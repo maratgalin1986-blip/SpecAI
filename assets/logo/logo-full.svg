@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 200" width="760" height="200">
+  <defs>
+    <linearGradient id="bg2" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#1E293B"/>
+      <stop offset="100%" stop-color="#0F172A"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Icon badge -->
+  <rect width="200" height="200" rx="44" fill="url(#bg2)"/>
+  <rect x="40" y="128" width="70" height="34" rx="6" fill="#F5B301"/>
+  <polygon points="40,128 30,150 40,162" fill="#D99A00"/>
+  <rect x="26" y="160" width="98" height="16" rx="8" fill="#111827"/>
+  <circle cx="42" cy="168" r="8" fill="#374151"/>
+  <circle cx="66" cy="168" r="8" fill="#374151"/>
+  <circle cx="90" cy="168" r="8" fill="#374151"/>
+  <circle cx="110" cy="168" r="8" fill="#374151"/>
+  <rect x="52" y="104" width="34" height="30" rx="6" fill="#FBC531"/>
+  <rect x="58" y="110" width="18" height="14" rx="3" fill="#0F172A"/>
+  <polygon points="82,112 150,58 160,70 96,124" fill="#F5B301"/>
+  <polygon points="150,58 176,96 166,104 140,68" fill="#FBC531"/>
+  <path d="M176 96 L196 104 L188 128 L166 118 Z" fill="#D99A00"/>
+  <circle cx="150" cy="58" r="10" fill="#22D3EE"/>
+  <circle cx="150" cy="58" r="16" fill="none" stroke="#22D3EE" stroke-width="2.5" opacity="0.55"/>
+  <line x1="150" y1="58" x2="176" y2="40" stroke="#22D3EE" stroke-width="3" stroke-linecap="round"/>
+  <circle cx="176" cy="40" r="5" fill="#22D3EE"/>
+  <line x1="150" y1="58" x2="132" y2="34" stroke="#22D3EE" stroke-width="3" stroke-linecap="round"/>
+  <circle cx="132" cy="34" r="5" fill="#22D3EE"/>
+
+  <!-- Wordmark -->
+  <text x="230" y="128" font-family="Arial, Helvetica, sans-serif" font-weight="800" font-size="88" fill="#0F172A">Spec<tspan fill="#0891B2">AI</tspan></text>
+  <text x="232" y="160" font-family="Arial, Helvetica, sans-serif" font-weight="500" font-size="20" letter-spacing="1.5" fill="#64748B">HEAVY EQUIPMENT RENTAL PLATFORM</text>
+</svg>
