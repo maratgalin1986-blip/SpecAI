@@ -1,38 +1,48 @@
 import 'dart:async';
 import 'dart:math';
 import 'package:flutter/foundation.dart';
+import 'package:firebase_auth/firebase_auth.dart' as fb;
 import 'package:latlong2/latlong.dart';
 import '../models/app_user.dart';
 import '../models/order.dart';
 import '../models/chat_message.dart';
 import '../models/contractor.dart';
 import '../models/equipment_category.dart';
+import '../services/firebase_auth_service.dart';
+import '../services/firestore_repository.dart';
 import 'app_data_store.dart';
 
-/// In-memory demo backend. Stands in for Firebase Auth/Firestore so the
-/// full customer -> order -> response -> chat -> completion flow is
-/// clickable end-to-end without any external services.
-class DemoDataStore extends ChangeNotifier implements AppDataStore {
-  DemoDataStore._internal() {
+/// Real backend: Firebase Phone Auth + Cloud Firestore. Keeps the same
+/// in-session reactive list/notifyListeners shape as DemoDataStore (so
+/// screens don't change), while persisting every write to Firestore in
+/// the background so data survives and is visible in the Firebase console.
+///
+/// Contractors are still local fixtures — there's no real supply side
+/// (contractor accounts) yet, so responses/tracking/chat replies are
+/// simulated client-side exactly like in demo mode, just persisted for real.
+class FirebaseDataStore extends ChangeNotifier implements AppDataStore {
+  FirebaseDataStore._internal() {
     _seedContractors();
   }
-  static final DemoDataStore instance = DemoDataStore._internal();
+  static final FirebaseDataStore instance = FirebaseDataStore._internal();
 
-  final Map<String, AppUser> _usersByPhone = {};
+  final _auth = FirebaseAuthService();
+  final _repo = FirestoreRepository();
+  final _random = Random();
+  final Map<String, Timer> _trackingTimers = {};
+
+  fb.User? _authUser;
+  String? _pendingPhone;
+
   @override
   AppUser? currentUser;
 
   @override
   final List<Order> orders = [];
   final List<ChatMessage> messages = [];
+
   @override
   final List<Contractor> contractors = [];
-
-  final _random = Random();
-  final Map<String, Timer> _trackingTimers = {};
-
-  String? _pendingPhone;
-  String? _pendingCode;
 
   void _seedContractors() {
     final names = [
@@ -78,49 +88,66 @@ class DemoDataStore extends ChangeNotifier implements AppDataStore {
   }
 
   @override
-  Future<String?> requestOtp(String phone) async {
-    await Future.delayed(const Duration(milliseconds: 400));
+  Future<String?> requestOtp(String phone) {
     _pendingPhone = phone;
-    _pendingCode = (1000 + _random.nextInt(9000)).toString();
-    return _pendingCode!;
+    final completer = Completer<String?>();
+    _auth.requestOtp(
+      phone: phone,
+      onCodeSent: () {
+        if (!completer.isCompleted) completer.complete(null);
+      },
+      onAutoVerified: (user) async {
+        await _onSignedIn(user);
+        if (!completer.isCompleted) completer.complete(null);
+      },
+      onError: (message) {
+        if (!completer.isCompleted) completer.completeError(message);
+      },
+    );
+    return completer.future;
   }
 
   @override
   Future<bool> verifyOtp(String code) async {
-    await Future.delayed(const Duration(milliseconds: 300));
-    if (_pendingPhone == null || code != _pendingCode) return false;
-    final existing = _usersByPhone[_pendingPhone];
+    final user = await _auth.verifyOtp(code);
+    if (user == null) return false;
+    await _onSignedIn(user);
+    return true;
+  }
+
+  Future<void> _onSignedIn(fb.User user) async {
+    _authUser = user;
+    final existing = await _repo.getUser(user.uid);
     if (existing != null) {
       currentUser = existing;
       notifyListeners();
     }
-    return true;
   }
 
   @override
   bool get hasProfile => currentUser != null;
   @override
-  String? get pendingPhone => _pendingPhone;
+  String? get pendingPhone => _pendingPhone ?? _authUser?.phoneNumber;
 
   @override
   Future<void> createProfile({required String name, required UserRole role}) async {
-    final phone = _pendingPhone!;
     final user = AppUser(
-      id: 'u_${DateTime.now().microsecondsSinceEpoch}',
-      phone: phone,
+      id: _authUser!.uid,
+      phone: _authUser!.phoneNumber ?? _pendingPhone ?? '',
       name: name,
       role: role,
     );
-    _usersByPhone[phone] = user;
+    await _repo.upsertUser(user);
     currentUser = user;
     notifyListeners();
   }
 
   @override
   void signOut() {
+    _auth.signOut();
     currentUser = null;
+    _authUser = null;
     _pendingPhone = null;
-    _pendingCode = null;
     notifyListeners();
   }
 
@@ -132,15 +159,26 @@ class DemoDataStore extends ChangeNotifier implements AppDataStore {
     required DateTime date,
     required String comment,
   }) async {
-    final order = Order(
-      id: 'o_${DateTime.now().microsecondsSinceEpoch}',
+    final destination = _jitter(kCityCenter, 0.02);
+    final docId = await _repo.createOrder(
       customerId: currentUser!.id,
       categoryId: categoryId,
       categoryTitle: categoryTitle,
       address: address,
       date: date,
       comment: comment,
-      destination: _jitter(kCityCenter, 0.02),
+      destinationLat: destination.latitude,
+      destinationLng: destination.longitude,
+    );
+    final order = Order(
+      id: docId,
+      customerId: currentUser!.id,
+      categoryId: categoryId,
+      categoryTitle: categoryTitle,
+      address: address,
+      date: date,
+      comment: comment,
+      destination: destination,
     );
     orders.insert(0, order);
     notifyListeners();
@@ -157,16 +195,22 @@ class DemoDataStore extends ChangeNotifier implements AppDataStore {
     var delay = 2;
     for (final contractor in picks) {
       Future.delayed(Duration(seconds: delay), () {
-        order.responses.add(
-          OrderResponse(
-            id: 'r_${DateTime.now().microsecondsSinceEpoch}',
-            contractorId: contractor.id,
-            contractorName: contractor.name,
-            price: contractor.price,
-            eta: '${contractor.etaMinutes} мин',
-          ),
+        final response = OrderResponse(
+          id: 'r_${DateTime.now().microsecondsSinceEpoch}',
+          contractorId: contractor.id,
+          contractorName: contractor.name,
+          price: contractor.price,
+          eta: '${contractor.etaMinutes} мин',
         );
+        order.responses.add(response);
         notifyListeners();
+        _repo.addResponse(
+          order.id,
+          contractorId: contractor.id,
+          contractorName: contractor.name,
+          price: contractor.price,
+          eta: '${contractor.etaMinutes} мин',
+        );
       });
       delay += 2;
     }
@@ -202,6 +246,7 @@ class DemoDataStore extends ChangeNotifier implements AppDataStore {
     order.contractorPosition = contractor.position;
     order.trackingStatus = 'Выехал к вам';
     notifyListeners();
+    _repo.acceptResponse(order.id, response.id, response.contractorId);
     _startTracking(order, contractor);
   }
 
@@ -223,17 +268,20 @@ class DemoDataStore extends ChangeNotifier implements AppDataStore {
         order.contractorArrived = true;
         order.trackingStatus = 'Исполнитель на месте';
         notifyListeners();
+        _repo.updateContractorPosition(order.id, dest.latitude, dest.longitude, order.trackingStatus, arrived: true);
         timer.cancel();
         _trackingTimers.remove(order.id);
         return;
       }
 
-      order.contractorPosition = LatLng(
+      final next = LatLng(
         current.latitude + latDiff * 0.08,
         current.longitude + lngDiff * 0.08,
       );
+      order.contractorPosition = next;
       order.trackingStatus = distance < 0.006 ? 'Почти на месте' : 'В пути к вам';
       notifyListeners();
+      _repo.updateContractorPosition(order.id, next.latitude, next.longitude, order.trackingStatus);
     });
   }
 
@@ -248,6 +296,7 @@ class DemoDataStore extends ChangeNotifier implements AppDataStore {
     );
     contractor.status = ContractorStatus.available;
     notifyListeners();
+    _repo.completeOrder(order.id);
   }
 
   @override
@@ -257,33 +306,37 @@ class DemoDataStore extends ChangeNotifier implements AppDataStore {
 
   @override
   void sendMessage(Order order, String text) {
-    messages.add(
-      ChatMessage(
-        id: 'm_${DateTime.now().microsecondsSinceEpoch}',
-        orderId: order.id,
-        senderId: currentUser!.id,
-        senderName: currentUser!.name,
-        text: text,
-        timestamp: DateTime.now(),
-      ),
+    final message = ChatMessage(
+      id: 'm_${DateTime.now().microsecondsSinceEpoch}',
+      orderId: order.id,
+      senderId: currentUser!.id,
+      senderName: currentUser!.name,
+      text: text,
+      timestamp: DateTime.now(),
     );
+    messages.add(message);
     notifyListeners();
+    _repo.sendMessage(order.id, senderId: currentUser!.id, senderName: currentUser!.name, text: text);
     _maybeAutoReply(order);
   }
 
   void _maybeAutoReply(Order order) {
     Future.delayed(const Duration(seconds: 2), () {
+      const senderId = 'demo_contractor';
+      const senderName = 'Исполнитель';
+      const text = 'Принято, буду в указанное время.';
       messages.add(
         ChatMessage(
           id: 'm_${DateTime.now().microsecondsSinceEpoch}',
           orderId: order.id,
-          senderId: 'demo_contractor',
-          senderName: 'Исполнитель',
-          text: 'Принято, буду в указанное время.',
+          senderId: senderId,
+          senderName: senderName,
+          text: text,
           timestamp: DateTime.now(),
         ),
       );
       notifyListeners();
+      _repo.sendMessage(order.id, senderId: senderId, senderName: senderName, text: text);
     });
   }
 }

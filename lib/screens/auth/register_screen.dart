@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../data/demo_data_store.dart';
+import '../../data/app_data_store.dart';
 import '../../models/app_user.dart';
 import '../home/home_screen.dart';
 
@@ -14,14 +14,15 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _nameController = TextEditingController();
   UserRole _role = UserRole.customer;
 
-  void _submit() {
+  Future<void> _submit() async {
     if (_nameController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Введите имя')),
       );
       return;
     }
-    DemoDataStore.instance.createProfile(name: _nameController.text.trim(), role: _role);
+    await AppData.instance.createProfile(name: _nameController.text.trim(), role: _role);
+    if (!mounted) return;
     Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute(builder: (_) => const HomeScreen()),
       (route) => false,

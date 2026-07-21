@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../data/demo_data_store.dart';
+import '../../data/app_data_store.dart';
 
 class ChatScreen extends StatefulWidget {
   final String orderId;
@@ -15,18 +15,18 @@ class _ChatScreenState extends State<ChatScreen> {
   void _send(order) {
     final text = _controller.text.trim();
     if (text.isEmpty) return;
-    DemoDataStore.instance.sendMessage(order, text);
+    AppData.instance.sendMessage(order, text);
     _controller.clear();
   }
 
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
-      animation: DemoDataStore.instance,
+      animation: AppData.instance,
       builder: (context, _) {
-        final order = DemoDataStore.instance.orders.firstWhere((o) => o.id == widget.orderId);
-        final messages = DemoDataStore.instance.messagesForOrder(widget.orderId);
-        final myId = DemoDataStore.instance.currentUser!.id;
+        final order = AppData.instance.orders.firstWhere((o) => o.id == widget.orderId);
+        final messages = AppData.instance.messagesForOrder(widget.orderId);
+        final myId = AppData.instance.currentUser!.id;
 
         return Scaffold(
           appBar: AppBar(title: const Text('Чат с исполнителем')),

@@ -1,16 +1,31 @@
 {
   "hosting": {
     "public": "build/web",
-    "ignore": [
-      "firebase.json",
-      "**/.*",
-      "**/node_modules/**"
-    ],
-    "rewrites": [
-      {
-        "source": "**",
-        "destination": "/index.html"
+    "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
+    "rewrites": [{ "source": "**", "destination": "/index.html" }]
+  },
+  "firestore": {
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
+  },
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "specai-dev",
+          "appId": "1:693800802296:android:bc3870c0ad46848628a80d",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "specai-dev",
+          "configurations": {
+            "android": "1:693800802296:android:bc3870c0ad46848628a80d",
+            "web": "1:693800802296:web:7847948c2f00511d28a80d"
+          }
+        }
       }
-    ]
+    }
   }
 }

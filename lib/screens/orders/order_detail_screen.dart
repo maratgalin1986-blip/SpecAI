@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../data/demo_data_store.dart';
+import '../../data/app_data_store.dart';
 import '../../models/order.dart';
 import '../../widgets/order_tracking_map.dart';
 import '../chat/chat_screen.dart';
@@ -11,9 +11,9 @@ class OrderDetailScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
-      animation: DemoDataStore.instance,
+      animation: AppData.instance,
       builder: (context, _) {
-        final order = DemoDataStore.instance.orders.firstWhere((o) => o.id == orderId);
+        final order = AppData.instance.orders.firstWhere((o) => o.id == orderId);
         return Scaffold(
           appBar: AppBar(title: Text(order.categoryTitle)),
           body: ListView(
@@ -51,7 +51,7 @@ class OrderDetailScreen extends StatelessWidget {
                             ),
                           ),
                           ElevatedButton(
-                            onPressed: () => DemoDataStore.instance.acceptResponse(order, r),
+                            onPressed: () => AppData.instance.acceptResponse(order, r),
                             child: const Text('Принять'),
                           ),
                         ],
@@ -92,7 +92,7 @@ class OrderDetailScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 12),
                 ElevatedButton(
-                  onPressed: () => DemoDataStore.instance.completeOrder(order),
+                  onPressed: () => AppData.instance.completeOrder(order),
                   child: const Text('Завершить заказ'),
                 ),
               ],

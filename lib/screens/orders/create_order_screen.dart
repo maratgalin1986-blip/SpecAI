@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../data/demo_data_store.dart';
+import '../../data/app_data_store.dart';
 import '../../models/equipment_category.dart';
 import 'order_detail_screen.dart';
 
@@ -33,20 +33,21 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
     if (picked != null) setState(() => _date = picked);
   }
 
-  void _submit() {
+  Future<void> _submit() async {
     if (_addressController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Укажите адрес объекта')),
       );
       return;
     }
-    final order = DemoDataStore.instance.createOrder(
+    final order = await AppData.instance.createOrder(
       categoryId: _category.id,
       categoryTitle: _category.title,
       address: _addressController.text.trim(),
       date: _date,
       comment: _commentController.text.trim(),
     );
+    if (!mounted) return;
     Navigator.of(context).pushReplacement(
       MaterialPageRoute(builder: (_) => OrderDetailScreen(orderId: order.id)),
     );

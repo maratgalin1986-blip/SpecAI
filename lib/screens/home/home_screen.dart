@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../data/demo_data_store.dart';
+import '../../data/app_data_store.dart';
 import '../../widgets/spec_ai_logo.dart';
 import '../orders/orders_list_screen.dart';
 import '../profile/profile_screen.dart';
@@ -24,7 +24,7 @@ class _HomeScreenState extends State<HomeScreen> {
     ];
 
     return AnimatedBuilder(
-      animation: DemoDataStore.instance,
+      animation: AppData.instance,
       builder: (context, _) {
         return Scaffold(
           appBar: AppBar(

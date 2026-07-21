@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../data/demo_data_store.dart';
+import '../../data/app_data_store.dart';
 import '../../models/app_user.dart';
 import '../auth/login_screen.dart';
 
@@ -8,7 +8,7 @@ class ProfileScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final user = DemoDataStore.instance.currentUser!;
+    final user = AppData.instance.currentUser!;
     final isContractor = user.role == UserRole.contractor;
 
     return ListView(
@@ -35,7 +35,7 @@ class ProfileScreen extends StatelessWidget {
         const SizedBox(height: 16),
         OutlinedButton.icon(
           onPressed: () {
-            DemoDataStore.instance.signOut();
+            AppData.instance.signOut();
             Navigator.of(context).pushAndRemoveUntil(
               MaterialPageRoute(builder: (_) => const LoginScreen()),
               (route) => false,
@@ -76,7 +76,7 @@ class _ContractorMonetizationCard extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            'После запуска платных тарифов комиссия SpecAI составит ${DemoDataStore.commissionRatePercent.toStringAsFixed(0)}% с завершённого заказа '
+            'После запуска платных тарифов комиссия SpecAI составит ${kCommissionRatePercent.toStringAsFixed(0)}% с завершённого заказа '
             '(или фиксированная подписка — выберем позже). Приём платежей ещё не подключён.',
             style: const TextStyle(color: Colors.black54, fontSize: 13),
           ),

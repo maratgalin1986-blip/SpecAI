@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
-import '../data/demo_data_store.dart';
+import '../data/app_data_store.dart';
 import '../models/order.dart';
 
 class OrderTrackingMap extends StatelessWidget {
@@ -9,7 +9,7 @@ class OrderTrackingMap extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final dest = order.destination ?? DemoDataStore.cityCenter;
+    final dest = order.destination ?? kCityCenter;
     final contractorPos = order.contractorPosition;
 
     return ClipRRect(

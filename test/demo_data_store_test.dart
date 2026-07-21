@@ -8,17 +8,18 @@ void main() {
     final store = DemoDataStore.instance;
 
     final code = await store.requestOtp('+79272428088');
-    expect(code.length, 4);
+    expect(code, isNotNull);
+    expect(code!.length, 4);
 
     final ok = await store.verifyOtp(code);
     expect(ok, isTrue);
     expect(store.hasProfile, isFalse);
 
-    store.createProfile(name: 'Марат Галин', role: UserRole.customer);
+    await store.createProfile(name: 'Марат Галин', role: UserRole.customer);
     expect(store.hasProfile, isTrue);
     expect(store.currentUser!.name, 'Марат Галин');
 
-    final order = store.createOrder(
+    final order = await store.createOrder(
       categoryId: 'excavator',
       categoryTitle: 'Экскаватор',
       address: 'г. Набережные Челны, пр. Мира, 10',

@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "693800802296",
+    "project_id": "specai-dev",
+    "storage_bucket": "specai-dev.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:693800802296:android:e5772b5922a2fc9128a80d",
+        "android_client_info": {
+          "package_name": "com.example.specai"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDoDrHXf2_Raafn3Rlwo_bVFDPyghEg67Q"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:693800802296:android:bc3870c0ad46848628a80d",
+        "android_client_info": {
+          "package_name": "com.specai.specai"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDoDrHXf2_Raafn3Rlwo_bVFDPyghEg67Q"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

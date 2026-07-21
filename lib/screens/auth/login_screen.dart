@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../data/demo_data_store.dart';
+import '../../data/app_data_store.dart';
 import '../../widgets/spec_ai_logo.dart';
 import 'otp_screen.dart';
 
@@ -23,7 +23,7 @@ class _LoginScreenState extends State<LoginScreen> {
       return;
     }
     setState(() => _loading = true);
-    final code = await DemoDataStore.instance.requestOtp(phone);
+    final code = await AppData.instance.requestOtp(phone);
     setState(() => _loading = false);
     if (!mounted) return;
     Navigator.of(context).push(

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
-import '../../data/demo_data_store.dart';
+import '../../data/app_data_store.dart';
 import '../../models/contractor.dart';
 import '../../models/equipment_category.dart';
 import '../orders/create_order_screen.dart';
@@ -24,7 +24,7 @@ class _ContractorsMapScreenState extends State<ContractorsMapScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final store = DemoDataStore.instance;
+    final store = AppData.instance;
     final contractors = _categoryFilter == null
         ? store.contractors
         : store.contractorsForCategory(_categoryFilter!);
@@ -63,7 +63,7 @@ class _ContractorsMapScreenState extends State<ContractorsMapScreen> {
           Expanded(
             child: FlutterMap(
               options: MapOptions(
-                initialCenter: DemoDataStore.cityCenter,
+                initialCenter: kCityCenter,
                 initialZoom: 12,
               ),
               children: [

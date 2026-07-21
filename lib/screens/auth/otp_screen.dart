@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
-import '../../data/demo_data_store.dart';
+import '../../data/app_data_store.dart';
 import 'register_screen.dart';
 import '../home/home_screen.dart';
 
 class OtpScreen extends StatefulWidget {
-  final String demoCode;
+  /// Present only in demo mode, where the code is generated locally and
+  /// shown on-screen instead of being sent as a real SMS.
+  final String? demoCode;
   final String phone;
-  const OtpScreen({super.key, required this.demoCode, required this.phone});
+  const OtpScreen({super.key, this.demoCode, required this.phone});
 
   @override
   State<OtpScreen> createState() => _OtpScreenState();
@@ -22,14 +24,14 @@ class _OtpScreenState extends State<OtpScreen> {
       _loading = true;
       _error = null;
     });
-    final ok = await DemoDataStore.instance.verifyOtp(_codeController.text.trim());
+    final ok = await AppData.instance.verifyOtp(_codeController.text.trim());
     setState(() => _loading = false);
     if (!ok) {
       setState(() => _error = 'Неверный код. Попробуйте ещё раз.');
       return;
     }
     if (!mounted) return;
-    final hasProfile = DemoDataStore.instance.hasProfile;
+    final hasProfile = AppData.instance.hasProfile;
     Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute(builder: (_) => hasProfile ? const HomeScreen() : const RegisterScreen()),
       (route) => false,
@@ -46,18 +48,20 @@ class _OtpScreenState extends State<OtpScreen> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Text('Код отправлен на ${widget.phone}'),
-            const SizedBox(height: 8),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: const Color(0xFFFFF7DA),
-                borderRadius: BorderRadius.circular(8),
+            if (widget.demoCode != null) ...[
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFF7DA),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  'Демо-режим: код подтверждения — ${widget.demoCode}',
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
               ),
-              child: Text(
-                'Демо-режим: код подтверждения — ${widget.demoCode}',
-                style: const TextStyle(fontWeight: FontWeight.w600),
-              ),
-            ),
+            ],
             const SizedBox(height: 24),
             TextField(
               controller: _codeController,

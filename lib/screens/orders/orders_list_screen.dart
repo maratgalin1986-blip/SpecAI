@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../data/demo_data_store.dart';
+import '../../data/app_data_store.dart';
 import '../../models/order.dart';
 import 'order_detail_screen.dart';
 
@@ -30,7 +30,7 @@ class OrdersListScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final orders = DemoDataStore.instance.ordersForCurrentUser();
+    final orders = AppData.instance.ordersForCurrentUser();
 
     if (orders.isEmpty) {
       return const Center(
