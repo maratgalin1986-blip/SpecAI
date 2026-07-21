@@ -24,14 +24,36 @@ flutter run -d chrome
 
 Демо-код подтверждения показывается прямо на экране (жёлтая плашка) — реальная SMS не отправляется.
 
-## Подключение реального Firebase (когда будет готово)
+## Подключение реального Firebase
 
+Слой реального бэкенда уже написан и собирается (`flutter analyze` чисто):
+
+- `lib/services/firebase_auth_service.dart` — реальная SMS-авторизация (Firebase Phone Auth)
+- `lib/services/firestore_repository.dart` — реальное хранилище заказов/откликов/чата/исполнителей (Cloud Firestore)
+- `firestore.rules` — правила безопасности (пока: только заказчик управляет своим заказом; сторона исполнителя как отдельный авторизованный пользователь — следующий шаг)
+- `lib/firebase_options.dart` — сейчас placeholder с `REPLACE_ME`, нужно сгенерировать настоящий
+
+Единственное, чего не хватает — привязки к реальному Firebase-проекту (создание проекта,
+включение Phone Auth, генерация ключей требуют входа в аккаунт Google/Firebase, чего у
+ассистента здесь нет). Два способа завершить это:
+
+**Вариант А — сами на своей машине:**
 ```bash
 dart pub global activate flutterfire_cli
 flutterfire configure
 ```
-Затем раскомментировать инициализацию Firebase в `lib/main.dart` и заменить вызовы
-`DemoDataStore` на реальные Firebase Auth/Firestore сервисы.
+Затем пришлите получившийся `lib/firebase_options.dart` — я подключу его в `main.dart`,
+выложу `firestore.rules`, включу Phone Auth и уберу `DemoDataStore`.
+
+**Вариант Б — дать ассистенту токен:**
+```bash
+npx firebase-tools login:ci
+```
+Пришлите полученный токен в чат — ассистент сам создаст проект, включит Phone Auth,
+Firestore и сгенерирует `firebase_options.dart` через `flutterfire configure --token`.
+
+До этого шага приложение продолжает работать в демо-режиме (`lib/data/demo_data_store.dart`) —
+это осознанный fallback, а не баг.
 
 ## Монетизация (заложено, не активировано)
 

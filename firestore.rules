@@ -1,0 +1,38 @@
+rules_version = '2';
+
+// NOTE: this schema currently only models the customer side with a real
+// authenticated user. Contractor accounts are not yet real Firebase Auth
+// users (see DemoDataStore/Contractor fixtures) — that's the next piece of
+// real-backend work, tracked in README. Until then, only the order's owner
+// (customer) can read/write it and its subcollections.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    match /users/{uid} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+
+    match /contractors/{contractorId} {
+      allow read: if request.auth != null;
+      allow write: if false; // seeded/managed server-side only for now
+    }
+
+    match /orders/{orderId} {
+      allow create: if request.auth != null
+        && request.auth.uid == request.resource.data.customerId;
+      allow read, update: if request.auth != null
+        && request.auth.uid == resource.data.customerId;
+      allow delete: if false;
+
+      match /responses/{responseId} {
+        allow read, write: if request.auth != null
+          && request.auth.uid == get(/databases/$(database)/documents/orders/$(orderId)).data.customerId;
+      }
+
+      match /messages/{messageId} {
+        allow read, write: if request.auth != null
+          && request.auth.uid == get(/databases/$(database)/documents/orders/$(orderId)).data.customerId;
+      }
+    }
+  }
+}
