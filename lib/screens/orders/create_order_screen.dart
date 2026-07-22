@@ -16,6 +16,7 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
   final _addressController = TextEditingController();
   final _commentController = TextEditingController();
   DateTime _date = DateTime.now().add(const Duration(days: 1));
+  bool _loading = false;
 
   @override
   void initState() {
@@ -40,17 +41,26 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
       );
       return;
     }
-    final order = await AppData.instance.createOrder(
-      categoryId: _category.id,
-      categoryTitle: _category.title,
-      address: _addressController.text.trim(),
-      date: _date,
-      comment: _commentController.text.trim(),
-    );
-    if (!mounted) return;
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute(builder: (_) => OrderDetailScreen(orderId: order.id)),
-    );
+    setState(() => _loading = true);
+    try {
+      final order = await AppData.instance.createOrder(
+        categoryId: _category.id,
+        categoryTitle: _category.title,
+        address: _addressController.text.trim(),
+        date: _date,
+        comment: _commentController.text.trim(),
+      );
+      if (!mounted) return;
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => OrderDetailScreen(orderId: order.id)),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Не удалось создать заказ: $e')),
+      );
+      setState(() => _loading = false);
+    }
   }
 
   @override
@@ -98,7 +108,16 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
             decoration: const InputDecoration(hintText: 'Детали задачи (необязательно)'),
           ),
           const SizedBox(height: 28),
-          ElevatedButton(onPressed: _submit, child: const Text('Создать заказ')),
+          ElevatedButton(
+            onPressed: _loading ? null : _submit,
+            child: _loading
+                ? const SizedBox(
+                    height: 20,
+                    width: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                  )
+                : const Text('Создать заказ'),
+          ),
         ],
       ),
     );

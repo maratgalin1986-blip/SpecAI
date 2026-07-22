@@ -1,6 +1,8 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_firestore/cloud_firestore.dart' hide Order;
+import 'package:latlong2/latlong.dart';
 import '../models/app_user.dart';
 import '../models/order.dart';
+import '../models/chat_message.dart';
 import '../models/contractor.dart';
 
 /// Real Firestore-backed data access. Mirrors the shape of DemoDataStore
@@ -70,12 +72,46 @@ class FirestoreRepository {
     return doc.id;
   }
 
-  Stream<QuerySnapshot<Map<String, dynamic>>> ordersForCustomer(String customerId) {
-    return _orders.where('customerId', isEqualTo: customerId).orderBy('createdAt', descending: true).snapshots();
+  /// Fetches this customer's full order history (including responses),
+  /// newest first — used to restore state after a page reload since
+  /// FirebaseDataStore otherwise only keeps orders created this session.
+  Future<List<Order>> getOrdersForCustomer(String customerId) async {
+    final snapshot = await _orders
+        .where('customerId', isEqualTo: customerId)
+        .orderBy('createdAt', descending: true)
+        .get();
+
+    final result = <Order>[];
+    for (final doc in snapshot.docs) {
+      final responses = await getResponses(doc.id);
+      result.add(_orderFromDoc(doc, responses));
+    }
+    return result;
   }
 
-  Stream<DocumentSnapshot<Map<String, dynamic>>> watchOrder(String orderId) {
-    return _orders.doc(orderId).snapshots();
+  Order _orderFromDoc(DocumentSnapshot<Map<String, dynamic>> doc, List<OrderResponse> responses) {
+    final data = doc.data()!;
+    final destLat = data['destinationLat'] as double?;
+    final destLng = data['destinationLng'] as double?;
+    final contractorLat = data['contractorLat'] as double?;
+    final contractorLng = data['contractorLng'] as double?;
+
+    return Order(
+      id: doc.id,
+      customerId: data['customerId'] as String,
+      categoryId: data['categoryId'] as String,
+      categoryTitle: data['categoryTitle'] as String,
+      address: data['address'] as String,
+      date: (data['date'] as Timestamp).toDate(),
+      comment: data['comment'] as String? ?? '',
+      status: OrderStatus.values.byName(data['status'] as String),
+      responses: responses,
+      acceptedContractorId: data['acceptedContractorId'] as String?,
+      destination: destLat != null && destLng != null ? LatLng(destLat, destLng) : null,
+      contractorPosition: contractorLat != null && contractorLng != null ? LatLng(contractorLat, contractorLng) : null,
+      contractorArrived: data['contractorArrived'] as bool? ?? false,
+      trackingStatus: data['trackingStatus'] as String? ?? '',
+    );
   }
 
   Future<void> addResponse(String orderId, {
@@ -94,8 +130,19 @@ class FirestoreRepository {
     });
   }
 
-  Stream<QuerySnapshot<Map<String, dynamic>>> responsesForOrder(String orderId) {
-    return _orders.doc(orderId).collection('responses').orderBy('createdAt').snapshots();
+  Future<List<OrderResponse>> getResponses(String orderId) async {
+    final snapshot = await _orders.doc(orderId).collection('responses').orderBy('createdAt').get();
+    return snapshot.docs.map((d) {
+      final data = d.data();
+      return OrderResponse(
+        id: d.id,
+        contractorId: data['contractorId'] as String,
+        contractorName: data['contractorName'] as String,
+        price: data['price'] as int,
+        eta: data['eta'] as String,
+        accepted: data['accepted'] as bool? ?? false,
+      );
+    }).toList();
   }
 
   Future<void> acceptResponse(String orderId, String responseId, String contractorId) {
@@ -132,12 +179,20 @@ class FirestoreRepository {
     });
   }
 
-  Stream<QuerySnapshot<Map<String, dynamic>>> messagesForOrder(String orderId) {
-    return _orders.doc(orderId).collection('messages').orderBy('timestamp').snapshots();
-  }
-
-  Stream<QuerySnapshot<Map<String, dynamic>>> contractorsForCategory(String categoryId) {
-    return _contractors.where('categoryId', isEqualTo: categoryId).snapshots();
+  Future<List<ChatMessage>> getMessages(String orderId) async {
+    final snapshot = await _orders.doc(orderId).collection('messages').orderBy('timestamp').get();
+    return snapshot.docs.map((d) {
+      final data = d.data();
+      final ts = data['timestamp'];
+      return ChatMessage(
+        id: d.id,
+        orderId: orderId,
+        senderId: data['senderId'] as String,
+        senderName: data['senderName'] as String,
+        text: data['text'] as String,
+        timestamp: ts is Timestamp ? ts.toDate() : DateTime.now(),
+      );
+    }).toList();
   }
 
   /// One-time seed for demo contractors, mirroring DemoDataStore's fixture

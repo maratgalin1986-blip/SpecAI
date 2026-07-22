@@ -23,12 +23,20 @@ class _LoginScreenState extends State<LoginScreen> {
       return;
     }
     setState(() => _loading = true);
-    final code = await AppData.instance.requestOtp(phone);
-    setState(() => _loading = false);
-    if (!mounted) return;
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => OtpScreen(demoCode: code, phone: phone)),
-    );
+    try {
+      final code = await AppData.instance.requestOtp(phone);
+      if (!mounted) return;
+      Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => OtpScreen(demoCode: code, phone: phone)),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Не удалось отправить код: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
   }
 
   @override

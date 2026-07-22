@@ -30,6 +30,13 @@ class OrdersListScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: AppData.instance,
+      builder: (context, _) => _buildList(context),
+    );
+  }
+
+  Widget _buildList(BuildContext context) {
     final orders = AppData.instance.ordersForCurrentUser();
 
     if (orders.isEmpty) {

@@ -62,7 +62,7 @@ class _ContractorsMapScreenState extends State<ContractorsMapScreen> {
           ),
           Expanded(
             child: FlutterMap(
-              options: MapOptions(
+              options: const MapOptions(
                 initialCenter: kCityCenter,
                 initialZoom: 12,
               ),

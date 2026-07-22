@@ -31,32 +31,48 @@ class OrderDetailScreen extends StatelessWidget {
                     padding: EdgeInsets.symmetric(vertical: 12),
                     child: Text('Ждём отклики от исполнителей...', style: TextStyle(color: Colors.black54)),
                   ),
-                ...order.responses.map((r) => Container(
-                      margin: const EdgeInsets.only(bottom: 10),
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: const Color(0xFFE5E7EB)),
-                      ),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(r.contractorName, style: const TextStyle(fontWeight: FontWeight.w600)),
-                                Text('${r.price} ₽ · прибытие через ${r.eta}', style: const TextStyle(color: Colors.black54, fontSize: 13)),
-                              ],
-                            ),
+                ...order.responses.map((r) {
+                  final matches = AppData.instance.contractors.where((c) => c.id == r.contractorId);
+                  final contractor = matches.isEmpty ? null : matches.first;
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 10),
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFFE5E7EB)),
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Text(r.contractorName, style: const TextStyle(fontWeight: FontWeight.w600)),
+                                  if (contractor != null) ...[
+                                    const SizedBox(width: 6),
+                                    const Icon(Icons.star, color: Colors.amber, size: 14),
+                                    Text(
+                                      contractor.rating.toStringAsFixed(1),
+                                      style: const TextStyle(fontSize: 12, color: Colors.black54),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                              Text('${r.price} ₽ · прибытие через ${r.eta}', style: const TextStyle(color: Colors.black54, fontSize: 13)),
+                            ],
                           ),
-                          ElevatedButton(
-                            onPressed: () => AppData.instance.acceptResponse(order, r),
-                            child: const Text('Принять'),
-                          ),
-                        ],
-                      ),
-                    )),
+                        ),
+                        ElevatedButton(
+                          onPressed: () => AppData.instance.acceptResponse(order, r),
+                          child: const Text('Принять'),
+                        ),
+                      ],
+                    ),
+                  );
+                }),
               ],
               if (order.status == OrderStatus.inProgress) ...[
                 OrderTrackingMap(order: order),

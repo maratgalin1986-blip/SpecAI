@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../data/app_data_store.dart';
+import '../../models/order.dart';
 
 class ChatScreen extends StatefulWidget {
   final String orderId;
@@ -11,12 +12,31 @@ class ChatScreen extends StatefulWidget {
 
 class _ChatScreenState extends State<ChatScreen> {
   final _controller = TextEditingController();
+  final _scrollController = ScrollController();
 
-  void _send(order) {
+  @override
+  void dispose() {
+    _controller.dispose();
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _send(Order order) {
     final text = _controller.text.trim();
     if (text.isEmpty) return;
     AppData.instance.sendMessage(order, text);
     _controller.clear();
+  }
+
+  void _scrollToBottom() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_scrollController.hasClients) return;
+      _scrollController.animateTo(
+        _scrollController.position.maxScrollExtent,
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeOut,
+      );
+    });
   }
 
   @override
@@ -27,6 +47,7 @@ class _ChatScreenState extends State<ChatScreen> {
         final order = AppData.instance.orders.firstWhere((o) => o.id == widget.orderId);
         final messages = AppData.instance.messagesForOrder(widget.orderId);
         final myId = AppData.instance.currentUser!.id;
+        if (messages.isNotEmpty) _scrollToBottom();
 
         return Scaffold(
           appBar: AppBar(title: const Text('Чат с исполнителем')),
@@ -38,6 +59,7 @@ class _ChatScreenState extends State<ChatScreen> {
                         child: Text('Напишите исполнителю', style: TextStyle(color: Colors.black54)),
                       )
                     : ListView.builder(
+                        controller: _scrollController,
                         padding: const EdgeInsets.all(14),
                         itemCount: messages.length,
                         itemBuilder: (context, index) {

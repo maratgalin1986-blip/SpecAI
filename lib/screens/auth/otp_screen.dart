@@ -24,18 +24,23 @@ class _OtpScreenState extends State<OtpScreen> {
       _loading = true;
       _error = null;
     });
-    final ok = await AppData.instance.verifyOtp(_codeController.text.trim());
-    setState(() => _loading = false);
-    if (!ok) {
-      setState(() => _error = 'Неверный код. Попробуйте ещё раз.');
-      return;
+    try {
+      final ok = await AppData.instance.verifyOtp(_codeController.text.trim());
+      if (!ok) {
+        setState(() => _error = 'Неверный код. Попробуйте ещё раз.');
+        return;
+      }
+      if (!mounted) return;
+      final hasProfile = AppData.instance.hasProfile;
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => hasProfile ? const HomeScreen() : const RegisterScreen()),
+        (route) => false,
+      );
+    } catch (e) {
+      setState(() => _error = 'Неверный или устаревший код. Попробуйте ещё раз.');
+    } finally {
+      if (mounted) setState(() => _loading = false);
     }
-    if (!mounted) return;
-    final hasProfile = AppData.instance.hasProfile;
-    Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(builder: (_) => hasProfile ? const HomeScreen() : const RegisterScreen()),
-      (route) => false,
-    );
   }
 
   @override
@@ -66,8 +71,8 @@ class _OtpScreenState extends State<OtpScreen> {
             TextField(
               controller: _codeController,
               keyboardType: TextInputType.number,
-              maxLength: 4,
-              decoration: const InputDecoration(hintText: '0000'),
+              maxLength: 6,
+              decoration: InputDecoration(hintText: widget.demoCode != null ? '0000' : '000000'),
             ),
             if (_error != null) ...[
               const SizedBox(height: 8),

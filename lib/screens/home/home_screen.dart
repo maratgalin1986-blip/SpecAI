@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../../data/app_data_store.dart';
 import '../../widgets/spec_ai_logo.dart';
 import '../orders/orders_list_screen.dart';
 import '../profile/profile_screen.dart';
@@ -23,31 +22,26 @@ class _HomeScreenState extends State<HomeScreen> {
       const ProfileScreen(),
     ];
 
-    return AnimatedBuilder(
-      animation: AppData.instance,
-      builder: (context, _) {
-        return Scaffold(
-          appBar: AppBar(
-            title: const Row(
-              children: [
-                SpecAiLogo(height: 28),
-                SizedBox(width: 10),
-                Text('SpecAI'),
-              ],
-            ),
-          ),
-          body: tabs[_tab],
-          bottomNavigationBar: NavigationBar(
-            selectedIndex: _tab,
-            onDestinationSelected: (i) => setState(() => _tab = i),
-            destinations: const [
-              NavigationDestination(icon: Icon(Icons.grid_view), label: 'Каталог'),
-              NavigationDestination(icon: Icon(Icons.list_alt), label: 'Заказы'),
-              NavigationDestination(icon: Icon(Icons.person), label: 'Профиль'),
-            ],
-          ),
-        );
-      },
+    return Scaffold(
+      appBar: AppBar(
+        title: const Row(
+          children: [
+            SpecAiLogo(height: 28),
+            SizedBox(width: 10),
+            Text('SpecAI'),
+          ],
+        ),
+      ),
+      body: tabs[_tab],
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: _tab,
+        onDestinationSelected: (i) => setState(() => _tab = i),
+        destinations: const [
+          NavigationDestination(icon: Icon(Icons.grid_view), label: 'Каталог'),
+          NavigationDestination(icon: Icon(Icons.list_alt), label: 'Заказы'),
+          NavigationDestination(icon: Icon(Icons.person), label: 'Профиль'),
+        ],
+      ),
     );
   }
 }

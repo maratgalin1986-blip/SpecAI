@@ -28,6 +28,13 @@ class FirebaseDataStore extends ChangeNotifier implements AppDataStore {
 
   final _auth = FirebaseAuthService();
   final _repo = FirestoreRepository();
+
+  /// Background persistence writes are best-effort: the UI already
+  /// reflects the change optimistically, so a transient Firestore error
+  /// here should be logged, not surfaced as an unhandled exception.
+  void _persist(Future<void> write, String what) {
+    write.catchError((Object e) => debugPrint('Firestore write failed ($what): $e'));
+  }
   final _random = Random();
   final Map<String, Timer> _trackingTimers = {};
 
@@ -120,7 +127,45 @@ class FirebaseDataStore extends ChangeNotifier implements AppDataStore {
     final existing = await _repo.getUser(user.uid);
     if (existing != null) {
       currentUser = existing;
+      await _loadOrderHistory();
       notifyListeners();
+    }
+  }
+
+  /// Restores this customer's past orders (and chat history) from
+  /// Firestore. Without this, a page reload would show an empty order
+  /// list even though the data is safely persisted server-side.
+  Future<void> _loadOrderHistory() async {
+    if (currentUser == null) return;
+    try {
+      final loadedOrders = await _repo.getOrdersForCustomer(currentUser!.id);
+      orders
+        ..clear()
+        ..addAll(loadedOrders);
+
+      for (final order in orders) {
+        messages.addAll(await _repo.getMessages(order.id));
+
+        if (order.status == OrderStatus.inProgress && !order.contractorArrived) {
+          final contractor = contractors.firstWhere(
+            (c) => c.id == order.acceptedContractorId,
+            orElse: () => Contractor(
+              id: order.acceptedContractorId ?? 'unknown',
+              name: 'Исполнитель',
+              categoryId: order.categoryId,
+              price: 0,
+              etaMinutes: 20,
+              rating: 4.5,
+              position: order.contractorPosition ?? kCityCenter,
+              status: ContractorStatus.busy,
+            ),
+          );
+          contractor.status = ContractorStatus.busy;
+          _startTracking(order, contractor);
+        }
+      }
+    } catch (e) {
+      debugPrint('Failed to load order history: $e');
     }
   }
 
@@ -144,7 +189,7 @@ class FirebaseDataStore extends ChangeNotifier implements AppDataStore {
 
   @override
   void signOut() {
-    _auth.signOut();
+    _persist(_auth.signOut(), 'signOut');
     currentUser = null;
     _authUser = null;
     _pendingPhone = null;
@@ -204,12 +249,15 @@ class FirebaseDataStore extends ChangeNotifier implements AppDataStore {
         );
         order.responses.add(response);
         notifyListeners();
-        _repo.addResponse(
-          order.id,
-          contractorId: contractor.id,
-          contractorName: contractor.name,
-          price: contractor.price,
-          eta: '${contractor.etaMinutes} мин',
+        _persist(
+          _repo.addResponse(
+            order.id,
+            contractorId: contractor.id,
+            contractorName: contractor.name,
+            price: contractor.price,
+            eta: '${contractor.etaMinutes} мин',
+          ),
+          'addResponse',
         );
       });
       delay += 2;
@@ -246,7 +294,7 @@ class FirebaseDataStore extends ChangeNotifier implements AppDataStore {
     order.contractorPosition = contractor.position;
     order.trackingStatus = 'Выехал к вам';
     notifyListeners();
-    _repo.acceptResponse(order.id, response.id, response.contractorId);
+    _persist(_repo.acceptResponse(order.id, response.id, response.contractorId), 'acceptResponse');
     _startTracking(order, contractor);
   }
 
@@ -268,7 +316,10 @@ class FirebaseDataStore extends ChangeNotifier implements AppDataStore {
         order.contractorArrived = true;
         order.trackingStatus = 'Исполнитель на месте';
         notifyListeners();
-        _repo.updateContractorPosition(order.id, dest.latitude, dest.longitude, order.trackingStatus, arrived: true);
+        _persist(
+          _repo.updateContractorPosition(order.id, dest.latitude, dest.longitude, order.trackingStatus, arrived: true),
+          'updateContractorPosition',
+        );
         timer.cancel();
         _trackingTimers.remove(order.id);
         return;
@@ -281,7 +332,10 @@ class FirebaseDataStore extends ChangeNotifier implements AppDataStore {
       order.contractorPosition = next;
       order.trackingStatus = distance < 0.006 ? 'Почти на месте' : 'В пути к вам';
       notifyListeners();
-      _repo.updateContractorPosition(order.id, next.latitude, next.longitude, order.trackingStatus);
+      _persist(
+        _repo.updateContractorPosition(order.id, next.latitude, next.longitude, order.trackingStatus),
+        'updateContractorPosition',
+      );
     });
   }
 
@@ -296,7 +350,7 @@ class FirebaseDataStore extends ChangeNotifier implements AppDataStore {
     );
     contractor.status = ContractorStatus.available;
     notifyListeners();
-    _repo.completeOrder(order.id);
+    _persist(_repo.completeOrder(order.id), 'completeOrder');
   }
 
   @override
@@ -316,7 +370,10 @@ class FirebaseDataStore extends ChangeNotifier implements AppDataStore {
     );
     messages.add(message);
     notifyListeners();
-    _repo.sendMessage(order.id, senderId: currentUser!.id, senderName: currentUser!.name, text: text);
+    _persist(
+      _repo.sendMessage(order.id, senderId: currentUser!.id, senderName: currentUser!.name, text: text),
+      'sendMessage',
+    );
     _maybeAutoReply(order);
   }
 
@@ -336,7 +393,7 @@ class FirebaseDataStore extends ChangeNotifier implements AppDataStore {
         ),
       );
       notifyListeners();
-      _repo.sendMessage(order.id, senderId: senderId, senderName: senderName, text: text);
+      _persist(_repo.sendMessage(order.id, senderId: senderId, senderName: senderName, text: text), 'sendMessage');
     });
   }
 }

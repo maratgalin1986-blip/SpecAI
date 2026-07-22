@@ -13,6 +13,7 @@ class RegisterScreen extends StatefulWidget {
 class _RegisterScreenState extends State<RegisterScreen> {
   final _nameController = TextEditingController();
   UserRole _role = UserRole.customer;
+  bool _loading = false;
 
   Future<void> _submit() async {
     if (_nameController.text.trim().isEmpty) {
@@ -21,12 +22,22 @@ class _RegisterScreenState extends State<RegisterScreen> {
       );
       return;
     }
-    await AppData.instance.createProfile(name: _nameController.text.trim(), role: _role);
-    if (!mounted) return;
-    Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(builder: (_) => const HomeScreen()),
-      (route) => false,
-    );
+    setState(() => _loading = true);
+    try {
+      await AppData.instance.createProfile(name: _nameController.text.trim(), role: _role);
+      if (!mounted) return;
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const HomeScreen()),
+        (route) => false,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Не удалось сохранить профиль: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
   }
 
   @override
@@ -61,7 +72,16 @@ class _RegisterScreenState extends State<RegisterScreen> {
               onTap: () => setState(() => _role = UserRole.contractor),
             ),
             const SizedBox(height: 32),
-            ElevatedButton(onPressed: _submit, child: const Text('Продолжить')),
+            ElevatedButton(
+              onPressed: _loading ? null : _submit,
+              child: _loading
+                  ? const SizedBox(
+                      height: 20,
+                      width: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                    )
+                  : const Text('Продолжить'),
+            ),
           ],
         ),
       ),
