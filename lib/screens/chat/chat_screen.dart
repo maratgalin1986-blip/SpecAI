@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../data/app_data_store.dart';
+import '../../models/app_user.dart';
 import '../../models/order.dart';
 
 class ChatScreen extends StatefulWidget {
@@ -47,10 +48,11 @@ class _ChatScreenState extends State<ChatScreen> {
         final order = AppData.instance.orders.firstWhere((o) => o.id == widget.orderId);
         final messages = AppData.instance.messagesForOrder(widget.orderId);
         final myId = AppData.instance.currentUser!.id;
+        final isContractor = AppData.instance.currentUser!.role == UserRole.contractor;
         if (messages.isNotEmpty) _scrollToBottom();
 
         return Scaffold(
-          appBar: AppBar(title: const Text('Чат с исполнителем')),
+          appBar: AppBar(title: Text(isContractor ? 'Чат с заказчиком' : 'Чат с исполнителем')),
           body: Column(
             children: [
               Expanded(

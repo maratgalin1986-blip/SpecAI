@@ -241,18 +241,29 @@ class FirestoreRepository {
 
   Future<List<ChatMessage>> getMessages(String orderId) async {
     final snapshot = await _orders.doc(orderId).collection('messages').orderBy('timestamp').get();
-    return snapshot.docs.map((d) {
-      final data = d.data();
-      final ts = data['timestamp'];
-      return ChatMessage(
-        id: d.id,
-        orderId: orderId,
-        senderId: data['senderId'] as String,
-        senderName: data['senderName'] as String,
-        text: data['text'] as String,
-        timestamp: ts is Timestamp ? ts.toDate() : DateTime.now(),
-      );
-    }).toList();
+    return snapshot.docs.map((d) => _messageFromDoc(orderId, d)).toList();
+  }
+
+  /// Live chat for [orderId] -- needed by whichever side (customer or the
+  /// accepted contractor) didn't send the message, since neither one-shot
+  /// fetches nor the other party's local state ever reach their session.
+  Stream<List<ChatMessage>> watchMessages(String orderId) {
+    return _orders.doc(orderId).collection('messages').orderBy('timestamp').snapshots().map(
+          (snapshot) => snapshot.docs.map((d) => _messageFromDoc(orderId, d)).toList(),
+        );
+  }
+
+  ChatMessage _messageFromDoc(String orderId, QueryDocumentSnapshot<Map<String, dynamic>> d) {
+    final data = d.data();
+    final ts = data['timestamp'];
+    return ChatMessage(
+      id: d.id,
+      orderId: orderId,
+      senderId: data['senderId'] as String,
+      senderName: data['senderName'] as String,
+      text: data['text'] as String,
+      timestamp: ts is Timestamp ? ts.toDate() : DateTime.now(),
+    );
   }
 
   /// One-time seed for demo contractors, mirroring DemoDataStore's fixture

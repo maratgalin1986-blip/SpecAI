@@ -156,9 +156,11 @@ class FirebaseDataStore extends ChangeNotifier implements AppDataStore {
     }
   }
 
-  /// Restores this customer's past orders (and chat history) from
-  /// Firestore. Without this, a page reload would show an empty order
-  /// list even though the data is safely persisted server-side.
+  /// Restores this customer's past orders from Firestore. Without this, a
+  /// page reload would show an empty order list even though the data is
+  /// safely persisted server-side. Chat history isn't fetched here --
+  /// messagesForOrder arms a live listener the moment ChatScreen actually
+  /// reads it, which fetches the same data and stays current besides.
   Future<void> _loadOrderHistory() async {
     if (currentUser == null) return;
     try {
@@ -168,8 +170,6 @@ class FirebaseDataStore extends ChangeNotifier implements AppDataStore {
         ..addAll(loadedOrders);
 
       for (final order in orders) {
-        messages.addAll(await _repo.getMessages(order.id));
-
         if (order.status == OrderStatus.inProgress && !order.contractorArrived) {
           final contractor = contractors.firstWhere(
             (c) => c.id == order.acceptedContractorId,
@@ -240,6 +240,10 @@ class FirebaseDataStore extends ChangeNotifier implements AppDataStore {
       sub.cancel();
     }
     _responseSubs.clear();
+    for (final sub in _messageSubs.values) {
+      sub.cancel();
+    }
+    _messageSubs.clear();
     _openOrdersSub?.cancel();
     _myOrdersSub?.cancel();
     _watchedContractorId = null;
@@ -427,7 +431,26 @@ class FirebaseDataStore extends ChangeNotifier implements AppDataStore {
 
   @override
   List<ChatMessage> messagesForOrder(String orderId) {
+    _watchMessages(orderId);
     return messages.where((m) => m.orderId == orderId).toList();
+  }
+
+  final Map<String, StreamSubscription<List<ChatMessage>>> _messageSubs = {};
+
+  /// Arms live chat for [orderId] on first read. Whichever side didn't
+  /// send a given message (customer or the real accepted contractor, in a
+  /// completely separate session) would otherwise never see it: their
+  /// local `messages` list only ever gets entries they wrote themselves.
+  void _watchMessages(String orderId) {
+    if (_messageSubs.containsKey(orderId)) return;
+    _messageSubs[orderId] = _repo.watchMessages(orderId).listen(
+      (fetched) {
+        messages.removeWhere((m) => m.orderId == orderId);
+        messages.addAll(fetched);
+        notifyListeners();
+      },
+      onError: (Object e) => debugPrint('watchMessages failed: $e'),
+    );
   }
 
   @override
