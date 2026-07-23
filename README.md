@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/logo/png/logo-fleet.png" alt="SpecAI" width="420">
+  <img src="assets/logo/png/logo-full.png" alt="SpecAI" width="320">
 </p>
 
 # SpecAI
@@ -50,4 +50,8 @@ flutter run -d chrome
 
 ## Логотип
 
-Исходники в `assets/logo/` (SVG + PNG всех размеров для иконок приложения/favicon).
+Фирменный знак — набор иконок спецтехники (экскаватор, кран, самосвал и т.д.) с подписью
+SpecAI. Исходное изображение: `assets/logo/original/logo-source.jpg`. Из него собраны:
+`assets/logo/png/logo-full.png` — полная витрина техники с подписью (экран входа), и
+`assets/logo/png/icon-*.png` — квадратная иконка (экскаватор на тёмно-синей плашке) для
+иконок приложения (Android/iOS/web) и шапки экрана.

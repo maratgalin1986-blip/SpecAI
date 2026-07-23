@@ -49,13 +49,8 @@ class _LoginScreenState extends State<LoginScreen> {
             mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const Center(child: SpecAiLogo(height: 96)),
+              const Center(child: SpecAiHeroLogo(width: 200)),
               const SizedBox(height: 16),
-              const Text(
-                'SpecAI',
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 32, fontWeight: FontWeight.w800),
-              ),
               const Text(
                 'Аренда спецтехники для строительства',
                 textAlign: TextAlign.center,
