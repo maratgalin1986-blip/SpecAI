@@ -1,6 +1,6 @@
 import 'package:latlong2/latlong.dart';
 
-enum OrderStatus { newOrder, inProgress, completed }
+enum OrderStatus { newOrder, inProgress, completed, cancelled }
 
 class OrderResponse {
   final String id;
@@ -40,6 +40,10 @@ class Order {
   bool contractorArrived;
   String trackingStatus;
 
+  /// Customer's 1-5 star rating of the contractor, given once the order is
+  /// completed. Null until rated.
+  int? customerRating;
+
   Order({
     required this.id,
     required this.customerId,
@@ -55,5 +59,6 @@ class Order {
     this.contractorPosition,
     this.contractorArrived = false,
     this.trackingStatus = '',
+    this.customerRating,
   }) : responses = responses ?? [];
 }

@@ -111,6 +111,7 @@ class FirestoreRepository {
       contractorPosition: contractorLat != null && contractorLng != null ? LatLng(contractorLat, contractorLng) : null,
       contractorArrived: data['contractorArrived'] as bool? ?? false,
       trackingStatus: data['trackingStatus'] as String? ?? '',
+      customerRating: data['customerRating'] as int?,
     );
   }
 
@@ -193,6 +194,14 @@ class FirestoreRepository {
 
   Future<void> completeOrder(String orderId) {
     return _orders.doc(orderId).update({'status': OrderStatus.completed.name});
+  }
+
+  Future<void> cancelOrder(String orderId) {
+    return _orders.doc(orderId).update({'status': OrderStatus.cancelled.name});
+  }
+
+  Future<void> setOrderRating(String orderId, int stars) {
+    return _orders.doc(orderId).update({'customerRating': stars});
   }
 
   Future<void> sendMessage(String orderId, {

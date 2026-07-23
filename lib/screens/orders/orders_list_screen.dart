@@ -14,6 +14,8 @@ class OrdersListScreen extends StatelessWidget {
         return 'В работе';
       case OrderStatus.completed:
         return 'Завершён';
+      case OrderStatus.cancelled:
+        return 'Отменён';
     }
   }
 
@@ -25,6 +27,8 @@ class OrdersListScreen extends StatelessWidget {
         return Colors.blue;
       case OrderStatus.completed:
         return Colors.green;
+      case OrderStatus.cancelled:
+        return Colors.grey;
     }
   }
 

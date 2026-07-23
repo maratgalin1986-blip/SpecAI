@@ -375,6 +375,22 @@ class FirebaseDataStore extends ChangeNotifier implements AppDataStore {
   }
 
   @override
+  void cancelOrder(Order order) {
+    if (order.acceptedContractorId != null) return;
+    order.status = OrderStatus.cancelled;
+    notifyListeners();
+    _persist(_repo.cancelOrder(order.id), 'cancelOrder');
+  }
+
+  @override
+  Future<void> rateOrder(Order order, int stars) async {
+    final clamped = stars.clamp(1, 5);
+    order.customerRating = clamped;
+    notifyListeners();
+    await _repo.setOrderRating(order.id, clamped);
+  }
+
+  @override
   List<ChatMessage> messagesForOrder(String orderId) {
     return messages.where((m) => m.orderId == orderId).toList();
   }

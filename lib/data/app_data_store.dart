@@ -33,6 +33,13 @@ abstract class AppDataStore extends ChangeNotifier {
   List<Contractor> contractorsForCategory(String categoryId);
   void acceptResponse(Order order, OrderResponse response);
   void completeOrder(Order order);
+
+  /// Cancels an order that hasn't had a contractor accepted yet.
+  void cancelOrder(Order order);
+
+  /// Customer rates the contractor 1-5 stars after the order is completed.
+  Future<void> rateOrder(Order order, int stars);
+
   List<ChatMessage> messagesForOrder(String orderId);
   void sendMessage(Order order, String text);
 

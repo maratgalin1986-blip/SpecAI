@@ -73,6 +73,27 @@ class OrderDetailScreen extends StatelessWidget {
                     ),
                   );
                 }),
+                const SizedBox(height: 8),
+                OutlinedButton.icon(
+                  onPressed: () async {
+                    final confirmed = await showDialog<bool>(
+                      context: context,
+                      builder: (context) => AlertDialog(
+                        title: const Text('Отменить заказ?'),
+                        content: const Text('Заказ будет отменён, отклики исполнителей больше нельзя будет принять.'),
+                        actions: [
+                          TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('Назад')),
+                          TextButton(onPressed: () => Navigator.of(context).pop(true), child: const Text('Отменить заказ')),
+                        ],
+                      ),
+                    );
+                    if (confirmed == true) {
+                      AppData.instance.cancelOrder(order);
+                    }
+                  },
+                  icon: const Icon(Icons.close),
+                  label: const Text('Отменить заказ'),
+                ),
               ],
               if (order.status == OrderStatus.inProgress) ...[
                 OrderTrackingMap(order: order),
@@ -112,7 +133,7 @@ class OrderDetailScreen extends StatelessWidget {
                   child: const Text('Завершить заказ'),
                 ),
               ],
-              if (order.status == OrderStatus.completed)
+              if (order.status == OrderStatus.completed) ...[
                 Container(
                   padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(
@@ -127,10 +148,83 @@ class OrderDetailScreen extends StatelessWidget {
                     ],
                   ),
                 ),
+                const SizedBox(height: 16),
+                _RatingSection(order: order),
+              ],
+              if (order.status == OrderStatus.cancelled)
+                Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.05),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Row(
+                    children: [
+                      Icon(Icons.cancel_outlined, color: Colors.black54),
+                      SizedBox(width: 10),
+                      Text('Заказ отменён'),
+                    ],
+                  ),
+                ),
             ],
           ),
         );
       },
+    );
+  }
+}
+
+class _RatingSection extends StatefulWidget {
+  final Order order;
+  const _RatingSection({required this.order});
+
+  @override
+  State<_RatingSection> createState() => _RatingSectionState();
+}
+
+class _RatingSectionState extends State<_RatingSection> {
+  bool _submitting = false;
+
+  Future<void> _rate(int stars) async {
+    setState(() => _submitting = true);
+    await AppData.instance.rateOrder(widget.order, stars);
+    if (mounted) setState(() => _submitting = false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final rating = widget.order.customerRating;
+    if (rating != null) {
+      return Row(
+        children: [
+          const Text('Ваша оценка: ', style: TextStyle(color: Colors.black54)),
+          ...List.generate(
+            5,
+            (i) => Icon(
+              i < rating ? Icons.star : Icons.star_border,
+              color: Colors.amber,
+              size: 20,
+            ),
+          ),
+        ],
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text('Оцените исполнителя', style: TextStyle(fontWeight: FontWeight.w700)),
+        const SizedBox(height: 8),
+        Row(
+          children: List.generate(5, (i) {
+            final starIndex = i + 1;
+            return IconButton(
+              onPressed: _submitting ? null : () => _rate(starIndex),
+              icon: const Icon(Icons.star_border, color: Colors.amber),
+            );
+          }),
+        ),
+      ],
     );
   }
 }

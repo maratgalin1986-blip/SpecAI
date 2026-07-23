@@ -251,6 +251,19 @@ class DemoDataStore extends ChangeNotifier implements AppDataStore {
   }
 
   @override
+  void cancelOrder(Order order) {
+    if (order.acceptedContractorId != null) return;
+    order.status = OrderStatus.cancelled;
+    notifyListeners();
+  }
+
+  @override
+  Future<void> rateOrder(Order order, int stars) async {
+    order.customerRating = stars.clamp(1, 5);
+    notifyListeners();
+  }
+
+  @override
   List<ChatMessage> messagesForOrder(String orderId) {
     return messages.where((m) => m.orderId == orderId).toList();
   }

@@ -50,10 +50,16 @@ class _ContractorJobsTabState extends State<ContractorJobsTab> {
       0,
       (sum, o) => sum + (o.acceptedPrice * kCommissionRatePercent / 100).round(),
     );
+    final ratings = completed.map((o) => o.customerRating).whereType<int>().toList();
+    final averageRating = ratings.isEmpty ? null : ratings.reduce((a, b) => a + b) / ratings.length;
 
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
+        if (averageRating != null) ...[
+          _RatingSummaryCard(average: averageRating, count: ratings.length),
+          const SizedBox(height: 16),
+        ],
         _CommissionCard(completedCount: completed.length, potentialCommission: potentialCommission),
         const SizedBox(height: 20),
         const Text('В работе', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
@@ -85,6 +91,37 @@ extension on Order {
   int get acceptedPrice {
     final match = responses.where((r) => r.contractorId == acceptedContractorId);
     return match.isEmpty ? 0 : match.first.price;
+  }
+}
+
+class _RatingSummaryCard extends StatelessWidget {
+  final double average;
+  final int count;
+  const _RatingSummaryCard({required this.average, required this.count});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.star, color: Colors.amber, size: 28),
+          const SizedBox(width: 12),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(average.toStringAsFixed(1), style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
+              Text('по оценкам заказчиков: $count', style: const TextStyle(color: Colors.black54, fontSize: 12)),
+            ],
+          ),
+        ],
+      ),
+    );
   }
 }
 

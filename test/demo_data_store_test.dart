@@ -55,5 +55,9 @@ void main() {
 
     store.completeOrder(order);
     expect(order.status, OrderStatus.completed);
+
+    expect(order.customerRating, isNull);
+    await store.rateOrder(order, 5);
+    expect(order.customerRating, 5);
   }, timeout: const Timeout(Duration(seconds: 30)));
 }
