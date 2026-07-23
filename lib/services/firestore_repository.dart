@@ -162,17 +162,28 @@ class FirestoreRepository {
 
   Future<List<OrderResponse>> getResponses(String orderId) async {
     final snapshot = await _orders.doc(orderId).collection('responses').orderBy('createdAt').get();
-    return snapshot.docs.map((d) {
-      final data = d.data();
-      return OrderResponse(
-        id: d.id,
-        contractorId: data['contractorId'] as String,
-        contractorName: data['contractorName'] as String,
-        price: data['price'] as int,
-        eta: data['eta'] as String,
-        accepted: data['accepted'] as bool? ?? false,
-      );
-    }).toList();
+    return snapshot.docs.map(_responseFromDoc).toList();
+  }
+
+  /// Live bids on an order -- lets a customer watching an order see a real
+  /// contractor's response the moment it's submitted, instead of only on
+  /// the next full page load (which is all `getResponses` gives you).
+  Stream<List<OrderResponse>> watchResponses(String orderId) {
+    return _orders.doc(orderId).collection('responses').orderBy('createdAt').snapshots().map(
+          (snapshot) => snapshot.docs.map(_responseFromDoc).toList(),
+        );
+  }
+
+  OrderResponse _responseFromDoc(QueryDocumentSnapshot<Map<String, dynamic>> d) {
+    final data = d.data();
+    return OrderResponse(
+      id: d.id,
+      contractorId: data['contractorId'] as String,
+      contractorName: data['contractorName'] as String,
+      price: data['price'] as int,
+      eta: data['eta'] as String,
+      accepted: data['accepted'] as bool? ?? false,
+    );
   }
 
   Future<void> acceptResponse(String orderId, String responseId, String contractorId) {

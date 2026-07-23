@@ -17,9 +17,11 @@ import 'app_data_store.dart';
 /// screens don't change), while persisting every write to Firestore in
 /// the background so data survives and is visible in the Firebase console.
 ///
-/// Contractors are still local fixtures — there's no real supply side
-/// (contractor accounts) yet, so responses/tracking/chat replies are
-/// simulated client-side exactly like in demo mode, just persisted for real.
+/// Contractor tracking/chat auto-replies for the seeded fixture contractors
+/// are still simulated client-side exactly like in demo mode. Real
+/// contractor accounts (registerAsContractor) place real bids, which the
+/// customer sees live via a Firestore snapshot listener on the order's
+/// responses -- see _watchResponses.
 class FirebaseDataStore extends ChangeNotifier implements AppDataStore {
   FirebaseDataStore._internal() {
     _seedContractors();
@@ -37,6 +39,7 @@ class FirebaseDataStore extends ChangeNotifier implements AppDataStore {
   }
   final _random = Random();
   final Map<String, Timer> _trackingTimers = {};
+  final Map<String, StreamSubscription<List<OrderResponse>>> _responseSubs = {};
 
   fb.User? _authUser;
   String? _pendingPhone;
@@ -183,11 +186,33 @@ class FirebaseDataStore extends ChangeNotifier implements AppDataStore {
           );
           contractor.status = ContractorStatus.busy;
           _startTracking(order, contractor);
+        } else if (order.status == OrderStatus.newOrder) {
+          _watchResponses(order);
         }
       }
     } catch (e) {
       debugPrint('Failed to load order history: $e');
     }
+  }
+
+  /// Live-updates [order]'s responses as real contractors bid, instead of
+  /// only refreshing on the next full page load. Safe to call more than
+  /// once for the same order -- later calls are no-ops.
+  void _watchResponses(Order order) {
+    if (_responseSubs.containsKey(order.id)) return;
+    _responseSubs[order.id] = _repo.watchResponses(order.id).listen(
+      (responses) {
+        order.responses
+          ..clear()
+          ..addAll(responses);
+        notifyListeners();
+      },
+      onError: (Object e) => debugPrint('watchResponses failed: $e'),
+    );
+  }
+
+  void _stopWatchingResponses(String orderId) {
+    _responseSubs.remove(orderId)?.cancel();
   }
 
   @override
@@ -211,6 +236,10 @@ class FirebaseDataStore extends ChangeNotifier implements AppDataStore {
   @override
   void signOut() {
     _persist(_auth.signOut(), 'signOut');
+    for (final sub in _responseSubs.values) {
+      sub.cancel();
+    }
+    _responseSubs.clear();
     currentUser = null;
     _authUser = null;
     _pendingPhone = null;
@@ -249,6 +278,7 @@ class FirebaseDataStore extends ChangeNotifier implements AppDataStore {
     orders.insert(0, order);
     notifyListeners();
     _simulateContractorResponses(order);
+    _watchResponses(order);
     return order;
   }
 
@@ -316,6 +346,7 @@ class FirebaseDataStore extends ChangeNotifier implements AppDataStore {
     order.trackingStatus = 'Выехал к вам';
     notifyListeners();
     _persist(_repo.acceptResponse(order.id, response.id, response.contractorId), 'acceptResponse');
+    _stopWatchingResponses(order.id);
     _startTracking(order, contractor);
   }
 
@@ -380,6 +411,7 @@ class FirebaseDataStore extends ChangeNotifier implements AppDataStore {
     order.status = OrderStatus.cancelled;
     notifyListeners();
     _persist(_repo.cancelOrder(order.id), 'cancelOrder');
+    _stopWatchingResponses(order.id);
   }
 
   @override
