@@ -1,0 +1,29 @@
+{
+  "name": "specai",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "AI platform for heavy equipment rental and construction services",
+  "engines": {
+    "node": ">=20"
+  },
+  "packageManager": "pnpm@10.33.0",
+  "scripts": {
+    "dev": "pnpm --filter @specai/web dev",
+    "build": "pnpm -r build",
+    "lint": "eslint . --max-warnings 0",
+    "typecheck": "pnpm -r typecheck",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "db:generate": "pnpm --filter @specai/database generate",
+    "db:push": "pnpm --filter @specai/database push",
+    "db:studio": "pnpm --filter @specai/database studio"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.13.0",
+    "eslint": "^9.13.0",
+    "prettier": "^3.3.3",
+    "typescript": "^5.6.3",
+    "typescript-eslint": "^8.11.0"
+  }
+}

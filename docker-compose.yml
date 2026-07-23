@@ -1,0 +1,15 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: specai
+      POSTGRES_PASSWORD: specai
+      POSTGRES_DB: specai
+    ports:
+      - '5432:5432'
+    volumes:
+      - specai_postgres_data:/var/lib/postgresql/data
+
+volumes:
+  specai_postgres_data:

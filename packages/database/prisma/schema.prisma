@@ -1,0 +1,291 @@
+// SpecAI domain schema: heavy equipment rental & construction services platform.
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Identity
+// ---------------------------------------------------------------------------
+
+enum UserRole {
+  CUSTOMER // rents equipment / hires services
+  PROVIDER_ADMIN // manages a provider company's fleet and bookings
+  PROVIDER_OPERATOR // drives/operates equipment on behalf of a provider
+  PLATFORM_ADMIN // internal SpecAI staff
+}
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  name          String
+  phone         String?
+  role          UserRole  @default(CUSTOMER)
+  passwordHash  String?
+  emailVerified DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  company   Company? @relation(fields: [companyId], references: [id])
+  companyId String?
+
+  bookings      Booking[]        @relation("BookingCustomer")
+  reviews       Review[]
+  aiConversations AiConversation[]
+
+  @@index([companyId])
+}
+
+// A Company can be an equipment provider (rental fleet owner), a customer
+// organization, or both — `isProvider` distinguishes fleet-owning companies.
+model Company {
+  id          String   @id @default(cuid())
+  name        String
+  isProvider  Boolean  @default(false)
+  taxId       String?
+  phone       String?
+  website     String?
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  location   Location? @relation(fields: [locationId], references: [id])
+  locationId String?
+
+  users     User[]
+  equipment Equipment[]
+  reviews   Review[]
+
+  @@index([locationId])
+}
+
+model Location {
+  id         String   @id @default(cuid())
+  addressLine String
+  city        String
+  region      String?
+  postalCode  String?
+  country     String
+  latitude    Float?
+  longitude   Float?
+  createdAt   DateTime @default(now())
+
+  companies Company[]
+  equipment Equipment[]
+  bookings  Booking[]
+}
+
+// ---------------------------------------------------------------------------
+// Equipment catalog
+// ---------------------------------------------------------------------------
+
+model EquipmentCategory {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  slug        String   @unique
+  description String?
+
+  parent   EquipmentCategory?  @relation("CategoryHierarchy", fields: [parentId], references: [id])
+  parentId String?
+  children EquipmentCategory[] @relation("CategoryHierarchy")
+
+  equipment Equipment[]
+
+  @@index([parentId])
+}
+
+enum EquipmentStatus {
+  AVAILABLE
+  RENTED
+  IN_MAINTENANCE
+  RETIRED
+}
+
+model Equipment {
+  id          String          @id @default(cuid())
+  name        String
+  make        String?
+  model       String?
+  year        Int?
+  status      EquipmentStatus @default(AVAILABLE)
+  dailyRate   Decimal         @db.Decimal(10, 2)
+  weeklyRate  Decimal?        @db.Decimal(10, 2)
+  monthlyRate Decimal?        @db.Decimal(10, 2)
+  currency    String          @default("USD")
+  // Free-form technical specifications (capacity, horsepower, dimensions, etc.).
+  // Kept schemaless because spec fields vary wildly across equipment types;
+  // AI spec-extraction populates this from manufacturer sheets/photos.
+  specs       Json?
+  description String?
+  imageUrls   String[]
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  category   EquipmentCategory @relation(fields: [categoryId], references: [id])
+  categoryId String
+
+  company   Company @relation(fields: [companyId], references: [id])
+  companyId String
+
+  location   Location? @relation(fields: [locationId], references: [id])
+  locationId String?
+
+  bookings           Booking[]
+  maintenanceRecords MaintenanceRecord[]
+  reviews            Review[]
+  documents          Document[]
+
+  @@index([categoryId])
+  @@index([companyId])
+  @@index([locationId])
+  @@index([status])
+}
+
+model MaintenanceRecord {
+  id          String   @id @default(cuid())
+  performedAt DateTime
+  description String
+  cost        Decimal? @db.Decimal(10, 2)
+  createdAt   DateTime @default(now())
+
+  equipment   Equipment @relation(fields: [equipmentId], references: [id])
+  equipmentId String
+
+  @@index([equipmentId])
+}
+
+// ---------------------------------------------------------------------------
+// Bookings / rentals
+// ---------------------------------------------------------------------------
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
+model Booking {
+  id           String        @id @default(cuid())
+  status       BookingStatus @default(PENDING)
+  startDate    DateTime
+  endDate      DateTime
+  totalPrice   Decimal       @db.Decimal(10, 2)
+  currency     String        @default("USD")
+  depositPaid  Boolean       @default(false)
+  notes        String?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  equipment   Equipment @relation(fields: [equipmentId], references: [id])
+  equipmentId String
+
+  customer   User   @relation("BookingCustomer", fields: [customerId], references: [id])
+  customerId String
+
+  deliveryLocation   Location? @relation(fields: [deliveryLocationId], references: [id])
+  deliveryLocationId String?
+
+  documents Document[]
+  review    Review?
+
+  @@index([equipmentId])
+  @@index([customerId])
+  @@index([status])
+}
+
+enum DocumentType {
+  CONTRACT
+  INSURANCE_CERTIFICATE
+  INSPECTION_REPORT
+  INVOICE
+  OTHER
+}
+
+model Document {
+  id        String       @id @default(cuid())
+  type      DocumentType
+  fileUrl   String
+  fileName  String
+  createdAt DateTime     @default(now())
+
+  booking   Booking? @relation(fields: [bookingId], references: [id])
+  bookingId String?
+
+  equipment   Equipment? @relation(fields: [equipmentId], references: [id])
+  equipmentId String?
+
+  @@index([bookingId])
+  @@index([equipmentId])
+}
+
+model Review {
+  id        String   @id @default(cuid())
+  rating    Int
+  comment   String?
+  createdAt DateTime @default(now())
+
+  author   User   @relation(fields: [authorId], references: [id])
+  authorId String
+
+  company   Company @relation(fields: [companyId], references: [id])
+  companyId String
+
+  equipment   Equipment? @relation(fields: [equipmentId], references: [id])
+  equipmentId String?
+
+  booking   Booking @relation(fields: [bookingId], references: [id])
+  bookingId String  @unique
+
+  @@index([companyId])
+  @@index([equipmentId])
+}
+
+// ---------------------------------------------------------------------------
+// AI assistant
+// ---------------------------------------------------------------------------
+
+enum AiConversationPurpose {
+  EQUIPMENT_RECOMMENDATION
+  SPEC_EXTRACTION
+  GENERAL_SUPPORT
+}
+
+model AiConversation {
+  id        String                 @id @default(cuid())
+  purpose   AiConversationPurpose  @default(GENERAL_SUPPORT)
+  createdAt DateTime               @default(now())
+
+  user   User   @relation(fields: [userId], references: [id])
+  userId String
+
+  messages AiMessage[]
+
+  @@index([userId])
+}
+
+enum AiMessageRole {
+  USER
+  ASSISTANT
+  SYSTEM
+}
+
+model AiMessage {
+  id        String        @id @default(cuid())
+  role      AiMessageRole
+  content   String
+  // Structured payload for tool calls/results (e.g. recommended equipment ids).
+  metadata  Json?
+  createdAt DateTime      @default(now())
+
+  conversation   AiConversation @relation(fields: [conversationId], references: [id])
+  conversationId String
+
+  @@index([conversationId])
+}
