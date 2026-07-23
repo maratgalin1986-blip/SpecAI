@@ -12,6 +12,10 @@ class Contractor {
   LatLng position;
   ContractorStatus status;
 
+  /// Id of the AppUser who owns this listing, for real contractor accounts
+  /// registered through the app. Null for the seeded demo fixtures.
+  final String? ownerId;
+
   Contractor({
     required this.id,
     required this.name,
@@ -21,5 +25,6 @@ class Contractor {
     required this.rating,
     required this.position,
     this.status = ContractorStatus.available,
+    this.ownerId,
   });
 }

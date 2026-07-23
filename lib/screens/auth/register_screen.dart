@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../data/app_data_store.dart';
 import '../../models/app_user.dart';
+import '../../models/equipment_category.dart';
 import '../home/home_screen.dart';
 
 class RegisterScreen extends StatefulWidget {
@@ -12,8 +13,19 @@ class RegisterScreen extends StatefulWidget {
 
 class _RegisterScreenState extends State<RegisterScreen> {
   final _nameController = TextEditingController();
+  final _priceController = TextEditingController(text: '3000');
+  final _etaController = TextEditingController(text: '20');
   UserRole _role = UserRole.customer;
+  String _categoryId = equipmentCategories.first.id;
   bool _loading = false;
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _priceController.dispose();
+    _etaController.dispose();
+    super.dispose();
+  }
 
   Future<void> _submit() async {
     if (_nameController.text.trim().isEmpty) {
@@ -22,9 +34,24 @@ class _RegisterScreenState extends State<RegisterScreen> {
       );
       return;
     }
+    final price = int.tryParse(_priceController.text.trim());
+    final eta = int.tryParse(_etaController.text.trim());
+    if (_role == UserRole.contractor && (price == null || price <= 0 || eta == null || eta <= 0)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Укажите корректные цену и время подачи')),
+      );
+      return;
+    }
     setState(() => _loading = true);
     try {
       await AppData.instance.createProfile(name: _nameController.text.trim(), role: _role);
+      if (_role == UserRole.contractor) {
+        await AppData.instance.registerAsContractor(
+          categoryId: _categoryId,
+          price: price!,
+          etaMinutes: eta!,
+        );
+      }
       if (!mounted) return;
       Navigator.of(context).pushAndRemoveUntil(
         MaterialPageRoute(builder: (_) => const HomeScreen()),
@@ -46,8 +73,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       appBar: AppBar(title: const Text('Создание профиля')),
       body: Padding(
         padding: const EdgeInsets.all(24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
+        child: ListView(
           children: [
             const Text('Ваше имя', style: TextStyle(fontWeight: FontWeight.w600)),
             const SizedBox(height: 8),
@@ -71,6 +97,55 @@ class _RegisterScreenState extends State<RegisterScreen> {
               selected: _role == UserRole.contractor,
               onTap: () => setState(() => _role = UserRole.contractor),
             ),
+            if (_role == UserRole.contractor) ...[
+              const SizedBox(height: 24),
+              const Text('Какую технику предоставляете', style: TextStyle(fontWeight: FontWeight.w600)),
+              const SizedBox(height: 8),
+              DropdownButtonFormField<String>(
+                value: _categoryId,
+                items: equipmentCategories
+                    .map((c) => DropdownMenuItem(value: c.id, child: Text(c.title)))
+                    .toList(),
+                onChanged: (v) => setState(() => _categoryId = v!),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('Цена, ₽', style: TextStyle(fontWeight: FontWeight.w600)),
+                        const SizedBox(height: 8),
+                        TextField(
+                          controller: _priceController,
+                          keyboardType: TextInputType.number,
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('Подача, мин', style: TextStyle(fontWeight: FontWeight.w600)),
+                        const SizedBox(height: 8),
+                        TextField(
+                          controller: _etaController,
+                          keyboardType: TextInputType.number,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Категорию и цену можно будет изменить позже в профиле.',
+                style: TextStyle(color: Colors.black54, fontSize: 12),
+              ),
+            ],
             const SizedBox(height: 32),
             ElevatedButton(
               onPressed: _loading ? null : _submit,

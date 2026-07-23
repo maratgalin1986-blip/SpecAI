@@ -35,6 +35,40 @@ abstract class AppDataStore extends ChangeNotifier {
   void completeOrder(Order order);
   List<ChatMessage> messagesForOrder(String orderId);
   void sendMessage(Order order, String text);
+
+  /// Creates (or updates) the marketplace listing tied to the current
+  /// contractor account, so orders in [categoryId] start showing up in
+  /// their "Заказы" feed.
+  Future<Contractor> registerAsContractor({
+    required String categoryId,
+    required int price,
+    required int etaMinutes,
+  });
+
+  /// The Contractor listing owned by the currently signed-in contractor,
+  /// or null if they haven't registered one (or are a customer).
+  Contractor? myContractorProfile();
+
+  /// Fetches/refreshes orders relevant to this contractor (open orders in
+  /// their category, plus orders they've been accepted on) into local
+  /// state. No-op for the in-memory demo backend, where every order is
+  /// already local; real work for the Firestore backend, which otherwise
+  /// only loads the signed-in user's own orders.
+  Future<void> loadContractorFeed(Contractor contractor);
+
+  /// Open orders in the contractor's own category that they haven't
+  /// already responded to.
+  List<Order> openOrdersForContractor(Contractor contractor);
+
+  /// Orders the contractor is currently working (accepted, not yet
+  /// completed).
+  List<Order> activeOrdersForContractor(Contractor contractor);
+
+  /// Orders the contractor has finished — used for the commission/earnings
+  /// summary on their profile.
+  List<Order> completedOrdersForContractor(Contractor contractor);
+
+  Future<void> respondToOrder(Order order, Contractor contractor, {required int price, required String eta});
 }
 
 /// City center used for demo geocoding/map centering in both backends.

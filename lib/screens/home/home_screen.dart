@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
+import '../../data/app_data_store.dart';
+import '../../models/app_user.dart';
 import '../../widgets/spec_ai_logo.dart';
+import '../contractor/contractor_jobs_tab.dart';
+import '../contractor/contractor_orders_tab.dart';
 import '../orders/orders_list_screen.dart';
 import '../profile/profile_screen.dart';
 import 'catalog_tab.dart';
@@ -16,11 +20,23 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final tabs = [
-      const CatalogTab(),
-      const OrdersListScreen(),
-      const ProfileScreen(),
-    ];
+    final isContractor = AppData.instance.currentUser?.role == UserRole.contractor;
+
+    final tabs = isContractor
+        ? const [ContractorOrdersTab(), ContractorJobsTab(), ProfileScreen()]
+        : const [CatalogTab(), OrdersListScreen(), ProfileScreen()];
+
+    final destinations = isContractor
+        ? const [
+            NavigationDestination(icon: Icon(Icons.grid_view), label: 'Заказы'),
+            NavigationDestination(icon: Icon(Icons.work_outline), label: 'В работе'),
+            NavigationDestination(icon: Icon(Icons.person), label: 'Профиль'),
+          ]
+        : const [
+            NavigationDestination(icon: Icon(Icons.grid_view), label: 'Каталог'),
+            NavigationDestination(icon: Icon(Icons.list_alt), label: 'Заказы'),
+            NavigationDestination(icon: Icon(Icons.person), label: 'Профиль'),
+          ];
 
     return Scaffold(
       appBar: AppBar(
@@ -36,11 +52,7 @@ class _HomeScreenState extends State<HomeScreen> {
       bottomNavigationBar: NavigationBar(
         selectedIndex: _tab,
         onDestinationSelected: (i) => setState(() => _tab = i),
-        destinations: const [
-          NavigationDestination(icon: Icon(Icons.grid_view), label: 'Каталог'),
-          NavigationDestination(icon: Icon(Icons.list_alt), label: 'Заказы'),
-          NavigationDestination(icon: Icon(Icons.person), label: 'Профиль'),
-        ],
+        destinations: destinations,
       ),
     );
   }

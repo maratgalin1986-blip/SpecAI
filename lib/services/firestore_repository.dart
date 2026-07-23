@@ -114,6 +114,35 @@ class FirestoreRepository {
     );
   }
 
+  /// Open ("newOrder") orders in [categoryId], for a contractor's feed.
+  /// Not scoped to a customer -- security rules gate which orders are
+  /// actually visible to a given contractor.
+  Future<List<Order>> getOpenOrdersForCategory(String categoryId) async {
+    final snapshot = await _orders
+        .where('categoryId', isEqualTo: categoryId)
+        .where('status', isEqualTo: OrderStatus.newOrder.name)
+        .get();
+
+    final result = <Order>[];
+    for (final doc in snapshot.docs) {
+      final responses = await getResponses(doc.id);
+      result.add(_orderFromDoc(doc, responses));
+    }
+    return result;
+  }
+
+  /// Orders a contractor has been accepted on (in progress or completed).
+  Future<List<Order>> getOrdersForContractor(String contractorId) async {
+    final snapshot = await _orders.where('acceptedContractorId', isEqualTo: contractorId).get();
+
+    final result = <Order>[];
+    for (final doc in snapshot.docs) {
+      final responses = await getResponses(doc.id);
+      result.add(_orderFromDoc(doc, responses));
+    }
+    return result;
+  }
+
   Future<void> addResponse(String orderId, {
     required String contractorId,
     required String contractorName,
@@ -208,6 +237,40 @@ class FirestoreRepository {
       'lat': c.position.latitude,
       'lng': c.position.longitude,
       'status': c.status.name,
+      'ownerId': c.ownerId,
     });
+  }
+
+  Future<Contractor?> getContractor(String id) async {
+    final doc = await _contractors.doc(id).get();
+    if (!doc.exists) return null;
+    final data = doc.data()!;
+    return Contractor(
+      id: doc.id,
+      name: data['name'] as String,
+      categoryId: data['categoryId'] as String,
+      price: data['price'] as int,
+      etaMinutes: data['etaMinutes'] as int,
+      rating: (data['rating'] as num).toDouble(),
+      position: LatLng(data['lat'] as double, data['lng'] as double),
+      status: ContractorStatus.values.byName(data['status'] as String? ?? 'available'),
+      ownerId: data['ownerId'] as String?,
+    );
+  }
+
+  /// Creates or updates the marketplace listing owned by a real contractor
+  /// account (as opposed to the seeded fixtures, which have no owner).
+  Future<void> upsertContractor(Contractor c) {
+    return _contractors.doc(c.id).set({
+      'name': c.name,
+      'categoryId': c.categoryId,
+      'price': c.price,
+      'etaMinutes': c.etaMinutes,
+      'rating': c.rating,
+      'lat': c.position.latitude,
+      'lng': c.position.longitude,
+      'status': c.status.name,
+      'ownerId': c.ownerId,
+    }, SetOptions(merge: true));
   }
 }

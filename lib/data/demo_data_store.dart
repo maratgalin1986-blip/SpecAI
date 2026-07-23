@@ -286,4 +286,77 @@ class DemoDataStore extends ChangeNotifier implements AppDataStore {
       notifyListeners();
     });
   }
+
+  @override
+  Future<Contractor> registerAsContractor({
+    required String categoryId,
+    required int price,
+    required int etaMinutes,
+  }) async {
+    final id = 'c_owner_${currentUser!.id}';
+    final index = contractors.indexWhere((c) => c.ownerId == currentUser!.id);
+    final contractor = Contractor(
+      id: id,
+      name: currentUser!.name,
+      categoryId: categoryId,
+      price: price,
+      etaMinutes: etaMinutes,
+      rating: 5.0,
+      position: _jitter(kCityCenter, 0.03),
+      ownerId: currentUser!.id,
+    );
+    if (index >= 0) {
+      contractors[index] = contractor;
+    } else {
+      contractors.add(contractor);
+    }
+    notifyListeners();
+    return contractor;
+  }
+
+  @override
+  Contractor? myContractorProfile() {
+    if (currentUser == null) return null;
+    final matches = contractors.where((c) => c.ownerId == currentUser!.id);
+    return matches.isEmpty ? null : matches.first;
+  }
+
+  @override
+  Future<void> loadContractorFeed(Contractor contractor) async {
+    // Every order already lives in the in-memory `orders` list.
+  }
+
+  @override
+  List<Order> openOrdersForContractor(Contractor contractor) {
+    return orders
+        .where((o) =>
+            o.categoryId == contractor.categoryId &&
+            o.status == OrderStatus.newOrder &&
+            !o.responses.any((r) => r.contractorId == contractor.id))
+        .toList();
+  }
+
+  @override
+  List<Order> activeOrdersForContractor(Contractor contractor) {
+    return orders.where((o) => o.acceptedContractorId == contractor.id && o.status == OrderStatus.inProgress).toList();
+  }
+
+  @override
+  List<Order> completedOrdersForContractor(Contractor contractor) {
+    return orders.where((o) => o.acceptedContractorId == contractor.id && o.status == OrderStatus.completed).toList();
+  }
+
+  @override
+  Future<void> respondToOrder(Order order, Contractor contractor, {required int price, required String eta}) async {
+    order.responses.add(
+      OrderResponse(
+        id: 'r_${DateTime.now().microsecondsSinceEpoch}',
+        contractorId: contractor.id,
+        contractorName: contractor.name,
+        price: price,
+        eta: eta,
+      ),
+    );
+    notifyListeners();
+  }
 }

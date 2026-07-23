@@ -127,8 +127,29 @@ class FirebaseDataStore extends ChangeNotifier implements AppDataStore {
     final existing = await _repo.getUser(user.uid);
     if (existing != null) {
       currentUser = existing;
+      if (existing.role == UserRole.contractor) {
+        await _loadOwnContractorProfile(existing.id);
+      }
       await _loadOrderHistory();
       notifyListeners();
+    }
+  }
+
+  /// Restores a contractor's own marketplace listing after a page reload —
+  /// otherwise `contractors` only has the seeded fixtures and
+  /// myContractorProfile() would look empty even though they registered.
+  Future<void> _loadOwnContractorProfile(String uid) async {
+    try {
+      final mine = await _repo.getContractor('c_owner_$uid');
+      if (mine == null) return;
+      final index = contractors.indexWhere((c) => c.id == mine.id);
+      if (index >= 0) {
+        contractors[index] = mine;
+      } else {
+        contractors.add(mine);
+      }
+    } catch (e) {
+      debugPrint('Failed to load contractor profile: $e');
     }
   }
 
@@ -395,5 +416,106 @@ class FirebaseDataStore extends ChangeNotifier implements AppDataStore {
       notifyListeners();
       _persist(_repo.sendMessage(order.id, senderId: senderId, senderName: senderName, text: text), 'sendMessage');
     });
+  }
+
+  @override
+  Future<Contractor> registerAsContractor({
+    required String categoryId,
+    required int price,
+    required int etaMinutes,
+  }) async {
+    final id = 'c_owner_${currentUser!.id}';
+    final index = contractors.indexWhere((c) => c.ownerId == currentUser!.id);
+    final contractor = Contractor(
+      id: id,
+      name: currentUser!.name,
+      categoryId: categoryId,
+      price: price,
+      etaMinutes: etaMinutes,
+      rating: 5.0,
+      position: _jitter(kCityCenter, 0.03),
+      ownerId: currentUser!.id,
+    );
+    if (index >= 0) {
+      contractors[index] = contractor;
+    } else {
+      contractors.add(contractor);
+    }
+    notifyListeners();
+    await _repo.upsertContractor(contractor);
+    return contractor;
+  }
+
+  @override
+  Contractor? myContractorProfile() {
+    if (currentUser == null) return null;
+    final matches = contractors.where((c) => c.ownerId == currentUser!.id);
+    return matches.isEmpty ? null : matches.first;
+  }
+
+  /// Merges freshly-fetched orders into the local list, replacing any
+  /// stale copy of the same order (by id) rather than duplicating it.
+  void _mergeOrders(List<Order> fetched) {
+    for (final order in fetched) {
+      final index = orders.indexWhere((o) => o.id == order.id);
+      if (index >= 0) {
+        orders[index] = order;
+      } else {
+        orders.add(order);
+      }
+    }
+  }
+
+  @override
+  Future<void> loadContractorFeed(Contractor contractor) async {
+    try {
+      final open = await _repo.getOpenOrdersForCategory(contractor.categoryId);
+      final mine = await _repo.getOrdersForContractor(contractor.id);
+      _mergeOrders(open);
+      _mergeOrders(mine);
+      notifyListeners();
+    } catch (e) {
+      debugPrint('Failed to load contractor feed: $e');
+    }
+  }
+
+  @override
+  List<Order> openOrdersForContractor(Contractor contractor) {
+    return orders
+        .where((o) =>
+            o.categoryId == contractor.categoryId &&
+            o.status == OrderStatus.newOrder &&
+            !o.responses.any((r) => r.contractorId == contractor.id))
+        .toList();
+  }
+
+  @override
+  List<Order> activeOrdersForContractor(Contractor contractor) {
+    return orders.where((o) => o.acceptedContractorId == contractor.id && o.status == OrderStatus.inProgress).toList();
+  }
+
+  @override
+  List<Order> completedOrdersForContractor(Contractor contractor) {
+    return orders.where((o) => o.acceptedContractorId == contractor.id && o.status == OrderStatus.completed).toList();
+  }
+
+  @override
+  Future<void> respondToOrder(Order order, Contractor contractor, {required int price, required String eta}) async {
+    final response = OrderResponse(
+      id: 'r_${DateTime.now().microsecondsSinceEpoch}',
+      contractorId: contractor.id,
+      contractorName: contractor.name,
+      price: price,
+      eta: eta,
+    );
+    order.responses.add(response);
+    notifyListeners();
+    await _repo.addResponse(
+      order.id,
+      contractorId: contractor.id,
+      contractorName: contractor.name,
+      price: price,
+      eta: eta,
+    );
   }
 }

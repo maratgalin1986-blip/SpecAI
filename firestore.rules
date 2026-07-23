@@ -1,10 +1,8 @@
 rules_version = '2';
 
-// NOTE: this schema currently only models the customer side with a real
-// authenticated user. Contractor accounts are not yet real Firebase Auth
-// users (see DemoDataStore/Contractor fixtures) — that's the next piece of
-// real-backend work, tracked in README. Until then, only the order's owner
-// (customer) can read/write it and its subcollections.
+// Contractor accounts are real Firebase Auth users too now. A contractor's
+// own marketplace listing always lives at contractors/{c_owner_<their uid>},
+// which lets these rules check ownership without an extra lookup.
 service cloud.firestore {
   match /databases/{database}/documents {
 
@@ -14,24 +12,49 @@ service cloud.firestore {
 
     match /contractors/{contractorId} {
       allow read: if request.auth != null;
-      allow write: if false; // seeded/managed server-side only for now
+      // Server-seeded fixtures are managed out of band. A real contractor
+      // may only create/update their own listing, whose id is derived from
+      // their uid so this can be checked without reading another document.
+      allow create, update: if request.auth != null
+        && contractorId == ('c_owner_' + request.auth.uid)
+        && request.resource.data.ownerId == request.auth.uid;
+      allow delete: if false;
     }
 
     match /orders/{orderId} {
       allow create: if request.auth != null
         && request.auth.uid == request.resource.data.customerId;
-      allow read, update: if request.auth != null
+      // The customer always sees their own orders; a contractor can read an
+      // order once they're accepted on it (any status); any signed-in user
+      // can see "newOrder" status orders so contractors can browse open
+      // demand in their category before responding.
+      allow read: if request.auth != null && (
+        request.auth.uid == resource.data.customerId ||
+        resource.data.acceptedContractorId == ('c_owner_' + request.auth.uid) ||
+        resource.data.status == 'newOrder'
+      );
+      allow update: if request.auth != null
         && request.auth.uid == resource.data.customerId;
       allow delete: if false;
 
       match /responses/{responseId} {
-        allow read, write: if request.auth != null
-          && request.auth.uid == get(/databases/$(database)/documents/orders/$(orderId)).data.customerId;
+        // Bids are visible to anyone who can see the order (customer +
+        // browsing contractors); a response may only be written either by
+        // the contractor it's from, or by the order's own customer (covers
+        // the simulated filler responses used to keep the demo lively).
+        allow read: if request.auth != null;
+        allow create: if request.auth != null && (
+          request.resource.data.contractorId == ('c_owner_' + request.auth.uid) ||
+          request.auth.uid == get(/databases/$(database)/documents/orders/$(orderId)).data.customerId
+        );
+        allow update, delete: if false;
       }
 
       match /messages/{messageId} {
-        allow read, write: if request.auth != null
-          && request.auth.uid == get(/databases/$(database)/documents/orders/$(orderId)).data.customerId;
+        allow read, write: if request.auth != null && (
+          request.auth.uid == get(/databases/$(database)/documents/orders/$(orderId)).data.customerId ||
+          get(/databases/$(database)/documents/orders/$(orderId)).data.acceptedContractorId == ('c_owner_' + request.auth.uid)
+        );
       }
     }
   }

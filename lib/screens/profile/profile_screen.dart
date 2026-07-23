@@ -77,7 +77,8 @@ class _ContractorMonetizationCard extends StatelessWidget {
           const SizedBox(height: 8),
           Text(
             'После запуска платных тарифов комиссия SpecAI составит ${kCommissionRatePercent.toStringAsFixed(0)}% с завершённого заказа '
-            '(или фиксированная подписка — выберем позже). Приём платежей ещё не подключён.',
+            '(или фиксированная подписка — выберем позже). Приём платежей ещё не подключён — '
+            'фактическая сумма к оплате всегда 0 ₽, актуальный расчёт смотрите на вкладке «В работе».',
             style: const TextStyle(color: Colors.black54, fontSize: 13),
           ),
         ],
