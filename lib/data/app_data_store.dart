@@ -56,11 +56,12 @@ abstract class AppDataStore extends ChangeNotifier {
   /// or null if they haven't registered one (or are a customer).
   Contractor? myContractorProfile();
 
-  /// Fetches/refreshes orders relevant to this contractor (open orders in
-  /// their category, plus orders they've been accepted on) into local
+  /// Arms live updates for orders relevant to this contractor (open orders
+  /// in their category, plus orders they've been accepted on) into local
   /// state. No-op for the in-memory demo backend, where every order is
-  /// already local; real work for the Firestore backend, which otherwise
-  /// only loads the signed-in user's own orders.
+  /// already local; for the Firestore backend this is a standing
+  /// subscription (safe to call repeatedly -- a second call for the same
+  /// contractor is a no-op), not a one-time fetch.
   Future<void> loadContractorFeed(Contractor contractor);
 
   /// Open orders in the contractor's own category that they haven't

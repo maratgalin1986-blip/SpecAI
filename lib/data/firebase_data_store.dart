@@ -240,6 +240,9 @@ class FirebaseDataStore extends ChangeNotifier implements AppDataStore {
       sub.cancel();
     }
     _responseSubs.clear();
+    _openOrdersSub?.cancel();
+    _myOrdersSub?.cancel();
+    _watchedContractorId = null;
     currentUser = null;
     _authUser = null;
     _pendingPhone = null;
@@ -514,17 +517,34 @@ class FirebaseDataStore extends ChangeNotifier implements AppDataStore {
     }
   }
 
+  /// Live subscriptions backing loadContractorFeed, keyed by contractor id
+  /// so switching categories (via the profile edit dialog) re-subscribes
+  /// instead of leaking the old listener.
+  String? _watchedContractorId;
+  StreamSubscription<List<Order>>? _openOrdersSub;
+  StreamSubscription<List<Order>>? _myOrdersSub;
+
   @override
   Future<void> loadContractorFeed(Contractor contractor) async {
-    try {
-      final open = await _repo.getOpenOrdersForCategory(contractor.categoryId);
-      final mine = await _repo.getOrdersForContractor(contractor.id);
-      _mergeOrders(open);
-      _mergeOrders(mine);
-      notifyListeners();
-    } catch (e) {
-      debugPrint('Failed to load contractor feed: $e');
-    }
+    if (_watchedContractorId == contractor.id) return;
+    _watchedContractorId = contractor.id;
+    await _openOrdersSub?.cancel();
+    await _myOrdersSub?.cancel();
+
+    _openOrdersSub = _repo.watchOpenOrdersForCategory(contractor.categoryId).listen(
+      (fetched) {
+        _mergeOrders(fetched);
+        notifyListeners();
+      },
+      onError: (Object e) => debugPrint('watchOpenOrdersForCategory failed: $e'),
+    );
+    _myOrdersSub = _repo.watchOrdersForContractor(contractor.id).listen(
+      (fetched) {
+        _mergeOrders(fetched);
+        notifyListeners();
+      },
+      onError: (Object e) => debugPrint('watchOrdersForContractor failed: $e'),
+    );
   }
 
   @override

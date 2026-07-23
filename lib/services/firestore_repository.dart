@@ -80,13 +80,7 @@ class FirestoreRepository {
         .where('customerId', isEqualTo: customerId)
         .orderBy('createdAt', descending: true)
         .get();
-
-    final result = <Order>[];
-    for (final doc in snapshot.docs) {
-      final responses = await getResponses(doc.id);
-      result.add(_orderFromDoc(doc, responses));
-    }
-    return result;
+    return _ordersFromDocs(snapshot.docs);
   }
 
   Order _orderFromDoc(DocumentSnapshot<Map<String, dynamic>> doc, List<OrderResponse> responses) {
@@ -123,21 +117,38 @@ class FirestoreRepository {
         .where('categoryId', isEqualTo: categoryId)
         .where('status', isEqualTo: OrderStatus.newOrder.name)
         .get();
+    return _ordersFromDocs(snapshot.docs);
+  }
 
-    final result = <Order>[];
-    for (final doc in snapshot.docs) {
-      final responses = await getResponses(doc.id);
-      result.add(_orderFromDoc(doc, responses));
-    }
-    return result;
+  /// Live version of [getOpenOrdersForCategory] -- a new order landing in
+  /// this category, or one leaving it (accepted/cancelled elsewhere), is
+  /// reflected without the contractor needing to reopen the tab.
+  Stream<List<Order>> watchOpenOrdersForCategory(String categoryId) {
+    return _orders
+        .where('categoryId', isEqualTo: categoryId)
+        .where('status', isEqualTo: OrderStatus.newOrder.name)
+        .snapshots()
+        .asyncMap((snapshot) => _ordersFromDocs(snapshot.docs));
   }
 
   /// Orders a contractor has been accepted on (in progress or completed).
   Future<List<Order>> getOrdersForContractor(String contractorId) async {
     final snapshot = await _orders.where('acceptedContractorId', isEqualTo: contractorId).get();
+    return _ordersFromDocs(snapshot.docs);
+  }
 
+  /// Live version of [getOrdersForContractor] -- an order the contractor is
+  /// working shows status/tracking changes as they happen.
+  Stream<List<Order>> watchOrdersForContractor(String contractorId) {
+    return _orders
+        .where('acceptedContractorId', isEqualTo: contractorId)
+        .snapshots()
+        .asyncMap((snapshot) => _ordersFromDocs(snapshot.docs));
+  }
+
+  Future<List<Order>> _ordersFromDocs(List<QueryDocumentSnapshot<Map<String, dynamic>>> docs) async {
     final result = <Order>[];
-    for (final doc in snapshot.docs) {
+    for (final doc in docs) {
       final responses = await getResponses(doc.id);
       result.add(_orderFromDoc(doc, responses));
     }
