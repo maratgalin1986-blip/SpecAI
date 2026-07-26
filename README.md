@@ -50,6 +50,12 @@ flutter pub get
 flutter run -d chrome
 ```
 
+Проект собирается текущим Flutter stable (CI использует `channel: stable` в
+`subosito/flutter-action`, без фиксации версии). Если `flutter analyze` вдруг
+показывает предупреждения про `deprecated_member_use`, которых нет в CI (или
+наоборот) — это почти всегда версия Flutter SDK разошлась с той, что
+использует CI; обновите его через `flutter upgrade`.
+
 ## Архитектура бэкенда
 
 - `lib/data/app_data_store.dart` — общий интерфейс `AppDataStore`
