@@ -80,7 +80,7 @@ class _ContractorListingCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               DropdownButtonFormField<String>(
-                value: categoryId,
+                initialValue: categoryId,
                 items: equipmentCategories
                     .map((c) => DropdownMenuItem(value: c.id, child: Text(c.title)))
                     .toList(),

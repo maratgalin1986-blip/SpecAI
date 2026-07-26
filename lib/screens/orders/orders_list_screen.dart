@@ -89,7 +89,7 @@ class OrdersListScreen extends StatelessWidget {
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                         decoration: BoxDecoration(
-                          color: _statusColor(order.status).withOpacity(0.12),
+                          color: _statusColor(order.status).withValues(alpha: 0.12),
                           borderRadius: BorderRadius.circular(6),
                         ),
                         child: Text(

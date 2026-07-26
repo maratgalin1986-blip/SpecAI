@@ -102,7 +102,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
               const Text('Какую технику предоставляете', style: TextStyle(fontWeight: FontWeight.w600)),
               const SizedBox(height: 8),
               DropdownButtonFormField<String>(
-                value: _categoryId,
+                initialValue: _categoryId,
                 items: equipmentCategories
                     .map((c) => DropdownMenuItem(value: c.id, child: Text(c.title)))
                     .toList(),
