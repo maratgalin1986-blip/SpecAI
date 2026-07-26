@@ -108,9 +108,11 @@ class _ContractorListingCard extends StatelessWidget {
       ),
     );
 
-    if (saved != true) return;
     final price = int.tryParse(priceController.text.trim()) ?? mine?.price ?? 3000;
     final eta = int.tryParse(etaController.text.trim()) ?? mine?.etaMinutes ?? 20;
+    priceController.dispose();
+    etaController.dispose();
+    if (saved != true) return;
     await AppData.instance.registerAsContractor(categoryId: categoryId, price: price, etaMinutes: eta);
   }
 

@@ -1,6 +1,10 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Required for Firebase Auth/Firestore and the OSM map tiles --
+         without this, every network call silently fails on a real device
+         (web builds are unaffected; the browser handles networking). -->
+    <uses-permission android:name="android.permission.INTERNET"/>
     <application
-        android:label="specai"
+        android:label="SpecAI"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

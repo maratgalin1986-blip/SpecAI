@@ -51,9 +51,11 @@ class _ContractorOrdersTabState extends State<ContractorOrdersTab> {
         ],
       ),
     );
-    if (result != true || !mounted) return;
     final price = int.tryParse(priceController.text.trim()) ?? contractor.price;
     final eta = int.tryParse(etaController.text.trim()) ?? contractor.etaMinutes;
+    priceController.dispose();
+    etaController.dispose();
+    if (result != true || !mounted) return;
     await AppData.instance.respondToOrder(order, contractor, price: price, eta: '$eta мин');
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(

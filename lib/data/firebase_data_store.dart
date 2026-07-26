@@ -330,6 +330,7 @@ class FirebaseDataStore extends ChangeNotifier implements AppDataStore {
 
   @override
   void acceptResponse(Order order, OrderResponse response) {
+    if (order.status != OrderStatus.newOrder) return;
     for (final r in order.responses) {
       r.accepted = r.id == response.id;
     }
@@ -400,6 +401,7 @@ class FirebaseDataStore extends ChangeNotifier implements AppDataStore {
 
   @override
   void completeOrder(Order order) {
+    if (order.status != OrderStatus.inProgress) return;
     order.status = OrderStatus.completed;
     _trackingTimers[order.id]?.cancel();
     _trackingTimers.remove(order.id);
@@ -592,6 +594,7 @@ class FirebaseDataStore extends ChangeNotifier implements AppDataStore {
 
   @override
   Future<void> respondToOrder(Order order, Contractor contractor, {required int price, required String eta}) async {
+    if (order.status != OrderStatus.newOrder) return;
     final response = OrderResponse(
       id: 'r_${DateTime.now().microsecondsSinceEpoch}',
       contractorId: contractor.id,

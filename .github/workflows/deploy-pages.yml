@@ -25,6 +25,8 @@ jobs:
         with:
           channel: stable
       - run: flutter pub get
+      - run: flutter analyze
+      - run: flutter test
       - run: flutter build web --release --base-href /SpecAI/
       - uses: actions/upload-pages-artifact@v3
         with:
