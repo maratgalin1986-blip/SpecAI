@@ -14,6 +14,12 @@ class _LoginScreenState extends State<LoginScreen> {
   final _phoneController = TextEditingController(text: '+7');
   bool _loading = false;
 
+  @override
+  void dispose() {
+    _phoneController.dispose();
+    super.dispose();
+  }
+
   Future<void> _submit() async {
     final phone = _phoneController.text.trim();
     if (phone.length < 10) {

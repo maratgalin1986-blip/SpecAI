@@ -75,7 +75,7 @@ class _ContractorOrdersTabState extends State<ContractorOrdersTab> {
       return const Center(
         child: Padding(
           padding: EdgeInsets.all(24),
-          child: Text('Профиль исполнителя не найден.', style: TextStyle(color: Colors.black54)),
+          child: Text('Профиль исполнителя не найден.\nЗаполните тариф на вкладке «Профиль».', style: TextStyle(color: Colors.black54)),
         ),
       );
     }

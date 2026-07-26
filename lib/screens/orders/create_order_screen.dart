@@ -24,6 +24,13 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
     _category = widget.initialCategory;
   }
 
+  @override
+  void dispose() {
+    _addressController.dispose();
+    _commentController.dispose();
+    super.dispose();
+  }
+
   Future<void> _pickDate() async {
     final picked = await showDatePicker(
       context: context,

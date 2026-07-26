@@ -19,6 +19,12 @@ class _OtpScreenState extends State<OtpScreen> {
   bool _loading = false;
   String? _error;
 
+  @override
+  void dispose() {
+    _codeController.dispose();
+    super.dispose();
+  }
+
   Future<void> _verify() async {
     setState(() {
       _loading = true;
