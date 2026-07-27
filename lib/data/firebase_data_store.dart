@@ -246,7 +246,7 @@ class FirebaseDataStore extends ChangeNotifier implements AppDataStore {
     _messageSubs.clear();
     _openOrdersSub?.cancel();
     _myOrdersSub?.cancel();
-    _watchedContractorId = null;
+    _watchedContractorKey = null;
     currentUser = null;
     _authUser = null;
     _pendingPhone = null;
@@ -543,16 +543,18 @@ class FirebaseDataStore extends ChangeNotifier implements AppDataStore {
   }
 
   /// Live subscriptions backing loadContractorFeed, keyed by contractor id
-  /// so switching categories (via the profile edit dialog) re-subscribes
-  /// instead of leaking the old listener.
-  String? _watchedContractorId;
+  /// *and* category so editing the category (via the profile edit dialog)
+  /// re-subscribes with the new category filter instead of silently
+  /// continuing to watch the old one under an unchanged contractor id.
+  String? _watchedContractorKey;
   StreamSubscription<List<Order>>? _openOrdersSub;
   StreamSubscription<List<Order>>? _myOrdersSub;
 
   @override
   Future<void> loadContractorFeed(Contractor contractor) async {
-    if (_watchedContractorId == contractor.id) return;
-    _watchedContractorId = contractor.id;
+    final key = '${contractor.id}:${contractor.categoryId}';
+    if (_watchedContractorKey == key) return;
+    _watchedContractorKey = key;
     await _openOrdersSub?.cancel();
     await _myOrdersSub?.cancel();
 
