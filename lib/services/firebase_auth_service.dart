@@ -19,22 +19,31 @@ class FirebaseAuthService {
     required void Function(User user) onAutoVerified,
     required void Function(String message) onError,
   }) async {
-    await _auth.verifyPhoneNumber(
-      phoneNumber: phone,
-      timeout: const Duration(seconds: 60),
-      verificationCompleted: (credential) async {
-        final result = await _auth.signInWithCredential(credential);
-        if (result.user != null) onAutoVerified(result.user!);
-      },
-      verificationFailed: (e) => onError(e.message ?? e.code),
-      codeSent: (verificationId, resendToken) {
-        _verificationId = verificationId;
-        onCodeSent();
-      },
-      codeAutoRetrievalTimeout: (verificationId) {
-        _verificationId = verificationId;
-      },
-    );
+    try {
+      await _auth.verifyPhoneNumber(
+        phoneNumber: phone,
+        timeout: const Duration(seconds: 60),
+        verificationCompleted: (credential) async {
+          final result = await _auth.signInWithCredential(credential);
+          if (result.user != null) onAutoVerified(result.user!);
+        },
+        verificationFailed: (e) => onError('${e.code}: ${e.message ?? e.toString()}'),
+        codeSent: (verificationId, resendToken) {
+          _verificationId = verificationId;
+          onCodeSent();
+        },
+        codeAutoRetrievalTimeout: (verificationId) {
+          _verificationId = verificationId;
+        },
+      );
+    } catch (e) {
+      // verifyPhoneNumber can throw directly (e.g. a reCAPTCHA/JS-interop
+      // failure) instead of routing through verificationFailed above --
+      // without this, the caller's completer would never fire and the
+      // UI would hang on the loading spinner forever instead of showing
+      // an error.
+      onError(e.toString());
+    }
   }
 
   Future<User?> verifyOtp(String smsCode) async {
