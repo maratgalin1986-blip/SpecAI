@@ -187,8 +187,16 @@ class _RatingSectionState extends State<_RatingSection> {
 
   Future<void> _rate(int stars) async {
     setState(() => _submitting = true);
-    await AppData.instance.rateOrder(widget.order, stars);
-    if (mounted) setState(() => _submitting = false);
+    try {
+      await AppData.instance.rateOrder(widget.order, stars);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Не удалось сохранить оценку: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _submitting = false);
+    }
   }
 
   @override

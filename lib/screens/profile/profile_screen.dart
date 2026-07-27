@@ -113,7 +113,14 @@ class _ContractorListingCard extends StatelessWidget {
     priceController.dispose();
     etaController.dispose();
     if (saved != true) return;
-    await AppData.instance.registerAsContractor(categoryId: categoryId, price: price, etaMinutes: eta);
+    try {
+      await AppData.instance.registerAsContractor(categoryId: categoryId, price: price, etaMinutes: eta);
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Не удалось сохранить тариф: $e')),
+      );
+    }
   }
 
   @override

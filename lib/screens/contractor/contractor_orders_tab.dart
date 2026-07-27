@@ -56,11 +56,18 @@ class _ContractorOrdersTabState extends State<ContractorOrdersTab> {
     priceController.dispose();
     etaController.dispose();
     if (result != true || !mounted) return;
-    await AppData.instance.respondToOrder(order, contractor, price: price, eta: '$eta мин');
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Отклик отправлен заказчику')),
-    );
+    try {
+      await AppData.instance.respondToOrder(order, contractor, price: price, eta: '$eta мин');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Отклик отправлен заказчику')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Не удалось отправить отклик: $e')),
+      );
+    }
   }
 
   @override
