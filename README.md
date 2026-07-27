@@ -43,6 +43,16 @@ snapshot-listener на подколлекцию `responses` (`FirestoreRepositor
 провайдер "Phone" не включён (по вашим заметкам из прошлой сессии он должен быть уже
 включён для этого проекта).
 
+**Критично для iOS-сборки:** для iOS вообще нет Firebase-конфигурации — `flutterfire
+configure` в прошлой сессии зарегистрировал только Android и Web, `ios/Runner/
+GoogleService-Info.plist` не существует. `DefaultFirebaseOptions.currentPlatform` в
+`lib/firebase_options.dart` для iOS явно бросает `UnsupportedError`. Приложение не
+крашится — это исключение ловится в `main.dart` и молча откатывает в демо-режим — но
+это значит, что **на iPhone реальный бэкенд не заработает никогда**, пока не
+зарегистрировать iOS-приложение в Firebase Console (или перезапустить
+`flutterfire configure` с доступом к CLI) и не положить получившийся
+`GoogleService-Info.plist` в `ios/Runner/`.
+
 ## Запуск
 
 ```bash
@@ -67,6 +77,12 @@ flutter run -d chrome
   принятый исполнитель получает доступ к своему заказу и чату по нему. **Требует
   повторного деплоя правил** (`firebase deploy --only firestore:rules`) — я не смог
   выполнить его сам в этой сессии, нет доступа к Firebase CLI/токену.
+- `firestore.indexes.json` — составной индекс `orders(customerId, createdAt desc)`,
+  без него запрос истории заказов заказчика (`getOrdersForCustomer`) будет падать в
+  реальном Firestore с `FAILED_PRECONDITION` при каждой перезагрузке страницы (ошибка
+  проглатывается в `try/catch` — просто пустая история заказов без явной ошибки в UI).
+  **Тоже нужно задеплоить** тем же `firebase deploy --only firestore:indexes` вместе с
+  правилами — новый индекс не строится мгновенно, обычно несколько минут.
 
 ## Монетизация (заложено, не активировано)
 
