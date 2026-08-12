@@ -21,6 +21,10 @@ export async function POST(request: NextRequest) {
     take: 50,
   });
 
+  if (available.length === 0) {
+    return NextResponse.json({ recommendations: [], followUpQuestion: undefined });
+  }
+
   const candidates = available.map((item) => ({
     id: item.id,
     name: item.name,
@@ -29,6 +33,20 @@ export async function POST(request: NextRequest) {
     specs: (item.specs as Record<string, unknown> | null) ?? undefined,
   }));
 
-  const result = await recommendEquipment(parsed.data.jobDescription, candidates);
-  return NextResponse.json(result);
+  let result;
+  try {
+    result = await recommendEquipment(parsed.data.jobDescription, candidates);
+  } catch {
+    return NextResponse.json(
+      { error: 'AI recommendation is unavailable right now' },
+      { status: 502 },
+    );
+  }
+
+  const byId = new Map(candidates.map((c) => [c.id, c]));
+  const recommendations = result.recommendations
+    .filter((rec) => byId.has(rec.equipmentId))
+    .map((rec) => ({ ...rec, equipment: byId.get(rec.equipmentId) }));
+
+  return NextResponse.json({ recommendations, followUpQuestion: result.followUpQuestion });
 }

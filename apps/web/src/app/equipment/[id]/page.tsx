@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation';
 import { prisma } from '@specai/database';
 import { Card, StatusBadge } from '@specai/ui';
+import { BookingForm } from '@/components/BookingForm';
 
 export const dynamic = 'force-dynamic';
 
@@ -65,6 +66,16 @@ export default async function EquipmentDetailPage({ params }: { params: { id: st
             <p className="text-sm text-slate-500">
               {item.location.city}, {item.location.country}
             </p>
+          )}
+
+          {item.status === 'AVAILABLE' && (
+            <div className="mt-2 border-t border-slate-200 pt-3">
+              <BookingForm
+                equipmentId={item.id}
+                dailyRate={Number(item.dailyRate)}
+                currency={item.currency}
+              />
+            </div>
           )}
         </Card>
       </div>

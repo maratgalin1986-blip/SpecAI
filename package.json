@@ -17,7 +17,8 @@
     "format:check": "prettier --check .",
     "db:generate": "pnpm --filter @specai/database generate",
     "db:push": "pnpm --filter @specai/database push",
-    "db:studio": "pnpm --filter @specai/database studio"
+    "db:studio": "pnpm --filter @specai/database studio",
+    "db:seed": "pnpm --filter @specai/database seed"
   },
   "devDependencies": {
     "@eslint/js": "^9.13.0",

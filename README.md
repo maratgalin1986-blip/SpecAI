@@ -44,13 +44,19 @@ packages/
 Requires Node 20+ and pnpm.
 
 ```bash
-cp .env.example .env      # set DATABASE_URL and ANTHROPIC_API_KEY
+cp .env.example .env      # set DATABASE_URL, ANTHROPIC_API_KEY, NEXTAUTH_SECRET
 docker compose up -d      # local Postgres
 pnpm install
 pnpm db:generate
 pnpm db:push               # sync schema to the database
+pnpm db:seed                # optional: sample companies/equipment/users
 pnpm dev                   # runs apps/web on http://localhost:3000
 ```
+
+Seeded accounts (see `packages/database/prisma/seed.ts`):
+
+- Provider admin: `provider@example.com` / `provider123`
+- Customer: `customer@example.com` / `customer123`
 
 ## Scripts
 
@@ -60,7 +66,20 @@ Run from the repo root:
 - `pnpm build` — build all packages and the web app
 - `pnpm lint` — lint the whole workspace
 - `pnpm typecheck` — typecheck all packages
-- `pnpm db:generate` / `pnpm db:push` / `pnpm db:studio` — Prisma workflows
+- `pnpm db:generate` / `pnpm db:push` / `pnpm db:studio` / `pnpm db:seed` — Prisma workflows
+
+## Application features implemented so far
+
+- **Auth** — email/password via NextAuth (JWT sessions); `/register` and `/login`
+  pages, `/dashboard` is auth-gated by `apps/web/src/middleware.ts`.
+- **Equipment catalog** — `/equipment` listing and `/equipment/[id]` detail pages
+  reading from Postgres via Prisma; `GET/POST /api/equipment` for search and listing.
+- **Bookings** — `POST /api/bookings` validates date ranges, rejects overlapping
+  bookings for the same equipment, and computes the total price server-side; the
+  equipment detail page includes a booking form for signed-in users, and
+  `/dashboard` lists the current user's bookings.
+- **AI recommendation** — `/recommend` page and `POST /api/ai/recommend` rank
+  available equipment against a free-text job description using Claude tool calls.
 
 ## AI service usage
 
