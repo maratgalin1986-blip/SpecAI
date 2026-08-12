@@ -4,9 +4,13 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button, Card } from '@specai/ui';
 
+type AccountType = 'CUSTOMER' | 'PROVIDER';
+
 export default function RegisterPage() {
   const router = useRouter();
+  const [accountType, setAccountType] = useState<AccountType>('CUSTOMER');
   const [name, setName] = useState('');
+  const [companyName, setCompanyName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -20,7 +24,13 @@ export default function RegisterPage() {
     const response = await fetch('/api/auth/register', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, email, password }),
+      body: JSON.stringify({
+        accountType,
+        name,
+        email,
+        password,
+        ...(accountType === 'PROVIDER' ? { companyName } : {}),
+      }),
     });
 
     setIsSubmitting(false);
@@ -38,6 +48,32 @@ export default function RegisterPage() {
     <div className="mx-auto max-w-sm">
       <Card>
         <h1 className="mb-4 text-xl font-bold">Create an account</h1>
+
+        <div className="mb-4 flex gap-2 text-sm">
+          <button
+            type="button"
+            onClick={() => setAccountType('CUSTOMER')}
+            className={`flex-1 rounded-md border px-3 py-2 font-medium ${
+              accountType === 'CUSTOMER'
+                ? 'border-amber-600 bg-amber-50 text-amber-800'
+                : 'border-slate-300 text-slate-600'
+            }`}
+          >
+            I want to rent equipment
+          </button>
+          <button
+            type="button"
+            onClick={() => setAccountType('PROVIDER')}
+            className={`flex-1 rounded-md border px-3 py-2 font-medium ${
+              accountType === 'PROVIDER'
+                ? 'border-amber-600 bg-amber-50 text-amber-800'
+                : 'border-slate-300 text-slate-600'
+            }`}
+          >
+            I want to list equipment
+          </button>
+        </div>
+
         <form onSubmit={handleSubmit} className="flex flex-col gap-3">
           <label className="flex flex-col gap-1 text-sm">
             Name
@@ -48,6 +84,17 @@ export default function RegisterPage() {
               className="rounded-md border border-slate-300 px-3 py-2"
             />
           </label>
+          {accountType === 'PROVIDER' && (
+            <label className="flex flex-col gap-1 text-sm">
+              Company name
+              <input
+                required
+                value={companyName}
+                onChange={(e) => setCompanyName(e.target.value)}
+                className="rounded-md border border-slate-300 px-3 py-2"
+              />
+            </label>
+          )}
           <label className="flex flex-col gap-1 text-sm">
             Email
             <input

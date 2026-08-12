@@ -8,7 +8,12 @@ export const dynamic = 'force-dynamic';
 export default async function EquipmentDetailPage({ params }: { params: { id: string } }) {
   const item = await prisma.equipment.findUnique({
     where: { id: params.id },
-    include: { category: true, location: true, company: true },
+    include: {
+      category: true,
+      location: true,
+      company: true,
+      reviews: { include: { author: true }, orderBy: { createdAt: 'desc' } },
+    },
   });
 
   if (!item) {
@@ -16,6 +21,9 @@ export default async function EquipmentDetailPage({ params }: { params: { id: st
   }
 
   const specs = (item.specs as Record<string, unknown> | null) ?? {};
+  const averageRating = item.reviews.length
+    ? item.reviews.reduce((sum, review) => sum + review.rating, 0) / item.reviews.length
+    : null;
 
   return (
     <div className="flex flex-col gap-6">
@@ -24,6 +32,13 @@ export default async function EquipmentDetailPage({ params }: { params: { id: st
           <h1 className="text-2xl font-bold">{item.name}</h1>
           <p className="text-slate-500">
             {item.category.name} · Listed by {item.company.name}
+            {averageRating !== null && (
+              <>
+                {' '}
+                · ★ {averageRating.toFixed(1)} ({item.reviews.length} review
+                {item.reviews.length === 1 ? '' : 's'})
+              </>
+            )}
           </p>
         </div>
         <StatusBadge status={item.status} />
@@ -47,6 +62,24 @@ export default async function EquipmentDetailPage({ params }: { params: { id: st
                   </div>
                 ))}
               </dl>
+            </>
+          )}
+
+          {item.reviews.length > 0 && (
+            <>
+              <h2 className="mt-6 font-semibold">Reviews</h2>
+              <div className="mt-2 flex flex-col gap-3">
+                {item.reviews.map((review) => (
+                  <div key={review.id} className="border-t border-slate-100 pt-2 text-sm">
+                    <p className="font-medium">
+                      {'★'.repeat(review.rating)}
+                      {'☆'.repeat(5 - review.rating)}{' '}
+                      <span className="font-normal text-slate-500">{review.author.name}</span>
+                    </p>
+                    {review.comment && <p className="mt-1 text-slate-600">{review.comment}</p>}
+                  </div>
+                ))}
+              </div>
             </>
           )}
         </Card>

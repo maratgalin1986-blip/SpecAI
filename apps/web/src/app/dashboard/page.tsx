@@ -2,6 +2,7 @@ import { getServerSession } from 'next-auth';
 import { prisma } from '@specai/database';
 import { BookingStatusBadge, Card } from '@specai/ui';
 import { authOptions } from '@/lib/auth';
+import { ReviewForm } from '@/components/ReviewForm';
 
 export const dynamic = 'force-dynamic';
 
@@ -15,7 +16,7 @@ export default async function DashboardPage() {
     session
       ? prisma.booking.findMany({
           where: { customerId: session.user.id },
-          include: { equipment: true },
+          include: { equipment: true, review: true },
           orderBy: { createdAt: 'desc' },
           take: 20,
         })
@@ -47,7 +48,7 @@ export default async function DashboardPage() {
         ) : (
           <div className="flex flex-col gap-3">
             {myBookings.map((booking) => (
-              <Card key={booking.id} className="flex items-center justify-between">
+              <Card key={booking.id} className="flex items-center justify-between gap-4">
                 <div>
                   <a
                     href={`/equipment/${booking.equipmentId}`}
@@ -59,6 +60,11 @@ export default async function DashboardPage() {
                     {booking.startDate.toDateString()} – {booking.endDate.toDateString()} · $
                     {booking.totalPrice.toString()} {booking.currency}
                   </p>
+                  {booking.status === 'COMPLETED' && !booking.review && (
+                    <div className="mt-2">
+                      <ReviewForm bookingId={booking.id} />
+                    </div>
+                  )}
                 </div>
                 <BookingStatusBadge status={booking.status} />
               </Card>

@@ -70,14 +70,25 @@ Run from the repo root:
 
 ## Application features implemented so far
 
-- **Auth** — email/password via NextAuth (JWT sessions); `/register` and `/login`
-  pages, `/dashboard` is auth-gated by `apps/web/src/middleware.ts`.
-- **Equipment catalog** — `/equipment` listing and `/equipment/[id]` detail pages
-  reading from Postgres via Prisma; `GET/POST /api/equipment` for search and listing.
+- **Auth** — email/password via NextAuth (JWT sessions). `/register` supports both
+  account types: renting customers, and providers (creates a `Company` with
+  `isProvider: true` and a `PROVIDER_ADMIN` user in one transaction). `/dashboard`
+  and `/provider` are auth-gated by `apps/web/src/middleware.ts`.
+- **Equipment catalog** — `/equipment` listing with a filter form (category, city,
+  price range, text search) and `/equipment/[id]` detail pages, including average
+  rating and reviews; `GET/POST /api/equipment` for search and (provider-only)
+  listing.
 - **Bookings** — `POST /api/bookings` validates date ranges, rejects overlapping
   bookings for the same equipment, and computes the total price server-side; the
-  equipment detail page includes a booking form for signed-in users, and
-  `/dashboard` lists the current user's bookings.
+  equipment detail page includes a booking form for signed-in customers, and
+  `/dashboard` lists the current user's bookings. `PATCH /api/bookings/[id]` drives
+  the booking state machine (provider confirms/activates/completes/cancels,
+  customer can cancel a pending/confirmed booking).
+- **Provider dashboard** — `/provider` lists a provider's equipment and incoming
+  bookings with approve/cancel/complete actions, and a form to list new equipment,
+  including an AI-assisted "paste a spec sheet" flow.
+- **Reviews** — after a booking is `COMPLETED`, the customer can leave a rating and
+  comment (`POST /api/reviews`), shown on the equipment detail page.
 - **AI recommendation** — `/recommend` page and `POST /api/ai/recommend` rank
   available equipment against a free-text job description using Claude tool calls.
 
