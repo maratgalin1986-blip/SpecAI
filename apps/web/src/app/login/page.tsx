@@ -21,7 +21,7 @@ export default function LoginPage() {
     setIsSubmitting(false);
 
     if (result?.error) {
-      setError('Invalid email or password');
+      setError('Неверный e-mail или пароль');
       return;
     }
 
@@ -32,10 +32,10 @@ export default function LoginPage() {
   return (
     <div className="mx-auto max-w-sm">
       <Card>
-        <h1 className="mb-4 text-xl font-bold">Sign in</h1>
+        <h1 className="mb-4 text-xl font-bold">Вход</h1>
         <form onSubmit={handleSubmit} className="flex flex-col gap-3">
           <label className="flex flex-col gap-1 text-sm">
-            Email
+            E-mail
             <input
               type="email"
               required
@@ -45,7 +45,7 @@ export default function LoginPage() {
             />
           </label>
           <label className="flex flex-col gap-1 text-sm">
-            Password
+            Пароль
             <input
               type="password"
               required
@@ -56,13 +56,13 @@ export default function LoginPage() {
           </label>
           {error && <p className="text-sm text-red-600">{error}</p>}
           <Button type="submit" disabled={isSubmitting}>
-            {isSubmitting ? 'Signing in…' : 'Sign in'}
+            {isSubmitting ? 'Выполняется вход…' : 'Войти'}
           </Button>
         </form>
         <p className="mt-4 text-sm text-slate-500">
-          No account?{' '}
+          Нет аккаунта?{' '}
           <a href="/register" className="font-medium text-amber-700">
-            Register
+            Зарегистрироваться
           </a>
         </p>
       </Card>

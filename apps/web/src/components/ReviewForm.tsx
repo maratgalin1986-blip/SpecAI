@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@specai/ui';
+import { pluralizeRu } from '@/lib/pluralize';
 
 export function ReviewForm({ bookingId }: { bookingId: string }) {
   const router = useRouter();
@@ -27,7 +28,7 @@ export function ReviewForm({ bookingId }: { bookingId: string }) {
 
     if (!response.ok) {
       const body = await response.json().catch(() => null);
-      setError(typeof body?.error === 'string' ? body.error : 'Could not submit review');
+      setError(typeof body?.error === 'string' ? body.error : 'Не удалось отправить отзыв');
       return;
     }
 
@@ -36,13 +37,13 @@ export function ReviewForm({ bookingId }: { bookingId: string }) {
   }
 
   if (submitted) {
-    return <p className="text-xs text-green-700">Thanks for the review!</p>;
+    return <p className="text-xs text-green-700">Спасибо за отзыв!</p>;
   }
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-2 text-xs">
       <label className="flex items-center gap-2">
-        Rating
+        Оценка
         <select
           value={rating}
           onChange={(e) => setRating(Number(e.target.value))}
@@ -50,14 +51,14 @@ export function ReviewForm({ bookingId }: { bookingId: string }) {
         >
           {[5, 4, 3, 2, 1].map((value) => (
             <option key={value} value={value}>
-              {value} star{value === 1 ? '' : 's'}
+              {pluralizeRu(value, ['звезда', 'звезды', 'звёзд'])}
             </option>
           ))}
         </select>
       </label>
       <textarea
         rows={2}
-        placeholder="Optional comment"
+        placeholder="Комментарий (необязательно)"
         value={comment}
         onChange={(e) => setComment(e.target.value)}
         className="rounded border border-slate-300 px-2 py-1"
@@ -65,7 +66,7 @@ export function ReviewForm({ bookingId }: { bookingId: string }) {
       {error && <p className="text-red-600">{error}</p>}
       <div>
         <Button type="submit" disabled={isSubmitting} className="px-3 py-1 text-xs">
-          {isSubmitting ? 'Submitting…' : 'Leave a review'}
+          {isSubmitting ? 'Отправка…' : 'Оставить отзыв'}
         </Button>
       </div>
     </form>

@@ -4,38 +4,37 @@ export default function HomePage() {
   return (
     <div className="flex flex-col gap-8">
       <section className="flex flex-col gap-4">
-        <h1 className="text-3xl font-bold tracking-tight">
-          Rent the right heavy equipment, faster.
-        </h1>
+        <h1 className="text-3xl font-bold tracking-tight">Подберите нужную спецтехнику быстрее.</h1>
         <p className="max-w-2xl text-slate-600">
-          SpecAI matches construction jobs to available excavators, cranes, and other heavy
-          equipment nearby, using an AI assistant to recommend the right fit and extract specs
-          automatically from provider listings.
+          SpecAI подбирает экскаваторы, краны и другую спецтехнику под конкретную строительную
+          задачу, используя ИИ-ассистента для рекомендаций и автоматического извлечения технических
+          характеристик из объявлений поставщиков.
         </p>
         <div>
           <a href="/equipment">
-            <Button>Browse equipment</Button>
+            <Button>Смотреть технику</Button>
           </a>
         </div>
       </section>
 
       <section className="grid gap-4 sm:grid-cols-3">
         <Card>
-          <h2 className="font-semibold">Smart matching</h2>
+          <h2 className="font-semibold">Умный подбор</h2>
           <p className="mt-1 text-sm text-slate-600">
-            Describe the job and get ranked equipment recommendations from available inventory.
+            Опишите задачу — получите ранжированные рекомендации техники из доступного парка.
           </p>
         </Card>
         <Card>
-          <h2 className="font-semibold">Automatic spec extraction</h2>
+          <h2 className="font-semibold">Автоизвлечение характеристик</h2>
           <p className="mt-1 text-sm text-slate-600">
-            Providers paste a spec sheet; SpecAI structures make, model, and technical specs.
+            Поставщик вставляет спецификацию — SpecAI структурирует марку, модель и
+            теххарактеристики.
           </p>
         </Card>
         <Card>
-          <h2 className="font-semibold">End-to-end bookings</h2>
+          <h2 className="font-semibold">Аренда от заявки до сдачи</h2>
           <p className="mt-1 text-sm text-slate-600">
-            Manage rentals, contracts, and maintenance records in one place.
+            Управляйте арендой, договорами и обслуживанием техники в одном месте.
           </p>
         </Card>
       </section>

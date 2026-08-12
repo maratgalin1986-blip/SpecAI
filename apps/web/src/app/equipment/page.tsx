@@ -41,29 +41,29 @@ export default async function EquipmentCatalogPage({
 
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="text-2xl font-bold">Equipment catalog</h1>
+      <h1 className="text-2xl font-bold">Каталог техники</h1>
 
       <form
         method="get"
         className="flex flex-wrap items-end gap-3 rounded-lg border border-slate-200 bg-white p-4"
       >
         <label className="flex flex-col gap-1 text-sm">
-          Search
+          Поиск
           <input
             name="q"
             defaultValue={searchParams.q}
-            placeholder="Excavator, crane…"
+            placeholder="Экскаватор, кран…"
             className="rounded-md border border-slate-300 px-3 py-2"
           />
         </label>
         <label className="flex flex-col gap-1 text-sm">
-          Category
+          Категория
           <select
             name="category"
             defaultValue={searchParams.category ?? ''}
             className="rounded-md border border-slate-300 px-3 py-2"
           >
-            <option value="">All categories</option>
+            <option value="">Все категории</option>
             {categories.map((category) => (
               <option key={category.id} value={category.id}>
                 {category.name}
@@ -72,7 +72,7 @@ export default async function EquipmentCatalogPage({
           </select>
         </label>
         <label className="flex flex-col gap-1 text-sm">
-          City
+          Город
           <input
             name="city"
             defaultValue={searchParams.city}
@@ -80,7 +80,7 @@ export default async function EquipmentCatalogPage({
           />
         </label>
         <label className="flex flex-col gap-1 text-sm">
-          Min $/day
+          Цена от, $/день
           <input
             name="minPrice"
             type="number"
@@ -90,7 +90,7 @@ export default async function EquipmentCatalogPage({
           />
         </label>
         <label className="flex flex-col gap-1 text-sm">
-          Max $/day
+          Цена до, $/день
           <input
             name="maxPrice"
             type="number"
@@ -103,7 +103,7 @@ export default async function EquipmentCatalogPage({
           type="submit"
           className="rounded-md bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700"
         >
-          Filter
+          Применить
         </button>
         {(searchParams.q ||
           searchParams.category ||
@@ -111,13 +111,13 @@ export default async function EquipmentCatalogPage({
           searchParams.minPrice ||
           searchParams.maxPrice) && (
           <a href="/equipment" className="text-sm font-medium text-slate-500 hover:text-slate-900">
-            Clear filters
+            Сбросить фильтры
           </a>
         )}
       </form>
 
       {equipment.length === 0 ? (
-        <p className="text-slate-600">No equipment matches these filters.</p>
+        <p className="text-slate-600">По этим фильтрам техника не найдена.</p>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {equipment.map((item) => (
@@ -135,7 +135,7 @@ export default async function EquipmentCatalogPage({
                 )}
                 <p className="mt-auto text-lg font-semibold">
                   ${item.dailyRate.toString()}
-                  <span className="text-sm font-normal text-slate-500">/day</span>
+                  <span className="text-sm font-normal text-slate-500">/день</span>
                 </p>
               </Card>
             </a>

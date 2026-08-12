@@ -45,7 +45,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session || session.user.role !== 'PROVIDER_ADMIN' || !session.user.companyId) {
-    return NextResponse.json({ error: 'Provider admin access required' }, { status: 403 });
+    return NextResponse.json({ error: 'Требуется аккаунт поставщика' }, { status: 403 });
   }
 
   const body = await request.json();

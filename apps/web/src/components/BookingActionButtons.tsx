@@ -5,10 +5,10 @@ import { useRouter } from 'next/navigation';
 import { Button } from '@specai/ui';
 
 const NEXT_STATUS_LABEL: Record<string, string> = {
-  CONFIRMED: 'Confirm',
-  ACTIVE: 'Mark active',
-  COMPLETED: 'Mark completed',
-  CANCELLED: 'Cancel',
+  CONFIRMED: 'Подтвердить',
+  ACTIVE: 'Начать аренду',
+  COMPLETED: 'Завершить',
+  CANCELLED: 'Отменить',
 };
 
 export function BookingActionButtons({
@@ -36,7 +36,7 @@ export function BookingActionButtons({
 
     if (!response.ok) {
       const body = await response.json().catch(() => null);
-      setError(typeof body?.error === 'string' ? body.error : 'Update failed');
+      setError(typeof body?.error === 'string' ? body.error : 'Не удалось обновить статус');
       return;
     }
 

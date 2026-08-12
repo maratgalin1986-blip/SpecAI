@@ -37,10 +37,7 @@ export async function POST(request: NextRequest) {
   try {
     result = await recommendEquipment(parsed.data.jobDescription, candidates);
   } catch {
-    return NextResponse.json(
-      { error: 'AI recommendation is unavailable right now' },
-      { status: 502 },
-    );
+    return NextResponse.json({ error: 'ИИ-подбор сейчас недоступен' }, { status: 502 });
   }
 
   const byId = new Map(candidates.map((c) => [c.id, c]));

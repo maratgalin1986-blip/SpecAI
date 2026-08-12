@@ -20,7 +20,7 @@ const createBookingRequestSchema = z
 export async function POST(request: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session) {
-    return NextResponse.json({ error: 'Sign in required' }, { status: 401 });
+    return NextResponse.json({ error: 'Необходимо войти в аккаунт' }, { status: 401 });
   }
 
   const body = await request.json();
@@ -33,7 +33,7 @@ export async function POST(request: NextRequest) {
 
   const equipment = await prisma.equipment.findUnique({ where: { id: equipmentId } });
   if (!equipment) {
-    return NextResponse.json({ error: 'Equipment not found' }, { status: 404 });
+    return NextResponse.json({ error: 'Техника не найдена' }, { status: 404 });
   }
 
   const overlapping = await prisma.booking.findFirst({
@@ -45,10 +45,7 @@ export async function POST(request: NextRequest) {
     },
   });
   if (overlapping) {
-    return NextResponse.json(
-      { error: 'Equipment is not available for the selected dates' },
-      { status: 409 },
-    );
+    return NextResponse.json({ error: 'Техника недоступна на выбранные даты' }, { status: 409 });
   }
 
   const days = Math.max(1, Math.ceil((endDate.getTime() - startDate.getTime()) / 86_400_000));

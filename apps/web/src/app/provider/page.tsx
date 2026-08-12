@@ -19,7 +19,9 @@ export default async function ProviderPage() {
   if (!session || session.user.role !== 'PROVIDER_ADMIN' || !session.user.companyId) {
     return (
       <div className="mx-auto max-w-md text-center">
-        <p className="text-slate-600">This page is only available to provider admin accounts.</p>
+        <p className="text-slate-600">
+          Эта страница доступна только аккаунтам поставщиков техники.
+        </p>
       </div>
     );
   }
@@ -40,12 +42,12 @@ export default async function ProviderPage() {
 
   return (
     <div className="flex flex-col gap-8">
-      <h1 className="text-2xl font-bold">Provider dashboard</h1>
+      <h1 className="text-2xl font-bold">Кабинет поставщика</h1>
 
       <section>
-        <h2 className="mb-3 text-lg font-semibold">Your equipment</h2>
+        <h2 className="mb-3 text-lg font-semibold">Ваша техника</h2>
         {equipment.length === 0 ? (
-          <p className="text-sm text-slate-600">No equipment listed yet.</p>
+          <p className="text-sm text-slate-600">Техника пока не добавлена.</p>
         ) : (
           <div className="grid gap-3 sm:grid-cols-2">
             {equipment.map((item) => (
@@ -53,7 +55,7 @@ export default async function ProviderPage() {
                 <div>
                   <p className="font-medium">{item.name}</p>
                   <p className="text-sm text-slate-500">
-                    {item.category.name} · ${item.dailyRate.toString()}/day
+                    {item.category.name} · ${item.dailyRate.toString()}/день
                   </p>
                 </div>
                 <StatusBadge status={item.status} />
@@ -64,16 +66,16 @@ export default async function ProviderPage() {
       </section>
 
       <section>
-        <h2 className="mb-3 text-lg font-semibold">List new equipment</h2>
+        <h2 className="mb-3 text-lg font-semibold">Добавить технику</h2>
         <Card className="max-w-xl">
           <NewEquipmentForm />
         </Card>
       </section>
 
       <section>
-        <h2 className="mb-3 text-lg font-semibold">Bookings</h2>
+        <h2 className="mb-3 text-lg font-semibold">Бронирования</h2>
         {bookings.length === 0 ? (
-          <p className="text-sm text-slate-600">No bookings yet.</p>
+          <p className="text-sm text-slate-600">Бронирований пока нет.</p>
         ) : (
           <div className="flex flex-col gap-3">
             {bookings.map((booking) => (
@@ -81,8 +83,8 @@ export default async function ProviderPage() {
                 <div>
                   <p className="font-medium">{booking.equipment.name}</p>
                   <p className="text-sm text-slate-500">
-                    {booking.customer.name} · {booking.startDate.toDateString()} –{' '}
-                    {booking.endDate.toDateString()} · ${booking.totalPrice.toString()}{' '}
+                    {booking.customer.name} · {booking.startDate.toLocaleDateString('ru-RU')} –{' '}
+                    {booking.endDate.toLocaleDateString('ru-RU')} · ${booking.totalPrice.toString()}{' '}
                     {booking.currency}
                   </p>
                 </div>

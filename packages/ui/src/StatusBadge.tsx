@@ -8,10 +8,10 @@ const statusStyles: Record<EquipmentStatus, string> = {
 };
 
 const statusLabels: Record<EquipmentStatus, string> = {
-  AVAILABLE: 'Available',
-  RENTED: 'Rented',
-  IN_MAINTENANCE: 'In maintenance',
-  RETIRED: 'Retired',
+  AVAILABLE: 'Доступна',
+  RENTED: 'В аренде',
+  IN_MAINTENANCE: 'На обслуживании',
+  RETIRED: 'Списана',
 };
 
 export function StatusBadge({ status }: { status: EquipmentStatus }) {

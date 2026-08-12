@@ -6,12 +6,12 @@ import './globals.css';
 
 export const metadata: Metadata = {
   title: 'SpecAI',
-  description: 'AI platform for heavy equipment rental and construction services',
+  description: 'ИИ-платформа для аренды спецтехники и строительных услуг',
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="ru">
       <body className="min-h-screen bg-slate-50 text-slate-900">
         <Providers>
           <header className="border-b border-slate-200 bg-white">
@@ -21,16 +21,16 @@ export default function RootLayout({ children }: { children: ReactNode }) {
               </a>
               <nav className="flex items-center gap-6 text-sm font-medium text-slate-600">
                 <a href="/equipment" className="hover:text-slate-900">
-                  Equipment
+                  Техника
                 </a>
                 <a href="/recommend" className="hover:text-slate-900">
-                  AI recommend
+                  ИИ-подбор
                 </a>
                 <a href="/dashboard" className="hover:text-slate-900">
-                  Dashboard
+                  Кабинет
                 </a>
                 <a href="/provider" className="hover:text-slate-900">
-                  Provider
+                  Провайдер
                 </a>
                 <AuthStatus />
               </nav>

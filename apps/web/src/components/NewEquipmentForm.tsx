@@ -43,7 +43,7 @@ export function NewEquipmentForm() {
 
     if (!response.ok) {
       const body = await response.json().catch(() => null);
-      setError(typeof body?.error === 'string' ? body.error : 'Spec extraction failed');
+      setError(typeof body?.error === 'string' ? body.error : 'Не удалось извлечь характеристики');
       return;
     }
 
@@ -72,7 +72,7 @@ export function NewEquipmentForm() {
 
     if (!response.ok) {
       const body = await response.json().catch(() => null);
-      setError(typeof body?.error === 'string' ? body.error : 'Could not create equipment listing');
+      setError(typeof body?.error === 'string' ? body.error : 'Не удалось добавить технику');
       return;
     }
 
@@ -88,7 +88,7 @@ export function NewEquipmentForm() {
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-3">
       <label className="flex flex-col gap-1 text-sm">
-        Name
+        Название
         <input
           required
           value={name}
@@ -98,7 +98,7 @@ export function NewEquipmentForm() {
       </label>
 
       <label className="flex flex-col gap-1 text-sm">
-        Category
+        Категория
         <select
           required
           value={categoryId}
@@ -106,7 +106,7 @@ export function NewEquipmentForm() {
           className="rounded-md border border-slate-300 px-3 py-2"
         >
           <option value="" disabled>
-            Select a category
+            Выберите категорию
           </option>
           {categories.map((category) => (
             <option key={category.id} value={category.id}>
@@ -117,7 +117,7 @@ export function NewEquipmentForm() {
       </label>
 
       <label className="flex flex-col gap-1 text-sm">
-        Daily rate (USD)
+        Цена в сутки (USD)
         <input
           type="number"
           required
@@ -130,7 +130,7 @@ export function NewEquipmentForm() {
       </label>
 
       <label className="flex flex-col gap-1 text-sm">
-        Description
+        Описание
         <textarea
           rows={3}
           value={description}
@@ -141,12 +141,12 @@ export function NewEquipmentForm() {
 
       <div className="rounded-md border border-dashed border-slate-300 p-3">
         <label className="flex flex-col gap-1 text-sm">
-          Paste a spec sheet to auto-fill technical specs (optional)
+          Вставьте спецификацию, чтобы заполнить характеристики автоматически (необязательно)
           <textarea
             rows={3}
             value={specSheetText}
             onChange={(e) => setSpecSheetText(e.target.value)}
-            placeholder="e.g. Operating weight: 20,300 kg. Engine power: 148 hp. Bucket capacity: 1.19 m3."
+            placeholder="Например: эксплуатационная масса 20 300 кг. Мощность двигателя 148 л.с. Объём ковша 1,19 м³."
             className="rounded-md border border-slate-300 px-3 py-2"
           />
         </label>
@@ -157,7 +157,7 @@ export function NewEquipmentForm() {
           disabled={isExtracting || !specSheetText.trim()}
           onClick={handleExtractSpecs}
         >
-          {isExtracting ? 'Extracting…' : 'Extract specs with AI'}
+          {isExtracting ? 'Извлекаем…' : 'Извлечь характеристики через ИИ'}
         </Button>
         {specs && (
           <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
@@ -173,7 +173,7 @@ export function NewEquipmentForm() {
 
       {error && <p className="text-sm text-red-600">{error}</p>}
       <Button type="submit" disabled={isSubmitting}>
-        {isSubmitting ? 'Creating…' : 'Add equipment'}
+        {isSubmitting ? 'Добавление…' : 'Добавить технику'}
       </Button>
     </form>
   );

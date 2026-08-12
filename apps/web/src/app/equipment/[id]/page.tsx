@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation';
 import { prisma } from '@specai/database';
 import { Card, StatusBadge } from '@specai/ui';
 import { BookingForm } from '@/components/BookingForm';
+import { pluralizeRu } from '@/lib/pluralize';
 
 export const dynamic = 'force-dynamic';
 
@@ -31,12 +32,12 @@ export default async function EquipmentDetailPage({ params }: { params: { id: st
         <div>
           <h1 className="text-2xl font-bold">{item.name}</h1>
           <p className="text-slate-500">
-            {item.category.name} · Listed by {item.company.name}
+            {item.category.name} · Поставщик: {item.company.name}
             {averageRating !== null && (
               <>
                 {' '}
-                · ★ {averageRating.toFixed(1)} ({item.reviews.length} review
-                {item.reviews.length === 1 ? '' : 's'})
+                · ★ {averageRating.toFixed(1)} (
+                {pluralizeRu(item.reviews.length, ['отзыв', 'отзыва', 'отзывов'])})
               </>
             )}
           </p>
@@ -46,14 +47,14 @@ export default async function EquipmentDetailPage({ params }: { params: { id: st
 
       <div className="grid gap-6 sm:grid-cols-3">
         <Card className="sm:col-span-2">
-          <h2 className="font-semibold">Description</h2>
+          <h2 className="font-semibold">Описание</h2>
           <p className="mt-2 whitespace-pre-line text-sm text-slate-600">
-            {item.description ?? 'No description provided.'}
+            {item.description ?? 'Описание не указано.'}
           </p>
 
           {Object.keys(specs).length > 0 && (
             <>
-              <h2 className="mt-6 font-semibold">Specifications</h2>
+              <h2 className="mt-6 font-semibold">Характеристики</h2>
               <dl className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
                 {Object.entries(specs).map(([key, value]) => (
                   <div key={key} className="contents">
@@ -67,7 +68,7 @@ export default async function EquipmentDetailPage({ params }: { params: { id: st
 
           {item.reviews.length > 0 && (
             <>
-              <h2 className="mt-6 font-semibold">Reviews</h2>
+              <h2 className="mt-6 font-semibold">Отзывы</h2>
               <div className="mt-2 flex flex-col gap-3">
                 {item.reviews.map((review) => (
                   <div key={review.id} className="border-t border-slate-100 pt-2 text-sm">
@@ -87,13 +88,13 @@ export default async function EquipmentDetailPage({ params }: { params: { id: st
         <Card className="flex flex-col gap-3">
           <p className="text-2xl font-semibold">
             ${item.dailyRate.toString()}
-            <span className="text-sm font-normal text-slate-500">/day</span>
+            <span className="text-sm font-normal text-slate-500">/день</span>
           </p>
           {item.weeklyRate && (
-            <p className="text-sm text-slate-600">${item.weeklyRate.toString()}/week</p>
+            <p className="text-sm text-slate-600">${item.weeklyRate.toString()}/неделя</p>
           )}
           {item.monthlyRate && (
-            <p className="text-sm text-slate-600">${item.monthlyRate.toString()}/month</p>
+            <p className="text-sm text-slate-600">${item.monthlyRate.toString()}/месяц</p>
           )}
           {item.location && (
             <p className="text-sm text-slate-500">

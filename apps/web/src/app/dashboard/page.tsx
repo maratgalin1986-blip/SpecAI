@@ -24,14 +24,14 @@ export default async function DashboardPage() {
   ]);
 
   const stats = [
-    { label: 'Equipment listed', value: equipmentCount },
-    { label: 'Active bookings', value: activeBookings },
-    { label: 'Provider companies', value: companies },
+    { label: 'Техники размещено', value: equipmentCount },
+    { label: 'Активных бронирований', value: activeBookings },
+    { label: 'Компаний-поставщиков', value: companies },
   ];
 
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="text-2xl font-bold">Dashboard</h1>
+      <h1 className="text-2xl font-bold">Личный кабинет</h1>
       <div className="grid gap-4 sm:grid-cols-3">
         {stats.map((stat) => (
           <Card key={stat.label}>
@@ -42,9 +42,9 @@ export default async function DashboardPage() {
       </div>
 
       <div>
-        <h2 className="mb-3 text-lg font-semibold">My bookings</h2>
+        <h2 className="mb-3 text-lg font-semibold">Мои бронирования</h2>
         {myBookings.length === 0 ? (
-          <p className="text-sm text-slate-600">No bookings yet.</p>
+          <p className="text-sm text-slate-600">Бронирований пока нет.</p>
         ) : (
           <div className="flex flex-col gap-3">
             {myBookings.map((booking) => (
@@ -57,8 +57,9 @@ export default async function DashboardPage() {
                     {booking.equipment.name}
                   </a>
                   <p className="text-sm text-slate-500">
-                    {booking.startDate.toDateString()} – {booking.endDate.toDateString()} · $
-                    {booking.totalPrice.toString()} {booking.currency}
+                    {booking.startDate.toLocaleDateString('ru-RU')} –{' '}
+                    {booking.endDate.toLocaleDateString('ru-RU')} · ${booking.totalPrice.toString()}{' '}
+                    {booking.currency}
                   </p>
                   {booking.status === 'COMPLETED' && !booking.review && (
                     <div className="mt-2">

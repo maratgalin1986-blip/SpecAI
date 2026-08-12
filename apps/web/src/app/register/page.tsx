@@ -37,7 +37,7 @@ export default function RegisterPage() {
 
     if (!response.ok) {
       const body = await response.json().catch(() => null);
-      setError(body?.error === 'Email already registered' ? body.error : 'Registration failed');
+      setError(typeof body?.error === 'string' ? body.error : 'Не удалось зарегистрироваться');
       return;
     }
 
@@ -47,7 +47,7 @@ export default function RegisterPage() {
   return (
     <div className="mx-auto max-w-sm">
       <Card>
-        <h1 className="mb-4 text-xl font-bold">Create an account</h1>
+        <h1 className="mb-4 text-xl font-bold">Создать аккаунт</h1>
 
         <div className="mb-4 flex gap-2 text-sm">
           <button
@@ -59,7 +59,7 @@ export default function RegisterPage() {
                 : 'border-slate-300 text-slate-600'
             }`}
           >
-            I want to rent equipment
+            Хочу арендовать технику
           </button>
           <button
             type="button"
@@ -70,13 +70,13 @@ export default function RegisterPage() {
                 : 'border-slate-300 text-slate-600'
             }`}
           >
-            I want to list equipment
+            Хочу сдавать технику
           </button>
         </div>
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-3">
           <label className="flex flex-col gap-1 text-sm">
-            Name
+            Имя
             <input
               required
               value={name}
@@ -86,7 +86,7 @@ export default function RegisterPage() {
           </label>
           {accountType === 'PROVIDER' && (
             <label className="flex flex-col gap-1 text-sm">
-              Company name
+              Название компании
               <input
                 required
                 value={companyName}
@@ -96,7 +96,7 @@ export default function RegisterPage() {
             </label>
           )}
           <label className="flex flex-col gap-1 text-sm">
-            Email
+            E-mail
             <input
               type="email"
               required
@@ -106,7 +106,7 @@ export default function RegisterPage() {
             />
           </label>
           <label className="flex flex-col gap-1 text-sm">
-            Password
+            Пароль
             <input
               type="password"
               required
@@ -118,13 +118,13 @@ export default function RegisterPage() {
           </label>
           {error && <p className="text-sm text-red-600">{error}</p>}
           <Button type="submit" disabled={isSubmitting}>
-            {isSubmitting ? 'Creating account…' : 'Create account'}
+            {isSubmitting ? 'Создание аккаунта…' : 'Создать аккаунт'}
           </Button>
         </form>
         <p className="mt-4 text-sm text-slate-500">
-          Already have an account?{' '}
+          Уже есть аккаунт?{' '}
           <a href="/login" className="font-medium text-amber-700">
-            Sign in
+            Войти
           </a>
         </p>
       </Card>

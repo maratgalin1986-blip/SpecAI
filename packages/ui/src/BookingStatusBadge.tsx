@@ -9,11 +9,11 @@ const statusStyles: Record<BookingStatus, string> = {
 };
 
 const statusLabels: Record<BookingStatus, string> = {
-  PENDING: 'Pending',
-  CONFIRMED: 'Confirmed',
-  ACTIVE: 'Active',
-  COMPLETED: 'Completed',
-  CANCELLED: 'Cancelled',
+  PENDING: 'Ожидает подтверждения',
+  CONFIRMED: 'Подтверждена',
+  ACTIVE: 'Активна',
+  COMPLETED: 'Завершена',
+  CANCELLED: 'Отменена',
 };
 
 export function BookingStatusBadge({ status }: { status: BookingStatus }) {

@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { Button } from '@specai/ui';
+import { pluralizeRu } from '@/lib/pluralize';
 
 export function BookingForm({
   equipmentId,
@@ -26,9 +27,9 @@ export function BookingForm({
     return (
       <p className="text-sm text-slate-600">
         <a href="/login" className="font-medium text-amber-700">
-          Sign in
+          Войдите
         </a>{' '}
-        to request a booking.
+        , чтобы отправить заявку на бронирование.
       </p>
     );
   }
@@ -55,7 +56,9 @@ export function BookingForm({
     if (!response.ok) {
       const body = await response.json().catch(() => null);
       setError(
-        typeof body?.error === 'string' ? body.error : 'Could not create booking. Try again.',
+        typeof body?.error === 'string'
+          ? body.error
+          : 'Не удалось создать бронирование. Попробуйте ещё раз.',
       );
       return;
     }
@@ -65,13 +68,15 @@ export function BookingForm({
   }
 
   if (success) {
-    return <p className="text-sm text-green-700">Booking request sent — status: pending.</p>;
+    return (
+      <p className="text-sm text-green-700">Заявка отправлена — статус: ожидает подтверждения.</p>
+    );
   }
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-3">
       <label className="flex flex-col gap-1 text-sm">
-        Start date
+        Дата начала
         <input
           type="date"
           required
@@ -81,7 +86,7 @@ export function BookingForm({
         />
       </label>
       <label className="flex flex-col gap-1 text-sm">
-        End date
+        Дата окончания
         <input
           type="date"
           required
@@ -92,12 +97,13 @@ export function BookingForm({
       </label>
       {days > 0 && (
         <p className="text-sm text-slate-600">
-          {days} day{days === 1 ? '' : 's'} · estimated total {estimatedTotal} {currency}
+          {pluralizeRu(days, ['день', 'дня', 'дней'])} · ориентировочная стоимость {estimatedTotal}{' '}
+          {currency}
         </p>
       )}
       {error && <p className="text-sm text-red-600">{error}</p>}
       <Button type="submit" disabled={isSubmitting}>
-        {isSubmitting ? 'Requesting…' : 'Request booking'}
+        {isSubmitting ? 'Отправка…' : 'Забронировать'}
       </Button>
     </form>
   );

@@ -21,7 +21,8 @@ const EXTRACTION_TOOL = {
       specs: {
         type: 'object',
         description:
-          'Key/value technical specs, e.g. operatingWeightKg, enginePowerHp, bucketCapacityM3.',
+          'Key/value technical specs. Keys must be short human-readable Russian labels ' +
+          'including the unit, e.g. "Эксплуатационная масса, кг", "Мощность двигателя, л.с.".',
         additionalProperties: { type: ['string', 'number', 'boolean'] },
       },
     },
@@ -42,7 +43,8 @@ export async function extractEquipmentSpecs(sourceText: string): Promise<Extract
     max_tokens: 1024,
     system:
       'You extract structured heavy equipment specifications from unstructured listing ' +
-      'or spec-sheet text. Only include values explicitly present in the source text.',
+      'or spec-sheet text. Only include values explicitly present in the source text. ' +
+      'Use Russian for spec key labels.',
     tools: [EXTRACTION_TOOL],
     tool_choice: { type: 'tool', name: EXTRACTION_TOOL.name },
     messages: [{ role: 'user', content: sourceText }],

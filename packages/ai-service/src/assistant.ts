@@ -18,7 +18,7 @@ export async function replyToCustomer(history: AssistantMessage[]): Promise<stri
     system:
       'You are the SpecAI customer support assistant for a heavy equipment rental and ' +
       'construction services platform. Be concise and helpful. If you are unsure about ' +
-      'account-specific details, say so instead of guessing.',
+      'account-specific details, say so instead of guessing. Always respond in Russian.',
     messages: history.map((m) => ({ role: m.role, content: m.content })),
   });
 

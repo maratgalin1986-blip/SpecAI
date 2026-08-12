@@ -12,7 +12,7 @@ export function AuthStatus() {
   if (!session) {
     return (
       <a href="/login" className="text-sm font-medium text-slate-600 hover:text-slate-900">
-        Sign in
+        Войти
       </a>
     );
   }
@@ -24,7 +24,7 @@ export function AuthStatus() {
         onClick={() => signOut({ callbackUrl: '/' })}
         className="font-medium text-slate-600 hover:text-slate-900"
       >
-        Sign out
+        Выйти
       </button>
     </div>
   );

@@ -6,32 +6,32 @@ const prisma = new PrismaClient();
 async function main() {
   const location = await prisma.location.create({
     data: {
-      addressLine: '4400 Brighton Blvd',
-      city: 'Denver',
-      region: 'CO',
-      postalCode: '80216',
-      country: 'USA',
-      latitude: 39.7803,
-      longitude: -104.9764,
+      addressLine: 'ул. Титова, 27',
+      city: 'Екатеринбург',
+      region: 'Свердловская область',
+      postalCode: '620028',
+      country: 'Россия',
+      latitude: 56.8389,
+      longitude: 60.6057,
     },
   });
 
   const providerCompany = await prisma.company.create({
     data: {
-      name: 'Rocky Mountain Heavy Equipment',
+      name: 'Уральская Спецтехника',
       isProvider: true,
-      phone: '+1-303-555-0100',
-      website: 'https://example.com/rmhe',
-      description: 'Fleet rental provider serving the Front Range.',
+      phone: '+7-343-555-0100',
+      website: 'https://example.com/ural-spec',
+      description: 'Аренда парка спецтехники по Уральскому региону.',
       locationId: location.id,
     },
   });
 
   const customerCompany = await prisma.company.create({
     data: {
-      name: 'Summit Construction Co.',
+      name: 'СтройГрупп',
       isProvider: false,
-      phone: '+1-303-555-0199',
+      phone: '+7-343-555-0199',
     },
   });
 
@@ -42,7 +42,7 @@ async function main() {
 
   const providerAdmin = await prisma.user.create({
     data: {
-      name: 'Pat Rivera',
+      name: 'Пётр Иванов',
       email: 'provider@example.com',
       role: 'PROVIDER_ADMIN',
       passwordHash: providerAdminPassword,
@@ -52,7 +52,7 @@ async function main() {
 
   const customer = await prisma.user.create({
     data: {
-      name: 'Jordan Lee',
+      name: 'Анна Смирнова',
       email: 'customer@example.com',
       role: 'CUSTOMER',
       passwordHash: customerPassword,
@@ -61,26 +61,26 @@ async function main() {
   });
 
   const [excavators, cranes, bulldozers] = await Promise.all([
-    prisma.equipmentCategory.create({ data: { name: 'Excavators', slug: 'excavators' } }),
-    prisma.equipmentCategory.create({ data: { name: 'Cranes', slug: 'cranes' } }),
-    prisma.equipmentCategory.create({ data: { name: 'Bulldozers', slug: 'bulldozers' } }),
+    prisma.equipmentCategory.create({ data: { name: 'Экскаваторы', slug: 'excavators' } }),
+    prisma.equipmentCategory.create({ data: { name: 'Краны', slug: 'cranes' } }),
+    prisma.equipmentCategory.create({ data: { name: 'Бульдозеры', slug: 'bulldozers' } }),
   ]);
 
   const excavator = await prisma.equipment.create({
     data: {
-      name: 'CAT 320 Hydraulic Excavator',
+      name: 'Гидравлический экскаватор CAT 320',
       make: 'Caterpillar',
       model: '320',
       year: 2021,
       dailyRate: 650,
       weeklyRate: 3200,
       monthlyRate: 11000,
-      description: 'Mid-size excavator suited for general excavation and utility work.',
+      description: 'Экскаватор среднего класса для земляных и инженерных работ.',
       specs: {
-        operatingWeightKg: 20300,
-        enginePowerHp: 148,
-        bucketCapacityM3: 1.19,
-        maxDigDepthM: 6.5,
+        'Эксплуатационная масса, кг': 20300,
+        'Мощность двигателя, л.с.': 148,
+        'Объём ковша, м³': 1.19,
+        'Макс. глубина копания, м': 6.5,
       },
       imageUrls: [],
       status: 'AVAILABLE',
@@ -92,17 +92,17 @@ async function main() {
 
   const crane = await prisma.equipment.create({
     data: {
-      name: 'Grove GMK4100L Mobile Crane',
+      name: 'Автокран Grove GMK4100L',
       make: 'Grove',
       model: 'GMK4100L',
       year: 2019,
       dailyRate: 1800,
       weeklyRate: 9500,
-      description: 'All-terrain mobile crane, 100-ton capacity.',
+      description: 'Полноприводный автокран грузоподъёмностью 100 тонн.',
       specs: {
-        maxLiftCapacityTons: 100,
-        maxBoomLengthM: 60,
-        axles: 4,
+        'Макс. грузоподъёмность, т': 100,
+        'Макс. вылет стрелы, м': 60,
+        'Количество осей': 4,
       },
       imageUrls: [],
       status: 'AVAILABLE',
@@ -114,16 +114,16 @@ async function main() {
 
   await prisma.equipment.create({
     data: {
-      name: 'CAT D6 Bulldozer',
+      name: 'Бульдозер CAT D6',
       make: 'Caterpillar',
       model: 'D6',
       year: 2018,
       dailyRate: 900,
-      description: 'Track-type tractor for grading and land clearing.',
+      description: 'Гусеничный бульдозер для планировки и расчистки участков.',
       specs: {
-        operatingWeightKg: 18500,
-        enginePowerHp: 185,
-        bladeCapacityM3: 3.4,
+        'Эксплуатационная масса, кг': 18500,
+        'Мощность двигателя, л.с.': 185,
+        'Объём отвала, м³': 3.4,
       },
       imageUrls: [],
       status: 'IN_MAINTENANCE',
@@ -145,7 +145,7 @@ async function main() {
     },
   });
 
-  console.log('Seeded database with:', {
+  console.log('База данных заполнена демо-данными:', {
     location: location.id,
     providerCompany: providerCompany.id,
     customerCompany: customerCompany.id,

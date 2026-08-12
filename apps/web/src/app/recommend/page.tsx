@@ -32,7 +32,7 @@ export default function RecommendPage() {
 
     if (!response.ok) {
       const body = await response.json().catch(() => null);
-      setError(typeof body?.error === 'string' ? body.error : 'Could not get a recommendation.');
+      setError(typeof body?.error === 'string' ? body.error : 'Не удалось получить рекомендацию.');
       return;
     }
 
@@ -44,9 +44,9 @@ export default function RecommendPage() {
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h1 className="text-2xl font-bold">AI equipment recommendation</h1>
+        <h1 className="text-2xl font-bold">ИИ-подбор техники</h1>
         <p className="mt-1 text-slate-600">
-          Describe the job and get ranked equipment matches from available inventory.
+          Опишите задачу — получите ранжированные варианты техники из доступного парка.
         </p>
       </div>
 
@@ -54,14 +54,14 @@ export default function RecommendPage() {
         <textarea
           required
           rows={4}
-          placeholder="e.g. Need to excavate a 200m trench for utility lines, soft soil, 2-week job."
+          placeholder="Например: нужно вырыть траншею 200 м под коммуникации, мягкий грунт, срок работ — 2 недели."
           value={jobDescription}
           onChange={(e) => setJobDescription(e.target.value)}
           className="rounded-md border border-slate-300 px-3 py-2"
         />
         <div>
           <Button type="submit" disabled={isSubmitting}>
-            {isSubmitting ? 'Thinking…' : 'Get recommendations'}
+            {isSubmitting ? 'Подбираем…' : 'Получить рекомендации'}
           </Button>
         </div>
       </form>
@@ -70,13 +70,13 @@ export default function RecommendPage() {
 
       {followUpQuestion && (
         <p className="text-sm text-slate-600">
-          <span className="font-medium">Clarifying question: </span>
+          <span className="font-medium">Уточняющий вопрос: </span>
           {followUpQuestion}
         </p>
       )}
 
       {recommendations && recommendations.length === 0 && !error && (
-        <p className="text-sm text-slate-600">No matching equipment found.</p>
+        <p className="text-sm text-slate-600">Подходящая техника не найдена.</p>
       )}
 
       {recommendations && recommendations.length > 0 && (
@@ -93,7 +93,7 @@ export default function RecommendPage() {
                   </a>
                   {rec.equipment && (
                     <p className="text-sm text-slate-500">
-                      {rec.equipment.category} · ${rec.equipment.dailyRate}/day
+                      {rec.equipment.category} · ${rec.equipment.dailyRate}/день
                     </p>
                   )}
                   <p className="mt-1 text-sm text-slate-600">{rec.reason}</p>

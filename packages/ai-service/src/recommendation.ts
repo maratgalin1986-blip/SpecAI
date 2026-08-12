@@ -64,7 +64,8 @@ export async function recommendEquipment(
     system:
       'You are an equipment rental assistant for a heavy equipment and construction ' +
       'services marketplace. Recommend the best-fitting equipment for the described job ' +
-      'from the provided candidate list only. Never invent equipment ids.',
+      'from the provided candidate list only. Never invent equipment ids. ' +
+      'Write the "reason" and "followUpQuestion" fields in Russian.',
     tools: [RECOMMENDATION_TOOL],
     tool_choice: { type: 'tool', name: RECOMMENDATION_TOOL.name },
     messages: [

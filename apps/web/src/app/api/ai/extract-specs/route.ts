@@ -11,7 +11,7 @@ const requestSchema = z.object({
 export async function POST(request: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session || session.user.role !== 'PROVIDER_ADMIN') {
-    return NextResponse.json({ error: 'Provider admin access required' }, { status: 403 });
+    return NextResponse.json({ error: 'Требуется аккаунт поставщика' }, { status: 403 });
   }
 
   const body = await request.json();
@@ -25,7 +25,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(specs);
   } catch {
     return NextResponse.json(
-      { error: 'Spec extraction is unavailable right now' },
+      { error: 'Извлечение характеристик сейчас недоступно' },
       { status: 502 },
     );
   }
