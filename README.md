@@ -58,6 +58,34 @@ Seeded accounts (see `packages/database/prisma/seed.ts`):
 - Provider admin: `provider@example.com` / `provider123`
 - Customer: `customer@example.com` / `customer123`
 
+## Deploying to a public URL
+
+The commands above only run the app on `localhost`. To get a URL reachable from
+any device — phone, another computer, anywhere — deploy to a host with a public
+address. The stack (Next.js + Postgres) maps cleanly onto **Vercel** (app) +
+**Neon** (Postgres), both of which have a free tier and need no server management.
+
+1. **Database** — create a free project at [neon.tech](https://neon.tech) (or
+   Supabase, or any managed Postgres). Copy the connection string it gives you;
+   that's your `DATABASE_URL`.
+2. **App** — go to [vercel.com](https://vercel.com), "Add New Project", import
+   this GitHub repo.
+   - Framework preset: Next.js (auto-detected).
+   - **Root Directory**: set to `apps/web` (this is a monorepo — Vercel needs
+     to know the Next.js app isn't at the repo root).
+   - Environment variables: `DATABASE_URL` (from step 1), `NEXTAUTH_SECRET`
+     (any random string — `openssl rand -base64 32`), `NEXTAUTH_URL` (your
+     Vercel deployment URL, e.g. `https://your-app.vercel.app`), and
+     `ANTHROPIC_API_KEY` if you want the AI features live.
+3. Deploy. Vercel runs `pnpm install` (which generates the Prisma client via
+   `packages/database`'s `postinstall` script) and `next build`.
+4. **Sync the schema** to the new database once, from your machine, pointed at
+   the Neon connection string: `DATABASE_URL="<neon-url>" pnpm db:push` and,
+   optionally, `DATABASE_URL="<neon-url>" pnpm db:seed` for demo data.
+
+After that, the Vercel URL works from any device on any network — no tunnel,
+no local server required.
+
 ## Scripts
 
 Run from the repo root:
