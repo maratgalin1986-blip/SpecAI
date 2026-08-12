@@ -29,6 +29,9 @@ export default function RootLayout({ children }: { children: ReactNode }) {
                 <a href="/dashboard" className="hover:text-slate-900">
                   Dashboard
                 </a>
+                <a href="/provider" className="hover:text-slate-900">
+                  Provider
+                </a>
                 <AuthStatus />
               </nav>
             </div>

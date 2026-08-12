@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth';
 import { Prisma, prisma } from '@specai/database';
 import { createEquipmentSchema, equipmentSearchQuerySchema } from '@specai/shared';
+import { authOptions } from '@/lib/auth';
 
 export async function GET(request: NextRequest) {
   const params = Object.fromEntries(request.nextUrl.searchParams.entries());
@@ -41,8 +43,14 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  const session = await getServerSession(authOptions);
+  if (!session || session.user.role !== 'PROVIDER_ADMIN' || !session.user.companyId) {
+    return NextResponse.json({ error: 'Provider admin access required' }, { status: 403 });
+  }
+
   const body = await request.json();
-  const parsed = createEquipmentSchema.safeParse(body);
+  // companyId is always derived from the authenticated provider, never trusted from the client.
+  const parsed = createEquipmentSchema.safeParse({ ...body, companyId: session.user.companyId });
 
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
