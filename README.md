@@ -44,7 +44,7 @@ packages/
 Requires Node 20+ and pnpm.
 
 ```bash
-cp .env.example .env      # set DATABASE_URL, ANTHROPIC_API_KEY, NEXTAUTH_SECRET
+cp .env.example .env      # set DATABASE_URL, DIRECT_URL, ANTHROPIC_API_KEY, NEXTAUTH_SECRET
 docker compose up -d      # local Postgres
 pnpm install
 pnpm db:generate
@@ -66,19 +66,23 @@ address. The stack (Next.js + Postgres) maps cleanly onto **Vercel** (app) +
 **Neon** (Postgres), both of which have a free tier and need no server management.
 
 1. **Database** — create a free project at [neon.tech](https://neon.tech) (or
-   Supabase, or any managed Postgres). Copy the connection string it gives you;
-   that's your `DATABASE_URL`.
+   Supabase, or any managed Postgres). Neon gives you two connection strings:
+   a **pooled** one (hostname contains `-pooler`) and a **direct** one (same
+   hostname without `-pooler`). You need both — see step 2.
 2. **App** — go to [vercel.com](https://vercel.com), "Add New Project", import
    this GitHub repo.
    - Framework preset: Next.js (auto-detected).
    - **Root Directory**: set to `apps/web` (this is a monorepo — Vercel needs
      to know the Next.js app isn't at the repo root).
-   - Environment variables: `DATABASE_URL` (from step 1), `NEXTAUTH_SECRET`
-     (any random string — `openssl rand -base64 32`), `NEXTAUTH_URL` (your
-     Vercel deployment URL, e.g. `https://your-app.vercel.app`), and
-     `ANTHROPIC_API_KEY` if you want the AI features live.
+   - Environment variables: `DATABASE_URL` (the **pooled** Neon string — used
+     at runtime), `DIRECT_URL` (the **direct**, unpooled Neon string — used
+     for `prisma db push`; DDL over a transaction-mode pooler is unreliable),
+     `NEXTAUTH_SECRET` (any random string — `openssl rand -base64 32`),
+     `NEXTAUTH_URL` (your Vercel deployment URL, e.g.
+     `https://your-app.vercel.app`), and `ANTHROPIC_API_KEY` if you want the
+     AI features live.
 3. Deploy. `apps/web`'s `build` script (`pnpm --filter @specai/database push
-   && pnpm --filter @specai/database ensure-categories && next build`) syncs
+&& pnpm --filter @specai/database ensure-categories && next build`) syncs
    the Prisma schema to whatever `DATABASE_URL` points at and seeds the base
    equipment categories on every build — no separate manual step, and safe to
    re-run since both are idempotent. It deliberately does **not** run the full

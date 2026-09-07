@@ -5,8 +5,14 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  // Runtime queries go through the pooled connection (e.g. Neon's PgBouncer
+  // endpoint) for serverless-friendly connection reuse. Schema pushes and
+  // migrations need a direct connection instead — DDL over a transaction-mode
+  // pooler is unreliable. Point DIRECT_URL at the same database without the
+  // pooler (locally, both vars can just be identical).
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 // ---------------------------------------------------------------------------
