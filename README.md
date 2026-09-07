@@ -77,11 +77,14 @@ address. The stack (Next.js + Postgres) maps cleanly onto **Vercel** (app) +
      (any random string — `openssl rand -base64 32`), `NEXTAUTH_URL` (your
      Vercel deployment URL, e.g. `https://your-app.vercel.app`), and
      `ANTHROPIC_API_KEY` if you want the AI features live.
-3. Deploy. Vercel runs `pnpm install` (which generates the Prisma client via
-   `packages/database`'s `postinstall` script) and `next build`.
-4. **Sync the schema** to the new database once, from your machine, pointed at
-   the Neon connection string: `DATABASE_URL="<neon-url>" pnpm db:push` and,
-   optionally, `DATABASE_URL="<neon-url>" pnpm db:seed` for demo data.
+3. Deploy. `apps/web`'s `build` script (`pnpm --filter @specai/database push
+   && pnpm --filter @specai/database ensure-categories && next build`) syncs
+   the Prisma schema to whatever `DATABASE_URL` points at and seeds the base
+   equipment categories on every build — no separate manual step, and safe to
+   re-run since both are idempotent. It deliberately does **not** run the full
+   `prisma/seed.ts` (fake companies, hardcoded `provider123`/`customer123`
+   passwords) against a real deployment — that script is for local dev only.
+   Register real accounts via `/register` on the deployed site instead.
 
 After that, the Vercel URL works from any device on any network — no tunnel,
 no local server required.
