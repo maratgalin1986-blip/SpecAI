@@ -145,6 +145,26 @@ async function main() {
     },
   });
 
+  const order = await prisma.order.create({
+    data: {
+      customerId: customer.id,
+      description: 'Нужен бульдозер для расчистки строительной площадки под фундамент, 3 дня.',
+      desiredStartDate: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000),
+      desiredEndDate: new Date(Date.now() + 13 * 24 * 60 * 60 * 1000),
+      categoryId: bulldozers.id,
+    },
+  });
+
+  await prisma.bid.create({
+    data: {
+      orderId: order.id,
+      equipmentId: excavator.id,
+      price: 2100,
+      currency: 'USD',
+      message: 'Бульдозер сейчас на обслуживании, но этот экскаватор справится с расчисткой.',
+    },
+  });
+
   console.log('База данных заполнена демо-данными:', {
     location: location.id,
     providerCompany: providerCompany.id,
@@ -152,6 +172,7 @@ async function main() {
     providerAdmin: providerAdmin.email,
     customer: customer.email,
     equipment: [excavator.id, crane.id],
+    order: order.id,
   });
 }
 

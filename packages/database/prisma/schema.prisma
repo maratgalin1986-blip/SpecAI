@@ -35,6 +35,7 @@ model User {
   companyId String?
 
   bookings      Booking[]        @relation("BookingCustomer")
+  orders        Order[]          @relation("OrderCustomer")
   reviews       Review[]
   aiConversations AiConversation[]
 
@@ -78,6 +79,7 @@ model Location {
   companies Company[]
   equipment Equipment[]
   bookings  Booking[]
+  orders    Order[]
 }
 
 // ---------------------------------------------------------------------------
@@ -95,6 +97,7 @@ model EquipmentCategory {
   children EquipmentCategory[] @relation("CategoryHierarchy")
 
   equipment Equipment[]
+  orders    Order[]
 
   @@index([parentId])
 }
@@ -136,6 +139,7 @@ model Equipment {
   locationId String?
 
   bookings           Booking[]
+  bids               Bid[]
   maintenanceRecords MaintenanceRecord[]
   reviews            Review[]
   documents          Document[]
@@ -192,12 +196,82 @@ model Booking {
   deliveryLocation   Location? @relation(fields: [deliveryLocationId], references: [id])
   deliveryLocationId String?
 
+  // Set when this booking was created by accepting a Bid on an Order,
+  // rather than the customer booking a specific listing directly.
+  order   Order?  @relation(fields: [orderId], references: [id])
+  orderId String? @unique
+
   documents Document[]
   review    Review?
 
   @@index([equipmentId])
   @@index([customerId])
   @@index([status])
+}
+
+// ---------------------------------------------------------------------------
+// Dispatch: customer posts a job, nearby providers bid on it
+// ---------------------------------------------------------------------------
+
+enum OrderStatus {
+  OPEN
+  MATCHED
+  CANCELLED
+}
+
+// A customer's job request ("need an excavator in Yekaterinburg next week")
+// posted without picking a specific listing up front — the taxi-style
+// counterpart to browsing the catalog and booking directly.
+model Order {
+  id                String      @id @default(cuid())
+  description       String
+  desiredStartDate  DateTime
+  desiredEndDate    DateTime
+  status            OrderStatus @default(OPEN)
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+
+  customer   User   @relation("OrderCustomer", fields: [customerId], references: [id])
+  customerId String
+
+  category   EquipmentCategory? @relation(fields: [categoryId], references: [id])
+  categoryId String?
+
+  location   Location? @relation(fields: [locationId], references: [id])
+  locationId String?
+
+  bids    Bid[]
+  booking Booking?
+
+  @@index([customerId])
+  @@index([categoryId])
+  @@index([status])
+}
+
+enum BidStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+}
+
+// A provider's offer against an Order: a specific piece of equipment at a
+// quoted price. Accepting a bid turns it into a Booking.
+model Bid {
+  id        String    @id @default(cuid())
+  price     Decimal   @db.Decimal(10, 2)
+  currency  String    @default("USD")
+  message   String?
+  status    BidStatus @default(PENDING)
+  createdAt DateTime  @default(now())
+
+  order   Order  @relation(fields: [orderId], references: [id])
+  orderId String
+
+  equipment   Equipment @relation(fields: [equipmentId], references: [id])
+  equipmentId String
+
+  @@index([orderId])
+  @@index([equipmentId])
 }
 
 enum DocumentType {

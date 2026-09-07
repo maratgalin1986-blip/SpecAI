@@ -5,6 +5,7 @@ import { AuthStatus } from '@/components/AuthStatus';
 
 const NAV_LINKS = [
   { href: '/equipment', label: 'Техника' },
+  { href: '/orders', label: 'Заявки' },
   { href: '/recommend', label: 'ИИ-подбор' },
   { href: '/dashboard', label: 'Кабинет' },
   { href: '/provider', label: 'Провайдер' },

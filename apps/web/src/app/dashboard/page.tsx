@@ -6,10 +6,16 @@ import { ReviewForm } from '@/components/ReviewForm';
 
 export const dynamic = 'force-dynamic';
 
+const ORDER_STATUS_LABEL: Record<string, string> = {
+  OPEN: 'Открыта',
+  MATCHED: 'Закрыта — техника выбрана',
+  CANCELLED: 'Отменена',
+};
+
 export default async function DashboardPage() {
   const session = await getServerSession(authOptions);
 
-  const [equipmentCount, activeBookings, companies, myBookings] = await Promise.all([
+  const [equipmentCount, activeBookings, companies, myBookings, myOrders] = await Promise.all([
     prisma.equipment.count(),
     prisma.booking.count({ where: { status: { in: ['CONFIRMED', 'ACTIVE'] } } }),
     prisma.company.count({ where: { isProvider: true } }),
@@ -17,6 +23,14 @@ export default async function DashboardPage() {
       ? prisma.booking.findMany({
           where: { customerId: session.user.id },
           include: { equipment: true, review: true },
+          orderBy: { createdAt: 'desc' },
+          take: 20,
+        })
+      : Promise.resolve([]),
+    session
+      ? prisma.order.findMany({
+          where: { customerId: session.user.id },
+          include: { bids: true },
           orderBy: { createdAt: 'desc' },
           take: 20,
         })
@@ -39,6 +53,39 @@ export default async function DashboardPage() {
             <p className="mt-1 text-3xl font-bold">{stat.value}</p>
           </Card>
         ))}
+      </div>
+
+      <div>
+        <h2 className="mb-3 text-lg font-semibold">Мои заявки</h2>
+        {myOrders.length === 0 ? (
+          <p className="text-sm text-slate-600">
+            Заявок пока нет.{' '}
+            <a href="/orders" className="font-medium text-amber-700">
+              Опубликовать
+            </a>
+            .
+          </p>
+        ) : (
+          <div className="flex flex-col gap-3">
+            {myOrders.map((order) => (
+              <a key={order.id} href={`/orders/${order.id}`}>
+                <Card className="flex items-center justify-between gap-4 hover:border-amber-400">
+                  <div>
+                    <p className="font-medium">{order.description}</p>
+                    <p className="text-sm text-slate-500">
+                      {order.desiredStartDate.toLocaleDateString('ru-RU')} –{' '}
+                      {order.desiredEndDate.toLocaleDateString('ru-RU')} · Предложений:{' '}
+                      {order.bids.length}
+                    </p>
+                  </div>
+                  <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-700">
+                    {ORDER_STATUS_LABEL[order.status]}
+                  </span>
+                </Card>
+              </a>
+            ))}
+          </div>
+        )}
       </div>
 
       <div>

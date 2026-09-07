@@ -119,6 +119,13 @@ Run from the repo root:
   comment (`POST /api/reviews`), shown on the equipment detail page.
 - **AI recommendation** — `/recommend` page and `POST /api/ai/recommend` rank
   available equipment against a free-text job description using Claude tool calls.
+- **Dispatch (orders & bids)** — `/orders` lets a customer post a job request
+  (what's needed, category, date range) without picking a specific listing up
+  front — a taxi-style counterpart to browsing the catalog. Providers browse
+  open orders and submit a `Bid` (their equipment + price) via
+  `POST /api/orders/[id]/bids`; the customer accepts one via
+  `POST /api/bids/[id]/accept`, which atomically creates a `Booking`, marks
+  the order `MATCHED`, and rejects the other bids.
 
 ## AI service usage
 
