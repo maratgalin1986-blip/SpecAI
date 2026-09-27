@@ -82,7 +82,7 @@ export default function HomePage() {
               ))}
             </div>
           </div>
-          <div className="relative h-[340px] sm:h-[420px] lg:h-auto lg:min-h-[600px]">
+          <div className="relative h-[470px] sm:h-[520px] lg:h-auto lg:min-h-[620px]">
             <Hero3D />
           </div>
         </div>
