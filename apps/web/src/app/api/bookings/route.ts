@@ -18,11 +18,32 @@ const createBookingRequestSchema = z
     path: ['endDate'],
   });
 
-/** Бронирования текущего пользователя (клиента), новые сверху. */
+/**
+ * Бронирования текущего пользователя (клиента), новые сверху.
+ * `?as=provider` — бронирования техники компании поставщика (с данными клиента).
+ */
 export async function GET(request: NextRequest) {
   const currentUser = await getRequestUser(request);
   if (!currentUser) {
     return NextResponse.json({ error: 'Необходимо войти в аккаунт' }, { status: 401 });
+  }
+
+  if (request.nextUrl.searchParams.get('as') === 'provider') {
+    if (currentUser.role !== 'PROVIDER_ADMIN' || !currentUser.companyId) {
+      return NextResponse.json({ error: 'Требуется аккаунт поставщика' }, { status: 403 });
+    }
+
+    const bookings = await prisma.booking.findMany({
+      where: { equipment: { companyId: currentUser.companyId } },
+      include: {
+        equipment: { select: { id: true, name: true, imageUrls: true } },
+        customer: { select: { id: true, name: true, email: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+    });
+
+    return NextResponse.json({ bookings });
   }
 
   const bookings = await prisma.booking.findMany({
