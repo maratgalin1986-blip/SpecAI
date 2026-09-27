@@ -181,6 +181,31 @@ In production, add an endpoint in the Stripe Dashboard pointing at
 `checkout.session.async_payment_failed`, `checkout.session.expired` and
 `payment_intent.payment_failed`, and use its signing secret.
 
+## Email notifications (Resend)
+
+Key events trigger transactional emails via [Resend](https://resend.com). Templates
+live in `apps/web/src/lib/emailTemplates.ts` (plain HTML + text, in Russian); the
+client in `apps/web/src/lib/email.ts` is created lazily and every send is wrapped in
+`try/catch`, so a failed or unconfigured email never breaks the API request — it is
+only logged (`[email] skipped: ...` / `[email] send failed`).
+
+| Event                                              | Recipient                             | Template               |
+| -------------------------------------------------- | ------------------------------------- | ---------------------- |
+| `POST /api/orders/[id]/bids` — new bid on an order | order customer                        | `newBidReceived`       |
+| `POST /api/bids/[id]/accept` — bid accepted        | `PROVIDER_ADMIN` users of the company | `bidAccepted`          |
+| `PATCH /api/bookings/[id]` — status changed        | booking customer                      | `bookingStatusChanged` |
+| Stripe webhook — payment marked `PAID`             | customer and provider admins          | `paymentReceived`      |
+
+Environment variables (see `.env.example`):
+
+- `RESEND_API_KEY` — API key from the Resend dashboard. When missing, sending is
+  skipped and the app keeps working.
+- `EMAIL_FROM` — sender on a domain verified in Resend, e.g. `SpecAI <noreply@example.com>`
+  (`onboarding@resend.dev` works for testing).
+- Links in emails use `NEXT_PUBLIC_APP_URL` (falls back to `NEXTAUTH_URL`).
+
+Tests: `pnpm --filter @specai/web test` covers the templates and the no-key path.
+
 ## AI service usage
 
 `packages/ai-service` exposes three functions consumed by `apps/web`:

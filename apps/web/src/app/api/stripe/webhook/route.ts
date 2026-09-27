@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import type Stripe from 'stripe';
-import { prisma } from '@specai/database';
+import { prisma, type Prisma } from '@specai/database';
 import { getStripe, getStripeWebhookSecret } from '@/lib/stripe';
+import { sendEmail } from '@/lib/email';
+import { paymentReceived } from '@/lib/emailTemplates';
 
 // Signature verification needs the raw request body, which is only reliably
 // available in the Node.js runtime.
@@ -14,8 +16,46 @@ function paymentIntentId(session: Stripe.Checkout.Session): string | null {
     : (session.payment_intent?.id ?? null);
 }
 
+type PaidNotification = {
+  bookingId: string;
+  equipmentName: string;
+  amount: Prisma.Decimal;
+  currency: string;
+  customerEmail: string;
+  providerEmails: string[];
+};
+
+async function notifyPaymentReceived(info: PaidNotification) {
+  try {
+    await sendEmail({
+      to: info.customerEmail,
+      ...paymentReceived({
+        bookingId: info.bookingId,
+        equipmentName: info.equipmentName,
+        amount: info.amount,
+        currency: info.currency,
+        recipient: 'customer',
+      }),
+    });
+    if (info.providerEmails.length > 0) {
+      await sendEmail({
+        to: info.providerEmails,
+        ...paymentReceived({
+          bookingId: info.bookingId,
+          equipmentName: info.equipmentName,
+          amount: info.amount,
+          currency: info.currency,
+          recipient: 'provider',
+        }),
+      });
+    }
+  } catch (error) {
+    console.error('[email] paymentReceived failed', error);
+  }
+}
+
 async function markPaid(session: Stripe.Checkout.Session) {
-  await prisma.$transaction(async (tx) => {
+  const notification = await prisma.$transaction(async (tx): Promise<PaidNotification | null> => {
     const payment = await tx.payment.findFirst({
       where: {
         OR: [
@@ -23,15 +63,32 @@ async function markPaid(session: Stripe.Checkout.Session) {
           ...(session.metadata?.paymentId ? [{ id: session.metadata.paymentId }] : []),
         ],
       },
-      include: { booking: { select: { status: true } } },
+      include: {
+        booking: {
+          select: {
+            status: true,
+            customer: { select: { email: true } },
+            equipment: {
+              select: {
+                name: true,
+                company: {
+                  select: {
+                    users: { where: { role: 'PROVIDER_ADMIN' }, select: { email: true } },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
     });
     if (!payment) {
       console.warn(`Stripe webhook: no Payment for checkout session ${session.id}`);
-      return;
+      return null;
     }
     // Idempotent: Stripe may deliver the same event more than once.
     if (payment.status === 'PAID') {
-      return;
+      return null;
     }
 
     await tx.payment.update({
@@ -50,7 +107,21 @@ async function markPaid(session: Stripe.Checkout.Session) {
         ...(payment.booking.status === 'PENDING' ? { status: 'CONFIRMED' } : {}),
       },
     });
+
+    return {
+      bookingId: payment.bookingId,
+      equipmentName: payment.booking.equipment.name,
+      amount: payment.amount,
+      currency: payment.currency,
+      customerEmail: payment.booking.customer.email,
+      providerEmails: payment.booking.equipment.company.users.map((user) => user.email),
+    };
   });
+
+  // Emails go out only after the transaction committed; failures are logged, not thrown.
+  if (notification) {
+    await notifyPaymentReceived(notification);
+  }
 }
 
 async function markFailed(where: {

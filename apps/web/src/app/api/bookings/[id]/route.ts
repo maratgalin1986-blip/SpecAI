@@ -3,6 +3,8 @@ import { getServerSession } from 'next-auth';
 import { z } from 'zod';
 import { prisma } from '@specai/database';
 import { authOptions } from '@/lib/auth';
+import { sendEmail } from '@/lib/email';
+import { bookingStatusChanged } from '@/lib/emailTemplates';
 
 const updateSchema = z.object({
   status: z.enum(['CONFIRMED', 'ACTIVE', 'COMPLETED', 'CANCELLED']),
@@ -28,7 +30,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
 
   const booking = await prisma.booking.findUnique({
     where: { id: params.id },
-    include: { equipment: true },
+    include: { equipment: true, customer: { select: { email: true } } },
   });
   if (!booking) {
     return NextResponse.json({ error: 'Бронирование не найдено' }, { status: 404 });
@@ -72,6 +74,21 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
     where: { id: params.id },
     data: { status: parsed.data.status },
   });
+
+  if (updated.status !== booking.status) {
+    try {
+      const template = bookingStatusChanged({
+        bookingId: updated.id,
+        equipmentName: booking.equipment.name,
+        status: updated.status,
+        startDate: updated.startDate,
+        endDate: updated.endDate,
+      });
+      await sendEmail({ to: booking.customer.email, ...template });
+    } catch (error) {
+      console.error('[email] bookingStatusChanged failed', error);
+    }
+  }
 
   return NextResponse.json({ booking: updated });
 }

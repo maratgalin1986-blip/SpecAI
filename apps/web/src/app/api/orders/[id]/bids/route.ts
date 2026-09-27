@@ -3,6 +3,8 @@ import { getServerSession } from 'next-auth';
 import { z } from 'zod';
 import { prisma } from '@specai/database';
 import { authOptions } from '@/lib/auth';
+import { sendEmail } from '@/lib/email';
+import { newBidReceived } from '@/lib/emailTemplates';
 
 const requestSchema = z.object({
   equipmentId: z.string().cuid(),
@@ -22,7 +24,10 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
 
-  const order = await prisma.order.findUnique({ where: { id: params.id } });
+  const order = await prisma.order.findUnique({
+    where: { id: params.id },
+    include: { customer: { select: { email: true } } },
+  });
   if (!order || order.status !== 'OPEN') {
     return NextResponse.json({ error: 'Заявка не найдена или уже закрыта' }, { status: 404 });
   }
@@ -44,6 +49,20 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       message: parsed.data.message,
     },
   });
+
+  try {
+    const template = newBidReceived({
+      orderId: order.id,
+      orderDescription: order.description,
+      equipmentName: equipment.name,
+      price: bid.price,
+      currency: bid.currency,
+      message: bid.message,
+    });
+    await sendEmail({ to: order.customer.email, ...template });
+  } catch (error) {
+    console.error('[email] newBidReceived failed', error);
+  }
 
   return NextResponse.json({ bid }, { status: 201 });
 }
