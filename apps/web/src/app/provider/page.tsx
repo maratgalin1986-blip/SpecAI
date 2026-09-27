@@ -51,14 +51,16 @@ export default async function ProviderPage() {
         ) : (
           <div className="grid gap-3 sm:grid-cols-2">
             {equipment.map((item) => (
-              <Card key={item.id} className="flex items-center justify-between">
-                <div>
-                  <p className="font-medium">{item.name}</p>
+              <Card key={item.id} className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="break-words font-medium">{item.name}</p>
                   <p className="text-sm text-slate-500">
                     {item.category.name} · ${item.dailyRate.toString()}/день
                   </p>
                 </div>
-                <StatusBadge status={item.status} />
+                <div className="shrink-0">
+                  <StatusBadge status={item.status} />
+                </div>
               </Card>
             ))}
           </div>
@@ -79,16 +81,19 @@ export default async function ProviderPage() {
         ) : (
           <div className="flex flex-col gap-3">
             {bookings.map((booking) => (
-              <Card key={booking.id} className="flex items-center justify-between gap-4">
-                <div>
-                  <p className="font-medium">{booking.equipment.name}</p>
+              <Card
+                key={booking.id}
+                className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4"
+              >
+                <div className="min-w-0">
+                  <p className="break-words font-medium">{booking.equipment.name}</p>
                   <p className="text-sm text-slate-500">
                     {booking.customer.name} · {booking.startDate.toLocaleDateString('ru-RU')} –{' '}
                     {booking.endDate.toLocaleDateString('ru-RU')} · ${booking.totalPrice.toString()}{' '}
                     {booking.currency}
                   </p>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex flex-wrap items-center gap-3 sm:justify-end">
                   <BookingStatusBadge status={booking.status} />
                   <BookingActionButtons
                     bookingId={booking.id}

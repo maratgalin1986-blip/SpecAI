@@ -45,7 +45,7 @@ export default async function EquipmentCatalogPage({
 
       <form
         method="get"
-        className="flex flex-wrap items-end gap-3 rounded-lg border border-slate-200 bg-white p-4"
+        className="grid grid-cols-1 items-end gap-3 rounded-lg border border-slate-200 bg-white p-4 sm:grid-cols-2 lg:flex lg:flex-wrap"
       >
         <label className="flex flex-col gap-1 text-sm">
           Поиск
@@ -53,7 +53,7 @@ export default async function EquipmentCatalogPage({
             name="q"
             defaultValue={searchParams.q}
             placeholder="Экскаватор, кран…"
-            className="rounded-md border border-slate-300 px-3 py-2"
+            className="w-full rounded-md border border-slate-300 px-3 py-2"
           />
         </label>
         <label className="flex flex-col gap-1 text-sm">
@@ -61,7 +61,7 @@ export default async function EquipmentCatalogPage({
           <select
             name="category"
             defaultValue={searchParams.category ?? ''}
-            className="rounded-md border border-slate-300 px-3 py-2"
+            className="w-full rounded-md border border-slate-300 px-3 py-2"
           >
             <option value="">Все категории</option>
             {categories.map((category) => (
@@ -76,7 +76,7 @@ export default async function EquipmentCatalogPage({
           <input
             name="city"
             defaultValue={searchParams.city}
-            className="rounded-md border border-slate-300 px-3 py-2"
+            className="w-full rounded-md border border-slate-300 px-3 py-2"
           />
         </label>
         <label className="flex flex-col gap-1 text-sm">
@@ -86,7 +86,7 @@ export default async function EquipmentCatalogPage({
             type="number"
             min={0}
             defaultValue={searchParams.minPrice}
-            className="w-28 rounded-md border border-slate-300 px-3 py-2"
+            className="w-full rounded-md border border-slate-300 px-3 py-2 lg:w-28"
           />
         </label>
         <label className="flex flex-col gap-1 text-sm">
@@ -96,24 +96,29 @@ export default async function EquipmentCatalogPage({
             type="number"
             min={0}
             defaultValue={searchParams.maxPrice}
-            className="w-28 rounded-md border border-slate-300 px-3 py-2"
+            className="w-full rounded-md border border-slate-300 px-3 py-2 lg:w-28"
           />
         </label>
-        <button
-          type="submit"
-          className="rounded-md bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700"
-        >
-          Применить
-        </button>
-        {(searchParams.q ||
-          searchParams.category ||
-          searchParams.city ||
-          searchParams.minPrice ||
-          searchParams.maxPrice) && (
-          <a href="/equipment" className="text-sm font-medium text-slate-500 hover:text-slate-900">
-            Сбросить фильтры
-          </a>
-        )}
+        <div className="flex flex-wrap items-center gap-3 sm:col-span-2 lg:col-auto">
+          <button
+            type="submit"
+            className="w-full rounded-md bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700 sm:w-auto"
+          >
+            Применить
+          </button>
+          {(searchParams.q ||
+            searchParams.category ||
+            searchParams.city ||
+            searchParams.minPrice ||
+            searchParams.maxPrice) && (
+            <a
+              href="/equipment"
+              className="text-sm font-medium text-slate-500 hover:text-slate-900"
+            >
+              Сбросить фильтры
+            </a>
+          )}
+        </div>
       </form>
 
       {equipment.length === 0 ? (

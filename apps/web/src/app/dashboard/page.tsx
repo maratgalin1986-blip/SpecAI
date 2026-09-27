@@ -80,7 +80,7 @@ export default async function DashboardPage({
           {paymentNotice.text}
         </p>
       )}
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {stats.map((stat) => (
           <Card key={stat.label}>
             <p className="text-sm text-slate-500">{stat.label}</p>
@@ -103,16 +103,16 @@ export default async function DashboardPage({
           <div className="flex flex-col gap-3">
             {myOrders.map((order) => (
               <a key={order.id} href={`/orders/${order.id}`}>
-                <Card className="flex items-center justify-between gap-4 hover:border-amber-400">
-                  <div>
-                    <p className="font-medium">{order.description}</p>
+                <Card className="flex flex-col gap-3 hover:border-amber-400 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+                  <div className="min-w-0">
+                    <p className="break-words font-medium">{order.description}</p>
                     <p className="text-sm text-slate-500">
                       {order.desiredStartDate.toLocaleDateString('ru-RU')} –{' '}
                       {order.desiredEndDate.toLocaleDateString('ru-RU')} · Предложений:{' '}
                       {order.bids.length}
                     </p>
                   </div>
-                  <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-700">
+                  <span className="w-fit shrink-0 rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-700">
                     {ORDER_STATUS_LABEL[order.status]}
                   </span>
                 </Card>
@@ -129,8 +129,11 @@ export default async function DashboardPage({
         ) : (
           <div className="flex flex-col gap-3">
             {myBookings.map((booking) => (
-              <Card key={booking.id} className="flex items-center justify-between gap-4">
-                <div>
+              <Card
+                key={booking.id}
+                className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4"
+              >
+                <div className="min-w-0">
                   <a
                     href={`/equipment/${booking.equipmentId}`}
                     className="font-medium hover:text-amber-700"
@@ -155,7 +158,7 @@ export default async function DashboardPage({
                     </div>
                   )}
                 </div>
-                <div className="flex flex-col items-end gap-2">
+                <div className="flex flex-wrap items-center gap-2 sm:flex-col sm:items-end">
                   <BookingStatusBadge status={booking.status} />
                   {booking.status === 'PENDING' &&
                     !booking.depositPaid &&
