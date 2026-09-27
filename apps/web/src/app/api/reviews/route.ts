@@ -1,12 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
 import { prisma } from '@specai/database';
 import { createReviewSchema } from '@specai/shared';
-import { authOptions } from '@/lib/auth';
+import { getRequestUser } from '@/lib/requestUser';
 
 export async function POST(request: NextRequest) {
-  const session = await getServerSession(authOptions);
-  if (!session) {
+  const currentUser = await getRequestUser(request);
+  if (!currentUser) {
     return NextResponse.json({ error: 'Необходимо войти в аккаунт' }, { status: 401 });
   }
 
@@ -21,7 +20,7 @@ export async function POST(request: NextRequest) {
     include: { equipment: true, review: true },
   });
 
-  if (!booking || booking.customerId !== session.user.id) {
+  if (!booking || booking.customerId !== currentUser.id) {
     return NextResponse.json({ error: 'Бронирование не найдено' }, { status: 404 });
   }
   if (booking.status !== 'COMPLETED') {
@@ -37,7 +36,7 @@ export async function POST(request: NextRequest) {
   const review = await prisma.review.create({
     data: {
       bookingId: booking.id,
-      authorId: session.user.id,
+      authorId: currentUser.id,
       companyId: booking.equipment.companyId,
       equipmentId: booking.equipmentId,
       rating: parsed.data.rating,

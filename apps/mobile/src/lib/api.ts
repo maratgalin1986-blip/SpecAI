@@ -101,6 +101,8 @@ export interface ApiUser {
   name: string;
   email: string;
   role: UserRole;
+  /** Дата подтверждения e-mail; null — не подтверждён. Отдаёт GET /api/mobile/me. */
+  emailVerified?: string | null;
 }
 
 export interface Equipment {
@@ -132,6 +134,8 @@ export interface EquipmentListResponse {
 
 export type BookingStatus = 'PENDING' | 'CONFIRMED' | 'ACTIVE' | 'COMPLETED' | 'CANCELLED';
 
+export type PaymentStatus = 'PENDING' | 'PAID' | 'FAILED' | 'REFUNDED' | string;
+
 export interface Booking {
   id: string;
   status: BookingStatus;
@@ -143,6 +147,45 @@ export interface Booking {
   notes: string | null;
   createdAt: string;
   equipment: { id: string; name: string; imageUrls?: string[] };
+  payment?: { status: PaymentStatus } | null;
+  review?: { id: string; rating: number } | null;
+}
+
+export type OrderStatus = 'OPEN' | 'MATCHED' | 'CANCELLED';
+export type BidStatus = 'PENDING' | 'ACCEPTED' | 'REJECTED';
+
+export interface Category {
+  id: string;
+  name: string;
+}
+
+export interface Bid {
+  id: string;
+  price: string | number;
+  currency: string;
+  message: string | null;
+  status: BidStatus;
+  createdAt: string;
+  equipmentId: string;
+  equipment?: {
+    id: string;
+    name: string;
+    imageUrls?: string[];
+    company: { id: string; name: string };
+  };
+}
+
+export interface Order {
+  id: string;
+  description: string;
+  desiredStartDate: string;
+  desiredEndDate: string;
+  status: OrderStatus;
+  createdAt: string;
+  customerId: string;
+  category: Category | null;
+  customer?: { id: string; name: string };
+  bids: Bid[];
 }
 
 /** Бронирование техники поставщика (GET /api/bookings?as=provider). */
@@ -241,8 +284,61 @@ export function fetchEquipmentById(id: string) {
   });
 }
 
+export function register(input: { name: string; email: string; password: string; phone?: string }) {
+  return apiFetch<{ id: string; email: string }>('/api/auth/register', {
+    method: 'POST',
+    body: { accountType: 'CUSTOMER', ...input },
+    anonymous: true,
+  });
+}
+
+export function sendVerificationEmail() {
+  return apiFetch<{ ok: boolean; alreadyVerified?: boolean }>('/api/auth/send-verification', {
+    method: 'POST',
+  });
+}
+
 export function fetchMyBookings() {
   return apiFetch<{ bookings: Booking[] }>('/api/bookings');
+}
+
+/** Создаёт Stripe Checkout для PENDING-бронирования и возвращает ссылку на оплату. */
+export function createCheckout(bookingId: string) {
+  return apiFetch<{ url: string }>(`/api/bookings/${encodeURIComponent(bookingId)}/checkout`, {
+    method: 'POST',
+  });
+}
+
+export function createReview(input: { bookingId: string; rating: number; comment?: string }) {
+  return apiFetch<{ review: { id: string } }>('/api/reviews', { method: 'POST', body: input });
+}
+
+export function fetchCategories() {
+  return apiFetch<{ categories: Category[] }>('/api/categories', { anonymous: true });
+}
+
+export function fetchMyOrders() {
+  // Без параметров роут отдаёт заявки текущего пользователя (с ?open=1 — ленту открытых).
+  return apiFetch<{ orders: Order[] }>('/api/orders');
+}
+
+export function fetchOrderById(id: string) {
+  return apiFetch<{ order: Order; isOwner: boolean }>(`/api/orders/${encodeURIComponent(id)}`);
+}
+
+export function createOrder(input: {
+  description: string;
+  desiredStartDate: string;
+  desiredEndDate: string;
+  categoryId?: string;
+}) {
+  return apiFetch<{ order: Order }>('/api/orders', { method: 'POST', body: input });
+}
+
+export function acceptBid(bidId: string) {
+  return apiFetch<{ booking: Booking }>(`/api/bids/${encodeURIComponent(bidId)}/accept`, {
+    method: 'POST',
+  });
 }
 
 export function createBooking(input: { equipmentId: string; startDate: string; endDate: string }) {

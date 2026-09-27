@@ -3,6 +3,8 @@
 Приложение на [Expo](https://expo.dev) (React Native, SDK 57, expo-router), которое работает
 поверх существующего API из `apps/web`. Раунд 1: вход, каталог техники с поиском и
 пагинацией, карточка техники с бронированием, мои бронирования, чат с ИИ-ассистентом, профиль.
+Раунд 2 (клиент): регистрация, нативный выбор дат, оплата через Stripe Checkout, заявки и
+предложения поставщиков, отзывы, подтверждение e-mail.
 
 ## Как это устроено
 
@@ -13,8 +15,22 @@
 - **API-клиент.** `src/lib/api.ts` — `fetch` с базовым URL из `EXPO_PUBLIC_API_URL` и Bearer из
   SecureStore. Чат читает SSE через `XMLHttpRequest.onprogress` (`src/lib/sse.ts`), так как у
   `fetch` в React Native нет `ReadableStream`.
-- **Экраны** (`src/app`, expo-router): `(auth)/login`, `(tabs)/index` — каталог, `equipment/[id]` —
-  карточка и бронирование, `(tabs)/bookings`, `(tabs)/chat`, `(tabs)/profile`.
+- **Экраны** (`src/app`, expo-router): `(auth)/login`, `(auth)/register` — регистрация клиента
+  (`POST /api/auth/register` с `accountType: CUSTOMER`, затем автологин), `(tabs)/index` — каталог,
+  `equipment/[id]` — карточка и бронирование, `(tabs)/bookings` — бронирования с оплатой и отзывами,
+  `bookings/[id]/review` — отзыв, `(tabs)/orders` — мои заявки, `orders/new` — новая заявка,
+  `orders/[id]` — заявка и предложения с кнопкой «Принять», `(tabs)/chat`, `(tabs)/profile`.
+- **Даты.** `src/components/DateField.tsx` — обёртка над `@react-native-community/datetimepicker`:
+  на iOS компактный inline-пикер, на Android системный диалог (`DateTimePickerAndroid.open`).
+  Расчёт стоимости (дни × ставка) показывается до отправки бронирования.
+- **Оплата.** `POST /api/bookings/[id]/checkout` возвращает ссылку Stripe Checkout, она
+  открывается через `expo-web-browser` (`openBrowserAsync`); после закрытия браузера список
+  перечитывается. Статус оплаты приходит из `depositPaid` и `payment.status` в `GET /api/bookings`
+  (его выставляет webhook Stripe, поэтому обновление может быть с задержкой).
+- **Заявки.** `GET /api/orders` — мои заявки (все статусы; `?open=1` — лента открытых заявок для поставщиков), `GET /api/orders/[id]` — заявка
+  с предложениями (`bids` с техникой и компанией) и флагом `isOwner`, `POST /api/bids/[id]/accept`.
+- **Восстановление пароля** — на сайте: ссылка «Забыли пароль?» открывает
+  `${API_URL}/forgot-password` во встроенном браузере.
 - **Монорепо.** `metro.config.js` следит за корнем репозитория и ищет модули в
   `apps/mobile/node_modules` и корневом `node_modules`; работает в режиме pnpm по умолчанию
   (isolated), `node-linker=hoisted` не требуется.
@@ -73,10 +89,13 @@ eas build --platform all --profile production    # магазинные сбор
 
 Публикация: `eas submit --platform ios|android` после успешной production-сборки.
 
-## Ограничения раунда 1
+## Ограничения
 
-- Регистрация и восстановление пароля — только на сайте.
-- Оплата бронирования (Stripe Checkout) в приложение не вынесена.
+- Регистрация в приложении — только для клиентов; аккаунт поставщика создаётся на сайте.
+- Восстановление пароля и сама страница Stripe Checkout открываются во встроенном браузере,
+  не нативно.
+- После оплаты приложение не получает push/deep link — статус «Оплачено» появляется после
+  обновления списка, когда webhook Stripe обработает платёж.
 
 ## Кабинет поставщика (роль PROVIDER_ADMIN)
 
@@ -87,5 +106,3 @@ eas build --platform all --profile production    # магазинные сбор
 «Извлечь характеристики из фото» → `POST /api/ai/extract-specs`, затем `POST /api/equipment`.
 Экран `provider/orders` — открытые заявки клиентов и отправка предложения
 (`POST /api/orders/[id]/bids`).
-
-- Даты бронирования вводятся текстом (`ГГГГ-ММ-ДД` или `ДД.ММ.ГГГГ`), без нативного пикера.

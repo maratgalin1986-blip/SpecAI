@@ -39,6 +39,10 @@ export default function TabsLayout() {
         options={{ title: 'Бронирования', tabBarIcon: tabIcon('calendar-outline') }}
       />
       <Tabs.Screen
+        name="orders"
+        options={{ title: 'Заявки', tabBarIcon: tabIcon('document-text-outline') }}
+      />
+      <Tabs.Screen
         name="provider"
         options={{
           title: 'Кабинет',

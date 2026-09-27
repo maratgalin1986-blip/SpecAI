@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import { useFocusEffect } from 'expo-router';
+import React, { useCallback, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { Button, Card } from '@/components/ui';
-import { API_URL, type UserRole } from '@/lib/api';
+import { Badge, Button, Card } from '@/components/ui';
+import { API_URL, ApiError, sendVerificationEmail, type UserRole } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { colors, spacing } from '@/lib/theme';
 
@@ -12,8 +13,37 @@ const ROLE_LABELS: Record<UserRole, string> = {
 };
 
 export default function ProfileScreen() {
-  const { user, logout } = useAuth();
+  const { user, logout, refreshUser } = useAuth();
   const [loggingOut, setLoggingOut] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [sent, setSent] = useState(false);
+
+  // При каждом открытии вкладки перечитываем пользователя: статус подтверждения
+  // e-mail меняется после перехода по ссылке из письма.
+  useFocusEffect(
+    useCallback(() => {
+      void refreshUser();
+    }, [refreshUser]),
+  );
+
+  const handleResend = async () => {
+    setSending(true);
+    try {
+      const result = await sendVerificationEmail();
+      if (result.alreadyVerified) {
+        await refreshUser();
+      } else {
+        setSent(true);
+      }
+    } catch (caught) {
+      Alert.alert(
+        'Ошибка',
+        caught instanceof ApiError ? caught.message : 'Не удалось отправить письмо',
+      );
+    } finally {
+      setSending(false);
+    }
+  };
 
   const handleLogout = () => {
     Alert.alert('Выйти из аккаунта?', undefined, [
@@ -45,8 +75,38 @@ export default function ProfileScreen() {
 
       <Card style={styles.card}>
         <Row label="Роль" value={user ? (ROLE_LABELS[user.role] ?? user.role) : '—'} />
+        <View style={styles.row}>
+          <Text style={styles.rowLabel}>E-mail</Text>
+          {user?.emailVerified === undefined ? (
+            <Text style={styles.rowValue}>—</Text>
+          ) : user.emailVerified ? (
+            <Badge text="Подтверждён" tone="success" />
+          ) : (
+            <Badge text="Не подтверждён" tone="warning" />
+          )}
+        </View>
         <Row label="Сервер" value={API_URL} />
       </Card>
+
+      {user && user.emailVerified === null ? (
+        <Card style={styles.card}>
+          <Text style={styles.verifyTitle}>Подтвердите e-mail</Text>
+          <Text style={styles.verifyText}>
+            Мы отправили письмо со ссылкой на {user.email}. Без подтверждения часть уведомлений
+            может не доходить.
+          </Text>
+          {sent ? (
+            <Text style={styles.verifySent}>Письмо отправлено — проверьте почту.</Text>
+          ) : (
+            <Button
+              title="Отправить письмо ещё раз"
+              variant="secondary"
+              loading={sending}
+              onPress={handleResend}
+            />
+          )}
+        </Card>
+      ) : null}
 
       <Button title="Выйти" variant="danger" onPress={handleLogout} loading={loggingOut} />
     </ScrollView>
@@ -82,4 +142,7 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', justifyContent: 'space-between', gap: spacing.md },
   rowLabel: { color: colors.textMuted, fontSize: 14 },
   rowValue: { color: colors.text, fontSize: 14, fontWeight: '500', flexShrink: 1 },
+  verifyTitle: { fontSize: 16, fontWeight: '600', color: colors.text },
+  verifyText: { fontSize: 14, color: colors.textMuted, lineHeight: 20 },
+  verifySent: { fontSize: 14, color: colors.success, fontWeight: '600' },
 });
