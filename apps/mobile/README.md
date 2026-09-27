@@ -97,9 +97,14 @@ API сайта из `apps/web`: вход и регистрация, катало
 cd apps/mobile
 npx eas whoami                                   # должен показать аккаунт
 EXPO_PUBLIC_API_URL=https://spec-ai-web.vercel.app npx eas update --branch preview \
-  --message "описание изменений" --platform all
+  --environment preview --message "описание изменений" --platform all
 npx eas update:list --branch preview             # id и ссылки на обновления
 ```
+
+Флаг `--environment` обязателен в `--non-interactive` режиме (CI); `expo-updates` уже в
+зависимостях — его добавил `eas update:configure`, для Expo Go он не нужен, но нужен сборкам
+`eas build`, чтобы они получали обновления. Первый preview опубликован: группа
+`5e780a28-adf2-4028-942b-859631f910fc`.
 
 Адрес API вшивается в бандл в момент публикации, поэтому `EXPO_PUBLIC_API_URL` обязателен
 и должен указывать на продакшен-сайт (не `localhost`); сейчас это Vercel-проект `spec-ai-web`,
@@ -109,8 +114,9 @@ npx eas update:list --branch preview             # id и ссылки на об�
 На телефоне:
 
 1. Установите Expo Go (App Store / Google Play). Expo Go поддерживает только текущий SDK —
-   для этого приложения нужен **SDK 57**; если в магазине уже более новая версия Expo Go,
-   обновите `expo` в `package.json` (`npx expo install --fix`) и опубликуйте заново.
+   для этого приложения нужен **SDK 57** (Expo Go 57.0.9). На 27.09.2026 SDK 58 ещё в
+   preview; когда Expo Go в магазинах перейдёт на 58, обновите `expo` в `package.json`
+   (`npx expo install expo@^58 --fix`) и опубликуйте заново.
 2. Войдите в Expo Go под аккаунтом, у которого есть доступ к организации
    `maratgalin1986s-team` — ветка `preview` видна на вкладке проекта; либо откройте ссылку
    на обновление (или отсканируйте QR со страницы обновления на expo.dev) камерой телефона.

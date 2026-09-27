@@ -42,7 +42,13 @@
       ]
     ],
     "extra": {
-      "router": {}
+      "router": {},
+      "eas": {
+        "projectId": "e14d6fd4-d51a-4611-b084-e1da96f98879"
+      }
+    },
+    "updates": {
+      "url": "https://u.expo.dev/e14d6fd4-d51a-4611-b084-e1da96f98879"
     }
   }
 }
