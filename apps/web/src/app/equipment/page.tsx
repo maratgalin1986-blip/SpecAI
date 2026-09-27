@@ -1,7 +1,7 @@
 import { prisma } from '@specai/database';
 import { EQUIPMENT_SORT_OPTIONS } from '@specai/shared';
 import { Card, StatusBadge } from '@specai/ui';
-import { formatMoney } from '@/lib/money';
+import { formatRate } from '@/lib/money';
 import { CallbackForm } from '@/components/CallbackForm';
 import { Pagination } from '@/components/Pagination';
 import {
@@ -15,7 +15,7 @@ import {
 export const metadata = {
   title: 'Каталог спецтехники',
   description:
-    'Аренда экскаваторов, кранов, погрузчиков, самосвалов и бульдозеров в Казани и Татарстане.',
+    'Аренда экскаваторов-погрузчиков, автокранов, погрузчиков и другой спецтехники с оператором в Набережных Челнах и по Татарстану.',
 };
 
 export const dynamic = 'force-dynamic';
@@ -127,7 +127,7 @@ export default async function EquipmentCatalogPage({
           />
         </label>
         <label className="flex flex-col gap-1 text-sm">
-          Цена от, ₽/сутки
+          Цена от, ₽/смена
           <input
             name="minPrice"
             type="number"
@@ -137,7 +137,7 @@ export default async function EquipmentCatalogPage({
           />
         </label>
         <label className="flex flex-col gap-1 text-sm">
-          Цена до, ₽/сутки
+          Цена до, ₽/смена
           <input
             name="maxPrice"
             type="number"
@@ -235,8 +235,10 @@ export default async function EquipmentCatalogPage({
                   </p>
                 )}
                 <p className="mt-auto text-lg font-semibold">
-                  {formatMoney(item.dailyRate, item.currency)}
-                  <span className="text-sm font-normal text-slate-500">/сутки</span>
+                  {formatRate(item).price}
+                  <span className="text-sm font-normal text-slate-500">
+                    {formatRate(item).unit}
+                  </span>
                 </p>
               </Card>
             </a>

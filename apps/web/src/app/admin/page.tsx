@@ -3,6 +3,7 @@ import { prisma } from '@specai/database';
 import { Card } from '@specai/ui';
 import { AdminLogin, AdminLogout } from '@/components/AdminLogin';
 import { LeadStatusSelect } from '@/components/LeadStatusSelect';
+import { LinkOwnerForm } from '@/components/LinkOwnerForm';
 import { isAdminConfigured, isAdminRequest } from '@/lib/admin';
 
 export const dynamic = 'force-dynamic';
@@ -46,6 +47,17 @@ export default async function AdminPage() {
         </div>
         <AdminLogout />
       </div>
+
+      <Card className="flex flex-col gap-3">
+        <div>
+          <h2 className="font-semibold">Парк компании в каталоге</h2>
+          <p className="text-sm text-slate-600">
+            Техника СпецПласт16 публикуется в каталоге автоматически. Чтобы менять цены и статусы,
+            зарегистрируйтесь на сайте и привяжите аккаунт:
+          </p>
+        </div>
+        <LinkOwnerForm />
+      </Card>
 
       {leads.length === 0 ? (
         <Card>Заявок пока нет. Они появятся здесь, как только клиенты заполнят форму.</Card>

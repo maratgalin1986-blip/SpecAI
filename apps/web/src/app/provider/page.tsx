@@ -5,7 +5,7 @@ import { BookingStatusBadge, Card, StatusBadge } from '@specai/ui';
 import { authOptions } from '@/lib/auth';
 import { NewEquipmentForm } from '@/components/NewEquipmentForm';
 import { BookingActionButtons } from '@/components/BookingActionButtons';
-import { formatMoney } from '@/lib/money';
+import { formatMoney, formatRate } from '@/lib/money';
 import { CallbackForm } from '@/components/CallbackForm';
 import { SITE } from '@/lib/site';
 import { Pagination } from '@/components/Pagination';
@@ -51,7 +51,7 @@ function ProviderLanding({ signedIn }: { signedIn: boolean }) {
           Сдавайте спецтехнику в аренду без простоев
         </h1>
         <p className="mt-3 max-w-2xl text-slate-300">
-          Разместите парк на {SITE.name} и получайте заказы от клиентов из Казани и Татарстана.
+          Разместите парк на {SITE.name} и получайте заказы от клиентов по всему Татарстану.
         </p>
         <div className="mt-6 flex flex-wrap gap-3">
           {signedIn ? (
@@ -181,7 +181,8 @@ export default async function ProviderPage({
                 <div className="min-w-0">
                   <p className="break-words font-medium">{item.name}</p>
                   <p className="text-sm text-slate-500">
-                    {item.category.name} · {formatMoney(item.dailyRate, item.currency)}/сутки
+                    {item.category.name} · {formatRate(item).price}
+                    {formatRate(item).unit}
                   </p>
                 </div>
                 <div className="shrink-0">

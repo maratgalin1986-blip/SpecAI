@@ -5,18 +5,18 @@ import type { Metadata } from 'next';
 import { BookingForm } from '@/components/BookingForm';
 import { CallbackForm } from '@/components/CallbackForm';
 import { pluralizeRu } from '@/lib/pluralize';
-import { formatMoney } from '@/lib/money';
+import { formatMoney, formatRate } from '@/lib/money';
 
 export const dynamic = 'force-dynamic';
 
 export async function generateMetadata({ params }: { params: { id: string } }): Promise<Metadata> {
   const item = await prisma.equipment.findUnique({
     where: { id: params.id },
-    select: { name: true, description: true, dailyRate: true, currency: true },
+    select: { name: true, description: true, dailyRate: true, hourlyRate: true, currency: true },
   });
   if (!item) return { title: 'Техника не найдена' };
   return {
-    title: `${item.name} — аренда от ${formatMoney(item.dailyRate, item.currency)}/сутки`,
+    title: `${item.name} — аренда ${formatRate(item).price}${formatRate(item).unit}`,
     description: item.description ?? `Аренда: ${item.name}`,
   };
 }
@@ -127,9 +127,12 @@ export default async function EquipmentDetailPage({ params }: { params: { id: st
 
         <Card className="flex h-fit flex-col gap-3 lg:sticky lg:top-6">
           <p className="text-2xl font-semibold">
-            {formatMoney(item.dailyRate, item.currency)}
-            <span className="text-sm font-normal text-slate-500">/сутки</span>
+            {formatRate(item).price}
+            <span className="text-sm font-normal text-slate-500">{formatRate(item).unit}</span>
           </p>
+          {formatRate(item).note && (
+            <p className="text-sm text-slate-600">{formatRate(item).note}</p>
+          )}
           {item.weeklyRate && (
             <p className="text-sm text-slate-600">
               {formatMoney(item.weeklyRate, item.currency)}/неделя

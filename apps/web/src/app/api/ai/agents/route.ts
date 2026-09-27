@@ -4,7 +4,7 @@ import { prisma } from '@specai/database';
 import { agentChatRequestSchema, createOrderSchema, type AgentId } from '@specai/shared';
 import { routeToAgent, runAgent, type AgentToolHandlers } from '@specai/ai-service';
 import { authOptions } from '@/lib/auth';
-import { formatMoney } from '@/lib/money';
+import { formatRate } from '@/lib/money';
 import { checkRateLimit } from '@/lib/rateLimit';
 import { SITE } from '@/lib/site';
 
@@ -109,6 +109,7 @@ export async function POST(request: NextRequest) {
         category: item.category.name,
         city: item.location?.city ?? null,
         dailyRate: Number(item.dailyRate),
+        hourlyRate: item.hourlyRate ? Number(item.hourlyRate) : null,
         currency: item.currency,
         status: item.status,
         link: `/equipment/${item.id}`,
@@ -135,6 +136,7 @@ export async function POST(request: NextRequest) {
         city: item.location?.city ?? null,
         provider: item.company.name,
         dailyRate: Number(item.dailyRate),
+        hourlyRate: item.hourlyRate ? Number(item.hourlyRate) : null,
         weeklyRate: item.weeklyRate ? Number(item.weeklyRate) : null,
         monthlyRate: item.monthlyRate ? Number(item.monthlyRate) : null,
         currency: item.currency,
@@ -267,6 +269,7 @@ export async function POST(request: NextRequest) {
         category: item.category.name,
         status: item.status,
         dailyRate: Number(item.dailyRate),
+        hourlyRate: item.hourlyRate ? Number(item.hourlyRate) : null,
         pendingBookings: item._count.bookings,
       }));
     },
@@ -325,7 +328,7 @@ export async function POST(request: NextRequest) {
         );
         for (const item of found.slice(0, 5)) {
           lines.push(
-            `• [${item.name}](${item.link}) — ${formatMoney(item.dailyRate, item.currency)}/сутки`,
+            `• [${item.name}](${item.link}) — ${formatRate(item).price}${formatRate(item).unit}`,
           );
         }
         lines.push('[Весь каталог техники](/equipment)');
