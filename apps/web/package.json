@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "pnpm --filter @specai/database push && pnpm --filter @specai/database ensure-categories && pnpm --filter @specai/database ensure-fleet && next build",
+    "build": "pnpm --filter @specai/database fetch-yandex-ca && pnpm --filter @specai/database push && pnpm --filter @specai/database ensure-categories && pnpm --filter @specai/database ensure-fleet && next build",
     "start": "next start",
     "lint": "echo 'lint runs from repo root'",
     "typecheck": "tsc --noEmit -p tsconfig.json",
