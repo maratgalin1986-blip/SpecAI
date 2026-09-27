@@ -82,7 +82,47 @@ function createOutlineMaterial() {
   return material;
 }
 
-function createMaterials(gradientMap: THREE.Texture, paint: number, paintDark: number) {
+const LAMP_OFF = new THREE.Color(0xd9d2b8);
+const LAMP_ON = new THREE.Color(0xffffff);
+
+/** Soft round glow for lamp halos, and a fading gradient for light beams. */
+function createGlowTextures() {
+  const haloCanvas = document.createElement('canvas');
+  haloCanvas.width = haloCanvas.height = 64;
+  const halo = haloCanvas.getContext('2d');
+  if (halo) {
+    const g = halo.createRadialGradient(32, 32, 0, 32, 32, 32);
+    g.addColorStop(0, 'rgba(255,255,255,1)');
+    g.addColorStop(0.25, 'rgba(255,244,200,0.8)');
+    g.addColorStop(1, 'rgba(255,220,150,0)');
+    halo.fillStyle = g;
+    halo.fillRect(0, 0, 64, 64);
+  }
+  const beamCanvas = document.createElement('canvas');
+  beamCanvas.width = 4;
+  beamCanvas.height = 64;
+  const beam = beamCanvas.getContext('2d');
+  if (beam) {
+    // Top of the texture maps to the cone tip at the lamp.
+    const g = beam.createLinearGradient(0, 0, 0, 64);
+    g.addColorStop(0, 'rgba(255,255,255,1)');
+    g.addColorStop(1, 'rgba(255,255,255,0)');
+    beam.fillStyle = g;
+    beam.fillRect(0, 0, 4, 64);
+  }
+  return {
+    halo: new THREE.CanvasTexture(haloCanvas),
+    beam: new THREE.CanvasTexture(beamCanvas),
+  };
+}
+type GlowTextures = ReturnType<typeof createGlowTextures>;
+
+function createMaterials(
+  gradientMap: THREE.Texture,
+  glowTextures: GlowTextures,
+  paint: number,
+  paintDark: number,
+) {
   const toon = (color: number) => new THREE.MeshToonMaterial({ color, gradientMap });
   return {
     paint: toon(paint),
@@ -96,7 +136,24 @@ function createMaterials(gradientMap: THREE.Texture, paint: number, paintDark: n
     pupil: new THREE.MeshBasicMaterial({ color: INK }),
     brow: new THREE.MeshBasicMaterial({ color: INK }),
     cheek: new THREE.MeshBasicMaterial({ color: 0xfb7185, transparent: true, opacity: 0 }),
-    lamp: new THREE.MeshBasicMaterial({ color: 0xfff3c4 }),
+    lamp: new THREE.MeshBasicMaterial({ color: LAMP_OFF.clone() }),
+    halo: new THREE.SpriteMaterial({
+      map: glowTextures.halo,
+      color: 0xfff1b8,
+      transparent: true,
+      opacity: 0,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    }),
+    lightBeam: new THREE.MeshBasicMaterial({
+      map: glowTextures.beam,
+      color: 0xfff1b8,
+      transparent: true,
+      opacity: 0,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+    }),
     beacon: new THREE.MeshStandardMaterial({
       color: 0xff7a00,
       emissive: 0xff7a00,
@@ -131,16 +188,69 @@ function wheel(m: Materials, radius: number, width: number, x: number, y: number
   return group;
 }
 
-function headlights(m: Materials, parent: THREE.Object3D, x: number, y: number, zs: number[]) {
+interface Headlights {
+  /** Where the scene's spotlight beam starts. */
+  anchor: THREE.Object3D;
+  /** 0 = off, 1 = full beam: lamp glow, halos and visible light cones. */
+  setLevel(level: number, time: number): void;
+}
+
+const BEAM_LENGTH = 3.2;
+const BEAM_TILT = 0.14;
+
+function headlights(
+  m: Materials,
+  parent: THREE.Object3D,
+  x: number,
+  y: number,
+  zs: number[],
+): Headlights {
+  const halos: THREE.Sprite[] = [];
+  const beams: THREE.Mesh[] = [];
+  const beamGeometry = new THREE.ConeGeometry(0.5, BEAM_LENGTH, 24, 1, true);
   for (const z of zs) {
     const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.08, 12, 12), m.lamp);
     lamp.position.set(x, y, z);
     parent.add(lamp);
+
+    const halo = new THREE.Sprite(m.halo);
+    halo.position.set(x + 0.08, y, z);
+    halo.visible = false;
+    parent.add(halo);
+    halos.push(halo);
+
+    // Cone with its tip at the lamp, opening forward and slightly downward.
+    const beam = new THREE.Mesh(beamGeometry, m.lightBeam);
+    beam.rotation.z = Math.PI / 2 - BEAM_TILT;
+    beam.position.set(
+      x + Math.cos(BEAM_TILT) * (BEAM_LENGTH / 2),
+      y - Math.sin(BEAM_TILT) * (BEAM_LENGTH / 2),
+      z,
+    );
+    beam.visible = false;
+    beam.userData.noOutline = true;
+    parent.add(beam);
+    beams.push(beam);
   }
   const anchor = new THREE.Object3D();
   anchor.position.set(x + 0.05, y, 0);
   parent.add(anchor);
-  return anchor;
+
+  return {
+    anchor,
+    setLevel(level, time) {
+      const on = level > 0.01;
+      m.lamp.color.copy(LAMP_OFF).lerp(LAMP_ON, clamp(level, 0, 1));
+      m.halo.opacity = clamp(level, 0, 1);
+      m.lightBeam.opacity = 0.28 * clamp(level, 0, 1);
+      const flicker = 1 + Math.sin(time * 40) * 0.04;
+      for (const halo of halos) {
+        halo.visible = on;
+        halo.scale.setScalar((0.35 + 0.75 * level) * flicker);
+      }
+      for (const beam of beams) beam.visible = on;
+    },
+  };
 }
 
 function beacon(m: Materials, parent: THREE.Object3D, x: number, y: number, z: number) {
@@ -492,7 +602,7 @@ interface Machine {
   root: THREE.Group;
   wheels: THREE.Object3D[];
   wheelRadius: number;
-  lightAnchor: THREE.Object3D;
+  lights: Headlights;
   /** The emote bubble floats above this point. */
   head: THREE.Object3D;
   face: Face;
@@ -521,7 +631,7 @@ function buildExcavator(m: Materials): Machine {
   turret.add(box(1.0, 1.0, 0.9, m.paint, 0.3, 1.3, 0.35));
   turret.add(box(0.06, 0.8, 0.75, m.glass, 0.8, 1.32, 0.35));
   beacon(m, turret, 0.3, 1.88, 0.35);
-  const lightAnchor = headlights(m, turret, 0.83, 0.92, [0.1, 0.6]);
+  const lights = headlights(m, turret, 0.83, 0.92, [0.1, 0.6]);
   const face = createFace(m, turret, 0.83, 1.33, 0.35, 1.05);
   const head = headAnchor(turret, 0.3, 2.5, 0.35);
 
@@ -557,7 +667,7 @@ function buildExcavator(m: Materials): Machine {
     root,
     wheels,
     wheelRadius: 0.18,
-    lightAnchor,
+    lights,
     head,
     face,
     hasTurret: true,
@@ -581,7 +691,7 @@ function buildCrane(m: Materials): Machine {
   root.add(box(3.6, 0.5, 1.3, m.steel, 0, 0.75, 0));
   root.add(box(0.8, 0.95, 1.3, m.paint, 1.4, 1.4, 0));
   root.add(box(0.06, 0.75, 1.1, m.glass, 1.8, 1.45, 0));
-  const lightAnchor = headlights(m, root, 1.82, 1.02, [-0.45, 0.45]);
+  const lights = headlights(m, root, 1.82, 1.02, [-0.45, 0.45]);
   const face = createFace(m, root, 1.83, 1.42, 0, 1.3);
   const head = headAnchor(root, 1.4, 2.6, 0);
   beacon(m, root, 1.4, 1.95, 0);
@@ -641,7 +751,7 @@ function buildCrane(m: Materials): Machine {
     root,
     wheels,
     wheelRadius: 0.4,
-    lightAnchor,
+    lights,
     head,
     face,
     hasTurret: false,
@@ -673,7 +783,7 @@ function buildLoader(m: Materials): Machine {
   root.add(exhaust);
   root.add(box(0.9, 0.5, 0.9, m.steel, 0.85, 0.85, 0));
   beacon(m, root, 0.0, 2.42, 0);
-  const lightAnchor = headlights(m, root, 1.32, 0.95, [-0.28, 0.28]);
+  const lights = headlights(m, root, 1.32, 0.95, [-0.28, 0.28]);
   const face = createFace(m, root, 0.53, 1.85, 0, 1.2);
   const head = headAnchor(root, 0.0, 3.0, 0);
 
@@ -715,7 +825,7 @@ function buildLoader(m: Materials): Machine {
     root,
     wheels,
     wheelRadius: 0.52,
-    lightAnchor,
+    lights,
     head,
     face,
     hasTurret: false,
@@ -739,7 +849,7 @@ function buildDumpTruck(m: Materials): Machine {
   root.add(box(0.06, 0.8, 1.3, m.glass, 1.9, 1.58, 0));
   root.add(box(0.22, 0.3, 1.55, m.chrome, 1.95, 0.85, 0));
   beacon(m, root, 1.38, 2.18, 0);
-  const lightAnchor = headlights(m, root, 1.93, 1.1, [-0.55, 0.55]);
+  const lights = headlights(m, root, 1.93, 1.1, [-0.55, 0.55]);
   const face = createFace(m, root, 1.92, 1.52, 0, 1.4);
   const head = headAnchor(root, 1.38, 2.8, 0);
 
@@ -773,7 +883,7 @@ function buildDumpTruck(m: Materials): Machine {
     root,
     wheels,
     wheelRadius: 0.47,
-    lightAnchor,
+    lights,
     head,
     face,
     hasTurret: false,
@@ -807,7 +917,7 @@ function buildBulldozer(m: Materials): Machine {
   exhaust.position.set(0.5, 1.4, 0.32);
   root.add(exhaust);
   beacon(m, root, -0.45, 2.34, 0);
-  const lightAnchor = headlights(m, root, 1.12, 0.95, [-0.3, 0.3]);
+  const lights = headlights(m, root, 1.05, 1.32, [-0.3, 0.3]);
   const face = createFace(m, root, 0.09, 1.8, 0, 1.15);
   const head = headAnchor(root, -0.45, 2.9, 0);
 
@@ -835,7 +945,7 @@ function buildBulldozer(m: Materials): Machine {
     root,
     wheels,
     wheelRadius: 0.18,
-    lightAnchor,
+    lights,
     head,
     face,
     hasTurret: false,
@@ -898,6 +1008,8 @@ export interface MachinesScene {
   current: number;
   show(index: number): void;
   setPointer(clientX: number, clientY: number): void;
+  /** Headlights stay on while the mouse button / finger is held down. */
+  setPressed(pressed: boolean): void;
   /** Clicking/tapping the machine makes it happy. */
   poke(clientX: number, clientY: number): void;
   setRunning(running: boolean): void;
@@ -964,6 +1076,7 @@ export function createMachinesScene(
 
   // Traffic cones around the edge.
   const gradientMap = createToonGradient();
+  const glowTextures = createGlowTextures();
   const outline = createOutlineMaterial();
   const coneMaterial = new THREE.MeshToonMaterial({ color: 0xf97316, gradientMap });
   for (let i = 0; i < 8; i++) {
@@ -1067,7 +1180,7 @@ export function createMachinesScene(
 
   // Machines.
   const machines = MACHINE_TYPES.map(({ build, paint, paintDark }) => {
-    const machine = build(createMaterials(gradientMap, paint, paintDark));
+    const machine = build(createMaterials(gradientMap, glowTextures, paint, paintDark));
     addOutlines(machine.root, outline);
     return machine;
   });
@@ -1124,6 +1237,8 @@ export function createMachinesScene(
   const planePoint = new THREE.Vector3();
   let pointerOnGround = false;
   let hasPointer = false;
+  let pressed = false;
+  let lightsLevel = 0;
   let pointerActiveUntil = -1;
 
   function toNdc(clientX: number, clientY: number) {
@@ -1193,6 +1308,7 @@ export function createMachinesScene(
   }
 
   function swapTo(next: number) {
+    activeMachine.lights.setLevel(0, elapsed);
     scene.remove(activeMachine.root);
     current = next;
     activeMachine = machines[current]!;
@@ -1402,10 +1518,15 @@ export function createMachinesScene(
     emoteSprite.visible = pop > 0.01;
 
     // Headlight beam and reticle.
-    activeMachine.lightAnchor.getWorldPosition(anchorWorld);
+    // Holding the mouse button (or a finger) down switches the headlights on.
+    lightsLevel = damp(lightsLevel, pressed ? 1 : 0, pressed ? 14 : 4, dt || 1);
+    activeMachine.lights.setLevel(lightsLevel, elapsed);
+    activeMachine.lights.anchor.getWorldPosition(anchorWorld);
     beam.position.copy(anchorWorld);
     beamTarget.position.copy(lookTarget);
-    beam.intensity = damp(beam.intensity, pointerActive ? 80 : sleepy ? 0 : 25, 3, dt || 1);
+    beam.angle = 0.38 + 0.2 * lightsLevel;
+    const baseBeam = pointerActive ? 80 : sleepy ? 0 : 25;
+    beam.intensity = damp(beam.intensity, baseBeam + 220 * lightsLevel, 6, dt || 1);
     const reticleOn = pointerActive && pointerOnGround && pointerGround.length() < PLATFORM_RADIUS;
     reticle.position.set(pointerGround.x, 0.03, pointerGround.z);
     reticleMaterial.opacity = damp(reticleMaterial.opacity, reticleOn ? 0.9 : 0, 8, dt || 1);
@@ -1455,6 +1576,13 @@ export function createMachinesScene(
       pointerActiveUntil = elapsed + 4;
       lastPointerAt = elapsed;
     },
+    setPressed(next) {
+      pressed = next;
+      if (options.reducedMotion) {
+        lightsLevel = next ? 1 : 0;
+        render();
+      }
+    },
     poke(clientX, clientY) {
       const ndc = toNdc(clientX, clientY);
       if (!ndc || transition?.phase === 'out') return;
@@ -1498,6 +1626,8 @@ export function createMachinesScene(
       scene.traverse(disposeObject);
       for (const machine of machines) machine.root.traverse(disposeObject);
       for (const texture of emoteTextures.values()) texture.dispose();
+      glowTextures.halo.dispose();
+      glowTextures.beam.dispose();
       gradientMap.dispose();
       renderer.dispose();
       renderer.domElement.remove();

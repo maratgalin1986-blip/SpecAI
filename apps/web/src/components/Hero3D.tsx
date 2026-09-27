@@ -24,7 +24,12 @@ export function Hero3D() {
 
     function onPointerDown(event: PointerEvent) {
       onPointer(event);
+      sceneRef.current?.setPressed(true);
       sceneRef.current?.poke(event.clientX, event.clientY);
+    }
+
+    function onPointerUp() {
+      sceneRef.current?.setPressed(false);
     }
 
     // Stop rendering while the hero is scrolled out of view.
@@ -48,6 +53,9 @@ export function Hero3D() {
         visibility.observe(container);
         window.addEventListener('pointermove', onPointer);
         window.addEventListener('pointerdown', onPointerDown);
+        window.addEventListener('pointerup', onPointerUp);
+        window.addEventListener('pointercancel', onPointerUp);
+        window.addEventListener('blur', onPointerUp);
       })
       .catch(() => undefined);
 
@@ -56,6 +64,9 @@ export function Hero3D() {
       visibility.disconnect();
       window.removeEventListener('pointermove', onPointer);
       window.removeEventListener('pointerdown', onPointerDown);
+      window.removeEventListener('pointerup', onPointerUp);
+      window.removeEventListener('pointercancel', onPointerUp);
+      window.removeEventListener('blur', onPointerUp);
       sceneRef.current?.dispose();
       sceneRef.current = undefined;
     };
@@ -99,10 +110,11 @@ export function Hero3D() {
           </div>
           <div className="text-xs text-slate-400">
             <span className="hidden sm:inline">
-              Ведите курсором — техника поедет за ним, кликните по ней — обрадуется
+              Ведите курсором — техника поедет следом. Зажмите кнопку мыши — включит фары, кликните
+              по машине — обрадуется
             </span>
             <span className="sm:hidden">
-              Коснитесь площадки — техника приедет, коснитесь её — обрадуется
+              Коснитесь площадки — техника приедет, держите палец — включит фары
             </span>
           </div>
         </div>
