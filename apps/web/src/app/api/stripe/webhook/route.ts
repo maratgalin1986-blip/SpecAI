@@ -115,7 +115,8 @@ async function markPaid(session: Stripe.Checkout.Session) {
       where: { id: payment.bookingId },
       data: {
         depositPaid: true,
-        // Only a PENDING booking is auto-confirmed; others keep their status.
+        // Only a PENDING booking is auto-confirmed; an already CONFIRMED one
+        // (the provider confirmed before payment) keeps its status.
         ...(payment.booking.status === 'PENDING' ? { status: 'CONFIRMED' } : {}),
       },
     });
@@ -136,10 +137,7 @@ async function markPaid(session: Stripe.Checkout.Session) {
   }
 }
 
-async function markFailed(where: {
-  stripeCheckoutSessionId?: string;
-  stripePaymentIntentId?: string;
-}) {
+async function markFailed(where: { stripeCheckoutSessionId: string }) {
   await prisma.payment.updateMany({
     where: { ...where, status: 'PENDING' },
     data: { status: 'FAILED' },
@@ -180,7 +178,13 @@ export async function POST(request: NextRequest) {
       await markFailed({ stripeCheckoutSessionId: event.data.object.id });
       break;
     case 'payment_intent.payment_failed':
-      await markFailed({ stripePaymentIntentId: event.data.object.id });
+      // A failed attempt does not close the Checkout Session: the customer can
+      // retry in the same session, so the Payment stays PENDING. Only
+      // `checkout.session.expired` / `async_payment_failed` mark it FAILED.
+      console.warn(
+        `Stripe webhook: payment attempt failed for payment intent ${event.data.object.id} ` +
+          `(${event.data.object.last_payment_error?.message ?? 'no error message'})`,
+      );
       break;
     default:
       break;

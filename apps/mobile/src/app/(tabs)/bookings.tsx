@@ -1,4 +1,5 @@
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
+import * as WebBrowser from 'expo-web-browser';
 import React, { useCallback, useState } from 'react';
 import { Alert, FlatList, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import {
@@ -13,11 +14,18 @@ import {
 import {
   ApiError,
   cancelBooking,
+  createCheckout,
   fetchMyBookings,
   type Booking,
   type BookingStatus,
 } from '@/lib/api';
-import { BOOKING_STATUS_LABELS, formatDate, formatMoney } from '@/lib/format';
+import {
+  BOOKING_STATUS_LABELS,
+  PAYMENT_STATUS_LABELS,
+  REFUND_REQUIRED_LABEL,
+  formatDate,
+  formatMoney,
+} from '@/lib/format';
 import { colors, spacing } from '@/lib/theme';
 
 const STATUS_TONES: Record<BookingStatus, BadgeTone> = {
@@ -28,16 +36,31 @@ const STATUS_TONES: Record<BookingStatus, BadgeTone> = {
   CANCELLED: 'danger',
 };
 
+function isPaid(booking: Booking): boolean {
+  return booking.depositPaid || booking.payment?.status === 'PAID';
+}
+
 function BookingCard({
   booking,
   onCancel,
+  onPay,
+  onReview,
   cancelling,
+  paying,
 }: {
   booking: Booking;
   onCancel: (booking: Booking) => void;
+  onPay: (booking: Booking) => void;
+  onReview: (booking: Booking) => void;
   cancelling: boolean;
+  paying: boolean;
 }) {
+  const paid = isPaid(booking);
   const canCancel = booking.status === 'PENDING' || booking.status === 'CONFIRMED';
+  const refundRequired = booking.payment?.refundRequired === true;
+  const canPay =
+    (booking.status === 'PENDING' || booking.status === 'CONFIRMED') && !paid && !refundRequired;
+  const canReview = booking.status === 'COMPLETED' && !booking.review;
   return (
     <Card style={styles.card}>
       <View style={styles.cardHeader}>
@@ -51,9 +74,22 @@ function BookingCard({
       </Text>
       <View style={styles.row}>
         <Text style={styles.price}>{formatMoney(booking.totalPrice, booking.currency)}</Text>
-        {booking.depositPaid ? <Badge text="Оплачено" tone="success" /> : null}
+        {refundRequired ? (
+          <Badge text={REFUND_REQUIRED_LABEL} tone="danger" />
+        ) : paid ? (
+          <Badge text={PAYMENT_STATUS_LABELS.PAID} tone="success" />
+        ) : booking.payment?.status === 'PENDING' ? (
+          <Badge text={PAYMENT_STATUS_LABELS.PENDING} tone="warning" />
+        ) : null}
       </View>
       {booking.notes ? <Text style={styles.notes}>{booking.notes}</Text> : null}
+      {booking.review ? (
+        <Text style={styles.reviewed}>Ваш отзыв: {'★'.repeat(booking.review.rating)}</Text>
+      ) : null}
+      {canPay ? <Button title="Оплатить" loading={paying} onPress={() => onPay(booking)} /> : null}
+      {canReview ? (
+        <Button title="Оставить отзыв" variant="secondary" onPress={() => onReview(booking)} />
+      ) : null}
       {canCancel ? (
         <Button
           title="Отменить бронирование"
@@ -67,10 +103,12 @@ function BookingCard({
 }
 
 export default function BookingsScreen() {
+  const router = useRouter();
   const [bookings, setBookings] = useState<Booking[] | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
+  const [payingId, setPayingId] = useState<string | null>(null);
 
   const load = useCallback(async (mode: 'initial' | 'refresh' = 'initial') => {
     if (mode === 'refresh') setRefreshing(true);
@@ -122,6 +160,32 @@ export default function BookingsScreen() {
     ]);
   };
 
+  const handlePay = async (booking: Booking) => {
+    setPayingId(booking.id);
+    try {
+      const { url } = await createCheckout(booking.id);
+      // Stripe Checkout открывается во встроенном браузере; после закрытия
+      // (успех, отмена или свайп назад) перечитываем список — статус оплаты
+      // выставляет webhook Stripe, поэтому он может обновиться с задержкой.
+      await WebBrowser.openBrowserAsync(url, { dismissButtonStyle: 'close' });
+      await load('refresh');
+    } catch (caught) {
+      Alert.alert(
+        'Ошибка',
+        caught instanceof ApiError ? caught.message : 'Не удалось открыть страницу оплаты',
+      );
+    } finally {
+      setPayingId(null);
+    }
+  };
+
+  const handleReview = (booking: Booking) => {
+    router.push({
+      pathname: '/bookings/[id]/review',
+      params: { id: booking.id, name: booking.equipment.name },
+    });
+  };
+
   if (bookings === null) {
     return <Loader />;
   }
@@ -131,7 +195,14 @@ export default function BookingsScreen() {
       data={bookings}
       keyExtractor={(item) => item.id}
       renderItem={({ item }) => (
-        <BookingCard booking={item} onCancel={handleCancel} cancelling={cancellingId === item.id} />
+        <BookingCard
+          booking={item}
+          onCancel={handleCancel}
+          onPay={handlePay}
+          onReview={handleReview}
+          cancelling={cancellingId === item.id}
+          paying={payingId === item.id}
+        />
       )}
       contentContainerStyle={styles.list}
       ItemSeparatorComponent={() => <View style={{ height: spacing.md }} />}
@@ -177,4 +248,5 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   price: { fontSize: 17, fontWeight: '700', color: colors.primaryDark },
   notes: { fontSize: 13, color: colors.textMuted },
+  reviewed: { fontSize: 13, color: colors.primaryDark, fontWeight: '600' },
 });

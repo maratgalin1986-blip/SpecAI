@@ -1,12 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
 import { z } from 'zod';
 import {
   extractEquipmentSpecs,
   extractEquipmentSpecsFromFile,
   isSpecFileMediaType,
 } from '@specai/ai-service';
-import { authOptions } from '@/lib/auth';
+import { getRequestUser } from '@/lib/requestUser';
 import { checkRateLimit } from '@/lib/rateLimit';
 import { getUploadMaxBytes, isImageMediaType, isOurBlobUrl } from '@/lib/blob';
 
@@ -61,12 +60,12 @@ async function fetchBlobAsBase64(fileUrl: string) {
 }
 
 export async function POST(request: NextRequest) {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'PROVIDER_ADMIN') {
+  const currentUser = await getRequestUser(request);
+  if (!currentUser || currentUser.role !== 'PROVIDER_ADMIN') {
     return NextResponse.json({ error: 'Требуется аккаунт поставщика' }, { status: 403 });
   }
 
-  const rate = checkRateLimit(`ai:extract-specs:${session.user.id}`, RATE_LIMIT);
+  const rate = checkRateLimit(`ai:extract-specs:${currentUser.id}`, RATE_LIMIT);
   if (!rate.ok) {
     return NextResponse.json(
       { error: 'Слишком много запросов, попробуйте позже' },

@@ -5,12 +5,36 @@ import { getRequestUser } from '@/lib/requestUser';
 
 export const dynamic = 'force-dynamic';
 
+/**
+ * Список заявок.
+ * - `?open=1` — открытые заявки всех клиентов (лента для поставщиков), как раньше.
+ * - без параметра — все заявки текущего пользователя (любого статуса), требует входа;
+ *   используется вкладкой «Заявки» мобильного приложения.
+ * Формат ответа один и тот же: `{ orders }` с category, customer (id, name) и bids.
+ */
 export async function GET(request: NextRequest) {
-  const categoryId = request.nextUrl.searchParams.get('categoryId') ?? undefined;
+  const { searchParams } = request.nextUrl;
+  const categoryId = searchParams.get('categoryId') ?? undefined;
+  const openFeed = searchParams.get('open') === '1';
+
+  let where: { status?: 'OPEN'; categoryId?: string; customerId?: string };
+  if (openFeed) {
+    where = { status: 'OPEN', categoryId };
+  } else {
+    const currentUser = await getRequestUser(request);
+    if (!currentUser) {
+      return NextResponse.json({ error: 'Необходимо войти в аккаунт' }, { status: 401 });
+    }
+    where = { customerId: currentUser.id, categoryId };
+  }
 
   const orders = await prisma.order.findMany({
-    where: { status: 'OPEN', categoryId },
-    include: { category: true, customer: true, bids: true },
+    where,
+    include: {
+      category: { select: { id: true, name: true } },
+      customer: { select: { id: true, name: true } },
+      bids: true,
+    },
     orderBy: { createdAt: 'desc' },
     take: 50,
   });

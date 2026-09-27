@@ -254,12 +254,18 @@ and the rest of the app keeps working.
 
 ## Payments (Stripe)
 
-Customers pay for a `PENDING` booking with Stripe Checkout from `/dashboard`
-("Оплатить"). `POST /api/bookings/[id]/checkout` creates a `Payment` row and a
-Checkout Session and returns its `url`; `POST /api/stripe/webhook` verifies the
-Stripe signature and, on `checkout.session.completed`, marks the payment `PAID`,
-sets `Booking.depositPaid = true` and moves the booking `PENDING → CONFIRMED`
-(expired/failed sessions become `FAILED`). The Stripe client is created lazily,
+Customers pay for a `PENDING` or `CONFIRMED` booking (with `depositPaid = false`)
+with Stripe Checkout from `/dashboard` ("Оплатить"). `POST /api/bookings/[id]/checkout`
+creates a `Payment` row and a Checkout Session and returns its `url`;
+`POST /api/stripe/webhook` verifies the Stripe signature and, on
+`checkout.session.completed`, marks the payment `PAID`, sets
+`Booking.depositPaid = true` and moves a `PENDING` booking to `CONFIRMED` (an
+already confirmed booking keeps its status). Expired sessions and
+`checkout.session.async_payment_failed` mark the payment `FAILED`;
+`payment_intent.payment_failed` is only logged, because the customer can retry
+in the same session. Refunds are done manually in the Stripe Dashboard: when a
+booking with a `PAID` payment is cancelled, `Payment.refundRequired` is set
+to flag it. The Stripe client is created lazily,
 so the app builds and runs without these variables — only payments are disabled.
 
 Environment variables (see `.env.example`):

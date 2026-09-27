@@ -1,12 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
 import { Prisma, prisma } from '@specai/database';
 import { createEquipmentSchema, equipmentSearchQuerySchema } from '@specai/shared';
-import { authOptions } from '@/lib/auth';
+import { getRequestUser } from '@/lib/requestUser';
 import { EQUIPMENT_ORDER_BY, totalPagesFor } from '@/lib/pagination';
 
 export async function GET(request: NextRequest) {
-  const params = Object.fromEntries(request.nextUrl.searchParams.entries());
+  const { mine, ...params } = Object.fromEntries(request.nextUrl.searchParams.entries());
+
+  // ?mine=1 — техника компании текущего поставщика (для мобильного кабинета).
+  // Заменяет companyId из строки запроса значением из аккаунта.
+  if (mine === '1' || mine === 'true') {
+    const currentUser = await getRequestUser(request);
+    if (!currentUser || currentUser.role !== 'PROVIDER_ADMIN' || !currentUser.companyId) {
+      return NextResponse.json({ error: 'Требуется аккаунт поставщика' }, { status: 403 });
+    }
+    params.companyId = currentUser.companyId;
+  }
+
   const parsed = equipmentSearchQuerySchema.safeParse({
     ...params,
     minDailyRate: params.minDailyRate ? Number(params.minDailyRate) : undefined,
@@ -65,14 +75,14 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'PROVIDER_ADMIN' || !session.user.companyId) {
+  const currentUser = await getRequestUser(request);
+  if (!currentUser || currentUser.role !== 'PROVIDER_ADMIN' || !currentUser.companyId) {
     return NextResponse.json({ error: 'Требуется аккаунт поставщика' }, { status: 403 });
   }
 
   const body = await request.json();
   // companyId is always derived from the authenticated provider, never trusted from the client.
-  const parsed = createEquipmentSchema.safeParse({ ...body, companyId: session.user.companyId });
+  const parsed = createEquipmentSchema.safeParse({ ...body, companyId: currentUser.companyId });
 
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });

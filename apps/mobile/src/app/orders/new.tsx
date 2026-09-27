@@ -1,0 +1,199 @@
+import { useRouter } from 'expo-router';
+import React, { useEffect, useMemo, useState } from 'react';
+import {
+  Keyboard,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
+import { DateField } from '@/components/DateField';
+import { Button, Card, Input } from '@/components/ui';
+import { ApiError, createOrder, fetchCategories, type Category } from '@/lib/api';
+import { addDays, pluralizeRu, rentalDays, startOfDay, toIsoDate } from '@/lib/format';
+import { colors, spacing } from '@/lib/theme';
+
+export default function NewOrderScreen() {
+  const router = useRouter();
+  const today = useMemo(() => startOfDay(new Date()), []);
+  const [description, setDescription] = useState('');
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [categoryId, setCategoryId] = useState<string | null>(null);
+  const [startDate, setStartDate] = useState(() => addDays(today, 1));
+  const [endDate, setEndDate] = useState(() => addDays(today, 4));
+  const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchCategories()
+      .then((data) => {
+        if (!cancelled) setCategories(data.categories);
+      })
+      .catch(() => {
+        // Категория необязательна — без списка заявку всё равно можно отправить.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const handleStartChange = (date: Date) => {
+    const next = startOfDay(date);
+    setStartDate(next);
+    if (endDate <= next) setEndDate(addDays(next, 1));
+  };
+
+  const days = rentalDays(startDate, endDate);
+
+  const handleSubmit = async () => {
+    Keyboard.dismiss();
+    setError(null);
+    if (!description.trim()) {
+      setError('Опишите, какая техника нужна');
+      return;
+    }
+    if (!days) {
+      setError('Дата окончания должна быть позже даты начала');
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const { order } = await createOrder({
+        description: description.trim(),
+        desiredStartDate: toIsoDate(startDate),
+        desiredEndDate: toIsoDate(endDate),
+        categoryId: categoryId ?? undefined,
+      });
+      router.replace({ pathname: '/orders/[id]', params: { id: order.id } });
+    } catch (caught) {
+      setError(caught instanceof ApiError ? caught.message : 'Не удалось создать заявку');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <KeyboardAvoidingView
+      style={styles.flex}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 96 : 0}
+    >
+      <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
+        <Card style={styles.section}>
+          <Input
+            label="Что нужно"
+            value={description}
+            onChangeText={setDescription}
+            placeholder="Например: нужен экскаватор для траншеи 50 м, мягкий грунт"
+            multiline
+            numberOfLines={4}
+            style={styles.textarea}
+            textAlignVertical="top"
+          />
+        </Card>
+
+        <Card style={styles.section}>
+          <Text style={styles.sectionTitle}>Категория</Text>
+          <View style={styles.chips}>
+            <Chip
+              label="Любая"
+              selected={categoryId === null}
+              onPress={() => setCategoryId(null)}
+            />
+            {categories.map((category) => (
+              <Chip
+                key={category.id}
+                label={category.name}
+                selected={categoryId === category.id}
+                onPress={() => setCategoryId(category.id)}
+              />
+            ))}
+          </View>
+        </Card>
+
+        <Card style={styles.section}>
+          <Text style={styles.sectionTitle}>Желаемые даты</Text>
+          <View style={styles.dateRow}>
+            <View style={styles.dateField}>
+              <DateField
+                label="Начало"
+                value={startDate}
+                minimumDate={today}
+                onChange={handleStartChange}
+              />
+            </View>
+            <View style={styles.dateField}>
+              <DateField
+                label="Окончание"
+                value={endDate}
+                minimumDate={addDays(startDate, 1)}
+                onChange={(date) => setEndDate(startOfDay(date))}
+              />
+            </View>
+          </View>
+          {days ? (
+            <Text style={styles.hint}>
+              Срок аренды: {pluralizeRu(days, ['день', 'дня', 'дней'])}
+            </Text>
+          ) : null}
+        </Card>
+
+        {error ? <Text style={styles.error}>{error}</Text> : null}
+        <Button title="Разместить заявку" onPress={handleSubmit} loading={submitting} />
+        <Text style={styles.footer}>
+          Поставщики увидят заявку и предложат технику с ценой. Вы выбираете лучшее предложение.
+        </Text>
+      </ScrollView>
+    </KeyboardAvoidingView>
+  );
+}
+
+function Chip({
+  label,
+  selected,
+  onPress,
+}: {
+  label: string;
+  selected: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityState={{ selected }}
+      onPress={onPress}
+      style={[styles.chip, selected && styles.chipSelected]}
+    >
+      <Text style={[styles.chipText, selected && styles.chipTextSelected]}>{label}</Text>
+    </Pressable>
+  );
+}
+
+const styles = StyleSheet.create({
+  flex: { flex: 1 },
+  container: { padding: spacing.lg, paddingBottom: spacing.xl * 2, gap: spacing.lg },
+  section: { gap: spacing.sm },
+  sectionTitle: { fontSize: 16, fontWeight: '600', color: colors.text },
+  textarea: { minHeight: 110, paddingTop: spacing.md },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
+  chip: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.card,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+  },
+  chipSelected: { backgroundColor: colors.primary, borderColor: colors.primary },
+  chipText: { fontSize: 14, color: colors.text },
+  chipTextSelected: { color: '#fff', fontWeight: '600' },
+  dateRow: { flexDirection: 'row', gap: spacing.md },
+  dateField: { flex: 1 },
+  hint: { fontSize: 14, color: colors.textMuted },
+  error: { color: colors.danger, fontSize: 14 },
+  footer: { fontSize: 13, color: colors.textMuted, textAlign: 'center', lineHeight: 18 },
+});

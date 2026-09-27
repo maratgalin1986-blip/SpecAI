@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
 import { put } from '@vercel/blob';
-import { authOptions } from '@/lib/auth';
+import { getRequestUser } from '@/lib/requestUser';
 import { checkRateLimit } from '@/lib/rateLimit';
 import {
   getBlobToken,
@@ -13,12 +12,12 @@ import {
 const RATE_LIMIT = { limit: 30, windowMs: 60_000 };
 
 export async function POST(request: NextRequest) {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'PROVIDER_ADMIN') {
+  const currentUser = await getRequestUser(request);
+  if (!currentUser || currentUser.role !== 'PROVIDER_ADMIN') {
     return NextResponse.json({ error: 'Требуется аккаунт поставщика' }, { status: 403 });
   }
 
-  const rate = checkRateLimit(`uploads:${session.user.id}`, RATE_LIMIT);
+  const rate = checkRateLimit(`uploads:${currentUser.id}`, RATE_LIMIT);
   if (!rate.ok) {
     return NextResponse.json(
       { error: 'Слишком много запросов, попробуйте позже' },
@@ -57,7 +56,7 @@ export async function POST(request: NextRequest) {
   const safeName = (file.name || 'file').replace(/[^\w.-]+/g, '_').slice(-80) || 'file';
 
   try {
-    const blob = await put(`equipment/${session.user.companyId ?? 'unknown'}/${safeName}`, file, {
+    const blob = await put(`equipment/${currentUser.companyId ?? 'unknown'}/${safeName}`, file, {
       access: 'public',
       addRandomSuffix: true,
       contentType: file.type,

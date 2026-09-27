@@ -1,4 +1,4 @@
-import type { BookingStatus } from './api';
+import type { BidStatus, BookingStatus, EquipmentStatus, OrderStatus } from './api';
 
 const CURRENCY_SYMBOLS: Record<string, string> = {
   USD: '$',
@@ -60,12 +60,23 @@ export const BOOKING_STATUS_LABELS: Record<BookingStatus, string> = {
   CANCELLED: 'Отменено',
 };
 
+// Индексируется строкой из API, поэтому Record<string>; satisfies гарантирует
+// подписи для всех значений серверного enum EquipmentStatus.
 export const EQUIPMENT_STATUS_LABELS: Record<string, string> = {
   AVAILABLE: 'Доступна',
   RENTED: 'В аренде',
-  MAINTENANCE: 'На обслуживании',
-  UNAVAILABLE: 'Недоступна',
+  IN_MAINTENANCE: 'На обслуживании',
+  RETIRED: 'Списана',
+} satisfies Record<EquipmentStatus, string>;
+
+export const PAYMENT_STATUS_LABELS: Record<'PENDING' | 'PAID' | 'FAILED' | 'REFUNDED', string> = {
+  PENDING: 'Ожидает оплаты',
+  PAID: 'Оплачено',
+  FAILED: 'Оплата не прошла',
+  REFUNDED: 'Возвращено',
 };
+
+export const REFUND_REQUIRED_LABEL = 'Требуется возврат';
 
 export const SPEC_LABELS: Record<string, string> = {
   capacity: 'Грузоподъёмность',
@@ -83,4 +94,45 @@ export function formatSpecValue(value: unknown): string {
   if (value === null || value === undefined) return '—';
   if (typeof value === 'object') return JSON.stringify(value);
   return String(value);
+}
+
+export const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
+  OPEN: 'Открыта',
+  MATCHED: 'Техника выбрана',
+  CANCELLED: 'Отменена',
+};
+
+export const BID_STATUS_LABELS: Record<BidStatus, string> = {
+  PENDING: 'Ожидает',
+  ACCEPTED: 'Принято',
+  REJECTED: 'Отклонено',
+};
+
+/** Русское склонение: pluralizeRu(3, ['день', 'дня', 'дней']) → «3 дня». */
+export function pluralizeRu(count: number, forms: [string, string, string]): string {
+  const abs = Math.abs(count) % 100;
+  const last = abs % 10;
+  let form = forms[2];
+  if (abs < 10 || abs > 20) {
+    if (last === 1) form = forms[0];
+    else if (last >= 2 && last <= 4) form = forms[1];
+  }
+  return `${count} ${form}`;
+}
+
+/** Число дней аренды между датами (как считает сервер); null, если конец не позже начала. */
+export function rentalDays(start: Date, end: Date): number | null {
+  if (end <= start) return null;
+  return Math.max(1, Math.ceil((end.getTime() - start.getTime()) / 86_400_000));
+}
+
+/** Дата в полночь локального времени — для сравнения дат без учёта времени. */
+export function startOfDay(date: Date): Date {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
+export function addDays(date: Date, days: number): Date {
+  const next = new Date(date);
+  next.setDate(next.getDate() + days);
+  return next;
 }

@@ -167,12 +167,20 @@ export default async function DashboardPage({
                     {booking.endDate.toLocaleDateString('ru-RU')} ·{' '}
                     {formatMoney(booking.totalPrice, booking.currency)}
                   </p>
-                  {booking.status !== 'CANCELLED' && (
+                  {booking.payment?.refundRequired ? (
                     <div className="mt-2">
-                      <PaymentStatusLabel
-                        paid={booking.depositPaid || booking.payment?.status === 'PAID'}
-                      />
+                      <span className="inline-block rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-semibold text-red-800">
+                        Требуется возврат
+                      </span>
                     </div>
+                  ) : (
+                    booking.status !== 'CANCELLED' && (
+                      <div className="mt-2">
+                        <PaymentStatusLabel
+                          paid={booking.depositPaid || booking.payment?.status === 'PAID'}
+                        />
+                      </div>
+                    )
                   )}
                   {booking.status === 'COMPLETED' && !booking.review && (
                     <div className="mt-2">
@@ -182,11 +190,10 @@ export default async function DashboardPage({
                 </div>
                 <div className="flex flex-wrap items-center gap-2 sm:flex-col sm:items-end">
                   <BookingStatusBadge status={booking.status} />
-                  {booking.status === 'PENDING' &&
+                  {(booking.status === 'PENDING' || booking.status === 'CONFIRMED') &&
                     !booking.depositPaid &&
-                    booking.payment?.status !== 'PAID' && (
-                      <PayBookingButton bookingId={booking.id} />
-                    )}
+                    booking.payment?.status !== 'PAID' &&
+                    !booking.payment?.refundRequired && <PayBookingButton bookingId={booking.id} />}
                 </div>
               </Card>
             ))}

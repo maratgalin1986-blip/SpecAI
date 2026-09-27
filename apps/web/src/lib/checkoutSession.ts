@@ -40,3 +40,14 @@ export function decideCheckout(existing: ExistingCheckoutSession | null): Checko
   // 'expired' (or unknown) — nothing to close, just start over.
   return { action: 'create', expireSessionId: null };
 }
+
+/**
+ * Booking statuses a customer may pay for. A provider can confirm a booking
+ * before the deposit is paid (PENDING → CONFIRMED), so both are payable; the
+ * route additionally checks that the deposit is not paid yet.
+ */
+export const PAYABLE_BOOKING_STATUSES = ['PENDING', 'CONFIRMED'] as const;
+
+export function isPayableBookingStatus(status: string): boolean {
+  return (PAYABLE_BOOKING_STATUSES as readonly string[]).includes(status);
+}
