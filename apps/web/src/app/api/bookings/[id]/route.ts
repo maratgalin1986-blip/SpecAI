@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
 import { z } from 'zod';
 import { prisma } from '@specai/database';
-import { authOptions } from '@/lib/auth';
+import { getRequestUser } from '@/lib/requestUser';
 import { sendEmail } from '@/lib/email';
 import { bookingStatusChanged } from '@/lib/emailTemplates';
 import { getStripe } from '@/lib/stripe';
@@ -50,8 +49,8 @@ async function closePendingCheckout(
 }
 
 export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
-  const session = await getServerSession(authOptions);
-  if (!session) {
+  const currentUser = await getRequestUser(request);
+  if (!currentUser) {
     return NextResponse.json({ error: 'Необходимо войти в аккаунт' }, { status: 401 });
   }
 
@@ -70,9 +69,8 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
   }
 
   const isOwningProvider =
-    session.user.role === 'PROVIDER_ADMIN' &&
-    session.user.companyId === booking.equipment.companyId;
-  const isCustomer = booking.customerId === session.user.id;
+    currentUser.role === 'PROVIDER_ADMIN' && currentUser.companyId === booking.equipment.companyId;
+  const isCustomer = booking.customerId === currentUser.id;
 
   if (isOwningProvider) {
     const allowed = PROVIDER_ALLOWED_TRANSITIONS[booking.status] ?? [];

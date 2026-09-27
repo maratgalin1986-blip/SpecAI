@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
 import { prisma } from '@specai/database';
 import { createOrderSchema } from '@specai/shared';
-import { authOptions } from '@/lib/auth';
+import { getRequestUser } from '@/lib/requestUser';
 
 export const dynamic = 'force-dynamic';
 
@@ -20,8 +19,8 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const session = await getServerSession(authOptions);
-  if (!session) {
+  const currentUser = await getRequestUser(request);
+  if (!currentUser) {
     return NextResponse.json({ error: 'Необходимо войти в аккаунт' }, { status: 401 });
   }
 
@@ -33,7 +32,7 @@ export async function POST(request: NextRequest) {
 
   const order = await prisma.order.create({
     data: {
-      customerId: session.user.id,
+      customerId: currentUser.id,
       description: parsed.data.description,
       desiredStartDate: parsed.data.desiredStartDate,
       desiredEndDate: parsed.data.desiredEndDate,

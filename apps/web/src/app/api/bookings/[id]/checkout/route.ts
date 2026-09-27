@@ -1,16 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
 import { prisma } from '@specai/database';
-import { authOptions } from '@/lib/auth';
+import { getRequestUser } from '@/lib/requestUser';
 import { getAppUrl, getStripe } from '@/lib/stripe';
 import { decideCheckout } from '@/lib/checkoutSession';
 import { toStripeAmount } from '@/lib/stripeAmount';
 
 export const runtime = 'nodejs';
 
-export async function POST(_request: NextRequest, { params }: { params: { id: string } }) {
-  const session = await getServerSession(authOptions);
-  if (!session) {
+export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
+  const currentUser = await getRequestUser(request);
+  if (!currentUser) {
     return NextResponse.json({ error: 'Необходимо войти в аккаунт' }, { status: 401 });
   }
 
@@ -21,7 +20,7 @@ export async function POST(_request: NextRequest, { params }: { params: { id: st
   if (!booking) {
     return NextResponse.json({ error: 'Бронирование не найдено' }, { status: 404 });
   }
-  if (booking.customerId !== session.user.id) {
+  if (booking.customerId !== currentUser.id) {
     return NextResponse.json({ error: 'Нет прав на оплату этого бронирования' }, { status: 403 });
   }
   if (booking.status !== 'PENDING') {
@@ -106,7 +105,7 @@ export async function POST(_request: NextRequest, { params }: { params: { id: st
     checkout = await stripe.checkout.sessions.create({
       mode: 'payment',
       client_reference_id: booking.id,
-      customer_email: session.user.email ?? undefined,
+      customer_email: currentUser.email ?? undefined,
       line_items: [
         {
           quantity: 1,
