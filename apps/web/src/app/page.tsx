@@ -180,10 +180,10 @@ export default function HomePage() {
       <Reveal>
         <section
           id="callback"
-          className="relative grid scroll-mt-24 gap-8 overflow-hidden rounded-3xl bg-slate-900 p-6 text-white sm:p-10 lg:grid-cols-2"
+          className="relative grid scroll-mt-24 grid-cols-1 gap-8 overflow-hidden rounded-3xl bg-slate-900 p-6 text-white sm:p-10 lg:grid-cols-2"
         >
           <div className="hero-grid opacity-30" aria-hidden />
-          <div className="relative flex flex-col justify-center">
+          <div className="relative flex min-w-0 flex-col justify-center">
             <div className="text-sm font-semibold uppercase tracking-widest text-amber-400">
               Быстрый заказ
             </div>
@@ -197,7 +197,7 @@ export default function HomePage() {
               {SITE.phone}
             </a>
           </div>
-          <div className="relative rounded-2xl bg-white/5 p-5 ring-1 ring-white/10 backdrop-blur">
+          <div className="relative min-w-0 rounded-2xl bg-white/5 p-4 ring-1 ring-white/10 backdrop-blur sm:p-5">
             <CallbackForm source="home" dark />
           </div>
         </section>

@@ -48,7 +48,7 @@ export function AgentChatWidget() {
         type="button"
         onClick={() => setIsOpen((open) => !open)}
         aria-label="Открыть чат с ИИ-агентами"
-        className="fixed bottom-4 right-4 z-50 flex items-center gap-2 rounded-full bg-amber-600 px-5 py-3 text-sm font-semibold text-white shadow-lg hover:bg-amber-700 sm:right-6"
+        className="fixed bottom-4 right-4 z-50 flex items-center gap-2 rounded-full bg-amber-600 p-3.5 text-sm font-semibold text-white shadow-lg hover:bg-amber-700 sm:right-6 sm:px-5 sm:py-3"
       >
         <svg
           viewBox="0 0 24 24"
@@ -63,7 +63,7 @@ export function AgentChatWidget() {
             d="M8 10h8M8 14h5m-9 6 2.5-3H19a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v11a2 2 0 0 0 1 1.7Z"
           />
         </svg>
-        {isOpen ? 'Свернуть' : 'ИИ-помощник'}
+        <span className="hidden sm:inline">{isOpen ? 'Свернуть' : 'ИИ-помощник'}</span>
       </button>
     </>
   );

@@ -4,6 +4,7 @@ import { Providers } from '@/components/Providers';
 import { SiteHeader } from '@/components/SiteHeader';
 import { SiteFooter } from '@/components/SiteFooter';
 import { AgentChatWidget } from '@/components/AgentChatWidget';
+import { YandexMetrika } from '@/components/YandexMetrika';
 import { SITE } from '@/lib/site';
 import { siteUrl } from '@/lib/siteUrl';
 import './globals.css';
@@ -40,6 +41,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           <main className="mx-auto w-full max-w-6xl flex-1 px-6 py-8">{children}</main>
           <SiteFooter />
           <AgentChatWidget />
+          <YandexMetrika />
         </Providers>
       </body>
     </html>

@@ -79,7 +79,7 @@ export function CallbackForm({
         <h3 className={`text-lg font-semibold ${dark ? 'text-white' : ''}`}>{title}</h3>
         <p className={`mt-1 text-sm ${dark ? 'text-slate-300' : 'text-slate-600'}`}>{subtitle}</p>
       </div>
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <input
           required
           value={name}

@@ -2,6 +2,12 @@
 @tailwind components;
 @tailwind utilities;
 
+/* 3D effects (e.g. scroll-reveal tilt) must never cause sideways scrolling. */
+html,
+body {
+  overflow-x: clip;
+}
+
 /* ---- Hero backdrop: animated aurora + perspective grid ------------------ */
 
 .hero-backdrop {
