@@ -2,7 +2,11 @@
   "expo": {
     "name": "СпецПласт16",
     "slug": "specai",
+    "owner": "maratgalin1986s-team",
     "version": "0.1.0",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "scheme": "specai",

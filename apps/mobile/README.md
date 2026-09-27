@@ -83,18 +83,51 @@ API сайта из `apps/web`: вход и регистрация, катало
 с кириллицей): оранжевая плашка `#d97706` с буквами «СП16» — в стиле `apps/web/src/app/icon.svg`.
 Если появится фирменный логотип, замените PNG в `assets/` или подправьте скрипт.
 
+## Тестирование через Expo Go
+
+Приложение можно проверить на телефоне без компьютера и без магазинов — через
+[EAS Update](https://docs.expo.dev/eas-update/introduction/) и [Expo Go](https://expo.dev/go).
+Проект привязан к аккаунту Expo `maratgalin1986s-team` (`owner` и `extra.eas.projectId` в
+`app.json`), обновления публикуются в ветку `preview` (профиль `preview` в `eas.json`,
+`runtimeVersion` — политика `appVersion`, то есть версия из `app.json`).
+
+Публикация (нужен `EXPO_TOKEN` робота или `eas login`):
+
+```bash
+cd apps/mobile
+npx eas whoami                                   # должен показать аккаунт
+EXPO_PUBLIC_API_URL=https://<prod-url> npx eas update --branch preview \
+  --message "описание изменений" --platform all
+npx eas update:list --branch preview             # id и ссылки на обновления
+```
+
+Адрес API вшивается в бандл в момент публикации, поэтому `EXPO_PUBLIC_API_URL` обязателен
+и должен указывать на продакшен-сайт (не `localhost`). После публикации команда печатает
+ссылку на страницу обновления — `https://expo.dev/accounts/maratgalin1986s-team/projects/specai/updates/<group-id>`.
+
+На телефоне:
+
+1. Установите Expo Go (App Store / Google Play). Expo Go поддерживает только текущий SDK —
+   для этого приложения нужен **SDK 57**; если в магазине уже более новая версия Expo Go,
+   обновите `expo` в `package.json` (`npx expo install --fix`) и опубликуйте заново.
+2. Войдите в Expo Go под аккаунтом, у которого есть доступ к организации
+   `maratgalin1986s-team` — ветка `preview` видна на вкладке проекта; либо откройте ссылку
+   на обновление (или отсканируйте QR со страницы обновления на expo.dev) камерой телефона.
+3. В приложении зарегистрируйтесь как клиент или войдите существующим аккаунтом сайта.
+
+Ограничения Expo Go: нативные модули только из состава SDK (у нас так и есть), push и
+собственная иконка/сплэш не показываются — для этого нужна сборка `eas build`.
+
 ## Сборка через EAS
 
 Нативные сборки делаются в облаке [EAS Build](https://docs.expo.dev/build/introduction/):
 
 ```bash
-npm i -g eas-cli
-eas login                      # аккаунт Expo (бесплатный)
-cd apps/mobile
-eas build:configure            # создаст eas.json и projectId в app.json
-eas build --platform android --profile preview   # APK для тестов
-eas build --platform ios --profile preview       # сборка для TestFlight / устройств
-eas build --platform all --profile production    # магазинные сборки
+cd apps/mobile                 # eas-cli установлен как devDependency, вызывайте npx eas
+npx eas login                  # или EXPO_TOKEN в окружении
+npx eas build --platform android --profile preview   # APK для тестов (канал preview)
+npx eas build --platform ios --profile preview       # сборка для TestFlight / устройств
+npx eas build --platform all --profile production    # магазинные сборки (канал production)
 ```
 
 Переменную `EXPO_PUBLIC_API_URL` для сборок задайте в профиле `eas.json`
@@ -110,7 +143,10 @@ eas build --platform all --profile production    # магазинные сбор
 - Идентификаторы уже заданы в `app.json`: `com.specai.app` (iOS bundle id и Android package),
   scheme `specai`.
 
-Публикация: `eas submit --platform ios|android` после успешной production-сборки.
+Публикация: `npx eas submit --platform ios|android` после успешной production-сборки.
+Профили `preview` и `production` в `eas.json` привязаны к одноимённым каналам EAS Update,
+так что `eas update --channel production` доставит JS-обновление в магазинную сборку без
+пересборки.
 
 ## Ограничения
 
