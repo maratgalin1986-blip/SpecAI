@@ -14,6 +14,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button, Input } from '@/components/ui';
 import { ApiError, register } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
+import { SITE } from '@/lib/site';
 import { colors, spacing } from '@/lib/theme';
 
 /** Регистрация клиента (поля как у веб-формы, accountType = CUSTOMER) с автологином. */
@@ -67,10 +68,10 @@ export default function RegisterScreen() {
         >
           <Pressable onPress={Keyboard.dismiss} accessible={false} style={styles.form}>
             <View style={styles.header}>
-              <Text style={styles.title}>Регистрация</Text>
+              <Text style={styles.title}>Регистрация в {SITE.name}</Text>
               <Text style={styles.subtitle}>
                 Аккаунт клиента: бронируйте технику и размещайте заявки. Поставщики регистрируются
-                на сайте.
+                на сайте. Без аккаунта можно позвонить {SITE.phone} или заказать звонок.
               </Text>
             </View>
 

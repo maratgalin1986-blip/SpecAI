@@ -33,6 +33,7 @@ import {
   EQUIPMENT_STATUS_LABELS,
   formatDate,
   formatMoney,
+  formatRate,
 } from '@/lib/format';
 import { colors, radius, spacing } from '@/lib/theme';
 
@@ -110,8 +111,8 @@ function EquipmentRow({ item }: { item: Equipment }) {
           </Text>
           <View style={styles.row}>
             <Text style={styles.price}>
-              {formatMoney(item.dailyRate, item.currency)}
-              <Text style={styles.priceUnit}> / день</Text>
+              {formatRate(item).price}
+              <Text style={styles.priceUnit}>{formatRate(item).unit}</Text>
             </Text>
             <Badge
               text={EQUIPMENT_STATUS_LABELS[item.status] ?? item.status}

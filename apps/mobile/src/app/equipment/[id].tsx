@@ -1,6 +1,7 @@
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Alert, Image, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ContactActions } from '@/components/ContactActions';
 import { DateField } from '@/components/DateField';
 import { Badge, Button, Card, ErrorBanner, Loader } from '@/components/ui';
 import { ApiError, createBooking, fetchEquipmentById, type Equipment } from '@/lib/api';
@@ -9,6 +10,7 @@ import {
   SPEC_LABELS,
   addDays,
   formatMoney,
+  formatRate,
   formatSpecValue,
   pluralizeRu,
   rentalDays,
@@ -95,6 +97,8 @@ export default function EquipmentDetailScreen() {
 
   const specs = Object.entries(item.specs ?? {});
   const isAvailable = item.status === 'AVAILABLE';
+  const rate = formatRate(item);
+  const hasHourly = rate.note !== null;
 
   return (
     <>
@@ -130,7 +134,18 @@ export default function EquipmentDetailScreen() {
         </View>
 
         <Card style={styles.priceCard}>
-          <PriceRow label="За день" value={formatMoney(item.dailyRate, item.currency)} primary />
+          <View style={styles.headlinePrice}>
+            <Text style={styles.headlinePriceValue}>
+              {rate.price}
+              <Text style={styles.headlinePriceUnit}>{rate.unit}</Text>
+            </Text>
+            <Text style={styles.headlinePriceLabel}>
+              {hasHourly ? 'за машино-час' : 'за сутки аренды'}
+            </Text>
+          </View>
+          {hasHourly ? (
+            <PriceRow label="Смена 8 ч" value={formatMoney(item.dailyRate, item.currency)} />
+          ) : null}
           {item.weeklyRate ? (
             <PriceRow label="За неделю" value={formatMoney(item.weeklyRate, item.currency)} />
           ) : null}
@@ -187,12 +202,14 @@ export default function EquipmentDetailScreen() {
                 <Text style={styles.estimateLabel}>
                   {pluralizeRu(days, ['день', 'дня', 'дней'])} ×{' '}
                   {formatMoney(item.dailyRate, item.currency)}
+                  {hasHourly ? ' (смена 8 ч)' : ''}
                 </Text>
                 <Text style={styles.estimateValue}>{formatMoney(estimate, item.currency)}</Text>
               </View>
               <Text style={styles.estimateHint}>
-                Итоговая стоимость рассчитывается по дневной ставке; оплата — после создания
-                бронирования.
+                {hasHourly
+                  ? 'Предварительно: дни × стоимость смены 8 ч. Точную сумму по машино-часам уточнит менеджер; оплата — после создания бронирования.'
+                  : 'Итоговая стоимость рассчитывается по суточной ставке; оплата — после создания бронирования.'}
               </Text>
             </View>
           ) : null}
@@ -202,6 +219,15 @@ export default function EquipmentDetailScreen() {
             onPress={handleBook}
             disabled={!isAvailable}
             loading={submitting}
+          />
+        </Card>
+
+        <Card style={styles.section}>
+          <Text style={styles.sectionTitle}>Заказать по телефону</Text>
+          <Text style={styles.description}>Оставьте номер — уточним даты, доставку и цену.</Text>
+          <ContactActions
+            source={`mobile:equipment:${item.id}`}
+            message={`Интересует: ${item.name}`}
           />
         </Card>
       </ScrollView>
@@ -229,6 +255,10 @@ const styles = StyleSheet.create({
   title: { fontSize: 22, fontWeight: '700', color: colors.text },
   meta: { fontSize: 14, color: colors.textMuted },
   priceCard: { marginHorizontal: spacing.lg, gap: spacing.sm },
+  headlinePrice: { gap: 2 },
+  headlinePriceValue: { fontSize: 24, fontWeight: '700', color: colors.primaryDark },
+  headlinePriceUnit: { fontSize: 15, fontWeight: '400', color: colors.textMuted },
+  headlinePriceLabel: { fontSize: 13, color: colors.textMuted },
   priceRow: { flexDirection: 'row', justifyContent: 'space-between' },
   priceLabel: { fontSize: 14, color: colors.textMuted },
   priceValue: { fontSize: 15, fontWeight: '600', color: colors.text },

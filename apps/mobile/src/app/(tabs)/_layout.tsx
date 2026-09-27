@@ -3,6 +3,7 @@ import { Tabs } from 'expo-router';
 import React from 'react';
 import type { ColorValue } from 'react-native';
 import { useAuth } from '@/lib/auth';
+import { SITE } from '@/lib/site';
 import { colors } from '@/lib/theme';
 
 type IconName = React.ComponentProps<typeof Ionicons>['name'];
@@ -32,7 +33,11 @@ export default function TabsLayout() {
     >
       <Tabs.Screen
         name="index"
-        options={{ title: 'Каталог', tabBarIcon: tabIcon('construct-outline') }}
+        options={{
+          title: 'Каталог',
+          headerTitle: `${SITE.name} · Каталог`,
+          tabBarIcon: tabIcon('construct-outline'),
+        }}
       />
       <Tabs.Screen
         name="bookings"

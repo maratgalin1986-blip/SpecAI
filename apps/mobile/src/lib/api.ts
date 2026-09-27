@@ -2,7 +2,7 @@ import { STORAGE_KEYS, getItem } from './storage';
 
 /**
  * Базовый URL API. Задаётся через EXPO_PUBLIC_API_URL (например,
- * https://specai.example.com). Без завершающего слэша.
+ * https://specplast16.ru). Сайт СпецПласт16 и API живут на одном хосте. Без завершающего слэша.
  */
 export const API_URL = (process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:3000').replace(
   /\/+$/,
@@ -114,7 +114,10 @@ export interface Equipment {
   model: string | null;
   year: number | null;
   status: EquipmentStatus | string;
+  /** Смена 8 часов. Если задан hourlyRate — второстепенная цена. */
   dailyRate: string | number;
+  /** Цена за машино-час — главная цена на сайте; null, если не задана. */
+  hourlyRate?: string | number | null;
   weeklyRate: string | number | null;
   monthlyRate: string | number | null;
   currency: string;
@@ -218,9 +221,19 @@ export interface CreateEquipmentInput {
   model?: string;
   year?: number;
   dailyRate: number;
+  hourlyRate?: number;
   description?: string;
   specs?: Record<string, unknown>;
   imageUrls: string[];
+}
+
+/** Заявка на обратный звонок (POST /api/leads, как форма CallbackForm на сайте). */
+export interface CreateLeadInput {
+  name: string;
+  phone: string;
+  message?: string;
+  /** Откуда пришла заявка, например `mobile:catalog` или `mobile:equipment:<id>`. */
+  source?: string;
 }
 
 export interface ChatMessage {
@@ -256,6 +269,21 @@ export function fetchEquipment(params: { query?: string; page?: number; pageSize
 
 export function fetchEquipmentById(id: string) {
   return apiFetch<{ equipment: Equipment }>(`/api/equipment/${encodeURIComponent(id)}`, {
+    anonymous: true,
+  });
+}
+
+/** Заказ обратного звонка — доступен без входа. `consent` обязателен (152-ФЗ). */
+export function createLead(input: CreateLeadInput) {
+  return apiFetch<{ ok: boolean }>('/api/leads', {
+    method: 'POST',
+    body: {
+      name: input.name,
+      phone: input.phone,
+      message: input.message || undefined,
+      source: input.source,
+      consent: true,
+    },
     anonymous: true,
   });
 }

@@ -1,9 +1,11 @@
-import { useFocusEffect } from 'expo-router';
+import { Link, useFocusEffect } from 'expo-router';
 import React, { useCallback, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ContactActions } from '@/components/ContactActions';
 import { Badge, Button, Card } from '@/components/ui';
 import { API_URL, ApiError, sendVerificationEmail, type UserRole } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
+import { SITE } from '@/lib/site';
 import { colors, spacing } from '@/lib/theme';
 
 const ROLE_LABELS: Record<UserRole, string> = {
@@ -108,6 +110,17 @@ export default function ProfileScreen() {
         </Card>
       ) : null}
 
+      <Card style={styles.card}>
+        <Text style={styles.companyTitle}>{SITE.name}</Text>
+        <Text style={styles.companyText}>
+          {SITE.tagline}. {SITE.city}, {SITE.region}. {SITE.workingHours}.
+        </Text>
+        <ContactActions source="mobile:profile" />
+        <Link href="/about" style={styles.aboutLink}>
+          О компании и контакты →
+        </Link>
+      </Card>
+
       <Button title="Выйти" variant="danger" onPress={handleLogout} loading={loggingOut} />
     </ScrollView>
   );
@@ -145,4 +158,7 @@ const styles = StyleSheet.create({
   verifyTitle: { fontSize: 16, fontWeight: '600', color: colors.text },
   verifyText: { fontSize: 14, color: colors.textMuted, lineHeight: 20 },
   verifySent: { fontSize: 14, color: colors.success, fontWeight: '600' },
+  companyTitle: { fontSize: 16, fontWeight: '600', color: colors.text },
+  companyText: { fontSize: 14, color: colors.textMuted, lineHeight: 20 },
+  aboutLink: { fontSize: 15, fontWeight: '600', color: colors.primaryDark, textAlign: 'center' },
 });

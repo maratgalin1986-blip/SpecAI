@@ -11,9 +11,11 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { ContactActions } from '@/components/ContactActions';
 import { Button, Input } from '@/components/ui';
 import { ApiError, API_URL } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
+import { SITE } from '@/lib/site';
 import { colors, spacing } from '@/lib/theme';
 
 export default function LoginScreen() {
@@ -50,10 +52,10 @@ export default function LoginScreen() {
         <Pressable style={styles.container} onPress={Keyboard.dismiss} accessible={false}>
           <View style={styles.header}>
             <View style={styles.logo}>
-              <Text style={styles.logoText}>S</Text>
+              <Text style={styles.logoText}>СП16</Text>
             </View>
-            <Text style={styles.title}>SpecAI</Text>
-            <Text style={styles.subtitle}>Аренда спецтехники с ИИ-подбором</Text>
+            <Text style={styles.title}>{SITE.name}</Text>
+            <Text style={styles.subtitle}>{SITE.tagline}</Text>
           </View>
 
           <View style={styles.form}>
@@ -92,6 +94,13 @@ export default function LoginScreen() {
             </Link>
           </View>
 
+          <View style={styles.contacts}>
+            <ContactActions source="mobile:login" compact />
+            <Link href="/about" style={styles.link}>
+              О компании {SITE.name}
+            </Link>
+          </View>
+
           <Text style={styles.footer}>Сервер: {API_URL}</Text>
         </Pressable>
       </KeyboardAvoidingView>
@@ -112,9 +121,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  logoText: { color: '#fff', fontSize: 32, fontWeight: '800' },
+  logoText: { color: '#fff', fontSize: 22, fontWeight: '800' },
   title: { fontSize: 28, fontWeight: '700', color: colors.text },
-  subtitle: { fontSize: 15, color: colors.textMuted },
+  subtitle: { fontSize: 15, color: colors.textMuted, textAlign: 'center' },
+  contacts: { gap: spacing.sm },
   form: { gap: spacing.lg },
   error: { color: colors.danger, fontSize: 14 },
   link: {
