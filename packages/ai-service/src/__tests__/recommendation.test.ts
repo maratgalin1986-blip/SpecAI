@@ -67,7 +67,7 @@ describe('recommendEquipment', () => {
   // Current behaviour: the function trusts the model and does NOT drop ids that
   // are absent from the candidate list. If filtering is added later, this test
   // should be updated to expect only 'eq_1'.
-  it('passes through equipment ids that are not among the candidates (no filtering yet)', async () => {
+  it('drops equipment ids that are not among the candidates', async () => {
     createMock.mockResolvedValue(
       toolUseMessage({
         recommendations: [
@@ -79,6 +79,6 @@ describe('recommendEquipment', () => {
 
     const result = await recommendEquipment('Работа', candidates);
 
-    expect(result.recommendations.map((r) => r.equipmentId)).toEqual(['eq_1', 'eq_unknown']);
+    expect(result.recommendations.map((r) => r.equipmentId)).toEqual(['eq_1']);
   });
 });

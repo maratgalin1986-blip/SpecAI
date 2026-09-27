@@ -83,5 +83,13 @@ export async function recommendEquipment(
     throw new Error('Model did not return a tool_use block');
   }
 
-  return recommendationResultSchema.parse(toolUse.input);
+  const result = recommendationResultSchema.parse(toolUse.input);
+
+  // The model is told not to invent ids, but it still can; drop anything that
+  // is not an actual candidate so callers never look up a non-existent row.
+  const known = new Set(candidates.map((c) => c.id));
+  return {
+    ...result,
+    recommendations: result.recommendations.filter((r) => known.has(r.equipmentId)),
+  };
 }
