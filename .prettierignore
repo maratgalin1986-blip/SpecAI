@@ -6,3 +6,6 @@ node_modules
 **/.next/**
 apps/web/public/sw.js
 apps/web/public/swe-worker-*.js
+apps/mobile/.expo
+apps/mobile/expo-env.d.ts
+apps/mobile/dist

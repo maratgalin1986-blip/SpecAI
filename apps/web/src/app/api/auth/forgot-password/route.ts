@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { prisma } from '@specai/database';
+import { findUserByEmail } from '@/lib/findUserByEmail';
 import { emailSchema } from '@specai/shared';
 import { checkRateLimit } from '@/lib/rateLimit';
 import { generateRawToken, hashToken } from '@/lib/tokens';
@@ -39,13 +40,11 @@ export async function POST(request: NextRequest) {
   const rate = checkRateLimit(`forgot-password:${email}:${ip}`, RATE_LIMIT);
   if (!rate.ok) return tooManyRequests(rate.retryAfterSec);
 
-  // Всегда 200 и одинаковая работа в обеих ветках: не раскрываем существование аккаунта
-  // ни ответом, ни задержкой. Письмо уходит в фоне, ответ его не ждёт.
+  // Всегда 200: не раскрываем существование аккаунта ответом. Письмо ждём —
+  // на serverless функция может быть остановлена сразу после ответа, и
+  // неожиданная отправка потерялась бы.
   try {
-    const user = await prisma.user.findUnique({
-      where: { email },
-      select: { id: true, email: true },
-    });
+    const user = await findUserByEmail(email, { select: { id: true, email: true } });
 
     const rawToken = generateRawToken();
     const tokenHash = hashToken(rawToken);
@@ -60,9 +59,7 @@ export async function POST(request: NextRequest) {
         },
       });
       const resetUrl = `${getEmailBaseUrl()}/reset-password?token=${encodeURIComponent(rawToken)}`;
-      void sendEmail({ to: user.email, ...passwordReset({ resetUrl }) }).catch((error) => {
-        console.error('[auth] forgot-password email failed', error);
-      });
+      await sendEmail({ to: user.email, ...passwordReset({ resetUrl }) });
     }
   } catch (error) {
     console.error('[auth] forgot-password failed', error);

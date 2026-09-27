@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
 import { z } from 'zod';
 import { prisma } from '@specai/database';
-import { authOptions } from '@/lib/auth';
+import { getRequestUser } from '@/lib/requestUser';
 import { sendEmail } from '@/lib/email';
 import { newBidReceived } from '@/lib/emailTemplates';
 
@@ -13,8 +12,8 @@ const requestSchema = z.object({
 });
 
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'PROVIDER_ADMIN' || !session.user.companyId) {
+  const currentUser = await getRequestUser(request);
+  if (!currentUser || currentUser.role !== 'PROVIDER_ADMIN' || !currentUser.companyId) {
     return NextResponse.json({ error: 'Требуется аккаунт поставщика' }, { status: 403 });
   }
 
@@ -33,7 +32,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
   }
 
   const equipment = await prisma.equipment.findUnique({ where: { id: parsed.data.equipmentId } });
-  if (!equipment || equipment.companyId !== session.user.companyId) {
+  if (!equipment || equipment.companyId !== currentUser.companyId) {
     return NextResponse.json(
       { error: 'Можно предлагать только собственную технику' },
       { status: 403 },

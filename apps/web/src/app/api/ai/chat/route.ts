@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
 import { z } from 'zod';
 import { prisma, type Prisma } from '@specai/database';
 import {
@@ -9,7 +8,7 @@ import {
   type AssistantMessage,
   type SearchEquipmentInput,
 } from '@specai/ai-service';
-import { authOptions } from '@/lib/auth';
+import { getRequestUser } from '@/lib/requestUser';
 import { checkRateLimit } from '@/lib/rateLimit';
 
 export const runtime = 'nodejs';
@@ -103,11 +102,11 @@ async function getMyBookings(userId: string) {
 }
 
 export async function POST(request: NextRequest) {
-  const session = await getServerSession(authOptions);
-  if (!session) {
+  const currentUser = await getRequestUser(request);
+  if (!currentUser) {
     return NextResponse.json({ error: 'Необходимо войти в аккаунт' }, { status: 401 });
   }
-  const userId = session.user.id;
+  const userId = currentUser.id;
 
   const rate = checkRateLimit(`ai:chat:${userId}`, RATE_LIMIT);
   if (!rate.ok) {
@@ -224,8 +223,8 @@ export async function POST(request: NextRequest) {
 }
 
 export async function GET(request: NextRequest) {
-  const session = await getServerSession(authOptions);
-  if (!session) {
+  const currentUser = await getRequestUser(request);
+  if (!currentUser) {
     return NextResponse.json({ error: 'Необходимо войти в аккаунт' }, { status: 401 });
   }
 
@@ -234,7 +233,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'conversationId обязателен' }, { status: 400 });
   }
 
-  const conversation = await loadOwnedConversation(conversationId, session.user.id);
+  const conversation = await loadOwnedConversation(conversationId, currentUser.id);
   if (!conversation) {
     return NextResponse.json({ error: 'Диалог не найден' }, { status: 404 });
   }

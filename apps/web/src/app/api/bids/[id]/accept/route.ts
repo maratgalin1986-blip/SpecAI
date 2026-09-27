@@ -1,13 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
 import { prisma } from '@specai/database';
-import { authOptions } from '@/lib/auth';
+import { getRequestUser } from '@/lib/requestUser';
 import { sendEmail } from '@/lib/email';
 import { bidAccepted } from '@/lib/emailTemplates';
 
-export async function POST(_request: NextRequest, { params }: { params: { id: string } }) {
-  const session = await getServerSession(authOptions);
-  if (!session) {
+export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
+  const currentUser = await getRequestUser(request);
+  if (!currentUser) {
     return NextResponse.json({ error: 'Необходимо войти в аккаунт' }, { status: 401 });
   }
 
@@ -27,7 +26,7 @@ export async function POST(_request: NextRequest, { params }: { params: { id: st
     },
   });
 
-  if (!bid || bid.order.customerId !== session.user.id) {
+  if (!bid || bid.order.customerId !== currentUser.id) {
     return NextResponse.json({ error: 'Предложение не найдено' }, { status: 404 });
   }
   if (bid.order.status !== 'OPEN' || bid.status !== 'PENDING') {

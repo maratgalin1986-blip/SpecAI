@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
 import { z } from 'zod';
 import { prisma } from '@specai/database';
 import { recommendEquipment } from '@specai/ai-service';
-import { authOptions } from '@/lib/auth';
+import { getRequestUser } from '@/lib/requestUser';
 import { checkRateLimit } from '@/lib/rateLimit';
 
 const requestSchema = z.object({
@@ -13,12 +12,12 @@ const requestSchema = z.object({
 const RATE_LIMIT = { limit: 10, windowMs: 60_000 };
 
 export async function POST(request: NextRequest) {
-  const session = await getServerSession(authOptions);
-  if (!session) {
+  const currentUser = await getRequestUser(request);
+  if (!currentUser) {
     return NextResponse.json({ error: 'Необходимо войти в аккаунт' }, { status: 401 });
   }
 
-  const rate = checkRateLimit(`ai:recommend:${session.user.id}`, RATE_LIMIT);
+  const rate = checkRateLimit(`ai:recommend:${currentUser.id}`, RATE_LIMIT);
   if (!rate.ok) {
     return NextResponse.json(
       { error: 'Слишком много запросов, попробуйте позже' },
