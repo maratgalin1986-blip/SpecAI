@@ -51,7 +51,9 @@ export function resetEmailClient(): void {
 export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult> {
   const recipients = (Array.isArray(input.to) ? input.to : [input.to])
     .map((address) => address.trim())
-    .filter(Boolean);
+    // Technical accounts (e.g. the importer of messenger orders) use the
+    // reserved .invalid TLD and must never be emailed.
+    .filter((address) => Boolean(address) && !address.endsWith('.invalid'));
 
   if (recipients.length === 0) {
     console.info('[email] skipped: no recipients', { subject: input.subject });

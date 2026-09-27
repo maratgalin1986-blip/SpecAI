@@ -4,6 +4,9 @@ import { prisma } from '@specai/database';
 import { getRequestUser } from '@/lib/requestUser';
 import { sendEmail } from '@/lib/email';
 import { newBidReceived } from '@/lib/emailTemplates';
+import { notifyTelegram } from '@/lib/notify';
+import { formatMoney } from '@/lib/money';
+import { siteUrl } from '@/lib/siteUrl';
 
 const requestSchema = z.object({
   equipmentId: z.string().cuid(),
@@ -59,6 +62,13 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       message: bid.message,
     });
     await sendEmail({ to: order.customer.email, ...template });
+    if (order.source !== 'SITE') {
+      // Imported orders have no real customer account — tell the site owner instead.
+      await notifyTelegram(
+        `💰 Предложение по заявке из чата: ${equipment.name} — ${formatMoney(bid.price, bid.currency)}\n` +
+          `${order.description.slice(0, 200)}\n${siteUrl()}/orders/${order.id}`,
+      );
+    }
   } catch (error) {
     console.error('[email] newBidReceived failed', error);
   }

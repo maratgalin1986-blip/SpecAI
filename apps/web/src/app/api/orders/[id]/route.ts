@@ -35,9 +35,18 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       },
     },
   });
-  if (!order) {
+  if (!order || order.status === 'PENDING_REVIEW') {
     return NextResponse.json({ error: 'Заявка не найдена' }, { status: 404 });
   }
 
-  return NextResponse.json({ order, isOwner: order.customerId === currentUser.id });
+  // Contacts of people from messenger chats are for equipment providers only.
+  const { contactName, contactPhone, rawText, sourceUrl, externalId, fingerprint, ...rest } = order;
+  const contact =
+    currentUser.role === 'PROVIDER_ADMIN' ? { contactName, contactPhone, rawText, sourceUrl } : {};
+  void externalId;
+  void fingerprint;
+  return NextResponse.json({
+    order: { ...rest, ...contact },
+    isOwner: order.customerId === currentUser.id,
+  });
 }

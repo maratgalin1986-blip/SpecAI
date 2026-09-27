@@ -39,7 +39,14 @@ export async function GET(request: NextRequest) {
     take: 50,
   });
 
-  return NextResponse.json({ orders });
+  // Never expose contacts of people whose requests were imported from chats.
+  const safeOrders = orders.map(
+    ({ contactName, contactPhone, rawText, sourceUrl, externalId, fingerprint, ...order }) => {
+      void [contactName, contactPhone, rawText, sourceUrl, externalId, fingerprint];
+      return order;
+    },
+  );
+  return NextResponse.json({ orders: safeOrders });
 }
 
 export async function POST(request: NextRequest) {
