@@ -145,6 +145,65 @@ export interface Booking {
   equipment: { id: string; name: string; imageUrls?: string[] };
 }
 
+/** Бронирование техники поставщика (GET /api/bookings?as=provider). */
+export interface ProviderBooking extends Booking {
+  customer: { id: string; name: string; email: string };
+}
+
+export interface Category {
+  id: string;
+  name: string;
+}
+
+export interface UploadedFile {
+  url: string;
+  contentType: string;
+  size: number;
+}
+
+export type SpecValue = string | number | boolean;
+
+export interface ExtractedSpecs {
+  make?: string;
+  model?: string;
+  year?: number;
+  specs: Record<string, SpecValue>;
+}
+
+export interface CreateEquipmentInput {
+  name: string;
+  categoryId: string;
+  make?: string;
+  model?: string;
+  year?: number;
+  dailyRate: number;
+  description?: string;
+  specs?: Record<string, unknown>;
+  imageUrls: string[];
+}
+
+export interface Order {
+  id: string;
+  description: string;
+  desiredStartDate: string;
+  desiredEndDate: string;
+  status: 'OPEN' | 'CLOSED' | 'CANCELLED' | string;
+  createdAt: string;
+  category: { id: string; name: string } | null;
+  customer: { id: string; name: string } | null;
+  bids: { id: string; equipmentId: string; price: string | number; status: string }[];
+}
+
+export interface Bid {
+  id: string;
+  orderId: string;
+  equipmentId: string;
+  price: string | number;
+  currency: string;
+  message: string | null;
+  status: string;
+}
+
 export interface ChatMessage {
   id: string;
   role: 'USER' | 'ASSISTANT';
@@ -201,4 +260,85 @@ export function fetchConversation(conversationId: string) {
   return apiFetch<{ conversationId: string; messages: ChatMessage[] }>(
     `/api/ai/chat?conversationId=${encodeURIComponent(conversationId)}`,
   );
+}
+
+// ---- Сторона поставщика (роль PROVIDER_ADMIN) ----
+
+export function fetchCategories() {
+  return apiFetch<{ categories: Category[] }>('/api/categories', { anonymous: true });
+}
+
+/** Техника компании текущего поставщика. */
+export function fetchMyEquipment(params: { page?: number; pageSize?: number } = {}) {
+  const search = new URLSearchParams({ mine: '1' });
+  search.set('page', String(params.page ?? 1));
+  search.set('pageSize', String(params.pageSize ?? 100));
+  return apiFetch<EquipmentListResponse>(`/api/equipment?${search.toString()}`);
+}
+
+export function fetchProviderBookings() {
+  return apiFetch<{ bookings: ProviderBooking[] }>('/api/bookings?as=provider');
+}
+
+export function updateBookingStatus(id: string, status: BookingStatus) {
+  return apiFetch<{ booking: Booking }>(`/api/bookings/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    body: { status },
+  });
+}
+
+export function createEquipment(input: CreateEquipmentInput) {
+  return apiFetch<{ equipment: Equipment }>('/api/equipment', { method: 'POST', body: input });
+}
+
+export function extractSpecsFromFile(fileUrl: string) {
+  return apiFetch<ExtractedSpecs>('/api/ai/extract-specs', { method: 'POST', body: { fileUrl } });
+}
+
+/**
+ * Загрузка файла в хранилище: multipart/form-data с полем `file`.
+ * В React Native в FormData кладётся объект { uri, name, type } — заголовок
+ * Content-Type с boundary выставляет сам fetch.
+ */
+export async function uploadFile(file: { uri: string; name: string; type: string }) {
+  const formData = new FormData();
+  formData.append('file', file as unknown as Blob);
+
+  let response: Response;
+  try {
+    response = await fetch(`${API_URL}/api/uploads`, {
+      method: 'POST',
+      headers: { Accept: 'application/json', ...(await authHeaders()) },
+      body: formData,
+    });
+  } catch {
+    throw new ApiError(0, 'Нет соединения с сервером');
+  }
+
+  const text = await response.text();
+  let data: unknown = null;
+  try {
+    data = text ? JSON.parse(text) : null;
+  } catch {
+    data = null;
+  }
+  if (!response.ok) {
+    throw new ApiError(response.status, extractError(data, 'Не удалось загрузить файл'), data);
+  }
+  return data as UploadedFile;
+}
+
+/** Открытые заявки клиентов (для предложений поставщика). */
+export function fetchOpenOrders() {
+  return apiFetch<{ orders: Order[] }>('/api/orders?open=1');
+}
+
+export function createBid(
+  orderId: string,
+  input: { equipmentId: string; price: number; message?: string },
+) {
+  return apiFetch<{ bid: Bid }>(`/api/orders/${encodeURIComponent(orderId)}/bids`, {
+    method: 'POST',
+    body: input,
+  });
 }
