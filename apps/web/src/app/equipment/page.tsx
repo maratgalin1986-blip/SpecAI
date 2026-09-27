@@ -1,6 +1,8 @@
 import { prisma } from '@specai/database';
 import { EQUIPMENT_SORT_OPTIONS } from '@specai/shared';
 import { Card, StatusBadge } from '@specai/ui';
+import { formatRate } from '@/lib/money';
+import { CallbackForm } from '@/components/CallbackForm';
 import { Pagination } from '@/components/Pagination';
 import {
   EQUIPMENT_ORDER_BY,
@@ -9,6 +11,12 @@ import {
   parsePage,
   totalPagesFor,
 } from '@/lib/pagination';
+
+export const metadata = {
+  title: 'Каталог спецтехники',
+  description:
+    'Аренда экскаваторов-погрузчиков, автокранов, погрузчиков и другой спецтехники с оператором в Набережных Челнах и по Татарстану.',
+};
 
 export const dynamic = 'force-dynamic';
 
@@ -119,7 +127,7 @@ export default async function EquipmentCatalogPage({
           />
         </label>
         <label className="flex flex-col gap-1 text-sm">
-          Цена от, $/день
+          Цена от, ₽/смена
           <input
             name="minPrice"
             type="number"
@@ -129,7 +137,7 @@ export default async function EquipmentCatalogPage({
           />
         </label>
         <label className="flex flex-col gap-1 text-sm">
-          Цена до, $/день
+          Цена до, ₽/смена
           <input
             name="maxPrice"
             type="number"
@@ -176,19 +184,33 @@ export default async function EquipmentCatalogPage({
       </p>
 
       {equipment.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-slate-300 bg-white p-8 text-center">
-          <p className="font-medium text-slate-700">
-            {hasFilters ? 'По этим фильтрам техника не найдена.' : 'В каталоге пока нет техники.'}
-          </p>
-          {hasFilters && (
-            <p className="mt-2 text-sm text-slate-500">
-              Попробуйте изменить запрос или{' '}
-              <a href="/equipment" className="font-medium text-amber-700 hover:underline">
-                сбросить фильтры
+        <div className="grid gap-6 lg:grid-cols-2">
+          <Card className="flex flex-col justify-center gap-2 p-6">
+            <div className="text-4xl">🔍</div>
+            <h2 className="text-lg font-semibold">
+              {hasFilters ? 'По этим фильтрам техника не найдена' : 'Каталог пополняется'}
+            </h2>
+            <p className="text-sm text-slate-600">
+              {hasFilters && (
+                <>
+                  Попробуйте изменить запрос или{' '}
+                  <a href="/equipment" className="font-medium text-amber-700 hover:underline">
+                    сбросить фильтры
+                  </a>
+                  .{' '}
+                </>
+              )}
+              Часть парка мы подбираем под заказ — оставьте заявку, найдём технику под вашу задачу,
+              или разместите{' '}
+              <a href="/orders" className="text-amber-700 underline">
+                заявку для поставщиков
               </a>
               .
             </p>
-          )}
+          </Card>
+          <Card className="p-6">
+            <CallbackForm source="catalog-empty" />
+          </Card>
         </div>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -213,8 +235,10 @@ export default async function EquipmentCatalogPage({
                   </p>
                 )}
                 <p className="mt-auto text-lg font-semibold">
-                  ${item.dailyRate.toString()}
-                  <span className="text-sm font-normal text-slate-500">/день</span>
+                  {formatRate(item).price}
+                  <span className="text-sm font-normal text-slate-500">
+                    {formatRate(item).unit}
+                  </span>
                 </p>
               </Card>
             </a>

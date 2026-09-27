@@ -1,14 +1,14 @@
 import bcrypt from 'bcryptjs';
-import { PrismaClient } from '../generated/client';
+import { createPrismaClient } from '../src';
 
-const prisma = new PrismaClient();
+const prisma = createPrismaClient();
 
 async function main() {
   const location = await prisma.location.create({
     data: {
       addressLine: 'ул. Титова, 27',
-      city: 'Екатеринбург',
-      region: 'Свердловская область',
+      city: 'Казань',
+      region: 'Республика Татарстан',
       postalCode: '620028',
       country: 'Россия',
       latitude: 56.8389,
@@ -18,7 +18,7 @@ async function main() {
 
   const providerCompany = await prisma.company.create({
     data: {
-      name: 'Уральская Спецтехника',
+      name: 'Казанская Спецтехника',
       isProvider: true,
       phone: '+7-343-555-0100',
       website: 'https://example.com/ural-spec',
@@ -72,9 +72,9 @@ async function main() {
       make: 'Caterpillar',
       model: '320',
       year: 2021,
-      dailyRate: 650,
-      weeklyRate: 3200,
-      monthlyRate: 11000,
+      dailyRate: 22000,
+      weeklyRate: 140000,
+      monthlyRate: 520000,
       description: 'Экскаватор среднего класса для земляных и инженерных работ.',
       specs: {
         'Эксплуатационная масса, кг': 20300,
@@ -96,8 +96,8 @@ async function main() {
       make: 'Grove',
       model: 'GMK4100L',
       year: 2019,
-      dailyRate: 1800,
-      weeklyRate: 9500,
+      dailyRate: 32000,
+      weeklyRate: 200000,
       description: 'Полноприводный автокран грузоподъёмностью 100 тонн.',
       specs: {
         'Макс. грузоподъёмность, т': 100,
@@ -118,7 +118,7 @@ async function main() {
       make: 'Caterpillar',
       model: 'D6',
       year: 2018,
-      dailyRate: 900,
+      dailyRate: 26000,
       description: 'Гусеничный бульдозер для планировки и расчистки участков.',
       specs: {
         'Эксплуатационная масса, кг': 18500,
@@ -140,7 +140,7 @@ async function main() {
       status: 'CONFIRMED',
       startDate: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000),
       endDate: new Date(Date.now() + 6 * 24 * 60 * 60 * 1000),
-      totalPrice: 5400,
+      totalPrice: 96000,
       deliveryLocationId: location.id,
     },
   });
@@ -159,8 +159,8 @@ async function main() {
     data: {
       orderId: order.id,
       equipmentId: excavator.id,
-      price: 2100,
-      currency: 'USD',
+      price: 75000,
+      currency: 'RUB',
       message: 'Бульдозер сейчас на обслуживании, но этот экскаватор справится с расчисткой.',
     },
   });

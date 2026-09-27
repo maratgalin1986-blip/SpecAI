@@ -29,7 +29,7 @@ export type GetMyBookingsInput = z.infer<typeof getMyBookingsInputSchema>;
 export const SEARCH_EQUIPMENT_TOOL: Anthropic.Tool = {
   name: SEARCH_EQUIPMENT_TOOL_NAME,
   description:
-    'Search the SpecAI catalogue for heavy equipment that is currently available for rent. ' +
+    'Search the СпецПласт16 catalogue for heavy equipment that is currently available for rent. ' +
     'Returns up to 5 matching units with id, name, category, city and daily rate. ' +
     'Use it whenever the user asks to find, pick or compare equipment. ' +
     'All filters are optional; combine them to narrow the search.',

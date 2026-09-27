@@ -46,7 +46,7 @@ export const MAX_TOOL_ROUNDS = 3;
  * Kept stable and free of per-request data so the cache_control breakpoint
  * below actually hits: any byte change here invalidates the cached prefix.
  */
-export const ASSISTANT_SYSTEM_PROMPT = `Ты — ассистент SpecAI, платформы аренды спецтехники и строительных услуг.
+export const ASSISTANT_SYSTEM_PROMPT = `Ты — ассистент СпецПласт16, платформы аренды спецтехники и строительных услуг.
 
 Твои задачи:
 - помогать клиенту подобрать подходящую спецтехнику (экскаваторы, краны, погрузчики, самосвалы и т.д.) под его задачу, бюджет и город;

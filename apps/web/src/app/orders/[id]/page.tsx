@@ -6,6 +6,7 @@ import { authOptions } from '@/lib/auth';
 import { BidForm } from '@/components/BidForm';
 import { AcceptBidButton } from '@/components/AcceptBidButton';
 import { pluralizeRu } from '@/lib/pluralize';
+import { formatMoney } from '@/lib/money';
 
 export const dynamic = 'force-dynamic';
 
@@ -84,7 +85,7 @@ export default async function OrderDetailPage({ params }: { params: { id: string
                     {bid.equipment.name} · {bid.equipment.company.name}
                   </p>
                   <p className="text-sm text-slate-500">
-                    ${bid.price.toString()} {bid.currency}
+                    {formatMoney(bid.price, bid.currency)}
                     {bid.message && <> · {bid.message}</>}
                   </p>
                 </div>

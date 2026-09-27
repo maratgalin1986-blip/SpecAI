@@ -1,9 +1,15 @@
+import type { Metadata } from 'next';
 import { prisma } from '@specai/database';
 import { orderStatusSchema, type OrderStatus } from '@specai/shared';
 import { Card } from '@specai/ui';
 import { NewOrderForm } from '@/components/NewOrderForm';
 import { Pagination } from '@/components/Pagination';
 import { parseEnumParam, parsePage, totalPagesFor } from '@/lib/pagination';
+
+export const metadata: Metadata = {
+  title: 'Заявки на технику',
+  description: 'Опубликуйте задачу — поставщики спецтехники предложат технику и цену.',
+};
 
 export const dynamic = 'force-dynamic';
 

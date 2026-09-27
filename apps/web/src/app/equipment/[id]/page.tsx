@@ -1,10 +1,25 @@
 import { notFound } from 'next/navigation';
 import { prisma } from '@specai/database';
 import { Card, StatusBadge } from '@specai/ui';
+import type { Metadata } from 'next';
 import { BookingForm } from '@/components/BookingForm';
+import { CallbackForm } from '@/components/CallbackForm';
 import { pluralizeRu } from '@/lib/pluralize';
+import { formatMoney, formatRate } from '@/lib/money';
 
 export const dynamic = 'force-dynamic';
+
+export async function generateMetadata({ params }: { params: { id: string } }): Promise<Metadata> {
+  const item = await prisma.equipment.findUnique({
+    where: { id: params.id },
+    select: { name: true, description: true, dailyRate: true, hourlyRate: true, currency: true },
+  });
+  if (!item) return { title: 'Техника не найдена' };
+  return {
+    title: `${item.name} — аренда ${formatRate(item).price}${formatRate(item).unit}`,
+    description: item.description ?? `Аренда: ${item.name}`,
+  };
+}
 
 export default async function EquipmentDetailPage({ params }: { params: { id: string } }) {
   const item = await prisma.equipment.findUnique({
@@ -112,14 +127,21 @@ export default async function EquipmentDetailPage({ params }: { params: { id: st
 
         <Card className="flex h-fit flex-col gap-3 lg:sticky lg:top-6">
           <p className="text-2xl font-semibold">
-            ${item.dailyRate.toString()}
-            <span className="text-sm font-normal text-slate-500">/день</span>
+            {formatRate(item).price}
+            <span className="text-sm font-normal text-slate-500">{formatRate(item).unit}</span>
           </p>
+          {formatRate(item).note && (
+            <p className="text-sm text-slate-600">{formatRate(item).note}</p>
+          )}
           {item.weeklyRate && (
-            <p className="text-sm text-slate-600">${item.weeklyRate.toString()}/неделя</p>
+            <p className="text-sm text-slate-600">
+              {formatMoney(item.weeklyRate, item.currency)}/неделя
+            </p>
           )}
           {item.monthlyRate && (
-            <p className="text-sm text-slate-600">${item.monthlyRate.toString()}/месяц</p>
+            <p className="text-sm text-slate-600">
+              {formatMoney(item.monthlyRate, item.currency)}/месяц
+            </p>
           )}
           {item.location && (
             <p className="text-sm text-slate-500">
@@ -136,6 +158,15 @@ export default async function EquipmentDetailPage({ params }: { params: { id: st
               />
             </div>
           )}
+
+          <div className="mt-2 border-t border-slate-200 pt-3">
+            <CallbackForm
+              source={`equipment:${item.id}`}
+              defaultMessage={`Интересует: ${item.name}`}
+              title="Заказать по телефону"
+              subtitle="Оставьте номер — уточним даты, доставку и цену."
+            />
+          </div>
         </Card>
       </div>
     </div>

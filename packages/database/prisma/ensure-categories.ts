@@ -1,11 +1,17 @@
-import { PrismaClient } from '../generated/client';
+import { createPrismaClient } from '../src';
 
-const prisma = new PrismaClient();
+const prisma = createPrismaClient();
 
 const BASE_CATEGORIES = [
   { name: 'Экскаваторы', slug: 'excavators' },
   { name: 'Краны', slug: 'cranes' },
   { name: 'Бульдозеры', slug: 'bulldozers' },
+  { name: 'Погрузчики', slug: 'loaders' },
+  { name: 'Самосвалы', slug: 'dump-trucks' },
+  { name: 'Экскаваторы-погрузчики', slug: 'backhoe-loaders' },
+  { name: 'Манипуляторы', slug: 'crane-trucks' },
+  { name: 'Автовышки', slug: 'aerial-platforms' },
+  { name: 'Тракторы', slug: 'tractors' },
 ];
 
 async function main() {

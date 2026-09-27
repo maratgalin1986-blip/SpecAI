@@ -5,3 +5,5 @@ export * from './schemas/auth';
 export * from './schemas/review';
 export * from './schemas/order';
 export * from './schemas/bid';
+export * from './schemas/agents';
+export * from './schemas/lead';

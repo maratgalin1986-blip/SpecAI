@@ -12,9 +12,12 @@
     "studio": "prisma studio",
     "seed": "tsx prisma/seed.ts",
     "ensure-categories": "tsx prisma/ensure-categories.ts",
+    "ensure-fleet": "tsx prisma/ensure-fleet.ts",
+    "fetch-yandex-ca": "tsx prisma/fetch-yandex-ca.ts",
     "build": "tsc --noEmit -p tsconfig.json",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "lint": "echo 'no lint step for @specai/database'"
+    "lint": "echo 'no lint step for @specai/database'",
+    "test": "vitest run"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
@@ -28,6 +31,7 @@
     "@types/node": "^20.16.11",
     "prisma": "^5.20.0",
     "tsx": "^4.19.1",
-    "typescript": "^5.6.3"
+    "typescript": "^5.6.3",
+    "vitest": "^4.1.11"
   }
 }

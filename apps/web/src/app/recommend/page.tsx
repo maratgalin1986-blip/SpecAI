@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { Button, Card } from '@specai/ui';
+import { formatMoney } from '@/lib/money';
 
 interface Recommendation {
   equipmentId: string;
@@ -93,7 +94,7 @@ export default function RecommendPage() {
                   </a>
                   {rec.equipment && (
                     <p className="text-sm text-slate-500">
-                      {rec.equipment.category} · ${rec.equipment.dailyRate}/день
+                      {rec.equipment.category} · {formatMoney(rec.equipment.dailyRate)}/сутки
                     </p>
                   )}
                   <p className="mt-1 text-sm text-slate-600">{rec.reason}</p>

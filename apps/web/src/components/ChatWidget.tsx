@@ -2,6 +2,7 @@
 
 import { useSession } from 'next-auth/react';
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
+import { SITE } from '@/lib/site';
 
 interface ChatMessage {
   id: string;
@@ -223,12 +224,12 @@ export function ChatWidget() {
       {isOpen && (
         <section
           role="dialog"
-          aria-label="Чат с ассистентом SpecAI"
+          aria-label={`Чат с ассистентом ${SITE.name}`}
           className="flex h-[70vh] max-h-[600px] w-[calc(100vw-2rem)] max-w-sm flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl"
         >
           <header className="flex items-center justify-between border-b border-slate-200 bg-slate-900 px-4 py-3 text-white">
             <div>
-              <p className="text-sm font-semibold">Ассистент SpecAI</p>
+              <p className="text-sm font-semibold">Ассистент {SITE.name}</p>
               <p className="text-xs text-slate-300">Подбор техники и ваши бронирования</p>
             </div>
             <div className="flex items-center gap-1">

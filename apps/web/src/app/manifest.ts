@@ -1,11 +1,11 @@
 import type { MetadataRoute } from 'next';
+import { SITE } from '@/lib/site';
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: 'SpecAI — аренда спецтехники',
-    short_name: 'SpecAI',
-    description:
-      'Аренда экскаваторов, кранов, погрузчиков и другой спецтехники с ИИ-подбором под задачу.',
+    name: `${SITE.name} — аренда спецтехники`,
+    short_name: SITE.name,
+    description: SITE.description,
     lang: 'ru',
     start_url: '/',
     scope: '/',

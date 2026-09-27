@@ -1,10 +1,14 @@
+import type { Metadata } from 'next';
 import { getServerSession } from 'next-auth';
 import { prisma } from '@specai/database';
 import { BookingStatusBadge, Card } from '@specai/ui';
 import { authOptions } from '@/lib/auth';
 import { ReviewForm } from '@/components/ReviewForm';
+import { formatMoney } from '@/lib/money';
 import { PayBookingButton } from '@/components/PayBookingButton';
 import { VerifyEmailBanner } from '@/components/VerifyEmailBanner';
+
+export const metadata: Metadata = { title: 'Личный кабинет', robots: { index: false } };
 
 export const dynamic = 'force-dynamic';
 
@@ -160,8 +164,8 @@ export default async function DashboardPage({
                   </a>
                   <p className="text-sm text-slate-500">
                     {booking.startDate.toLocaleDateString('ru-RU')} –{' '}
-                    {booking.endDate.toLocaleDateString('ru-RU')} · ${booking.totalPrice.toString()}{' '}
-                    {booking.currency}
+                    {booking.endDate.toLocaleDateString('ru-RU')} ·{' '}
+                    {formatMoney(booking.totalPrice, booking.currency)}
                   </p>
                   {booking.payment?.refundRequired ? (
                     <div className="mt-2">

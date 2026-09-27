@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate PWA icons for SpecAI (public/icons).
+"""Generate PWA icons for СпецПласт16 (public/icons).
 
 Requires Pillow (pip install pillow). Not a project dependency; run manually:
     pnpm --filter @specai/web icons
@@ -8,7 +8,7 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
 
-BG = (15, 23, 42)  # slate-900, matches theme color
+BG = (217, 119, 6)  # amber-600, СпецПласт16 brand colour
 FG = (255, 255, 255)
 OUT = Path(__file__).resolve().parent.parent / 'public' / 'icons'
 
@@ -45,8 +45,8 @@ def draw_icon(size: int, *, maskable: bool, transparent_corners: bool) -> Image.
         else:
             img.paste(BG, (0, 0, s, s))
 
-    text = 'S'
-    font = load_font(int((s - 2 * pad) * 0.72))
+    text = '16'
+    font = load_font(int((s - 2 * pad) * 0.5))
     left, top, right, bottom = draw.textbbox((0, 0), text, font=font)
     w, h = right - left, bottom - top
     x = (s - w) / 2 - left

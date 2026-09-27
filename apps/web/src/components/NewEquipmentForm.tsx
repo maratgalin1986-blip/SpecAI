@@ -36,6 +36,7 @@ export function NewEquipmentForm() {
   const [name, setName] = useState('');
   const [categoryId, setCategoryId] = useState('');
   const [dailyRate, setDailyRate] = useState('');
+  const [hourlyRate, setHourlyRate] = useState('');
   const [description, setDescription] = useState('');
   const [specSheetText, setSpecSheetText] = useState('');
   const [specs, setSpecs] = useState<Record<string, unknown> | null>(null);
@@ -175,6 +176,7 @@ export function NewEquipmentForm() {
           name,
           categoryId,
           dailyRate: Number(dailyRate),
+          hourlyRate: hourlyRate ? Number(hourlyRate) : undefined,
           description: description || undefined,
           specs: specs ?? undefined,
           imageUrls: files.filter(isImage).map((file) => file.url),
@@ -190,6 +192,7 @@ export function NewEquipmentForm() {
       setName('');
       setCategoryId('');
       setDailyRate('');
+      setHourlyRate('');
       setDescription('');
       setSpecSheetText('');
       setSpecs(null);
@@ -237,7 +240,23 @@ export function NewEquipmentForm() {
       </label>
 
       <label className="flex flex-col gap-1 text-sm">
-        Цена в сутки (USD)
+        Цена за час, ₽ <span className="text-slate-400">(необязательно)</span>
+        <input
+          type="number"
+          min={1}
+          step="0.01"
+          value={hourlyRate}
+          onChange={(e) => {
+            setHourlyRate(e.target.value);
+            // Suggest an 8-hour shift price when the daily price is still empty.
+            if (!dailyRate && e.target.value) setDailyRate(String(Number(e.target.value) * 8));
+          }}
+          className="rounded-md border border-slate-300 px-3 py-2"
+        />
+      </label>
+
+      <label className="flex flex-col gap-1 text-sm">
+        Цена за смену / сутки, ₽
         <input
           type="number"
           required
