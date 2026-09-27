@@ -161,6 +161,7 @@ export interface Category {
 
 export interface Bid {
   id: string;
+  orderId?: string;
   price: string | number;
   currency: string;
   message: string | null;
@@ -193,11 +194,6 @@ export interface ProviderBooking extends Booking {
   customer: { id: string; name: string; email: string };
 }
 
-export interface Category {
-  id: string;
-  name: string;
-}
-
 export interface UploadedFile {
   url: string;
   contentType: string;
@@ -223,28 +219,6 @@ export interface CreateEquipmentInput {
   description?: string;
   specs?: Record<string, unknown>;
   imageUrls: string[];
-}
-
-export interface Order {
-  id: string;
-  description: string;
-  desiredStartDate: string;
-  desiredEndDate: string;
-  status: 'OPEN' | 'CLOSED' | 'CANCELLED' | string;
-  createdAt: string;
-  category: { id: string; name: string } | null;
-  customer: { id: string; name: string } | null;
-  bids: { id: string; equipmentId: string; price: string | number; status: string }[];
-}
-
-export interface Bid {
-  id: string;
-  orderId: string;
-  equipmentId: string;
-  price: string | number;
-  currency: string;
-  message: string | null;
-  status: string;
 }
 
 export interface ChatMessage {
@@ -359,10 +333,6 @@ export function fetchConversation(conversationId: string) {
 }
 
 // ---- Сторона поставщика (роль PROVIDER_ADMIN) ----
-
-export function fetchCategories() {
-  return apiFetch<{ categories: Category[] }>('/api/categories', { anonymous: true });
-}
 
 /** Техника компании текущего поставщика. */
 export function fetchMyEquipment(params: { page?: number; pageSize?: number } = {}) {
