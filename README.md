@@ -134,6 +134,20 @@ Run from the repo root:
   `POST /api/bids/[id]/accept`, which atomically creates a `Booking`, marks
   the order `MATCHED`, and rejects the other bids.
 
+## File uploads (Vercel Blob)
+
+Providers can attach photos (JPEG/PNG/WebP) and PDF spec sheets to new equipment.
+Files go to [Vercel Blob](https://vercel.com/docs/storage/vercel-blob) via
+`POST /api/uploads` (multipart, field `file`, max 10 MB, public URL with a random
+suffix). Image URLs are stored in `Equipment.imageUrls` and shown in the catalog and
+on the equipment page; any uploaded file can be passed to
+`POST /api/ai/extract-specs` as `{ fileUrl }` to extract specs with Claude vision.
+
+Setup: in the Vercel dashboard open your project → **Storage** → create a **Blob**
+store and connect it (this adds `BLOB_READ_WRITE_TOKEN`); locally copy the token into
+`.env`. Without the token the upload endpoint returns `503 Хранилище не настроено`
+and the rest of the app keeps working.
+
 ## AI service usage
 
 `packages/ai-service` exposes three functions consumed by `apps/web`:
@@ -141,6 +155,8 @@ Run from the repo root:
 - `recommendEquipment(jobDescription, candidates)` — tool-call based ranking of
   candidate equipment against a natural-language job description.
 - `extractEquipmentSpecs(sourceText)` — structured spec extraction from free text.
+- `extractEquipmentSpecsFromFile({ data, mediaType })` — the same extraction from a
+  base64 photo (JPEG/PNG/WebP, sent as an `image` block) or PDF (`document` block).
 - `replyToCustomer(history)` — a support chat turn given conversation history.
 
 All three require `ANTHROPIC_API_KEY` to be set.
