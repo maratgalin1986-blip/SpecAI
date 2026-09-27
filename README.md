@@ -205,6 +205,8 @@ Yandex (скачивается при сборке, `packages/database/src/conne
 
 - **Telegram** — бот (`TELEGRAM_BOT_TOKEN`) → `/admin` → «Подключить Telegram-бота» →
   у @BotFather `/setprivacy` → Disable → добавить бота в группы.
+  `TELEGRAM_CHAT_ID` для уведомлений: написать боту `/id` (в личке или в рабочей группе) —
+  он ответит номером чата.
 - **WhatsApp** — через шлюз Green API (официального API для групп нет): URL и токен
   вебхука — в `/admin`.
 - **Любой другой источник** — `POST /api/integrations/inbound` с токеном из `/admin`.
