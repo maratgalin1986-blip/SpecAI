@@ -31,6 +31,9 @@ function RootNavigator() {
       <Stack.Protected guard={isSignedIn}>
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="equipment/[id]" options={{ title: 'Техника' }} />
+        <Stack.Screen name="orders/new" options={{ title: 'Новая заявка' }} />
+        <Stack.Screen name="orders/[id]" options={{ title: 'Заявка' }} />
+        <Stack.Screen name="bookings/[id]/review" options={{ title: 'Отзыв' }} />
       </Stack.Protected>
     </Stack>
   );

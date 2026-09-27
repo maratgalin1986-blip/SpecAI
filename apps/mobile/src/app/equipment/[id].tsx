@@ -1,25 +1,21 @@
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Alert, Image, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { Badge, Button, Card, ErrorBanner, Input, Loader } from '@/components/ui';
+import { DateField } from '@/components/DateField';
+import { Badge, Button, Card, ErrorBanner, Loader } from '@/components/ui';
 import { ApiError, createBooking, fetchEquipmentById, type Equipment } from '@/lib/api';
 import {
   EQUIPMENT_STATUS_LABELS,
   SPEC_LABELS,
+  addDays,
   formatMoney,
   formatSpecValue,
-  parseDateInput,
+  pluralizeRu,
+  rentalDays,
+  startOfDay,
   toIsoDate,
 } from '@/lib/format';
-import { colors, spacing } from '@/lib/theme';
-
-function defaultDates() {
-  const start = new Date();
-  start.setDate(start.getDate() + 1);
-  const end = new Date(start);
-  end.setDate(end.getDate() + 3);
-  return { start: toIsoDate(start), end: toIsoDate(end) };
-}
+import { colors, radius, spacing } from '@/lib/theme';
 
 export default function EquipmentDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -28,9 +24,9 @@ export default function EquipmentDetailScreen() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const initial = useMemo(defaultDates, []);
-  const [startDate, setStartDate] = useState(initial.start);
-  const [endDate, setEndDate] = useState(initial.end);
+  const today = useMemo(() => startOfDay(new Date()), []);
+  const [startDate, setStartDate] = useState(() => addDays(today, 1));
+  const [endDate, setEndDate] = useState(() => addDays(today, 4));
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -52,22 +48,20 @@ export default function EquipmentDetailScreen() {
     void load();
   }, [load]);
 
-  const parsedStart = parseDateInput(startDate);
-  const parsedEnd = parseDateInput(endDate);
-  const days =
-    parsedStart && parsedEnd && parsedEnd > parsedStart
-      ? Math.max(1, Math.ceil((parsedEnd.getTime() - parsedStart.getTime()) / 86_400_000))
-      : null;
+  const days = rentalDays(startDate, endDate);
   const estimate = item && days ? Number(item.dailyRate) * days : null;
+
+  const handleStartChange = (date: Date) => {
+    const next = startOfDay(date);
+    setStartDate(next);
+    // Окончание всегда позже начала — сдвигаем, если пользователь выбрал более позднее начало.
+    if (endDate <= next) setEndDate(addDays(next, 1));
+  };
 
   const handleBook = async () => {
     setFormError(null);
     if (!item) return;
-    if (!parsedStart || !parsedEnd) {
-      setFormError('Введите даты в формате ГГГГ-ММ-ДД');
-      return;
-    }
-    if (parsedEnd <= parsedStart) {
+    if (!days) {
       setFormError('Дата окончания должна быть позже даты начала');
       return;
     }
@@ -75,8 +69,8 @@ export default function EquipmentDetailScreen() {
     try {
       await createBooking({
         equipmentId: item.id,
-        startDate: toIsoDate(parsedStart),
-        endDate: toIsoDate(parsedEnd),
+        startDate: toIsoDate(startDate),
+        endDate: toIsoDate(endDate),
       });
       Alert.alert('Заявка отправлена', 'Бронирование создано и ожидает подтверждения.', [
         { text: 'К бронированиям', onPress: () => router.replace('/(tabs)/bookings') },
@@ -171,31 +165,36 @@ export default function EquipmentDetailScreen() {
           <Text style={styles.sectionTitle}>Забронировать</Text>
           <View style={styles.dateRow}>
             <View style={styles.dateField}>
-              <Input
+              <DateField
                 label="Начало"
                 value={startDate}
-                onChangeText={setStartDate}
-                placeholder="ГГГГ-ММ-ДД"
-                keyboardType="numbers-and-punctuation"
-                autoCorrect={false}
+                minimumDate={today}
+                onChange={handleStartChange}
               />
             </View>
             <View style={styles.dateField}>
-              <Input
+              <DateField
                 label="Окончание"
                 value={endDate}
-                onChangeText={setEndDate}
-                placeholder="ГГГГ-ММ-ДД"
-                keyboardType="numbers-and-punctuation"
-                autoCorrect={false}
+                minimumDate={addDays(startDate, 1)}
+                onChange={(date) => setEndDate(startOfDay(date))}
               />
             </View>
           </View>
           {days && estimate !== null ? (
-            <Text style={styles.estimate}>
-              {days} {days === 1 ? 'день' : days < 5 ? 'дня' : 'дней'} ·{' '}
-              <Text style={styles.estimateValue}>{formatMoney(estimate, item.currency)}</Text>
-            </Text>
+            <View style={styles.estimateBox}>
+              <View style={styles.estimateRow}>
+                <Text style={styles.estimateLabel}>
+                  {pluralizeRu(days, ['день', 'дня', 'дней'])} ×{' '}
+                  {formatMoney(item.dailyRate, item.currency)}
+                </Text>
+                <Text style={styles.estimateValue}>{formatMoney(estimate, item.currency)}</Text>
+              </View>
+              <Text style={styles.estimateHint}>
+                Итоговая стоимость рассчитывается по дневной ставке; оплата — после создания
+                бронирования.
+              </Text>
+            </View>
           ) : null}
           {formError ? <Text style={styles.formError}>{formError}</Text> : null}
           <Button
@@ -249,7 +248,15 @@ const styles = StyleSheet.create({
   specValue: { fontSize: 14, fontWeight: '500', color: colors.text, textAlign: 'right' },
   dateRow: { flexDirection: 'row', gap: spacing.md },
   dateField: { flex: 1 },
-  estimate: { fontSize: 14, color: colors.textMuted },
-  estimateValue: { fontWeight: '700', color: colors.primaryDark },
+  estimateBox: {
+    backgroundColor: colors.primaryLight,
+    borderRadius: radius.md,
+    padding: spacing.md,
+    gap: spacing.xs,
+  },
+  estimateRow: { flexDirection: 'row', justifyContent: 'space-between', gap: spacing.md },
+  estimateLabel: { fontSize: 14, color: colors.text },
+  estimateValue: { fontSize: 16, fontWeight: '700', color: colors.primaryDark },
+  estimateHint: { fontSize: 12, color: colors.textMuted },
   formError: { color: colors.danger, fontSize: 14 },
 });

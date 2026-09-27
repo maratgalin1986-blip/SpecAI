@@ -1,3 +1,5 @@
+import { Link } from 'expo-router';
+import * as WebBrowser from 'expo-web-browser';
 import React, { useState } from 'react';
 import {
   Keyboard,
@@ -79,9 +81,15 @@ export default function LoginScreen() {
             />
             {error ? <Text style={styles.error}>{error}</Text> : null}
             <Button title="Войти" onPress={handleSubmit} loading={submitting} />
-            <Text style={styles.hint}>
-              Нет аккаунта? Зарегистрируйтесь на сайте — вход в приложении тот же.
-            </Text>
+            <Pressable
+              accessibilityRole="link"
+              onPress={() => void WebBrowser.openBrowserAsync(`${API_URL}/forgot-password`)}
+            >
+              <Text style={styles.link}>Забыли пароль?</Text>
+            </Pressable>
+            <Link href="/(auth)/register" style={styles.link}>
+              Нет аккаунта? Зарегистрироваться
+            </Link>
           </View>
 
           <Text style={styles.footer}>Сервер: {API_URL}</Text>
@@ -109,6 +117,12 @@ const styles = StyleSheet.create({
   subtitle: { fontSize: 15, color: colors.textMuted },
   form: { gap: spacing.lg },
   error: { color: colors.danger, fontSize: 14 },
-  hint: { color: colors.textMuted, fontSize: 13, textAlign: 'center' },
+  link: {
+    color: colors.primaryDark,
+    fontSize: 15,
+    fontWeight: '600',
+    textAlign: 'center',
+    paddingVertical: spacing.xs,
+  },
   footer: { color: colors.textSoft, fontSize: 12, textAlign: 'center' },
 });

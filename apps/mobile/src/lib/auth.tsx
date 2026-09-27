@@ -9,6 +9,8 @@ interface AuthContextValue {
   isLoading: boolean;
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
+  /** Перечитать пользователя с сервера (например, статус подтверждения e-mail). */
+  refreshUser: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -68,17 +70,35 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, [clear]);
 
-  const login = useCallback(async (email: string, password: string) => {
-    const result = await apiLogin(email.trim(), password);
-    await setItem(STORAGE_KEYS.token, result.token);
-    await setItem(STORAGE_KEYS.user, JSON.stringify(result.user));
-    setToken(result.token);
-    setUser(result.user);
-  }, []);
+  const refreshUser = useCallback(async () => {
+    try {
+      const { user: fresh } = await fetchMe();
+      setUser(fresh);
+      await setItem(STORAGE_KEYS.user, JSON.stringify(fresh));
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 401) {
+        await clear();
+      }
+      // Сетевые ошибки игнорируем — остаёмся с кэшированным пользователем.
+    }
+  }, [clear]);
+
+  const login = useCallback(
+    async (email: string, password: string) => {
+      const result = await apiLogin(email.trim(), password);
+      await setItem(STORAGE_KEYS.token, result.token);
+      await setItem(STORAGE_KEYS.user, JSON.stringify(result.user));
+      setToken(result.token);
+      setUser(result.user);
+      // Ответ логина не содержит emailVerified — дотягиваем полный профиль в фоне.
+      void refreshUser();
+    },
+    [refreshUser],
+  );
 
   const value = useMemo<AuthContextValue>(
-    () => ({ token, user, isLoading, login, logout: clear }),
-    [token, user, isLoading, login, clear],
+    () => ({ token, user, isLoading, login, logout: clear, refreshUser }),
+    [token, user, isLoading, login, clear, refreshUser],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
