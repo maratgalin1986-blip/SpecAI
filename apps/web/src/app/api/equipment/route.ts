@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { Prisma, prisma } from '@specai/database';
 import { createEquipmentSchema, equipmentSearchQuerySchema } from '@specai/shared';
 import { authOptions } from '@/lib/auth';
+import { EQUIPMENT_ORDER_BY, totalPagesFor } from '@/lib/pagination';
 
 export async function GET(request: NextRequest) {
   const params = Object.fromEntries(request.nextUrl.searchParams.entries());
@@ -18,28 +19,49 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
 
-  const { categoryId, companyId, status, city, minDailyRate, maxDailyRate, query, page, pageSize } =
-    parsed.data;
+  const {
+    categoryId,
+    companyId,
+    status,
+    city,
+    minDailyRate,
+    maxDailyRate,
+    query,
+    page,
+    pageSize,
+    sort,
+  } = parsed.data;
 
-  const equipment = await prisma.equipment.findMany({
-    where: {
-      categoryId,
-      companyId,
-      status,
-      location: city ? { city: { equals: city, mode: 'insensitive' } } : undefined,
-      dailyRate:
-        minDailyRate !== undefined || maxDailyRate !== undefined
-          ? { gte: minDailyRate, lte: maxDailyRate }
-          : undefined,
-      name: query ? { contains: query, mode: 'insensitive' } : undefined,
-    },
-    include: { category: true, location: true, company: true },
-    skip: (page - 1) * pageSize,
-    take: pageSize,
-    orderBy: { createdAt: 'desc' },
+  const where: Prisma.EquipmentWhereInput = {
+    categoryId,
+    companyId,
+    status,
+    location: city ? { city: { equals: city, mode: 'insensitive' } } : undefined,
+    dailyRate:
+      minDailyRate !== undefined || maxDailyRate !== undefined
+        ? { gte: minDailyRate, lte: maxDailyRate }
+        : undefined,
+    name: query ? { contains: query, mode: 'insensitive' } : undefined,
+  };
+
+  const [total, equipment] = await Promise.all([
+    prisma.equipment.count({ where }),
+    prisma.equipment.findMany({
+      where,
+      include: { category: true, location: true, company: true },
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+      orderBy: EQUIPMENT_ORDER_BY[sort],
+    }),
+  ]);
+
+  return NextResponse.json({
+    equipment,
+    total,
+    page,
+    pageSize,
+    totalPages: totalPagesFor(total, pageSize),
   });
-
-  return NextResponse.json({ equipment });
 }
 
 export async function POST(request: NextRequest) {

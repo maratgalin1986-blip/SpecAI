@@ -91,8 +91,17 @@ describe('registerSchema', () => {
 
 describe('equipmentSearchQuerySchema and createBidSchema', () => {
   it('fills pagination defaults and caps pageSize at 100', () => {
-    expect(equipmentSearchQuerySchema.parse({})).toMatchObject({ page: 1, pageSize: 20 });
+    expect(equipmentSearchQuerySchema.parse({})).toMatchObject({
+      page: 1,
+      pageSize: 20,
+      sort: 'newest',
+    });
     expect(equipmentSearchQuerySchema.safeParse({ pageSize: 101 }).success).toBe(false);
+  });
+
+  it('accepts known sort values and rejects unknown ones', () => {
+    expect(equipmentSearchQuerySchema.parse({ sort: 'price_asc' }).sort).toBe('price_asc');
+    expect(equipmentSearchQuerySchema.safeParse({ sort: 'random' }).success).toBe(false);
   });
 
   it('requires a 3-letter currency and a positive price for bids', () => {
