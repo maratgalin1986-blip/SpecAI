@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "echo 'lint runs from repo root'",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "test": "vitest run"
+    "test": "vitest run",
+    "icons": "python3 scripts/generate-icons.py"
   },
   "dependencies": {
     "@specai/ai-service": "workspace:*",
@@ -22,10 +23,12 @@
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "resend": "^6.30.0",
+    "serwist": "^9.5.12",
     "stripe": "^22.6.2",
     "zod": "^3.23.8"
   },
   "devDependencies": {
+    "@serwist/next": "^9.5.12",
     "@types/bcryptjs": "^2.4.6",
     "@types/node": "^20.16.11",
     "@types/react": "^18.3.12",

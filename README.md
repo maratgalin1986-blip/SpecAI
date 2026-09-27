@@ -227,6 +227,35 @@ the emailed link. Consuming a token is a single atomic `updateMany` (unused + no
 Pages: `/forgot-password`, `/reset-password`; `/login` links to the former, and the dashboard
 shows a "Подтвердите email" banner (`VerifyEmailBanner`) until the address is verified.
 
+## PWA
+
+Сайт устанавливается как приложение (Progressive Web App): манифест генерируется в
+`apps/web/src/app/manifest.ts`, иконки лежат в `apps/web/public/icons` (пересоздать:
+`pnpm --filter @specai/web icons`, нужен Python 3 + Pillow), service worker собирается из
+`apps/web/src/app/sw.ts` через `@serwist/next` в `apps/web/public/sw.js` (файл генерируется при
+`next build`, в git не попадает; в `next dev` service worker отключён).
+
+### Установка
+
+- **iPhone / iPad (Safari):** откройте сайт → кнопка «Поделиться» → «На экран „Домой“» → «Добавить».
+  Сайт сам покажет подсказку внизу экрана; её можно закрыть — напоминание вернётся через 7 дней.
+- **Android (Chrome и др.):** нажмите «Установить» на плашке «Установить приложение» внизу экрана
+  либо меню браузера → «Установить приложение» / «Добавить на главный экран».
+- **Desktop (Chrome / Edge):** иконка установки в адресной строке.
+
+### Что кэшируется
+
+- **Precache (app shell):** статика Next.js (`/_next/static/**`), файлы из `public/` (иконки) и
+  офлайн-страница `/~offline`.
+- **Runtime, cache-first:** `/icons/**`, `/_next/static/**`, `/_next/image`, картинки и шрифты.
+- **Runtime, network-first (до суток):** публичные страницы (`/`, `/equipment`, `/recommend` и т.п.)
+  и их RSC-ответы — открываются офлайн, если были посещены.
+- **Не кэшируется никогда:** `/api/**` (включая `/api/auth/**`) и страницы, зависящие от сессии:
+  `/dashboard`, `/orders`, `/provider`, `/login`, `/register`, `/forgot-password`,
+  `/reset-password`, `/verify-email`.
+- Если сеть недоступна и страницы нет в кэше, показывается `/~offline` («Нет соединения»);
+  при появлении сети приложение перезагружается автоматически.
+
 ## AI service usage
 
 `packages/ai-service` exposes three functions consumed by `apps/web`:

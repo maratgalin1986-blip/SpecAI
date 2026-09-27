@@ -10,6 +10,7 @@ export default tseslint.config(
       '**/dist/**',
       '**/generated/**',
       '**/*.config.{js,mjs,ts}',
+      'apps/web/public/**',
     ],
   },
   js.configs.recommended,
