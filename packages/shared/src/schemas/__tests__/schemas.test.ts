@@ -3,7 +3,10 @@ import {
   createBidSchema,
   createBookingSchema,
   createEquipmentSchema,
+  emailSchema,
   equipmentSearchQuerySchema,
+  loginSchema,
+  normalizeEmail,
   registerSchema,
 } from '../../index';
 
@@ -86,6 +89,27 @@ describe('registerSchema', () => {
       password: 'short',
     });
     expect(shortPassword.success).toBe(false);
+  });
+
+  it('normalizes email to trimmed lower case', () => {
+    const result = registerSchema.parse({
+      accountType: 'CUSTOMER',
+      name: 'Иван',
+      email: '  Ivan.Petrov@Example.COM ',
+      password: 'password123',
+    });
+    expect(result.email).toBe('ivan.petrov@example.com');
+  });
+});
+
+describe('loginSchema and emailSchema', () => {
+  it('normalizes email and requires a password', () => {
+    expect(loginSchema.parse({ email: ' USER@Example.com', password: 'x' }).email).toBe(
+      'user@example.com',
+    );
+    expect(loginSchema.safeParse({ email: 'user@example.com', password: '' }).success).toBe(false);
+    expect(emailSchema.safeParse('not-an-email').success).toBe(false);
+    expect(normalizeEmail('  A@B.CO ')).toBe('a@b.co');
   });
 });
 

@@ -1,8 +1,23 @@
 import { z } from 'zod';
 
+/**
+ * E-mail в нормализованном виде: без пробелов по краям и в нижнем регистре.
+ * Один и тот же адрес, набранный по-разному, должен приводить к одной записи User.
+ */
+export const emailSchema = z
+  .string()
+  .trim()
+  .email()
+  .max(254)
+  .transform((value) => value.toLowerCase());
+
+export function normalizeEmail(value: string): string {
+  return value.trim().toLowerCase();
+}
+
 const baseRegistration = {
   name: z.string().min(1).max(200),
-  email: z.string().email(),
+  email: emailSchema,
   password: z.string().min(8).max(100),
   phone: z.string().max(30).optional(),
 };
@@ -25,3 +40,9 @@ export const registerSchema = z.discriminatedUnion('accountType', [
   registerProviderSchema,
 ]);
 export type RegisterInput = z.infer<typeof registerSchema>;
+
+export const loginSchema = z.object({
+  email: emailSchema,
+  password: z.string().min(1).max(100),
+});
+export type LoginInput = z.infer<typeof loginSchema>;

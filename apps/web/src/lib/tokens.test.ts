@@ -24,3 +24,10 @@ describe('generateRawToken', () => {
     expect(a).not.toBe(b);
   });
 });
+
+describe('token pipeline used by forgot-password', () => {
+  it('produces a 64-char hex hash for any raw token so both branches do equal work', () => {
+    const hash = hashToken(generateRawToken());
+    expect(hash).toMatch(/^[0-9a-f]{64}$/);
+  });
+});

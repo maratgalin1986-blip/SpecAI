@@ -28,12 +28,14 @@ export async function POST(request: NextRequest) {
   }
 
   const passwordHash = await bcrypt.hash(parsed.data.password, 10);
+  const now = new Date();
   await prisma.$transaction([
-    prisma.user.update({ where: { id: userId }, data: { passwordHash } }),
+    // passwordChangedAt делает недействительными все JWT, выданные до смены пароля.
+    prisma.user.update({ where: { id: userId }, data: { passwordHash, passwordChangedAt: now } }),
     // Остальные неиспользованные ссылки на сброс становятся бесполезными.
     prisma.verificationToken.updateMany({
       where: { userId, type: 'PASSWORD_RESET', usedAt: null },
-      data: { usedAt: new Date() },
+      data: { usedAt: now },
     }),
   ]);
 
