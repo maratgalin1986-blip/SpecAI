@@ -151,6 +151,15 @@ Run from the repo root:
 
 Для работы нужен `ANTHROPIC_API_KEY`.
 
+## 3D и анимации
+
+- Главный экран — WebGL-сцена на three.js (`apps/web/src/lib/excavatorScene.ts`):
+  экскаватор копает и выгружает грунт, летит пыль, камера следует за курсором.
+  three.js подгружается лениво, рендер ставится на паузу, когда экран прокручен,
+  а при `prefers-reduced-motion` показывается статичный кадр.
+- 3D-наклон карточек (`TiltCard`), появление блоков при прокрутке (`Reveal`),
+  вращающийся 3D-куб и анимированный фон — стили в `apps/web/src/app/globals.css`.
+
 ## AI service usage
 
 `packages/ai-service` exposes three functions consumed by `apps/web`:
