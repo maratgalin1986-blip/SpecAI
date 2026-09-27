@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { prisma } from '@specai/database';
 import { authOptions } from '@/lib/auth';
 import { getAppUrl, getStripe } from '@/lib/stripe';
+import { decideCheckout } from '@/lib/checkoutSession';
 import { toStripeAmount } from '@/lib/stripeAmount';
 
 export const runtime = 'nodejs';
@@ -33,8 +34,51 @@ export async function POST(_request: NextRequest, { params }: { params: { id: st
     return NextResponse.json({ error: 'Бронирование уже оплачено' }, { status: 409 });
   }
 
-  // Reuse the existing Payment row if one exists (e.g. the customer closed the
-  // previous Checkout page or it expired); otherwise create it.
+  const stripe = getStripe();
+
+  // If a Checkout Session already exists for this booking, decide whether to
+  // reuse it, close it, or refuse — never leave two payable sessions alive.
+  let expireSessionId: string | null = null;
+  if (booking.payment?.status === 'PENDING' && booking.payment.stripeCheckoutSessionId) {
+    let existing;
+    try {
+      existing = await stripe.checkout.sessions.retrieve(booking.payment.stripeCheckoutSessionId);
+    } catch (error) {
+      console.error('Stripe checkout session retrieve failed', error);
+      return NextResponse.json(
+        { error: 'Не удалось проверить существующую платёжную сессию' },
+        { status: 502 },
+      );
+    }
+    const decision = decideCheckout({
+      id: existing.id,
+      status: existing.status,
+      url: existing.url,
+    });
+    if (decision.action === 'reuse') {
+      return NextResponse.json({ url: decision.url });
+    }
+    if (decision.action === 'already_paid') {
+      // The webhook will (or already did) flip the Payment to PAID.
+      return NextResponse.json({ error: 'Бронирование уже оплачено' }, { status: 409 });
+    }
+    expireSessionId = decision.expireSessionId;
+  }
+
+  if (expireSessionId) {
+    try {
+      await stripe.checkout.sessions.expire(expireSessionId);
+    } catch (error) {
+      console.error('Stripe checkout session expire failed', error);
+      return NextResponse.json(
+        { error: 'Не удалось закрыть предыдущую платёжную сессию' },
+        { status: 502 },
+      );
+    }
+  }
+
+  // Reuse the existing Payment row if one exists (the previous Checkout Session
+  // expired or was closed above); otherwise create it.
   const payment = booking.payment
     ? await prisma.payment.update({
         where: { id: booking.payment.id },
@@ -59,7 +103,7 @@ export async function POST(_request: NextRequest, { params }: { params: { id: st
 
   let checkout;
   try {
-    checkout = await getStripe().checkout.sessions.create({
+    checkout = await stripe.checkout.sessions.create({
       mode: 'payment',
       client_reference_id: booking.id,
       customer_email: session.user.email ?? undefined,

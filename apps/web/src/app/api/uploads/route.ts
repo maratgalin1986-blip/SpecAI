@@ -3,7 +3,12 @@ import { getServerSession } from 'next-auth';
 import { put } from '@vercel/blob';
 import { authOptions } from '@/lib/auth';
 import { checkRateLimit } from '@/lib/rateLimit';
-import { UPLOAD_MAX_BYTES, getBlobToken, isAllowedUploadType } from '@/lib/blob';
+import {
+  getBlobToken,
+  getUploadMaxBytes,
+  isAllowedUploadType,
+  uploadTooLargeMessage,
+} from '@/lib/blob';
 
 const RATE_LIMIT = { limit: 30, windowMs: 60_000 };
 
@@ -45,8 +50,8 @@ export async function POST(request: NextRequest) {
   if (file.size === 0) {
     return NextResponse.json({ error: 'Файл пустой' }, { status: 400 });
   }
-  if (file.size > UPLOAD_MAX_BYTES) {
-    return NextResponse.json({ error: 'Файл больше 10 МБ' }, { status: 413 });
+  if (file.size > getUploadMaxBytes(file.type)) {
+    return NextResponse.json({ error: uploadTooLargeMessage(file.type) }, { status: 413 });
   }
 
   const safeName = (file.name || 'file').replace(/[^\w.-]+/g, '_').slice(-80) || 'file';

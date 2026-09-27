@@ -86,24 +86,36 @@ async function markPaid(session: Stripe.Checkout.Session) {
       console.warn(`Stripe webhook: no Payment for checkout session ${session.id}`);
       return null;
     }
-    // Idempotent: Stripe may deliver the same event more than once.
-    if (payment.status === 'PAID') {
-      return null;
-    }
-
-    await tx.payment.update({
-      where: { id: payment.id },
+    // Idempotent and race-safe: Stripe may deliver the same event more than
+    // once, possibly concurrently. Only the delivery that flips PENDING -> PAID
+    // (count === 1) confirms the booking and sends the emails.
+    const { count } = await tx.payment.updateMany({
+      where: { id: payment.id, status: 'PENDING' },
       data: {
         status: 'PAID',
         stripeCheckoutSessionId: session.id,
         stripePaymentIntentId: paymentIntentId(session),
       },
     });
+    if (count !== 1) {
+      return null;
+    }
+
+    if (payment.booking.status === 'CANCELLED') {
+      // Money arrived for a booking that was cancelled in the meantime. Keep the
+      // booking cancelled, do not notify anyone as "confirmed" — a refund is needed.
+      console.error(
+        `Stripe webhook: payment ${payment.id} (checkout session ${session.id}) ` +
+          `received for CANCELLED booking ${payment.bookingId} — manual refund required`,
+      );
+      return null;
+    }
+
     await tx.booking.update({
       where: { id: payment.bookingId },
       data: {
         depositPaid: true,
-        // Only a PENDING booking is auto-confirmed; a cancelled one stays as is.
+        // Only a PENDING booking is auto-confirmed; others keep their status.
         ...(payment.booking.status === 'PENDING' ? { status: 'CONFIRMED' } : {}),
       },
     });

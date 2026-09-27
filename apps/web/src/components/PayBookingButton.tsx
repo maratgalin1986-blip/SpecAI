@@ -11,16 +11,25 @@ export function PayBookingButton({ bookingId }: { bookingId: string }) {
     setError(null);
     setIsSubmitting(true);
 
-    const response = await fetch(`/api/bookings/${bookingId}/checkout`, { method: 'POST' });
-    const body = await response.json().catch(() => null);
+    let redirectUrl: string | null = null;
+    try {
+      const response = await fetch(`/api/bookings/${bookingId}/checkout`, { method: 'POST' });
+      const body = await response.json().catch(() => null);
 
-    if (!response.ok || typeof body?.url !== 'string') {
-      setIsSubmitting(false);
-      setError(typeof body?.error === 'string' ? body.error : 'Не удалось перейти к оплате');
-      return;
+      if (!response.ok || typeof body?.url !== 'string') {
+        setError(typeof body?.error === 'string' ? body.error : 'Не удалось перейти к оплате');
+        return;
+      }
+
+      redirectUrl = body.url;
+    } catch {
+      setError('Не удалось связаться с сервером. Проверьте соединение и попробуйте ещё раз');
+    } finally {
+      // Кнопку оставляем заблокированной только на время редиректа на оплату.
+      if (!redirectUrl) setIsSubmitting(false);
     }
 
-    window.location.assign(body.url);
+    if (redirectUrl) window.location.assign(redirectUrl);
   }
 
   return (

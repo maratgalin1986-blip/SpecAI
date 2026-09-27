@@ -5,7 +5,24 @@
  * падают, а роуты, которым нужно хранилище, отвечают 503.
  */
 
-export const UPLOAD_MAX_BYTES = 10 * 1024 * 1024; // 10 МБ
+export const UPLOAD_MAX_BYTES = 10 * 1024 * 1024; // 10 МБ (PDF)
+/** Anthropic принимает изображения не больше 5 МБ, поэтому картинки ограничены жёстче. */
+export const IMAGE_UPLOAD_MAX_BYTES = 5 * 1024 * 1024; // 5 МБ
+
+export function isImageMediaType(mediaType: string): boolean {
+  return mediaType.startsWith('image/');
+}
+
+/** Лимит размера файла для его media type: 5 МБ для изображений, 10 МБ для остального. */
+export function getUploadMaxBytes(mediaType: string): number {
+  return isImageMediaType(mediaType) ? IMAGE_UPLOAD_MAX_BYTES : UPLOAD_MAX_BYTES;
+}
+
+export function uploadTooLargeMessage(mediaType: string): string {
+  return isImageMediaType(mediaType)
+    ? 'Изображение больше 5 МБ — сожмите его'
+    : 'Файл больше 10 МБ';
+}
 
 export const UPLOAD_ALLOWED_TYPES = [
   'image/jpeg',

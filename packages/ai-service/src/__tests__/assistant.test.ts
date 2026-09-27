@@ -194,8 +194,19 @@ describe('streamAssistantReply', () => {
 
     expect(onToolCall).toHaveBeenCalledTimes(3);
     expect(streamMock).toHaveBeenCalledTimes(4);
-    expect(streamMock.mock.calls[2]?.[0].tools).toBeDefined();
-    expect(streamMock.mock.calls[3]?.[0].tools).toBeUndefined();
+    // Tools are always offered while there are tool_use/tool_result blocks in the history,
+    // otherwise the API rejects the request. The last round forbids new calls instead.
+    for (const call of streamMock.mock.calls.slice(0, 3)) {
+      expect(call[0].tools).toBeDefined();
+      expect(call[0].tool_choice).toBeUndefined();
+    }
+    const lastParams = streamMock.mock.calls[3]?.[0];
+    expect(lastParams.tools.map((t: { name: string }) => t.name)).toEqual([
+      'search_equipment',
+      'get_my_bookings',
+    ]);
+    expect(lastParams.tool_choice).toEqual({ type: 'none' });
+    expect(lastParams.messages).toHaveLength(7);
     expect(result.text).toBe('Готово.');
   });
 

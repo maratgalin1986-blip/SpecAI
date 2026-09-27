@@ -140,8 +140,11 @@ export async function* streamAssistantReply({
         system: [
           { type: 'text', text: ASSISTANT_SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } },
         ],
-        // Once the round budget is spent, hide the tools so the model wraps up in text.
-        tools: toolRounds < maxToolRounds ? tools : undefined,
+        // Tools stay in the request: `messages` still contains tool_use/tool_result
+        // blocks, and the API rejects those when the tools are not defined. Once
+        // the round budget is spent, tool_choice `none` makes the model wrap up in text.
+        tools,
+        ...(toolRounds < maxToolRounds ? {} : { tool_choice: { type: 'none' as const } }),
         messages,
       },
       signal ? { signal } : undefined,

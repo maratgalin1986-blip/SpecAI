@@ -8,7 +8,7 @@ import {
 } from '@specai/ai-service';
 import { authOptions } from '@/lib/auth';
 import { checkRateLimit } from '@/lib/rateLimit';
-import { UPLOAD_MAX_BYTES, isOurBlobUrl } from '@/lib/blob';
+import { getUploadMaxBytes, isImageMediaType, isOurBlobUrl } from '@/lib/blob';
 
 const requestSchema = z.union([
   z.object({ sourceText: z.string().min(1).max(8000) }),
@@ -37,17 +37,24 @@ async function fetchBlobAsBase64(fileUrl: string) {
     throw new FileFetchError('Поддерживаются только JPEG, PNG, WebP и PDF', 415);
   }
 
+  // Anthropic отклоняет изображения больше 5 МБ, поэтому для картинок лимит жёстче.
+  const maxBytes = getUploadMaxBytes(mediaType);
+  const tooLarge = () =>
+    isImageMediaType(mediaType)
+      ? new FileFetchError('Изображение больше 5 МБ — сожмите его', 400)
+      : new FileFetchError('Файл больше 10 МБ', 413);
+
   const declaredLength = Number(response.headers.get('content-length') ?? 0);
-  if (declaredLength > UPLOAD_MAX_BYTES) {
-    throw new FileFetchError('Файл больше 10 МБ', 413);
+  if (declaredLength > maxBytes) {
+    throw tooLarge();
   }
 
   const bytes = Buffer.from(await response.arrayBuffer());
   if (bytes.byteLength === 0) {
     throw new FileFetchError('Файл пустой', 400);
   }
-  if (bytes.byteLength > UPLOAD_MAX_BYTES) {
-    throw new FileFetchError('Файл больше 10 МБ', 413);
+  if (bytes.byteLength > maxBytes) {
+    throw tooLarge();
   }
 
   return { data: bytes.toString('base64'), mediaType };

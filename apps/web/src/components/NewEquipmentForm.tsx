@@ -17,7 +17,8 @@ interface UploadedFile {
 }
 
 const ACCEPTED_TYPES = 'image/jpeg,image/png,image/webp,application/pdf';
-const MAX_FILE_BYTES = 10 * 1024 * 1024;
+const MAX_FILE_BYTES = 10 * 1024 * 1024; // PDF
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024; // Anthropic не принимает изображения больше 5 МБ
 
 function isImage(file: UploadedFile) {
   return file.contentType.startsWith('image/');
@@ -65,37 +66,47 @@ export function NewEquipmentForm() {
   }
 
   async function requestExtraction(body: Record<string, string>) {
-    const response = await fetch('/api/ai/extract-specs', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
+    try {
+      const response = await fetch('/api/ai/extract-specs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
 
-    if (!response.ok) {
-      const payload = await response.json().catch(() => null);
-      setError(
-        typeof payload?.error === 'string' ? payload.error : 'Не удалось извлечь характеристики',
-      );
-      return;
+      if (!response.ok) {
+        const payload = await response.json().catch(() => null);
+        setError(
+          typeof payload?.error === 'string' ? payload.error : 'Не удалось извлечь характеристики',
+        );
+        return;
+      }
+
+      applyExtracted(await response.json());
+    } catch {
+      setError('Не удалось связаться с сервером. Проверьте соединение и попробуйте ещё раз');
     }
-
-    applyExtracted(await response.json());
   }
 
   async function handleExtractSpecs() {
     if (!specSheetText.trim()) return;
     setIsExtracting(true);
     setError(null);
-    await requestExtraction({ sourceText: specSheetText });
-    setIsExtracting(false);
+    try {
+      await requestExtraction({ sourceText: specSheetText });
+    } finally {
+      setIsExtracting(false);
+    }
   }
 
   async function handleExtractFromFile() {
     if (!selectedFileUrl) return;
     setIsExtractingFile(true);
     setError(null);
-    await requestExtraction({ fileUrl: selectedFileUrl });
-    setIsExtractingFile(false);
+    try {
+      await requestExtraction({ fileUrl: selectedFileUrl });
+    } finally {
+      setIsExtractingFile(false);
+    }
   }
 
   async function handleFilesChosen(event: React.ChangeEvent<HTMLInputElement>) {
@@ -105,34 +116,45 @@ export function NewEquipmentForm() {
     setError(null);
 
     const uploaded: UploadedFile[] = [];
-    for (const file of chosen) {
-      if (file.size > MAX_FILE_BYTES) {
-        setError(`Файл «${file.name}» больше 10 МБ и не был загружен`);
-        continue;
+    try {
+      for (const file of chosen) {
+        const isImageFile = file.type.startsWith('image/');
+        if (isImageFile && file.size > MAX_IMAGE_BYTES) {
+          setError(`Изображение «${file.name}» больше 5 МБ — сожмите его. Файл не загружен`);
+          continue;
+        }
+        if (file.size > MAX_FILE_BYTES) {
+          setError(`Файл «${file.name}» больше 10 МБ и не был загружен`);
+          continue;
+        }
+        const formData = new FormData();
+        formData.append('file', file);
+        try {
+          const response = await fetch('/api/uploads', { method: 'POST', body: formData });
+          if (!response.ok) {
+            const payload = await response.json().catch(() => null);
+            setError(
+              typeof payload?.error === 'string'
+                ? payload.error
+                : `Не удалось загрузить файл «${file.name}»`,
+            );
+            continue;
+          }
+          const data = (await response.json()) as Omit<UploadedFile, 'name'>;
+          uploaded.push({ ...data, name: file.name });
+        } catch {
+          setError(`Не удалось загрузить файл «${file.name}»: проверьте соединение`);
+        }
       }
-      const formData = new FormData();
-      formData.append('file', file);
-      const response = await fetch('/api/uploads', { method: 'POST', body: formData });
-      if (!response.ok) {
-        const payload = await response.json().catch(() => null);
-        setError(
-          typeof payload?.error === 'string'
-            ? payload.error
-            : `Не удалось загрузить файл «${file.name}»`,
-        );
-        continue;
+    } finally {
+      const last = uploaded[uploaded.length - 1];
+      if (last) {
+        setFiles((prev) => [...prev, ...uploaded]);
+        setSelectedFileUrl(last.url);
       }
-      const data = (await response.json()) as Omit<UploadedFile, 'name'>;
-      uploaded.push({ ...data, name: file.name });
+      setIsUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
     }
-
-    const last = uploaded[uploaded.length - 1];
-    if (last) {
-      setFiles((prev) => [...prev, ...uploaded]);
-      setSelectedFileUrl(last.url);
-    }
-    setIsUploading(false);
-    if (fileInputRef.current) fileInputRef.current.value = '';
   }
 
   function removeFile(url: string) {
@@ -145,36 +167,40 @@ export function NewEquipmentForm() {
     setError(null);
     setIsSubmitting(true);
 
-    const response = await fetch('/api/equipment', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        name,
-        categoryId,
-        dailyRate: Number(dailyRate),
-        description: description || undefined,
-        specs: specs ?? undefined,
-        imageUrls: files.filter(isImage).map((file) => file.url),
-      }),
-    });
+    try {
+      const response = await fetch('/api/equipment', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name,
+          categoryId,
+          dailyRate: Number(dailyRate),
+          description: description || undefined,
+          specs: specs ?? undefined,
+          imageUrls: files.filter(isImage).map((file) => file.url),
+        }),
+      });
 
-    setIsSubmitting(false);
+      if (!response.ok) {
+        const body = await response.json().catch(() => null);
+        setError(typeof body?.error === 'string' ? body.error : 'Не удалось добавить технику');
+        return;
+      }
 
-    if (!response.ok) {
-      const body = await response.json().catch(() => null);
-      setError(typeof body?.error === 'string' ? body.error : 'Не удалось добавить технику');
-      return;
+      setName('');
+      setCategoryId('');
+      setDailyRate('');
+      setDescription('');
+      setSpecSheetText('');
+      setSpecs(null);
+      setFiles([]);
+      setSelectedFileUrl(null);
+      router.refresh();
+    } catch {
+      setError('Не удалось связаться с сервером. Проверьте соединение и попробуйте ещё раз');
+    } finally {
+      setIsSubmitting(false);
     }
-
-    setName('');
-    setCategoryId('');
-    setDailyRate('');
-    setDescription('');
-    setSpecSheetText('');
-    setSpecs(null);
-    setFiles([]);
-    setSelectedFileUrl(null);
-    router.refresh();
   }
 
   const busy = isUploading || isExtracting || isExtractingFile;
@@ -235,7 +261,7 @@ export function NewEquipmentForm() {
 
       <div className="rounded-md border border-dashed border-slate-300 p-3">
         <label className="flex flex-col gap-1 text-sm">
-          Фото техники или PDF со спецификацией (JPEG, PNG, WebP, PDF — до 10 МБ)
+          Фото техники или PDF со спецификацией (JPEG, PNG, WebP — до 5 МБ; PDF — до 10 МБ)
           <input
             ref={fileInputRef}
             type="file"
