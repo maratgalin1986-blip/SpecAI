@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { SITE } from '@/lib/site';
 
 const DISMISS_KEY = 'specai:install-prompt-dismissed-at';
 const DISMISS_DAYS = 7;
@@ -109,7 +110,7 @@ export function InstallPrompt() {
             Нажмите «Поделиться» <span aria-hidden="true">⎋</span> → «На экран „Домой“».
           </p>
         ) : (
-          <p className="text-slate-600">SpecAI на главном экране, без браузера.</p>
+          <p className="text-slate-600">{SITE.name} на главном экране, без браузера.</p>
         )}
       </div>
       {mode === 'native' && (

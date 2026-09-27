@@ -20,7 +20,7 @@ describe('createEquipmentSchema', () => {
       companyId: CUID,
       dailyRate: 15000,
     });
-    expect(result.currency).toBe('USD');
+    expect(result.currency).toBe('RUB');
     expect(result.imageUrls).toEqual([]);
   });
 
@@ -130,7 +130,7 @@ describe('equipmentSearchQuerySchema and createBidSchema', () => {
 
   it('requires a 3-letter currency and a positive price for bids', () => {
     expect(createBidSchema.parse({ orderId: CUID, equipmentId: CUID, price: 100 }).currency).toBe(
-      'USD',
+      'RUB',
     );
     expect(
       createBidSchema.safeParse({ orderId: CUID, equipmentId: CUID, price: 100, currency: 'RUBL' })

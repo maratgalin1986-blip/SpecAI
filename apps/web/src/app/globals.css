@@ -1,3 +1,217 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* 3D effects (e.g. scroll-reveal tilt) must never cause sideways scrolling. */
+html,
+body {
+  overflow-x: clip;
+}
+
+/* ---- Hero backdrop: animated aurora + perspective grid ------------------ */
+
+.hero-backdrop {
+  background:
+    radial-gradient(60% 80% at 80% 20%, rgba(245, 158, 11, 0.28), transparent 60%),
+    radial-gradient(50% 70% at 10% 90%, rgba(56, 189, 248, 0.18), transparent 60%),
+    linear-gradient(160deg, #0f172a 0%, #111827 55%, #1c1917 100%);
+  background-size: 160% 160%;
+  animation: aurora 16s ease-in-out infinite alternate;
+}
+
+@keyframes aurora {
+  from {
+    background-position: 0% 0%;
+  }
+  to {
+    background-position: 100% 100%;
+  }
+}
+
+.hero-grid {
+  position: absolute;
+  inset: auto -50% -40% -50%;
+  height: 70%;
+  background-image:
+    linear-gradient(rgba(245, 158, 11, 0.25) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(245, 158, 11, 0.25) 1px, transparent 1px);
+  background-size: 48px 48px;
+  transform: perspective(500px) rotateX(62deg);
+  mask-image: linear-gradient(to top, black, transparent 85%);
+  animation: grid-move 3s linear infinite;
+}
+
+@keyframes grid-move {
+  to {
+    background-position: 0 48px;
+  }
+}
+
+.text-gradient {
+  background: linear-gradient(90deg, #fbbf24, #f97316, #fbbf24);
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: shine 5s linear infinite;
+}
+
+@keyframes shine {
+  to {
+    background-position: 200% center;
+  }
+}
+
+.float-in {
+  animation: float-in 0.9s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+@keyframes float-in {
+  from {
+    opacity: 0;
+    transform: translateY(24px) rotateX(20deg);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* ---- 3D tilt cards ------------------------------------------------------- */
+
+.tilt-wrap {
+  perspective: 900px;
+}
+
+.tilt-card {
+  --rx: 0deg;
+  --ry: 0deg;
+  --gx: 50%;
+  --gy: 50%;
+  transform: rotateX(var(--rx)) rotateY(var(--ry));
+  transform-style: preserve-3d;
+  transition:
+    transform 0.2s ease-out,
+    box-shadow 0.3s,
+    border-color 0.3s;
+}
+
+.tilt-card:hover {
+  border-color: rgb(251 191 36);
+  box-shadow: 0 25px 50px -12px rgba(217, 119, 6, 0.35);
+}
+
+.tilt-content {
+  transform: translateZ(30px);
+}
+
+.tilt-glare {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  background: radial-gradient(
+    circle at var(--gx) var(--gy),
+    rgba(251, 191, 36, 0.25),
+    transparent 55%
+  );
+  transition: opacity 0.3s;
+}
+
+.tilt-card:hover .tilt-glare {
+  opacity: 1;
+}
+
+/* ---- Scroll reveal ------------------------------------------------------- */
+
+.reveal {
+  opacity: 0;
+  transform: perspective(800px) translateY(40px) rotateX(18deg);
+  transition:
+    opacity 0.8s ease,
+    transform 0.8s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.reveal-visible {
+  opacity: 1;
+  transform: none;
+}
+
+/* ---- Rotating 3D cube (agents section) ----------------------------------- */
+
+.cube-scene {
+  perspective: 600px;
+  width: 120px;
+  height: 120px;
+}
+
+.cube {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  transform-style: preserve-3d;
+  animation: cube-spin 14s linear infinite;
+}
+
+.cube-face {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(251, 191, 36, 0.6);
+  background: rgba(15, 23, 42, 0.92);
+  backface-visibility: hidden;
+  color: #fbbf24;
+  font-weight: 700;
+  font-size: 13px;
+  text-align: center;
+  padding: 8px;
+  box-shadow: inset 0 0 30px rgba(245, 158, 11, 0.25);
+}
+
+.cube-face:nth-child(1) {
+  transform: rotateY(0deg) translateZ(60px);
+}
+.cube-face:nth-child(2) {
+  transform: rotateY(90deg) translateZ(60px);
+}
+.cube-face:nth-child(3) {
+  transform: rotateY(180deg) translateZ(60px);
+}
+.cube-face:nth-child(4) {
+  transform: rotateY(-90deg) translateZ(60px);
+}
+.cube-face:nth-child(5) {
+  transform: rotateX(90deg) translateZ(60px);
+}
+.cube-face:nth-child(6) {
+  transform: rotateX(-90deg) translateZ(60px);
+}
+
+@keyframes cube-spin {
+  from {
+    transform: rotateX(-20deg) rotateY(0deg);
+  }
+  to {
+    transform: rotateX(-20deg) rotateY(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hero-backdrop,
+  .hero-grid,
+  .text-gradient,
+  .cube,
+  .float-in {
+    animation: none;
+  }
+  .reveal {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+  .tilt-card {
+    transform: none;
+  }
+}

@@ -237,7 +237,7 @@ export function NewEquipmentForm() {
       </label>
 
       <label className="flex flex-col gap-1 text-sm">
-        Цена в сутки (USD)
+        Цена за сутки, ₽
         <input
           type="number"
           required

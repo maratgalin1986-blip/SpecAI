@@ -1,3 +1,4 @@
+import { SITE } from './site';
 /**
  * Шаблоны email-уведомлений (простой HTML на русском).
  * Каждая функция возвращает { subject, html, text } для sendEmail.
@@ -66,14 +67,16 @@ function layout(title: string, paragraphs: string[], link?: { href: string; labe
 <h1 style="margin:0 0 16px;font-size:20px">${escapeHtml(title)}</h1>
 ${body}
 ${button}
-<p style="margin:24px 0 0;color:#6b7280;font-size:13px">Это автоматическое письмо от платформы SpecAI. Отвечать на него не нужно.</p>
+<p style="margin:24px 0 0;color:#6b7280;font-size:13px">Это автоматическое письмо от платформы ${SITE.name}. Отвечать на него не нужно.</p>
 </div>
 </body>
 </html>`;
 }
 
 function plain(title: string, lines: string[], link?: string): string {
-  return [title, '', ...lines, ...(link ? ['', `Ссылка: ${link}`] : []), '', '— SpecAI'].join('\n');
+  return [title, '', ...lines, ...(link ? ['', `Ссылка: ${link}`] : []), '', `— ${SITE.name}`].join(
+    '\n',
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -92,7 +95,7 @@ export function newBidReceived(params: NewBidReceivedParams): EmailTemplate {
   const url = `${getEmailBaseUrl()}/orders/${params.orderId}`;
   const price = formatPrice(params.price, params.currency);
   const title = 'Новое предложение по вашей заявке';
-  const subject = `SpecAI: новое предложение по заявке — ${params.equipmentName}`;
+  const subject = `${SITE.name}: новое предложение по заявке — ${params.equipmentName}`;
 
   const lines = [
     `По вашей заявке «${params.orderDescription}» поступило новое предложение.`,
@@ -123,7 +126,7 @@ export type BidAcceptedParams = {
 export function bidAccepted(params: BidAcceptedParams): EmailTemplate {
   const url = `${getEmailBaseUrl()}/dashboard`;
   const title = 'Ваше предложение принято';
-  const subject = `SpecAI: предложение принято — ${params.equipmentName}`;
+  const subject = `${SITE.name}: предложение принято — ${params.equipmentName}`;
 
   const lines = [
     `Клиент${params.customerName ? ` ${params.customerName}` : ''} принял ваше предложение по технике «${params.equipmentName}».`,
@@ -153,7 +156,7 @@ export function bookingStatusChanged(params: BookingStatusChangedParams): EmailT
   const url = `${getEmailBaseUrl()}/dashboard`;
   const label = BOOKING_STATUS_LABELS[params.status] ?? params.status;
   const title = 'Статус бронирования изменён';
-  const subject = `SpecAI: бронирование ${label} — ${params.equipmentName}`;
+  const subject = `${SITE.name}: бронирование ${label} — ${params.equipmentName}`;
 
   const lines = [
     `Статус вашего бронирования техники «${params.equipmentName}» изменён: ${label}.`,
@@ -183,14 +186,14 @@ export function paymentReceived(params: PaymentReceivedParams): EmailTemplate {
   const url = `${getEmailBaseUrl()}/dashboard`;
   const amount = formatPrice(params.amount, params.currency);
   const title = 'Оплата получена';
-  const subject = `SpecAI: оплата получена — ${params.equipmentName}`;
+  const subject = `${SITE.name}: оплата получена — ${params.equipmentName}`;
 
   const lines =
     params.recipient === 'customer'
       ? [
           `Мы получили вашу оплату ${amount} за бронирование техники «${params.equipmentName}».`,
           `Бронирование № ${params.bookingId} подтверждено.`,
-          'Спасибо, что пользуетесь SpecAI!',
+          `Спасибо, что пользуетесь ${SITE.name}!`,
         ]
       : [
           `Клиент оплатил ${amount} за бронирование техники «${params.equipmentName}».`,
@@ -210,10 +213,10 @@ export type PasswordResetParams = { resetUrl: string };
 /** Пользователю: ссылка для сброса пароля. */
 export function passwordReset(params: PasswordResetParams): EmailTemplate {
   const title = 'Сброс пароля';
-  const subject = 'SpecAI: сброс пароля';
+  const subject = `${SITE.name}: сброс пароля`;
 
   const lines = [
-    'Вы запросили сброс пароля для аккаунта SpecAI.',
+    `Вы запросили сброс пароля для аккаунта ${SITE.name}.`,
     'Перейдите по ссылке ниже, чтобы задать новый пароль. Ссылка действует 1 час.',
     'Если вы не запрашивали сброс, просто проигнорируйте это письмо — пароль останется прежним.',
   ];
@@ -233,10 +236,10 @@ export type EmailVerifyParams = { verifyUrl: string };
 /** Пользователю: ссылка для подтверждения email. */
 export function emailVerify(params: EmailVerifyParams): EmailTemplate {
   const title = 'Подтвердите email';
-  const subject = 'SpecAI: подтвердите email';
+  const subject = `${SITE.name}: подтвердите email`;
 
   const lines = [
-    'Спасибо за регистрацию в SpecAI!',
+    `Спасибо за регистрацию в ${SITE.name}!`,
     'Подтвердите адрес электронной почты, перейдя по ссылке ниже. Ссылка действует 24 часа.',
     'Если вы не создавали аккаунт, просто проигнорируйте это письмо.',
   ];

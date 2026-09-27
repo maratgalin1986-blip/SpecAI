@@ -7,7 +7,7 @@ export const createBidSchema = z.object({
   orderId: z.string().cuid(),
   equipmentId: z.string().cuid(),
   price: z.number().positive(),
-  currency: z.string().length(3).default('USD'),
+  currency: z.string().length(3).default('RUB'),
   message: z.string().max(1000).optional(),
 });
 export type CreateBidInput = z.infer<typeof createBidSchema>;

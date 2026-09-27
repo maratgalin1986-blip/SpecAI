@@ -2,13 +2,15 @@
 
 import { useState } from 'react';
 import { AuthStatus } from '@/components/AuthStatus';
+import { SITE } from '@/lib/site';
 
 const NAV_LINKS = [
   { href: '/equipment', label: 'Техника' },
   { href: '/orders', label: 'Заявки' },
-  { href: '/recommend', label: 'ИИ-подбор' },
+  { href: '/agents', label: 'ИИ-агенты' },
+  { href: '/provider', label: 'Поставщикам' },
+  { href: '/contacts', label: 'Контакты' },
   { href: '/dashboard', label: 'Кабинет' },
-  { href: '/provider', label: 'Провайдер' },
 ];
 
 export function SiteHeader() {
@@ -17,8 +19,11 @@ export function SiteHeader() {
   return (
     <header className="border-b border-slate-200 bg-white">
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3 sm:px-6 sm:py-4">
-        <a href="/" className="text-lg font-semibold text-slate-900">
-          SpecAI
+        <a href="/" className="flex shrink-0 items-center gap-2 text-lg font-bold text-slate-900">
+          <span className="flex h-8 w-8 items-center justify-center rounded-md bg-amber-600 text-sm text-white">
+            16
+          </span>
+          {SITE.name}
         </a>
 
         <nav className="hidden items-center gap-6 text-sm font-medium text-slate-600 md:flex">

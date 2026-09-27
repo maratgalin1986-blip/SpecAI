@@ -6,6 +6,11 @@ const BASE_CATEGORIES = [
   { name: 'Экскаваторы', slug: 'excavators' },
   { name: 'Краны', slug: 'cranes' },
   { name: 'Бульдозеры', slug: 'bulldozers' },
+  { name: 'Погрузчики', slug: 'loaders' },
+  { name: 'Самосвалы', slug: 'dump-trucks' },
+  { name: 'Экскаваторы-погрузчики', slug: 'backhoe-loaders' },
+  { name: 'Манипуляторы', slug: 'crane-trucks' },
+  { name: 'Автовышки', slug: 'aerial-platforms' },
 ];
 
 async function main() {
