@@ -161,8 +161,8 @@ already confirmed booking keeps its status). Expired sessions and
 `checkout.session.async_payment_failed` mark the payment `FAILED`;
 `payment_intent.payment_failed` is only logged, because the customer can retry
 in the same session. Refunds are done manually in the Stripe Dashboard: when a
-booking with a `PAID` payment is cancelled, the payment is marked
-`REFUND_REQUIRED` to flag it. The Stripe client is created lazily,
+booking with a `PAID` payment is cancelled, `Payment.refundRequired` is set
+to flag it. The Stripe client is created lazily,
 so the app builds and runs without these variables — only payments are disabled.
 
 Environment variables (see `.env.example`):

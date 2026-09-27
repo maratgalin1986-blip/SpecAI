@@ -249,9 +249,6 @@ enum PaymentStatus {
   PAID
   FAILED
   REFUNDED
-  // Paid, but the booking was cancelled afterwards: refund manually in the
-  // Stripe Dashboard.
-  REFUND_REQUIRED
 }
 
 // One payment per booking. Created when the customer starts Stripe Checkout;
@@ -261,6 +258,11 @@ model Payment {
   amount                  Decimal       @db.Decimal(10, 2)
   currency                String        @default("USD")
   status                  PaymentStatus @default(PENDING)
+  // Paid, but the booking was cancelled afterwards: refund manually in the
+  // Stripe Dashboard. A column rather than an enum value because adding an
+  // enum value (ALTER TYPE ... ADD VALUE) cannot run through a transaction
+  // pooler, which is how `db push` reaches the hosted database.
+  refundRequired          Boolean       @default(false)
   stripeCheckoutSessionId String?       @unique
   stripePaymentIntentId   String?
   createdAt               DateTime      @default(now())

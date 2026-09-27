@@ -136,7 +136,7 @@ export interface EquipmentListResponse {
 
 export type BookingStatus = 'PENDING' | 'CONFIRMED' | 'ACTIVE' | 'COMPLETED' | 'CANCELLED';
 
-export type PaymentStatus = 'PENDING' | 'PAID' | 'FAILED' | 'REFUNDED' | 'REFUND_REQUIRED' | string;
+export type PaymentStatus = 'PENDING' | 'PAID' | 'FAILED' | 'REFUNDED' | string;
 
 export interface Booking {
   id: string;
@@ -149,7 +149,7 @@ export interface Booking {
   notes: string | null;
   createdAt: string;
   equipment: { id: string; name: string; imageUrls?: string[] };
-  payment?: { status: PaymentStatus } | null;
+  payment?: { status: PaymentStatus; refundRequired?: boolean } | null;
   review?: { id: string; rating: number } | null;
 }
 

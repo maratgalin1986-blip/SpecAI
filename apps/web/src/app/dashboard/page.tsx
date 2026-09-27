@@ -163,7 +163,7 @@ export default async function DashboardPage({
                     {booking.endDate.toLocaleDateString('ru-RU')} · ${booking.totalPrice.toString()}{' '}
                     {booking.currency}
                   </p>
-                  {booking.payment?.status === 'REFUND_REQUIRED' ? (
+                  {booking.payment?.refundRequired ? (
                     <div className="mt-2">
                       <span className="inline-block rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-semibold text-red-800">
                         Требуется возврат
@@ -189,9 +189,7 @@ export default async function DashboardPage({
                   {(booking.status === 'PENDING' || booking.status === 'CONFIRMED') &&
                     !booking.depositPaid &&
                     booking.payment?.status !== 'PAID' &&
-                    booking.payment?.status !== 'REFUND_REQUIRED' && (
-                      <PayBookingButton bookingId={booking.id} />
-                    )}
+                    !booking.payment?.refundRequired && <PayBookingButton bookingId={booking.id} />}
                 </div>
               </Card>
             ))}

@@ -22,6 +22,7 @@ import {
 import {
   BOOKING_STATUS_LABELS,
   PAYMENT_STATUS_LABELS,
+  REFUND_REQUIRED_LABEL,
   formatDate,
   formatMoney,
 } from '@/lib/format';
@@ -56,7 +57,7 @@ function BookingCard({
 }) {
   const paid = isPaid(booking);
   const canCancel = booking.status === 'PENDING' || booking.status === 'CONFIRMED';
-  const refundRequired = booking.payment?.status === 'REFUND_REQUIRED';
+  const refundRequired = booking.payment?.refundRequired === true;
   const canPay =
     (booking.status === 'PENDING' || booking.status === 'CONFIRMED') && !paid && !refundRequired;
   const canReview = booking.status === 'COMPLETED' && !booking.review;
@@ -74,7 +75,7 @@ function BookingCard({
       <View style={styles.row}>
         <Text style={styles.price}>{formatMoney(booking.totalPrice, booking.currency)}</Text>
         {refundRequired ? (
-          <Badge text={PAYMENT_STATUS_LABELS.REFUND_REQUIRED} tone="danger" />
+          <Badge text={REFUND_REQUIRED_LABEL} tone="danger" />
         ) : paid ? (
           <Badge text={PAYMENT_STATUS_LABELS.PAID} tone="success" />
         ) : booking.payment?.status === 'PENDING' ? (

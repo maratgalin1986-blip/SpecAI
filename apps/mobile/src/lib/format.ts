@@ -69,16 +69,14 @@ export const EQUIPMENT_STATUS_LABELS: Record<string, string> = {
   RETIRED: 'Списана',
 } satisfies Record<EquipmentStatus, string>;
 
-export const PAYMENT_STATUS_LABELS: Record<
-  'PENDING' | 'PAID' | 'FAILED' | 'REFUNDED' | 'REFUND_REQUIRED',
-  string
-> = {
+export const PAYMENT_STATUS_LABELS: Record<'PENDING' | 'PAID' | 'FAILED' | 'REFUNDED', string> = {
   PENDING: 'Ожидает оплаты',
   PAID: 'Оплачено',
   FAILED: 'Оплата не прошла',
   REFUNDED: 'Возвращено',
-  REFUND_REQUIRED: 'Требуется возврат',
 };
+
+export const REFUND_REQUIRED_LABEL = 'Требуется возврат';
 
 export const SPEC_LABELS: Record<string, string> = {
   capacity: 'Грузоподъёмность',

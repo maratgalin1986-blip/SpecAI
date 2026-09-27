@@ -51,7 +51,7 @@ async function closePendingCheckout(
 /**
  * A cancelled booking whose deposit was already PAID needs a refund. Refunds
  * are done manually in the Stripe Dashboard; the Payment is marked
- * REFUND_REQUIRED so it does not silently stay PAID.
+ * refundRequired so it does not silently stay PAID.
  */
 async function flagPaidPaymentForRefund(
   bookingId: string,
@@ -63,14 +63,14 @@ async function flagPaidPaymentForRefund(
   try {
     await prisma.payment.updateMany({
       where: { id: payment.id, status: 'PAID' },
-      data: { status: 'REFUND_REQUIRED' },
+      data: { refundRequired: true },
     });
     console.error(
       `[stripe] booking ${bookingId} cancelled after payment ${payment.id} was PAID — manual refund required`,
     );
   } catch (error) {
     console.error(
-      `[stripe] failed to mark payment ${payment.id} REFUND_REQUIRED for cancelled booking ${bookingId}`,
+      `[stripe] failed to flag payment ${payment.id} for refund after cancelling booking ${bookingId}`,
       error,
     );
   }
