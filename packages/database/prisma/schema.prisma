@@ -209,9 +209,39 @@ model Booking {
 
   documents Document[]
   review    Review?
+  payment   Payment?
 
   @@index([equipmentId])
   @@index([customerId])
+  @@index([status])
+}
+
+// ---------------------------------------------------------------------------
+// Payments (Stripe Checkout)
+// ---------------------------------------------------------------------------
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+}
+
+// One payment per booking. Created when the customer starts Stripe Checkout;
+// flipped to PAID by the Stripe webhook, which also confirms the booking.
+model Payment {
+  id                      String        @id @default(cuid())
+  amount                  Decimal       @db.Decimal(10, 2)
+  currency                String        @default("USD")
+  status                  PaymentStatus @default(PENDING)
+  stripeCheckoutSessionId String?       @unique
+  stripePaymentIntentId   String?
+  createdAt               DateTime      @default(now())
+  updatedAt               DateTime      @updatedAt
+
+  booking   Booking @relation(fields: [bookingId], references: [id])
+  bookingId String  @unique
+
   @@index([status])
 }
 

@@ -7,7 +7,8 @@
     "build": "pnpm --filter @specai/database push && pnpm --filter @specai/database ensure-categories && next build",
     "start": "next start",
     "lint": "echo 'lint runs from repo root'",
-    "typecheck": "tsc --noEmit -p tsconfig.json"
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run"
   },
   "dependencies": {
     "@specai/ai-service": "workspace:*",
@@ -20,6 +21,7 @@
     "next-auth": "^4.24.8",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
+    "stripe": "^22.6.2",
     "zod": "^3.23.8"
   },
   "devDependencies": {
@@ -30,6 +32,7 @@
     "autoprefixer": "^10.4.20",
     "postcss": "^8.4.47",
     "tailwindcss": "^3.4.14",
-    "typescript": "^5.6.3"
+    "typescript": "^5.6.3",
+    "vitest": "^5.0.2"
   }
 }

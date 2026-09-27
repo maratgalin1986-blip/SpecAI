@@ -101,6 +101,7 @@ Run from the repo root:
 - `pnpm build` — build all packages and the web app
 - `pnpm lint` — lint the whole workspace
 - `pnpm typecheck` — typecheck all packages
+- `pnpm test` — run unit tests (vitest) in every package that has them
 - `pnpm db:generate` / `pnpm db:push` / `pnpm db:studio` / `pnpm db:seed` — Prisma workflows
 
 ## Application features implemented so far
@@ -147,6 +148,38 @@ Setup: in the Vercel dashboard open your project → **Storage** → create a **
 store and connect it (this adds `BLOB_READ_WRITE_TOKEN`); locally copy the token into
 `.env`. Without the token the upload endpoint returns `503 Хранилище не настроено`
 and the rest of the app keeps working.
+
+## Payments (Stripe)
+
+Customers pay for a `PENDING` booking with Stripe Checkout from `/dashboard`
+("Оплатить"). `POST /api/bookings/[id]/checkout` creates a `Payment` row and a
+Checkout Session and returns its `url`; `POST /api/stripe/webhook` verifies the
+Stripe signature and, on `checkout.session.completed`, marks the payment `PAID`,
+sets `Booking.depositPaid = true` and moves the booking `PENDING → CONFIRMED`
+(expired/failed sessions become `FAILED`). The Stripe client is created lazily,
+so the app builds and runs without these variables — only payments are disabled.
+
+Environment variables (see `.env.example`):
+
+- `STRIPE_SECRET_KEY` — secret API key (`sk_test_...` for test mode).
+- `STRIPE_WEBHOOK_SECRET` — signing secret of the webhook endpoint (`whsec_...`).
+- `NEXT_PUBLIC_APP_URL` — public base URL for Checkout success/cancel redirects
+  (falls back to `NEXTAUTH_URL`).
+
+Local webhook setup with the [Stripe CLI](https://docs.stripe.com/stripe-cli):
+
+```bash
+stripe login
+stripe listen --forward-to localhost:3000/api/stripe/webhook
+# copy the printed "whsec_..." into STRIPE_WEBHOOK_SECRET and restart `pnpm dev`
+stripe trigger checkout.session.completed   # optional smoke test
+```
+
+In production, add an endpoint in the Stripe Dashboard pointing at
+`https://<your-domain>/api/stripe/webhook` with the events
+`checkout.session.completed`, `checkout.session.async_payment_succeeded`,
+`checkout.session.async_payment_failed`, `checkout.session.expired` and
+`payment_intent.payment_failed`, and use its signing secret.
 
 ## AI service usage
 
