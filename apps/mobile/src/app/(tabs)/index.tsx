@@ -10,15 +10,17 @@ import {
   Text,
   View,
 } from 'react-native';
+import { ContactActions } from '@/components/ContactActions';
 import { Badge, EmptyState, ErrorBanner, Input } from '@/components/ui';
 import { ApiError, fetchEquipment, type Equipment } from '@/lib/api';
-import { EQUIPMENT_STATUS_LABELS, formatMoney } from '@/lib/format';
+import { EQUIPMENT_STATUS_LABELS, formatRate } from '@/lib/format';
 import { colors, radius, spacing } from '@/lib/theme';
 
 const PAGE_SIZE = 20;
 
 function EquipmentCard({ item }: { item: Equipment }) {
   const image = item.imageUrls[0];
+  const rate = formatRate(item);
   return (
     <Link href={{ pathname: '/equipment/[id]', params: { id: item.id } }} asChild>
       <Pressable style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}>
@@ -38,10 +40,13 @@ function EquipmentCard({ item }: { item: Equipment }) {
             {item.location?.city ? ` · ${item.location.city}` : ''}
           </Text>
           <View style={styles.cardFooter}>
-            <Text style={styles.price}>
-              {formatMoney(item.dailyRate, item.currency)}
-              <Text style={styles.priceUnit}> / день</Text>
-            </Text>
+            <View style={styles.priceBlock}>
+              <Text style={styles.price}>
+                {rate.price}
+                <Text style={styles.priceUnit}>{rate.unit}</Text>
+              </Text>
+              {rate.note ? <Text style={styles.priceNote}>{rate.note}</Text> : null}
+            </View>
             <Badge
               text={EQUIPMENT_STATUS_LABELS[item.status] ?? item.status}
               tone={item.status === 'AVAILABLE' ? 'success' : 'neutral'}
@@ -127,6 +132,11 @@ export default function CatalogScreen() {
         {!loading && !error ? (
           <Text style={styles.count}>{total > 0 ? `Найдено: ${total}` : 'Ничего не найдено'}</Text>
         ) : null}
+        <ContactActions
+          source="mobile:catalog"
+          message="Нужна техника — подберите вариант и назовите цену"
+          compact
+        />
       </View>
 
       {error && items.length === 0 ? (
@@ -212,6 +222,8 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: spacing.sm,
   },
+  priceBlock: { flexShrink: 1, gap: 2 },
   price: { fontSize: 16, fontWeight: '700', color: colors.primaryDark },
   priceUnit: { fontSize: 13, fontWeight: '400', color: colors.textMuted },
+  priceNote: { fontSize: 12, color: colors.textMuted },
 });

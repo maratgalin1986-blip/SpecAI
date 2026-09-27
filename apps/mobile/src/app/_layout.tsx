@@ -35,6 +35,9 @@ function RootNavigator() {
         <Stack.Screen name="orders/[id]" options={{ title: 'Заявка' }} />
         <Stack.Screen name="bookings/[id]/review" options={{ title: 'Отзыв' }} />
       </Stack.Protected>
+      {/* Доступны и без входа: заявка на звонок и сведения о компании. */}
+      <Stack.Screen name="callback" options={{ title: 'Заказать звонок', presentation: 'modal' }} />
+      <Stack.Screen name="about" options={{ title: 'О компании' }} />
     </Stack>
   );
 }

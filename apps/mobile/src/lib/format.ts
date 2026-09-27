@@ -7,16 +7,66 @@ const CURRENCY_SYMBOLS: Record<string, string> = {
   KZT: '₸',
 };
 
-export function formatMoney(value: string | number | null | undefined, currency: string): string {
+/** Разбивает число на разряды пробелом (fallback без Intl): 12500 → «12 500». */
+function groupDigits(amount: number): string {
+  const rounded = Math.round(amount);
+  const sign = rounded < 0 ? '-' : '';
+  return sign + String(Math.abs(rounded)).replace(/\B(?=(\d{3})+(?!\d))/g, '\u00a0');
+}
+
+/** Цена как на сайте: 12500 RUB → «12 500 ₽» (ru-RU, без копеек). Валюта по умолчанию — RUB. */
+export function formatMoney(
+  value: string | number | null | undefined,
+  currency: string = 'RUB',
+): string {
   if (value === null || value === undefined) return '—';
   const amount = Number(value);
   if (Number.isNaN(amount)) return '—';
-  const formatted = amount.toLocaleString('ru-RU', {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 2,
-  });
-  const symbol = CURRENCY_SYMBOLS[currency.toUpperCase()];
-  return symbol ? `${formatted} ${symbol}` : `${formatted} ${currency}`;
+  const code = currency.toUpperCase();
+  try {
+    return new Intl.NumberFormat('ru-RU', {
+      style: 'currency',
+      currency: code,
+      maximumFractionDigits: 0,
+    }).format(amount);
+  } catch {
+    const symbol = CURRENCY_SYMBOLS[code] ?? code;
+    return `${groupDigits(amount)}\u00a0${symbol}`;
+  }
+}
+
+/** Единица главной цены: «₽/час» или «₽/сутки». */
+export function currencySymbol(currency: string = 'RUB'): string {
+  return CURRENCY_SYMBOLS[currency.toUpperCase()] ?? currency.toUpperCase();
+}
+
+export interface RateLike {
+  hourlyRate?: string | number | null;
+  dailyRate: string | number;
+  currency?: string;
+}
+
+/**
+ * Главная цена позиции, как на сайте (`apps/web/src/lib/money.ts` → formatRate):
+ * с машино-часом — «от 3 000 ₽/час», смена 8 ч — dailyRate; иначе dailyRate за сутки.
+ */
+export function formatRate(item: RateLike): { price: string; unit: string; note: string | null } {
+  const hasHourly =
+    item.hourlyRate !== null && item.hourlyRate !== undefined && Number(item.hourlyRate) > 0;
+  if (hasHourly) {
+    return {
+      price: `от ${formatMoney(item.hourlyRate, item.currency)}`,
+      unit: '/час',
+      note: `смена 8 ч — ${formatMoney(item.dailyRate, item.currency)}`,
+    };
+  }
+  return { price: formatMoney(item.dailyRate, item.currency), unit: '/сутки', note: null };
+}
+
+/** Телефон в цифры для tel:-ссылки: «+7 (927) 242-80-88» → «+79272428088». */
+export function phoneToHref(phone: string): string {
+  const digits = phone.replace(/[^\d+]/g, '');
+  return `tel:${digits}`;
 }
 
 export function formatDate(value: string | Date): string {

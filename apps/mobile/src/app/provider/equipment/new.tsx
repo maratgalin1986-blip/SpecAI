@@ -68,6 +68,7 @@ export default function NewEquipmentScreen() {
   const [make, setMake] = useState('');
   const [model, setModel] = useState('');
   const [year, setYear] = useState('');
+  const [hourlyRate, setHourlyRate] = useState('');
   const [dailyRate, setDailyRate] = useState('');
   const [description, setDescription] = useState('');
   const [photos, setPhotos] = useState<Photo[]>([]);
@@ -181,7 +182,11 @@ export default function NewEquipmentScreen() {
     if (!categoryId) return setError('Выберите категорию');
     const rate = Number(dailyRate.replace(',', '.'));
     if (!dailyRate.trim() || Number.isNaN(rate) || rate <= 0) {
-      return setError('Укажите цену в сутки (число больше нуля)');
+      return setError('Укажите цену за смену 8 ч (число больше нуля)');
+    }
+    const hourly = hourlyRate.trim() ? Number(hourlyRate.replace(',', '.')) : undefined;
+    if (hourly !== undefined && (Number.isNaN(hourly) || hourly <= 0)) {
+      return setError('Цена за машино-час должна быть числом больше нуля');
     }
     const yearNumber = year.trim() ? Number(year) : undefined;
     if (yearNumber !== undefined && (!Number.isInteger(yearNumber) || yearNumber < 1950)) {
@@ -197,6 +202,7 @@ export default function NewEquipmentScreen() {
         model: model.trim() || undefined,
         year: yearNumber,
         dailyRate: rate,
+        hourlyRate: hourly,
         description: description.trim() || undefined,
         specs: specsFromRows(specRows),
         imageUrls: photos.map((photo) => photo.url),
@@ -283,14 +289,28 @@ export default function NewEquipmentScreen() {
               </View>
               <View style={styles.flex}>
                 <Input
-                  label="Цена в сутки (USD) *"
-                  value={dailyRate}
-                  onChangeText={setDailyRate}
-                  placeholder="450"
+                  label="₽ за машино-час"
+                  value={hourlyRate}
+                  onChangeText={(value) => {
+                    setHourlyRate(value);
+                    // Как на сайте: смена 8 ч подставляется из часовой ставки, пока не задана.
+                    const hourly = Number(value.replace(',', '.'));
+                    if (!dailyRate && value && !Number.isNaN(hourly)) {
+                      setDailyRate(String(hourly * 8));
+                    }
+                  }}
+                  placeholder="2500"
                   keyboardType="decimal-pad"
                 />
               </View>
             </View>
+            <Input
+              label="₽ за смену 8 ч *"
+              value={dailyRate}
+              onChangeText={setDailyRate}
+              placeholder="20000"
+              keyboardType="decimal-pad"
+            />
             <Input
               label="Описание"
               value={description}
