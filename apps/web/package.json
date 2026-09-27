@@ -7,22 +7,30 @@
     "build": "pnpm --filter @specai/database push && pnpm --filter @specai/database ensure-categories && next build",
     "start": "next start",
     "lint": "echo 'lint runs from repo root'",
-    "typecheck": "tsc --noEmit -p tsconfig.json"
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run",
+    "icons": "python3 scripts/generate-icons.py"
   },
   "dependencies": {
     "@specai/ai-service": "workspace:*",
     "@specai/database": "workspace:*",
     "@specai/shared": "workspace:*",
     "@specai/ui": "workspace:*",
+    "@vercel/blob": "^2.8.0",
     "bcryptjs": "^2.4.3",
+    "jose": "^6.2.12",
     "next": "^14.2.15",
     "next-auth": "^4.24.8",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
+    "resend": "^6.30.0",
+    "serwist": "^9.5.12",
+    "stripe": "^22.6.2",
     "three": "^0.169.0",
     "zod": "^3.23.8"
   },
   "devDependencies": {
+    "@serwist/next": "^9.5.12",
     "@types/bcryptjs": "^2.4.6",
     "@types/node": "^20.16.11",
     "@types/react": "^18.3.12",
@@ -31,6 +39,7 @@
     "autoprefixer": "^10.4.20",
     "postcss": "^8.4.47",
     "tailwindcss": "^3.4.14",
-    "typescript": "^5.6.3"
+    "typescript": "^5.6.3",
+    "vitest": "^4.1.11"
   }
 }

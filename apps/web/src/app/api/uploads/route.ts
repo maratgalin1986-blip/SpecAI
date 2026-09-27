@@ -1,0 +1,74 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth';
+import { put } from '@vercel/blob';
+import { authOptions } from '@/lib/auth';
+import { checkRateLimit } from '@/lib/rateLimit';
+import {
+  getBlobToken,
+  getUploadMaxBytes,
+  isAllowedUploadType,
+  uploadTooLargeMessage,
+} from '@/lib/blob';
+
+const RATE_LIMIT = { limit: 30, windowMs: 60_000 };
+
+export async function POST(request: NextRequest) {
+  const session = await getServerSession(authOptions);
+  if (!session || session.user.role !== 'PROVIDER_ADMIN') {
+    return NextResponse.json({ error: 'Требуется аккаунт поставщика' }, { status: 403 });
+  }
+
+  const rate = checkRateLimit(`uploads:${session.user.id}`, RATE_LIMIT);
+  if (!rate.ok) {
+    return NextResponse.json(
+      { error: 'Слишком много запросов, попробуйте позже' },
+      { status: 429, headers: { 'Retry-After': String(rate.retryAfterSec) } },
+    );
+  }
+
+  const token = getBlobToken();
+  if (!token) {
+    return NextResponse.json({ error: 'Хранилище не настроено' }, { status: 503 });
+  }
+
+  let formData: FormData;
+  try {
+    formData = await request.formData();
+  } catch {
+    return NextResponse.json({ error: 'Ожидается multipart/form-data' }, { status: 400 });
+  }
+
+  const file = formData.get('file');
+  if (!(file instanceof File)) {
+    return NextResponse.json({ error: 'Поле file обязательно' }, { status: 400 });
+  }
+
+  if (!isAllowedUploadType(file.type)) {
+    return NextResponse.json({ error: 'Допустимы только JPEG, PNG, WebP и PDF' }, { status: 415 });
+  }
+
+  if (file.size === 0) {
+    return NextResponse.json({ error: 'Файл пустой' }, { status: 400 });
+  }
+  if (file.size > getUploadMaxBytes(file.type)) {
+    return NextResponse.json({ error: uploadTooLargeMessage(file.type) }, { status: 413 });
+  }
+
+  const safeName = (file.name || 'file').replace(/[^\w.-]+/g, '_').slice(-80) || 'file';
+
+  try {
+    const blob = await put(`equipment/${session.user.companyId ?? 'unknown'}/${safeName}`, file, {
+      access: 'public',
+      addRandomSuffix: true,
+      contentType: file.type,
+      token,
+    });
+
+    return NextResponse.json(
+      { url: blob.url, contentType: file.type, size: file.size },
+      { status: 201 },
+    );
+  } catch {
+    return NextResponse.json({ error: 'Не удалось загрузить файл' }, { status: 502 });
+  }
+}

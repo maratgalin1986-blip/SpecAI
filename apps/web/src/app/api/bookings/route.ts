@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
 import { z } from 'zod';
 import { prisma } from '@specai/database';
-import { authOptions } from '@/lib/auth';
+import { getRequestUser } from '@/lib/requestUser';
+
+export const dynamic = 'force-dynamic';
 
 const createBookingRequestSchema = z
   .object({
@@ -17,9 +18,26 @@ const createBookingRequestSchema = z
     path: ['endDate'],
   });
 
+/** Бронирования текущего пользователя (клиента), новые сверху. */
+export async function GET(request: NextRequest) {
+  const currentUser = await getRequestUser(request);
+  if (!currentUser) {
+    return NextResponse.json({ error: 'Необходимо войти в аккаунт' }, { status: 401 });
+  }
+
+  const bookings = await prisma.booking.findMany({
+    where: { customerId: currentUser.id },
+    include: { equipment: { select: { id: true, name: true, imageUrls: true } } },
+    orderBy: { createdAt: 'desc' },
+    take: 100,
+  });
+
+  return NextResponse.json({ bookings });
+}
+
 export async function POST(request: NextRequest) {
-  const session = await getServerSession(authOptions);
-  if (!session) {
+  const currentUser = await getRequestUser(request);
+  if (!currentUser) {
     return NextResponse.json({ error: 'Необходимо войти в аккаунт' }, { status: 401 });
   }
 
@@ -54,7 +72,7 @@ export async function POST(request: NextRequest) {
   const booking = await prisma.booking.create({
     data: {
       equipmentId,
-      customerId: session.user.id,
+      customerId: currentUser.id,
       startDate,
       endDate,
       totalPrice,

@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import { prisma } from '@specai/database';
+import { findUserByEmail } from '@/lib/findUserByEmail';
 import { registerSchema } from '@specai/shared';
+import { sendVerificationEmail } from '@/lib/verificationEmail';
 
 export async function POST(request: NextRequest) {
   const body = await request.json();
@@ -11,7 +13,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
 
-  const existing = await prisma.user.findUnique({ where: { email: parsed.data.email } });
+  const existing = await findUserByEmail(parsed.data.email, { select: { id: true } });
   if (existing) {
     return NextResponse.json({ error: 'Этот e-mail уже зарегистрирован' }, { status: 409 });
   }
@@ -45,6 +47,13 @@ export async function POST(request: NextRequest) {
       },
     });
   });
+
+  // Письмо подтверждения — best-effort: сбой не должен ломать регистрацию.
+  try {
+    await sendVerificationEmail(user);
+  } catch (error) {
+    console.error('[auth] failed to send verification email', error);
+  }
 
   return NextResponse.json({ id: user.id, email: user.email }, { status: 201 });
 }

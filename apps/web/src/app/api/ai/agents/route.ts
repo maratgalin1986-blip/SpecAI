@@ -5,10 +5,20 @@ import { agentChatRequestSchema, createOrderSchema, type AgentId } from '@specai
 import { routeToAgent, runAgent, type AgentToolHandlers } from '@specai/ai-service';
 import { authOptions } from '@/lib/auth';
 import { formatMoney } from '@/lib/money';
+import { checkRateLimit } from '@/lib/rateLimit';
 import { SITE } from '@/lib/site';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
+
+const AGENT_LIMITS_GUEST = [
+  { limit: 10, windowMs: 60_000 },
+  { limit: 60, windowMs: 60 * 60_000 },
+];
+const AGENT_LIMITS_USER = [
+  { limit: 20, windowMs: 60_000 },
+  { limit: 200, windowMs: 60 * 60_000 },
+];
 
 class ToolError extends Error {}
 
@@ -42,6 +52,19 @@ export async function POST(request: NextRequest) {
 
   const session = await getServerSession(authOptions);
   const user = session?.user;
+
+  // Guests can chat too, so limit by user or IP to keep AI costs bounded.
+  const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown';
+  const rateKey = user ? `ai:agents:user:${user.id}` : `ai:agents:ip:${ip}`;
+  for (const window of user ? AGENT_LIMITS_USER : AGENT_LIMITS_GUEST) {
+    const rate = checkRateLimit(`${rateKey}:${window.windowMs}`, window);
+    if (!rate.ok) {
+      return NextResponse.json(
+        { error: `Слишком много сообщений. Попробуйте позже или позвоните: ${SITE.phone}` },
+        { status: 429, headers: { 'Retry-After': String(rate.retryAfterSec) } },
+      );
+    }
+  }
 
   function requireUser() {
     if (!user) {

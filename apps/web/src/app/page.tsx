@@ -1,9 +1,11 @@
+import { prisma } from '@specai/database';
 import { Button } from '@specai/ui';
 import { AGENT_PROFILES } from '@specai/shared';
 import { CallbackForm } from '@/components/CallbackForm';
 import { Hero3D } from '@/components/Hero3D';
 import { Reveal } from '@/components/Reveal';
 import { TiltCard } from '@/components/TiltCard';
+import { pluralizeRu } from '@/lib/pluralize';
 import { SITE } from '@/lib/site';
 
 const SERVICES = [
@@ -32,7 +34,38 @@ const HIGHLIGHTS = [
   { value: '16', label: 'регион' },
 ];
 
-export default function HomePage() {
+// Service cards link to their catalog category (matched by name) and show how
+// much equipment is listed there. Falls back to plain cards without a database.
+export const revalidate = 300;
+
+async function loadCategoryLinks() {
+  try {
+    const categories = await prisma.equipmentCategory.findMany({
+      include: { _count: { select: { equipment: { where: { status: 'AVAILABLE' } } } } },
+    });
+    return new Map(
+      categories.map((category) => [
+        category.name,
+        { id: category.id, available: category._count.equipment },
+      ]),
+    );
+  } catch (error) {
+    console.error('Failed to load categories for the home page', error);
+    return new Map<string, { id: string; available: number }>();
+  }
+}
+
+const SERVICE_CATEGORY: Record<string, string> = {
+  Экскаваторы: 'Экскаваторы',
+  Автокраны: 'Краны',
+  Погрузчики: 'Погрузчики',
+  Самосвалы: 'Самосвалы',
+  Бульдозеры: 'Бульдозеры',
+};
+
+export default async function HomePage() {
+  const categoryLinks = await loadCategoryLinks();
+
   return (
     <div className="flex flex-col gap-20">
       <section className="hero-backdrop relative -mt-2 overflow-hidden rounded-3xl text-white shadow-2xl">
@@ -101,15 +134,34 @@ export default function HomePage() {
           <p className="mt-2 text-slate-600">Всё для стройки и земляных работ — в одном месте.</p>
         </Reveal>
         <div className="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-          {SERVICES.map((service, index) => (
-            <Reveal key={service.title} delay={index * 80}>
-              <TiltCard>
-                <div className="text-3xl">{service.icon}</div>
-                <h3 className="mt-3 text-lg font-semibold">{service.title}</h3>
-                <p className="mt-1 text-sm text-slate-600">{service.text}</p>
-              </TiltCard>
-            </Reveal>
-          ))}
+          {SERVICES.map((service, index) => {
+            const category = categoryLinks.get(SERVICE_CATEGORY[service.title] ?? '');
+            return (
+              <Reveal key={service.title} delay={index * 80}>
+                <a
+                  href={category ? `/equipment?category=${category.id}` : '#callback'}
+                  className="block h-full"
+                >
+                  <TiltCard>
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="text-3xl">{service.icon}</div>
+                      {category && category.available > 0 && (
+                        <span className="rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700">
+                          {pluralizeRu(category.available, ['единица', 'единицы', 'единиц'])}{' '}
+                          свободно
+                        </span>
+                      )}
+                    </div>
+                    <h3 className="mt-3 text-lg font-semibold">{service.title}</h3>
+                    <p className="mt-1 text-sm text-slate-600">{service.text}</p>
+                    <span className="mt-3 inline-block text-sm font-medium text-amber-700">
+                      {category ? 'Смотреть в каталоге →' : 'Оставить заявку →'}
+                    </span>
+                  </TiltCard>
+                </a>
+              </Reveal>
+            );
+          })}
         </div>
       </section>
 

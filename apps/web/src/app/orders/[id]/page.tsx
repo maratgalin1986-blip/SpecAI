@@ -39,8 +39,8 @@ export default async function OrderDetailPage({ params }: { params: { id: string
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-start justify-between gap-4">
-        <div>
+      <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+        <div className="min-w-0">
           <h1 className="text-2xl font-bold">Заявка</h1>
           <p className="text-slate-500">
             {order.category?.name ?? 'Любая категория'} ·{' '}
@@ -48,7 +48,7 @@ export default async function OrderDetailPage({ params }: { params: { id: string
             {order.desiredEndDate.toLocaleDateString('ru-RU')} · от {order.customer.name}
           </p>
         </div>
-        <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-700">
+        <span className="w-fit shrink-0 rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-700">
           {ORDER_STATUS_LABEL[order.status]}
         </span>
       </div>
@@ -76,9 +76,12 @@ export default async function OrderDetailPage({ params }: { params: { id: string
         ) : (
           <div className="flex flex-col gap-3">
             {order.bids.map((bid) => (
-              <Card key={bid.id} className="flex items-center justify-between gap-4">
-                <div>
-                  <p className="font-medium">
+              <Card
+                key={bid.id}
+                className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4"
+              >
+                <div className="min-w-0">
+                  <p className="break-words font-medium">
                     {bid.equipment.name} · {bid.equipment.company.name}
                   </p>
                   <p className="text-sm text-slate-500">
@@ -90,12 +93,12 @@ export default async function OrderDetailPage({ params }: { params: { id: string
                   <AcceptBidButton bidId={bid.id} />
                 )}
                 {bid.status === 'ACCEPTED' && (
-                  <span className="rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-semibold text-green-800">
+                  <span className="w-fit shrink-0 rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-semibold text-green-800">
                     Принято
                   </span>
                 )}
                 {bid.status === 'REJECTED' && (
-                  <span className="rounded-full bg-slate-200 px-2.5 py-0.5 text-xs font-semibold text-slate-600">
+                  <span className="w-fit shrink-0 rounded-full bg-slate-200 px-2.5 py-0.5 text-xs font-semibold text-slate-600">
                     Отклонено
                   </span>
                 )}

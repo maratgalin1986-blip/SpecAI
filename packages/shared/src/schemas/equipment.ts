@@ -26,6 +26,10 @@ export const createEquipmentSchema = z.object({
 });
 export type CreateEquipmentInput = z.infer<typeof createEquipmentSchema>;
 
+export const equipmentSortSchema = z.enum(['newest', 'price_asc', 'price_desc', 'name']);
+export type EquipmentSort = z.infer<typeof equipmentSortSchema>;
+export const EQUIPMENT_SORT_OPTIONS = equipmentSortSchema.options;
+
 export const equipmentSearchQuerySchema = z.object({
   categoryId: z.string().cuid().optional(),
   companyId: z.string().cuid().optional(),
@@ -36,5 +40,6 @@ export const equipmentSearchQuerySchema = z.object({
   query: z.string().max(200).optional(),
   page: z.number().int().min(1).default(1),
   pageSize: z.number().int().min(1).max(100).default(20),
+  sort: equipmentSortSchema.default('newest'),
 });
 export type EquipmentSearchQuery = z.infer<typeof equipmentSearchQuerySchema>;

@@ -1,20 +1,32 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
 import { prisma } from '@specai/database';
-import { authOptions } from '@/lib/auth';
+import { getRequestUser } from '@/lib/requestUser';
+import { sendEmail } from '@/lib/email';
+import { bidAccepted } from '@/lib/emailTemplates';
 
-export async function POST(_request: NextRequest, { params }: { params: { id: string } }) {
-  const session = await getServerSession(authOptions);
-  if (!session) {
+export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
+  const currentUser = await getRequestUser(request);
+  if (!currentUser) {
     return NextResponse.json({ error: 'Необходимо войти в аккаунт' }, { status: 401 });
   }
 
   const bid = await prisma.bid.findUnique({
     where: { id: params.id },
-    include: { order: true, equipment: true },
+    include: {
+      order: { include: { customer: { select: { name: true } } } },
+      equipment: {
+        include: {
+          company: {
+            select: {
+              users: { where: { role: 'PROVIDER_ADMIN' }, select: { email: true } },
+            },
+          },
+        },
+      },
+    },
   });
 
-  if (!bid || bid.order.customerId !== session.user.id) {
+  if (!bid || bid.order.customerId !== currentUser.id) {
     return NextResponse.json({ error: 'Предложение не найдено' }, { status: 404 });
   }
   if (bid.order.status !== 'OPEN' || bid.status !== 'PENDING') {
@@ -58,6 +70,24 @@ export async function POST(_request: NextRequest, { params }: { params: { id: st
 
     return created;
   });
+
+  try {
+    const providerEmails = bid.equipment.company.users.map((user) => user.email);
+    if (providerEmails.length > 0) {
+      const template = bidAccepted({
+        bookingId: booking.id,
+        equipmentName: bid.equipment.name,
+        price: booking.totalPrice,
+        currency: booking.currency,
+        startDate: booking.startDate,
+        endDate: booking.endDate,
+        customerName: bid.order.customer.name,
+      });
+      await sendEmail({ to: providerEmails, ...template });
+    }
+  } catch (error) {
+    console.error('[email] bidAccepted failed', error);
+  }
 
   return NextResponse.json({ booking }, { status: 201 });
 }

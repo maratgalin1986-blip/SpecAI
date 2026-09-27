@@ -18,8 +18,8 @@ export function SiteHeader() {
 
   return (
     <header className="border-b border-slate-200 bg-white">
-      <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
-        <a href="/" className="flex items-center gap-2 text-lg font-bold text-slate-900">
+      <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3 sm:px-6 sm:py-4">
+        <a href="/" className="flex shrink-0 items-center gap-2 text-lg font-bold text-slate-900">
           <span className="flex h-8 w-8 items-center justify-center rounded-md bg-amber-600 text-sm text-white">
             16
           </span>
@@ -38,8 +38,9 @@ export function SiteHeader() {
         <button
           type="button"
           onClick={() => setIsMenuOpen((open) => !open)}
-          aria-label="Открыть меню"
+          aria-label={isMenuOpen ? 'Закрыть меню' : 'Открыть меню'}
           aria-expanded={isMenuOpen}
+          aria-controls="mobile-nav"
           className="flex h-9 w-9 items-center justify-center rounded-md text-slate-600 hover:bg-slate-100 md:hidden"
         >
           {isMenuOpen ? (
@@ -67,7 +68,10 @@ export function SiteHeader() {
       </div>
 
       {isMenuOpen && (
-        <nav className="flex flex-col gap-1 border-t border-slate-200 px-6 py-3 text-sm font-medium text-slate-600 md:hidden">
+        <nav
+          id="mobile-nav"
+          className="flex flex-col gap-1 border-t border-slate-200 px-4 py-3 text-sm font-medium text-slate-600 md:hidden"
+        >
           {NAV_LINKS.map((link) => (
             <a
               key={link.href}

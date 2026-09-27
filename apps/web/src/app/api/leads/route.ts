@@ -2,22 +2,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@specai/database';
 import { createLeadSchema } from '@specai/shared';
 import { notifyTelegram } from '@/lib/notify';
+import { checkRateLimit } from '@/lib/rateLimit';
 import { SITE } from '@/lib/site';
 
 export const dynamic = 'force-dynamic';
 
-// Best-effort flood protection (per server instance): 5 requests / 10 min / IP.
-const WINDOW_MS = 10 * 60 * 1000;
-const MAX_PER_WINDOW = 5;
-const recent = new Map<string, number[]>();
-
-function isRateLimited(ip: string) {
-  const now = Date.now();
-  const hits = (recent.get(ip) ?? []).filter((time) => now - time < WINDOW_MS);
-  hits.push(now);
-  recent.set(ip, hits);
-  return hits.length > MAX_PER_WINDOW;
-}
+// Best-effort flood protection (per server instance).
+const LEAD_RATE_LIMIT = { limit: 5, windowMs: 10 * 60 * 1000 };
 
 export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => null);
@@ -35,7 +26,7 @@ export async function POST(request: NextRequest) {
   }
 
   const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown';
-  if (isRateLimited(ip)) {
+  if (!checkRateLimit(`leads:${ip}`, LEAD_RATE_LIMIT).ok) {
     return NextResponse.json(
       { error: `Слишком много заявок. Позвоните нам: ${SITE.phone}` },
       { status: 429 },

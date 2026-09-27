@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
 import { z } from 'zod';
 import { prisma } from '@specai/database';
-import { authOptions } from '@/lib/auth';
+import { getRequestUser } from '@/lib/requestUser';
+import { sendEmail } from '@/lib/email';
+import { bookingStatusChanged } from '@/lib/emailTemplates';
+import { getStripe } from '@/lib/stripe';
 
 const updateSchema = z.object({
   status: z.enum(['CONFIRMED', 'ACTIVE', 'COMPLETED', 'CANCELLED']),
@@ -14,9 +16,41 @@ const PROVIDER_ALLOWED_TRANSITIONS: Record<string, string[]> = {
   ACTIVE: ['COMPLETED'],
 };
 
+/**
+ * A cancelled booking must not stay payable: expire the open Checkout Session
+ * and mark the Payment FAILED. The Payment is flipped only after Stripe
+ * confirmed the expiry — if `expire` fails (e.g. the customer just completed
+ * the session), the row stays PENDING so the webhook can still reconcile it.
+ * Any Stripe error is logged and never blocks the cancellation itself.
+ */
+async function closePendingCheckout(
+  payment: { id: string; status: string; stripeCheckoutSessionId: string | null } | null,
+) {
+  if (!payment || payment.status !== 'PENDING' || !payment.stripeCheckoutSessionId) {
+    return;
+  }
+  try {
+    await getStripe().checkout.sessions.expire(payment.stripeCheckoutSessionId);
+  } catch (error) {
+    console.error(
+      `[stripe] failed to expire checkout session ${payment.stripeCheckoutSessionId} on cancel`,
+      error,
+    );
+    return;
+  }
+  try {
+    await prisma.payment.updateMany({
+      where: { id: payment.id, status: 'PENDING' },
+      data: { status: 'FAILED' },
+    });
+  } catch (error) {
+    console.error(`[stripe] failed to mark payment ${payment.id} FAILED on cancel`, error);
+  }
+}
+
 export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
-  const session = await getServerSession(authOptions);
-  if (!session) {
+  const currentUser = await getRequestUser(request);
+  if (!currentUser) {
     return NextResponse.json({ error: 'Необходимо войти в аккаунт' }, { status: 401 });
   }
 
@@ -28,16 +62,15 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
 
   const booking = await prisma.booking.findUnique({
     where: { id: params.id },
-    include: { equipment: true },
+    include: { equipment: true, customer: { select: { email: true } }, payment: true },
   });
   if (!booking) {
     return NextResponse.json({ error: 'Бронирование не найдено' }, { status: 404 });
   }
 
   const isOwningProvider =
-    session.user.role === 'PROVIDER_ADMIN' &&
-    session.user.companyId === booking.equipment.companyId;
-  const isCustomer = booking.customerId === session.user.id;
+    currentUser.role === 'PROVIDER_ADMIN' && currentUser.companyId === booking.equipment.companyId;
+  const isCustomer = booking.customerId === currentUser.id;
 
   if (isOwningProvider) {
     const allowed = PROVIDER_ALLOWED_TRANSITIONS[booking.status] ?? [];
@@ -72,6 +105,25 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
     where: { id: params.id },
     data: { status: parsed.data.status },
   });
+
+  if (updated.status === 'CANCELLED' && booking.status !== 'CANCELLED') {
+    await closePendingCheckout(booking.payment);
+  }
+
+  if (updated.status !== booking.status) {
+    try {
+      const template = bookingStatusChanged({
+        bookingId: updated.id,
+        equipmentName: booking.equipment.name,
+        status: updated.status,
+        startDate: updated.startDate,
+        endDate: updated.endDate,
+      });
+      await sendEmail({ to: booking.customer.email, ...template });
+    } catch (error) {
+      console.error('[email] bookingStatusChanged failed', error);
+    }
+  }
 
   return NextResponse.json({ booking: updated });
 }

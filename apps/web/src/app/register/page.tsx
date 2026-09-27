@@ -55,7 +55,7 @@ export default function RegisterPage() {
       <Card>
         <h1 className="mb-4 text-xl font-bold">Создать аккаунт</h1>
 
-        <div className="mb-4 flex gap-2 text-sm">
+        <div className="mb-4 flex flex-col gap-2 text-sm sm:flex-row">
           <button
             type="button"
             onClick={() => setAccountType('CUSTOMER')}

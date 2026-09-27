@@ -60,8 +60,8 @@ export default function RecommendPage() {
           onChange={(e) => setJobDescription(e.target.value)}
           className="rounded-md border border-slate-300 px-3 py-2"
         />
-        <div>
-          <Button type="submit" disabled={isSubmitting}>
+        <div className="flex">
+          <Button type="submit" disabled={isSubmitting} className="w-full sm:w-auto">
             {isSubmitting ? 'Подбираем…' : 'Получить рекомендации'}
           </Button>
         </div>
