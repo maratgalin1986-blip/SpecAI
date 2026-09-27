@@ -1,0 +1,113 @@
+name: Перенос базы в Yandex Cloud
+
+# One-off, manually started copy of the whole database (schema "public") from
+# the current Postgres to Yandex Managed PostgreSQL.
+#
+# Needs two repository secrets (Settings → Secrets and variables → Actions):
+#   SOURCE_DATABASE_URL — the current database (the same value as DIRECT_URL,
+#                         or DATABASE_URL if DIRECT_URL isn't set, in Vercel)
+#   TARGET_DATABASE_URL — the new Yandex database:
+#                         postgresql://USER:PASSWORD@HOST.mdb.yandexcloud.net:6432/DBNAME
+#
+# The target must be empty: the job refuses to overwrite existing tables.
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Напишите ПЕРЕНЕСТИ, чтобы подтвердить копирование'
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      SOURCE_DATABASE_URL: ${{ secrets.SOURCE_DATABASE_URL }}
+      TARGET_DATABASE_URL: ${{ secrets.TARGET_DATABASE_URL }}
+    steps:
+      - name: Check confirmation and secrets
+        run: |
+          if [ "${{ inputs.confirm }}" != "ПЕРЕНЕСТИ" ]; then
+            echo "::error::Для запуска введите ПЕРЕНЕСТИ в поле подтверждения"; exit 1
+          fi
+          if [ -z "$SOURCE_DATABASE_URL" ] || [ -z "$TARGET_DATABASE_URL" ]; then
+            echo "::error::Добавьте секреты SOURCE_DATABASE_URL и TARGET_DATABASE_URL"; exit 1
+          fi
+
+      - name: Install PostgreSQL 17 client
+        run: |
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsSL -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \
+            https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
+            | sudo tee /etc/apt/sources.list.d/pgdg.list
+          sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client-17
+          echo "/usr/lib/postgresql/17/bin" >> "$GITHUB_PATH"
+
+      - name: Download Yandex Cloud root CA
+        run: |
+          mkdir -p ~/.postgresql
+          curl -fsSL -o ~/.postgresql/yandex-root.crt https://storage.yandexcloud.net/cloud-certs/CA.pem
+
+      - name: Prepare libpq connection strings
+        # Prisma-only URL parameters (schema, pgbouncer, connection_limit, …)
+        # are not understood by pg_dump/psql, so keep only standard ones.
+        run: |
+          python3 - <<'PY' >> "$GITHUB_ENV"
+          import os
+          from urllib.parse import urlsplit, urlunsplit, parse_qsl, urlencode
+          ALLOWED = {'sslmode', 'sslrootcert', 'options', 'application_name', 'connect_timeout'}
+          def clean(url, yandex=False):
+              p = urlsplit(url)
+              q = [(k, v) for k, v in parse_qsl(p.query) if k in ALLOWED]
+              if yandex or p.hostname.endswith('.mdb.yandexcloud.net'):
+                  q = [(k, v) for k, v in q if k not in ('sslmode', 'sslrootcert')]
+                  q += [('sslmode', 'verify-full'),
+                        ('sslrootcert', os.path.expanduser('~/.postgresql/yandex-root.crt'))]
+              elif not any(k == 'sslmode' for k, _ in q):
+                  q.append(('sslmode', 'require'))
+              return urlunsplit((p.scheme, p.netloc, p.path, urlencode(q), ''))
+          src = clean(os.environ['SOURCE_DATABASE_URL'])
+          dst = clean(os.environ['TARGET_DATABASE_URL'], yandex=True)
+          print(f'::add-mask::{src}')
+          print(f'::add-mask::{dst}')
+          print(f'SRC={src}')
+          print(f'DST={dst}')
+          PY
+
+      - name: Check connections and that the target is empty
+        run: |
+          echo "Источник: $(psql "$SRC" -tAc 'select version()' | cut -c1-40)"
+          echo "Приёмник: $(psql "$DST" -tAc 'select version()' | cut -c1-40)"
+          existing=$(psql "$DST" -tAc "select count(*) from information_schema.tables where table_schema = 'public'")
+          if [ "$existing" != "0" ]; then
+            echo "::error::В базе Yandex уже есть таблицы ($existing). Нужна пустая база — копирование отменено."
+            exit 1
+          fi
+
+      - name: Dump the current database
+        run: pg_dump "$SRC" --schema=public --no-owner --no-acl --format=custom --file=dump.pgc
+
+      - name: Restore into Yandex Cloud
+        run: |
+          # The target database already has a "public" schema — skip creating it.
+          pg_restore --list dump.pgc | grep -v ' SCHEMA - public ' > restore.list
+          pg_restore --dbname="$DST" --no-owner --no-acl --use-list=restore.list dump.pgc \
+            || echo "::warning::pg_restore reported non-fatal errors — see the row-count check below"
+
+      - name: Compare row counts table by table
+        run: |
+          fail=0
+          printf '%-28s %10s %10s\n' 'Таблица' 'Было' 'Стало'
+          for t in $(psql "$SRC" -tAc "select tablename from pg_tables where schemaname = 'public' order by 1"); do
+            a=$(psql "$SRC" -tAc "select count(*) from public.\"$t\"")
+            b=$(psql "$DST" -tAc "select count(*) from public.\"$t\"" 2>/dev/null || echo "нет")
+            mark=""; if [ "$a" != "$b" ]; then mark="  <-- НЕ СОВПАДАЕТ"; fail=1; fi
+            printf '%-28s %10s %10s%s\n' "$t" "$a" "$b" "$mark"
+          done
+          if [ "$fail" = "1" ]; then echo "::error::Количество строк не совпало"; exit 1; fi
+          echo "Готово: все таблицы перенесены. Теперь замените DATABASE_URL и DIRECT_URL в Vercel на адрес Yandex и сделайте Redeploy."

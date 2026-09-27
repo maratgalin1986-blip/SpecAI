@@ -1,7 +1,7 @@
 import bcrypt from 'bcryptjs';
-import { PrismaClient } from '../generated/client';
+import { createPrismaClient } from '../src';
 
-const prisma = new PrismaClient();
+const prisma = createPrismaClient();
 
 async function main() {
   const location = await prisma.location.create({

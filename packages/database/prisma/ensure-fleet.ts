@@ -2,9 +2,9 @@
 // ensure-categories) and is idempotent: rows use fixed ids and existing rows
 // are never overwritten, so price or status changes made later in the provider
 // cabinet stick.
-import { PrismaClient } from '../generated/client';
+import { createPrismaClient } from '../src';
 
-const prisma = new PrismaClient();
+const prisma = createPrismaClient();
 
 const COMPANY_ID = 'specplast16-house';
 const LOCATION_ID = 'specplast16-location';

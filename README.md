@@ -155,6 +155,37 @@ Preview), после изменения — Deployments → Redeploy.
 Реквизиты оператора персональных данных (ИП/ООО, ИНН) для политики конфиденциальности —
 в `apps/web/src/lib/site.ts` (`legalName`, `inn`).
 
+## Перенос базы в Yandex Cloud (152-ФЗ)
+
+Код уже умеет работать с Yandex Managed Service for PostgreSQL: для хостов
+`*.mdb.yandexcloud.net` соединение шифруется и проверяется по корневому сертификату
+Yandex (скачивается при сборке, `packages/database/src/connection.ts`).
+
+1. **Создать кластер** — console.yandex.cloud → Managed Service for PostgreSQL →
+   «Создать кластер»: PostgreSQL 17, класс s3-c2-m8 или меньше (для старта хватит
+   b2.medium), диск 10–20 ГБ, **«Публичный доступ» у хоста — включить**, база
+   `specai`, пользователь `specai` с паролем. В настройках пользователя режим пулинга —
+   **«Сессионный»**.
+2. **Открыть доступ** — в группе безопасности кластера разрешить входящий TCP 6432 из
+   0.0.0.0/0 (у Vercel и GitHub нет постоянных IP).
+3. **Скопировать данные** — GitHub → Settings → Secrets and variables → Actions → New
+   secret:
+   - `SOURCE_DATABASE_URL` — текущая база: значение `DIRECT_URL` из Vercel (если его нет —
+     `DATABASE_URL`, но без `-pooler` в адресе);
+   - `TARGET_DATABASE_URL` —
+     `postgresql://specai:ПАРОЛЬ@ХОСТ.mdb.yandexcloud.net:6432/specai` (хост — на
+     странице кластера, вкладка «Хосты»).
+
+   Затем Actions → «Перенос базы в Yandex Cloud» → Run workflow → ввести `ПЕРЕНЕСТИ`.
+   Задача копирует все таблицы и сверяет число строк; в непустую базу копировать
+   откажется.
+
+4. **Переключить сайт** — в Vercel заменить `DATABASE_URL` и `DIRECT_URL` на адрес Yandex
+   (тот же, что `TARGET_DATABASE_URL`) → Redeploy.
+5. **Ускорить** — Vercel → Settings → Functions → Function Region → Frankfurt (fra1),
+   ближайший к Москве регион.
+6. Проверить сайт и через пару недель удалить старую базу.
+
 ## Парк СпецПласт16 в каталоге
 
 `packages/database/prisma/ensure-fleet.ts` при каждой сборке добавляет в каталог технику

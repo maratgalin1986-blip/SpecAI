@@ -1,6 +1,6 @@
-import { PrismaClient } from '../generated/client';
+import { createPrismaClient } from '../src';
 
-const prisma = new PrismaClient();
+const prisma = createPrismaClient();
 
 const BASE_CATEGORIES = [
   { name: 'Экскаваторы', slug: 'excavators' },
