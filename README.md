@@ -1,4 +1,7 @@
-# SpecAI
+# СпецПласт16 (SpecAI)
+
+Сайт аренды спецтехники **СпецПласт16** с командой ИИ-агентов. Название, телефон,
+email и город задаются в `apps/web/src/lib/site.ts`.
 
 AI platform for heavy equipment rental and construction services.
 
@@ -133,6 +136,20 @@ Run from the repo root:
   `POST /api/orders/[id]/bids`; the customer accepts one via
   `POST /api/bids/[id]/accept`, which atomically creates a `Booking`, marks
   the order `MATCHED`, and rejects the other bids.
+
+## ИИ-агенты (`/agents` + чат-виджет на каждой странице)
+
+`POST /api/ai/agents` принимает `{ agentId, messages }` и запускает агента с
+инструментами, которые работают с живой базой данных (`packages/ai-service/src/agents.ts`,
+обработчики инструментов — `apps/web/src/app/api/ai/agents/route.ts`):
+
+- **Консультант** — поиск техники в каталоге, характеристики, расчёт стоимости аренды.
+- **Диспетчер** — собирает детали работ и после подтверждения клиента создаёт заявку.
+- **Поддержка** — статус бронирований и заявок текущего пользователя, условия аренды.
+- **Помощник поставщика** — открытые заявки и состояние парка техники поставщика.
+- **Авто** (`agentId: "auto"`) — роутер сам выбирает подходящего агента.
+
+Для работы нужен `ANTHROPIC_API_KEY`.
 
 ## AI service usage
 
