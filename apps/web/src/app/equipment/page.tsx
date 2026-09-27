@@ -123,6 +123,13 @@ export default async function EquipmentCatalogPage({
           {equipment.map((item) => (
             <a key={item.id} href={`/equipment/${item.id}`}>
               <Card className="flex h-full flex-col gap-2 hover:border-amber-400">
+                {item.imageUrls[0] && (
+                  <img
+                    src={item.imageUrls[0]}
+                    alt={item.name}
+                    className="-mx-1 -mt-1 h-40 w-[calc(100%+0.5rem)] rounded-md object-cover"
+                  />
+                )}
                 <div className="flex items-start justify-between gap-2">
                   <h2 className="font-semibold">{item.name}</h2>
                   <StatusBadge status={item.status} />

@@ -1,15 +1,57 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { z } from 'zod';
-import { extractEquipmentSpecs } from '@specai/ai-service';
+import {
+  extractEquipmentSpecs,
+  extractEquipmentSpecsFromFile,
+  isSpecFileMediaType,
+} from '@specai/ai-service';
 import { authOptions } from '@/lib/auth';
 import { checkRateLimit } from '@/lib/rateLimit';
+import { UPLOAD_MAX_BYTES, isOurBlobUrl } from '@/lib/blob';
 
-const requestSchema = z.object({
-  sourceText: z.string().min(1).max(8000),
-});
+const requestSchema = z.union([
+  z.object({ sourceText: z.string().min(1).max(8000) }),
+  z.object({ fileUrl: z.string().url().refine(isOurBlobUrl, 'Допустимы только наши файлы') }),
+]);
 
 const RATE_LIMIT = { limit: 10, windowMs: 60_000 };
+
+class FileFetchError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+  ) {
+    super(message);
+  }
+}
+
+async function fetchBlobAsBase64(fileUrl: string) {
+  const response = await fetch(fileUrl, { cache: 'no-store' });
+  if (!response.ok) {
+    throw new FileFetchError('Не удалось скачать файл', 400);
+  }
+
+  const mediaType = (response.headers.get('content-type') ?? '').split(';')[0]?.trim() ?? '';
+  if (!isSpecFileMediaType(mediaType)) {
+    throw new FileFetchError('Поддерживаются только JPEG, PNG, WebP и PDF', 415);
+  }
+
+  const declaredLength = Number(response.headers.get('content-length') ?? 0);
+  if (declaredLength > UPLOAD_MAX_BYTES) {
+    throw new FileFetchError('Файл больше 10 МБ', 413);
+  }
+
+  const bytes = Buffer.from(await response.arrayBuffer());
+  if (bytes.byteLength === 0) {
+    throw new FileFetchError('Файл пустой', 400);
+  }
+  if (bytes.byteLength > UPLOAD_MAX_BYTES) {
+    throw new FileFetchError('Файл больше 10 МБ', 413);
+  }
+
+  return { data: bytes.toString('base64'), mediaType };
+}
 
 export async function POST(request: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -36,8 +78,22 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
 
+  let file: Awaited<ReturnType<typeof fetchBlobAsBase64>> | undefined;
+  if ('fileUrl' in parsed.data) {
+    try {
+      file = await fetchBlobAsBase64(parsed.data.fileUrl);
+    } catch (error) {
+      if (error instanceof FileFetchError) {
+        return NextResponse.json({ error: error.message }, { status: error.status });
+      }
+      return NextResponse.json({ error: 'Не удалось скачать файл' }, { status: 400 });
+    }
+  }
+
   try {
-    const specs = await extractEquipmentSpecs(parsed.data.sourceText);
+    const specs = file
+      ? await extractEquipmentSpecsFromFile(file)
+      : await extractEquipmentSpecs((parsed.data as { sourceText: string }).sourceText);
     return NextResponse.json(specs);
   } catch {
     return NextResponse.json(
