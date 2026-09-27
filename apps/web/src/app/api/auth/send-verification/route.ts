@@ -1,20 +1,19 @@
-import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
+import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@specai/database';
-import { authOptions } from '@/lib/auth';
+import { getRequestUser } from '@/lib/requestUser';
 import { checkRateLimit } from '@/lib/rateLimit';
 import { sendVerificationEmail } from '@/lib/verificationEmail';
 
 const RATE_LIMIT = { limit: 5, windowMs: 60 * 60_000 };
 
-export async function POST() {
-  const session = await getServerSession(authOptions);
-  if (!session) {
+export async function POST(request: NextRequest) {
+  const currentUser = await getRequestUser(request);
+  if (!currentUser) {
     return NextResponse.json({ error: 'Требуется вход' }, { status: 401 });
   }
 
   const user = await prisma.user.findUnique({
-    where: { id: session.user.id },
+    where: { id: currentUser.id },
     select: { id: true, email: true, emailVerified: true },
   });
   if (!user) {
