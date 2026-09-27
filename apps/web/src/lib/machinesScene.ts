@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
+import type { SceneSounds, SoundName } from './machineSounds';
 
 // Animated 3D hero scene: a rotating cast of cartoon construction machines on a
 // floating platform. Each machine has a face — blinking eyes that follow the
@@ -962,13 +963,18 @@ function buildBulldozer(m: Materials): Machine {
   };
 }
 
-// Each machine gets its own cartoon paint job.
-const MACHINE_TYPES: { build: (m: Materials) => Machine; paint: number; paintDark: number }[] = [
-  { build: buildExcavator, paint: 0xfbbf24, paintDark: 0xf59e0b },
-  { build: buildCrane, paint: 0xfb7185, paintDark: 0xe11d48 },
-  { build: buildLoader, paint: 0xfacc15, paintDark: 0x65a30d },
-  { build: buildDumpTruck, paint: 0x38bdf8, paintDark: 0xf97316 },
-  { build: buildBulldozer, paint: 0xf59e0b, paintDark: 0x7c3aed },
+// Each machine gets its own cartoon paint job and engine note (Hz).
+const MACHINE_TYPES: {
+  build: (m: Materials) => Machine;
+  paint: number;
+  paintDark: number;
+  engineHz: number;
+}[] = [
+  { build: buildExcavator, paint: 0xfbbf24, paintDark: 0xf59e0b, engineHz: 42 },
+  { build: buildCrane, paint: 0xfb7185, paintDark: 0xe11d48, engineHz: 36 },
+  { build: buildLoader, paint: 0xfacc15, paintDark: 0x65a30d, engineHz: 50 },
+  { build: buildDumpTruck, paint: 0x38bdf8, paintDark: 0xf97316, engineHz: 33 },
+  { build: buildBulldozer, paint: 0xf59e0b, paintDark: 0x7c3aed, engineHz: 46 },
 ];
 
 const LAST_SHOWN_KEY = 'specplast16:last-machine';
@@ -1022,7 +1028,11 @@ const SWITCH_SECONDS = 14;
 
 export function createMachinesScene(
   container: HTMLElement,
-  options: { reducedMotion: boolean; onChange?: (index: number) => void },
+  options: {
+    reducedMotion: boolean;
+    onChange?: (index: number) => void;
+    sound?: SceneSounds;
+  },
 ): MachinesScene {
   const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -1207,9 +1217,19 @@ export function createMachinesScene(
   let spawnedAt = 0;
   let hopStart = -10;
 
-  function setEmotion(next: Emotion, lockSeconds = 0) {
+  const EMOTION_SOUNDS: Partial<Record<Emotion, SoundName>> = {
+    curious: 'curious',
+    happy: 'happy',
+    joy: 'joy',
+    surprised: 'surprised',
+    sleepy: 'sleepy',
+  };
+
+  function setEmotion(next: Emotion, lockSeconds = 0, silent = false) {
     if (next !== emotion) {
       emotion = next;
+      const sound = EMOTION_SOUNDS[next];
+      if (sound && !silent) options.sound?.play(sound);
       const emote = EMOTES[next];
       emoteVisible = Boolean(emote);
       if (emote) {
@@ -1219,6 +1239,17 @@ export function createMachinesScene(
       }
     }
     if (lockSeconds > 0) emotionLockedUntil = elapsed + lockSeconds;
+  }
+
+  let nextSnoreAt = 0;
+  let lastDirtSoundAt = -10;
+  /** Particle emitter for machines' work, with a (throttled) dirt sound. */
+  function workEmit(origin: THREE.Vector3, count: number, spread: number) {
+    emit(origin, count, spread);
+    if (elapsed - lastDirtSoundAt > 1.4) {
+      lastDirtSoundAt = elapsed;
+      options.sound?.play('dirt');
+    }
   }
 
   let transition: { phase: 'out' | 'in'; t: number; next: number } | null = null;
@@ -1319,7 +1350,8 @@ export function createMachinesScene(
     drive.yaw = faceCameraYaw() + (Math.random() - 0.5) * 0.6;
     emit(drive.position.clone().setY(0.2), 40, 2.5);
     spawnedAt = elapsed;
-    setEmotion('surprised', 1.4);
+    options.sound?.play('appear');
+    setEmotion('surprised', 1.4, true);
     rememberShown(current);
     options.onChange?.(current);
   }
@@ -1492,9 +1524,21 @@ export function createMachinesScene(
       work: drive.work,
       moving,
       lookYaw,
-      emit,
+      emit: workEmit,
     });
     activeMachine.root.updateMatrixWorld(true);
+
+    // Engine hum follows throttle; off while dozing, revving when overjoyed.
+    if (animate && running) {
+      const throttle = sleepy
+        ? 0
+        : clamp(0.25 + (drive.speed / 1.8) * 0.75 + (emotion === 'joy' ? 0.5 : 0), 0, 1);
+      options.sound?.engine(throttle * baseScale, MACHINE_TYPES[current]?.engineHz ?? 40);
+    }
+    if (sleepy && elapsed > nextSnoreAt) {
+      nextSnoreAt = elapsed + 3.2;
+      options.sound?.play('snore');
+    }
 
     // Eyes: follow the pointer, meet the viewer's gaze, or droop when sleepy.
     if (pointerActive && pointerOnGround) eyeTarget.set(pointerGround.x, 0.6, pointerGround.z);
@@ -1577,6 +1621,7 @@ export function createMachinesScene(
       lastPointerAt = elapsed;
     },
     setPressed(next) {
+      if (next !== pressed) options.sound?.play(next ? 'lightsOn' : 'lightsOff');
       pressed = next;
       if (options.reducedMotion) {
         lightsLevel = next ? 1 : 0;
@@ -1588,6 +1633,7 @@ export function createMachinesScene(
       if (!ndc || transition?.phase === 'out') return;
       raycaster.setFromCamera(ndc, camera);
       if (raycaster.intersectObject(activeMachine.root, true).length === 0) return;
+      options.sound?.play('horn');
       setEmotion('joy', 1.8);
       emoteShownAt = elapsed;
       hopStart = elapsed;
@@ -1598,6 +1644,7 @@ export function createMachinesScene(
       if (next === running) return;
       running = next;
       cancelAnimationFrame(frame);
+      if (!running) options.sound?.engine(0, 40);
       if (running) {
         clock.getDelta();
         render();
@@ -1605,6 +1652,7 @@ export function createMachinesScene(
     },
     dispose() {
       running = false;
+      options.sound?.engine(0, 40);
       cancelAnimationFrame(frame);
       resizeObserver.disconnect();
       const disposed = new Set<{ dispose(): void }>();
