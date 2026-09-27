@@ -5,11 +5,11 @@ own branch and PR. Read this before touching anything.
 
 ## Areas and who owns them
 
-| Area | Paths | Session (branch) |
-| --- | --- | --- |
-| Public site, branding, leads, admin | `apps/web/src/app/**` (pages), `apps/web/src/components/**`, `packages/shared/src/schemas/{lead,agents}.ts` | «Сайт для спецпласт16 с ИИ агентами» (`claude/specplast16-website-ai-agents-*`) |
-| Mobile app, mobile auth, PWA | `apps/mobile/**`, `apps/web/src/app/api/mobile/**`, `apps/web/src/lib/{mobileAuth,requestUser}.ts`, `apps/web/src/app/{manifest,sw}.ts` | «Приложение» (`claude/token-recovery-agent-tasks-*`) |
-| Database, deploy, CI | `packages/database/**`, `.github/**`, `.env.example` | shared — see the rules below |
+| Area                                | Paths                                                                                                                                   | Session (branch)                                                                |
+| ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| Public site, branding, leads, admin | `apps/web/src/app/**` (pages), `apps/web/src/components/**`, `packages/shared/src/schemas/{lead,agents}.ts`                             | «Сайт для спецпласт16 с ИИ агентами» (`claude/specplast16-website-ai-agents-*`) |
+| Mobile app, mobile auth, PWA        | `apps/mobile/**`, `apps/web/src/app/api/mobile/**`, `apps/web/src/lib/{mobileAuth,requestUser}.ts`, `apps/web/src/app/{manifest,sw}.ts` | «Приложение» (`claude/token-recovery-agent-tasks-*`)                            |
+| Database, deploy, CI                | `packages/database/**`, `.github/**`, `.env.example`                                                                                    | shared — see the rules below                                                    |
 
 If you are a new session: pick an area, say so in your PR title, and stay out
 of the others unless the change is required for your feature. When a shared
