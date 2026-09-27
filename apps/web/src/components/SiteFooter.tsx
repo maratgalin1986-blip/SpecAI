@@ -1,9 +1,10 @@
+import { LANDINGS } from '@/lib/landings';
 import { SITE } from '@/lib/site';
 
 export function SiteFooter() {
   return (
     <footer className="border-t border-slate-200 bg-slate-900 text-slate-300">
-      <div className="mx-auto grid max-w-6xl gap-6 px-6 py-10 pb-24 text-sm sm:grid-cols-3">
+      <div className="mx-auto grid max-w-6xl gap-6 px-6 py-10 pb-28 text-sm sm:grid-cols-3">
         <div>
           <div className="text-base font-semibold text-white">{SITE.name}</div>
           <p className="mt-2">{SITE.tagline}.</p>
@@ -13,6 +14,11 @@ export function SiteFooter() {
           <a href="/equipment" className="hover:text-white">
             Каталог техники
           </a>
+          {LANDINGS.map((landing) => (
+            <a key={landing.slug} href={`/arenda/${landing.slug}`} className="hover:text-white">
+              Аренда {landing.title}
+            </a>
+          ))}
           <a href="/orders" className="hover:text-white">
             Заявки
           </a>

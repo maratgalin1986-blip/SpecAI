@@ -17,7 +17,7 @@ export function AgentChatWidget() {
   return (
     <>
       {isOpen && (
-        <div className="fixed inset-x-2 bottom-20 z-50 flex h-[70vh] flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl sm:inset-x-auto sm:right-6 sm:w-[400px]">
+        <div className="fixed inset-x-2 bottom-36 z-50 sm:bottom-20 flex h-[70vh] flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl sm:inset-x-auto sm:right-6 sm:w-[400px]">
           <div className="flex items-center justify-between bg-slate-900 px-4 py-3 text-white">
             <div>
               <div className="text-sm font-semibold">ИИ-агенты СпецПласт16</div>
@@ -48,7 +48,7 @@ export function AgentChatWidget() {
         type="button"
         onClick={() => setIsOpen((open) => !open)}
         aria-label="Открыть чат с ИИ-агентами"
-        className="fixed bottom-4 right-4 z-50 flex items-center gap-2 rounded-full bg-amber-600 p-3.5 text-sm font-semibold text-white shadow-lg hover:bg-amber-700 sm:right-6 sm:px-5 sm:py-3"
+        className="fixed bottom-20 right-4 z-50 flex items-center gap-2 sm:bottom-4 rounded-full bg-amber-600 p-3.5 text-sm font-semibold text-white shadow-lg hover:bg-amber-700 sm:right-6 sm:px-5 sm:py-3"
       >
         <svg
           viewBox="0 0 24 24"

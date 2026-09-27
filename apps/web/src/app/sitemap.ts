@@ -1,5 +1,6 @@
 import type { MetadataRoute } from 'next';
 import { prisma } from '@specai/database';
+import { LANDINGS } from '@/lib/landings';
 import { siteUrl } from '@/lib/siteUrl';
 
 export const revalidate = 3600;
@@ -8,6 +9,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const base = siteUrl();
   const staticPages = [
     '',
+    ...LANDINGS.map((landing) => `/arenda/${landing.slug}`),
     '/equipment',
     '/orders',
     '/agents',

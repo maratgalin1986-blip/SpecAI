@@ -94,7 +94,7 @@ export function InstallPrompt() {
     <div
       role="dialog"
       aria-label="Установить приложение"
-      className="fixed inset-x-3 bottom-3 z-40 mx-auto flex max-w-md items-center gap-3 rounded-xl border border-slate-200 bg-white p-3 shadow-lg sm:inset-x-auto sm:left-4"
+      className="fixed inset-x-3 bottom-20 z-40 sm:bottom-3 mx-auto flex max-w-md items-center gap-3 rounded-xl border border-slate-200 bg-white p-3 shadow-lg sm:inset-x-auto sm:left-4"
     >
       <img
         src="/icons/icon-192.png"

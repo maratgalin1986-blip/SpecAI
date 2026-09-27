@@ -10,6 +10,12 @@ export const SITE = {
   phone: '+7 (927) 242-80-88',
   phoneHref: 'tel:+79272428088',
   email: 'specplast16@mail.ru',
+  // WhatsApp chat with the same number (click-to-chat).
+  whatsappHref: 'https://wa.me/79272428088',
+  // Telegram bot username without "@", once the bot exists (NEXT_PUBLIC_TELEGRAM_BOT).
+  telegramBot: process.env.NEXT_PUBLIC_TELEGRAM_BOT ?? '',
+  // Promise shown next to callback forms. Keep it realistic.
+  callbackPromise: 'Перезвоним в течение 15 минут в рабочее время',
   workingHours: 'Пн–Сб, 8:00–20:00 · ИИ-агенты — круглосуточно',
   // Legal details of the personal-data operator shown in the privacy policy,
   // e.g. 'ИП Иванов Иван Иванович' and the ИНН. Fill in before launch.

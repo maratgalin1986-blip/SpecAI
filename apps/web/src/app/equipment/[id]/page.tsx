@@ -4,6 +4,8 @@ import { Card, StatusBadge } from '@specai/ui';
 import type { Metadata } from 'next';
 import { BookingForm } from '@/components/BookingForm';
 import { CallbackForm } from '@/components/CallbackForm';
+import { RentalCalculator } from '@/components/RentalCalculator';
+import { SITE } from '@/lib/site';
 import { pluralizeRu } from '@/lib/pluralize';
 import { formatMoney, formatRate } from '@/lib/money';
 
@@ -160,12 +162,33 @@ export default async function EquipmentDetailPage({ params }: { params: { id: st
           )}
 
           <div className="mt-2 border-t border-slate-200 pt-3">
-            <CallbackForm
-              source={`equipment:${item.id}`}
-              defaultMessage={`Интересует: ${item.name}`}
-              title="Заказать по телефону"
-              subtitle="Оставьте номер — уточним даты, доставку и цену."
-            />
+            {item.hourlyRate ? (
+              <RentalCalculator
+                equipmentId={item.id}
+                equipmentName={item.name}
+                hourlyRate={Number(item.hourlyRate)}
+                hammerRate={
+                  typeof specs['Цена с гидромолотом, ₽/ч'] === 'number'
+                    ? (specs['Цена с гидромолотом, ₽/ч'] as number)
+                    : undefined
+                }
+              />
+            ) : (
+              <CallbackForm
+                source={`equipment:${item.id}`}
+                defaultMessage={`Интересует: ${item.name}`}
+                title="Заказать по телефону"
+                subtitle={`${SITE.callbackPromise}.`}
+              />
+            )}
+            <a
+              href={SITE.whatsappHref}
+              target="_blank"
+              rel="noopener"
+              className="mt-3 flex items-center justify-center gap-2 rounded-md border border-emerald-600 py-2 text-sm font-semibold text-emerald-700 hover:bg-emerald-50"
+            >
+              Спросить в WhatsApp
+            </a>
           </div>
         </Card>
       </div>
