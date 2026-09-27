@@ -96,13 +96,14 @@ API сайта из `apps/web`: вход и регистрация, катало
 ```bash
 cd apps/mobile
 npx eas whoami                                   # должен показать аккаунт
-EXPO_PUBLIC_API_URL=https://<prod-url> npx eas update --branch preview \
+EXPO_PUBLIC_API_URL=https://spec-ai-web.vercel.app npx eas update --branch preview \
   --message "описание изменений" --platform all
 npx eas update:list --branch preview             # id и ссылки на обновления
 ```
 
 Адрес API вшивается в бандл в момент публикации, поэтому `EXPO_PUBLIC_API_URL` обязателен
-и должен указывать на продакшен-сайт (не `localhost`). После публикации команда печатает
+и должен указывать на продакшен-сайт (не `localhost`); сейчас это Vercel-проект `spec-ai-web`,
+`https://spec-ai-web.vercel.app`. После публикации команда печатает
 ссылку на страницу обновления — `https://expo.dev/accounts/maratgalin1986s-team/projects/specai/updates/<group-id>`.
 
 На телефоне:
@@ -131,7 +132,7 @@ npx eas build --platform all --profile production    # магазинные сб
 ```
 
 Переменную `EXPO_PUBLIC_API_URL` для сборок задайте в профиле `eas.json`
-(`"env": { "EXPO_PUBLIC_API_URL": "https://<prod-url>" }`) или через `eas env:create`.
+(`"env": { "EXPO_PUBLIC_API_URL": "https://spec-ai-web.vercel.app" }`) или через `eas env:create`.
 
 Что потребуется:
 
