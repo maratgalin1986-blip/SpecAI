@@ -44,8 +44,30 @@ model User {
   orders        Order[]          @relation("OrderCustomer")
   reviews       Review[]
   aiConversations AiConversation[]
+  verificationTokens VerificationToken[]
 
   @@index([companyId])
+}
+
+enum VerificationTokenType {
+  PASSWORD_RESET
+  EMAIL_VERIFY
+}
+
+// One-time tokens for password reset and email verification. `token` holds the
+// sha256 hash of the raw token that was emailed to the user, never the raw value.
+model VerificationToken {
+  id        String                @id @default(cuid())
+  token     String                @unique
+  type      VerificationTokenType
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime              @default(now())
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String
+
+  @@index([userId])
 }
 
 // A Company can be an equipment provider (rental fleet owner), a customer

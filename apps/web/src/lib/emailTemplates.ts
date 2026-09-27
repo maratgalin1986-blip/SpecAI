@@ -204,3 +204,49 @@ export function paymentReceived(params: PaymentReceivedParams): EmailTemplate {
     text: plain(title, lines, url),
   };
 }
+
+export type PasswordResetParams = { resetUrl: string };
+
+/** Пользователю: ссылка для сброса пароля. */
+export function passwordReset(params: PasswordResetParams): EmailTemplate {
+  const title = 'Сброс пароля';
+  const subject = 'SpecAI: сброс пароля';
+
+  const lines = [
+    'Вы запросили сброс пароля для аккаунта SpecAI.',
+    'Перейдите по ссылке ниже, чтобы задать новый пароль. Ссылка действует 1 час.',
+    'Если вы не запрашивали сброс, просто проигнорируйте это письмо — пароль останется прежним.',
+  ];
+
+  return {
+    subject,
+    html: layout(title, lines.map(escapeHtml), {
+      href: params.resetUrl,
+      label: 'Задать новый пароль',
+    }),
+    text: plain(title, lines, params.resetUrl),
+  };
+}
+
+export type EmailVerifyParams = { verifyUrl: string };
+
+/** Пользователю: ссылка для подтверждения email. */
+export function emailVerify(params: EmailVerifyParams): EmailTemplate {
+  const title = 'Подтвердите email';
+  const subject = 'SpecAI: подтвердите email';
+
+  const lines = [
+    'Спасибо за регистрацию в SpecAI!',
+    'Подтвердите адрес электронной почты, перейдя по ссылке ниже. Ссылка действует 24 часа.',
+    'Если вы не создавали аккаунт, просто проигнорируйте это письмо.',
+  ];
+
+  return {
+    subject,
+    html: layout(title, lines.map(escapeHtml), {
+      href: params.verifyUrl,
+      label: 'Подтвердить email',
+    }),
+    text: plain(title, lines, params.verifyUrl),
+  };
+}

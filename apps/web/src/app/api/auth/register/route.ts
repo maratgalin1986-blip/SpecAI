@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import { prisma } from '@specai/database';
 import { registerSchema } from '@specai/shared';
+import { sendVerificationEmail } from '@/lib/verificationEmail';
 
 export async function POST(request: NextRequest) {
   const body = await request.json();
@@ -45,6 +46,13 @@ export async function POST(request: NextRequest) {
       },
     });
   });
+
+  // Письмо подтверждения — best-effort: сбой не должен ломать регистрацию.
+  try {
+    await sendVerificationEmail(user);
+  } catch (error) {
+    console.error('[auth] failed to send verification email', error);
+  }
 
   return NextResponse.json({ id: user.id, email: user.email }, { status: 201 });
 }

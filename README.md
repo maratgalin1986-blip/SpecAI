@@ -206,6 +206,27 @@ Environment variables (see `.env.example`):
 
 Tests: `pnpm --filter @specai/web test` covers the templates and the no-key path.
 
+## Password reset and email verification
+
+One-time tokens live in the `VerificationToken` table (`type` is `PASSWORD_RESET` or
+`EMAIL_VERIFY`). Only the sha256 hash of a token is stored; the raw value exists solely in
+the emailed link. Consuming a token is a single atomic `updateMany` (unused + not expired →
+`usedAt = now`), so a link works exactly once. Helpers: `apps/web/src/lib/tokens.ts`.
+
+- `POST /api/auth/forgot-password { email }` — always `200`; if the account exists, sends
+  `passwordReset` with `/reset-password?token=…` (valid 60 min). Rate limited 5/hour per
+  email + IP.
+- `POST /api/auth/reset-password { token, password }` — sets a new bcrypt hash; `400`
+  "Ссылка недействительна или устарела" for an unknown, used or expired token.
+- `POST /api/auth/send-verification` — session required; no-op when already verified;
+  sends `emailVerify` with `/verify-email?token=…` (valid 24 h). Registration sends the
+  same email best-effort.
+- `GET /verify-email?token=…` → `/api/auth/verify-email` — marks `User.emailVerified` and
+  redirects to `/dashboard?verified=1` (or `/login?verified=1` without a session).
+
+Pages: `/forgot-password`, `/reset-password`; `/login` links to the former, and the dashboard
+shows a "Подтвердите email" banner (`VerifyEmailBanner`) until the address is verified.
+
 ## AI service usage
 
 `packages/ai-service` exposes three functions consumed by `apps/web`:

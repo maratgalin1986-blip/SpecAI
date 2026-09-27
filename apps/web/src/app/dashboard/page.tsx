@@ -4,6 +4,7 @@ import { BookingStatusBadge, Card } from '@specai/ui';
 import { authOptions } from '@/lib/auth';
 import { ReviewForm } from '@/components/ReviewForm';
 import { PayBookingButton } from '@/components/PayBookingButton';
+import { VerifyEmailBanner } from '@/components/VerifyEmailBanner';
 
 export const dynamic = 'force-dynamic';
 
@@ -39,12 +40,12 @@ function PaymentStatusLabel({ paid }: { paid: boolean }) {
 export default async function DashboardPage({
   searchParams,
 }: {
-  searchParams?: { payment?: string };
+  searchParams?: { payment?: string; verified?: string };
 }) {
   const session = await getServerSession(authOptions);
   const paymentNotice = searchParams?.payment ? PAYMENT_NOTICE[searchParams.payment] : undefined;
 
-  const [equipmentCount, activeBookings, companies, myBookings, myOrders] = await Promise.all([
+  const [equipmentCount, activeBookings, companies, myBookings, myOrders, me] = await Promise.all([
     prisma.equipment.count(),
     prisma.booking.count({ where: { status: { in: ['CONFIRMED', 'ACTIVE'] } } }),
     prisma.company.count({ where: { isProvider: true } }),
@@ -64,6 +65,12 @@ export default async function DashboardPage({
           take: 20,
         })
       : Promise.resolve([]),
+    session
+      ? prisma.user.findUnique({
+          where: { id: session.user.id },
+          select: { emailVerified: true },
+        })
+      : Promise.resolve(null),
   ]);
 
   const stats = [
@@ -75,6 +82,17 @@ export default async function DashboardPage({
   return (
     <div className="flex flex-col gap-6">
       <h1 className="text-2xl font-bold">Личный кабинет</h1>
+      {searchParams?.verified === '1' && (
+        <p className="rounded-md border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
+          Email подтверждён. Спасибо!
+        </p>
+      )}
+      {searchParams?.verified === '0' && (
+        <p className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+          Ссылка подтверждения недействительна или устарела. Запросите новое письмо.
+        </p>
+      )}
+      {session && me && !me.emailVerified && <VerifyEmailBanner />}
       {paymentNotice && (
         <p className={`rounded-md border px-4 py-3 text-sm ${paymentNotice.className}`}>
           {paymentNotice.text}

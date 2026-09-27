@@ -59,6 +59,11 @@ export default function LoginPage() {
             {isSubmitting ? 'Выполняется вход…' : 'Войти'}
           </Button>
         </form>
+        <p className="mt-3 text-sm">
+          <a href="/forgot-password" className="font-medium text-amber-700">
+            Забыли пароль?
+          </a>
+        </p>
         <p className="mt-4 text-sm text-slate-500">
           Нет аккаунта?{' '}
           <a href="/register" className="font-medium text-amber-700">

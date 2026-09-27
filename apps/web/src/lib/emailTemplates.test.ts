@@ -2,7 +2,9 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   bidAccepted,
   bookingStatusChanged,
+  emailVerify,
   newBidReceived,
+  passwordReset,
   paymentReceived,
 } from './emailTemplates';
 
@@ -85,5 +87,27 @@ describe('paymentReceived', () => {
     expect(provider.text).toContain('Клиент оплатил');
     expect(provider.text).toContain('USD');
     expect(customer.html).toContain('https://specai.example.com/dashboard');
+  });
+});
+
+describe('passwordReset', () => {
+  it('links to the reset url in html and text', () => {
+    const url = 'https://specai.example.com/reset-password?token=abc&x=1';
+    const tpl = passwordReset({ resetUrl: url });
+    expect(tpl.subject).toContain('сброс пароля');
+    expect(tpl.html).toContain('https://specai.example.com/reset-password?token=abc&amp;x=1');
+    expect(tpl.text).toContain(url);
+    expect(tpl.text).toContain('1 час');
+  });
+});
+
+describe('emailVerify', () => {
+  it('links to the verify url and mentions the 24h ttl', () => {
+    const url = 'https://specai.example.com/verify-email?token=xyz';
+    const tpl = emailVerify({ verifyUrl: url });
+    expect(tpl.subject).toContain('подтвердите email');
+    expect(tpl.html).toContain(url);
+    expect(tpl.text).toContain(url);
+    expect(tpl.text).toContain('24 часа');
   });
 });
