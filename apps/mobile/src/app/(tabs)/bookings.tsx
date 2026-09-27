@@ -19,7 +19,12 @@ import {
   type Booking,
   type BookingStatus,
 } from '@/lib/api';
-import { BOOKING_STATUS_LABELS, formatDate, formatMoney } from '@/lib/format';
+import {
+  BOOKING_STATUS_LABELS,
+  PAYMENT_STATUS_LABELS,
+  formatDate,
+  formatMoney,
+} from '@/lib/format';
 import { colors, spacing } from '@/lib/theme';
 
 const STATUS_TONES: Record<BookingStatus, BadgeTone> = {
@@ -51,7 +56,9 @@ function BookingCard({
 }) {
   const paid = isPaid(booking);
   const canCancel = booking.status === 'PENDING' || booking.status === 'CONFIRMED';
-  const canPay = booking.status === 'PENDING' && !paid;
+  const refundRequired = booking.payment?.status === 'REFUND_REQUIRED';
+  const canPay =
+    (booking.status === 'PENDING' || booking.status === 'CONFIRMED') && !paid && !refundRequired;
   const canReview = booking.status === 'COMPLETED' && !booking.review;
   return (
     <Card style={styles.card}>
@@ -66,10 +73,12 @@ function BookingCard({
       </Text>
       <View style={styles.row}>
         <Text style={styles.price}>{formatMoney(booking.totalPrice, booking.currency)}</Text>
-        {paid ? (
-          <Badge text="Оплачено" tone="success" />
+        {refundRequired ? (
+          <Badge text={PAYMENT_STATUS_LABELS.REFUND_REQUIRED} tone="danger" />
+        ) : paid ? (
+          <Badge text={PAYMENT_STATUS_LABELS.PAID} tone="success" />
         ) : booking.payment?.status === 'PENDING' ? (
-          <Badge text="Ожидает оплаты" tone="warning" />
+          <Badge text={PAYMENT_STATUS_LABELS.PENDING} tone="warning" />
         ) : null}
       </View>
       {booking.notes ? <Text style={styles.notes}>{booking.notes}</Text> : null}

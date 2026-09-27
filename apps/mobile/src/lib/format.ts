@@ -1,4 +1,4 @@
-import type { BidStatus, BookingStatus, OrderStatus } from './api';
+import type { BidStatus, BookingStatus, EquipmentStatus, OrderStatus } from './api';
 
 const CURRENCY_SYMBOLS: Record<string, string> = {
   USD: '$',
@@ -60,11 +60,24 @@ export const BOOKING_STATUS_LABELS: Record<BookingStatus, string> = {
   CANCELLED: 'Отменено',
 };
 
+// Индексируется строкой из API, поэтому Record<string>; satisfies гарантирует
+// подписи для всех значений серверного enum EquipmentStatus.
 export const EQUIPMENT_STATUS_LABELS: Record<string, string> = {
   AVAILABLE: 'Доступна',
   RENTED: 'В аренде',
-  MAINTENANCE: 'На обслуживании',
-  UNAVAILABLE: 'Недоступна',
+  IN_MAINTENANCE: 'На обслуживании',
+  RETIRED: 'Списана',
+} satisfies Record<EquipmentStatus, string>;
+
+export const PAYMENT_STATUS_LABELS: Record<
+  'PENDING' | 'PAID' | 'FAILED' | 'REFUNDED' | 'REFUND_REQUIRED',
+  string
+> = {
+  PENDING: 'Ожидает оплаты',
+  PAID: 'Оплачено',
+  FAILED: 'Оплата не прошла',
+  REFUNDED: 'Возвращено',
+  REFUND_REQUIRED: 'Требуется возврат',
 };
 
 export const SPEC_LABELS: Record<string, string> = {

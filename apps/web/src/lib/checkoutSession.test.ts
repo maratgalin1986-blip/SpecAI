@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { decideCheckout } from './checkoutSession';
+import { decideCheckout, isPayableBookingStatus } from './checkoutSession';
 
 describe('decideCheckout', () => {
   it('creates a new session when there is no existing one', () => {
@@ -30,5 +30,18 @@ describe('decideCheckout', () => {
     expect(decideCheckout({ id: 'cs_4', status: 'complete', url: null })).toEqual({
       action: 'already_paid',
     });
+  });
+});
+
+describe('isPayableBookingStatus', () => {
+  it('allows PENDING and CONFIRMED bookings', () => {
+    expect(isPayableBookingStatus('PENDING')).toBe(true);
+    expect(isPayableBookingStatus('CONFIRMED')).toBe(true);
+  });
+
+  it('refuses the other statuses', () => {
+    for (const status of ['ACTIVE', 'COMPLETED', 'CANCELLED', 'UNKNOWN']) {
+      expect(isPayableBookingStatus(status)).toBe(false);
+    }
   });
 });

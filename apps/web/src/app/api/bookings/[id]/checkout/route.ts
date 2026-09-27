@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@specai/database';
 import { getRequestUser } from '@/lib/requestUser';
 import { getAppUrl, getStripe } from '@/lib/stripe';
-import { decideCheckout } from '@/lib/checkoutSession';
+import { decideCheckout, isPayableBookingStatus } from '@/lib/checkoutSession';
 import { toStripeAmount } from '@/lib/stripeAmount';
 
 export const runtime = 'nodejs';
@@ -23,9 +23,12 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
   if (booking.customerId !== currentUser.id) {
     return NextResponse.json({ error: 'Нет прав на оплату этого бронирования' }, { status: 403 });
   }
-  if (booking.status !== 'PENDING') {
+  if (!isPayableBookingStatus(booking.status)) {
     return NextResponse.json(
-      { error: 'Оплатить можно только бронирование, ожидающее подтверждения' },
+      {
+        error:
+          'Оплатить можно только бронирование в статусе «ожидает подтверждения» или «подтверждено»',
+      },
       { status: 409 },
     );
   }

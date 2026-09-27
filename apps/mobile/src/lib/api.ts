@@ -105,13 +105,15 @@ export interface ApiUser {
   emailVerified?: string | null;
 }
 
+export type EquipmentStatus = 'AVAILABLE' | 'RENTED' | 'IN_MAINTENANCE' | 'RETIRED';
+
 export interface Equipment {
   id: string;
   name: string;
   make: string | null;
   model: string | null;
   year: number | null;
-  status: 'AVAILABLE' | 'RENTED' | 'MAINTENANCE' | 'UNAVAILABLE' | string;
+  status: EquipmentStatus | string;
   dailyRate: string | number;
   weeklyRate: string | number | null;
   monthlyRate: string | number | null;
@@ -134,7 +136,7 @@ export interface EquipmentListResponse {
 
 export type BookingStatus = 'PENDING' | 'CONFIRMED' | 'ACTIVE' | 'COMPLETED' | 'CANCELLED';
 
-export type PaymentStatus = 'PENDING' | 'PAID' | 'FAILED' | 'REFUNDED' | string;
+export type PaymentStatus = 'PENDING' | 'PAID' | 'FAILED' | 'REFUNDED' | 'REFUND_REQUIRED' | string;
 
 export interface Booking {
   id: string;

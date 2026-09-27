@@ -249,6 +249,9 @@ enum PaymentStatus {
   PAID
   FAILED
   REFUNDED
+  // Paid, but the booking was cancelled afterwards: refund manually in the
+  // Stripe Dashboard.
+  REFUND_REQUIRED
 }
 
 // One payment per booking. Created when the customer starts Stripe Checkout;

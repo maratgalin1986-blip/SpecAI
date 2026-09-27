@@ -48,6 +48,34 @@ async function closePendingCheckout(
   }
 }
 
+/**
+ * A cancelled booking whose deposit was already PAID needs a refund. Refunds
+ * are done manually in the Stripe Dashboard; the Payment is marked
+ * REFUND_REQUIRED so it does not silently stay PAID.
+ */
+async function flagPaidPaymentForRefund(
+  bookingId: string,
+  payment: { id: string; status: string } | null,
+) {
+  if (!payment || payment.status !== 'PAID') {
+    return;
+  }
+  try {
+    await prisma.payment.updateMany({
+      where: { id: payment.id, status: 'PAID' },
+      data: { status: 'REFUND_REQUIRED' },
+    });
+    console.error(
+      `[stripe] booking ${bookingId} cancelled after payment ${payment.id} was PAID — manual refund required`,
+    );
+  } catch (error) {
+    console.error(
+      `[stripe] failed to mark payment ${payment.id} REFUND_REQUIRED for cancelled booking ${bookingId}`,
+      error,
+    );
+  }
+}
+
 export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
   const currentUser = await getRequestUser(request);
   if (!currentUser) {
@@ -108,6 +136,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
 
   if (updated.status === 'CANCELLED' && booking.status !== 'CANCELLED') {
     await closePendingCheckout(booking.payment);
+    await flagPaidPaymentForRefund(updated.id, booking.payment);
   }
 
   if (updated.status !== booking.status) {
