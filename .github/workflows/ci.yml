@@ -8,8 +8,23 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: specai
+          POSTGRES_PASSWORD: specai
+          POSTGRES_DB: specai
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U specai -d specai"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     env:
       DATABASE_URL: 'postgresql://specai:specai@localhost:5432/specai?schema=public'
+      DIRECT_URL: 'postgresql://specai:specai@localhost:5432/specai?schema=public'
       NEXTAUTH_SECRET: 'ci-build-secret'
       NEXTAUTH_URL: 'http://localhost:3000'
     steps:
@@ -35,6 +50,9 @@ jobs:
 
       - name: Typecheck
         run: pnpm typecheck
+
+      - name: Test
+        run: pnpm test
 
       - name: Build
         run: pnpm build

@@ -21,7 +21,10 @@ export interface RateLimitResult {
 
 const buckets = new Map<string, number[]>();
 
-export function checkRateLimit(key: string, { limit, windowMs }: RateLimitOptions): RateLimitResult {
+export function checkRateLimit(
+  key: string,
+  { limit, windowMs }: RateLimitOptions,
+): RateLimitResult {
   const now = Date.now();
   const windowStart = now - windowMs;
 

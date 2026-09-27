@@ -1,0 +1,110 @@
+import { describe, expect, it } from 'vitest';
+import {
+  createBidSchema,
+  createBookingSchema,
+  createEquipmentSchema,
+  equipmentSearchQuerySchema,
+  registerSchema,
+} from '../../index';
+
+const CUID = 'cjld2cjxh0000qzrmn831i7rn';
+
+describe('createEquipmentSchema', () => {
+  it('applies defaults for currency and imageUrls', () => {
+    const result = createEquipmentSchema.parse({
+      name: 'Экскаватор JCB 3CX',
+      categoryId: CUID,
+      companyId: CUID,
+      dailyRate: 15000,
+    });
+    expect(result.currency).toBe('USD');
+    expect(result.imageUrls).toEqual([]);
+  });
+
+  it('rejects a non-positive dailyRate and a non-cuid categoryId', () => {
+    const result = createEquipmentSchema.safeParse({
+      name: 'Кран',
+      categoryId: 'not-a-cuid',
+      companyId: CUID,
+      dailyRate: 0,
+    });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      const paths = result.error.issues.map((issue) => issue.path.join('.'));
+      expect(paths).toContain('dailyRate');
+      expect(paths).toContain('categoryId');
+    }
+  });
+});
+
+describe('createBookingSchema', () => {
+  it('coerces ISO strings to dates and requires endDate after startDate', () => {
+    const ok = createBookingSchema.parse({
+      equipmentId: CUID,
+      customerId: CUID,
+      startDate: '2026-10-01',
+      endDate: '2026-10-05',
+    });
+    expect(ok.startDate).toBeInstanceOf(Date);
+    expect(ok.endDate.getTime()).toBeGreaterThan(ok.startDate.getTime());
+
+    const bad = createBookingSchema.safeParse({
+      equipmentId: CUID,
+      customerId: CUID,
+      startDate: '2026-10-05',
+      endDate: '2026-10-01',
+    });
+    expect(bad.success).toBe(false);
+    if (!bad.success) {
+      expect(bad.error.issues[0]?.path).toEqual(['endDate']);
+    }
+  });
+});
+
+describe('registerSchema', () => {
+  it('discriminates on accountType and requires companyName for providers', () => {
+    const customer = registerSchema.safeParse({
+      accountType: 'CUSTOMER',
+      name: 'Иван',
+      email: 'ivan@example.com',
+      password: 'password123',
+    });
+    expect(customer.success).toBe(true);
+
+    const providerWithoutCompany = registerSchema.safeParse({
+      accountType: 'PROVIDER',
+      name: 'ООО Техника',
+      email: 'ops@example.com',
+      password: 'password123',
+    });
+    expect(providerWithoutCompany.success).toBe(false);
+
+    const shortPassword = registerSchema.safeParse({
+      accountType: 'CUSTOMER',
+      name: 'Иван',
+      email: 'ivan@example.com',
+      password: 'short',
+    });
+    expect(shortPassword.success).toBe(false);
+  });
+});
+
+describe('equipmentSearchQuerySchema and createBidSchema', () => {
+  it('fills pagination defaults and caps pageSize at 100', () => {
+    expect(equipmentSearchQuerySchema.parse({})).toMatchObject({ page: 1, pageSize: 20 });
+    expect(equipmentSearchQuerySchema.safeParse({ pageSize: 101 }).success).toBe(false);
+  });
+
+  it('requires a 3-letter currency and a positive price for bids', () => {
+    expect(createBidSchema.parse({ orderId: CUID, equipmentId: CUID, price: 100 }).currency).toBe(
+      'USD',
+    );
+    expect(
+      createBidSchema.safeParse({ orderId: CUID, equipmentId: CUID, price: 100, currency: 'RUBL' })
+        .success,
+    ).toBe(false);
+    expect(createBidSchema.safeParse({ orderId: CUID, equipmentId: CUID, price: -5 }).success).toBe(
+      false,
+    );
+  });
+});
