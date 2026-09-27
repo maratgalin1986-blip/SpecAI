@@ -47,7 +47,8 @@ export default async function OrdersPage({ searchParams }: { searchParams: Order
     'OPEN',
   );
   const requestedPage = parsePage(searchParams.page);
-  const where = status === 'ALL' ? {} : { status };
+  // Orders imported from messengers stay hidden until the admin publishes them.
+  const where = status === 'ALL' ? { status: { not: 'PENDING_REVIEW' as const } } : { status };
 
   const total = await prisma.order.count({ where });
   const totalPages = totalPagesFor(total, PAGE_SIZE);
@@ -129,7 +130,7 @@ export default async function OrdersPage({ searchParams }: { searchParams: Order
                     <p className="font-medium">{order.description}</p>
                     {status === 'ALL' && (
                       <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600">
-                        {STATUS_LABELS[order.status]}
+                        {STATUS_LABELS[order.status as OrderStatus]}
                       </span>
                     )}
                   </div>
@@ -138,6 +139,12 @@ export default async function OrdersPage({ searchParams }: { searchParams: Order
                     {order.desiredStartDate.toLocaleDateString('ru-RU')} –{' '}
                     {order.desiredEndDate.toLocaleDateString('ru-RU')}
                   </p>
+                  {order.source !== 'SITE' && (
+                    <p className="w-fit rounded-full bg-sky-50 px-2 py-0.5 text-xs font-medium text-sky-700">
+                      Из {order.source === 'WHATSAPP' ? 'WhatsApp' : 'Telegram'}
+                      {order.sourceChat ? ` · ${order.sourceChat}` : ''}
+                    </p>
+                  )}
                   <p className="text-sm text-slate-500">
                     {order.bids.length > 0
                       ? `Предложений: ${order.bids.length}`

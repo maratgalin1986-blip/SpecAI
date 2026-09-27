@@ -282,6 +282,8 @@ model Payment {
 // ---------------------------------------------------------------------------
 
 enum OrderStatus {
+  // Imported from a messenger chat, waiting for the admin to publish it.
+  PENDING_REVIEW
   OPEN
   MATCHED
   CANCELLED
@@ -311,9 +313,33 @@ model Order {
   bids    Bid[]
   booking Booking?
 
+  // Orders collected automatically from Telegram/WhatsApp chats and groups.
+  // For those, `customer` is a technical importer user and the real contact
+  // is kept in contactName/contactPhone (shown only to providers and admins).
+  source       OrderSource @default(SITE)
+  // "telegram:<chat>:<message>". Not @unique on purpose: adding a unique
+  // constraint makes the build-time `db push` stop for confirmation. Dedupe
+  // is done in code (lib/ingest.ts).
+  externalId   String?
+  fingerprint  String? // normalized text — spots reposts across chats
+  sourceChat   String?
+  sourceUrl    String?
+  contactName  String?
+  contactPhone String?
+  rawText      String?
+
   @@index([customerId])
   @@index([categoryId])
   @@index([status])
+  @@index([fingerprint])
+  @@index([externalId])
+}
+
+enum OrderSource {
+  SITE
+  TELEGRAM
+  WHATSAPP
+  OTHER
 }
 
 enum BidStatus {

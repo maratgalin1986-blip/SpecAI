@@ -7,10 +7,12 @@ import { BidForm } from '@/components/BidForm';
 import { AcceptBidButton } from '@/components/AcceptBidButton';
 import { pluralizeRu } from '@/lib/pluralize';
 import { formatMoney } from '@/lib/money';
+import { isAdminRequest } from '@/lib/admin';
 
 export const dynamic = 'force-dynamic';
 
 const ORDER_STATUS_LABEL: Record<string, string> = {
+  PENDING_REVIEW: 'На модерации',
   OPEN: 'Открыта',
   MATCHED: 'Закрыта — техника выбрана',
   CANCELLED: 'Отменена',
@@ -31,11 +33,15 @@ export default async function OrderDetailPage({ params }: { params: { id: string
     },
   });
 
-  if (!order) {
+  // Imported orders under review are visible only in /admin.
+  if (!order || order.status === 'PENDING_REVIEW') {
     notFound();
   }
 
   const isOwner = session?.user.id === order.customerId;
+  const isImported = order.source !== 'SITE';
+  // Contacts of people from chats are shown only to equipment providers.
+  const canSeeContact = session?.user.role === 'PROVIDER_ADMIN' || isAdminRequest();
 
   return (
     <div className="flex flex-col gap-6">
@@ -45,7 +51,10 @@ export default async function OrderDetailPage({ params }: { params: { id: string
           <p className="text-slate-500">
             {order.category?.name ?? 'Любая категория'} ·{' '}
             {order.desiredStartDate.toLocaleDateString('ru-RU')} –{' '}
-            {order.desiredEndDate.toLocaleDateString('ru-RU')} · от {order.customer.name}
+            {order.desiredEndDate.toLocaleDateString('ru-RU')} ·{' '}
+            {isImported
+              ? `из ${order.source === 'WHATSAPP' ? 'WhatsApp' : 'Telegram'}${order.sourceChat ? ` (${order.sourceChat})` : ''}`
+              : `от ${order.customer.name}`}
           </p>
         </div>
         <span className="w-fit shrink-0 rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-700">
@@ -57,6 +66,45 @@ export default async function OrderDetailPage({ params }: { params: { id: string
         <h2 className="font-semibold">Описание</h2>
         <p className="mt-2 whitespace-pre-line text-sm text-slate-600">{order.description}</p>
       </Card>
+
+      {isImported && (
+        <Card className="border-sky-200 bg-sky-50">
+          <h2 className="font-semibold">Заявка из чата</h2>
+          {canSeeContact ? (
+            <div className="mt-2 flex flex-col gap-1 text-sm">
+              {order.contactName && <p>Автор: {order.contactName}</p>}
+              {order.contactPhone && (
+                <p>
+                  Телефон:{' '}
+                  <a href={`tel:${order.contactPhone}`} className="font-semibold text-amber-700">
+                    {order.contactPhone}
+                  </a>
+                </p>
+              )}
+              {order.sourceUrl && (
+                <a
+                  href={order.sourceUrl}
+                  target="_blank"
+                  rel="noopener"
+                  className="text-sky-700 underline"
+                >
+                  Открыть исходное сообщение
+                </a>
+              )}
+              {order.rawText && order.rawText !== order.description && (
+                <p className="mt-1 whitespace-pre-line text-slate-600">«{order.rawText}»</p>
+              )}
+            </div>
+          ) : (
+            <p className="mt-2 text-sm text-slate-600">
+              Контакты заказчика видны зарегистрированным поставщикам техники.{' '}
+              <a href="/provider" className="font-medium text-amber-700 underline">
+                Стать поставщиком
+              </a>
+            </p>
+          )}
+        </Card>
+      )}
 
       {order.status === 'OPEN' && !isOwner && (
         <section>
