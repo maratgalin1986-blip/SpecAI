@@ -1,5 +1,6 @@
 import bcrypt from 'bcryptjs';
-import { prisma, type UserRole } from '@specai/database';
+import { type UserRole } from '@specai/database';
+import { findUserByEmail } from '@/lib/findUserByEmail';
 import { loginSchema } from '@specai/shared';
 
 export interface AuthenticatedUser {
@@ -23,7 +24,7 @@ export async function authenticateWithCredentials(
     return null;
   }
 
-  const user = await prisma.user.findUnique({ where: { email: parsed.data.email } });
+  const user = await findUserByEmail(parsed.data.email);
   if (!user?.passwordHash) {
     return null;
   }
