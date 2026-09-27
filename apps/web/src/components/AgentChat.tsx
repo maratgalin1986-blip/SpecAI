@@ -23,7 +23,7 @@ function agentName(id?: AgentId) {
 // so agents' answers are clickable without pulling in a markdown renderer.
 function renderContent(text: string) {
   const parts = text.split(
-    /(\[[^\]]+\]\(\/[^)\s]*\)|(?<![\w/])\/(?:equipment|orders|dashboard|provider|login|register|recommend|agents)[\w/-]*)/g,
+    /(\[[^\]]+\]\(\/[^)\s]*\)|(?<![\w/])\/(?:equipment|orders|dashboard|provider|login|register|recommend|agents|contacts|privacy)[\w/-]*)/g,
   );
   return parts.map((part, index) => {
     const md = part.match(/^\[([^\]]+)\]\((\/[^)\s]*)\)$/);
@@ -34,7 +34,11 @@ function renderContent(text: string) {
         </a>
       );
     }
-    if (/^\/(?:equipment|orders|dashboard|provider|login|register|recommend|agents)/.test(part)) {
+    if (
+      /^\/(?:equipment|orders|dashboard|provider|login|register|recommend|agents|contacts|privacy)/.test(
+        part,
+      )
+    ) {
       return (
         <a key={index} href={part} className="font-medium text-amber-700 underline">
           {part}

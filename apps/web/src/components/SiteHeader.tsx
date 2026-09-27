@@ -8,9 +8,9 @@ const NAV_LINKS = [
   { href: '/equipment', label: 'Техника' },
   { href: '/orders', label: 'Заявки' },
   { href: '/agents', label: 'ИИ-агенты' },
-  { href: '/recommend', label: 'ИИ-подбор' },
+  { href: '/provider', label: 'Поставщикам' },
+  { href: '/contacts', label: 'Контакты' },
   { href: '/dashboard', label: 'Кабинет' },
-  { href: '/provider', label: 'Провайдер' },
 ];
 
 export function SiteHeader() {

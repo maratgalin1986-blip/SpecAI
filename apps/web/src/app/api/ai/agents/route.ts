@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { prisma } from '@specai/database';
-import { agentChatRequestSchema, createOrderSchema } from '@specai/shared';
+import { agentChatRequestSchema, createOrderSchema, type AgentId } from '@specai/shared';
 import { routeToAgent, runAgent, type AgentToolHandlers } from '@specai/ai-service';
 import { authOptions } from '@/lib/auth';
+import { formatMoney } from '@/lib/money';
+import { SITE } from '@/lib/site';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -247,6 +249,85 @@ export async function POST(request: NextRequest) {
     },
   };
 
+  // Without an API key (or if the AI service fails) the agents still help in
+  // a simplified mode: catalog search by keywords, the user's bookings and
+  // orders, and a nudge towards a callback request.
+  async function offlineReply(agentId: AgentId) {
+    const text = (messages.at(-1)?.content ?? '').toLowerCase();
+    const lines: string[] = [];
+
+    if (agentId === 'support' || /брон|заказ|заявк|статус/.test(text)) {
+      if (user) {
+        const [bookings, orders] = await Promise.all([
+          handlers.get_my_bookings({}) as Promise<{ equipment: string; status: string }[]>,
+          handlers.get_my_orders({}) as Promise<{ description: string; status: string }[]>,
+        ]);
+        if (bookings.length > 0) {
+          lines.push('Ваши бронирования:');
+          for (const b of bookings.slice(0, 5)) {
+            lines.push(`• ${b.equipment} — ${BOOKING_STATUS_RU[b.status] ?? b.status}`);
+          }
+        }
+        if (orders.length > 0) {
+          lines.push('Ваши заявки:');
+          for (const o of orders.slice(0, 5)) {
+            lines.push(
+              `• ${o.description.slice(0, 60)} — ${ORDER_STATUS_RU[o.status] ?? o.status}`,
+            );
+          }
+        }
+        if (lines.length > 0) lines.push('Подробности — в [личном кабинете](/dashboard).');
+      } else if (agentId === 'support') {
+        lines.push('Чтобы посмотреть свои бронирования и заявки, [войдите в аккаунт](/login).');
+      }
+    }
+
+    if (lines.length === 0) {
+      const category = OFFLINE_CATEGORIES.find(({ stem }) => text.includes(stem));
+      const categories = (await handlers.list_categories({})) as { id: string; name: string }[];
+      const categoryId = category
+        ? categories.find((c) => c.name === category.name)?.id
+        : undefined;
+      const found = (await handlers.search_equipment(categoryId ? { categoryId } : {})) as {
+        name: string;
+        dailyRate: number;
+        currency: string;
+        link: string;
+      }[];
+      if (found.length > 0) {
+        lines.push(
+          category
+            ? `Вот что есть по запросу «${category.name}»:`
+            : 'Сейчас доступна такая техника:',
+        );
+        for (const item of found.slice(0, 5)) {
+          lines.push(
+            `• [${item.name}](${item.link}) — ${formatMoney(item.dailyRate, item.currency)}/сутки`,
+          );
+        }
+        lines.push('[Весь каталог техники](/equipment)');
+      } else {
+        lines.push(
+          category
+            ? `${category.name} сейчас подбираем под заказ — в каталоге свободных нет.`
+            : 'Подберём технику под вашу задачу.',
+        );
+      }
+    }
+
+    lines.push(
+      '',
+      `Сейчас я работаю в упрощённом режиме. Для точного подбора и цены [оставьте заявку на звонок](/contacts) или позвоните ${SITE.phone}.`,
+    );
+    return { agentId, reply: lines.join('\n'), toolsUsed: [], offline: true };
+  }
+
+  const fallbackAgent: AgentId =
+    parsed.data.agentId === 'auto' ? 'consultant' : parsed.data.agentId;
+  if (!process.env.ANTHROPIC_API_KEY) {
+    return NextResponse.json(await offlineReply(fallbackAgent));
+  }
+
   try {
     const agentId =
       parsed.data.agentId === 'auto' ? await routeToAgent(messages) : parsed.data.agentId;
@@ -258,7 +339,32 @@ export async function POST(request: NextRequest) {
     });
     return NextResponse.json(result);
   } catch (error) {
-    console.error('Agent chat failed', error);
-    return NextResponse.json({ error: 'ИИ-агенты сейчас недоступны' }, { status: 502 });
+    console.error('Agent chat failed, answering in offline mode', error);
+    return NextResponse.json(await offlineReply(fallbackAgent));
   }
 }
+
+const OFFLINE_CATEGORIES = [
+  { stem: 'экскаватор-погруз', name: 'Экскаваторы-погрузчики' },
+  { stem: 'экскав', name: 'Экскаваторы' },
+  { stem: 'кран', name: 'Краны' },
+  { stem: 'бульд', name: 'Бульдозеры' },
+  { stem: 'погруз', name: 'Погрузчики' },
+  { stem: 'самосв', name: 'Самосвалы' },
+  { stem: 'манипул', name: 'Манипуляторы' },
+  { stem: 'вышк', name: 'Автовышки' },
+];
+
+const BOOKING_STATUS_RU: Record<string, string> = {
+  PENDING: 'ожидает подтверждения',
+  CONFIRMED: 'подтверждено',
+  ACTIVE: 'в работе',
+  COMPLETED: 'завершено',
+  CANCELLED: 'отменено',
+};
+
+const ORDER_STATUS_RU: Record<string, string> = {
+  OPEN: 'открыта',
+  MATCHED: 'исполнитель выбран',
+  CANCELLED: 'отменена',
+};

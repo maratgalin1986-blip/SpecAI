@@ -1,6 +1,12 @@
+import type { Metadata } from 'next';
 import { prisma } from '@specai/database';
 import { Card } from '@specai/ui';
 import { NewOrderForm } from '@/components/NewOrderForm';
+
+export const metadata: Metadata = {
+  title: 'Заявки на технику',
+  description: 'Опубликуйте задачу — поставщики спецтехники предложат технику и цену.',
+};
 
 export const dynamic = 'force-dynamic';
 

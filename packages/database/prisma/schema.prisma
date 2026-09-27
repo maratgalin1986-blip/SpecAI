@@ -125,7 +125,7 @@ model Equipment {
   dailyRate   Decimal         @db.Decimal(10, 2)
   weeklyRate  Decimal?        @db.Decimal(10, 2)
   monthlyRate Decimal?        @db.Decimal(10, 2)
-  currency    String          @default("USD")
+  currency    String          @default("RUB")
   // Free-form technical specifications (capacity, horsepower, dimensions, etc.).
   // Kept schemaless because spec fields vary wildly across equipment types;
   // AI spec-extraction populates this from manufacturer sheets/photos.
@@ -187,7 +187,7 @@ model Booking {
   startDate    DateTime
   endDate      DateTime
   totalPrice   Decimal       @db.Decimal(10, 2)
-  currency     String        @default("USD")
+  currency     String        @default("RUB")
   depositPaid  Boolean       @default(false)
   notes        String?
   createdAt    DateTime      @default(now())
@@ -265,7 +265,7 @@ enum BidStatus {
 model Bid {
   id        String    @id @default(cuid())
   price     Decimal   @db.Decimal(10, 2)
-  currency  String    @default("USD")
+  currency  String    @default("RUB")
   message   String?
   status    BidStatus @default(PENDING)
   createdAt DateTime  @default(now())
@@ -368,4 +368,31 @@ model AiMessage {
   conversationId String
 
   @@index([conversationId])
+}
+
+// ---------------------------------------------------------------------------
+// Leads: "call me back" requests from the public site
+// ---------------------------------------------------------------------------
+
+enum LeadStatus {
+  NEW
+  IN_PROGRESS
+  DONE
+}
+
+// A visitor asking the company to call them back. Works without an account
+// and without the AI features, so the site always captures enquiries.
+model Lead {
+  id        String     @id @default(cuid())
+  name      String
+  phone     String
+  message   String?
+  // Where the form was sent from (e.g. "home", "equipment:<id>", "agents").
+  source    String?
+  status    LeadStatus @default(NEW)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  @@index([status])
+  @@index([createdAt])
 }

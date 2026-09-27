@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { Button } from '@specai/ui';
+import { formatMoney } from '@/lib/money';
 
 interface EquipmentOption {
   id: string;
@@ -87,7 +88,7 @@ export function BidForm({ orderId }: { orderId: string }) {
           </option>
           {equipmentOptions.map((item) => (
             <option key={item.id} value={item.id}>
-              {item.name} (${item.dailyRate}/день)
+              {item.name} ({formatMoney(item.dailyRate)}/сутки)
             </option>
           ))}
         </select>

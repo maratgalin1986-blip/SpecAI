@@ -1,5 +1,6 @@
 import { Button } from '@specai/ui';
 import { AGENT_PROFILES } from '@specai/shared';
+import { CallbackForm } from '@/components/CallbackForm';
 import { Hero3D } from '@/components/Hero3D';
 import { Reveal } from '@/components/Reveal';
 import { TiltCard } from '@/components/TiltCard';
@@ -68,6 +69,12 @@ export default function HomePage() {
                 className="inline-flex items-center rounded-md bg-white/10 px-6 py-3 text-base font-medium text-white ring-1 ring-white/30 backdrop-blur hover:bg-white/20"
               >
                 Каталог техники
+              </a>
+              <a
+                href="#callback"
+                className="inline-flex items-center rounded-md px-4 py-3 text-base font-medium text-amber-300 underline-offset-4 hover:underline"
+              >
+                Заказать звонок
               </a>
             </div>
             <div
@@ -169,6 +176,32 @@ export default function HomePage() {
           ))}
         </ol>
       </section>
+
+      <Reveal>
+        <section
+          id="callback"
+          className="relative grid scroll-mt-24 gap-8 overflow-hidden rounded-3xl bg-slate-900 p-6 text-white sm:p-10 lg:grid-cols-2"
+        >
+          <div className="hero-grid opacity-30" aria-hidden />
+          <div className="relative flex flex-col justify-center">
+            <div className="text-sm font-semibold uppercase tracking-widest text-amber-400">
+              Быстрый заказ
+            </div>
+            <h2 className="mt-2 text-3xl font-bold">Нужна техника? Оставьте заявку — перезвоним</h2>
+            <ul className="mt-4 space-y-2 text-slate-300">
+              <li>✔ Подберём технику под задачу и бюджет</li>
+              <li>✔ Назовём точную цену с доставкой</li>
+              <li>✔ Работаем в Казани и по всему Татарстану</li>
+            </ul>
+            <a href={SITE.phoneHref} className="mt-6 text-2xl font-bold text-amber-400">
+              {SITE.phone}
+            </a>
+          </div>
+          <div className="relative rounded-2xl bg-white/5 p-5 ring-1 ring-white/10 backdrop-blur">
+            <CallbackForm source="home" dark />
+          </div>
+        </section>
+      </Reveal>
 
       <Reveal>
         <section className="grid gap-6 rounded-3xl border border-amber-200 bg-gradient-to-br from-amber-50 to-orange-100 p-6 sm:grid-cols-2 sm:p-10">

@@ -1,5 +1,13 @@
 import { prisma } from '@specai/database';
 import { Card, StatusBadge } from '@specai/ui';
+import { formatMoney } from '@/lib/money';
+import { CallbackForm } from '@/components/CallbackForm';
+
+export const metadata = {
+  title: 'Каталог спецтехники',
+  description:
+    'Аренда экскаваторов, кранов, погрузчиков, самосвалов и бульдозеров в Казани и Татарстане.',
+};
 
 export const dynamic = 'force-dynamic';
 
@@ -80,7 +88,7 @@ export default async function EquipmentCatalogPage({
           />
         </label>
         <label className="flex flex-col gap-1 text-sm">
-          Цена от, $/день
+          Цена от, ₽/сутки
           <input
             name="minPrice"
             type="number"
@@ -90,7 +98,7 @@ export default async function EquipmentCatalogPage({
           />
         </label>
         <label className="flex flex-col gap-1 text-sm">
-          Цена до, $/день
+          Цена до, ₽/сутки
           <input
             name="maxPrice"
             type="number"
@@ -117,7 +125,23 @@ export default async function EquipmentCatalogPage({
       </form>
 
       {equipment.length === 0 ? (
-        <p className="text-slate-600">По этим фильтрам техника не найдена.</p>
+        <div className="grid gap-6 lg:grid-cols-2">
+          <Card className="flex flex-col justify-center gap-2 p-6">
+            <div className="text-4xl">🔍</div>
+            <h2 className="text-lg font-semibold">Подходящая техника не найдена</h2>
+            <p className="text-sm text-slate-600">
+              Каталог постоянно пополняется, а часть парка мы подбираем под заказ. Оставьте заявку —
+              найдём технику под вашу задачу, или разместите{' '}
+              <a href="/orders" className="text-amber-700 underline">
+                заявку для поставщиков
+              </a>
+              .
+            </p>
+          </Card>
+          <Card className="p-6">
+            <CallbackForm source="catalog-empty" />
+          </Card>
+        </div>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {equipment.map((item) => (
@@ -134,8 +158,8 @@ export default async function EquipmentCatalogPage({
                   </p>
                 )}
                 <p className="mt-auto text-lg font-semibold">
-                  ${item.dailyRate.toString()}
-                  <span className="text-sm font-normal text-slate-500">/день</span>
+                  {formatMoney(item.dailyRate, item.currency)}
+                  <span className="text-sm font-normal text-slate-500">/сутки</span>
                 </p>
               </Card>
             </a>

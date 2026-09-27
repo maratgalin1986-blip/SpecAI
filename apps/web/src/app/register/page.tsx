@@ -1,18 +1,19 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { signIn } from 'next-auth/react';
 import { Button, Card } from '@specai/ui';
 
 type AccountType = 'CUSTOMER' | 'PROVIDER';
 
 export default function RegisterPage() {
-  const router = useRouter();
   const [accountType, setAccountType] = useState<AccountType>('CUSTOMER');
   const [name, setName] = useState('');
   const [companyName, setCompanyName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [phone, setPhone] = useState('');
+  const [consent, setConsent] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -29,19 +30,24 @@ export default function RegisterPage() {
         name,
         email,
         password,
+        ...(phone ? { phone } : {}),
         ...(accountType === 'PROVIDER' ? { companyName } : {}),
       }),
     });
 
-    setIsSubmitting(false);
-
     if (!response.ok) {
+      setIsSubmitting(false);
       const body = await response.json().catch(() => null);
       setError(typeof body?.error === 'string' ? body.error : 'Не удалось зарегистрироваться');
       return;
     }
 
-    router.push('/login');
+    // Sign straight in and go to the right cabinet.
+    await signIn('credentials', {
+      email,
+      password,
+      callbackUrl: accountType === 'PROVIDER' ? '/provider' : '/dashboard',
+    });
   }
 
   return (
@@ -106,7 +112,19 @@ export default function RegisterPage() {
             />
           </label>
           <label className="flex flex-col gap-1 text-sm">
-            Пароль
+            Телефон <span className="text-slate-400">(необязательно)</span>
+            <input
+              type="tel"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              maxLength={30}
+              autoComplete="tel"
+              placeholder="+7 (___) ___-__-__"
+              className="rounded-md border border-slate-300 px-3 py-2"
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-sm">
+            Пароль <span className="text-slate-400">(минимум 8 символов)</span>
             <input
               type="password"
               required
@@ -115,6 +133,21 @@ export default function RegisterPage() {
               onChange={(e) => setPassword(e.target.value)}
               className="rounded-md border border-slate-300 px-3 py-2"
             />
+          </label>
+          <label className="flex items-start gap-2 text-xs text-slate-600">
+            <input
+              type="checkbox"
+              required
+              checked={consent}
+              onChange={(e) => setConsent(e.target.checked)}
+              className="mt-0.5"
+            />
+            <span>
+              Согласен(на) на обработку персональных данных в соответствии с{' '}
+              <a href="/privacy" target="_blank" className="text-amber-700 underline">
+                политикой конфиденциальности
+              </a>
+            </span>
           </label>
           {error && <p className="text-sm text-red-600">{error}</p>}
           <Button type="submit" disabled={isSubmitting}>

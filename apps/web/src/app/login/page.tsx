@@ -5,6 +5,19 @@ import { signIn } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { Button, Card } from '@specai/ui';
 
+// Where to go after signing in: the page that sent the user here (same site
+// only, to avoid open redirects), otherwise the dashboard.
+function safeCallbackUrl() {
+  const raw = new URLSearchParams(window.location.search).get('callbackUrl');
+  if (!raw) return '/dashboard';
+  try {
+    const url = new URL(raw, window.location.origin);
+    return url.origin === window.location.origin ? url.pathname + url.search : '/dashboard';
+  } catch {
+    return '/dashboard';
+  }
+}
+
 export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState('');
@@ -25,7 +38,7 @@ export default function LoginPage() {
       return;
     }
 
-    router.push('/dashboard');
+    router.push(safeCallbackUrl());
     router.refresh();
   }
 

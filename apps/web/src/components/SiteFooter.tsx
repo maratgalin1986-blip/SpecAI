@@ -22,6 +22,12 @@ export function SiteFooter() {
           <a href="/register" className="hover:text-white">
             Стать поставщиком
           </a>
+          <a href="/contacts" className="hover:text-white">
+            Контакты
+          </a>
+          <a href="/privacy" className="hover:text-white">
+            Политика конфиденциальности
+          </a>
         </div>
         <div className="flex flex-col gap-1">
           <div className="font-semibold text-white">Контакты</div>

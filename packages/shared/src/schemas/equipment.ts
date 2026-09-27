@@ -19,7 +19,7 @@ export const createEquipmentSchema = z.object({
   dailyRate: z.number().positive(),
   weeklyRate: z.number().positive().optional(),
   monthlyRate: z.number().positive().optional(),
-  currency: z.string().length(3).default('USD'),
+  currency: z.string().length(3).default('RUB'),
   description: z.string().max(5000).optional(),
   specs: z.record(z.string(), z.unknown()).optional(),
   imageUrls: z.array(z.string().url()).default([]),

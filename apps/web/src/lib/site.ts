@@ -11,4 +11,8 @@ export const SITE = {
   phoneHref: 'tel:+79272428088',
   email: 'specplast16@mail.ru',
   workingHours: 'Пн–Сб, 8:00–20:00 · ИИ-агенты — круглосуточно',
+  // Legal details of the personal-data operator shown in the privacy policy,
+  // e.g. 'ИП Иванов Иван Иванович' and the ИНН. Fill in before launch.
+  legalName: '' as string,
+  inn: '' as string,
 };
