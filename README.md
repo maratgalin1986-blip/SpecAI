@@ -101,6 +101,7 @@ Run from the repo root:
 - `pnpm build` — build all packages and the web app
 - `pnpm lint` — lint the whole workspace
 - `pnpm typecheck` — typecheck all packages
+- `pnpm test` — run unit tests (vitest) in every package that has them
 - `pnpm db:generate` / `pnpm db:push` / `pnpm db:studio` / `pnpm db:seed` — Prisma workflows
 
 ## Application features implemented so far
@@ -134,6 +135,98 @@ Run from the repo root:
   `POST /api/bids/[id]/accept`, which atomically creates a `Booking`, marks
   the order `MATCHED`, and rejects the other bids.
 
+## File uploads (Vercel Blob)
+
+Providers can attach photos (JPEG/PNG/WebP) and PDF spec sheets to new equipment.
+Files go to [Vercel Blob](https://vercel.com/docs/storage/vercel-blob) via
+`POST /api/uploads` (multipart, field `file`, max 10 MB, public URL with a random
+suffix). Image URLs are stored in `Equipment.imageUrls` and shown in the catalog and
+on the equipment page; any uploaded file can be passed to
+`POST /api/ai/extract-specs` as `{ fileUrl }` to extract specs with Claude vision.
+
+Setup: in the Vercel dashboard open your project → **Storage** → create a **Blob**
+store and connect it (this adds `BLOB_READ_WRITE_TOKEN`); locally copy the token into
+`.env`. Without the token the upload endpoint returns `503 Хранилище не настроено`
+and the rest of the app keeps working.
+
+## Payments (Stripe)
+
+Customers pay for a `PENDING` booking with Stripe Checkout from `/dashboard`
+("Оплатить"). `POST /api/bookings/[id]/checkout` creates a `Payment` row and a
+Checkout Session and returns its `url`; `POST /api/stripe/webhook` verifies the
+Stripe signature and, on `checkout.session.completed`, marks the payment `PAID`,
+sets `Booking.depositPaid = true` and moves the booking `PENDING → CONFIRMED`
+(expired/failed sessions become `FAILED`). The Stripe client is created lazily,
+so the app builds and runs without these variables — only payments are disabled.
+
+Environment variables (see `.env.example`):
+
+- `STRIPE_SECRET_KEY` — secret API key (`sk_test_...` for test mode).
+- `STRIPE_WEBHOOK_SECRET` — signing secret of the webhook endpoint (`whsec_...`).
+- `NEXT_PUBLIC_APP_URL` — public base URL for Checkout success/cancel redirects
+  (falls back to `NEXTAUTH_URL`).
+
+Local webhook setup with the [Stripe CLI](https://docs.stripe.com/stripe-cli):
+
+```bash
+stripe login
+stripe listen --forward-to localhost:3000/api/stripe/webhook
+# copy the printed "whsec_..." into STRIPE_WEBHOOK_SECRET and restart `pnpm dev`
+stripe trigger checkout.session.completed   # optional smoke test
+```
+
+In production, add an endpoint in the Stripe Dashboard pointing at
+`https://<your-domain>/api/stripe/webhook` with the events
+`checkout.session.completed`, `checkout.session.async_payment_succeeded`,
+`checkout.session.async_payment_failed`, `checkout.session.expired` and
+`payment_intent.payment_failed`, and use its signing secret.
+
+## Email notifications (Resend)
+
+Key events trigger transactional emails via [Resend](https://resend.com). Templates
+live in `apps/web/src/lib/emailTemplates.ts` (plain HTML + text, in Russian); the
+client in `apps/web/src/lib/email.ts` is created lazily and every send is wrapped in
+`try/catch`, so a failed or unconfigured email never breaks the API request — it is
+only logged (`[email] skipped: ...` / `[email] send failed`).
+
+| Event                                              | Recipient                             | Template               |
+| -------------------------------------------------- | ------------------------------------- | ---------------------- |
+| `POST /api/orders/[id]/bids` — new bid on an order | order customer                        | `newBidReceived`       |
+| `POST /api/bids/[id]/accept` — bid accepted        | `PROVIDER_ADMIN` users of the company | `bidAccepted`          |
+| `PATCH /api/bookings/[id]` — status changed        | booking customer                      | `bookingStatusChanged` |
+| Stripe webhook — payment marked `PAID`             | customer and provider admins          | `paymentReceived`      |
+
+Environment variables (see `.env.example`):
+
+- `RESEND_API_KEY` — API key from the Resend dashboard. When missing, sending is
+  skipped and the app keeps working.
+- `EMAIL_FROM` — sender on a domain verified in Resend, e.g. `SpecAI <noreply@example.com>`
+  (`onboarding@resend.dev` works for testing).
+- Links in emails use `NEXT_PUBLIC_APP_URL` (falls back to `NEXTAUTH_URL`).
+
+Tests: `pnpm --filter @specai/web test` covers the templates and the no-key path.
+
+## Password reset and email verification
+
+One-time tokens live in the `VerificationToken` table (`type` is `PASSWORD_RESET` or
+`EMAIL_VERIFY`). Only the sha256 hash of a token is stored; the raw value exists solely in
+the emailed link. Consuming a token is a single atomic `updateMany` (unused + not expired →
+`usedAt = now`), so a link works exactly once. Helpers: `apps/web/src/lib/tokens.ts`.
+
+- `POST /api/auth/forgot-password { email }` — always `200`; if the account exists, sends
+  `passwordReset` with `/reset-password?token=…` (valid 60 min). Rate limited 5/hour per
+  email + IP.
+- `POST /api/auth/reset-password { token, password }` — sets a new bcrypt hash; `400`
+  "Ссылка недействительна или устарела" for an unknown, used or expired token.
+- `POST /api/auth/send-verification` — session required; no-op when already verified;
+  sends `emailVerify` with `/verify-email?token=…` (valid 24 h). Registration sends the
+  same email best-effort.
+- `GET /verify-email?token=…` → `/api/auth/verify-email` — marks `User.emailVerified` and
+  redirects to `/dashboard?verified=1` (or `/login?verified=1` without a session).
+
+Pages: `/forgot-password`, `/reset-password`; `/login` links to the former, and the dashboard
+shows a "Подтвердите email" banner (`VerifyEmailBanner`) until the address is verified.
+
 ## AI service usage
 
 `packages/ai-service` exposes three functions consumed by `apps/web`:
@@ -141,6 +234,8 @@ Run from the repo root:
 - `recommendEquipment(jobDescription, candidates)` — tool-call based ranking of
   candidate equipment against a natural-language job description.
 - `extractEquipmentSpecs(sourceText)` — structured spec extraction from free text.
+- `extractEquipmentSpecsFromFile({ data, mediaType })` — the same extraction from a
+  base64 photo (JPEG/PNG/WebP, sent as an `image` block) or PDF (`document` block).
 - `replyToCustomer(history)` — a support chat turn given conversation history.
 
 All three require `ANTHROPIC_API_KEY` to be set.

@@ -18,11 +18,13 @@ export function AuthStatus() {
   }
 
   return (
-    <div className="flex items-center gap-3 text-sm">
-      <span className="text-slate-600">{session.user.email}</span>
+    <div className="flex min-w-0 items-center gap-3 text-sm">
+      <span className="min-w-0 truncate text-slate-600" title={session.user.email ?? undefined}>
+        {session.user.email}
+      </span>
       <button
         onClick={() => signOut({ callbackUrl: '/' })}
-        className="font-medium text-slate-600 hover:text-slate-900"
+        className="shrink-0 font-medium text-slate-600 hover:text-slate-900"
       >
         Выйти
       </button>
