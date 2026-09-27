@@ -149,6 +149,7 @@ Preview), после изменения — Deployments → Redeploy.
 | `ADMIN_PASSWORD`                                  | пароль к `/admin` — там заявки на звонок                       | да, чтобы видеть заявки |
 | `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`          | уведомления о новых заявках в Telegram                         | нет                     |
 | `NEXT_PUBLIC_SITE_URL`                            | адрес сайта для sitemap и превью в соцсетях                    | когда будет домен       |
+| `NEXT_PUBLIC_YANDEX_METRIKA_ID`                   | счётчик Яндекс.Метрики для статистики посещений                | нет                     |
 
 Реквизиты оператора персональных данных (ИП/ООО, ИНН) для политики конфиденциальности —
 в `apps/web/src/lib/site.ts` (`legalName`, `inn`).
