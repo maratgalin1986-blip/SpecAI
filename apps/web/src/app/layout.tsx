@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
+import { ChatWidget } from '@/components/ChatWidget';
 import { Providers } from '@/components/Providers';
 import { SiteHeader } from '@/components/SiteHeader';
 import './globals.css';
@@ -16,6 +17,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         <Providers>
           <SiteHeader />
           <main className="mx-auto max-w-6xl px-6 py-8">{children}</main>
+          <ChatWidget />
         </Providers>
       </body>
     </html>
