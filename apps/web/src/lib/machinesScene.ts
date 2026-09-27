@@ -1,19 +1,26 @@
 import * as THREE from 'three';
+import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 
-// Animated 3D hero scene: a rotating cast of construction machines on a
-// floating platform. The active machine drives towards the pointer, turns its
-// cab/boom to "look" at it and lights it up with its headlights; left alone it
-// wanders and does its job (digs, lifts, dumps, pushes). Imported dynamically
-// from Hero3D so three.js stays out of the main bundle.
+// Animated 3D hero scene: a rotating cast of cartoon construction machines on a
+// floating platform. Each machine has a face — blinking eyes that follow the
+// pointer, eyebrows and a mouth — and reacts with emotions: surprised when it
+// appears, curious while chasing the pointer, happy next to it, overjoyed when
+// clicked, focused while working and sleepy when left alone. Imported
+// dynamically from Hero3D so three.js stays out of the main bundle.
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
 const AMBER = 0xf59e0b;
+const INK = 0x1f1b2e;
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value));
+}
 
 function smooth(t: number) {
-  const x = Math.min(1, Math.max(0, t));
+  const x = clamp(t, 0, 1);
   return x * x * (3 - 2 * x);
 }
 
@@ -29,7 +36,7 @@ function wrapAngle(a: number) {
 
 function approachAngle(current: number, target: number, maxStep: number) {
   const diff = wrapAngle(target - current);
-  return current + Math.max(-maxStep, Math.min(maxStep, diff));
+  return current + clamp(diff, -maxStep, maxStep);
 }
 
 function damp(current: number, target: number, lambda: number, dt: number) {
@@ -52,27 +59,44 @@ function cycle<T extends Record<string, number>>(poses: T[], time: number, secon
   return out as T;
 }
 
-function createMaterials() {
+// ---------------------------------------------------------------------------
+// Cartoon materials: 3-step toon shading plus an inverted-hull ink outline.
+// ---------------------------------------------------------------------------
+
+function createToonGradient() {
+  const texture = new THREE.DataTexture(new Uint8Array([110, 190, 255]), 3, 1, THREE.RedFormat);
+  texture.minFilter = THREE.NearestFilter;
+  texture.magFilter = THREE.NearestFilter;
+  texture.needsUpdate = true;
+  return texture;
+}
+
+function createOutlineMaterial() {
+  const material = new THREE.MeshBasicMaterial({ color: INK, side: THREE.BackSide });
+  material.onBeforeCompile = (shader) => {
+    shader.vertexShader = shader.vertexShader.replace(
+      '#include <begin_vertex>',
+      '#include <begin_vertex>\ntransformed += normalize(normal) * 0.028;',
+    );
+  };
+  return material;
+}
+
+function createMaterials(gradientMap: THREE.Texture, paint: number, paintDark: number) {
+  const toon = (color: number) => new THREE.MeshToonMaterial({ color, gradientMap });
   return {
-    paint: new THREE.MeshStandardMaterial({ color: AMBER, metalness: 0.3, roughness: 0.45 }),
-    paintDark: new THREE.MeshStandardMaterial({ color: 0xd97706, roughness: 0.5 }),
-    steel: new THREE.MeshStandardMaterial({ color: 0x1e293b, metalness: 0.6, roughness: 0.4 }),
-    chrome: new THREE.MeshStandardMaterial({ color: 0x94a3b8, metalness: 0.9, roughness: 0.25 }),
-    rubber: new THREE.MeshStandardMaterial({ color: 0x111827, roughness: 0.9 }),
-    soil: new THREE.MeshStandardMaterial({ color: 0x8b5a2b, roughness: 1 }),
-    glass: new THREE.MeshPhysicalMaterial({
-      color: 0x38bdf8,
-      roughness: 0.05,
-      transparent: true,
-      opacity: 0.75,
-      emissive: 0x0ea5e9,
-      emissiveIntensity: 0.3,
-    }),
-    lamp: new THREE.MeshStandardMaterial({
-      color: 0xfff7d6,
-      emissive: 0xfff1b8,
-      emissiveIntensity: 3,
-    }),
+    paint: toon(paint),
+    paintDark: toon(paintDark),
+    steel: toon(0x475569),
+    chrome: toon(0xcbd5e1),
+    rubber: toon(0x27272a),
+    soil: toon(0xa16207),
+    glass: toon(0xbae6fd),
+    eyeWhite: new THREE.MeshBasicMaterial({ color: 0xffffff }),
+    pupil: new THREE.MeshBasicMaterial({ color: INK }),
+    brow: new THREE.MeshBasicMaterial({ color: INK }),
+    cheek: new THREE.MeshBasicMaterial({ color: 0xfb7185, transparent: true, opacity: 0 }),
+    lamp: new THREE.MeshBasicMaterial({ color: 0xfff3c4 }),
     beacon: new THREE.MeshStandardMaterial({
       color: 0xff7a00,
       emissive: 0xff7a00,
@@ -83,7 +107,8 @@ function createMaterials() {
 type Materials = ReturnType<typeof createMaterials>;
 
 function box(w: number, h: number, d: number, material: THREE.Material, x = 0, y = 0, z = 0) {
-  const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), material);
+  const radius = Math.min(w, h, d) * 0.32;
+  const mesh = new THREE.Mesh(new RoundedBoxGeometry(w, h, d, 2, radius), material);
   mesh.position.set(x, y, z);
   mesh.castShadow = true;
   mesh.receiveShadow = true;
@@ -98,7 +123,7 @@ function wheel(m: Materials, radius: number, width: number, x: number, y: number
   tyre.rotation.x = Math.PI / 2;
   tyre.castShadow = true;
   const hub = new THREE.Mesh(
-    new THREE.CylinderGeometry(radius * 0.5, radius * 0.5, width + 0.02, 6),
+    new THREE.CylinderGeometry(radius * 0.5, radius * 0.5, width + 0.04, 8),
     m.chrome,
   );
   hub.rotation.x = Math.PI / 2;
@@ -119,7 +144,7 @@ function headlights(m: Materials, parent: THREE.Object3D, x: number, y: number, 
 }
 
 function beacon(m: Materials, parent: THREE.Object3D, x: number, y: number, z: number) {
-  const mesh = new THREE.Mesh(new THREE.SphereGeometry(0.09, 16, 16), m.beacon);
+  const mesh = new THREE.Mesh(new THREE.SphereGeometry(0.1, 16, 16), m.beacon);
   mesh.position.set(x, y, z);
   parent.add(mesh);
 }
@@ -127,15 +152,321 @@ function beacon(m: Materials, parent: THREE.Object3D, x: number, y: number, z: n
 function tracks(m: Materials, root: THREE.Group, length: number, zs: number[]) {
   const rollers: THREE.Object3D[] = [];
   for (const z of zs) {
-    root.add(box(length, 0.55, 0.5, m.steel, 0, 0.28, z));
+    root.add(box(length, 0.55, 0.5, m.rubber, 0, 0.28, z));
     const count = Math.round(length / 0.7);
     for (let i = 0; i < count; i++) {
-      const roller = wheel(m, 0.2, 0.52, -length / 2 + 0.35 + i * 0.7, 0.28, z);
+      const roller = wheel(m, 0.18, 0.54, -length / 2 + 0.35 + i * 0.7, 0.28, z);
       rollers.push(roller);
       root.add(roller);
     }
   }
   return rollers;
+}
+
+/** Gives every mesh of a machine a cartoon ink outline (skipping face details). */
+function addOutlines(root: THREE.Object3D, outline: THREE.Material) {
+  const meshes: THREE.Mesh[] = [];
+  root.traverse((object) => {
+    if (object instanceof THREE.Mesh && !object.userData.noOutline) meshes.push(object);
+  });
+  for (const mesh of meshes) {
+    const hull = new THREE.Mesh(mesh.geometry, outline);
+    hull.userData.noOutline = true;
+    mesh.add(hull);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Faces and emotions
+// ---------------------------------------------------------------------------
+
+export type Emotion = 'happy' | 'curious' | 'surprised' | 'joy' | 'sleepy' | 'focused';
+type MouthShape = 'smile' | 'grin' | 'o' | 'small-o' | 'flat' | 'sleepy';
+
+const EXPRESSIONS: Record<
+  Emotion,
+  { open: number; browRaise: number; browTilt: number; mouth: MouthShape; blush: number }
+> = {
+  happy: { open: 0.85, browRaise: 0.03, browTilt: -0.15, mouth: 'smile', blush: 0.5 },
+  curious: { open: 1.15, browRaise: 0.06, browTilt: -0.3, mouth: 'small-o', blush: 0 },
+  surprised: { open: 1.35, browRaise: 0.1, browTilt: 0, mouth: 'o', blush: 0 },
+  joy: { open: 1, browRaise: 0.07, browTilt: -0.2, mouth: 'grin', blush: 0.9 },
+  sleepy: { open: 0.22, browRaise: -0.03, browTilt: 0.25, mouth: 'sleepy', blush: 0 },
+  focused: { open: 0.7, browRaise: -0.03, browTilt: 0.45, mouth: 'flat', blush: 0 },
+};
+
+function drawMouth(ctx: CanvasRenderingContext2D, shape: MouthShape) {
+  const ink = '#1f1b2e';
+  ctx.clearRect(0, 0, 128, 64);
+  ctx.lineWidth = 9;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.strokeStyle = ink;
+  ctx.beginPath();
+  switch (shape) {
+    case 'smile':
+      ctx.moveTo(30, 20);
+      ctx.quadraticCurveTo(64, 62, 98, 20);
+      ctx.stroke();
+      break;
+    case 'grin':
+      ctx.moveTo(24, 14);
+      ctx.lineTo(104, 14);
+      ctx.quadraticCurveTo(64, 80, 24, 14);
+      ctx.fillStyle = '#7f1d1d';
+      ctx.fill();
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.ellipse(64, 42, 16, 9, 0, 0, Math.PI * 2);
+      ctx.fillStyle = '#fb7185';
+      ctx.fill();
+      break;
+    case 'o':
+      ctx.ellipse(64, 32, 15, 20, 0, 0, Math.PI * 2);
+      ctx.fillStyle = '#7f1d1d';
+      ctx.fill();
+      ctx.stroke();
+      break;
+    case 'small-o':
+      ctx.ellipse(64, 32, 9, 11, 0, 0, Math.PI * 2);
+      ctx.fillStyle = '#7f1d1d';
+      ctx.fill();
+      ctx.stroke();
+      break;
+    case 'flat':
+      ctx.moveTo(38, 34);
+      ctx.lineTo(90, 30);
+      ctx.stroke();
+      break;
+    case 'sleepy':
+      ctx.moveTo(44, 34);
+      ctx.quadraticCurveTo(54, 26, 64, 34);
+      ctx.quadraticCurveTo(74, 42, 84, 34);
+      ctx.stroke();
+      break;
+  }
+}
+
+interface Face {
+  update(dt: number, time: number, emotion: Emotion, lookWorld: THREE.Vector3): void;
+}
+
+/**
+ * Builds a cartoon face on `parent`, facing its local +x axis: two blinking
+ * eyes whose pupils track `lookWorld`, eyebrows, blush and a canvas mouth.
+ */
+function createFace(
+  m: Materials,
+  parent: THREE.Object3D,
+  x: number,
+  y: number,
+  z: number,
+  size: number,
+): Face {
+  const face = new THREE.Group();
+  face.position.set(x, y, z);
+  face.scale.setScalar(size);
+  parent.add(face);
+
+  const eyes: {
+    eye: THREE.Group;
+    pupil: THREE.Group;
+    brow: THREE.Mesh;
+    happyArc: THREE.Mesh;
+    side: number;
+  }[] = [];
+  for (const side of [-1, 1]) {
+    const eye = new THREE.Group();
+    eye.position.set(0, 0.1, side * 0.17);
+    const white = new THREE.Mesh(new THREE.SphereGeometry(0.13, 24, 16), m.eyeWhite);
+    white.scale.x = 0.5;
+    const pupil = new THREE.Group();
+    const iris = new THREE.Mesh(new THREE.SphereGeometry(0.068, 20, 14), m.pupil);
+    iris.scale.x = 0.35;
+    iris.userData.noOutline = true;
+    const shine = new THREE.Mesh(new THREE.SphereGeometry(0.022, 10, 8), m.eyeWhite);
+    shine.position.set(0.03, 0.028, -0.022);
+    shine.userData.noOutline = true;
+    pupil.add(iris, shine);
+    pupil.position.x = 0.052;
+    eye.add(white, pupil);
+    face.add(eye);
+
+    // "^ ^" eyes for joy.
+    const happyArc = new THREE.Mesh(new THREE.TorusGeometry(0.085, 0.025, 8, 20, Math.PI), m.pupil);
+    happyArc.rotation.y = Math.PI / 2;
+    happyArc.position.set(0.06, 0.06, side * 0.17);
+    happyArc.visible = false;
+    happyArc.userData.noOutline = true;
+    face.add(happyArc);
+
+    const brow = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.035, 0.17), m.brow);
+    brow.position.set(0.03, 0.29, side * 0.17);
+    brow.userData.noOutline = true;
+    face.add(brow);
+
+    const cheek = new THREE.Mesh(new THREE.CircleGeometry(0.05, 16), m.cheek);
+    cheek.rotation.y = Math.PI / 2;
+    cheek.position.set(0.04, -0.08, side * 0.27);
+    cheek.userData.noOutline = true;
+    face.add(cheek);
+
+    eyes.push({ eye, pupil, brow, happyArc, side });
+  }
+
+  const canvas = document.createElement('canvas');
+  canvas.width = 128;
+  canvas.height = 64;
+  const ctx = canvas.getContext('2d');
+  const mouthTexture = new THREE.CanvasTexture(canvas);
+  const mouth = new THREE.Mesh(
+    new THREE.PlaneGeometry(0.34, 0.17),
+    new THREE.MeshBasicMaterial({ map: mouthTexture, transparent: true, depthWrite: false }),
+  );
+  mouth.rotation.y = Math.PI / 2;
+  mouth.position.set(0.05, -0.17, 0);
+  mouth.userData.noOutline = true;
+  face.add(mouth);
+
+  let currentMouth: MouthShape | null = null;
+  let open = 1;
+  let browRaise = 0;
+  let browTilt = 0;
+  let nextBlink = 1 + Math.random() * 2;
+  let blinkStart = -10;
+  let doubleBlink = false;
+  const local = new THREE.Vector3();
+
+  return {
+    update(dt, time, emotion, lookWorld) {
+      const expression = EXPRESSIONS[emotion];
+
+      // Blinking ("хлопает глазами"): quick close/open, sometimes twice.
+      if (time > nextBlink) {
+        blinkStart = time;
+        doubleBlink = Math.random() < 0.3;
+        nextBlink = time + 1.6 + Math.random() * 3.2;
+      }
+      const sinceBlink = time - blinkStart;
+      const blinkPulse = (t: number) => (t >= 0 && t < 0.16 ? Math.sin((t / 0.16) * Math.PI) : 0);
+      const blink = Math.max(
+        blinkPulse(sinceBlink),
+        doubleBlink ? blinkPulse(sinceBlink - 0.22) : 0,
+      );
+
+      open = damp(open, expression.open, 10, dt);
+      browRaise = damp(browRaise, expression.browRaise, 8, dt);
+      browTilt = damp(browTilt, expression.browTilt, 8, dt);
+      m.cheek.opacity = damp(m.cheek.opacity, expression.blush, 5, dt);
+
+      const joyful = emotion === 'joy';
+      for (const { eye, pupil, brow, happyArc, side } of eyes) {
+        eye.visible = !joyful;
+        happyArc.visible = joyful;
+        eye.scale.y = Math.max(0.06, open * (1 - blink * 0.95));
+        brow.position.y = 0.27 + browRaise + (open - 1) * 0.08;
+        brow.rotation.x = side * browTilt;
+
+        // Pupils look towards the target.
+        local.copy(lookWorld);
+        eye.worldToLocal(local);
+        local.x = Math.max(local.x, 0.2);
+        local.normalize();
+        pupil.position.y = clamp(local.y * 0.09, -0.055, 0.055);
+        pupil.position.z = clamp(local.z * 0.09, -0.055, 0.055);
+      }
+
+      if (ctx && expression.mouth !== currentMouth) {
+        currentMouth = expression.mouth;
+        drawMouth(ctx, currentMouth);
+        mouthTexture.needsUpdate = true;
+      }
+    },
+  };
+}
+
+type Emote = 'heart' | '!' | '?' | 'zzz' | 'note';
+
+const EMOTES: Partial<Record<Emotion, Emote>> = {
+  joy: 'heart',
+  surprised: '!',
+  curious: '?',
+  sleepy: 'zzz',
+  happy: 'note',
+};
+
+function createEmoteTexture(emote: Emote) {
+  const canvas = document.createElement('canvas');
+  canvas.width = 128;
+  canvas.height = 128;
+  const ctx = canvas.getContext('2d');
+  if (ctx) {
+    // Speech bubble.
+    ctx.fillStyle = '#ffffff';
+    ctx.strokeStyle = '#1f1b2e';
+    ctx.lineWidth = 6;
+    ctx.beginPath();
+    ctx.ellipse(64, 56, 50, 44, 0, 0, Math.PI * 2);
+    ctx.moveTo(44, 92);
+    ctx.lineTo(34, 120);
+    ctx.lineTo(62, 98);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.ellipse(64, 56, 47, 41, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    switch (emote) {
+      case 'heart':
+        ctx.fillStyle = '#ef4444';
+        ctx.beginPath();
+        ctx.moveTo(64, 82);
+        ctx.bezierCurveTo(20, 56, 34, 20, 64, 40);
+        ctx.bezierCurveTo(94, 20, 108, 56, 64, 82);
+        ctx.fill();
+        break;
+      case '!':
+        ctx.fillStyle = '#f97316';
+        ctx.font = 'bold 72px sans-serif';
+        ctx.fillText('!', 64, 58);
+        break;
+      case '?':
+        ctx.fillStyle = '#0ea5e9';
+        ctx.font = 'bold 68px sans-serif';
+        ctx.fillText('?', 64, 58);
+        break;
+      case 'zzz':
+        ctx.fillStyle = '#8b5cf6';
+        ctx.font = 'bold 34px sans-serif';
+        ctx.fillText('Z', 44, 68);
+        ctx.font = 'bold 42px sans-serif';
+        ctx.fillText('Z', 66, 54);
+        ctx.font = 'bold 50px sans-serif';
+        ctx.fillText('Z', 88, 40);
+        break;
+      case 'note':
+        ctx.fillStyle = '#16a34a';
+        ctx.beginPath();
+        ctx.ellipse(50, 74, 13, 10, -0.4, 0, Math.PI * 2);
+        ctx.ellipse(84, 66, 13, 10, -0.4, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillRect(58, 26, 7, 48);
+        ctx.fillRect(92, 18, 7, 48);
+        ctx.beginPath();
+        ctx.moveTo(58, 26);
+        ctx.lineTo(99, 18);
+        ctx.lineTo(99, 30);
+        ctx.lineTo(58, 38);
+        ctx.fill();
+        break;
+    }
+  }
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  return texture;
 }
 
 // ---------------------------------------------------------------------------
@@ -162,9 +493,19 @@ interface Machine {
   wheels: THREE.Object3D[];
   wheelRadius: number;
   lightAnchor: THREE.Object3D;
+  /** The emote bubble floats above this point. */
+  head: THREE.Object3D;
+  face: Face;
   /** Machines with a turret look at the target with it; others turn in place. */
   hasTurret: boolean;
   update(ctx: MachineContext): void;
+}
+
+function headAnchor(parent: THREE.Object3D, x: number, y: number, z: number) {
+  const anchor = new THREE.Object3D();
+  anchor.position.set(x, y, z);
+  parent.add(anchor);
+  return anchor;
 }
 
 function buildExcavator(m: Materials): Machine {
@@ -176,26 +517,27 @@ function buildExcavator(m: Materials): Machine {
   root.add(turret);
   turret.add(new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.8, 0.2, 24), m.steel));
   turret.add(box(2.2, 0.75, 1.6, m.paint, -0.3, 0.5, 0));
-  turret.add(box(0.5, 0.6, 1.6, m.paintDark, -1.4, 0.45, 0));
-  turret.add(box(0.9, 0.9, 0.8, m.paint, 0.35, 1.3, 0.35));
-  turret.add(box(0.05, 0.6, 0.65, m.glass, 0.82, 1.35, 0.35));
-  turret.add(box(0.6, 0.5, 0.05, m.glass, 0.35, 1.4, 0.77));
-  beacon(m, turret, 0.35, 1.82, 0.35);
-  const lightAnchor = headlights(m, turret, 0.83, 1.0, [0.12, 0.58]);
+  turret.add(box(0.5, 0.65, 1.6, m.paintDark, -1.4, 0.45, 0));
+  turret.add(box(1.0, 1.0, 0.9, m.paint, 0.3, 1.3, 0.35));
+  turret.add(box(0.06, 0.8, 0.75, m.glass, 0.8, 1.32, 0.35));
+  beacon(m, turret, 0.3, 1.88, 0.35);
+  const lightAnchor = headlights(m, turret, 0.83, 0.92, [0.1, 0.6]);
+  const face = createFace(m, turret, 0.83, 1.33, 0.35, 1.05);
+  const head = headAnchor(turret, 0.3, 2.5, 0.35);
 
   const boomPivot = new THREE.Group();
-  boomPivot.position.set(0.7, 0.8, -0.3);
+  boomPivot.position.set(0.7, 0.8, -0.35);
   turret.add(boomPivot);
-  boomPivot.add(box(2.4, 0.32, 0.34, m.paint, 1.2, 0, 0));
+  boomPivot.add(box(2.4, 0.34, 0.36, m.paint, 1.2, 0, 0));
   const armPivot = new THREE.Group();
   armPivot.position.x = 2.4;
   boomPivot.add(armPivot);
-  armPivot.add(box(1.7, 0.24, 0.28, m.paintDark, 0.85, 0, 0));
+  armPivot.add(box(1.7, 0.26, 0.3, m.paintDark, 0.85, 0, 0));
   const bucketPivot = new THREE.Group();
   bucketPivot.position.x = 1.7;
   armPivot.add(bucketPivot);
-  bucketPivot.add(box(0.5, 0.08, 0.6, m.steel, 0.25, 0, 0));
-  bucketPivot.add(box(0.08, 0.45, 0.6, m.steel, 0.5, -0.2, 0));
+  bucketPivot.add(box(0.5, 0.1, 0.62, m.steel, 0.25, 0, 0));
+  bucketPivot.add(box(0.1, 0.45, 0.62, m.steel, 0.5, -0.2, 0));
   const tip = new THREE.Object3D();
   tip.position.set(0.4, -0.3, 0);
   bucketPivot.add(tip);
@@ -214,8 +556,10 @@ function buildExcavator(m: Materials): Machine {
     name: 'Экскаватор',
     root,
     wheels,
-    wheelRadius: 0.2,
+    wheelRadius: 0.18,
     lightAnchor,
+    head,
+    face,
     hasTurret: true,
     update(ctx) {
       turret.rotation.y = damp(turret.rotation.y, ctx.lookYaw, 4, ctx.dt);
@@ -225,7 +569,7 @@ function buildExcavator(m: Materials): Machine {
       armPivot.rotation.z = lerp(travel.arm, p.arm, ctx.work);
       bucketPivot.rotation.z = lerp(travel.bucket, p.bucket, ctx.work);
       const segment = Math.floor((workTime / 1.3) % poses.length);
-      if (ctx.work > 0.8 && (segment === 1 || segment === 3) && Math.random() < 0.6) {
+      if (ctx.work > 0.8 && (segment === 1 || segment === 3) && Math.random() < 0.6 * ctx.dt * 60) {
         ctx.emit(tip.getWorldPosition(tipWorld), 2, 0.4);
       }
     },
@@ -235,57 +579,59 @@ function buildExcavator(m: Materials): Machine {
 function buildCrane(m: Materials): Machine {
   const root = new THREE.Group();
   root.add(box(3.6, 0.5, 1.3, m.steel, 0, 0.75, 0));
-  root.add(box(0.7, 0.8, 1.2, m.paint, 1.45, 1.35, 0));
-  root.add(box(0.05, 0.5, 1.0, m.glass, 1.81, 1.45, 0));
-  const lightAnchor = headlights(m, root, 1.82, 1.05, [-0.4, 0.4]);
-  beacon(m, root, 1.45, 1.8, 0);
+  root.add(box(0.8, 0.95, 1.3, m.paint, 1.4, 1.4, 0));
+  root.add(box(0.06, 0.75, 1.1, m.glass, 1.8, 1.45, 0));
+  const lightAnchor = headlights(m, root, 1.82, 1.02, [-0.45, 0.45]);
+  const face = createFace(m, root, 1.83, 1.42, 0, 1.3);
+  const head = headAnchor(root, 1.4, 2.6, 0);
+  beacon(m, root, 1.4, 1.95, 0);
 
   const wheels: THREE.Object3D[] = [];
   for (const x of [1.2, -0.4, -1.2]) {
     for (const z of [-0.62, 0.62]) {
-      const w = wheel(m, 0.38, 0.3, x, 0.38, z);
+      const w = wheel(m, 0.4, 0.32, x, 0.4, z);
       wheels.push(w);
       root.add(w);
     }
   }
 
   const outriggers: { beam: THREE.Mesh; side: number }[] = [];
-  for (const x of [1.0, -1.5]) {
+  for (const x of [0.75, -1.5]) {
     for (const side of [-1, 1]) {
-      const beam = box(0.18, 0.18, 0.9, m.paintDark, x, 0.6, side * 0.5);
-      beam.add(box(0.3, 0.5, 0.3, m.steel, 0, -0.25, side * 0.45));
+      const beam = box(0.2, 0.2, 0.9, m.paintDark, x, 0.6, side * 0.5);
+      beam.add(box(0.32, 0.5, 0.32, m.steel, 0, -0.25, side * 0.45));
       outriggers.push({ beam, side });
       root.add(beam);
     }
   }
 
   const turret = new THREE.Group();
-  turret.position.set(-0.5, 1.0, 0);
+  turret.position.set(-0.6, 1.0, 0);
   root.add(turret);
   turret.add(new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.6, 0.2, 24), m.steel));
   turret.add(box(1.6, 0.5, 1.1, m.paint, -0.3, 0.3, 0));
   turret.add(box(0.6, 0.6, 0.45, m.paint, 0.25, 0.7, 0.55));
-  turret.add(box(0.05, 0.4, 0.35, m.glass, 0.56, 0.75, 0.55));
   turret.add(box(0.5, 0.6, 1.1, m.paintDark, -1.2, 0.4, 0));
 
   const boomPivot = new THREE.Group();
   boomPivot.position.set(0.4, 0.55, -0.1);
   turret.add(boomPivot);
-  boomPivot.add(box(2.6, 0.36, 0.36, m.paint, 1.3, 0, 0));
-  const inner = box(2.4, 0.26, 0.26, m.paintDark, 1.2, 0, 0);
+  boomPivot.add(box(2.6, 0.38, 0.38, m.paint, 1.3, 0, 0));
+  const inner = box(2.4, 0.28, 0.28, m.paintDark, 1.2, 0, 0);
   boomPivot.add(inner);
   const hanger = new THREE.Group();
   hanger.position.x = 1.2;
   inner.add(hanger);
-  const rope = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 1, 6), m.chrome);
+  const rope = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 1, 6), m.chrome);
+  rope.userData.noOutline = true;
   hanger.add(rope);
   const hook = new THREE.Group();
-  hook.add(box(0.25, 0.3, 0.25, m.paint));
+  hook.add(box(0.28, 0.32, 0.28, m.paint));
   const hookCurve = new THREE.Mesh(
-    new THREE.TorusGeometry(0.1, 0.03, 8, 16, Math.PI * 1.4),
+    new THREE.TorusGeometry(0.11, 0.035, 8, 16, Math.PI * 1.4),
     m.steel,
   );
-  hookCurve.position.y = -0.25;
+  hookCurve.position.y = -0.27;
   hook.add(hookCurve);
   hanger.add(hook);
 
@@ -294,9 +640,11 @@ function buildCrane(m: Materials): Machine {
     name: 'Автокран',
     root,
     wheels,
-    wheelRadius: 0.38,
+    wheelRadius: 0.4,
     lightAnchor,
-    hasTurret: true,
+    head,
+    face,
+    hasTurret: false,
     update(ctx) {
       if (!ctx.moving) workTime += ctx.dt;
       // The boom rests forward while driving and tracks the target once parked.
@@ -308,7 +656,7 @@ function buildCrane(m: Materials): Machine {
       hanger.rotation.z = -elevation + Math.sin(ctx.time * 1.8) * (0.05 + 0.1 * ctx.work);
       rope.scale.y = ropeLength;
       rope.position.y = -ropeLength / 2;
-      hook.position.y = -ropeLength - 0.15;
+      hook.position.y = -ropeLength - 0.16;
       for (const { beam, side } of outriggers) beam.position.z = side * (0.5 + 0.55 * ctx.work);
     },
   };
@@ -316,22 +664,23 @@ function buildCrane(m: Materials): Machine {
 
 function buildLoader(m: Materials): Machine {
   const root = new THREE.Group();
-  root.add(box(1.5, 0.9, 1.3, m.paint, -0.65, 1.0, 0));
-  root.add(box(0.6, 0.6, 1.1, m.paintDark, -1.3, 0.95, 0));
-  root.add(box(0.9, 0.9, 1.1, m.paint, 0.05, 1.8, 0));
-  root.add(box(0.05, 0.65, 0.95, m.glass, 0.51, 1.85, 0));
-  root.add(box(0.9, 0.55, 0.05, m.glass, 0.05, 1.85, 0.56));
-  const exhaust = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.7, 10), m.chrome);
-  exhaust.position.set(-1.1, 1.75, 0.35);
+  root.add(box(1.5, 0.95, 1.35, m.paint, -0.65, 1.0, 0));
+  root.add(box(0.6, 0.65, 1.15, m.paintDark, -1.3, 0.95, 0));
+  root.add(box(1.0, 1.0, 1.2, m.paint, 0.0, 1.85, 0));
+  root.add(box(0.06, 0.8, 1.0, m.glass, 0.5, 1.87, 0));
+  const exhaust = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 0.7, 10), m.chrome);
+  exhaust.position.set(-1.1, 1.75, 0.38);
   root.add(exhaust);
   root.add(box(0.9, 0.5, 0.9, m.steel, 0.85, 0.85, 0));
-  beacon(m, root, 0.05, 2.3, 0);
-  const lightAnchor = headlights(m, root, 0.52, 2.1, [-0.35, 0.35]);
+  beacon(m, root, 0.0, 2.42, 0);
+  const lightAnchor = headlights(m, root, 1.32, 0.95, [-0.28, 0.28]);
+  const face = createFace(m, root, 0.53, 1.85, 0, 1.2);
+  const head = headAnchor(root, 0.0, 3.0, 0);
 
   const wheels: THREE.Object3D[] = [];
   for (const x of [-0.95, 0.9]) {
-    for (const z of [-0.75, 0.75]) {
-      const w = wheel(m, 0.5, 0.4, x, 0.5, z);
+    for (const z of [-0.78, 0.78]) {
+      const w = wheel(m, 0.52, 0.42, x, 0.52, z);
       wheels.push(w);
       root.add(w);
     }
@@ -340,13 +689,13 @@ function buildLoader(m: Materials): Machine {
   const arms = new THREE.Group();
   arms.position.set(0.9, 1.2, 0);
   root.add(arms);
-  for (const z of [-0.45, 0.45]) arms.add(box(1.5, 0.18, 0.14, m.paintDark, 0.75, 0, z));
+  for (const z of [-0.45, 0.45]) arms.add(box(1.5, 0.2, 0.16, m.paintDark, 0.75, 0, z));
   const bucket = new THREE.Group();
   bucket.position.x = 1.5;
   arms.add(bucket);
-  bucket.add(box(0.08, 0.6, 1.5, m.steel, 0.1, -0.1, 0));
-  bucket.add(box(0.55, 0.08, 1.5, m.steel, 0.35, -0.4, 0));
-  for (const z of [-0.75, 0.75]) bucket.add(box(0.55, 0.5, 0.05, m.steel, 0.35, -0.15, z));
+  bucket.add(box(0.1, 0.6, 1.5, m.steel, 0.1, -0.1, 0));
+  bucket.add(box(0.55, 0.1, 1.5, m.steel, 0.35, -0.4, 0));
+  for (const z of [-0.74, 0.74]) bucket.add(box(0.55, 0.5, 0.07, m.steel, 0.35, -0.15, z));
   const tip = new THREE.Object3D();
   tip.position.set(0.6, -0.3, 0);
   bucket.add(tip);
@@ -365,8 +714,10 @@ function buildLoader(m: Materials): Machine {
     name: 'Фронтальный погрузчик',
     root,
     wheels,
-    wheelRadius: 0.5,
+    wheelRadius: 0.52,
     lightAnchor,
+    head,
+    face,
     hasTurret: false,
     update(ctx) {
       if (!ctx.moving) workTime += ctx.dt;
@@ -374,7 +725,7 @@ function buildLoader(m: Materials): Machine {
       arms.rotation.z = lerp(travel.arms, p.arms, ctx.work);
       bucket.rotation.z = lerp(travel.bucket, p.bucket, ctx.work);
       const segment = Math.floor((workTime / 1.2) % poses.length);
-      if (ctx.work > 0.8 && segment === 3 && Math.random() < 0.8) {
+      if (ctx.work > 0.8 && segment === 3 && Math.random() < 0.8 * ctx.dt * 60) {
         ctx.emit(tip.getWorldPosition(tipWorld), 3, 0.8);
       }
     },
@@ -383,30 +734,31 @@ function buildLoader(m: Materials): Machine {
 
 function buildDumpTruck(m: Materials): Machine {
   const root = new THREE.Group();
-  root.add(box(3.8, 0.35, 1.1, m.steel, 0, 0.75, 0));
-  root.add(box(1.0, 1.1, 1.4, m.paint, 1.4, 1.45, 0));
-  root.add(box(0.05, 0.55, 1.2, m.glass, 1.91, 1.65, 0));
-  root.add(box(0.2, 0.3, 1.5, m.chrome, 1.95, 0.85, 0));
-  beacon(m, root, 1.4, 2.08, 0);
-  const lightAnchor = headlights(m, root, 1.92, 1.1, [-0.5, 0.5]);
+  root.add(box(3.8, 0.38, 1.15, m.steel, 0, 0.75, 0));
+  root.add(box(1.05, 1.2, 1.5, m.paint, 1.38, 1.5, 0));
+  root.add(box(0.06, 0.8, 1.3, m.glass, 1.9, 1.58, 0));
+  root.add(box(0.22, 0.3, 1.55, m.chrome, 1.95, 0.85, 0));
+  beacon(m, root, 1.38, 2.18, 0);
+  const lightAnchor = headlights(m, root, 1.93, 1.1, [-0.55, 0.55]);
+  const face = createFace(m, root, 1.92, 1.52, 0, 1.4);
+  const head = headAnchor(root, 1.38, 2.8, 0);
 
   const wheels: THREE.Object3D[] = [];
   for (const x of [1.3, -0.9, -1.6]) {
-    for (const z of [-0.65, 0.65]) {
-      const w = wheel(m, 0.45, 0.35, x, 0.45, z);
+    for (const z of [-0.68, 0.68]) {
+      const w = wheel(m, 0.47, 0.36, x, 0.47, z);
       wheels.push(w);
       root.add(w);
     }
   }
 
   const bed = new THREE.Group();
-  bed.position.set(-1.9, 1.0, 0);
+  bed.position.set(-1.9, 1.02, 0);
   root.add(bed);
-  bed.add(box(2.8, 0.1, 1.5, m.paintDark, 1.4, 0, 0));
-  for (const z of [-0.72, 0.72]) bed.add(box(2.8, 0.7, 0.06, m.paint, 1.4, 0.35, z));
-  bed.add(box(0.1, 0.9, 1.5, m.paint, 2.8, 0.45, 0));
+  bed.add(box(2.8, 0.12, 1.5, m.paintDark, 1.4, 0, 0));
+  for (const z of [-0.72, 0.72]) bed.add(box(2.8, 0.7, 0.08, m.paintDark, 1.4, 0.35, z));
+  bed.add(box(0.12, 0.9, 1.5, m.paintDark, 2.8, 0.45, 0));
   const load = new THREE.Mesh(new THREE.ConeGeometry(0.75, 0.7, 20), m.soil);
-  load.scale.set(1.6, 1, 0.9);
   load.position.set(1.4, 0.4, 0);
   load.castShadow = true;
   bed.add(load);
@@ -420,8 +772,10 @@ function buildDumpTruck(m: Materials): Machine {
     name: 'Самосвал',
     root,
     wheels,
-    wheelRadius: 0.45,
+    wheelRadius: 0.47,
     lightAnchor,
+    head,
+    face,
     hasTurret: false,
     update(ctx) {
       if (!ctx.moving) workTime += ctx.dt;
@@ -435,7 +789,7 @@ function buildDumpTruck(m: Materials): Machine {
       const remaining = Math.max(0.05, 1 - emptied * ctx.work);
       load.scale.set(1.6 * remaining, remaining, 0.9 * remaining);
       load.position.x = 1.4 - 0.8 * emptied * ctx.work;
-      if (tilt > 0.45 && t < 4.2 && Math.random() < 0.9) {
+      if (tilt > 0.45 && t < 4.2 && Math.random() < 0.9 * ctx.dt * 60) {
         ctx.emit(spout.getWorldPosition(spoutWorld), 3, 0.9);
       }
     },
@@ -445,23 +799,24 @@ function buildDumpTruck(m: Materials): Machine {
 function buildBulldozer(m: Materials): Machine {
   const root = new THREE.Group();
   const wheels = tracks(m, root, 2.4, [-0.7, 0.7]);
-  root.add(box(1.8, 0.8, 1.2, m.paint, -0.1, 0.95, 0));
-  root.add(box(0.8, 0.5, 1.0, m.paintDark, 0.7, 0.85, 0));
-  root.add(box(0.9, 0.8, 1.0, m.paint, -0.45, 1.75, 0));
-  root.add(box(0.05, 0.55, 0.85, m.glass, 0.01, 1.8, 0));
-  root.add(box(0.8, 0.5, 0.05, m.glass, -0.45, 1.8, 0.51));
-  const exhaust = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.6, 10), m.chrome);
-  exhaust.position.set(0.5, 1.4, 0.3);
+  root.add(box(1.8, 0.85, 1.25, m.paint, -0.1, 0.95, 0));
+  root.add(box(0.8, 0.55, 1.0, m.paintDark, 0.7, 0.85, 0));
+  root.add(box(1.0, 0.95, 1.15, m.paint, -0.45, 1.8, 0));
+  root.add(box(0.06, 0.75, 0.95, m.glass, 0.06, 1.82, 0));
+  const exhaust = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 0.6, 10), m.chrome);
+  exhaust.position.set(0.5, 1.4, 0.32);
   root.add(exhaust);
-  beacon(m, root, -0.45, 2.22, 0);
-  const lightAnchor = headlights(m, root, 0.02, 2.05, [-0.35, 0.35]);
+  beacon(m, root, -0.45, 2.34, 0);
+  const lightAnchor = headlights(m, root, 1.12, 0.95, [-0.3, 0.3]);
+  const face = createFace(m, root, 0.09, 1.8, 0, 1.15);
+  const head = headAnchor(root, -0.45, 2.9, 0);
 
   const bladeArm = new THREE.Group();
   bladeArm.position.set(0.3, 0.65, 0);
   root.add(bladeArm);
-  for (const z of [-0.62, 0.62]) bladeArm.add(box(1.1, 0.14, 0.14, m.steel, 0.55, 0, z));
-  const blade = box(0.16, 0.85, 2.0, m.paintDark, 1.2, 0.05, 0);
-  blade.add(box(0.1, 0.08, 2.0, m.chrome, 0.06, -0.42, 0));
+  for (const z of [-0.62, 0.62]) bladeArm.add(box(1.1, 0.16, 0.16, m.steel, 0.55, 0, z));
+  const blade = box(0.18, 0.85, 2.0, m.paintDark, 1.2, 0.05, 0);
+  blade.add(box(0.12, 0.1, 2.0, m.chrome, 0.06, -0.42, 0));
   bladeArm.add(blade);
   const edge = new THREE.Object3D();
   edge.position.set(1.4, -0.35, 0);
@@ -470,8 +825,8 @@ function buildBulldozer(m: Materials): Machine {
   const ripper = new THREE.Group();
   ripper.position.set(-1.1, 0.8, 0);
   root.add(ripper);
-  ripper.add(box(0.5, 0.12, 0.8, m.steel, -0.25, 0, 0));
-  ripper.add(box(0.1, 0.6, 0.1, m.steel, -0.45, -0.3, 0));
+  ripper.add(box(0.5, 0.14, 0.8, m.steel, -0.25, 0, 0));
+  ripper.add(box(0.12, 0.6, 0.12, m.steel, -0.45, -0.3, 0));
 
   let workTime = 0;
   const edgeWorld = new THREE.Vector3();
@@ -479,8 +834,10 @@ function buildBulldozer(m: Materials): Machine {
     name: 'Бульдозер',
     root,
     wheels,
-    wheelRadius: 0.2,
+    wheelRadius: 0.18,
     lightAnchor,
+    head,
+    face,
     hasTurret: false,
     update(ctx) {
       if (!ctx.moving) workTime += ctx.dt;
@@ -488,12 +845,21 @@ function buildBulldozer(m: Materials): Machine {
       const parked = 0.1 + 0.12 * Math.sin(workTime * 2.2);
       bladeArm.rotation.z = lerp(-0.12, parked, ctx.work);
       ripper.rotation.z = ctx.work * 0.35 * (0.5 + 0.5 * Math.sin(workTime * 1.5));
-      if (ctx.moving && Math.random() < 0.9) ctx.emit(edge.getWorldPosition(edgeWorld), 2, 1.6);
+      if (ctx.moving && Math.random() < 0.9 * ctx.dt * 60) {
+        ctx.emit(edge.getWorldPosition(edgeWorld), 2, 1.6);
+      }
     },
   };
 }
 
-const BUILDERS = [buildExcavator, buildCrane, buildLoader, buildDumpTruck, buildBulldozer];
+// Each machine gets its own cartoon paint job.
+const MACHINE_TYPES: { build: (m: Materials) => Machine; paint: number; paintDark: number }[] = [
+  { build: buildExcavator, paint: 0xfbbf24, paintDark: 0xf59e0b },
+  { build: buildCrane, paint: 0xfb7185, paintDark: 0xe11d48 },
+  { build: buildLoader, paint: 0xfacc15, paintDark: 0x65a30d },
+  { build: buildDumpTruck, paint: 0x38bdf8, paintDark: 0xf97316 },
+  { build: buildBulldozer, paint: 0xf59e0b, paintDark: 0x7c3aed },
+];
 
 const LAST_SHOWN_KEY = 'specplast16:last-machine';
 
@@ -532,13 +898,15 @@ export interface MachinesScene {
   current: number;
   show(index: number): void;
   setPointer(clientX: number, clientY: number): void;
+  /** Clicking/tapping the machine makes it happy. */
+  poke(clientX: number, clientY: number): void;
   setRunning(running: boolean): void;
   dispose(): void;
 }
 
 const PLATFORM_RADIUS = 4.6;
 const DRIVE_RADIUS = 2.4;
-const SWITCH_SECONDS = 13;
+const SWITCH_SECONDS = 14;
 
 export function createMachinesScene(
   container: HTMLElement,
@@ -548,7 +916,6 @@ export function createMachinesScene(
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-  renderer.toneMapping = THREE.ACESFilmicToneMapping;
   container.appendChild(renderer.domElement);
 
   const scene = new THREE.Scene();
@@ -557,9 +924,9 @@ export function createMachinesScene(
   const cameraBase = new THREE.Vector3(9.5, 6.2, 10.5);
   const lookAt = new THREE.Vector3(0.3, 0.9, 0);
 
-  scene.add(new THREE.HemisphereLight(0xdbeafe, 0x1e293b, 0.9));
-  const sun = new THREE.DirectionalLight(0xffffff, 2.1);
-  sun.position.set(6, 10, 5);
+  scene.add(new THREE.HemisphereLight(0xffffff, 0x334155, 1.4));
+  const sun = new THREE.DirectionalLight(0xffffff, 2.2);
+  sun.position.set(6, 10, 7);
   sun.castShadow = true;
   sun.shadow.mapSize.set(1024, 1024);
   Object.assign(sun.shadow.camera, { left: -7, right: 7, top: 7, bottom: -7 });
@@ -596,12 +963,15 @@ export function createMachinesScene(
   scene.add(grid);
 
   // Traffic cones around the edge.
-  const coneMaterial = new THREE.MeshStandardMaterial({ color: 0xf97316, roughness: 0.6 });
+  const gradientMap = createToonGradient();
+  const outline = createOutlineMaterial();
+  const coneMaterial = new THREE.MeshToonMaterial({ color: 0xf97316, gradientMap });
   for (let i = 0; i < 8; i++) {
     const angle = (i / 8) * Math.PI * 2 + 0.3;
-    const cone = new THREE.Mesh(new THREE.ConeGeometry(0.14, 0.4, 12), coneMaterial);
-    cone.position.set(Math.cos(angle) * 4.2, 0.2, Math.sin(angle) * 4.2);
+    const cone = new THREE.Mesh(new THREE.ConeGeometry(0.16, 0.42, 16), coneMaterial);
+    cone.position.set(Math.cos(angle) * 4.2, 0.21, Math.sin(angle) * 4.2);
     cone.castShadow = true;
+    cone.add(new THREE.Mesh(cone.geometry, outline));
     scene.add(cone);
   }
 
@@ -615,13 +985,14 @@ export function createMachinesScene(
   scene.add(reticle);
   const reticleMaterial = reticle.material as THREE.MeshBasicMaterial;
 
-  // Floating wireframe shapes.
+  // Floating wireframe shapes, kept out of the camera's line of sight.
   const shapes: THREE.Mesh[] = [];
   const shapeGeometries = [
     new THREE.OctahedronGeometry(0.45),
     new THREE.IcosahedronGeometry(0.4),
     new THREE.TetrahedronGeometry(0.5),
   ];
+  const cameraAngle = Math.atan2(cameraBase.z, cameraBase.x);
   for (let i = 0; i < 7; i++) {
     const mesh = new THREE.Mesh(
       shapeGeometries[i % shapeGeometries.length],
@@ -632,8 +1003,6 @@ export function createMachinesScene(
         opacity: 0.5,
       }),
     );
-    // Spread around the platform, but never between the camera and the machine.
-    const cameraAngle = Math.atan2(cameraBase.z, cameraBase.x);
     const angle = cameraAngle + 0.9 + (i / 6) * (Math.PI * 2 - 1.8);
     mesh.position.set(Math.cos(angle) * 7.5, 3 + (i % 3) * 1.1, Math.sin(angle) * 7.5);
     mesh.userData.phase = i * 0.9;
@@ -657,7 +1026,7 @@ export function createMachinesScene(
       dustGeometry,
       new THREE.PointsMaterial({
         color: 0xd6a36a,
-        size: 0.09,
+        size: 0.1,
         transparent: true,
         opacity: 0.85,
         depthWrite: false,
@@ -684,9 +1053,24 @@ export function createMachinesScene(
     }
   }
 
+  // Emote bubble above the active machine.
+  const emoteTextures = new Map<Emote, THREE.CanvasTexture>();
+  for (const emote of ['heart', '!', '?', 'zzz', 'note'] as Emote[]) {
+    emoteTextures.set(emote, createEmoteTexture(emote));
+  }
+  const emoteMaterial = new THREE.SpriteMaterial({ transparent: true, depthTest: false });
+  const emoteSprite = new THREE.Sprite(emoteMaterial);
+  emoteSprite.renderOrder = 10;
+  scene.add(emoteSprite);
+  let emoteShownAt = -10;
+  let emoteVisible = false;
+
   // Machines.
-  const materials = createMaterials();
-  const machines = BUILDERS.map((build) => build(materials));
+  const machines = MACHINE_TYPES.map(({ build, paint, paintDark }) => {
+    const machine = build(createMaterials(gradientMap, paint, paintDark));
+    addOutlines(machine.root, outline);
+    return machine;
+  });
   const order = shuffledOrder(machines.length);
   let current = order[0] ?? 0;
   rememberShown(current);
@@ -695,12 +1079,34 @@ export function createMachinesScene(
 
   const drive = {
     position: new THREE.Vector3(0, 0, 0),
-    yaw: Math.random() * Math.PI * 2,
+    // Start roughly facing the camera so the face is visible.
+    yaw: -0.8 + (Math.random() - 0.5) * 0.8,
     speed: 0,
     work: 1,
     wanderTarget: new THREE.Vector3(),
     wanderUntil: 0,
   };
+
+  // Emotions.
+  let emotion: Emotion = 'surprised';
+  let emotionLockedUntil = 1.2;
+  let lastPointerAt = -100;
+  let spawnedAt = 0;
+  let hopStart = -10;
+
+  function setEmotion(next: Emotion, lockSeconds = 0) {
+    if (next !== emotion) {
+      emotion = next;
+      const emote = EMOTES[next];
+      emoteVisible = Boolean(emote);
+      if (emote) {
+        emoteMaterial.map = emoteTextures.get(emote) ?? null;
+        emoteMaterial.needsUpdate = true;
+        emoteShownAt = elapsed;
+      }
+    }
+    if (lockSeconds > 0) emotionLockedUntil = elapsed + lockSeconds;
+  }
 
   let transition: { phase: 'out' | 'in'; t: number; next: number } | null = null;
   // Switching runs on wall-clock time so slow devices don't switch late.
@@ -712,17 +1118,45 @@ export function createMachinesScene(
   const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
   const pointerNdc = new THREE.Vector2();
   const pointerGround = new THREE.Vector3();
+  const pointerLook = new THREE.Vector3();
+  const lookPlane = new THREE.Plane();
+  const toCamera = new THREE.Vector3();
+  const planePoint = new THREE.Vector3();
+  let pointerOnGround = false;
   let hasPointer = false;
   let pointerActiveUntil = -1;
 
-  function updatePointerGround() {
+  function toNdc(clientX: number, clientY: number) {
+    const rect = renderer.domElement.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) return null;
+    return new THREE.Vector2(
+      ((clientX - rect.left) / rect.width) * 2 - 1,
+      -((clientY - rect.top) / rect.height) * 2 + 1,
+    );
+  }
+
+  function updatePointerTargets() {
     raycaster.setFromCamera(pointerNdc, camera);
-    const hit = raycaster.ray.intersectPlane(groundPlane, pointerGround);
-    if (!hit || hit.length() > 30) {
-      // Pointer above the horizon: look in its direction instead.
-      const dir = raycaster.ray.direction;
-      pointerGround.set(dir.x, 0, dir.z).normalize().multiplyScalar(12);
-    }
+    // Where the pointer touches the platform (the machine drives there)…
+    pointerOnGround =
+      raycaster.ray.intersectPlane(groundPlane, pointerGround) !== null &&
+      pointerGround.length() < PLATFORM_RADIUS + 0.5;
+    // …and, for pointers anywhere else on screen, a point on a vertical plane
+    // between the machine and the camera, so the machine keeps facing the
+    // viewer and its eyes follow the cursor around the screen.
+    toCamera
+      .set(camera.position.x - drive.position.x, 0, camera.position.z - drive.position.z)
+      .normalize();
+    planePoint.copy(drive.position).addScaledVector(toCamera, 3).setY(1.2);
+    lookPlane.setFromNormalAndCoplanarPoint(toCamera, planePoint);
+    if (!raycaster.ray.intersectPlane(lookPlane, pointerLook)) pointerLook.copy(planePoint);
+  }
+
+  function faceCameraYaw() {
+    return Math.atan2(
+      -(camera.position.z - drive.position.z),
+      camera.position.x - drive.position.x,
+    );
   }
 
   function resize() {
@@ -743,6 +1177,7 @@ export function createMachinesScene(
   const smoothPointer = { x: 0, y: 0 };
   const followTarget = new THREE.Vector3();
   const lookTarget = new THREE.Vector3();
+  const eyeTarget = new THREE.Vector3();
   const anchorWorld = new THREE.Vector3();
 
   function startTransition(next: number) {
@@ -764,7 +1199,11 @@ export function createMachinesScene(
     scene.add(activeMachine.root);
     drive.work = 1;
     drive.speed = 0;
+    // Arrive facing the viewer.
+    drive.yaw = faceCameraYaw() + (Math.random() - 0.5) * 0.6;
     emit(drive.position.clone().setY(0.2), 40, 2.5);
+    spawnedAt = elapsed;
+    setEmotion('surprised', 1.4);
     rememberShown(current);
     options.onChange?.(current);
   }
@@ -785,14 +1224,48 @@ export function createMachinesScene(
     camera.lookAt(lookAt);
     camera.updateMatrixWorld();
 
-    // --- Choose where to go and what to look at. -------------------------
+    // --- Mood. -------------------------------------------------------------
     const pointerActive = animate && hasPointer && elapsed < pointerActiveUntil;
+    const idleFor = elapsed - Math.max(lastPointerAt, spawnedAt);
+    if (elapsed >= emotionLockedUntil) {
+      if (pointerActive) {
+        setEmotion(
+          emotion === 'sleepy' ? 'surprised' : drive.speed > 0.3 ? 'curious' : 'happy',
+          emotion === 'sleepy' ? 1 : 0,
+        );
+      } else if (idleFor < 5) {
+        setEmotion('focused');
+      } else if (idleFor < 8.5) {
+        setEmotion('happy');
+      } else {
+        setEmotion('sleepy');
+      }
+    }
+    const sleepy = emotion === 'sleepy';
+
+    // --- Choose where to go and what to look at. -------------------------
     if (pointerActive) {
-      updatePointerGround();
-      lookTarget.copy(pointerGround);
-      // Approach the pointer but stop short of it, inside the drive area.
-      followTarget.copy(pointerGround);
-      if (followTarget.length() > DRIVE_RADIUS) followTarget.setLength(DRIVE_RADIUS);
+      updatePointerTargets();
+      if (pointerOnGround) {
+        lookTarget.copy(pointerGround);
+        followTarget.copy(pointerGround);
+        if (followTarget.length() > DRIVE_RADIUS) followTarget.setLength(DRIVE_RADIUS);
+      } else {
+        // Turn towards the cursor, but never so far that the face is hidden —
+        // the eyes cover the rest.
+        const toward = Math.atan2(
+          -(pointerLook.z - drive.position.z),
+          pointerLook.x - drive.position.x,
+        );
+        const facing = faceCameraYaw();
+        const heading = facing + clamp(wrapAngle(toward - facing), -0.6, 0.6);
+        lookTarget.set(
+          drive.position.x + Math.cos(heading) * 3,
+          0,
+          drive.position.z - Math.sin(heading) * 3,
+        );
+        followTarget.copy(drive.position);
+      }
     } else {
       if (elapsed > drive.wanderUntil) {
         const angle = Math.random() * Math.PI * 2;
@@ -801,12 +1274,23 @@ export function createMachinesScene(
           .multiplyScalar(Math.random() * 1.8);
         drive.wanderUntil = elapsed + 5 + Math.random() * 4;
       }
-      followTarget.copy(drive.wanderTarget);
-      lookTarget.set(
-        drive.position.x + Math.cos(elapsed * 0.3) * 5,
-        0,
-        drive.position.z - Math.sin(elapsed * 0.3) * 5,
-      );
+      // Only wander while working; stay put to greet the viewer or to doze.
+      followTarget.copy(emotion === 'focused' ? drive.wanderTarget : drive.position);
+      if (emotion === 'happy' || emotion === 'surprised') {
+        // Turn to face the viewer.
+        lookTarget.set(camera.position.x, 0, camera.position.z);
+      } else {
+        lookTarget.set(
+          drive.position.x + Math.cos(elapsed * 0.3) * 5,
+          0,
+          drive.position.z - Math.sin(elapsed * 0.3) * 5,
+        );
+      }
+    }
+
+    // Big reactions are played to the audience.
+    if (emotion === 'joy' || emotion === 'surprised') {
+      lookTarget.set(camera.position.x, 0, camera.position.z);
     }
 
     // --- Drive. ------------------------------------------------------------
@@ -816,7 +1300,12 @@ export function createMachinesScene(
     const stopDistance = pointerActive ? 1.9 : 0.3;
     const toPointer = Math.hypot(lookTarget.x - drive.position.x, lookTarget.z - drive.position.z);
     const wantsToMove =
-      animate && !transition && distance > stopDistance && (!pointerActive || toPointer > 2.3);
+      animate &&
+      !transition &&
+      !sleepy &&
+      emotion !== 'joy' &&
+      distance > stopDistance &&
+      (!pointerActive || toPointer > 2.3);
     let moving = false;
     if (wantsToMove) {
       const heading = Math.atan2(-dz, dx);
@@ -836,7 +1325,7 @@ export function createMachinesScene(
       lookTarget.x - drive.position.x,
     );
     let lookYaw = wrapAngle(lookHeading - drive.yaw);
-    if (!moving && !activeMachine.hasTurret && animate && Math.abs(lookYaw) > 0.2) {
+    if (!moving && !activeMachine.hasTurret && animate && !sleepy && Math.abs(lookYaw) > 0.2) {
       // No turret: turn the whole machine in place to face the target.
       drive.yaw = approachAngle(drive.yaw, lookHeading, dt * 1.6);
       lookYaw = wrapAngle(lookHeading - drive.yaw);
@@ -844,37 +1333,46 @@ export function createMachinesScene(
 
     const machine = activeMachine;
     for (const w of machine.wheels) w.rotation.z -= (drive.speed * dt) / machine.wheelRadius;
-    machine.root.position.set(
-      drive.position.x,
-      moving ? Math.abs(Math.sin(elapsed * 18)) * 0.015 : 0,
-      drive.position.z,
-    );
+
+    // Hop for joy, rumble while driving, breathe while idle.
+    const hopT = elapsed - hopStart;
+    const hop =
+      hopT < 0.9 ? Math.abs(Math.sin((hopT / 0.45) * Math.PI)) * (hopT < 0.45 ? 0.55 : 0.3) : 0;
+    const rumble = moving ? Math.abs(Math.sin(elapsed * 18)) * 0.02 : 0;
+    machine.root.position.set(drive.position.x, hop + rumble, drive.position.z);
+    const breathe = Math.sin(elapsed * (sleepy ? 1.4 : 2.6)) * (sleepy ? 0.03 : 0.015);
 
     // --- Switching machines. ----------------------------------------------
     let spin = 0;
+    let baseScale = 1;
     if (transition) {
       transition.t += dt / (transition.phase === 'out' ? 0.45 : 0.75);
       if (transition.phase === 'out') {
-        machine.root.scale.setScalar(Math.max(0.001, 1 - smooth(transition.t)));
+        baseScale = Math.max(0.001, 1 - smooth(transition.t));
         spin = smooth(transition.t) * Math.PI;
         if (transition.t >= 1) {
           swapTo(transition.next);
           transition = { phase: 'in', t: 0, next: transition.next };
-          activeMachine.root.scale.setScalar(0.001);
+          baseScale = 0.001;
         }
       } else {
-        activeMachine.root.scale.setScalar(Math.max(0.001, easeOutBack(Math.min(1, transition.t))));
+        baseScale = Math.max(0.001, easeOutBack(Math.min(1, transition.t)));
         if (transition.t >= 1) transition = null;
       }
     } else if (animate && wallTime > autoSwitchAt) {
       const position = order.indexOf(current);
       startTransition(order[(position + 1) % order.length] ?? 0);
     }
+    activeMachine.root.scale.set(
+      baseScale * (1 - breathe * 0.5),
+      baseScale * (1 + breathe),
+      baseScale * (1 - breathe * 0.5),
+    );
     activeMachine.root.rotation.y = drive.yaw + spin;
 
     activeMachine.update({
       time: elapsed,
-      dt: animate ? dt : 0,
+      dt: animate ? dt * (sleepy ? 0.15 : 1) : 0,
       work: drive.work,
       moving,
       lookYaw,
@@ -882,12 +1380,33 @@ export function createMachinesScene(
     });
     activeMachine.root.updateMatrixWorld(true);
 
+    // Eyes: follow the pointer, meet the viewer's gaze, or droop when sleepy.
+    if (pointerActive && pointerOnGround) eyeTarget.set(pointerGround.x, 0.6, pointerGround.z);
+    else if (pointerActive) eyeTarget.copy(pointerLook);
+    else if (sleepy) eyeTarget.set(drive.position.x, -5, drive.position.z);
+    else if (emotion === 'focused') eyeTarget.copy(lookTarget).setY(0);
+    else eyeTarget.copy(camera.position);
+    activeMachine.face.update(animate ? dt : 0.016, elapsed, emotion, eyeTarget);
+
+    // Emote bubble.
+    activeMachine.head.getWorldPosition(anchorWorld);
+    const emoteAge = elapsed - emoteShownAt;
+    const emoteOn = emoteVisible && (sleepy || emoteAge < 2.2);
+    const pop = emoteOn ? easeOutBack(clamp(emoteAge / 0.35, 0, 1)) : 0;
+    emoteSprite.scale.setScalar(Math.max(0.001, pop * 0.95 * baseScale));
+    emoteSprite.position.set(
+      anchorWorld.x,
+      anchorWorld.y + Math.sin(elapsed * 3) * 0.08,
+      anchorWorld.z,
+    );
+    emoteSprite.visible = pop > 0.01;
+
     // Headlight beam and reticle.
     activeMachine.lightAnchor.getWorldPosition(anchorWorld);
     beam.position.copy(anchorWorld);
     beamTarget.position.copy(lookTarget);
-    beam.intensity = damp(beam.intensity, pointerActive ? 80 : 25, 3, dt || 1);
-    const reticleOn = pointerActive && pointerGround.length() < PLATFORM_RADIUS;
+    beam.intensity = damp(beam.intensity, pointerActive ? 80 : sleepy ? 0 : 25, 3, dt || 1);
+    const reticleOn = pointerActive && pointerOnGround && pointerGround.length() < PLATFORM_RADIUS;
     reticle.position.set(pointerGround.x, 0.03, pointerGround.z);
     reticleMaterial.opacity = damp(reticleMaterial.opacity, reticleOn ? 0.9 : 0, 8, dt || 1);
     reticle.scale.setScalar(1 + Math.sin(elapsed * 6) * 0.12);
@@ -911,7 +1430,6 @@ export function createMachinesScene(
         shape.position.y += Math.sin(elapsed * 1.2 + (shape.userData.phase as number)) * dt * 0.3;
       }
       ring.rotation.z += dt * 0.2;
-      materials.beacon.emissiveIntensity = 1 + Math.max(0, Math.sin(elapsed * 8)) * 3;
     }
 
     renderer.render(scene, camera);
@@ -928,15 +1446,25 @@ export function createMachinesScene(
       if (index >= 0 && index < machines.length) startTransition(index);
     },
     setPointer(clientX, clientY) {
-      const rect = renderer.domElement.getBoundingClientRect();
-      if (rect.width === 0 || rect.height === 0) return;
-      const x = ((clientX - rect.left) / rect.width) * 2 - 1;
-      const y = -((clientY - rect.top) / rect.height) * 2 + 1;
-      pointerNdc.set(x, y);
-      smoothPointer.x = damp(smoothPointer.x, Math.max(-1.5, Math.min(1.5, x)), 1, 0.3);
-      smoothPointer.y = damp(smoothPointer.y, Math.max(-1.5, Math.min(1.5, -y)), 1, 0.3);
+      const ndc = toNdc(clientX, clientY);
+      if (!ndc) return;
+      pointerNdc.copy(ndc);
+      smoothPointer.x = damp(smoothPointer.x, clamp(ndc.x, -1.5, 1.5), 1, 0.3);
+      smoothPointer.y = damp(smoothPointer.y, clamp(-ndc.y, -1.5, 1.5), 1, 0.3);
       hasPointer = true;
       pointerActiveUntil = elapsed + 4;
+      lastPointerAt = elapsed;
+    },
+    poke(clientX, clientY) {
+      const ndc = toNdc(clientX, clientY);
+      if (!ndc || transition?.phase === 'out') return;
+      raycaster.setFromCamera(ndc, camera);
+      if (raycaster.intersectObject(activeMachine.root, true).length === 0) return;
+      setEmotion('joy', 1.8);
+      emoteShownAt = elapsed;
+      hopStart = elapsed;
+      emit(activeMachine.head.getWorldPosition(new THREE.Vector3()), 20, 1.2);
+      if (options.reducedMotion) render();
     },
     setRunning(next) {
       if (next === running) return;
@@ -951,13 +1479,15 @@ export function createMachinesScene(
       running = false;
       cancelAnimationFrame(frame);
       resizeObserver.disconnect();
-      const disposed = new Set<THREE.Material | THREE.BufferGeometry>();
+      const disposed = new Set<{ dispose(): void }>();
       const disposeObject = (object: THREE.Object3D) => {
-        if (object instanceof THREE.Mesh || object instanceof THREE.Points) {
+        if (
+          object instanceof THREE.Mesh ||
+          object instanceof THREE.Points ||
+          object instanceof THREE.Sprite
+        ) {
           const materialList = Array.isArray(object.material) ? object.material : [object.material];
-          for (const item of [object.geometry, ...materialList] as (
-            THREE.Material | THREE.BufferGeometry
-          )[]) {
+          for (const item of [object.geometry, ...materialList] as { dispose(): void }[]) {
             if (!disposed.has(item)) {
               disposed.add(item);
               item.dispose();
@@ -967,6 +1497,8 @@ export function createMachinesScene(
       };
       scene.traverse(disposeObject);
       for (const machine of machines) machine.root.traverse(disposeObject);
+      for (const texture of emoteTextures.values()) texture.dispose();
+      gradientMap.dispose();
       renderer.dispose();
       renderer.domElement.remove();
     },

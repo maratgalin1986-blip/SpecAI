@@ -1,5 +1,4 @@
 // Company branding and contacts, in one place so they're easy to update.
-// TODO: replace the placeholder email below with the real one.
 export const SITE = {
   name: 'СпецПласт16',
   tagline: 'Аренда спецтехники и строительные услуги в Татарстане',
@@ -10,6 +9,6 @@ export const SITE = {
   region: 'Республика Татарстан',
   phone: '+7 (927) 242-80-88',
   phoneHref: 'tel:+79272428088',
-  email: 'info@specplast16.ru',
+  email: 'specplast16@mail.ru',
   workingHours: 'Пн–Сб, 8:00–20:00 · ИИ-агенты — круглосуточно',
 };

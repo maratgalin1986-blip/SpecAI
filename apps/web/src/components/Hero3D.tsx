@@ -22,6 +22,11 @@ export function Hero3D() {
       sceneRef.current?.setPointer(event.clientX, event.clientY);
     }
 
+    function onPointerDown(event: PointerEvent) {
+      onPointer(event);
+      sceneRef.current?.poke(event.clientX, event.clientY);
+    }
+
     // Stop rendering while the hero is scrolled out of view.
     const visibility = new IntersectionObserver(([entry]) => {
       sceneRef.current?.setRunning(entry?.isIntersecting ?? true);
@@ -42,7 +47,7 @@ export function Hero3D() {
         setCurrent(sceneRef.current.current);
         visibility.observe(container);
         window.addEventListener('pointermove', onPointer);
-        window.addEventListener('pointerdown', onPointer);
+        window.addEventListener('pointerdown', onPointerDown);
       })
       .catch(() => undefined);
 
@@ -50,7 +55,7 @@ export function Hero3D() {
       cancelled = true;
       visibility.disconnect();
       window.removeEventListener('pointermove', onPointer);
-      window.removeEventListener('pointerdown', onPointer);
+      window.removeEventListener('pointerdown', onPointerDown);
       sceneRef.current?.dispose();
       sceneRef.current = undefined;
     };
@@ -93,8 +98,12 @@ export function Hero3D() {
             ))}
           </div>
           <div className="text-xs text-slate-400">
-            <span className="hidden sm:inline">Ведите курсором — техника поедет за ним</span>
-            <span className="sm:hidden">Коснитесь площадки — техника поедет к вам</span>
+            <span className="hidden sm:inline">
+              Ведите курсором — техника поедет за ним, кликните по ней — обрадуется
+            </span>
+            <span className="sm:hidden">
+              Коснитесь площадки — техника приедет, коснитесь её — обрадуется
+            </span>
           </div>
         </div>
       )}
