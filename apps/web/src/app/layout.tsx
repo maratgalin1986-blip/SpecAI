@@ -6,6 +6,7 @@ import { SiteHeader } from '@/components/SiteHeader';
 import { SiteFooter } from '@/components/SiteFooter';
 import { AgentChatWidget } from '@/components/AgentChatWidget';
 import { YandexMetrika } from '@/components/YandexMetrika';
+import { MessengerButtons } from '@/components/MessengerButtons';
 import { SITE } from '@/lib/site';
 import { siteUrl } from '@/lib/siteUrl';
 import './globals.css';
@@ -47,6 +48,26 @@ export const metadata: Metadata = {
   },
 };
 
+// Company card for search engines (Yandex/Google knowledge panels).
+const ORGANIZATION_JSON_LD = {
+  '@context': 'https://schema.org',
+  '@type': 'LocalBusiness',
+  name: SITE.legalName || SITE.name,
+  alternateName: SITE.name,
+  description: SITE.description,
+  url: siteUrl(),
+  telephone: SITE.phone,
+  email: SITE.email,
+  taxID: SITE.inn || undefined,
+  address: {
+    '@type': 'PostalAddress',
+    addressLocality: SITE.city,
+    addressRegion: SITE.region,
+    addressCountry: 'RU',
+  },
+  areaServed: SITE.region,
+};
+
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
@@ -57,6 +78,10 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="ru">
       <body className="flex min-h-screen flex-col bg-slate-50 text-slate-900">
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(ORGANIZATION_JSON_LD) }}
+        />
         <Providers>
           <SiteHeader />
           <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 sm:px-6 sm:py-8">
@@ -66,6 +91,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           {/* Multi-agent assistant (works for guests too). The streaming single
               assistant in ChatWidget stays available to API/mobile clients. */}
           <AgentChatWidget />
+          <MessengerButtons />
           <InstallPrompt />
           <YandexMetrika />
         </Providers>

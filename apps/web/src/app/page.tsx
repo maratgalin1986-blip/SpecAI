@@ -2,7 +2,9 @@ import { prisma } from '@specai/database';
 import { Button } from '@specai/ui';
 import { AGENT_PROFILES } from '@specai/shared';
 import { CallbackForm } from '@/components/CallbackForm';
+import { Faq } from '@/components/Faq';
 import { Hero3D } from '@/components/Hero3D';
+import { TrustBadges } from '@/components/TrustBadges';
 import { Reveal } from '@/components/Reveal';
 import { TiltCard } from '@/components/TiltCard';
 import { pluralizeRu } from '@/lib/pluralize';
@@ -83,6 +85,37 @@ const SERVICE_CATEGORY: Record<string, string> = {
   Тракторы: 'Тракторы',
 };
 
+const SERVICE_LANDING: Record<string, string> = {
+  'Экскаваторы-погрузчики': 'ekskavator-pogruzchik',
+  Гидромолот: 'ekskavator-pogruzchik',
+  Автокраны: 'avtokran',
+  'Фронтальные погрузчики': 'frontalnyj-pogruzchik',
+  Тракторы: 'traktor',
+};
+
+const HOME_FAQ = [
+  {
+    q: 'Сколько стоит аренда спецтехники?',
+    a: 'Экскаватор-погрузчик и фронтальный погрузчик — от 3 000 ₽/ч, с гидромолотом — от 3 500 ₽/ч, автокраны — от 3 500 ₽/ч, трактор — от 2 500 ₽/ч. Все цены — с машинистом, смена 8 часов.',
+  },
+  {
+    q: 'Как быстро приедет техника?',
+    a: 'Зависит от загрузки парка и адреса. Оставьте заявку или позвоните — менеджер назовёт время подачи.',
+  },
+  {
+    q: 'Работаете с юридическими лицами?',
+    a: 'Да: договор, оплата по безналу с НДС, закрывающие документы, в том числе через ЭДО.',
+  },
+  {
+    q: 'Где вы работаете?',
+    a: 'В Набережных Челнах и по Татарстану. Стоимость подачи зависит от расстояния до объекта.',
+  },
+  {
+    q: 'Можно заказать технику через ИИ-агента?',
+    a: 'Да, агенты на сайте подберут технику, посчитают стоимость и оформят заявку круглосуточно.',
+  },
+];
+
 export default async function HomePage() {
   const categoryLinks = await loadCategoryLinks();
 
@@ -148,6 +181,8 @@ export default async function HomePage() {
         </div>
       </section>
 
+      <TrustBadges />
+
       <section>
         <Reveal>
           <h2 className="text-3xl font-bold">Техника и услуги</h2>
@@ -159,7 +194,13 @@ export default async function HomePage() {
             return (
               <Reveal key={service.title} delay={index * 80}>
                 <a
-                  href={category ? `/equipment?category=${category.id}` : '#callback'}
+                  href={
+                    SERVICE_LANDING[service.title]
+                      ? `/arenda/${SERVICE_LANDING[service.title]}`
+                      : category
+                        ? `/equipment?category=${category.id}`
+                        : '#callback'
+                  }
                   className="block h-full"
                 >
                   <TiltCard>
@@ -248,6 +289,8 @@ export default async function HomePage() {
           ))}
         </ol>
       </section>
+
+      <Faq items={HOME_FAQ} />
 
       <Reveal>
         <section
