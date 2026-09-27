@@ -108,7 +108,7 @@ export function CallbackForm({
         onChange={(e) => setMessage(e.target.value)}
         maxLength={1000}
         rows={3}
-        placeholder="Что нужно сделать? Например: котлован под фундамент, Казань, на следующей неделе"
+        placeholder="Что нужно сделать? Например: траншея под водопровод, Набережные Челны, на следующей неделе"
         aria-label="Комментарий"
         className={input}
       />

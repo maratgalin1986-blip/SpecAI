@@ -13,3 +13,7 @@ if (process.env.NODE_ENV !== 'production') {
 }
 
 export * from '../generated/client';
+
+// The site owner's own company (СпецПласт16) whose fleet is published by
+// prisma/ensure-fleet.ts. Fixed id so the fleet can be linked to an account.
+export const HOUSE_COMPANY_ID = 'specplast16-house';

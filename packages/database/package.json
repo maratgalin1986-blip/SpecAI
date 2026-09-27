@@ -12,6 +12,7 @@
     "studio": "prisma studio",
     "seed": "tsx prisma/seed.ts",
     "ensure-categories": "tsx prisma/ensure-categories.ts",
+    "ensure-fleet": "tsx prisma/ensure-fleet.ts",
     "build": "tsc --noEmit -p tsconfig.json",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "lint": "echo 'no lint step for @specai/database'"

@@ -147,6 +147,9 @@ model Equipment {
   year        Int?
   status      EquipmentStatus @default(AVAILABLE)
   dailyRate   Decimal         @db.Decimal(10, 2)
+  // Hourly rate (machine-hour), the usual unit for machinery with an operator.
+  // When set, it is shown as the headline price; dailyRate is then an 8-hour shift.
+  hourlyRate  Decimal?        @db.Decimal(10, 2)
   weeklyRate  Decimal?        @db.Decimal(10, 2)
   monthlyRate Decimal?        @db.Decimal(10, 2)
   currency    String          @default("RUB")

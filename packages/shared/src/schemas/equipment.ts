@@ -17,6 +17,7 @@ export const createEquipmentSchema = z.object({
   companyId: z.string().cuid(),
   locationId: z.string().cuid().optional(),
   dailyRate: z.number().positive(),
+  hourlyRate: z.number().positive().optional(),
   weeklyRate: z.number().positive().optional(),
   monthlyRate: z.number().positive().optional(),
   currency: z.string().length(3).default('RUB'),

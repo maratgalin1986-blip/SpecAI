@@ -16,7 +16,8 @@ export const metadata: Metadata = {
   description: SITE.description,
   applicationName: SITE.name,
   keywords: [
-    'аренда спецтехники Казань',
+    'аренда спецтехники Набережные Челны',
+    'аренда экскаватора-погрузчика',
     'аренда экскаватора',
     'аренда автокрана',
     'аренда самосвала',
