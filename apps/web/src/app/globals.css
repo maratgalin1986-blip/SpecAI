@@ -126,15 +126,57 @@ body {
 
 .reveal {
   opacity: 0;
-  transform: perspective(800px) translateY(40px) rotateX(18deg);
+  transform: translateY(24px);
   transition:
-    opacity 0.8s ease,
-    transform 0.8s cubic-bezier(0.2, 0.8, 0.2, 1);
+    opacity 0.7s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 0.7s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .reveal-visible {
   opacity: 1;
   transform: none;
+}
+
+/* ---- Editorial details: eyebrow labels, marker highlight, marquee -------- */
+
+.eyebrow {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 0.75rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.marker {
+  background: linear-gradient(
+    transparent 62%,
+    rgba(245, 158, 11, 0.85) 62%,
+    rgba(245, 158, 11, 0.85) 92%,
+    transparent 92%
+  );
+  padding: 0 0.08em;
+}
+
+.marquee {
+  display: flex;
+  width: max-content;
+  animation: marquee 40s linear infinite;
+}
+
+@keyframes marquee {
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+/* Faint film grain over the whole page, like the reference landings. */
+.grain::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  pointer-events: none;
+  opacity: 0.035;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
 }
 
 /* ---- Rotating 3D cube (agents section) ----------------------------------- */
@@ -203,6 +245,7 @@ body {
   .hero-grid,
   .text-gradient,
   .cube,
+  .marquee,
   .float-in {
     animation: none;
   }

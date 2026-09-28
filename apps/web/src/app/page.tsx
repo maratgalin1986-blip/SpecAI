@@ -2,45 +2,72 @@ import { prisma } from '@specai/database';
 import { Button } from '@specai/ui';
 import { AGENT_PROFILES } from '@specai/shared';
 import { CallbackForm } from '@/components/CallbackForm';
+import { CountUp } from '@/components/CountUp';
 import { Faq } from '@/components/Faq';
 import { Hero3D } from '@/components/Hero3D';
-import { TrustBadges } from '@/components/TrustBadges';
+import { Icon, type IconName } from '@/components/Icon';
 import { Reveal } from '@/components/Reveal';
 import { TiltCard } from '@/components/TiltCard';
 import { pluralizeRu } from '@/lib/pluralize';
 import { SITE } from '@/lib/site';
 
-const SERVICES = [
+const SERVICES: { icon: IconName; title: string; text: string; price?: string }[] = [
   {
-    icon: '🚜',
+    icon: 'excavator',
     title: 'Экскаваторы-погрузчики',
     text: 'JCB 4CX, CASE 570, Hidromek 102B, LGCE B877F — траншеи, котлованы, планировка.',
+    price: 'от 3 000 ₽/ч',
   },
   {
-    icon: '🔨',
+    icon: 'hammer',
     title: 'Гидромолот',
     text: 'Демонтаж, вскрытие асфальта и бетона, работа по мёрзлому грунту.',
+    price: 'от 3 500 ₽/ч',
   },
   {
-    icon: '🏗️',
+    icon: 'crane',
     title: 'Автокраны',
     text: 'До 32 т — монтаж конструкций, погрузка и подъём грузов.',
+    price: 'от 3 500 ₽/ч',
   },
   {
-    icon: '🚛',
+    icon: 'loader',
     title: 'Фронтальные погрузчики',
     text: 'Погрузка грунта, щебня и песка, уборка снега на объектах.',
+    price: 'от 3 000 ₽/ч',
   },
   {
-    icon: '🚜',
+    icon: 'tractor',
     title: 'Тракторы',
     text: 'МТЗ «Беларус» для вспомогательных и коммунальных работ.',
+    price: 'от 2 500 ₽/ч',
   },
   {
-    icon: '👷',
+    icon: 'helmet',
     title: 'Техника с оператором',
     text: 'Опытные машинисты, работа по договору, документы и ЭДО для юрлиц.',
   },
+];
+
+const MARQUEE = [
+  'Экскаваторы-погрузчики',
+  'Автокраны до 32 т',
+  'Гидромолот',
+  'Фронтальные погрузчики',
+  'Тракторы МТЗ',
+  'Самосвалы',
+  'Работа с НДС',
+  'Смена 8 часов',
+];
+
+const ADVANTAGES = [
+  {
+    title: 'С машинистом',
+    text: 'Опытный оператор на каждой машине — вам не нужно искать своего.',
+  },
+  { title: 'Цена видна сразу', text: 'Почасовая ставка без скрытых доплат, смена — 8 часов.' },
+  { title: 'Работаем с НДС', text: 'Договор, безнал, закрывающие документы и ЭДО для юрлиц.' },
+  { title: 'Круглосуточно', text: 'ИИ-агенты подберут технику и примут заявку даже ночью.' },
 ];
 
 const STEPS = [
@@ -48,12 +75,6 @@ const STEPS = [
   { title: 'Получите варианты', text: 'Агент подберёт технику из каталога и посчитает стоимость.' },
   { title: 'Забронируйте', text: 'Подтвердите бронь или выберите лучшее предложение поставщиков.' },
   { title: 'Работайте', text: 'Следите за статусом в личном кабинете, оставьте отзыв.' },
-];
-
-const HIGHLIGHTS = [
-  { value: '24/7', label: 'на связи' },
-  { value: `${AGENT_PROFILES.length}`, label: 'ИИ-агента' },
-  { value: '16', label: 'регион' },
 ];
 
 // Service cards link to their catalog category (matched by name) and show how
@@ -65,15 +86,17 @@ async function loadCategoryLinks() {
     const categories = await prisma.equipmentCategory.findMany({
       include: { _count: { select: { equipment: { where: { status: 'AVAILABLE' } } } } },
     });
-    return new Map(
+    const links = new Map(
       categories.map((category) => [
         category.name,
         { id: category.id, available: category._count.equipment },
       ]),
     );
+    const available = categories.reduce((sum, category) => sum + category._count.equipment, 0);
+    return { links, available };
   } catch (error) {
     console.error('Failed to load categories for the home page', error);
-    return new Map<string, { id: string; available: number }>();
+    return { links: new Map<string, { id: string; available: number }>(), available: 0 };
   }
 }
 
@@ -117,63 +140,60 @@ const HOME_FAQ = [
 ];
 
 export default async function HomePage() {
-  const categoryLinks = await loadCategoryLinks();
+  const { links: categoryLinks, available } = await loadCategoryLinks();
+  const stats = [
+    ...(available > 0
+      ? [{ prefix: '', value: available, suffix: '', label: 'единиц техники свободно' }]
+      : []),
+    { prefix: 'от ', value: 2500, suffix: ' ₽', label: 'час работы с машинистом' },
+    { prefix: '', value: 8, suffix: ' ч', label: 'смена, оплата по факту' },
+    { prefix: '', value: 15, suffix: ' мин', label: 'перезвоним в рабочее время' },
+  ];
 
   return (
-    <div className="flex flex-col gap-20">
-      <section className="hero-backdrop relative -mt-2 overflow-hidden rounded-3xl text-white shadow-2xl">
+    <div className="flex flex-col gap-24">
+      <section className="hero-backdrop relative -mt-2 overflow-hidden rounded-[2rem] text-white shadow-2xl">
         <div className="hero-grid" aria-hidden />
         <div className="relative grid lg:grid-cols-2">
           <div className="z-10 flex flex-col justify-center px-6 pb-4 pt-12 sm:px-10 lg:py-20">
-            <div className="float-in text-sm font-semibold uppercase tracking-widest text-amber-400">
-              {SITE.city} · {SITE.region}
+            <div className="float-in inline-flex w-fit items-center gap-2 rounded-full bg-white/10 px-3 py-1.5 ring-1 ring-white/15">
+              <span className="relative flex h-2 w-2">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75 motion-reduce:animate-none" />
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-400" />
+              </span>
+              <span className="eyebrow text-slate-200">{SITE.city} · техника свободна сегодня</span>
             </div>
             <h1
-              className="float-in mt-4 text-4xl font-extrabold leading-tight tracking-tight sm:text-5xl"
+              className="float-in mt-6 text-[2.6rem] font-extrabold leading-[1.02] tracking-[-0.04em] sm:text-6xl"
               style={{ animationDelay: '120ms' }}
             >
-              <span className="text-gradient">{SITE.name}</span>
-              <br />
-              спецтехника с ИИ-агентами
+              Аренда <span className="marker text-white">спецтехники</span> с машинистом
             </h1>
             <p
-              className="float-in mt-5 max-w-xl text-lg text-slate-300"
+              className="float-in mt-6 max-w-xl text-lg leading-relaxed text-slate-300"
               style={{ animationDelay: '240ms' }}
             >
-              Экскаваторы-погрузчики, автокраны и погрузчики с опытными операторами — от 2 500 ₽/ч.
-              ИИ-агенты круглосуточно подберут технику, посчитают стоимость и оформят заявку.
+              Экскаваторы-погрузчики, автокраны и погрузчики в Набережных Челнах и по Татарстану —
+              от 2 500 ₽/ч. ИИ-агенты круглосуточно подберут технику и посчитают стоимость.
             </p>
             <div className="float-in mt-8 flex flex-wrap gap-3" style={{ animationDelay: '360ms' }}>
               <a
+                href="#callback"
+                className="group inline-flex items-center gap-2 rounded-full bg-amber-500 px-6 py-3.5 text-base font-semibold text-slate-950 shadow-lg shadow-amber-500/30 transition hover:bg-amber-400"
+              >
+                Заказать технику
+                <Icon name="arrow" className="h-4 w-4 transition group-hover:translate-x-1" />
+              </a>
+              <a
                 href="/agents"
-                className="inline-flex items-center rounded-md bg-amber-600 px-6 py-3 text-base font-medium text-white shadow-lg shadow-amber-600/40 transition hover:-translate-y-0.5 hover:bg-amber-500"
+                className="inline-flex items-center gap-2 rounded-full px-6 py-3.5 text-base font-semibold text-white ring-1 ring-white/30 backdrop-blur transition hover:bg-white/10"
               >
                 Спросить ИИ-агента
               </a>
-              <a
-                href="/equipment"
-                className="inline-flex items-center rounded-md bg-white/10 px-6 py-3 text-base font-medium text-white ring-1 ring-white/30 backdrop-blur hover:bg-white/20"
-              >
-                Каталог техники
-              </a>
-              <a
-                href="#callback"
-                className="inline-flex items-center rounded-md px-4 py-3 text-base font-medium text-amber-300 underline-offset-4 hover:underline"
-              >
-                Заказать звонок
-              </a>
             </div>
-            <div
-              className="float-in mt-10 grid max-w-md grid-cols-3 gap-4"
-              style={{ animationDelay: '480ms' }}
-            >
-              {HIGHLIGHTS.map((item) => (
-                <div key={item.label}>
-                  <div className="text-2xl font-bold text-amber-400">{item.value}</div>
-                  <div className="text-xs text-slate-400">{item.label}</div>
-                </div>
-              ))}
-            </div>
+            <p className="float-in mt-5 text-sm text-slate-400" style={{ animationDelay: '480ms' }}>
+              Работаем с НДС · Договор и ЭДО · Перезвоним за 15 минут
+            </p>
           </div>
           <div className="relative h-[470px] sm:h-[520px] lg:h-auto lg:min-h-[620px]">
             <Hero3D />
@@ -181,18 +201,60 @@ export default async function HomePage() {
         </div>
       </section>
 
-      <TrustBadges />
+      <section className="-mt-12 grid grid-cols-2 overflow-hidden rounded-3xl border border-slate-200 bg-white lg:grid-cols-4">
+        {stats.map((stat, index) => (
+          <Reveal
+            key={stat.label}
+            delay={index * 80}
+            className="border-slate-200 p-5 sm:p-7 [&:not(:last-child)]:border-r max-lg:[&:nth-child(2)]:border-r-0 max-lg:[&:nth-child(-n+2)]:border-b"
+          >
+            <div className="whitespace-nowrap text-2xl font-extrabold tracking-tight sm:text-4xl">
+              {stat.prefix}
+              <CountUp value={stat.value} />
+              {stat.suffix}
+            </div>
+            <div className="mt-1 text-sm text-slate-500">{stat.label}</div>
+          </Reveal>
+        ))}
+      </section>
+
+      <div className="-my-10 overflow-hidden border-y border-slate-200 py-4" aria-hidden>
+        <div className="marquee">
+          {[...MARQUEE, ...MARQUEE].map((item, index) => (
+            <span key={index} className="eyebrow flex items-center gap-8 pr-8 text-slate-500">
+              {item}
+              <span className="text-amber-500">✦</span>
+            </span>
+          ))}
+        </div>
+      </div>
 
       <section>
         <Reveal>
-          <h2 className="text-3xl font-bold">Техника и услуги</h2>
-          <p className="mt-2 text-slate-600">Всё для стройки и земляных работ — в одном месте.</p>
+          <div className="eyebrow text-amber-600">01 — Техника и цены</div>
+          <div className="mt-3 flex flex-wrap items-end justify-between gap-4">
+            <h2 className="max-w-2xl text-4xl font-extrabold tracking-[-0.03em] sm:text-5xl">
+              Цена видна сразу, без скрытых доплат
+            </h2>
+            <a
+              href="/equipment"
+              className="group inline-flex items-center gap-2 rounded-full border border-slate-300 px-5 py-2.5 text-sm font-semibold transition hover:border-slate-900"
+            >
+              Весь каталог
+              <Icon name="arrow" className="h-4 w-4 transition group-hover:translate-x-1" />
+            </a>
+          </div>
+          <p className="mt-3 text-slate-600">Все цены — с машинистом, смена 8 часов.</p>
         </Reveal>
-        <div className="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="mt-10 grid overflow-hidden rounded-3xl border border-slate-200 bg-white sm:grid-cols-2 lg:grid-cols-3">
           {SERVICES.map((service, index) => {
             const category = categoryLinks.get(SERVICE_CATEGORY[service.title] ?? '');
             return (
-              <Reveal key={service.title} delay={index * 80}>
+              <Reveal
+                key={service.title}
+                delay={index * 60}
+                className="border-slate-200 max-sm:[&:not(:last-child)]:border-b sm:max-lg:[&:nth-child(odd)]:border-r sm:max-lg:[&:nth-child(-n+4)]:border-b lg:[&:not(:nth-child(3n))]:border-r lg:[&:nth-child(-n+3)]:border-b"
+              >
                 <a
                   href={
                     SERVICE_LANDING[service.title]
@@ -201,24 +263,30 @@ export default async function HomePage() {
                         ? `/equipment?category=${category.id}`
                         : '#callback'
                   }
-                  className="block h-full"
+                  className="group flex h-full flex-col p-6 transition hover:bg-amber-50/60 sm:p-8"
                 >
-                  <TiltCard>
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="text-3xl">{service.icon}</div>
-                      {category && category.available > 0 && (
-                        <span className="rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700">
-                          {pluralizeRu(category.available, ['единица', 'единицы', 'единиц'])}{' '}
-                          свободно
-                        </span>
-                      )}
-                    </div>
-                    <h3 className="mt-3 text-lg font-semibold">{service.title}</h3>
-                    <p className="mt-1 text-sm text-slate-600">{service.text}</p>
-                    <span className="mt-3 inline-block text-sm font-medium text-amber-700">
-                      {category ? 'Смотреть в каталоге →' : 'Оставить заявку →'}
+                  <div className="flex items-start justify-between gap-2">
+                    <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-900 text-amber-400 transition group-hover:bg-amber-500 group-hover:text-slate-950">
+                      <Icon name={service.icon} className="h-7 w-7" />
                     </span>
-                  </TiltCard>
+                    {category && category.available > 0 && (
+                      <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">
+                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                        {pluralizeRu(category.available, ['единица', 'единицы', 'единиц'])} свободно
+                      </span>
+                    )}
+                  </div>
+                  <h3 className="mt-6 text-xl font-bold tracking-tight">{service.title}</h3>
+                  <p className="mt-2 text-sm leading-relaxed text-slate-600">{service.text}</p>
+                  <div className="mt-auto flex items-center justify-between pt-6">
+                    <span className="font-mono text-sm font-semibold text-slate-900">
+                      {service.price ?? 'по договору'}
+                    </span>
+                    <Icon
+                      name="arrow"
+                      className="h-5 w-5 text-amber-600 transition group-hover:translate-x-1"
+                    />
+                  </div>
                 </a>
               </Reveal>
             );
@@ -226,15 +294,45 @@ export default async function HomePage() {
         </div>
       </section>
 
-      <section className="relative overflow-hidden rounded-3xl bg-slate-900 px-6 py-12 text-white sm:px-10">
+      <section className="grid gap-10 lg:grid-cols-12">
+        <div className="lg:sticky lg:top-28 lg:col-span-5 lg:self-start">
+          <Reveal>
+            <div className="eyebrow text-amber-600">02 — Почему мы</div>
+            <h2 className="mt-3 text-4xl font-extrabold tracking-[-0.03em] sm:text-5xl">
+              Своя техника и свои машинисты
+            </h2>
+            <p className="mt-4 text-slate-600">
+              {SITE.legalName || SITE.name} — парк в {SITE.city}. Подберём машину под задачу и
+              назовём точную цену с подачей.
+            </p>
+          </Reveal>
+        </div>
+        <div className="flex flex-col gap-4 lg:col-span-7">
+          {ADVANTAGES.map((item, index) => (
+            <Reveal key={item.title} delay={index * 80}>
+              <div className="group flex items-start gap-5 border-b border-slate-200 pb-6">
+                <span className="font-mono text-sm text-amber-600">0{index + 1}</span>
+                <div>
+                  <h3 className="text-2xl font-bold tracking-tight transition group-hover:text-amber-600 sm:text-3xl">
+                    {item.title}
+                  </h3>
+                  <p className="mt-1 text-slate-600">{item.text}</p>
+                </div>
+              </div>
+            </Reveal>
+          ))}
+        </div>
+      </section>
+
+      <section className="relative overflow-hidden rounded-[2rem] bg-slate-950 px-6 py-14 text-white sm:px-10">
         <div className="hero-grid opacity-40" aria-hidden />
         <div className="relative flex flex-col items-start gap-8 lg:flex-row lg:items-center">
           <Reveal className="flex-1">
-            <div className="text-sm font-semibold uppercase tracking-widest text-amber-400">
-              Искусственный интеллект
-            </div>
-            <h2 className="mt-2 text-3xl font-bold">Команда ИИ-агентов</h2>
-            <p className="mt-3 max-w-xl text-slate-300">
+            <div className="eyebrow text-amber-400">03 — Искусственный интеллект</div>
+            <h2 className="mt-3 text-4xl font-extrabold tracking-[-0.03em] sm:text-5xl">
+              Команда ИИ-агентов
+            </h2>
+            <p className="mt-4 max-w-xl text-slate-300">
               Каждый агент работает с живыми данными сайта: каталогом, заявками и вашими
               бронированиями. Не знаете, к кому обратиться? Режим «Авто» сам передаст вопрос нужному
               специалисту.
@@ -254,8 +352,8 @@ export default async function HomePage() {
           {AGENT_PROFILES.map((agent, index) => (
             <Reveal key={agent.id} delay={index * 100}>
               <TiltCard dark>
-                <div className="text-xs font-semibold uppercase text-amber-400">{agent.role}</div>
-                <h3 className="mt-1 text-lg font-semibold">{agent.name}</h3>
+                <div className="eyebrow text-[0.65rem] text-amber-400">{agent.role}</div>
+                <h3 className="mt-2 text-lg font-bold">{agent.name}</h3>
                 <p className="mt-2 text-sm text-slate-300">{agent.description}</p>
                 <a
                   href={`/agents?agent=${agent.id}`}
@@ -269,21 +367,24 @@ export default async function HomePage() {
         </div>
       </section>
 
-      <section>
-        <Reveal>
-          <h2 className="text-3xl font-bold">Как это работает</h2>
-        </Reveal>
-        <ol className="relative mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+      <section className="grid gap-10 lg:grid-cols-12">
+        <div className="lg:sticky lg:top-28 lg:col-span-5 lg:self-start">
+          <Reveal>
+            <div className="eyebrow text-amber-600">04 — Как это работает</div>
+            <h2 className="mt-3 text-4xl font-extrabold tracking-[-0.03em] sm:text-5xl">
+              Четыре шага до техники на объекте
+            </h2>
+          </Reveal>
+        </div>
+        <ol className="grid gap-4 sm:grid-cols-2 lg:col-span-7">
           {STEPS.map((step, index) => (
             <li key={step.title}>
-              <Reveal delay={index * 120}>
-                <TiltCard>
-                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-amber-400 to-orange-600 text-lg font-bold text-white shadow-lg shadow-amber-500/40">
-                    {index + 1}
-                  </div>
-                  <h3 className="mt-4 font-semibold">{step.title}</h3>
+              <Reveal delay={index * 100} className="h-full">
+                <div className="h-full rounded-3xl border border-slate-200 bg-white p-6 transition hover:-translate-y-1 hover:border-amber-300">
+                  <div className="font-mono text-4xl font-bold text-amber-500">0{index + 1}</div>
+                  <h3 className="mt-4 text-lg font-bold">{step.title}</h3>
                   <p className="mt-1 text-sm text-slate-600">{step.text}</p>
-                </TiltCard>
+                </div>
               </Reveal>
             </li>
           ))}
@@ -295,33 +396,38 @@ export default async function HomePage() {
       <Reveal>
         <section
           id="callback"
-          className="relative grid scroll-mt-24 grid-cols-1 gap-8 overflow-hidden rounded-3xl bg-slate-900 p-6 text-white sm:p-10 lg:grid-cols-2"
+          className="relative grid scroll-mt-24 grid-cols-1 gap-8 overflow-hidden rounded-[2rem] bg-slate-950 p-6 text-white sm:p-10 lg:grid-cols-2"
         >
           <div className="hero-grid opacity-30" aria-hidden />
           <div className="relative flex min-w-0 flex-col justify-center">
-            <div className="text-sm font-semibold uppercase tracking-widest text-amber-400">
-              Быстрый заказ
-            </div>
-            <h2 className="mt-2 text-3xl font-bold">Нужна техника? Оставьте заявку — перезвоним</h2>
-            <ul className="mt-4 space-y-2 text-slate-300">
+            <div className="eyebrow text-amber-400">Быстрый заказ</div>
+            <h2 className="mt-3 text-4xl font-extrabold uppercase leading-[0.95] tracking-[-0.03em] sm:text-6xl">
+              Нужна техника сегодня?
+            </h2>
+            <ul className="mt-6 space-y-2 text-slate-300">
               <li>✔ Подберём технику под задачу и бюджет</li>
               <li>✔ Назовём точную цену с доставкой</li>
               <li>✔ Работаем в Набережных Челнах и по всему Татарстану</li>
             </ul>
-            <a href={SITE.phoneHref} className="mt-6 text-2xl font-bold text-amber-400">
+            <a
+              href={SITE.phoneHref}
+              className="mt-6 inline-flex items-center gap-2 text-2xl font-bold text-amber-400"
+            >
+              <Icon name="phone" className="h-6 w-6" />
               {SITE.phone}
             </a>
           </div>
-          <div className="relative min-w-0 rounded-2xl bg-white/5 p-4 ring-1 ring-white/10 backdrop-blur sm:p-5">
+          <div className="relative min-w-0 rounded-3xl bg-white/5 p-4 ring-1 ring-white/10 backdrop-blur sm:p-6">
             <CallbackForm source="home" dark />
           </div>
         </section>
       </Reveal>
 
       <Reveal>
-        <section className="grid gap-6 rounded-3xl border border-amber-200 bg-gradient-to-br from-amber-50 to-orange-100 p-6 sm:grid-cols-2 sm:p-10">
+        <section className="grid gap-6 rounded-[2rem] border border-amber-200 bg-gradient-to-br from-amber-50 to-orange-100 p-6 sm:grid-cols-2 sm:p-10">
           <div>
-            <h2 className="text-3xl font-bold">Владеете техникой?</h2>
+            <div className="eyebrow text-amber-700">Поставщикам</div>
+            <h2 className="mt-3 text-3xl font-extrabold tracking-tight">Владеете техникой?</h2>
             <p className="mt-3 text-slate-700">
               Разместите парк на {SITE.name}, получайте заявки клиентов и делайте ставки. ИИ
               заполнит характеристики техники по описанию из паспорта.
