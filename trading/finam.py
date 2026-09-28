@@ -68,6 +68,30 @@ class Finam:
     def orders(self):
         return self._request("GET", f"/v1/accounts/{self.account_id}/orders").get("orders", [])
 
+    def bars(self, symbol, timeframe, start, end):
+        """[(iso_time, open, high, low, close, volume)] from Finam."""
+        r = self._request(
+            "GET",
+            f"/v1/instruments/{symbol}/bars",
+            query={"timeframe": timeframe, "interval.start_time": start, "interval.end_time": end},
+        )
+        return [
+            (b["timestamp"], _dec(b["open"]), _dec(b["high"]), _dec(b["low"]), _dec(b["close"]), _dec(b["volume"]))
+            for b in r.get("bars", [])
+        ]
+
+    def place_market(self, symbol, side, quantity, comment="council"):
+        body = {
+            "symbol": symbol,
+            "quantity": {"value": str(int(quantity))},
+            "side": "SIDE_BUY" if side == "buy" else "SIDE_SELL",
+            "type": "ORDER_TYPE_MARKET",
+            "time_in_force": "TIME_IN_FORCE_DAY",
+            "client_order_id": uuid.uuid4().hex[:20],
+            "comment": comment,
+        }
+        return self._request("POST", f"/v1/accounts/{self.account_id}/orders", body)
+
     def place_limit(self, symbol, side, quantity, price, comment="agents"):
         body = {
             "symbol": symbol,

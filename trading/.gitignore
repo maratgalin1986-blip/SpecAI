@@ -4,3 +4,4 @@ memory/state_*.json
 memory/journal.md
 memory/STOP
 .env
+memory/council*
