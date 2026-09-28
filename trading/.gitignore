@@ -1,0 +1,6 @@
+.cache/
+__pycache__/
+memory/state_*.json
+memory/journal.md
+memory/STOP
+.env
