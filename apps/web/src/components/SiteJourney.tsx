@@ -5,7 +5,9 @@ import { defaultPhotoOf, pickPhoto, type MachineType } from '@/lib/machinePhotos
 import { currentSiteObject, SITE_OBJECTS, type ObjectStop } from '@/lib/siteObjects';
 
 // «Путешествие по объекту»: a pinned, scroll-driven fly-through of one big
-// construction site. Each stop is a looping clip of real footage (over a
+// construction site. Scroll scrubs the footage like film on an editing desk,
+// forward and backward, with a little camera inertia; when the visitor stops
+// scrolling the scene keeps living (the clip plays on in slow motion). Each stop is a looping clip of real footage (over a
 // photo that shows while it loads); scrolling pulls the camera out of
 // the previous shot, holds, then dives into a focal point (a load on the hook,
 // the pit, the platform…) and comes out of the next shot — like an Apple-style
@@ -92,6 +94,8 @@ export function SiteJourney() {
   // A different construction project on every visit (see siteObjects.ts).
   const [object, setObject] = useState(SITE_OBJECTS[0]!);
   const [clock, setClock] = useState('');
+  const videoRefs = useRef<(HTMLVideoElement | null)[]>([]);
+  const posRef = useRef(0);
 
   useEffect(() => {
     // The route between the gate and the finale is shuffled on every visit.
@@ -134,6 +138,56 @@ export function SiteJourney() {
     };
   }, []);
 
+  // Scrubbing: while the visitor scrolls, each visible clip is paused and its
+  // playhead eases towards the time that matches the scroll position; after
+  // a short pause in scrolling the clip plays on at 0.7× from where it is.
+  useEffect(() => {
+    if (reduced) return;
+    let raf = 0;
+    let lastScroll = 0;
+    const heads: number[] = [];
+    const onScroll = () => {
+      lastScroll = performance.now();
+    };
+    const loop = () => {
+      raf = requestAnimationFrame(loop);
+      const pos = posRef.current;
+      const scrolling = performance.now() - lastScroll < 220;
+      videoRefs.current.forEach((video, i) => {
+        if (!video || !video.duration || video.readyState < 2) return;
+        if (pos < i - 0.3 || pos > i + 1.1) {
+          if (!video.paused) video.pause();
+          return;
+        }
+        const span = video.duration * 0.92;
+        // 0 when the camera arrives at this stop, 1 as it dives into the next.
+        const local = clamp((pos - i + 0.3) / 1.3);
+        const target = local * span;
+        if (scrolling) {
+          if (!video.paused) video.pause();
+          const head = heads[i] ?? video.currentTime;
+          const next = head + (target - head) * 0.22;
+          heads[i] = next;
+          if (!video.seeking && Math.abs(video.currentTime - next) > 0.03) {
+            video.currentTime = next;
+          }
+        } else {
+          heads[i] = video.currentTime;
+          if (video.paused) {
+            video.playbackRate = 0.7;
+            void video.play().catch(() => {});
+          }
+        }
+      });
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    raf = requestAnimationFrame(loop);
+    return () => {
+      window.removeEventListener('scroll', onScroll);
+      cancelAnimationFrame(raf);
+    };
+  }, [reduced]);
+
   // Reduced motion: a plain list of the stops.
   if (reduced) {
     return (
@@ -161,6 +215,7 @@ export function SiteJourney() {
 
   const n = scenes.length;
   const pos = progress * n; // 0…n
+  posRef.current = pos;
   const index = Math.min(n - 1, Math.floor(pos));
   const local = pos - index; // 0…1 inside the current stop
 
@@ -206,12 +261,15 @@ export function SiteJourney() {
                 {/* Real footage over the photo: people and machines at work. */}
                 <video
                   key={object.clips[scene.stop]}
+                  ref={(el) => {
+                    videoRefs.current[i] = el;
+                  }}
                   className="journey-push absolute inset-0 h-full w-full object-cover"
-                  autoPlay
                   muted
                   loop
                   playsInline
-                  preload={i < 2 ? 'auto' : 'metadata'}
+                  // Load a clip fully only when the camera gets close to it.
+                  preload={pos > i - 1.5 ? 'auto' : 'metadata'}
                   poster={`/video/${object.clips[scene.stop]}.jpg`}
                 >
                   <source src={`/video/${object.clips[scene.stop]}.webm`} type="video/webm" />
@@ -326,6 +384,17 @@ export function SiteJourney() {
         <span className="absolute right-4 top-20 z-30 text-[0.6rem] text-white/40">
           Видео и фото для примера
         </span>
+        {/* A long fly-through can be skipped. */}
+        <button
+          type="button"
+          onClick={() => {
+            const el = sectionRef.current;
+            if (el) window.scrollTo({ top: el.offsetTop + el.offsetHeight, behavior: 'smooth' });
+          }}
+          className="absolute bottom-24 right-4 z-30 rounded-full bg-white/10 px-3 py-1.5 text-xs font-semibold text-white/80 ring-1 ring-white/20 backdrop-blur hover:bg-white/20 sm:bottom-28 sm:right-6"
+        >
+          Пропустить ↓
+        </button>
       </div>
     </section>
   );
