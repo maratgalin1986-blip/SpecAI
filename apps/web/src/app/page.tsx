@@ -9,6 +9,7 @@ import { Icon, type IconName } from '@/components/Icon';
 import { MachinePhoto } from '@/components/MachinePhoto';
 import { Reveal } from '@/components/Reveal';
 import { ShiftStory } from '@/components/ShiftStory';
+import { SiteJourney } from '@/components/SiteJourney';
 import { TaskWizard } from '@/components/TaskWizard';
 import { TiltCard } from '@/components/TiltCard';
 import type { MachineType } from '@/lib/machinePhotos';
@@ -280,6 +281,8 @@ export default async function HomePage() {
           ))}
         </div>
       </div>
+
+      <SiteJourney />
 
       <div className="depth">
         <TaskWizard />
