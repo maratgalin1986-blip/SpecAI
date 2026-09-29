@@ -1,13 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@specai/database';
 import { getRequestUser } from '@/lib/requestUser';
+import { orderViewerFor } from '@/lib/orderViewer';
+import {
+  canSeeChatContacts,
+  canSeeCustomerName,
+  isSafeHttpUrl,
+  orderDescriptionFor,
+  visibleBids,
+} from '@/lib/privacy';
 
 export const dynamic = 'force-dynamic';
 
 /**
  * Заявка с предложениями поставщиков (техника, компания, цена, сообщение).
- * Как и страница /orders/[id] на сайте, доступна любому вошедшему пользователю;
- * `isOwner` подсказывает клиенту, можно ли принимать предложения.
+ * Доступна любому вошедшему пользователю, но все предложения видят только автор
+ * заявки и админ, поставщик — свои (правила в lib/privacy.ts); `isOwner`
+ * подсказывает клиенту, можно ли принимать предложения.
  */
 export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
   const currentUser = await getRequestUser(request);
@@ -27,6 +36,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
               id: true,
               name: true,
               imageUrls: true,
+              companyId: true,
               company: { select: { id: true, name: true } },
             },
           },
@@ -39,14 +49,35 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     return NextResponse.json({ error: 'Заявка не найдена' }, { status: 404 });
   }
 
-  // Contacts of people from messenger chats are for equipment providers only.
-  const { contactName, contactPhone, rawText, sourceUrl, externalId, fingerprint, ...rest } = order;
-  const contact =
-    currentUser.role === 'PROVIDER_ADMIN' ? { contactName, contactPhone, rawText, sourceUrl } : {};
+  // Personal data (152-ФЗ): chat contacts for admins and verified providers,
+  // the customer's name and every bid for the customer and admins, a provider
+  // sees only their own bids; everybody gets the number of bids.
+  const viewer = await orderViewerFor(currentUser);
+  const {
+    contactName,
+    contactPhone,
+    rawText,
+    sourceUrl,
+    externalId,
+    fingerprint,
+    customer,
+    bids,
+    ...rest
+  } = order;
   void externalId;
   void fingerprint;
+  const contact = canSeeChatContacts(viewer)
+    ? { contactName, contactPhone, rawText, sourceUrl: isSafeHttpUrl(sourceUrl) ? sourceUrl : null }
+    : {};
   return NextResponse.json({
-    order: { ...rest, ...contact },
+    order: {
+      ...rest,
+      ...contact,
+      description: orderDescriptionFor(order, viewer),
+      customer: canSeeCustomerName(viewer, order.customerId) ? customer : undefined,
+      bids: visibleBids(bids, viewer, order.customerId),
+      bidCount: bids.length,
+    },
     isOwner: order.customerId === currentUser.id,
   });
 }

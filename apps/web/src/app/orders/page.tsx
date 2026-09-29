@@ -6,6 +6,10 @@ import { NewOrderForm } from '@/components/NewOrderForm';
 import { Pagination } from '@/components/Pagination';
 import { parseEnumParam, parsePage, totalPagesFor } from '@/lib/pagination';
 import { CinemaHero } from '@/components/CinemaHero';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth';
+import { orderViewerFor } from '@/lib/orderViewer';
+import { orderDescriptionFor } from '@/lib/privacy';
 
 export const metadata: Metadata = {
   title: 'Заявки на технику',
@@ -57,11 +61,15 @@ export default async function OrdersPage({ searchParams }: { searchParams: Order
 
   const orders = await prisma.order.findMany({
     where,
-    include: { category: true, customer: true, bids: true },
+    include: { category: true, _count: { select: { bids: true } } },
     orderBy: { createdAt: 'desc' },
     skip: (page - 1) * PAGE_SIZE,
     take: PAGE_SIZE,
   });
+
+  // Phones and e-mails in orders imported from chats are hidden (152-ФЗ).
+  const session = await getServerSession(authOptions);
+  const viewer = await orderViewerFor(session?.user);
 
   const statusHref = (value: OrderStatus | 'ALL') =>
     value === 'OPEN' ? '/orders' : `/orders?status=${value}`;
@@ -133,7 +141,7 @@ export default async function OrdersPage({ searchParams }: { searchParams: Order
               <a key={order.id} href={`/orders/${order.id}`}>
                 <Card className="flex h-full flex-col gap-2 hover:border-amber-400">
                   <div className="flex items-start justify-between gap-2">
-                    <p className="font-medium">{order.description}</p>
+                    <p className="font-medium">{orderDescriptionFor(order, viewer)}</p>
                     {status === 'ALL' && (
                       <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600">
                         {STATUS_LABELS[order.status as OrderStatus]}
@@ -152,8 +160,8 @@ export default async function OrdersPage({ searchParams }: { searchParams: Order
                     </p>
                   )}
                   <p className="text-sm text-slate-500">
-                    {order.bids.length > 0
-                      ? `Предложений: ${order.bids.length}`
+                    {order._count.bids > 0
+                      ? `Предложений: ${order._count.bids}`
                       : 'Пока нет предложений'}
                   </p>
                 </Card>

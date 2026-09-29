@@ -23,7 +23,16 @@ export const createEquipmentSchema = z.object({
   currency: z.string().length(3).default('RUB'),
   description: z.string().max(5000).optional(),
   specs: z.record(z.string(), z.unknown()).optional(),
-  imageUrls: z.array(z.string().url()).default([]),
+  // Shown on public pages: https only (no javascript:, data: or plain http).
+  imageUrls: z
+    .array(
+      z
+        .string()
+        .url()
+        .regex(/^https:\/\//i, 'Ссылка на фото должна начинаться с https://'),
+    )
+    .max(20)
+    .default([]),
 });
 export type CreateEquipmentInput = z.infer<typeof createEquipmentSchema>;
 

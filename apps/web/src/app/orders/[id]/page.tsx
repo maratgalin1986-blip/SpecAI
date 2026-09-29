@@ -7,7 +7,14 @@ import { BidForm } from '@/components/BidForm';
 import { AcceptBidButton } from '@/components/AcceptBidButton';
 import { pluralizeRu } from '@/lib/pluralize';
 import { formatMoney } from '@/lib/money';
-import { isAdminRequest } from '@/lib/admin';
+import { orderViewerFor } from '@/lib/orderViewer';
+import {
+  canSeeChatContacts,
+  canSeeCustomerName,
+  isSafeHttpUrl,
+  orderDescriptionFor,
+  visibleBids,
+} from '@/lib/privacy';
 
 export const dynamic = 'force-dynamic';
 
@@ -25,7 +32,7 @@ export default async function OrderDetailPage({ params }: { params: { id: string
     where: { id: params.id },
     include: {
       category: true,
-      customer: true,
+      customer: { select: { name: true } },
       bids: {
         include: { equipment: { include: { company: true } } },
         orderBy: { price: 'asc' },
@@ -40,8 +47,14 @@ export default async function OrderDetailPage({ params }: { params: { id: string
 
   const isOwner = session?.user.id === order.customerId;
   const isImported = order.source !== 'SITE';
-  // Contacts of people from chats are shown only to equipment providers.
-  const canSeeContact = session?.user.role === 'PROVIDER_ADMIN' || isAdminRequest();
+  // Personal data (152-ФЗ), rules in lib/privacy.ts: chat contacts for admins
+  // and providers with a confirmed e-mail; the customer's name and all bids for
+  // the customer and admins; a provider sees only their own bids.
+  const viewer = await orderViewerFor(session?.user);
+  const canSeeContact = canSeeChatContacts(viewer);
+  const bids = visibleBids(order.bids, viewer, order.customerId);
+  const hiddenBids = order.bids.length - bids.length;
+  const isProvider = session?.user.role === 'PROVIDER_ADMIN';
 
   return (
     <div className="flex flex-col gap-6">
@@ -54,7 +67,9 @@ export default async function OrderDetailPage({ params }: { params: { id: string
             {order.desiredEndDate.toLocaleDateString('ru-RU')} ·{' '}
             {isImported
               ? `из ${order.source === 'WHATSAPP' ? 'WhatsApp' : 'Telegram'}${order.sourceChat ? ` (${order.sourceChat})` : ''}`
-              : `от ${order.customer.name}`}
+              : canSeeCustomerName(viewer, order.customerId)
+                ? `от ${order.customer.name}`
+                : 'от заказчика с сайта'}
           </p>
         </div>
         <span className="w-fit shrink-0 rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-700">
@@ -64,7 +79,9 @@ export default async function OrderDetailPage({ params }: { params: { id: string
 
       <Card>
         <h2 className="font-semibold">Описание</h2>
-        <p className="mt-2 whitespace-pre-line text-sm text-slate-600">{order.description}</p>
+        <p className="mt-2 whitespace-pre-line text-sm text-slate-600">
+          {orderDescriptionFor(order, viewer)}
+        </p>
       </Card>
 
       {isImported && (
@@ -81,11 +98,11 @@ export default async function OrderDetailPage({ params }: { params: { id: string
                   </a>
                 </p>
               )}
-              {order.sourceUrl && (
+              {isSafeHttpUrl(order.sourceUrl) && (
                 <a
                   href={order.sourceUrl}
                   target="_blank"
-                  rel="noopener"
+                  rel="noopener noreferrer"
                   className="text-sky-700 underline"
                 >
                   Открыть исходное сообщение
@@ -97,10 +114,21 @@ export default async function OrderDetailPage({ params }: { params: { id: string
             </div>
           ) : (
             <p className="mt-2 text-sm text-slate-600">
-              Контакты заказчика видны зарегистрированным поставщикам техники.{' '}
-              <a href="/provider" className="font-medium text-amber-700 underline">
-                Стать поставщиком
-              </a>
+              {isProvider ? (
+                <>
+                  Контакты заказчика видны поставщикам с подтверждённым e-mail.{' '}
+                  <a href="/dashboard" className="font-medium text-amber-700 underline">
+                    Подтвердить e-mail
+                  </a>
+                </>
+              ) : (
+                <>
+                  Контакты заказчика видны зарегистрированным поставщикам техники.{' '}
+                  <a href="/register" className="font-medium text-amber-700 underline">
+                    Стать поставщиком
+                  </a>
+                </>
+              )}
             </p>
           )}
         </Card>
@@ -123,7 +151,13 @@ export default async function OrderDetailPage({ params }: { params: { id: string
           <p className="text-sm text-slate-600">Пока никто не предложил технику.</p>
         ) : (
           <div className="flex flex-col gap-3">
-            {order.bids.map((bid) => (
+            {hiddenBids > 0 && (
+              <p className="text-sm text-slate-600">
+                {bids.length > 0 ? 'Ниже — ваши предложения. ' : ''}
+                Цены и компании других поставщиков видит только заказчик.
+              </p>
+            )}
+            {bids.map((bid) => (
               <Card
                 key={bid.id}
                 className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4"
