@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { defaultPhotoOf, pickPhoto, type MachineType } from '@/lib/machinePhotos';
+import { currentSiteObject, SITE_OBJECTS, type ObjectStop } from '@/lib/siteObjects';
 
 // «Путешествие по объекту»: a pinned, scroll-driven fly-through of one big
 // construction site. Each stop is a looping clip of real footage (over a
@@ -12,8 +13,8 @@ import { defaultPhotoOf, pickPhoto, type MachineType } from '@/lib/machinePhotos
 
 type Scene = {
   type: MachineType;
-  /** Real footage (public/video/<name>.webm|.mp4|.jpg); one is picked per visit. */
-  videos: string[];
+  /** Which clip of the visit's construction project plays here. */
+  stop: ObjectStop;
   place: string;
   title: string;
   text: string;
@@ -24,7 +25,7 @@ type Scene = {
 const SCENES: Scene[] = [
   {
     type: 'crane',
-    videos: ['site-aerial', 'city-cranes'],
+    stop: 'gate',
     place: 'Ворота объекта',
     title: 'Большая стройка начинается с техники',
     text: 'Автокраны, экскаваторы, манипуляторы и катки — весь парк в одном каталоге.',
@@ -33,7 +34,7 @@ const SCENES: Scene[] = [
   },
   {
     type: 'excavator',
-    videos: ['excavator-truck'],
+    stop: 'pit',
     place: 'Котлован',
     title: 'Копаем котлован под фундамент',
     text: 'Гусеничные экскаваторы и экскаваторы-погрузчики с опытными машинистами.',
@@ -42,7 +43,7 @@ const SCENES: Scene[] = [
   },
   {
     type: 'kmu',
-    videos: ['workers'],
+    stop: 'yard',
     place: 'Склад материалов',
     title: 'Привезём и выгрузим',
     text: 'Манипулятор КМУ 7 т и самосвалы — от плит до контейнеров.',
@@ -51,7 +52,7 @@ const SCENES: Scene[] = [
   },
   {
     type: 'agp',
-    videos: ['tower-glass'],
+    stop: 'height',
     place: 'Фасад',
     title: 'Работы на высоте',
     text: 'Автовышки АГП для фасадов, кровли и освещения.',
@@ -60,7 +61,7 @@ const SCENES: Scene[] = [
   },
   {
     type: 'wheeled-excavator',
-    videos: ['demolition'],
+    stop: 'demolition',
     place: 'Демонтаж',
     title: 'Ломаем старое под новое',
     text: 'Колёсные экскаваторы с гидромолотом и ножницами — бетон, асфальт, перекрытия.',
@@ -69,7 +70,7 @@ const SCENES: Scene[] = [
   },
   {
     type: 'trench',
-    videos: ['frame-sunset'],
+    stop: 'finale',
     place: 'Ваш объект',
     title: 'Следующая остановка — ваша стройка',
     text: 'Оставьте заявку — подберём технику и назовём цену за 15 минут.',
@@ -88,7 +89,8 @@ export function SiteJourney() {
   // A different photo (machine model and backdrop) of every stop on each visit.
   const [scenes, setScenes] = useState(SCENES);
   const [photos, setPhotos] = useState(() => SCENES.map((scene) => defaultPhotoOf(scene.type)));
-  const [clips, setClips] = useState(() => SCENES.map((scene) => scene.videos[0]!));
+  // A different construction project on every visit (see siteObjects.ts).
+  const [object, setObject] = useState(SITE_OBJECTS[0]!);
   const [clock, setClock] = useState('');
 
   useEffect(() => {
@@ -97,7 +99,7 @@ export function SiteJourney() {
     const route = [SCENES[0]!, ...middle, SCENES[SCENES.length - 1]!];
     setScenes(route);
     setPhotos(route.map((scene) => pickPhoto(scene.type, 'journey')));
-    setClips(route.map((scene) => scene.videos[Math.floor(Math.random() * scene.videos.length)]!));
+    setObject(currentSiteObject());
     const tick = () =>
       setClock(new Date().toLocaleTimeString('ru-RU', { timeZone: 'Europe/Moscow' }));
     tick();
@@ -203,17 +205,17 @@ export function SiteJourney() {
                 />
                 {/* Real footage over the photo: people and machines at work. */}
                 <video
-                  key={clips[i]}
+                  key={object.clips[scene.stop]}
                   className="journey-push absolute inset-0 h-full w-full object-cover"
                   autoPlay
                   muted
                   loop
                   playsInline
                   preload={i < 2 ? 'auto' : 'metadata'}
-                  poster={`/video/${clips[i]}.jpg`}
+                  poster={`/video/${object.clips[scene.stop]}.jpg`}
                 >
-                  <source src={`/video/${clips[i]}.webm`} type="video/webm" />
-                  <source src={`/video/${clips[i]}.mp4`} type="video/mp4" />
+                  <source src={`/video/${object.clips[scene.stop]}.webm`} type="video/webm" />
+                  <source src={`/video/${object.clips[scene.stop]}.mp4`} type="video/mp4" />
                 </video>
                 <div className="journey-clouds absolute inset-0" />
                 <div className="journey-flicker absolute inset-0" />
@@ -247,7 +249,10 @@ export function SiteJourney() {
         {/* HUD */}
         <div className="relative z-30 mx-auto flex h-full max-w-6xl flex-col px-4 pb-10 pt-24 sm:px-6">
           <div className="flex items-center justify-between gap-4">
-            <div className="eyebrow text-amber-400">Путешествие по объекту</div>
+            <div>
+              <div className="eyebrow text-amber-400">Путешествие по объекту</div>
+              <div className="mt-1 text-sm font-semibold text-white/90">{object.name}</div>
+            </div>
             <div className="flex items-center gap-3 font-mono text-xs tabular-nums text-white/80 sm:text-sm">
               <span className="flex items-center gap-1.5 rounded bg-red-600/90 px-2 py-0.5 text-[0.65rem] font-bold uppercase tracking-widest text-white">
                 <span className="journey-rec h-1.5 w-1.5 rounded-full bg-white" />

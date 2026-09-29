@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { MachinePhoto } from '@/components/MachinePhoto';
 import { MACHINE_LABELS, type MachineType } from '@/lib/machinePhotos';
+import { currentSiteObject, SITE_OBJECTS } from '@/lib/siteObjects';
 
 // Full-bleed hero backdrop: photos of the machine classes cross-fade with a
 // slow push-in; the chips switch machines by hand. Every visit starts on a
@@ -24,19 +25,20 @@ const SLIDES: { type: MachineType; href: string }[] = [
 
 const SLIDE_MS = 6500;
 const VIDEO_MS = 12000;
-// Real construction footage; the hero opens on one of them (index -1), then
-// cycles through the machine photos and comes back to the footage.
-const HERO_VIDEOS = ['site-aerial', 'city-cranes', 'tower-glass'];
+// Real construction footage of the visit's project (see siteObjects.ts); the
+// hero opens on it (index -1), then cycles through the machine photos and
+// comes back to the footage.
 
 export function HeroPhotos() {
   const rootRef = useRef<HTMLDivElement>(null);
   const [current, setCurrent] = useState(-1);
-  const [video, setVideo] = useState(HERO_VIDEOS[0]!);
+  const [object, setObject] = useState(SITE_OBJECTS[0]!);
+  const video = object.hero;
   const [paused, setPaused] = useState(false);
 
-  // Random footage on every visit, chosen after hydration.
+  // A different project on every visit, chosen after hydration.
   useEffect(() => {
-    setVideo(HERO_VIDEOS[Math.floor(Math.random() * HERO_VIDEOS.length)]!);
+    setObject(currentSiteObject());
   }, []);
 
   useEffect(() => {
@@ -156,7 +158,7 @@ export function HeroPhotos() {
         {current === -1 ? 'Стройка онлайн' : MACHINE_LABELS[slide.type]} →
       </a>
       <span className="absolute right-5 top-4 z-10 text-[0.6rem] text-white/50">
-        {current === -1 ? 'Видео для примера' : 'Фото для примера'}
+        {current === -1 ? `${object.name} · видео для примера` : 'Фото для примера'}
       </span>
     </>
   );
