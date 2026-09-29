@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { signIn } from 'next-auth/react';
 import { Button, Card } from '@specai/ui';
+import { CinemaBackdrop } from '@/components/CinemaHero';
 
 type AccountType = 'CUSTOMER' | 'PROVIDER';
 
@@ -51,9 +52,10 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="mx-auto max-w-sm">
-      <Card>
-        <h1 className="mb-4 text-xl font-bold">Создать аккаунт</h1>
+    <div className="mx-auto max-w-sm py-6 sm:py-12">
+      <CinemaBackdrop clip="frame-sunset" />
+      <Card className="cine-sub shadow-2xl">
+        <h1 className="cine-title mb-4 text-xl font-bold">Создать аккаунт</h1>
 
         <div className="mb-4 flex flex-col gap-2 text-sm sm:flex-row">
           <button

@@ -4,6 +4,7 @@ import { Suspense, useState } from 'react';
 import { signIn } from 'next-auth/react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Button, Card } from '@specai/ui';
+import { CinemaBackdrop } from '@/components/CinemaHero';
 
 // Where to go after signing in: the page that sent the user here (same site
 // only, to avoid open redirects), otherwise the dashboard.
@@ -63,9 +64,10 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="mx-auto max-w-sm">
-      <Card>
-        <h1 className="mb-4 text-xl font-bold">Вход</h1>
+    <div className="mx-auto max-w-sm py-6 sm:py-12">
+      <CinemaBackdrop clip="tower-glass" />
+      <Card className="cine-sub shadow-2xl">
+        <h1 className="cine-title mb-4 text-xl font-bold">Вход</h1>
         <Suspense fallback={null}>
           <VerifiedNotice />
         </Suspense>

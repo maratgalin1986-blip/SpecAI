@@ -5,6 +5,7 @@ import { Card } from '@specai/ui';
 import { NewOrderForm } from '@/components/NewOrderForm';
 import { Pagination } from '@/components/Pagination';
 import { parseEnumParam, parsePage, totalPagesFor } from '@/lib/pagination';
+import { CinemaHero } from '@/components/CinemaHero';
 
 export const metadata: Metadata = {
   title: 'Заявки на технику',
@@ -67,13 +68,18 @@ export default async function OrdersPage({ searchParams }: { searchParams: Order
 
   return (
     <div className="flex flex-col gap-8">
-      <div>
-        <h1 className="text-2xl font-bold">Заявки на технику</h1>
-        <p className="mt-1 text-slate-600">
+      <CinemaHero
+        eyebrow="Биржа заявок"
+        title="Заявки на технику"
+        clips={['workers', 'house-frame']}
+        camera={4}
+        compact
+      >
+        <p>
           Опубликуйте, что вам нужно — поставщики поблизости предложат свою технику и цену. Похоже
           на заказ такси, только для спецтехники.
         </p>
-      </div>
+      </CinemaHero>
 
       <section>
         <h2 className="mb-3 text-lg font-semibold">Новая заявка</h2>

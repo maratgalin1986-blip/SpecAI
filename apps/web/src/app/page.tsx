@@ -323,7 +323,7 @@ export default async function HomePage() {
                     }
                     className="group flex h-full flex-col"
                   >
-                    <div className="relative aspect-[16/9] overflow-hidden">
+                    <div className="cine-frame relative aspect-[16/9] overflow-hidden">
                       <MachinePhoto
                         type={service.photo}
                         slot="services"

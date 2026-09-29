@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { AGENT_PROFILES, agentIdSchema } from '@specai/shared';
 import { AgentChat } from '@/components/AgentChat';
+import { CinemaHero } from '@/components/CinemaHero';
 
 export const metadata: Metadata = { title: 'ИИ-агенты' };
 
@@ -10,12 +11,17 @@ export default function AgentsPage({ searchParams }: { searchParams: { agent?: s
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-2xl font-bold">ИИ-агенты</h1>
-        <p className="mt-1 text-slate-600">
+      <CinemaHero
+        eyebrow="Диспетчерская · круглосуточно"
+        title="ИИ-агенты"
+        clips={['city-cranes', 'steel-frame']}
+        camera={3}
+        compact
+      >
+        <p>
           Выберите специалиста или оставьте «Авто» — ассистент сам передаст вопрос нужному агенту.
         </p>
-      </div>
+      </CinemaHero>
 
       <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
         <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
