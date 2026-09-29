@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { Card } from '@specai/ui';
 import { CallbackForm } from '@/components/CallbackForm';
 import { SITE } from '@/lib/site';
+import { CinemaHero } from '@/components/CinemaHero';
 
 export const metadata: Metadata = {
   title: 'Контакты',
@@ -11,12 +12,15 @@ export const metadata: Metadata = {
 export default function ContactsPage() {
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-3xl font-bold">Контакты</h1>
-        <p className="mt-1 text-slate-600">
-          Звоните, пишите или оставьте заявку — подберём технику под вашу задачу.
-        </p>
-      </div>
+      <CinemaHero
+        eyebrow={`${SITE.city} · ${SITE.region}`}
+        title="Контакты"
+        clips={['crane-sun', 'building-sun']}
+        camera={5}
+        compact
+      >
+        <p>Звоните, пишите или оставьте заявку — подберём технику под вашу задачу.</p>
+      </CinemaHero>
       <div className="grid gap-6 lg:grid-cols-2">
         <Card className="flex flex-col gap-4 p-6">
           <div>

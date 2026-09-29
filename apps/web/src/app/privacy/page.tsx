@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { SITE } from '@/lib/site';
+import { CinemaHero } from '@/components/CinemaHero';
 
 export const metadata: Metadata = {
   title: 'Политика конфиденциальности',
@@ -10,7 +11,13 @@ export default function PrivacyPage() {
   const operator = SITE.legalName || SITE.name;
   return (
     <article className="mx-auto max-w-3xl space-y-4 text-slate-700 [&_h2]:mt-8 [&_h2]:text-xl [&_h2]:font-semibold [&_h2]:text-slate-900 [&_li]:ml-5 [&_li]:list-disc">
-      <h1 className="text-3xl font-bold text-slate-900">Политика обработки персональных данных</h1>
+      <CinemaHero
+        eyebrow="Документы"
+        title="Политика обработки персональных данных"
+        clips={['building-sun', 'tower-glass']}
+        camera={9}
+        compact
+      />
       <p className="text-sm text-slate-500">Редакция от 27 сентября 2026 г.</p>
 
       <h2>1. Общие положения</h2>

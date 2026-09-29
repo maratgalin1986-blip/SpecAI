@@ -1,15 +1,27 @@
 import type { Metadata, Viewport } from 'next';
 import type { ReactNode } from 'react';
+import { JetBrains_Mono, Manrope } from 'next/font/google';
 import { InstallPrompt } from '@/components/InstallPrompt';
+import { TelegramMiniApp } from '@/components/TelegramMiniApp';
 import { Providers } from '@/components/Providers';
 import { SiteHeader } from '@/components/SiteHeader';
 import { SiteFooter } from '@/components/SiteFooter';
 import { AgentChatWidget } from '@/components/AgentChatWidget';
 import { YandexMetrika } from '@/components/YandexMetrika';
+import { MarketingTracker } from '@/components/MarketingTracker';
+import { CinemaClicks } from '@/components/CinemaClicks';
 import { MessengerButtons } from '@/components/MessengerButtons';
 import { SITE } from '@/lib/site';
 import { siteUrl } from '@/lib/siteUrl';
 import './globals.css';
+
+// Cyrillic-capable fonts: Manrope for text and headings, a mono for labels and figures.
+const sans = Manrope({ subsets: ['latin', 'cyrillic'], variable: '--font-sans', display: 'swap' });
+const mono = JetBrains_Mono({
+  subsets: ['latin', 'cyrillic'],
+  variable: '--font-mono',
+  display: 'swap',
+});
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl()),
@@ -76,8 +88,10 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="ru">
-      <body className="flex min-h-screen flex-col bg-slate-50 text-slate-900">
+    <html lang="ru" className={`${sans.variable} ${mono.variable}`}>
+      <body className="flex min-h-screen flex-col bg-[#f7f7f5] font-sans text-slate-900 antialiased grain">
+        {/* Black bars open on every page load, like the start of a scene. */}
+        <div className="cine-curtain" aria-hidden />
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(ORGANIZATION_JSON_LD) }}
@@ -93,7 +107,10 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           <AgentChatWidget />
           <MessengerButtons />
           <InstallPrompt />
+          <TelegramMiniApp />
           <YandexMetrika />
+          <MarketingTracker />
+          <CinemaClicks />
         </Providers>
       </body>
     </html>

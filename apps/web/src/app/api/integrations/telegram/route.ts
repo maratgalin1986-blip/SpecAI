@@ -44,6 +44,15 @@ export async function POST(request: NextRequest) {
   if (!message || !text || message.from?.is_bot) return NextResponse.json({ ok: true });
 
   const isPrivate = message.chat.type === 'private';
+  // Tells the owner which value to put into TELEGRAM_CHAT_ID (works in a
+  // private chat or, as an explicit command, in a group).
+  if (/^\/id(@\w+)?(\s|$)/.test(text)) {
+    await reply(
+      message.chat.id,
+      `ID этого чата: ${message.chat.id}\nУкажите его в TELEGRAM_CHAT_ID.`,
+    );
+    return NextResponse.json({ ok: true });
+  }
   if (isPrivate && text.startsWith('/start')) {
     await reply(
       message.chat.id,

@@ -9,6 +9,15 @@ import { LANDINGS, landingBySlug } from '@/lib/landings';
 import { formatMoney, formatRate } from '@/lib/money';
 import { SITE } from '@/lib/site';
 import { siteUrl } from '@/lib/siteUrl';
+import { CinemaLayer } from '@/components/CinemaHero';
+
+// Footage behind the landing header, by machine kind.
+const LANDING_CLIPS: Record<string, string[]> = {
+  'ekskavator-pogruzchik': ['excavator-truck', 'demolition'],
+  avtokran: ['city-cranes', 'crane-sun'],
+  'frontalnyj-pogruzchik': ['excavator-truck', 'workers'],
+  traktor: ['house-frame', 'site-aerial'],
+};
 
 export const revalidate = 300;
 
@@ -82,8 +91,8 @@ export default async function LandingPage({ params }: { params: { slug: string }
 
   return (
     <div className="flex flex-col gap-12">
-      <section className="hero-backdrop relative overflow-hidden rounded-3xl px-6 py-10 text-white sm:px-10">
-        <div className="hero-grid opacity-40" aria-hidden />
+      <section className="relative isolate overflow-hidden rounded-[2rem] bg-slate-950 px-6 py-10 text-white shadow-2xl sm:px-10 sm:py-14">
+        <CinemaLayer clips={LANDING_CLIPS[landing.slug] ?? ['site-aerial']} />
         <div className="relative grid gap-8 lg:grid-cols-[1fr_380px]">
           <div className="flex flex-col justify-center">
             <nav className="text-sm text-slate-400">
@@ -92,7 +101,7 @@ export default async function LandingPage({ params }: { params: { slug: string }
               </a>{' '}
               / <span>{landing.short}</span>
             </nav>
-            <h1 className="mt-3 text-3xl font-extrabold leading-tight sm:text-4xl">
+            <h1 className="cine-title mt-3 text-3xl font-extrabold leading-tight sm:text-5xl">
               Аренда {landing.title} в Набережных Челнах
             </h1>
             <p className="mt-4 text-slate-300">{landing.intro}</p>
