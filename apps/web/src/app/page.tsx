@@ -1,10 +1,11 @@
+import Image from 'next/image';
 import { prisma } from '@specai/database';
 import { Button } from '@specai/ui';
 import { AGENT_PROFILES } from '@specai/shared';
 import { CallbackForm } from '@/components/CallbackForm';
 import { CountUp } from '@/components/CountUp';
 import { Faq } from '@/components/Faq';
-import { Hero3D } from '@/components/Hero3D';
+import { HeroPhotos } from '@/components/HeroPhotos';
 import { Icon, type IconName } from '@/components/Icon';
 import { Reveal } from '@/components/Reveal';
 import { ShiftStory } from '@/components/ShiftStory';
@@ -13,40 +14,52 @@ import { TiltCard } from '@/components/TiltCard';
 import { pluralizeRu } from '@/lib/pluralize';
 import { SITE } from '@/lib/site';
 
-const SERVICES: { icon: IconName; title: string; text: string; price?: string }[] = [
+const SERVICES: {
+  icon: IconName;
+  title: string;
+  text: string;
+  price?: string;
+  photo: string;
+}[] = [
   {
     icon: 'excavator',
     title: 'Экскаваторы-погрузчики',
+    photo: '/images/backhoe.jpg',
     text: 'JCB 4CX, CASE 570, Hidromek 102B, LGCE B877F — траншеи, котлованы, планировка.',
     price: 'от 3 000 ₽/ч',
   },
   {
     icon: 'hammer',
     title: 'Гидромолот',
+    photo: '/images/trench.jpg',
     text: 'Демонтаж, вскрытие асфальта и бетона, работа по мёрзлому грунту.',
     price: 'от 3 500 ₽/ч',
   },
   {
     icon: 'crane',
     title: 'Автокраны',
+    photo: '/images/crane.jpg',
     text: 'До 32 т — монтаж конструкций, погрузка и подъём грузов.',
     price: 'от 3 500 ₽/ч',
   },
   {
     icon: 'loader',
     title: 'Фронтальные погрузчики',
+    photo: '/images/loader.jpg',
     text: 'Погрузка грунта, щебня и песка, уборка снега на объектах.',
     price: 'от 3 000 ₽/ч',
   },
   {
     icon: 'tractor',
     title: 'Тракторы',
+    photo: '/images/tractor.jpg',
     text: 'МТЗ «Беларус» для вспомогательных и коммунальных работ.',
     price: 'от 2 500 ₽/ч',
   },
   {
     icon: 'helmet',
     title: 'Техника с оператором',
+    photo: '/images/dozer.jpg',
     text: 'Опытные машинисты, работа по договору, документы и ЭДО для юрлиц.',
   },
 ];
@@ -154,10 +167,10 @@ export default async function HomePage() {
 
   return (
     <div className="flex flex-col gap-24">
-      <section className="depth-exit hero-backdrop relative -mt-2 overflow-hidden rounded-[2rem] text-white shadow-2xl">
-        <div className="hero-grid" aria-hidden />
+      <section className="depth-exit relative -mt-2 min-h-[640px] overflow-hidden rounded-[2rem] bg-slate-950 text-white shadow-2xl lg:min-h-[680px]">
+        <HeroPhotos />
         <div className="relative grid lg:grid-cols-2">
-          <div className="z-10 flex flex-col justify-center px-6 pb-4 pt-12 sm:px-10 lg:py-20">
+          <div className="z-10 flex flex-col justify-center px-6 pb-20 pt-14 sm:px-10 lg:py-24">
             <div className="float-in inline-flex w-fit items-center gap-2 rounded-full bg-white/10 px-3 py-1.5 ring-1 ring-white/15">
               <span className="relative flex h-2 w-2">
                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75 motion-reduce:animate-none" />
@@ -196,9 +209,6 @@ export default async function HomePage() {
             <p className="float-in mt-5 text-sm text-slate-400" style={{ animationDelay: '480ms' }}>
               Работаем с НДС · Договор и ЭДО · Перезвоним за 15 минут
             </p>
-          </div>
-          <div className="relative h-[470px] sm:h-[520px] lg:h-auto lg:min-h-[620px]">
-            <Hero3D />
           </div>
         </div>
       </section>
@@ -271,6 +281,16 @@ export default async function HomePage() {
                   }
                   className="group flex h-full flex-col p-6 transition hover:bg-amber-50/60 sm:p-8"
                 >
+                  <div className="relative -mx-6 -mt-6 mb-6 aspect-[16/9] overflow-hidden sm:-mx-8 sm:-mt-8">
+                    <Image
+                      src={service.photo}
+                      alt={service.title}
+                      fill
+                      sizes="(min-width: 1024px) 380px, (min-width: 640px) 50vw, 100vw"
+                      className="object-cover transition duration-700 group-hover:scale-105"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-slate-950/40 to-transparent" />
+                  </div>
                   <div className="flex items-start justify-between gap-2">
                     <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-900 text-amber-400 transition group-hover:bg-amber-500 group-hover:text-slate-950">
                       <Icon name={service.icon} className="h-7 w-7" />

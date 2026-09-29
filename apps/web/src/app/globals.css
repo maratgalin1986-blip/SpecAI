@@ -243,6 +243,21 @@ body {
   }
 }
 
+/* ---- Hero photos: slow push-in on the active slide ------------------------ */
+
+.hero-kenburns {
+  animation: kenburns 9s ease-out both;
+}
+
+@keyframes kenburns {
+  from {
+    transform: scale(1.12);
+  }
+  to {
+    transform: scale(1);
+  }
+}
+
 /* ---- Rotating 3D cube (agents section) ----------------------------------- */
 
 .cube-scene {
@@ -310,6 +325,7 @@ body {
   .text-gradient,
   .cube,
   .marquee,
+  .hero-kenburns,
   .story-dust,
   .float-in {
     animation: none;

@@ -6,12 +6,11 @@ import { BookingForm } from '@/components/BookingForm';
 import { EquipmentCard, categoryIcon } from '@/components/EquipmentCard';
 import { EstimateBox } from '@/components/EstimateBox';
 import { Icon } from '@/components/Icon';
-import { Machine3DViewer } from '@/components/Machine3DViewer';
 import { MachineGallery } from '@/components/MachineGallery';
 import {
   headlinePrices,
   keySpecs,
-  machineKindOf,
+  machinePhotoOf,
   numericSpec,
   specChip,
   specEntries,
@@ -61,14 +60,7 @@ export default async function EquipmentDetailPage({ params }: { params: { id: st
   const chips = keySpecs(specs, 4).map(specChip);
   const { hour, shift } = headlinePrices(item);
   const hammerRate = numericSpec(specs, /гидромолот.*₽/i) ?? undefined;
-  const kind = machineKindOf(item.category.name, item.name);
-  const envelope =
-    kind === 'backhoe'
-      ? {
-          digDepth: numericSpec(specs, /глубин\S* копания/i),
-          reach: numericSpec(specs, /радиус копания|вылет.*копани|досягаемост/i),
-        }
-      : undefined;
+  const illustration = machinePhotoOf(item.category.name, item.name);
   const ownFleet = item.company.name === SITE.legalName;
   const averageRating = item.reviews.length
     ? item.reviews.reduce((sum, review) => sum + review.rating, 0) / item.reviews.length
@@ -178,12 +170,17 @@ export default async function EquipmentDetailPage({ params }: { params: { id: st
 
           {item.imageUrls.length > 0 ? (
             <MachineGallery images={item.imageUrls} name={item.name} />
-          ) : kind ? (
-            <Machine3DViewer
-              kind={kind}
-              fallbackIcon={categoryIcon(item.category.name)}
-              envelope={envelope}
-            />
+          ) : illustration ? (
+            <figure className="relative aspect-[16/9] overflow-hidden rounded-3xl bg-slate-950">
+              <img
+                src={illustration}
+                alt={item.category.name}
+                className="h-full w-full object-cover"
+              />
+              <figcaption className="absolute bottom-3 left-4 rounded-full bg-slate-950/60 px-3 py-1 text-xs text-white/80 backdrop-blur">
+                Фото для примера — не эта машина
+              </figcaption>
+            </figure>
           ) : (
             <div className="relative flex aspect-[16/9] items-center justify-center overflow-hidden rounded-3xl bg-slate-950 bg-[radial-gradient(ellipse_at_50%_35%,rgba(245,158,11,0.16),transparent_62%)]">
               <div

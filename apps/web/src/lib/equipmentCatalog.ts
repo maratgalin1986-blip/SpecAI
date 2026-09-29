@@ -40,9 +40,9 @@ export function isTaskGroupId(value: string | undefined): value is TaskGroupId {
 export type MachineKind = 'backhoe' | 'crane' | 'wheelLoader' | 'dumpTruck' | 'dozer';
 
 /**
- * The procedural 3D model that illustrates a machine, or null when none of
- * them looks like it (a crawler excavator is not a backhoe loader, a tractor
- * is not a wheel loader) — then the page shows a static placeholder instead.
+ * The machine class a listing belongs to, or null when none of ours looks
+ * like it (a crawler excavator is not a backhoe loader, a tractor is not a
+ * wheel loader) — then the page shows a static placeholder instead.
  */
 export function machineKindOf(categoryName: string, machineName = ''): MachineKind | null {
   const category = categoryName.toLowerCase();
@@ -53,6 +53,22 @@ export function machineKindOf(categoryName: string, machineName = ''): MachineKi
   if (/погрузчик/.test(category) && !/вилоч|телескоп|мини/.test(name)) return 'wheelLoader';
   if (/самосвал/.test(category)) return 'dumpTruck';
   if (/бульдоз/.test(category)) return 'dozer';
+  return null;
+}
+
+const KIND_PHOTO: Record<MachineKind, string> = {
+  backhoe: '/images/backhoe.jpg',
+  crane: '/images/crane.jpg',
+  wheelLoader: '/images/loader.jpg',
+  dumpTruck: '/images/truck.jpg',
+  dozer: '/images/dozer.jpg',
+};
+
+/** An illustrative photo of the machine class, or null when none fits. */
+export function machinePhotoOf(categoryName: string, machineName = ''): string | null {
+  const kind = machineKindOf(categoryName, machineName);
+  if (kind) return KIND_PHOTO[kind];
+  if (/трактор/i.test(categoryName)) return '/images/tractor.jpg';
   return null;
 }
 

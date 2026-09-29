@@ -1,14 +1,13 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import type { ShiftStoryScene } from '@/lib/shiftStoryScene';
+import Image from 'next/image';
 
 // A cinematic, scroll-scrubbed "one shift" story: the section is several
 // screens tall, the scene stays pinned, and scrolling plays it like a video.
 // A HUD shows the shift clock, trench depth, excavated soil and the running
 // price. The numbers are an illustrative example of an 8-hour shift. The
-// machine itself is a three.js scene, loaded lazily and drawn only while the
-// section is on screen.
+// scene is a pair of photos that cross-fade and slowly push in as you scroll.
 
 const RATE = 3000; // ₽ per machine-hour, backhoe loader with an operator
 const SHIFT_HOURS = 8;
@@ -35,56 +34,7 @@ const phase = (p: number, from: number, to: number) => clamp((p - from) / (to - 
 
 export function ShiftStory() {
   const sectionRef = useRef<HTMLElement>(null);
-  const canvasRef = useRef<HTMLDivElement>(null);
-  const sceneRef = useRef<ShiftStoryScene>();
   const [progress, setProgress] = useState(0);
-  const [sceneReady, setSceneReady] = useState(false);
-  const progressRef = useRef(0);
-
-  useEffect(() => {
-    const section = sectionRef.current;
-    const container = canvasRef.current;
-    if (!section || !container) return;
-    let cancelled = false;
-    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    const visibility = new IntersectionObserver(([entry]) => {
-      sceneRef.current?.setRunning(entry?.isIntersecting ?? false);
-    });
-    // Load three.js only when the story is about to scroll into view.
-    const approach = new IntersectionObserver(
-      ([entry]) => {
-        if (!entry?.isIntersecting) return;
-        approach.disconnect();
-        import('@/lib/shiftStoryScene')
-          .then(({ createShiftStoryScene }) => {
-            if (cancelled) return;
-            try {
-              sceneRef.current = createShiftStoryScene(container, { reducedMotion });
-            } catch {
-              return; // No WebGL — the lit backdrop and HUD still tell the story.
-            }
-            sceneRef.current.setProgress(progressRef.current);
-            visibility.observe(section);
-            setSceneReady(true);
-          })
-          .catch(() => undefined);
-      },
-      { rootMargin: '100% 0px' },
-    );
-    approach.observe(section);
-    return () => {
-      cancelled = true;
-      approach.disconnect();
-      visibility.disconnect();
-      sceneRef.current?.dispose();
-      sceneRef.current = undefined;
-    };
-  }, []);
-
-  useEffect(() => {
-    progressRef.current = progress;
-    sceneRef.current?.setProgress(progress);
-  }, [progress]);
 
   useEffect(() => {
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
@@ -114,6 +64,8 @@ export function ShiftStory() {
   }, []);
 
   const p = progress;
+  const arrive = phase(p, 0.12, 0.35); // machine photo comes into light
+  const dig = phase(p, 0.36, 0.46); // cross-fade to the trench
   const work = phase(p, 0.4, 0.84); // digging
   const settle = phase(p, 0.84, 0.95);
 
@@ -135,16 +87,34 @@ export function ShiftStory() {
       aria-label="Пример смены"
     >
       <div className="sticky top-0 flex h-[100svh] flex-col overflow-hidden bg-[#07080a] text-white">
-        {/* Work light and floor reflection, like a lit set. */}
-        <div
-          className="pointer-events-none absolute inset-0"
-          style={{
-            background:
-              'radial-gradient(60% 55% at 62% 30%, rgba(245,158,11,0.28), transparent 70%),' +
-              'radial-gradient(90% 40% at 50% 100%, rgba(245,158,11,0.12), transparent 70%)',
-          }}
-          aria-hidden
-        />
+        {/* Photo scene: the machine arrives, then the trench deepens under
+            the work lights. Both frames push in slowly as the story plays. */}
+        <div className="absolute inset-0" aria-hidden>
+          <Image
+            src="/images/backhoe.jpg"
+            alt=""
+            fill
+            sizes="100vw"
+            className="object-cover"
+            style={{
+              opacity: 0.35 + 0.65 * arrive * (1 - dig),
+              transform: `scale(${1.02 + 0.06 * p})`,
+            }}
+          />
+          <Image
+            src="/images/trench.jpg"
+            alt=""
+            fill
+            sizes="100vw"
+            className="object-cover"
+            style={{ opacity: dig, transform: `scale(${1.02 + 0.1 * work})` }}
+          />
+          <div className="absolute inset-0 bg-gradient-to-b from-[#07080a] via-[#07080a]/30 to-[#07080a]" />
+          <div
+            className="absolute inset-0 bg-[#07080a]"
+            style={{ opacity: 0.55 * (1 - arrive) + 0.35 * settle }}
+          />
+        </div>
         <div className="story-dust pointer-events-none absolute inset-0" aria-hidden />
 
         {/* Chapter nav */}
@@ -198,13 +168,6 @@ export function ShiftStory() {
               <span className="font-mono text-amber-400">{RATE.toLocaleString('ru-RU')} ₽/ч</span>
             </div>
           </div>
-          <div
-            ref={canvasRef}
-            className={`absolute inset-0 transition-opacity duration-700 [mask-image:linear-gradient(to_bottom,transparent,black_18%,black_78%,transparent)] ${
-              sceneReady ? 'opacity-100' : 'opacity-0'
-            }`}
-            aria-hidden
-          />
         </div>
 
         {/* Caption, CTA and scrubber */}

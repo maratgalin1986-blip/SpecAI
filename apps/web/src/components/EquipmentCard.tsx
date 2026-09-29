@@ -2,7 +2,14 @@ import type { EquipmentStatus } from '@specai/ui';
 import { AvailabilityChip } from '@/components/AvailabilityChip';
 import { Icon, type IconName } from '@/components/Icon';
 import { QuickOrder } from '@/components/QuickOrder';
-import { headlinePrices, keySpecs, rub, specChip, taskGroupOf } from '@/lib/equipmentCatalog';
+import {
+  headlinePrices,
+  keySpecs,
+  machinePhotoOf,
+  rub,
+  specChip,
+  taskGroupOf,
+} from '@/lib/equipmentCatalog';
 
 type Amount = number | string | { toString(): string } | null;
 
@@ -37,6 +44,7 @@ export function EquipmentCard({ item }: { item: EquipmentCardItem }) {
   const href = `/equipment/${item.id}`;
   const { hour, shift } = headlinePrices(item);
   const chips = keySpecs(item.specs, 3).map(specChip);
+  const illustration = item.imageUrls[0] ? null : machinePhotoOf(item.category.name, item.name);
   const priceSummary = [hour !== null && `${rub(hour)}/ч`, shift !== null && `${rub(shift)}/смена`]
     .filter(Boolean)
     .join(', ');
@@ -51,6 +59,18 @@ export function EquipmentCard({ item }: { item: EquipmentCardItem }) {
             loading="lazy"
             className="h-full w-full object-cover transition duration-500 group-hover/card:scale-[1.03]"
           />
+        ) : illustration ? (
+          <>
+            <img
+              src={illustration}
+              alt=""
+              loading="lazy"
+              className="h-full w-full object-cover transition duration-500 group-hover/card:scale-[1.03]"
+            />
+            <span className="absolute bottom-2 right-3 text-[0.6rem] text-white/70">
+              Фото для примера
+            </span>
+          </>
         ) : (
           <div className="relative flex h-full w-full items-center justify-center bg-slate-950 bg-[radial-gradient(ellipse_at_30%_20%,rgba(245,158,11,0.18),transparent_60%)]">
             <div
