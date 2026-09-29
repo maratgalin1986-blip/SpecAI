@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@specai/database';
 import { createLeadSchema } from '@specai/shared';
+import { acceptLead } from '@/lib/leadIntake';
 import { notifyTelegram } from '@/lib/notify';
 import { checkRateLimit } from '@/lib/rateLimit';
 import { SITE } from '@/lib/site';
@@ -33,26 +34,27 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const lead = await prisma.lead.create({
-    data: {
+  const outcome = await acceptLead(
+    {
       name: parsed.data.name,
       phone: parsed.data.phone,
       message: parsed.data.message || null,
       source: parsed.data.source || null,
     },
-  });
-
-  await notifyTelegram(
-    [
-      `📞 Новая заявка на звонок — ${SITE.name}`,
-      `Имя: ${lead.name}`,
-      `Телефон: ${lead.phone}`,
-      lead.message ? `Сообщение: ${lead.message}` : null,
-      lead.source ? `Откуда: ${lead.source}` : null,
-    ]
-      .filter(Boolean)
-      .join('\n'),
+    {
+      save: (data) => prisma.lead.create({ data }),
+      notify: notifyTelegram,
+      siteName: SITE.name,
+      onSaveError: (error) => console.error('Lead was not saved to the database', error),
+    },
   );
+
+  if (outcome === 'lost') {
+    return NextResponse.json(
+      { error: `Не удалось отправить заявку. Позвоните нам: ${SITE.phone}` },
+      { status: 503 },
+    );
+  }
 
   return NextResponse.json({ ok: true }, { status: 201 });
 }
