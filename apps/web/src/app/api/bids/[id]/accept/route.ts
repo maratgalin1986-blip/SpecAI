@@ -3,6 +3,16 @@ import { prisma } from '@specai/database';
 import { getRequestUser } from '@/lib/requestUser';
 import { sendEmail } from '@/lib/email';
 import { bidAccepted } from '@/lib/emailTemplates';
+import { prismaErrorCode } from '@/lib/apiInput';
+import {
+  BLOCKING_BOOKING_STATUSES,
+  toBookingDay,
+  unavailableEquipmentMessage,
+} from '@/lib/bookingRules';
+import { findOverlappingBooking, lockEquipment } from '@/lib/bookingConflicts';
+
+/** Thrown inside the transaction to roll it back when the order was taken meanwhile. */
+class AlreadyClosedError extends Error {}
 
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
   const currentUser = await getRequestUser(request);
@@ -33,43 +43,83 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     return NextResponse.json({ error: 'Заявка уже закрыта' }, { status: 409 });
   }
 
-  const overlapping = await prisma.booking.findFirst({
-    where: {
-      equipmentId: bid.equipmentId,
-      status: { in: ['PENDING', 'CONFIRMED', 'ACTIVE'] },
-      startDate: { lt: bid.order.desiredEndDate },
-      endDate: { gt: bid.order.desiredStartDate },
-    },
-  });
-  if (overlapping) {
-    return NextResponse.json(
-      { error: 'Эта техника уже занята на выбранные даты' },
-      { status: 409 },
-    );
-  }
+  const startDate = toBookingDay(bid.order.desiredStartDate);
+  const endDate = toBookingDay(bid.order.desiredEndDate);
 
-  const booking = await prisma.$transaction(async (tx) => {
-    const created = await tx.booking.create({
-      data: {
+  let result;
+  try {
+    result = await prisma.$transaction(async (tx) => {
+      // Same per-machine lock as POST /api/bookings: the overlap check and the
+      // new booking cannot interleave with another booking of this machine.
+      await lockEquipment(tx, bid.equipmentId);
+
+      const equipment = await tx.equipment.findUnique({
+        where: { id: bid.equipmentId },
+        select: { status: true },
+      });
+      const unavailable = equipment
+        ? unavailableEquipmentMessage(equipment.status)
+        : 'Техника не найдена';
+      if (unavailable) {
+        return { error: `${unavailable}. Выберите другое предложение` } as const;
+      }
+
+      const overlapping = await findOverlappingBooking(tx, {
         equipmentId: bid.equipmentId,
-        customerId: bid.order.customerId,
-        startDate: bid.order.desiredStartDate,
-        endDate: bid.order.desiredEndDate,
-        totalPrice: bid.price,
-        currency: bid.currency,
-        orderId: bid.orderId,
-      },
-    });
+        startDate,
+        endDate,
+        statuses: BLOCKING_BOOKING_STATUSES,
+      });
+      if (overlapping) {
+        return {
+          error:
+            overlapping.status === 'PENDING'
+              ? 'Эта техника уже занята на выбранные даты'
+              : 'На эти даты у этой техники уже есть подтверждённая бронь',
+        } as const;
+      }
 
-    await tx.bid.update({ where: { id: bid.id }, data: { status: 'ACCEPTED' } });
-    await tx.bid.updateMany({
-      where: { orderId: bid.orderId, id: { not: bid.id } },
-      data: { status: 'REJECTED' },
-    });
-    await tx.order.update({ where: { id: bid.orderId }, data: { status: 'MATCHED' } });
+      // Close the order first and only if it is still open: of two parallel
+      // «Принять» clicks exactly one gets past this line.
+      const closed = await tx.order.updateMany({
+        where: { id: bid.orderId, status: 'OPEN' },
+        data: { status: 'MATCHED' },
+      });
+      const accepted = await tx.bid.updateMany({
+        where: { id: bid.id, status: 'PENDING' },
+        data: { status: 'ACCEPTED' },
+      });
+      if (closed.count === 0 || accepted.count === 0) {
+        throw new AlreadyClosedError();
+      }
+      await tx.bid.updateMany({
+        where: { orderId: bid.orderId, id: { not: bid.id } },
+        data: { status: 'REJECTED' },
+      });
 
-    return created;
-  });
+      const created = await tx.booking.create({
+        data: {
+          equipmentId: bid.equipmentId,
+          customerId: bid.order.customerId,
+          startDate,
+          endDate,
+          totalPrice: bid.price,
+          currency: bid.currency,
+          orderId: bid.orderId,
+        },
+      });
+      return { booking: created } as const;
+    });
+  } catch (error) {
+    if (error instanceof AlreadyClosedError || prismaErrorCode(error) === 'P2002') {
+      return NextResponse.json({ error: 'Заявка уже закрыта' }, { status: 409 });
+    }
+    throw error;
+  }
+  if ('error' in result) {
+    return NextResponse.json({ error: result.error }, { status: 409 });
+  }
+  const { booking } = result;
 
   try {
     const providerEmails = bid.equipment.company.users.map((user) => user.email);

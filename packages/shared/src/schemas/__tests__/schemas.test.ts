@@ -62,6 +62,16 @@ describe('createBookingSchema', () => {
       expect(bad.error.issues[0]?.path).toEqual(['endDate']);
     }
   });
+
+  it('accepts the owner fleet ids and a one-day booking', () => {
+    const result = createBookingSchema.safeParse({
+      equipmentId: 'sp16-jcb-4cx',
+      customerId: CUID,
+      startDate: '2026-10-01',
+      endDate: '2026-10-01',
+    });
+    expect(result.success).toBe(true);
+  });
 });
 
 describe('registerSchema', () => {
@@ -137,6 +147,15 @@ describe('equipmentSearchQuerySchema and createBidSchema', () => {
         .success,
     ).toBe(false);
     expect(createBidSchema.safeParse({ orderId: CUID, equipmentId: CUID, price: -5 }).success).toBe(
+      false,
+    );
+  });
+
+  it('accepts the owner fleet ids in bids', () => {
+    expect(
+      createBidSchema.safeParse({ orderId: CUID, equipmentId: 'sp16-jcb-4cx', price: 100 }).success,
+    ).toBe(true);
+    expect(createBidSchema.safeParse({ orderId: CUID, equipmentId: '', price: 100 }).success).toBe(
       false,
     );
   });
