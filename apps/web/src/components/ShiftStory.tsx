@@ -1,11 +1,14 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import type { ShiftStoryScene } from '@/lib/shiftStoryScene';
 
 // A cinematic, scroll-scrubbed "one shift" story: the section is several
 // screens tall, the scene stays pinned, and scrolling plays it like a video.
 // A HUD shows the shift clock, trench depth, excavated soil and the running
-// price. The numbers are an illustrative example of an 8-hour shift.
+// price. The numbers are an illustrative example of an 8-hour shift. The
+// machine itself is a three.js scene, loaded lazily and drawn only while the
+// section is on screen.
 
 const RATE = 3000; // ₽ per machine-hour, backhoe loader with an operator
 const SHIFT_HOURS = 8;
@@ -29,11 +32,59 @@ const CHAPTERS = [
 
 const clamp = (value: number, min = 0, max = 1) => Math.min(max, Math.max(min, value));
 const phase = (p: number, from: number, to: number) => clamp((p - from) / (to - from));
-const ease = (t: number) => 1 - Math.pow(1 - t, 3);
 
 export function ShiftStory() {
   const sectionRef = useRef<HTMLElement>(null);
+  const canvasRef = useRef<HTMLDivElement>(null);
+  const sceneRef = useRef<ShiftStoryScene>();
   const [progress, setProgress] = useState(0);
+  const [sceneReady, setSceneReady] = useState(false);
+  const progressRef = useRef(0);
+
+  useEffect(() => {
+    const section = sectionRef.current;
+    const container = canvasRef.current;
+    if (!section || !container) return;
+    let cancelled = false;
+    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const visibility = new IntersectionObserver(([entry]) => {
+      sceneRef.current?.setRunning(entry?.isIntersecting ?? false);
+    });
+    // Load three.js only when the story is about to scroll into view.
+    const approach = new IntersectionObserver(
+      ([entry]) => {
+        if (!entry?.isIntersecting) return;
+        approach.disconnect();
+        import('@/lib/shiftStoryScene')
+          .then(({ createShiftStoryScene }) => {
+            if (cancelled) return;
+            try {
+              sceneRef.current = createShiftStoryScene(container, { reducedMotion });
+            } catch {
+              return; // No WebGL — the lit backdrop and HUD still tell the story.
+            }
+            sceneRef.current.setProgress(progressRef.current);
+            visibility.observe(section);
+            setSceneReady(true);
+          })
+          .catch(() => undefined);
+      },
+      { rootMargin: '100% 0px' },
+    );
+    approach.observe(section);
+    return () => {
+      cancelled = true;
+      approach.disconnect();
+      visibility.disconnect();
+      sceneRef.current?.dispose();
+      sceneRef.current = undefined;
+    };
+  }, []);
+
+  useEffect(() => {
+    progressRef.current = progress;
+    sceneRef.current?.setProgress(progress);
+  }, [progress]);
 
   useEffect(() => {
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
@@ -63,7 +114,6 @@ export function ShiftStory() {
   }, []);
 
   const p = progress;
-  const drive = ease(phase(p, 0.12, 0.4)); // machine drives in
   const work = phase(p, 0.4, 0.84); // digging
   const settle = phase(p, 0.84, 0.95);
 
@@ -72,15 +122,6 @@ export function ShiftStory() {
   const soil = work * 42; // cubic metres
   const price = Math.floor(hours) * RATE;
 
-  // Digging cycle: boom and stick swing while the trench gets deeper.
-  const cycle = Math.sin(work * Math.PI * 14);
-  const digging = work > 0 && work < 1 ? 1 : 0;
-  const boom = -24 + (6 + depth * 3) * digging * (0.5 + 0.5 * cycle) - 6 * settle;
-  const stick = 78 + 18 * digging * cycle + 8 * settle;
-  const bucket = 20 + 40 * digging * (0.5 - 0.5 * cycle);
-
-  const tx = -900 + 1230 * drive; // machine x offset
-  const trench = depth * 26; // px
   const chapterIndex = CHAPTERS.reduce((index, chapter, i) => (p >= chapter.from ? i : index), 0);
   const chapter = CHAPTERS[chapterIndex]!;
   const clock = `${String(Math.floor(hours)).padStart(2, '0')}:${String(
@@ -157,87 +198,13 @@ export function ShiftStory() {
               <span className="font-mono text-amber-400">{RATE.toLocaleString('ru-RU')} ₽/ч</span>
             </div>
           </div>
-          <svg
-            viewBox="0 0 1000 480"
-            overflow="visible"
-            className="h-full max-h-[60vh] w-full min-w-[620px] max-w-5xl max-sm:-translate-x-[10%]"
+          <div
+            ref={canvasRef}
+            className={`absolute inset-0 transition-opacity duration-700 [mask-image:linear-gradient(to_bottom,transparent,black_18%,black_78%,transparent)] ${
+              sceneReady ? 'opacity-100' : 'opacity-0'
+            }`}
             aria-hidden
-          >
-            <defs>
-              <linearGradient id="story-ground" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0" stopColor="#2a2118" />
-                <stop offset="1" stopColor="#07080a" />
-              </linearGradient>
-              <linearGradient id="story-body" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0" stopColor="#fbbf24" />
-                <stop offset="1" stopColor="#d97706" />
-              </linearGradient>
-            </defs>
-            <rect x="-2000" y="380" width="5000" height="100" fill="url(#story-ground)" />
-            <line x1="-2000" y1="380" x2="3000" y2="380" stroke="#f59e0b" strokeOpacity="0.35" />
-            {/* Trench and spoil heap */}
-            <path
-              d={`M770 380 L786 ${380 + trench} L870 ${380 + trench} L886 380 Z`}
-              fill="#0b0c0e"
-              stroke="#78350f"
-            />
-            <ellipse
-              cx="975"
-              cy="380"
-              rx={soil * 1.6}
-              ry={soil * 1}
-              fill="#3f2a17"
-              stroke="#92400e"
-              strokeOpacity="0.6"
-            />
-
-            <g transform={`translate(${tx} 0)`}>
-              {/* Front loader bucket */}
-              <path d="M8 330 L-30 330 L-40 372 L6 372 Z" fill="#b45309" />
-              <line x1="30" y1="318" x2="4" y2="340" stroke="#92400e" strokeWidth="8" />
-              {/* Body and cab */}
-              <rect x="20" y="290" width="250" height="62" rx="10" fill="url(#story-body)" />
-              <rect x="140" y="200" width="100" height="92" rx="8" fill="#f59e0b" />
-              <rect
-                x="152"
-                y="212"
-                width="76"
-                height="52"
-                rx="5"
-                fill="#0f172a"
-                stroke="#fde68a"
-                strokeOpacity="0.4"
-              />
-              <circle cx="238" cy="206" r="5" fill="#fde68a" className="story-beacon" />
-              {/* Wheels */}
-              {[
-                [70, 352, 30],
-                [225, 348, 36],
-              ].map(([cx, cy, r]) => (
-                <g key={cx} transform={`rotate(${drive * 720} ${cx} ${cy})`}>
-                  <circle cx={cx} cy={cy} r={r} fill="#111" stroke="#27272a" strokeWidth="6" />
-                  <line
-                    x1={cx! - r!}
-                    y1={cy}
-                    x2={cx! + r!}
-                    y2={cy}
-                    stroke="#3f3f46"
-                    strokeWidth="4"
-                  />
-                </g>
-              ))}
-              {/* Backhoe: boom → stick → bucket */}
-              <g transform={`translate(270 305) rotate(${boom})`}>
-                <rect x="0" y="-9" width="150" height="18" rx="8" fill="#f59e0b" />
-                <g transform={`translate(150 0) rotate(${stick})`}>
-                  <rect x="0" y="-7" width="140" height="14" rx="6" fill="#fbbf24" />
-                  <g transform={`translate(140 0) rotate(${bucket})`}>
-                    <path d="M0 -12 L34 -8 L30 22 L4 18 Z" fill="#b45309" />
-                  </g>
-                </g>
-              </g>
-            </g>
-          </svg>
+          />
         </div>
 
         {/* Caption, CTA and scrubber */}

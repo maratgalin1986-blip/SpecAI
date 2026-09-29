@@ -1,19 +1,8 @@
-// Cartoon sound effects for the 3D hero, synthesised with the Web Audio API —
+// Machine sounds for the 3D hero, synthesised with the Web Audio API —
 // no audio files to download. Browsers only allow audio after a user gesture,
 // so nothing plays until unlock() is called from a click/tap/keypress.
 
-export type SoundName =
-  | 'appear'
-  | 'horn'
-  | 'curious'
-  | 'happy'
-  | 'joy'
-  | 'surprised'
-  | 'sleepy'
-  | 'snore'
-  | 'lightsOn'
-  | 'lightsOff'
-  | 'dirt';
+export type SoundName = 'appear' | 'horn' | 'lightsOn' | 'lightsOff' | 'dirt';
 
 /** What the 3D scene needs from the sound system. */
 export interface SceneSounds {
@@ -104,6 +93,8 @@ export function createSoundEngine(initiallyMuted: boolean): SoundEngine {
     start?: number;
     duration: number;
     volume: number;
+    /** Hold the level until the end instead of decaying straight away. */
+    hold?: boolean;
   }) {
     if (!ctx || !master) return;
     const t = ctx.currentTime + (opts.start ?? 0);
@@ -114,6 +105,7 @@ export function createSoundEngine(initiallyMuted: boolean): SoundEngine {
     const gain = ctx.createGain();
     gain.gain.setValueAtTime(0.0001, t);
     gain.gain.exponentialRampToValueAtTime(opts.volume, t + 0.012);
+    if (opts.hold) gain.gain.setValueAtTime(opts.volume, t + opts.duration - 0.04);
     gain.gain.exponentialRampToValueAtTime(0.0001, t + opts.duration);
     osc.connect(gain).connect(master);
     osc.start(t);
@@ -149,54 +141,38 @@ export function createSoundEngine(initiallyMuted: boolean): SoundEngine {
   }
 
   const SOUNDS: Record<SoundName, () => void> = {
-    // "Boing!" as a machine pops onto the platform.
+    // Starter motor cranking, then the diesel catching.
     appear() {
-      blip({ type: 'sine', from: 180, to: 720, duration: 0.18, volume: 0.25 });
-      blip({ type: 'sine', from: 720, to: 520, start: 0.18, duration: 0.16, volume: 0.2 });
-      blip({ type: 'triangle', from: 1400, to: 2100, start: 0.05, duration: 0.12, volume: 0.05 });
+      for (let i = 0; i < 4; i++) {
+        blip({ type: 'sawtooth', from: 70, to: 55, start: i * 0.11, duration: 0.1, volume: 0.05 });
+      }
+      noise({
+        filter: 'lowpass',
+        frequency: 260,
+        start: 0.4,
+        attack: 0.05,
+        duration: 0.6,
+        volume: 0.18,
+      });
+      blip({ type: 'sawtooth', from: 45, to: 90, start: 0.42, duration: 0.45, volume: 0.07 });
     },
-    // Cartoon "beep-beep".
+    // Two-tone truck horn.
     horn() {
       for (const [start, duration] of [
-        [0, 0.12],
-        [0.18, 0.22],
+        [0, 0.28],
+        [0.36, 0.5],
       ] as const) {
-        blip({ type: 'square', from: 392, start, duration, volume: 0.06 });
-        blip({ type: 'square', from: 494, start, duration, volume: 0.05 });
+        blip({ type: 'sawtooth', from: 233, start, duration, volume: 0.035, hold: true });
+        blip({ type: 'sawtooth', from: 294, start, duration, volume: 0.03, hold: true });
+        blip({ type: 'square', from: 117, start, duration, volume: 0.015, hold: true });
       }
     },
-    curious() {
-      blip({ type: 'triangle', from: 320, to: 560, duration: 0.28, volume: 0.15 });
-    },
-    happy() {
-      [523, 659, 784].forEach((f, i) =>
-        blip({ type: 'triangle', from: f, start: i * 0.09, duration: 0.14, volume: 0.12 }),
-      );
-    },
-    joy() {
-      [1047, 1319, 1568, 2093].forEach((f, i) =>
-        blip({ type: 'sine', from: f, start: 0.35 + i * 0.07, duration: 0.14, volume: 0.1 }),
-      );
-    },
-    surprised() {
-      blip({ type: 'sine', from: 500, to: 950, duration: 0.16, volume: 0.18 });
-    },
-    // A yawn…
-    sleepy() {
-      blip({ type: 'triangle', from: 420, to: 190, duration: 0.6, volume: 0.1 });
-    },
-    // …and snoring.
-    snore() {
-      noise({ filter: 'lowpass', frequency: 320, attack: 0.6, duration: 1.1, volume: 0.12 });
-      blip({ type: 'sine', from: 95, to: 70, duration: 1.1, volume: 0.05 });
-    },
+    // Relay click.
     lightsOn() {
       noise({ filter: 'highpass', frequency: 3000, duration: 0.04, volume: 0.25 });
-      blip({ type: 'sine', from: 140, to: 280, start: 0.02, duration: 0.25, volume: 0.08 });
     },
     lightsOff() {
-      noise({ filter: 'highpass', frequency: 2500, duration: 0.04, volume: 0.2 });
-      blip({ type: 'sine', from: 220, to: 110, duration: 0.2, volume: 0.06 });
+      noise({ filter: 'highpass', frequency: 2500, duration: 0.035, volume: 0.18 });
     },
     // Soil pouring / pushed dirt.
     dirt() {

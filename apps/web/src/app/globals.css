@@ -179,7 +179,7 @@ body {
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
 }
 
-/* ---- Scroll story: floating dust in the work light, blinking beacon ------ */
+/* ---- Scroll story: floating dust in the work light ----------------------- */
 
 .story-dust {
   background-image:
@@ -195,16 +195,6 @@ body {
 @keyframes dust {
   to {
     background-position: 400px -300px;
-  }
-}
-
-.story-beacon {
-  animation: beacon 1.2s ease-in-out infinite;
-}
-
-@keyframes beacon {
-  50% {
-    opacity: 0.2;
   }
 }
 
@@ -276,7 +266,6 @@ body {
   .cube,
   .marquee,
   .story-dust,
-  .story-beacon,
   .float-in {
     animation: none;
   }

@@ -186,7 +186,7 @@ export function Hero3D() {
           <div className="text-xs text-slate-400">
             <span className="hidden sm:inline">
               Ведите курсором — техника поедет следом. Зажмите кнопку мыши — включит фары, кликните
-              по машине — погудит и обрадуется
+              по машине — посигналит
             </span>
             <span className="sm:hidden">
               Коснитесь площадки — техника приедет, держите палец — включит фары
