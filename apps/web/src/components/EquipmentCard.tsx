@@ -122,13 +122,13 @@ export function EquipmentCard({ item }: { item: EquipmentCardItem }) {
             <div className="border-r border-slate-200 px-3 py-2.5">
               <dt className="eyebrow text-[0.6rem] text-slate-500">Час</dt>
               <dd className="mt-0.5 whitespace-nowrap font-mono text-base font-semibold tabular-nums text-slate-900">
-                {hour !== null ? rub(hour) : <span className="text-slate-400">по запросу</span>}
+                {hour !== null ? rub(hour) : <span className="text-slate-500">по запросу</span>}
               </dd>
             </div>
             <div className="px-3 py-2.5">
               <dt className="eyebrow text-[0.6rem] text-slate-500">Смена 8 ч</dt>
               <dd className="mt-0.5 whitespace-nowrap font-mono text-base font-semibold tabular-nums text-slate-900">
-                {shift !== null ? rub(shift) : <span className="text-slate-400">по запросу</span>}
+                {shift !== null ? rub(shift) : <span className="text-slate-500">по запросу</span>}
               </dd>
             </div>
           </dl>

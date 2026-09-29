@@ -125,7 +125,7 @@ export function AgentChat({
             onClick={() => changeAgent(id)}
             className={`shrink-0 rounded-full px-3 py-1 text-xs font-medium transition-colors ${
               selection === id
-                ? 'bg-amber-600 text-white'
+                ? 'bg-amber-500 text-slate-950'
                 : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
             }`}
           >
@@ -191,7 +191,7 @@ export function AgentChat({
         <button
           type="submit"
           disabled={isSending || !input.trim()}
-          className="rounded-md bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700 disabled:opacity-50"
+          className="rounded-md bg-amber-500 px-4 py-2 text-sm font-medium text-slate-950 hover:bg-amber-400 disabled:opacity-50"
         >
           Отправить
         </button>

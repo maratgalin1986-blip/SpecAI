@@ -1,8 +1,11 @@
 'use client';
 
+import Image from 'next/image';
 import { useEffect, useRef, useState } from 'react';
 import { defaultPhotoOf, pickPhoto, type MachineType } from '@/lib/machinePhotos';
 import { currentSiteObject, SITE_OBJECTS, type ObjectStop } from '@/lib/siteObjects';
+import { footageAllowed } from '@/components/CinemaVideo';
+import { LiveClock } from '@/components/LiveClock';
 
 // «Путешествие по объекту»: a pinned, scroll-driven fly-through of one big
 // construction site. Scroll scrubs the footage like film on an editing desk,
@@ -93,8 +96,14 @@ export function SiteJourney() {
   const [photos, setPhotos] = useState(() => SCENES.map((scene) => defaultPhotoOf(scene.type)));
   // A different construction project on every visit (see siteObjects.ts).
   const [object, setObject] = useState(SITE_OBJECTS[0]!);
-  const [clock, setClock] = useState('');
   const videoRefs = useRef<(HTMLVideoElement | null)[]>([]);
+  // Clips are mounted only after hydration, once this visit's project is
+  // known, so the server-side default clips are never downloaded.
+  const [mounted, setMounted] = useState(false);
+  // Photos too: the stage is far below the fold, and the server-side default
+  // photos would otherwise be fetched and then replaced by this visit's pick.
+  const [hydrated, setHydrated] = useState(false);
+  const [near, setNear] = useState(false);
   const posRef = useRef(0);
 
   useEffect(() => {
@@ -104,11 +113,8 @@ export function SiteJourney() {
     setScenes(route);
     setPhotos(route.map((scene) => pickPhoto(scene.type, 'journey')));
     setObject(currentSiteObject());
-    const tick = () =>
-      setClock(new Date().toLocaleTimeString('ru-RU', { timeZone: 'Europe/Moscow' }));
-    tick();
-    const timer = window.setInterval(tick, 1000);
-    return () => window.clearInterval(timer);
+    setMounted(footageAllowed());
+    setHydrated(true);
   }, []);
 
   useEffect(() => {
@@ -124,6 +130,8 @@ export function SiteJourney() {
       const rect = el.getBoundingClientRect();
       const scrollable = rect.height - window.innerHeight;
       setProgress(scrollable > 0 ? clamp(-rect.top / scrollable) : 0);
+      // Start fetching footage only when the stage is about to come in.
+      setNear(rect.top < window.innerHeight * 1.5 && rect.bottom > -window.innerHeight);
     };
     const onScroll = () => {
       if (!frame) frame = requestAnimationFrame(update);
@@ -204,7 +212,7 @@ export function SiteJourney() {
               className="aspect-video w-full object-cover"
             />
             <div className="p-5">
-              <div className="eyebrow text-amber-600">{scene.place}</div>
+              <div className="eyebrow text-amber-700">{scene.place}</div>
               <h3 className="mt-2 text-xl font-bold">{scene.title}</h3>
             </div>
           </a>
@@ -252,29 +260,34 @@ export function SiteJourney() {
               {/* "Live" layer: a handheld camera drift, a slow push-in, cloud
                   shadows and light flicker over the frame. */}
               <div className="journey-handheld absolute inset-0">
-                <img
-                  src={photos[i]}
-                  alt=""
-                  loading={i < 2 ? 'eager' : 'lazy'}
-                  className="journey-push absolute inset-0 h-full w-full object-cover"
-                />
+                {hydrated && (
+                  <Image
+                    src={photos[i]!}
+                    alt=""
+                    fill
+                    sizes="100vw"
+                    className="journey-push object-cover"
+                  />
+                )}
                 {/* Real footage over the photo: people and machines at work. */}
-                <video
-                  key={object.clips[scene.stop]}
-                  ref={(el) => {
-                    videoRefs.current[i] = el;
-                  }}
-                  className="journey-push absolute inset-0 h-full w-full object-cover"
-                  muted
-                  loop
-                  playsInline
-                  // Load a clip fully only when the camera gets close to it.
-                  preload={pos > i - 1.5 ? 'auto' : 'metadata'}
-                  poster={`/video/${object.clips[scene.stop]}.jpg`}
-                >
-                  <source src={`/video/${object.clips[scene.stop]}.webm`} type="video/webm" />
-                  <source src={`/video/${object.clips[scene.stop]}.mp4`} type="video/mp4" />
-                </video>
+                {mounted && (
+                  <video
+                    key={object.clips[scene.stop]}
+                    ref={(el) => {
+                      videoRefs.current[i] = el;
+                    }}
+                    className="journey-push absolute inset-0 h-full w-full object-cover"
+                    muted
+                    loop
+                    playsInline
+                    // Load a clip fully only when the camera gets close to it.
+                    preload={near && pos > i - 1.5 ? 'auto' : 'none'}
+                    poster={`/video/${object.clips[scene.stop]}.webp`}
+                  >
+                    <source src={`/video/${object.clips[scene.stop]}.webm`} type="video/webm" />
+                    <source src={`/video/${object.clips[scene.stop]}.mp4`} type="video/mp4" />
+                  </video>
+                )}
                 <div className="journey-clouds absolute inset-0" />
                 <div className="journey-flicker absolute inset-0" />
               </div>
@@ -317,7 +330,7 @@ export function SiteJourney() {
                 Онлайн
               </span>
               <span className="hidden sm:inline">Камера {String(index + 1).padStart(2, '0')}</span>
-              <span>{clock}</span>
+              <LiveClock />
             </div>
           </div>
 

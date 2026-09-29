@@ -1,3 +1,4 @@
+import dynamic from 'next/dynamic';
 import { prisma } from '@specai/database';
 import { Button } from '@specai/ui';
 import { AGENT_PROFILES } from '@specai/shared';
@@ -9,13 +10,16 @@ import { Icon, type IconName } from '@/components/Icon';
 import { IntroSplash } from '@/components/IntroSplash';
 import { MachinePhoto } from '@/components/MachinePhoto';
 import { Reveal } from '@/components/Reveal';
-import { ShiftStory } from '@/components/ShiftStory';
-import { SiteJourney } from '@/components/SiteJourney';
-import { TaskWizard } from '@/components/TaskWizard';
 import { TiltCard } from '@/components/TiltCard';
 import type { MachineType } from '@/lib/machinePhotos';
 import { pluralizeRu } from '@/lib/pluralize';
 import { SITE } from '@/lib/site';
+
+// Big interactive blocks below the fold: separate chunks, so the browser
+// hydrates them in their own short tasks instead of one long one.
+const SiteJourney = dynamic(() => import('@/components/SiteJourney').then((m) => m.SiteJourney));
+const ShiftStory = dynamic(() => import('@/components/ShiftStory').then((m) => m.ShiftStory));
+const TaskWizard = dynamic(() => import('@/components/TaskWizard').then((m) => m.TaskWizard));
 
 const SERVICES: {
   icon: IconName;
@@ -256,11 +260,12 @@ export default async function HomePage() {
         </div>
       </section>
 
-      <section className="depth -mt-12 grid grid-cols-2 overflow-hidden rounded-3xl border border-slate-200 bg-white lg:grid-cols-4">
-        {stats.map((stat, index) => (
-          <Reveal
+      {/* Right under the hero, so no entrance effect: it must read at rest.
+          The numbers themselves count up. */}
+      <section className="-mt-12 grid grid-cols-2 overflow-hidden rounded-3xl border border-slate-200 bg-white lg:grid-cols-4">
+        {stats.map((stat) => (
+          <div
             key={stat.label}
-            delay={index * 80}
             className="border-slate-200 p-5 sm:p-7 [&:not(:last-child)]:border-r max-lg:[&:nth-child(2)]:border-r-0 max-lg:[&:nth-child(-n+2)]:border-b"
           >
             <div className="whitespace-nowrap text-2xl font-extrabold tracking-tight sm:text-4xl">
@@ -269,7 +274,7 @@ export default async function HomePage() {
               {stat.suffix}
             </div>
             <div className="mt-1 text-sm text-slate-500">{stat.label}</div>
-          </Reveal>
+          </div>
         ))}
       </section>
 
@@ -292,7 +297,7 @@ export default async function HomePage() {
 
       <section className="depth">
         <Reveal>
-          <div className="eyebrow text-amber-600">01 — Техника и цены</div>
+          <div className="eyebrow text-amber-700">Техника и цены</div>
           <div className="mt-3 flex flex-wrap items-end justify-between gap-4">
             <h2 className="max-w-2xl text-4xl font-extrabold tracking-[-0.03em] sm:text-5xl">
               Цена видна сразу, без скрытых доплат
@@ -352,7 +357,7 @@ export default async function HomePage() {
                         </span>
                         <Icon
                           name="arrow"
-                          className="h-5 w-5 text-amber-600 transition group-hover:translate-x-1"
+                          className="h-5 w-5 text-amber-700 transition group-hover:translate-x-1"
                         />
                       </div>
                     </div>
@@ -387,7 +392,7 @@ export default async function HomePage() {
       <section className="grid gap-10 lg:grid-cols-12">
         <div className="lg:sticky lg:top-28 lg:col-span-5 lg:self-start">
           <Reveal>
-            <div className="eyebrow text-amber-600">02 — Почему мы</div>
+            <div className="eyebrow text-amber-700">Почему мы</div>
             <h2 className="mt-3 text-4xl font-extrabold tracking-[-0.03em] sm:text-5xl">
               Своя техника и свои машинисты
             </h2>
@@ -401,7 +406,7 @@ export default async function HomePage() {
           {ADVANTAGES.map((item, index) => (
             <Reveal key={item.title} delay={index * 80}>
               <div className="group flex items-start gap-5 border-b border-slate-200 pb-6">
-                <span className="font-mono text-sm text-amber-600">0{index + 1}</span>
+                <span className="font-mono text-sm text-amber-700">0{index + 1}</span>
                 <div>
                   <h3 className="text-2xl font-bold tracking-tight transition group-hover:text-amber-600 sm:text-3xl">
                     {item.title}
@@ -418,7 +423,7 @@ export default async function HomePage() {
         <div className="hero-grid opacity-40" aria-hidden />
         <div className="relative flex flex-col items-start gap-8 lg:flex-row lg:items-center">
           <Reveal className="flex-1">
-            <div className="eyebrow text-amber-400">03 — Искусственный интеллект</div>
+            <div className="eyebrow text-amber-400">Искусственный интеллект</div>
             <h2 className="mt-3 text-4xl font-extrabold tracking-[-0.03em] sm:text-5xl">
               Команда ИИ-агентов
             </h2>
@@ -460,7 +465,7 @@ export default async function HomePage() {
       <section className="grid gap-10 lg:grid-cols-12">
         <div className="lg:sticky lg:top-28 lg:col-span-5 lg:self-start">
           <Reveal>
-            <div className="eyebrow text-amber-600">04 — Как это работает</div>
+            <div className="eyebrow text-amber-700">Как это работает</div>
             <h2 className="mt-3 text-4xl font-extrabold tracking-[-0.03em] sm:text-5xl">
               Четыре шага до техники на объекте
             </h2>

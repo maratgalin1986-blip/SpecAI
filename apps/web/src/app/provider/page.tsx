@@ -11,6 +11,7 @@ import { SITE } from '@/lib/site';
 import { Pagination } from '@/components/Pagination';
 import { parsePage, totalPagesFor } from '@/lib/pagination';
 import { CinemaLayer } from '@/components/CinemaHero';
+import { Icon, type IconName } from '@/components/Icon';
 
 export const dynamic = 'force-dynamic';
 export const metadata: Metadata = {
@@ -18,24 +19,24 @@ export const metadata: Metadata = {
   description: `Сдавайте спецтехнику в аренду через ${SITE.name}: заявки клиентов, бронирования, ИИ-помощник.`,
 };
 
-const PROVIDER_BENEFITS = [
+const PROVIDER_BENEFITS: { icon: IconName; title: string; text: string }[] = [
   {
-    icon: '📥',
+    icon: 'inbox',
     title: 'Заявки клиентов',
     text: 'Клиенты публикуют задачи — вы предлагаете свою технику и цену.',
   },
   {
-    icon: '🗓️',
+    icon: 'calendar',
     title: 'Бронирования онлайн',
     text: 'Подтверждайте брони и следите за загрузкой парка в одном кабинете.',
   },
   {
-    icon: '🤖',
+    icon: 'spark',
     title: 'ИИ заполнит карточку',
     text: 'Вставьте текст из паспорта техники — ИИ разложит характеристики по полям.',
   },
   {
-    icon: '💸',
+    icon: 'tag',
     title: 'Бесплатное размещение',
     text: 'Регистрация и размещение техники ничего не стоят.',
   },
@@ -65,7 +66,7 @@ function ProviderLanding({ signedIn }: { signedIn: boolean }) {
             <>
               <a
                 href="/register"
-                className="rounded-md bg-amber-600 px-6 py-3 font-semibold text-white hover:bg-amber-500"
+                className="rounded-md bg-amber-500 px-6 py-3 font-semibold text-slate-950 hover:bg-amber-400"
               >
                 Зарегистрироваться как поставщик
               </a>
@@ -82,8 +83,10 @@ function ProviderLanding({ signedIn }: { signedIn: boolean }) {
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {PROVIDER_BENEFITS.map((benefit) => (
           <Card key={benefit.title}>
-            <div className="text-3xl">{benefit.icon}</div>
-            <h2 className="mt-2 font-semibold">{benefit.title}</h2>
+            <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-slate-900 text-amber-400">
+              <Icon name={benefit.icon} className="h-6 w-6" />
+            </span>
+            <h2 className="mt-4 font-semibold">{benefit.title}</h2>
             <p className="mt-1 text-sm text-slate-600">{benefit.text}</p>
           </Card>
         ))}

@@ -126,7 +126,7 @@ export function InstallPrompt() {
         type="button"
         onClick={dismiss}
         aria-label="Закрыть"
-        className="rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+        className="flex h-9 w-9 items-center justify-center rounded-md text-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700"
       >
         ×
       </button>

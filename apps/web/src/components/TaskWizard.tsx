@@ -246,7 +246,7 @@ export function TaskWizard() {
                     </span>
                   </div>
                 )}
-                <div className="eyebrow text-amber-600">Рекомендуем</div>
+                <div className="eyebrow text-amber-700">Рекомендуем</div>
                 <h3 className="mt-2 text-2xl font-extrabold tracking-tight">{task.machine}</h3>
                 <dl className="mt-4 divide-y divide-slate-200 rounded-2xl border border-slate-200 text-sm">
                   {[

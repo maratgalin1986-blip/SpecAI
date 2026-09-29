@@ -114,7 +114,7 @@ export default async function LandingPage({ params }: { params: { slug: string }
             <div className="mt-6 flex flex-wrap gap-3">
               <a
                 href={SITE.phoneHref}
-                className="rounded-md bg-amber-600 px-5 py-3 font-semibold hover:bg-amber-500"
+                className="rounded-md bg-amber-500 px-5 py-3 font-semibold hover:bg-amber-400 text-slate-950"
               >
                 {SITE.phone}
               </a>
@@ -122,7 +122,7 @@ export default async function LandingPage({ params }: { params: { slug: string }
                 href={SITE.whatsappHref}
                 target="_blank"
                 rel="noopener"
-                className="rounded-md bg-emerald-600 px-5 py-3 font-semibold hover:bg-emerald-500"
+                className="rounded-md bg-emerald-700 px-5 py-3 font-semibold hover:bg-emerald-600"
               >
                 Написать в WhatsApp
               </a>

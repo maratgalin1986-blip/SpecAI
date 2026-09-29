@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { CinemaVideo } from '@/components/CinemaVideo';
 import { SITE } from '@/lib/site';
 
 // Opening titles of the home page, about 3 seconds: a drone shot descends over
@@ -15,7 +16,9 @@ import { SITE } from '@/lib/site';
 const SEEN_KEY = 'sp16_intro_seen';
 const DURATION_MS = 3600;
 
-const HIDE_IF_SEEN = `try{if(sessionStorage.getItem('${SEEN_KEY}')||matchMedia('(prefers-reduced-motion: reduce)').matches){document.getElementById('intro').hidden=true}}catch(e){}`;
+// `?intro=0` in the address skips the titles too (ad landings, QA, links
+// sent to someone who has already seen them).
+const HIDE_IF_SEEN = `try{if(sessionStorage.getItem('${SEEN_KEY}')||/[?&]intro=0/.test(location.search)||matchMedia('(prefers-reduced-motion: reduce)').matches){document.getElementById('intro').hidden=true}}catch(e){}`;
 
 export function IntroSplash() {
   const [done, setDone] = useState(false);
@@ -52,18 +55,11 @@ export function IntroSplash() {
         role="presentation"
         suppressHydrationWarning
       >
-        <video
-          className="intro-drone absolute inset-0 h-full w-full object-cover"
-          autoPlay
-          muted
-          playsInline
-          preload="auto"
-          poster="/video/site-aerial.jpg"
-          aria-hidden
-        >
-          <source src="/video/site-aerial.webm" type="video/webm" />
-          <source src="/video/site-aerial.mp4" type="video/mp4" />
-        </video>
+        {/* The descent moves the frame and the footage together; the footage
+            is fetched only for visitors who actually get the titles. */}
+        <div className="intro-drone absolute inset-0">
+          <CinemaVideo clip="site-aerial" priority className="absolute inset-0 h-full w-full" />
+        </div>
         <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-black/10 to-black/70" />
         <div className="journey-scanlines pointer-events-none absolute inset-0 opacity-40" />
 

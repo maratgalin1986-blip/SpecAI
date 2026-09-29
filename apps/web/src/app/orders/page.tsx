@@ -99,7 +99,7 @@ export default async function OrdersPage({ searchParams }: { searchParams: Order
                 aria-current={filter.value === status ? 'page' : undefined}
                 className={
                   filter.value === status
-                    ? 'rounded-full bg-amber-600 px-3 py-1 text-sm font-medium text-white'
+                    ? 'rounded-full bg-amber-500 px-3 py-1 text-sm font-medium text-slate-950'
                     : 'rounded-full border border-slate-300 bg-white px-3 py-1 text-sm text-slate-700 hover:border-amber-400'
                 }
               >

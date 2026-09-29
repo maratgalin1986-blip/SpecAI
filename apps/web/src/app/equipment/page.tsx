@@ -185,7 +185,7 @@ export default async function EquipmentCatalogPage({
       <CinemaHero
         eyebrow={`Каталог · ${SITE.city} и Татарстан`}
         title="Спецтехника в аренду"
-        clips={['excavator-truck', 'site-aerial', 'city-cranes']}
+        clips={['site-aerial', 'excavator-truck', 'city-cranes']}
         camera={2}
       >
         <p>
@@ -263,6 +263,7 @@ export default async function EquipmentCatalogPage({
         <input
           type="checkbox"
           id="catalog-more-filters"
+          aria-label="Показать все фильтры"
           className="peer sr-only"
           defaultChecked={hasSecondaryFilters}
         />
@@ -343,7 +344,7 @@ export default async function EquipmentCatalogPage({
       {equipment.length === 0 ? (
         <div className="grid gap-6 lg:grid-cols-2">
           <div className="flex flex-col justify-center gap-3 rounded-3xl border border-slate-200 bg-white p-8">
-            <div className="eyebrow text-amber-600">Ничего не нашлось</div>
+            <div className="eyebrow text-amber-700">Ничего не нашлось</div>
             <h2 className="text-2xl font-bold tracking-tight">
               {hasFilters ? 'По этим фильтрам техника не найдена' : 'Каталог пополняется'}
             </h2>

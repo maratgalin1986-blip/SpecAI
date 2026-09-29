@@ -1,11 +1,14 @@
 'use client';
 
 import { useEffect, useState, type ReactNode } from 'react';
+import { CinemaVideo } from '@/components/CinemaVideo';
+import { LiveClock } from '@/components/LiveClock';
 
-// The film-style header of an inner page: a looping clip of real footage, a
-// slow push-in, scanlines and grain, a camera HUD (● ОНЛАЙН, camera number,
-// Moscow time) and a title that is revealed like opening credits.
-// `clips` are names in public/video; one is picked per visit.
+// The film-style header of an inner page: a looping clip of real footage
+// (poster frame first, see CinemaVideo), a slow push-in, scanlines and grain,
+// a camera HUD (● ОНЛАЙН, camera number, Moscow time) and a title that is
+// revealed like opening credits. `clips` are names in public/video; one is
+// picked per visit.
 
 export function CinemaHero({
   eyebrow,
@@ -24,15 +27,9 @@ export function CinemaHero({
   compact?: boolean;
 }) {
   const [clip, setClip] = useState(clips[0]!);
-  const [clock, setClock] = useState('');
 
   useEffect(() => {
     setClip(clips[Math.floor(Math.random() * clips.length)]!);
-    const tick = () =>
-      setClock(new Date().toLocaleTimeString('ru-RU', { timeZone: 'Europe/Moscow' }));
-    tick();
-    const timer = window.setInterval(tick, 1000);
-    return () => window.clearInterval(timer);
   }, []);
 
   return (
@@ -41,19 +38,12 @@ export function CinemaHero({
         compact ? 'min-h-[260px]' : 'min-h-[360px] sm:min-h-[420px]'
       }`}
     >
-      <video
-        key={clip}
-        className="journey-push absolute inset-0 -z-10 h-full w-full object-cover"
-        autoPlay
-        muted
-        loop
-        playsInline
-        poster={`/video/${clip}.jpg`}
-        aria-hidden
-      >
-        <source src={`/video/${clip}.webm`} type="video/webm" />
-        <source src={`/video/${clip}.mp4`} type="video/mp4" />
-      </video>
+      <CinemaVideo
+        clip={clip}
+        poster={clips[0]}
+        priority
+        className="journey-push absolute inset-0 -z-10 h-full w-full"
+      />
       <div className="absolute inset-0 -z-10 bg-gradient-to-r from-slate-950/85 via-slate-950/45 to-transparent" />
       <div className="absolute inset-0 -z-10 bg-gradient-to-t from-slate-950/80 via-transparent to-slate-950/40" />
       <div className="journey-scanlines pointer-events-none absolute inset-0 -z-10 opacity-50" />
@@ -67,7 +57,7 @@ export function CinemaHero({
           </span>
           <span className="hidden sm:inline">Камера {String(camera).padStart(2, '0')}</span>
         </span>
-        <span className="tabular-nums">{clock}</span>
+        <LiveClock className="tabular-nums" />
       </div>
 
       <div className={`px-6 sm:px-10 ${compact ? 'pb-8 pt-10' : 'pb-10 pt-14 sm:pt-20'}`}>
@@ -92,17 +82,7 @@ export function CinemaHero({
 export function CinemaBackdrop({ clip }: { clip: string }) {
   return (
     <div className="pointer-events-none fixed inset-0 -z-10 overflow-hidden" aria-hidden>
-      <video
-        className="journey-push h-full w-full object-cover"
-        autoPlay
-        muted
-        loop
-        playsInline
-        poster={`/video/${clip}.jpg`}
-      >
-        <source src={`/video/${clip}.webm`} type="video/webm" />
-        <source src={`/video/${clip}.mp4`} type="video/mp4" />
-      </video>
+      <CinemaVideo clip={clip} className="journey-push absolute inset-0 h-full w-full" />
       <div className="absolute inset-0 bg-slate-950/70 backdrop-blur-[2px]" />
       <div className="journey-scanlines absolute inset-0 opacity-40" />
     </div>
@@ -120,19 +100,12 @@ export function CinemaLayer({ clips }: { clips: string[] }) {
   }, []);
   return (
     <>
-      <video
-        key={clip}
-        className="journey-push absolute inset-0 -z-10 h-full w-full object-cover"
-        autoPlay
-        muted
-        loop
-        playsInline
-        poster={`/video/${clip}.jpg`}
-        aria-hidden
-      >
-        <source src={`/video/${clip}.webm`} type="video/webm" />
-        <source src={`/video/${clip}.mp4`} type="video/mp4" />
-      </video>
+      <CinemaVideo
+        clip={clip}
+        poster={clips[0]}
+        priority
+        className="journey-push absolute inset-0 -z-10 h-full w-full"
+      />
       <div className="absolute inset-0 -z-10 bg-gradient-to-r from-slate-950/90 via-slate-950/60 to-slate-950/20" />
       <div className="journey-scanlines pointer-events-none absolute inset-0 -z-10 opacity-50" />
       <div className="cine-letterbox pointer-events-none absolute inset-0" aria-hidden />

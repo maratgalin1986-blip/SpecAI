@@ -17,7 +17,7 @@ export function TrustBadges({ dark = false }: { dark?: boolean }) {
             dark ? 'bg-white/5 ring-1 ring-white/10' : 'border border-slate-200 bg-white'
           }`}
         >
-          <span className={`mt-0.5 shrink-0 ${dark ? 'text-amber-400' : 'text-amber-600'}`}>
+          <span className={`mt-0.5 shrink-0 ${dark ? 'text-amber-400' : 'text-amber-700'}`}>
             <Icon name={badge.icon} className="h-6 w-6" />
           </span>
           <div className="min-w-0">
