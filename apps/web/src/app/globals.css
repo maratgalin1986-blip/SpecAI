@@ -179,6 +179,35 @@ body {
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
 }
 
+/* ---- Scroll story: floating dust in the work light, blinking beacon ------ */
+
+.story-dust {
+  background-image:
+    radial-gradient(1px 1px at 20% 30%, rgba(253, 230, 138, 0.5), transparent),
+    radial-gradient(1px 1px at 70% 20%, rgba(253, 230, 138, 0.4), transparent),
+    radial-gradient(1.5px 1.5px at 45% 60%, rgba(253, 230, 138, 0.3), transparent),
+    radial-gradient(1px 1px at 85% 55%, rgba(253, 230, 138, 0.4), transparent),
+    radial-gradient(1px 1px at 10% 70%, rgba(253, 230, 138, 0.3), transparent);
+  background-size: 400px 300px;
+  animation: dust 30s linear infinite;
+}
+
+@keyframes dust {
+  to {
+    background-position: 400px -300px;
+  }
+}
+
+.story-beacon {
+  animation: beacon 1.2s ease-in-out infinite;
+}
+
+@keyframes beacon {
+  50% {
+    opacity: 0.2;
+  }
+}
+
 /* ---- Rotating 3D cube (agents section) ----------------------------------- */
 
 .cube-scene {
@@ -246,6 +275,8 @@ body {
   .text-gradient,
   .cube,
   .marquee,
+  .story-dust,
+  .story-beacon,
   .float-in {
     animation: none;
   }

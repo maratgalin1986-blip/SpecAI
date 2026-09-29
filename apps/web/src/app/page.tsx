@@ -7,6 +7,7 @@ import { Faq } from '@/components/Faq';
 import { Hero3D } from '@/components/Hero3D';
 import { Icon, type IconName } from '@/components/Icon';
 import { Reveal } from '@/components/Reveal';
+import { ShiftStory } from '@/components/ShiftStory';
 import { TiltCard } from '@/components/TiltCard';
 import { pluralizeRu } from '@/lib/pluralize';
 import { SITE } from '@/lib/site';
@@ -293,6 +294,8 @@ export default async function HomePage() {
           })}
         </div>
       </section>
+
+      <ShiftStory />
 
       <section className="grid gap-10 lg:grid-cols-12">
         <div className="lg:sticky lg:top-28 lg:col-span-5 lg:self-start">
