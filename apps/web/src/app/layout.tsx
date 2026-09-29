@@ -8,6 +8,7 @@ import { SiteHeader } from '@/components/SiteHeader';
 import { SiteFooter } from '@/components/SiteFooter';
 import { AgentChatWidget } from '@/components/AgentChatWidget';
 import { YandexMetrika } from '@/components/YandexMetrika';
+import { MarketingTracker } from '@/components/MarketingTracker';
 import { MessengerButtons } from '@/components/MessengerButtons';
 import { SITE } from '@/lib/site';
 import { siteUrl } from '@/lib/siteUrl';
@@ -105,6 +106,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           <InstallPrompt />
           <TelegramMiniApp />
           <YandexMetrika />
+          <MarketingTracker />
         </Providers>
       </body>
     </html>

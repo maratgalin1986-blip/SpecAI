@@ -611,3 +611,114 @@ html {
     opacity: 1;
   }
 }
+
+/* Opening titles (IntroSplash): ~3.6 s in total. The drone descends over the
+   site, the titles and the partner card come in, then the camera dives into
+   the page. All timings are CSS, so it ends even before hydration. */
+.intro {
+  animation: intro-out 0.55s cubic-bezier(0.7, 0, 0.84, 0) 3.05s forwards;
+}
+@keyframes intro-out {
+  to {
+    opacity: 0;
+    transform: scale(1.35);
+    visibility: hidden;
+    pointer-events: none;
+  }
+}
+.intro-drone {
+  transform-origin: 50% 60%;
+  animation: intro-drone 3.6s cubic-bezier(0.25, 0.1, 0.25, 1) both;
+}
+@keyframes intro-drone {
+  from {
+    transform: scale(1.55) rotate(-4deg);
+    filter: blur(2px) brightness(0.7);
+  }
+  to {
+    transform: scale(1.02) rotate(0deg);
+    filter: blur(0) brightness(1);
+  }
+}
+.intro-presents {
+  animation: intro-rise 0.7s ease-out 0.15s both;
+}
+.intro-presents-2 {
+  animation: intro-rise 0.7s ease-out 0.45s both;
+}
+@keyframes intro-rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+    letter-spacing: 0.6em;
+  }
+}
+.intro-card-wrap {
+  perspective: 1200px;
+}
+.intro-card {
+  background:
+    radial-gradient(120% 90% at 100% 0%, rgba(245, 158, 11, 0.45), transparent 55%),
+    linear-gradient(135deg, #111827 0%, #0b0f19 55%, #1f2937 100%);
+  transform-style: preserve-3d;
+  animation: intro-card 1.5s cubic-bezier(0.2, 0.8, 0.2, 1) 0.8s both;
+}
+@keyframes intro-card {
+  from {
+    opacity: 0;
+    transform: translateY(40px) rotateY(-75deg) rotateX(18deg) scale(0.8);
+  }
+  60% {
+    opacity: 1;
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) rotateY(-8deg) rotateX(6deg) scale(1);
+  }
+}
+.intro-card-shine {
+  background: linear-gradient(
+    115deg,
+    transparent 30%,
+    rgba(255, 255, 255, 0.22) 45%,
+    transparent 60%
+  );
+  background-size: 250% 100%;
+  animation: intro-shine 1.4s ease-in-out 1.6s both;
+}
+@keyframes intro-shine {
+  from {
+    background-position: 120% 0;
+  }
+  to {
+    background-position: -60% 0;
+  }
+}
+.intro-chip {
+  background: linear-gradient(135deg, #fcd34d, #b45309);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.25);
+}
+.intro-rec {
+  animation: rec 1s steps(2) infinite;
+}
+/* The hero footage starts from above, like a drone coming down. */
+.hero-drone {
+  transform-origin: 50% 40%;
+  animation: hero-drone 7s cubic-bezier(0.25, 0.1, 0.25, 1) both;
+}
+@keyframes hero-drone {
+  from {
+    transform: scale(1.3) translateY(-3%);
+  }
+  to {
+    transform: scale(1);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .intro {
+    display: none;
+  }
+  .hero-drone {
+    animation: none;
+  }
+}

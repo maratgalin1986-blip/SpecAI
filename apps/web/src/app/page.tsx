@@ -6,6 +6,7 @@ import { CountUp } from '@/components/CountUp';
 import { Faq } from '@/components/Faq';
 import { HeroPhotos } from '@/components/HeroPhotos';
 import { Icon, type IconName } from '@/components/Icon';
+import { IntroSplash } from '@/components/IntroSplash';
 import { MachinePhoto } from '@/components/MachinePhoto';
 import { Reveal } from '@/components/Reveal';
 import { ShiftStory } from '@/components/ShiftStory';
@@ -208,6 +209,7 @@ export default async function HomePage() {
 
   return (
     <div className="flex flex-col gap-24">
+      <IntroSplash />
       <section className="depth-exit relative -mt-2 min-h-[640px] overflow-hidden rounded-[2rem] bg-slate-950 text-white shadow-2xl lg:min-h-[680px]">
         <HeroPhotos />
         <div className="hero-parallax-text relative grid lg:grid-cols-2">
