@@ -176,6 +176,27 @@ export function rentalDays(start: Date, end: Date): number | null {
   return Math.max(1, Math.ceil((end.getTime() - start.getTime()) / 86_400_000));
 }
 
+/**
+ * Число дней брони, обе даты включительно (как считает сервер): 1–1 марта — 1 день,
+ * 1–3 марта — 3 дня. null, если конец раньше начала.
+ */
+export function bookingDays(start: Date, end: Date): number | null {
+  const from = startOfDay(start);
+  const to = startOfDay(end);
+  if (to < from) return null;
+  return Math.round((to.getTime() - from.getTime()) / 86_400_000) + 1;
+}
+
+/**
+ * Цена смены (8 ч) для введённой часовой ставки: «2500» → «20000». Пустой или
+ * неверный ввод даёт «». Подставляется при каждом вводе, пока смену не меняли вручную.
+ */
+export function suggestShiftRate(hourly: string): string {
+  const value = Number(hourly.replace(',', '.'));
+  if (!hourly.trim() || !Number.isFinite(value) || value <= 0) return '';
+  return String(Math.round(value * 8 * 100) / 100);
+}
+
 /** Дата в полночь локального времени — для сравнения дат без учёта времени. */
 export function startOfDay(date: Date): Date {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate());

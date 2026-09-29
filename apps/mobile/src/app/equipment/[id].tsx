@@ -9,11 +9,11 @@ import {
   EQUIPMENT_STATUS_LABELS,
   SPEC_LABELS,
   addDays,
+  bookingDays,
   formatMoney,
   formatRate,
   formatSpecValue,
   pluralizeRu,
-  rentalDays,
   startOfDay,
   toIsoDate,
 } from '@/lib/format';
@@ -50,21 +50,22 @@ export default function EquipmentDetailScreen() {
     void load();
   }, [load]);
 
-  const days = rentalDays(startDate, endDate);
+  // Обе даты включительно, как на сервере: бронь на один день — начало и конец в один день.
+  const days = bookingDays(startDate, endDate);
   const estimate = item && days ? Number(item.dailyRate) * days : null;
 
   const handleStartChange = (date: Date) => {
     const next = startOfDay(date);
     setStartDate(next);
-    // Окончание всегда позже начала — сдвигаем, если пользователь выбрал более позднее начало.
-    if (endDate <= next) setEndDate(addDays(next, 1));
+    // Окончание не раньше начала — сдвигаем, если пользователь выбрал более позднее начало.
+    if (endDate < next) setEndDate(next);
   };
 
   const handleBook = async () => {
     setFormError(null);
     if (!item) return;
     if (!days) {
-      setFormError('Дата окончания должна быть позже даты начала');
+      setFormError('Дата окончания не может быть раньше даты начала');
       return;
     }
     setSubmitting(true);
@@ -191,7 +192,7 @@ export default function EquipmentDetailScreen() {
               <DateField
                 label="Окончание"
                 value={endDate}
-                minimumDate={addDays(startDate, 1)}
+                minimumDate={startDate}
                 onChange={(date) => setEndDate(startOfDay(date))}
               />
             </View>
