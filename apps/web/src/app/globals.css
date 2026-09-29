@@ -8,6 +8,75 @@ body {
   overflow-x: clip;
 }
 
+/* In-page jumps (#podbor, #callback) glide instead of teleporting. */
+html {
+  scroll-behavior: smooth;
+}
+
+/* ---- «Воронка»: page-to-page vortex transition ---------------------------
+   Cross-document View Transitions (Chromium 126+, Safari 18.2+): the old page
+   is sucked into the centre, turning and blurring, and the new page rises out
+   of the depth. Browsers without support simply navigate. The header keeps
+   its own name so it stays put while the page swirls underneath. */
+
+@view-transition {
+  navigation: auto;
+}
+
+::view-transition-group(root) {
+  animation-duration: 0.75s;
+}
+
+::view-transition-old(root) {
+  animation: vortex-out 0.55s cubic-bezier(0.55, 0, 0.9, 0.4) both;
+  transform-origin: 50% 40vh;
+}
+
+::view-transition-new(root) {
+  animation: vortex-in 0.75s cubic-bezier(0.16, 1, 0.3, 1) 0.12s both;
+  transform-origin: 50% 40vh;
+}
+
+.site-header-vt {
+  view-transition-name: site-header;
+}
+
+::view-transition-group(site-header) {
+  animation-duration: 0.3s;
+  z-index: 10;
+}
+
+@keyframes vortex-out {
+  from {
+    opacity: 1;
+    transform: none;
+    filter: none;
+  }
+  to {
+    opacity: 0;
+    transform: perspective(1200px) translateZ(-600px) rotate(-9deg) scale(0.55);
+    filter: blur(10px) brightness(0.6);
+    border-radius: 48px;
+  }
+}
+
+@keyframes vortex-in {
+  from {
+    opacity: 0;
+    transform: perspective(1200px) translateZ(-900px) rotate(12deg) scale(0.35);
+    filter: blur(14px);
+  }
+  60% {
+    opacity: 1;
+    filter: blur(0);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+    filter: none;
+  }
+}
+
 /* ---- Hero backdrop: animated aurora + perspective grid ------------------ */
 
 .hero-backdrop {
@@ -120,6 +189,77 @@ body {
 
 .tilt-card:hover .tilt-glare {
   opacity: 1;
+}
+
+.tilt-glare {
+  z-index: 5;
+}
+
+/* On photo cards the glare is a white highlight, like light on glass. */
+.tilt-glare-light {
+  mix-blend-mode: soft-light;
+  background: radial-gradient(
+    circle at var(--gx) var(--gy),
+    rgba(255, 255, 255, 0.55),
+    transparent 50%
+  );
+}
+
+/* The photo inside a tilted card drifts closer on hover. */
+.tilt-zoom {
+  transition: transform 0.9s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.tilt-card:hover .tilt-zoom {
+  transform: scale(1.09) translate3d(calc(var(--ry) * -0.6px), calc(var(--rx) * 0.6px), 0);
+}
+
+/* Don't wobble a card while someone is typing into its form. */
+.tilt-card:focus-within {
+  transform: none;
+}
+
+/* ---- Hero depth: pointer parallax + scroll zoom -------------------------
+   HeroPhotos sets --hx/--hy (pointer, -1…1) and --hs (scroll, 0…1) on the
+   section. The photo moves against the pointer, the text with it. */
+
+.hero-parallax-photo {
+  transform: perspective(1400px)
+    translate3d(calc(var(--hx, 0) * -22px), calc(var(--hy, 0) * -14px + var(--hs, 0) * 90px), 0)
+    rotateY(calc(var(--hx, 0) * 1.6deg)) rotateX(calc(var(--hy, 0) * -1.2deg))
+    scale(calc(1 + var(--hs, 0) * 0.22));
+  transition: transform 0.35s cubic-bezier(0.2, 0.8, 0.2, 1);
+  will-change: transform;
+}
+
+.hero-parallax-text {
+  /* 2D on purpose: a 3D layer would rasterise the headline blurry. */
+  transform: translate(calc(var(--hx, 0) * 10px), calc(var(--hy, 0) * 6px - var(--hs, 0) * 60px));
+  opacity: calc(1 - var(--hs, 0) * 0.8);
+  transition: transform 0.35s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.hero-vignette {
+  background: radial-gradient(120% 90% at 60% 45%, transparent 55%, rgba(2, 6, 23, 0.55));
+}
+
+/* Machine page and wizard photos rise out of the depth when they appear. */
+.machine-hero-photo,
+.wizard-photo {
+  animation: emerge 1.1s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes emerge {
+  from {
+    opacity: 0;
+    transform: perspective(1000px) translateZ(-240px) rotateX(6deg);
+    filter: blur(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+    filter: none;
+  }
 }
 
 /* ---- Scroll reveal ------------------------------------------------------- */
@@ -320,6 +460,14 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  @view-transition {
+    navigation: none;
+  }
+  .machine-hero-photo,
+  .wizard-photo,
   .hero-backdrop,
   .hero-grid,
   .text-gradient,
@@ -339,7 +487,13 @@ body {
     transform: none;
     transition: none;
   }
-  .tilt-card {
+  .tilt-card,
+  .tilt-card:hover .tilt-zoom,
+  .hero-parallax-photo,
+  .hero-parallax-text {
     transform: none;
+  }
+  .hero-parallax-text {
+    opacity: 1;
   }
 }

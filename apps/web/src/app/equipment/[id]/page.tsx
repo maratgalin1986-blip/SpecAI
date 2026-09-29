@@ -7,10 +7,11 @@ import { EquipmentCard, categoryIcon } from '@/components/EquipmentCard';
 import { EstimateBox } from '@/components/EstimateBox';
 import { Icon } from '@/components/Icon';
 import { MachineGallery } from '@/components/MachineGallery';
+import { MachinePhoto } from '@/components/MachinePhoto';
 import {
   headlinePrices,
   keySpecs,
-  machinePhotoOf,
+  machineTypeOf,
   numericSpec,
   specChip,
   specEntries,
@@ -60,7 +61,7 @@ export default async function EquipmentDetailPage({ params }: { params: { id: st
   const chips = keySpecs(specs, 4).map(specChip);
   const { hour, shift } = headlinePrices(item);
   const hammerRate = numericSpec(specs, /гидромолот.*₽/i) ?? undefined;
-  const illustration = machinePhotoOf(item.category.name, item.name);
+  const illustration = machineTypeOf(item.category.name, item.name);
   const ownFleet = item.company.name === SITE.legalName;
   const averageRating = item.reviews.length
     ? item.reviews.reduce((sum, review) => sum + review.rating, 0) / item.reviews.length
@@ -172,10 +173,12 @@ export default async function EquipmentDetailPage({ params }: { params: { id: st
             <MachineGallery images={item.imageUrls} name={item.name} />
           ) : illustration ? (
             <figure className="relative aspect-[16/9] overflow-hidden rounded-3xl bg-slate-950">
-              <img
-                src={illustration}
+              <MachinePhoto
+                type={illustration}
                 alt={item.category.name}
-                className="h-full w-full object-cover"
+                priority
+                sizes="(min-width: 1024px) 720px, 100vw"
+                className="machine-hero-photo absolute inset-0"
               />
               <figcaption className="absolute bottom-3 left-4 rounded-full bg-slate-950/60 px-3 py-1 text-xs text-white/80 backdrop-blur">
                 Фото для примера — не эта машина

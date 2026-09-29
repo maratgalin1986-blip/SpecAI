@@ -3,6 +3,8 @@
 import { useState } from 'react';
 import { CallbackForm } from '@/components/CallbackForm';
 import { Icon, type IconName } from '@/components/Icon';
+import { MachinePhoto } from '@/components/MachinePhoto';
+import type { MachineType } from '@/lib/machinePhotos';
 
 // «Подобрать технику»: three quick questions → a recommended machine, a rough
 // price range from the price list and a callback form with the answers filled in.
@@ -14,6 +16,7 @@ const TASKS: {
   machine: string;
   rate?: number;
   landing?: string;
+  photo?: MachineType;
 }[] = [
   {
     id: 'dig',
@@ -22,6 +25,7 @@ const TASKS: {
     machine: 'Экскаватор-погрузчик',
     rate: 3000,
     landing: 'ekskavator-pogruzchik',
+    photo: 'backhoe',
   },
   {
     id: 'break',
@@ -30,6 +34,7 @@ const TASKS: {
     machine: 'Экскаватор-погрузчик с гидромолотом',
     rate: 3500,
     landing: 'ekskavator-pogruzchik',
+    photo: 'backhoe',
   },
   {
     id: 'lift',
@@ -38,6 +43,21 @@ const TASKS: {
     machine: 'Автокран',
     rate: 3500,
     landing: 'avtokran',
+    photo: 'crane',
+  },
+  {
+    id: 'kmu',
+    icon: 'crane',
+    label: 'Подъём и перевозка груза манипулятором',
+    machine: 'Манипулятор КМУ 7 т',
+    photo: 'kmu',
+  },
+  {
+    id: 'height',
+    icon: 'lift',
+    label: 'Работы на высоте',
+    machine: 'Автовышка АГП',
+    photo: 'agp',
   },
   {
     id: 'load',
@@ -46,6 +66,14 @@ const TASKS: {
     machine: 'Фронтальный погрузчик',
     rate: 3000,
     landing: 'frontalnyj-pogruzchik',
+    photo: 'loader',
+  },
+  {
+    id: 'compact',
+    icon: 'roller',
+    label: 'Уплотнение грунта и асфальта',
+    machine: 'Виброкаток',
+    photo: 'roller',
   },
   {
     id: 'utility',
@@ -54,6 +82,7 @@ const TASKS: {
     machine: 'Трактор МТЗ',
     rate: 2500,
     landing: 'traktor',
+    photo: 'tractor',
   },
   { id: 'other', icon: 'helmet', label: 'Другое — опишу сам', machine: 'Подберёт менеджер' },
 ];
@@ -140,7 +169,9 @@ export function TaskWizard() {
                   <button
                     key={item.id}
                     type="button"
-                    className={choice(task?.id === item.id)}
+                    className={`${choice(task?.id === item.id)} ${
+                      item.id === 'other' ? 'sm:col-span-2' : ''
+                    }`}
                     onClick={() => {
                       setTask(item);
                       setStep(1);
@@ -201,6 +232,20 @@ export function TaskWizard() {
           {step === 3 && task && (
             <div className="grid gap-6 xl:grid-cols-2">
               <div>
+                {task.photo && (
+                  <div className="wizard-photo relative mb-5 aspect-[16/9] overflow-hidden rounded-2xl bg-slate-950">
+                    <MachinePhoto
+                      key={task.photo}
+                      type={task.photo}
+                      slot="wizard"
+                      alt={task.machine}
+                      sizes="(min-width: 1280px) 360px, (min-width: 1024px) 560px, 100vw"
+                    />
+                    <span className="absolute bottom-2 right-3 text-[0.6rem] text-white/70">
+                      Фото для примера
+                    </span>
+                  </div>
+                )}
                 <div className="eyebrow text-amber-600">Рекомендуем</div>
                 <h3 className="mt-2 text-2xl font-extrabold tracking-tight">{task.machine}</h3>
                 <dl className="mt-4 divide-y divide-slate-200 rounded-2xl border border-slate-200 text-sm">

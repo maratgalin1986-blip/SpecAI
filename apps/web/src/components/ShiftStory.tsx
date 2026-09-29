@@ -1,13 +1,16 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import Image from 'next/image';
+import { MachinePhoto } from '@/components/MachinePhoto';
 
 // A cinematic, scroll-scrubbed "one shift" story: the section is several
 // screens tall, the scene stays pinned, and scrolling plays it like a video.
 // A HUD shows the shift clock, trench depth, excavated soil and the running
 // price. The numbers are an illustrative example of an 8-hour shift. The
 // scene is a pair of photos that cross-fade and slowly push in as you scroll.
+// On the way in the scene is a "portal": a small rounded window in the middle
+// of the screen that widens to full screen as the section scrolls up, so the
+// visitor dives into the scene before the story starts.
 
 const RATE = 3000; // ₽ per machine-hour, backhoe loader with an operator
 const SHIFT_HOURS = 8;
@@ -35,10 +38,13 @@ const phase = (p: number, from: number, to: number) => clamp((p - from) / (to - 
 export function ShiftStory() {
   const sectionRef = useRef<HTMLElement>(null);
   const [progress, setProgress] = useState(0);
+  const [enter, setEnter] = useState(0);
+  const [narrow, setNarrow] = useState(false);
 
   useEffect(() => {
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
       setProgress(1);
+      setEnter(1);
       return;
     }
     let frame = 0;
@@ -49,6 +55,12 @@ export function ShiftStory() {
       const rect = el.getBoundingClientRect();
       const scrollable = rect.height - window.innerHeight;
       setProgress(scrollable > 0 ? clamp(-rect.top / scrollable) : 0);
+      // Portal: opens while the section rises into view and finishes over
+      // the first tenth of the pinned story.
+      const rising = clamp(1 - rect.top / window.innerHeight);
+      const pinned = scrollable > 0 ? clamp(-rect.top / (scrollable * 0.1)) : 1;
+      setEnter(0.55 * rising + 0.45 * pinned);
+      setNarrow(window.innerWidth < 640);
     };
     const onScroll = () => {
       if (!frame) frame = requestAnimationFrame(update);
@@ -64,6 +76,15 @@ export function ShiftStory() {
   }, []);
 
   const p = progress;
+  // Portal: smoothstep, so the window starts small and settles softly.
+  const open = enter * enter * (3 - 2 * enter);
+  const closed = 1 - open;
+  const insetY = 28 * closed;
+  const insetX = (narrow ? 8 : 34) * closed;
+  const portal =
+    closed > 0.001
+      ? `inset(${insetY}% ${insetX}% ${insetY}% ${insetX}% round ${Math.round(48 * closed)}px)`
+      : 'none';
   const arrive = phase(p, 0.12, 0.35); // machine photo comes into light
   const dig = phase(p, 0.36, 0.46); // cross-fade to the trench
   const work = phase(p, 0.4, 0.84); // digging
@@ -86,36 +107,43 @@ export function ShiftStory() {
       className="relative ml-[calc(50%-50vw)] h-[420vh] w-screen"
       aria-label="Пример смены"
     >
-      <div className="sticky top-0 flex h-[100svh] flex-col overflow-hidden bg-[#07080a] text-white">
+      <div
+        className="sticky top-0 flex h-[100svh] flex-col overflow-hidden bg-[#07080a] text-white"
+        style={{ clipPath: portal, WebkitClipPath: portal }}
+      >
         {/* Photo scene: the machine arrives, then the trench deepens under
             the work lights. Both frames push in slowly as the story plays. */}
         <div className="absolute inset-0" aria-hidden>
-          <Image
-            src="/images/backhoe.jpg"
-            alt=""
-            fill
-            sizes="100vw"
-            className="object-cover"
+          <MachinePhoto
+            type="backhoe"
+            slot="story"
             style={{
-              opacity: 0.35 + 0.65 * arrive * (1 - dig),
-              transform: `scale(${1.02 + 0.06 * p})`,
+              opacity: Math.max(0.35 + 0.65 * arrive, 0.85 * closed) * (1 - dig),
+              transform: `scale(${1.02 + 0.06 * p + 0.35 * closed})`,
             }}
           />
-          <Image
-            src="/images/trench.jpg"
-            alt=""
-            fill
-            sizes="100vw"
-            className="object-cover"
+          <MachinePhoto
+            type="trench"
+            slot="story"
             style={{ opacity: dig, transform: `scale(${1.02 + 0.1 * work})` }}
           />
           <div className="absolute inset-0 bg-gradient-to-b from-[#07080a] via-[#07080a]/30 to-[#07080a]" />
           <div
             className="absolute inset-0 bg-[#07080a]"
-            style={{ opacity: 0.55 * (1 - arrive) + 0.35 * settle }}
+            style={{ opacity: 0.55 * (1 - arrive) * open + 0.35 * settle }}
           />
         </div>
         <div className="story-dust pointer-events-none absolute inset-0" aria-hidden />
+        {/* Glowing rim of the portal window; fades once it is full screen. */}
+        <div
+          className="pointer-events-none absolute z-20 ring-2 ring-inset ring-amber-400/70 shadow-[inset_0_0_60px_rgba(245,158,11,0.35)]"
+          style={{
+            inset: `${insetY}% ${insetX}%`,
+            borderRadius: 48 * closed,
+            opacity: closed > 0.001 ? Math.min(1, closed * 3) : 0,
+          }}
+          aria-hidden
+        />
 
         {/* Chapter nav */}
         <div className="relative z-10 mx-auto mt-20 flex w-full max-w-6xl items-center justify-between gap-4 px-4 sm:px-6">

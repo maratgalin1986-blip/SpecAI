@@ -1,4 +1,3 @@
-import Image from 'next/image';
 import { prisma } from '@specai/database';
 import { Button } from '@specai/ui';
 import { AGENT_PROFILES } from '@specai/shared';
@@ -7,10 +6,12 @@ import { CountUp } from '@/components/CountUp';
 import { Faq } from '@/components/Faq';
 import { HeroPhotos } from '@/components/HeroPhotos';
 import { Icon, type IconName } from '@/components/Icon';
+import { MachinePhoto } from '@/components/MachinePhoto';
 import { Reveal } from '@/components/Reveal';
 import { ShiftStory } from '@/components/ShiftStory';
 import { TaskWizard } from '@/components/TaskWizard';
 import { TiltCard } from '@/components/TiltCard';
+import type { MachineType } from '@/lib/machinePhotos';
 import { pluralizeRu } from '@/lib/pluralize';
 import { SITE } from '@/lib/site';
 
@@ -19,47 +20,82 @@ const SERVICES: {
   title: string;
   text: string;
   price?: string;
-  photo: string;
+  photo: MachineType;
 }[] = [
   {
     icon: 'excavator',
     title: 'Экскаваторы-погрузчики',
-    photo: '/images/backhoe.jpg',
+    photo: 'backhoe',
     text: 'JCB 4CX, CASE 570, Hidromek 102B, LGCE B877F — траншеи, котлованы, планировка.',
     price: 'от 3 000 ₽/ч',
   },
   {
+    icon: 'excavator',
+    title: 'Гусеничные экскаваторы',
+    photo: 'excavator',
+    text: 'Котлованы, карьеры и большие объёмы грунта — ковш под задачу.',
+    price: 'по запросу',
+  },
+  {
     icon: 'hammer',
     title: 'Гидромолот',
-    photo: '/images/trench.jpg',
+    photo: 'trench',
     text: 'Демонтаж, вскрытие асфальта и бетона, работа по мёрзлому грунту.',
     price: 'от 3 500 ₽/ч',
   },
   {
+    icon: 'hammer',
+    title: 'Колёсный экскаватор с гидромолотом',
+    photo: 'wheeled-excavator',
+    text: 'Дробление бетона и асфальта в городе — своим ходом, без трала.',
+    price: 'по запросу',
+  },
+  {
     icon: 'crane',
     title: 'Автокраны',
-    photo: '/images/crane.jpg',
+    photo: 'crane',
     text: 'До 32 т — монтаж конструкций, погрузка и подъём грузов.',
     price: 'от 3 500 ₽/ч',
   },
   {
+    icon: 'crane',
+    title: 'Манипулятор КМУ 7 т',
+    photo: 'kmu',
+    text: 'Погрузка, перевозка и разгрузка одной машиной: блоки, плиты, бытовки.',
+    price: 'по запросу',
+  },
+  {
+    icon: 'lift',
+    title: 'Автовышка АГП',
+    photo: 'agp',
+    text: 'Работы на высоте: фасады, кровля, освещение, вывески, обрезка деревьев.',
+    price: 'по запросу',
+  },
+  {
     icon: 'loader',
     title: 'Фронтальные погрузчики',
-    photo: '/images/loader.jpg',
+    photo: 'loader',
     text: 'Погрузка грунта, щебня и песка, уборка снега на объектах.',
     price: 'от 3 000 ₽/ч',
   },
   {
+    icon: 'roller',
+    title: 'Виброкаток',
+    photo: 'roller',
+    text: 'Уплотнение грунта, щебня и асфальта на дорогах и благоустройстве.',
+    price: 'по запросу',
+  },
+  {
     icon: 'tractor',
     title: 'Тракторы',
-    photo: '/images/tractor.jpg',
+    photo: 'tractor',
     text: 'МТЗ «Беларус» для вспомогательных и коммунальных работ.',
     price: 'от 2 500 ₽/ч',
   },
   {
     icon: 'helmet',
     title: 'Техника с оператором',
-    photo: '/images/dozer.jpg',
+    photo: 'dozer',
     text: 'Опытные машинисты, работа по договору, документы и ЭДО для юрлиц.',
   },
 ];
@@ -118,7 +154,11 @@ async function loadCategoryLinks() {
 const SERVICE_CATEGORY: Record<string, string> = {
   'Экскаваторы-погрузчики': 'Экскаваторы-погрузчики',
   Гидромолот: 'Экскаваторы-погрузчики',
+  'Гусеничные экскаваторы': 'Экскаваторы',
+  'Колёсный экскаватор с гидромолотом': 'Экскаваторы',
   Автокраны: 'Краны',
+  'Манипулятор КМУ 7 т': 'Манипуляторы',
+  'Автовышка АГП': 'Автовышки',
   'Фронтальные погрузчики': 'Погрузчики',
   Тракторы: 'Тракторы',
 };
@@ -169,7 +209,7 @@ export default async function HomePage() {
     <div className="flex flex-col gap-24">
       <section className="depth-exit relative -mt-2 min-h-[640px] overflow-hidden rounded-[2rem] bg-slate-950 text-white shadow-2xl lg:min-h-[680px]">
         <HeroPhotos />
-        <div className="relative grid lg:grid-cols-2">
+        <div className="hero-parallax-text relative grid lg:grid-cols-2">
           <div className="z-10 flex flex-col justify-center px-6 pb-20 pt-14 sm:px-10 lg:py-24">
             <div className="float-in inline-flex w-fit items-center gap-2 rounded-full bg-white/10 px-3 py-1.5 ring-1 ring-white/15">
               <span className="relative flex h-2 w-2">
@@ -262,61 +302,78 @@ export default async function HomePage() {
           </div>
           <p className="mt-3 text-slate-600">Все цены — с машинистом, смена 8 часов.</p>
         </Reveal>
-        <div className="mt-10 grid overflow-hidden rounded-3xl border border-slate-200 bg-white sm:grid-cols-2 lg:grid-cols-3">
+        <div className="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
           {SERVICES.map((service, index) => {
             const category = categoryLinks.get(SERVICE_CATEGORY[service.title] ?? '');
             return (
-              <Reveal
-                key={service.title}
-                delay={index * 60}
-                className="border-slate-200 max-sm:[&:not(:last-child)]:border-b sm:max-lg:[&:nth-child(odd)]:border-r sm:max-lg:[&:nth-child(-n+4)]:border-b lg:[&:not(:nth-child(3n))]:border-r lg:[&:nth-child(-n+3)]:border-b"
-              >
-                <a
-                  href={
-                    SERVICE_LANDING[service.title]
-                      ? `/arenda/${SERVICE_LANDING[service.title]}`
-                      : category
-                        ? `/equipment?category=${category.id}`
-                        : '#callback'
-                  }
-                  className="group flex h-full flex-col p-6 transition hover:bg-amber-50/60 sm:p-8"
-                >
-                  <div className="relative -mx-6 -mt-6 mb-6 aspect-[16/9] overflow-hidden sm:-mx-8 sm:-mt-8">
-                    <Image
-                      src={service.photo}
-                      alt={service.title}
-                      fill
-                      sizes="(min-width: 1024px) 380px, (min-width: 640px) 50vw, 100vw"
-                      className="object-cover transition duration-700 group-hover:scale-105"
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-slate-950/40 to-transparent" />
-                  </div>
-                  <div className="flex items-start justify-between gap-2">
-                    <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-900 text-amber-400 transition group-hover:bg-amber-500 group-hover:text-slate-950">
-                      <Icon name={service.icon} className="h-7 w-7" />
-                    </span>
-                    {category && category.available > 0 && (
-                      <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">
-                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                        {pluralizeRu(category.available, ['единица', 'единицы', 'единиц'])} свободно
+              <Reveal key={service.title} delay={(index % 3) * 60} className="h-full">
+                <TiltCard max={8} className="rounded-3xl border border-slate-200 bg-white">
+                  <a
+                    href={
+                      SERVICE_LANDING[service.title]
+                        ? `/arenda/${SERVICE_LANDING[service.title]}`
+                        : category
+                          ? `/equipment?category=${category.id}`
+                          : '#callback'
+                    }
+                    className="group flex h-full flex-col"
+                  >
+                    <div className="relative aspect-[16/9] overflow-hidden">
+                      <MachinePhoto
+                        type={service.photo}
+                        slot="services"
+                        alt={service.title}
+                        sizes="(min-width: 1024px) 380px, (min-width: 640px) 50vw, 100vw"
+                        className="tilt-zoom absolute inset-0"
+                      />
+                      <div className="absolute inset-0 bg-gradient-to-t from-slate-950/50 to-transparent" />
+                      <span className="absolute bottom-4 left-5 flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-950/80 text-amber-400 ring-1 ring-white/10 backdrop-blur transition group-hover:bg-amber-500 group-hover:text-slate-950">
+                        <Icon name={service.icon} className="h-6 w-6" />
                       </span>
-                    )}
-                  </div>
-                  <h3 className="mt-6 text-xl font-bold tracking-tight">{service.title}</h3>
-                  <p className="mt-2 text-sm leading-relaxed text-slate-600">{service.text}</p>
-                  <div className="mt-auto flex items-center justify-between pt-6">
-                    <span className="font-mono text-sm font-semibold text-slate-900">
-                      {service.price ?? 'по договору'}
-                    </span>
-                    <Icon
-                      name="arrow"
-                      className="h-5 w-5 text-amber-600 transition group-hover:translate-x-1"
-                    />
-                  </div>
-                </a>
+                      {category && category.available > 0 && (
+                        <span className="absolute right-4 top-4 inline-flex items-center gap-1.5 rounded-full bg-white/90 px-2.5 py-1 text-xs font-semibold text-emerald-700 backdrop-blur">
+                          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                          {pluralizeRu(category.available, ['единица', 'единицы', 'единиц'])}{' '}
+                          свободно
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex flex-1 flex-col p-6">
+                      <h3 className="text-xl font-bold tracking-tight">{service.title}</h3>
+                      <p className="mt-2 text-sm leading-relaxed text-slate-600">{service.text}</p>
+                      <div className="mt-auto flex items-center justify-between pt-6">
+                        <span className="font-mono text-sm font-semibold text-slate-900">
+                          {service.price ?? 'по договору'}
+                        </span>
+                        <Icon
+                          name="arrow"
+                          className="h-5 w-5 text-amber-600 transition group-hover:translate-x-1"
+                        />
+                      </div>
+                    </div>
+                  </a>
+                </TiltCard>
               </Reveal>
             );
           })}
+          <Reveal delay={120} className="h-full">
+            <TiltCard max={8} dark className="rounded-3xl border border-slate-800 bg-slate-950">
+              <a href="#podbor" className="group flex h-full min-h-[18rem] flex-col p-6 sm:p-8">
+                <div className="hero-grid opacity-30" aria-hidden />
+                <div className="eyebrow relative text-amber-400">Не нашли свою?</div>
+                <h3 className="relative mt-3 text-2xl font-extrabold tracking-tight text-white">
+                  Подберём технику под задачу
+                </h3>
+                <p className="relative mt-2 text-sm leading-relaxed text-slate-400">
+                  Три вопроса — и вы увидите подходящую машину и ориентир по цене.
+                </p>
+                <span className="relative mt-auto inline-flex w-fit items-center gap-2 rounded-full bg-amber-500 px-5 py-2.5 text-sm font-semibold text-slate-950 transition group-hover:bg-amber-400">
+                  Подобрать технику
+                  <Icon name="arrow" className="h-4 w-4 transition group-hover:translate-x-1" />
+                </span>
+              </a>
+            </TiltCard>
+          </Reveal>
         </div>
       </section>
 

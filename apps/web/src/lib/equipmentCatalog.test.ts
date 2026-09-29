@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
   headlinePrices,
   keySpecs,
-  machineKindOf,
+  machinePhotoOf,
+  machineTypeOf,
   numericSpec,
   specChip,
   specEntries,
@@ -21,15 +22,32 @@ describe('taskGroupOf', () => {
   });
 });
 
-describe('machineKindOf', () => {
-  it('maps categories to a matching 3D model only', () => {
-    expect(machineKindOf('Экскаваторы-погрузчики')).toBe('backhoe');
-    expect(machineKindOf('Краны')).toBe('crane');
-    expect(machineKindOf('Погрузчики', 'Фронтальный погрузчик')).toBe('wheelLoader');
-    expect(machineKindOf('Погрузчики', 'Вилочный погрузчик')).toBeNull();
-    expect(machineKindOf('Экскаваторы')).toBeNull();
-    expect(machineKindOf('Манипуляторы')).toBeNull();
-    expect(machineKindOf('Тракторы')).toBeNull();
+describe('machineTypeOf', () => {
+  it('maps categories and names to a machine photo type', () => {
+    expect(machineTypeOf('Экскаваторы-погрузчики')).toBe('backhoe');
+    expect(machineTypeOf('Экскаваторы', 'JCB 4CX экскаватор-погрузчик')).toBe('backhoe');
+    expect(machineTypeOf('Экскаваторы')).toBe('excavator');
+    expect(machineTypeOf('Экскаваторы', 'Гусеничный экскаватор Hitachi')).toBe('excavator');
+    expect(machineTypeOf('Экскаваторы', 'Колёсный экскаватор с гидромолотом')).toBe(
+      'wheeled-excavator',
+    );
+    expect(machineTypeOf('Манипуляторы')).toBe('kmu');
+    expect(machineTypeOf('Краны', 'Кран-манипулятор КМУ 7 т')).toBe('kmu');
+    expect(machineTypeOf('Автовышки')).toBe('agp');
+    expect(machineTypeOf('Спецтехника', 'АГП-22')).toBe('agp');
+    expect(machineTypeOf('Катки')).toBe('roller');
+    expect(machineTypeOf('Краны')).toBe('crane');
+    expect(machineTypeOf('Погрузчики', 'Фронтальный погрузчик')).toBe('loader');
+    expect(machineTypeOf('Погрузчики', 'Вилочный погрузчик')).toBeNull();
+    expect(machineTypeOf('Самосвалы')).toBe('truck');
+    expect(machineTypeOf('Бульдозеры')).toBe('dozer');
+    expect(machineTypeOf('Тракторы')).toBe('tractor');
+    expect(machineTypeOf('Генераторы')).toBeNull();
+  });
+
+  it('gives the server-rendered photo of the type', () => {
+    expect(machinePhotoOf('Краны')).toMatch(/^\/images\/.+\.jpg$/);
+    expect(machinePhotoOf('Генераторы')).toBeNull();
   });
 });
 

@@ -45,6 +45,25 @@ const PATHS = {
       <path d="M16 12V8" />
     </>
   ),
+  lift: (
+    <>
+      <circle cx="6" cy="19" r="1.5" />
+      <circle cx="16" cy="19" r="1.5" />
+      <path d="M3 17h17v-3H3z" />
+      <path d="M7 14l8-8" />
+      <path d="M11 14l4-8" />
+      <path d="M13 3h6v3h-6z" />
+    </>
+  ),
+  roller: (
+    <>
+      <circle cx="6" cy="16" r="4" />
+      <circle cx="18" cy="17" r="3" />
+      <path d="M6 12V8h8l2 6" />
+      <path d="M10 16h5" />
+      <path d="M9 8V5h4v3" />
+    </>
+  ),
   helmet: (
     <>
       <path d="M3 17h18" />

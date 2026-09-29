@@ -1,11 +1,13 @@
 import type { EquipmentStatus } from '@specai/ui';
 import { AvailabilityChip } from '@/components/AvailabilityChip';
 import { Icon, type IconName } from '@/components/Icon';
+import { MachinePhoto } from '@/components/MachinePhoto';
 import { QuickOrder } from '@/components/QuickOrder';
+import { TiltCard } from '@/components/TiltCard';
 import {
   headlinePrices,
   keySpecs,
-  machinePhotoOf,
+  machineTypeOf,
   rub,
   specChip,
   taskGroupOf,
@@ -44,96 +46,97 @@ export function EquipmentCard({ item }: { item: EquipmentCardItem }) {
   const href = `/equipment/${item.id}`;
   const { hour, shift } = headlinePrices(item);
   const chips = keySpecs(item.specs, 3).map(specChip);
-  const illustration = item.imageUrls[0] ? null : machinePhotoOf(item.category.name, item.name);
+  const illustration = item.imageUrls[0] ? null : machineTypeOf(item.category.name, item.name);
   const priceSummary = [hour !== null && `${rub(hour)}/ч`, shift !== null && `${rub(shift)}/смена`]
     .filter(Boolean)
     .join(', ');
 
   return (
-    <article className="group/card flex h-full flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white transition hover:border-slate-300 hover:shadow-xl hover:shadow-slate-900/5">
-      <a href={href} className="relative block aspect-[2/1] overflow-hidden" tabIndex={-1}>
-        {item.imageUrls[0] ? (
-          <img
-            src={item.imageUrls[0]}
-            alt={item.name}
-            loading="lazy"
-            className="h-full w-full object-cover transition duration-500 group-hover/card:scale-[1.03]"
-          />
-        ) : illustration ? (
-          <>
+    <TiltCard max={6} className="rounded-3xl border border-slate-200 bg-white">
+      <article className="group/card flex h-full flex-col">
+        <a href={href} className="relative block aspect-[2/1] overflow-hidden" tabIndex={-1}>
+          {item.imageUrls[0] ? (
             <img
-              src={illustration}
-              alt=""
+              src={item.imageUrls[0]}
+              alt={item.name}
               loading="lazy"
-              className="h-full w-full object-cover transition duration-500 group-hover/card:scale-[1.03]"
+              className="tilt-zoom h-full w-full object-cover"
             />
-            <span className="absolute bottom-2 right-3 text-[0.6rem] text-white/70">
-              Фото для примера
-            </span>
-          </>
-        ) : (
-          <div className="relative flex h-full w-full items-center justify-center bg-slate-950 bg-[radial-gradient(ellipse_at_30%_20%,rgba(245,158,11,0.18),transparent_60%)]">
-            <div
-              className="absolute inset-0 opacity-[0.12] [background-image:linear-gradient(rgba(255,255,255,.5)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,.5)_1px,transparent_1px)] [background-size:28px_28px]"
-              aria-hidden
-            />
-            <Icon
-              name={categoryIcon(item.category.name)}
-              className="relative h-20 w-20 text-amber-400 transition duration-500 group-hover/card:scale-110"
-            />
-          </div>
-        )}
-        <AvailabilityChip status={item.status} className="absolute left-3 top-3 shadow-sm" />
-      </a>
+          ) : illustration ? (
+            <>
+              <MachinePhoto
+                type={illustration}
+                sizes="(min-width: 1024px) 380px, (min-width: 640px) 50vw, 100vw"
+                className="tilt-zoom absolute inset-0"
+              />
+              <span className="absolute bottom-2 right-3 text-[0.6rem] text-white/70">
+                Фото для примера
+              </span>
+            </>
+          ) : (
+            <div className="relative flex h-full w-full items-center justify-center bg-slate-950 bg-[radial-gradient(ellipse_at_30%_20%,rgba(245,158,11,0.18),transparent_60%)]">
+              <div
+                className="absolute inset-0 opacity-[0.12] [background-image:linear-gradient(rgba(255,255,255,.5)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,.5)_1px,transparent_1px)] [background-size:28px_28px]"
+                aria-hidden
+              />
+              <Icon
+                name={categoryIcon(item.category.name)}
+                className="relative h-20 w-20 text-amber-400 transition duration-500 group-hover/card:scale-110"
+              />
+            </div>
+          )}
+          <AvailabilityChip status={item.status} className="absolute left-3 top-3 shadow-sm" />
+        </a>
 
-      <div className="flex flex-1 flex-col gap-4 p-5">
-        <div>
-          <div className="eyebrow text-[0.65rem] text-slate-500">
-            {item.category.name}
-            {item.location && ` · ${item.location.city}`}
+        <div className="flex flex-1 flex-col gap-4 p-5">
+          <div>
+            <div className="eyebrow text-[0.65rem] text-slate-500">
+              {item.category.name}
+              {item.location && ` · ${item.location.city}`}
+            </div>
+            <h2 className="mt-1.5 text-lg font-bold leading-snug tracking-tight">
+              <a href={href} className="hover:text-amber-700">
+                {item.name}
+              </a>
+            </h2>
           </div>
-          <h2 className="mt-1.5 text-lg font-bold leading-snug tracking-tight">
-            <a href={href} className="hover:text-amber-700">
-              {item.name}
-            </a>
-          </h2>
+
+          {chips.length > 0 && (
+            <ul className="flex flex-wrap gap-1.5" aria-label="Характеристики">
+              {chips.map((chip) => (
+                <li
+                  key={chip}
+                  className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700"
+                >
+                  {chip}
+                </li>
+              ))}
+            </ul>
+          )}
+
+          <dl className="mt-auto grid grid-cols-2 overflow-hidden rounded-2xl border border-slate-200">
+            <div className="border-r border-slate-200 px-3 py-2.5">
+              <dt className="eyebrow text-[0.6rem] text-slate-500">Час</dt>
+              <dd className="mt-0.5 whitespace-nowrap font-mono text-base font-semibold tabular-nums text-slate-900">
+                {hour !== null ? rub(hour) : <span className="text-slate-400">по запросу</span>}
+              </dd>
+            </div>
+            <div className="px-3 py-2.5">
+              <dt className="eyebrow text-[0.6rem] text-slate-500">Смена 8 ч</dt>
+              <dd className="mt-0.5 whitespace-nowrap font-mono text-base font-semibold tabular-nums text-slate-900">
+                {shift !== null ? rub(shift) : <span className="text-slate-400">по запросу</span>}
+              </dd>
+            </div>
+          </dl>
+
+          <QuickOrder
+            equipmentId={item.id}
+            equipmentName={item.name}
+            priceSummary={priceSummary}
+            detailsHref={href}
+          />
         </div>
-
-        {chips.length > 0 && (
-          <ul className="flex flex-wrap gap-1.5" aria-label="Характеристики">
-            {chips.map((chip) => (
-              <li
-                key={chip}
-                className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700"
-              >
-                {chip}
-              </li>
-            ))}
-          </ul>
-        )}
-
-        <dl className="mt-auto grid grid-cols-2 overflow-hidden rounded-2xl border border-slate-200">
-          <div className="border-r border-slate-200 px-3 py-2.5">
-            <dt className="eyebrow text-[0.6rem] text-slate-500">Час</dt>
-            <dd className="mt-0.5 whitespace-nowrap font-mono text-base font-semibold tabular-nums text-slate-900">
-              {hour !== null ? rub(hour) : <span className="text-slate-400">по запросу</span>}
-            </dd>
-          </div>
-          <div className="px-3 py-2.5">
-            <dt className="eyebrow text-[0.6rem] text-slate-500">Смена 8 ч</dt>
-            <dd className="mt-0.5 whitespace-nowrap font-mono text-base font-semibold tabular-nums text-slate-900">
-              {shift !== null ? rub(shift) : <span className="text-slate-400">по запросу</span>}
-            </dd>
-          </div>
-        </dl>
-
-        <QuickOrder
-          equipmentId={item.id}
-          equipmentName={item.name}
-          priceSummary={priceSummary}
-          detailsHref={href}
-        />
-      </div>
-    </article>
+      </article>
+    </TiltCard>
   );
 }

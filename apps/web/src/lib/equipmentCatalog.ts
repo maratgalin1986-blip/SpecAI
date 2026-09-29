@@ -1,6 +1,8 @@
 // Catalog helpers shared by the equipment list and the machine page: task
-// groups for the category tabs, which 3D model illustrates a category, spec
+// groups for the category tabs, which photo illustrates a category, spec
 // formatting and headline prices. Pure functions — safe on server and client.
+
+import { defaultPhotoOf, type MachineType } from './machinePhotos';
 
 export type TaskGroupId = 'earth' | 'lifting' | 'loading' | 'transport' | 'other';
 
@@ -37,39 +39,33 @@ export function isTaskGroupId(value: string | undefined): value is TaskGroupId {
   return TASK_GROUPS.some((group) => group.id === value);
 }
 
-export type MachineKind = 'backhoe' | 'crane' | 'wheelLoader' | 'dumpTruck' | 'dozer';
-
 /**
- * The machine class a listing belongs to, or null when none of ours looks
- * like it (a crawler excavator is not a backhoe loader, a tractor is not a
- * wheel loader) — then the page shows a static placeholder instead.
+ * Which machine type illustrates a listing, or null when none of our photos
+ * looks like it (a forklift is not a wheel loader) — then the page shows a
+ * drawn placeholder instead.
  */
-export function machineKindOf(categoryName: string, machineName = ''): MachineKind | null {
+export function machineTypeOf(categoryName: string, machineName = ''): MachineType | null {
   const category = categoryName.toLowerCase();
   const name = machineName.toLowerCase();
-  if (/экскаватор/.test(category) && /погрузчик/.test(category)) return 'backhoe';
-  if (/манипулятор/.test(category) || /манипулятор/.test(name)) return null;
+  const both = `${category} ${name}`;
+  if (/экскаватор/.test(category) && /погрузчик/.test(both)) return 'backhoe';
+  if (/экскаватор/.test(both) && /колёсн|колесн/.test(both)) return 'wheeled-excavator';
+  if (/экскаватор/.test(category)) return 'excavator';
+  if (/манипулятор|кму/.test(both)) return 'kmu';
+  if (/вышк|(^|[^а-яё])агп([^а-яё]|$)|подъ[её]мник/.test(both)) return 'agp';
+  if (/кат(ок|ки)/.test(both)) return 'roller';
   if (/кран/.test(category)) return 'crane';
-  if (/погрузчик/.test(category) && !/вилоч|телескоп|мини/.test(name)) return 'wheelLoader';
-  if (/самосвал/.test(category)) return 'dumpTruck';
+  if (/погрузчик/.test(category) && !/вилоч|телескоп|мини/.test(name)) return 'loader';
+  if (/самосвал/.test(category)) return 'truck';
   if (/бульдоз/.test(category)) return 'dozer';
+  if (/трактор/.test(category)) return 'tractor';
   return null;
 }
 
-const KIND_PHOTO: Record<MachineKind, string> = {
-  backhoe: '/images/backhoe.jpg',
-  crane: '/images/crane.jpg',
-  wheelLoader: '/images/loader.jpg',
-  dumpTruck: '/images/truck.jpg',
-  dozer: '/images/dozer.jpg',
-};
-
-/** An illustrative photo of the machine class, or null when none fits. */
+/** The server-rendered illustrative photo of the machine type, or null. */
 export function machinePhotoOf(categoryName: string, machineName = ''): string | null {
-  const kind = machineKindOf(categoryName, machineName);
-  if (kind) return KIND_PHOTO[kind];
-  if (/трактор/i.test(categoryName)) return '/images/tractor.jpg';
-  return null;
+  const type = machineTypeOf(categoryName, machineName);
+  return type ? defaultPhotoOf(type) : null;
 }
 
 export type SpecValue = string | number | boolean;
