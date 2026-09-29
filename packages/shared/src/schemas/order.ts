@@ -9,9 +9,12 @@ export const createOrderSchema = z
     desiredStartDate: z.coerce.date(),
     desiredEndDate: z.coerce.date(),
     categoryId: z.string().cuid().optional(),
+    // Where the machine is needed — geocoded for the weather and the map.
+    address: z.string().trim().max(200).optional(),
   })
-  .refine((data) => data.desiredEndDate > data.desiredStartDate, {
-    message: 'desiredEndDate must be after desiredStartDate',
+  // A one-day job starts and ends on the same date.
+  .refine((data) => data.desiredEndDate >= data.desiredStartDate, {
+    message: 'Дата окончания не может быть раньше даты начала',
     path: ['desiredEndDate'],
   });
 export type CreateOrderInput = z.infer<typeof createOrderSchema>;

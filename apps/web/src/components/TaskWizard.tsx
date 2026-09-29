@@ -1,10 +1,12 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { CallbackForm } from '@/components/CallbackForm';
 import { Icon, type IconName } from '@/components/Icon';
 import { MachinePhoto } from '@/components/MachinePhoto';
 import type { MachineType } from '@/lib/machinePhotos';
+import { WeatherHud } from '@/components/WeatherHud';
+import { mskToday, weatherLine, type ShiftWeather, type WorkNote } from '@/lib/weather';
 
 // «Подобрать технику»: three quick questions → a recommended machine, a rough
 // price range from the price list and a callback form with the answers filled in.
@@ -103,6 +105,46 @@ export function TaskWizard() {
   const [task, setTask] = useState<(typeof TASKS)[number] | null>(null);
   const [when, setWhen] = useState('');
   const [volume, setVolume] = useState<(typeof VOLUME)[number] | null>(null);
+  // Forecast for «Сегодня»/«Завтра» at the result step; the booking form waits
+  // for it (a second at most) so the weather goes into the request text.
+  const [forecast, setForecast] = useState<{
+    date: string;
+    weather: ShiftWeather | null;
+    notes: WorkNote[];
+  } | null>(null);
+  const [forecastDone, setForecastDone] = useState(true);
+
+  const workDate =
+    when === 'Сегодня' ? mskToday() : when === 'Завтра' ? mskToday(Date.now() + 86_400_000) : null;
+
+  useEffect(() => {
+    if (step !== 3 || !task || !workDate) {
+      setForecast(null);
+      setForecastDone(true);
+      return;
+    }
+    const controller = new AbortController();
+    setForecastDone(false);
+    const params = new URLSearchParams({ date: workDate });
+    if (task.photo) params.set('kind', task.photo);
+    fetch(`/api/weather?${params}`, { signal: controller.signal })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((data) => {
+        setForecast(
+          data?.weather ? { date: workDate, weather: data.weather, notes: data.notes } : null,
+        );
+        setForecastDone(true);
+      })
+      .catch((error: Error) => {
+        if (error.name !== 'AbortError') setForecastDone(true);
+      });
+    // Never keep the form waiting for long.
+    const timer = window.setTimeout(() => setForecastDone(true), 2500);
+    return () => {
+      controller.abort();
+      window.clearTimeout(timer);
+    };
+  }, [step, task, workDate]);
 
   const estimate =
     task?.rate && volume?.hours
@@ -113,7 +155,10 @@ export function TaskWizard() {
 
   const summary = task
     ? `Подбор техники: ${task.label}. Когда: ${when || '—'}. Объём: ${volume?.label ?? '—'}. ` +
-      `Рекомендация: ${task.machine}${estimate ? `, ориентир ${estimate}` : ''}.`
+      `Рекомендация: ${task.machine}${estimate ? `, ориентир ${estimate}` : ''}.` +
+      (forecast?.weather
+        ? ` Погода на смену: ${weatherLine(forecast.weather, forecast.notes)}.`
+        : '')
     : '';
 
   const choice = (active: boolean) =>
@@ -289,13 +334,31 @@ export function TaskWizard() {
                   </button>
                 </div>
               </div>
-              <CallbackForm
-                key={summary}
-                source="wizard"
-                defaultMessage={summary}
-                title="Забронировать"
-                subtitle="Менеджер уточнит адрес и подачу и назовёт точную цену."
-              />
+              {forecastDone ? (
+                <CallbackForm
+                  key={summary}
+                  source="wizard"
+                  defaultMessage={summary}
+                  title="Забронировать"
+                  subtitle="Менеджер уточнит адрес и подачу и назовёт точную цену."
+                />
+              ) : (
+                <div
+                  className="h-72 animate-pulse rounded-2xl bg-slate-100"
+                  aria-label="Проверяем погоду"
+                />
+              )}
+              {forecast?.weather && (
+                <div className="xl:col-span-2">
+                  <WeatherHud
+                    weather={forecast.weather}
+                    notes={forecast.notes}
+                    place="Набережные Челны"
+                    dateLabel={when.toLowerCase()}
+                    machineLabel={`для: ${task.machine.toLowerCase()}`}
+                  />
+                </div>
+              )}
             </div>
           )}
         </div>
