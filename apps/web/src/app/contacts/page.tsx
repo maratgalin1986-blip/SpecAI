@@ -48,7 +48,7 @@ export default function ContactsPage() {
           <div className="flex flex-wrap gap-2 pt-2">
             <a
               href={SITE.phoneHref}
-              className="rounded-md bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-500"
+              className="rounded-md bg-amber-500 px-4 py-2 text-sm font-semibold text-slate-950 hover:bg-amber-400"
             >
               Позвонить
             </a>

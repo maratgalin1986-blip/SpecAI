@@ -241,7 +241,7 @@ export default async function EquipmentDetailPage({ params }: { params: { id: st
         {/* Specs, description, reviews */}
         <div className="flex min-w-0 flex-col gap-10 lg:col-start-1 lg:row-start-2">
           <section>
-            <div className="eyebrow text-amber-600">01 — Характеристики</div>
+            <div className="eyebrow text-amber-700">Характеристики</div>
             <dl className="mt-4 grid overflow-hidden rounded-3xl border border-slate-200 bg-white sm:grid-cols-2">
               {facts.map((fact, index) => (
                 <div
@@ -256,7 +256,7 @@ export default async function EquipmentDetailPage({ params }: { params: { id: st
           </section>
 
           <section>
-            <div className="eyebrow text-amber-600">02 — Описание</div>
+            <div className="eyebrow text-amber-700">Описание</div>
             <p className="mt-4 max-w-3xl whitespace-pre-line leading-relaxed text-slate-700">
               {item.description ?? 'Описание не указано — уточните детали у менеджера.'}
             </p>
@@ -264,7 +264,7 @@ export default async function EquipmentDetailPage({ params }: { params: { id: st
 
           {item.reviews.length > 0 && (
             <section>
-              <div className="eyebrow text-amber-600">03 — Отзывы</div>
+              <div className="eyebrow text-amber-700">Отзывы</div>
               <div className="mt-4 flex flex-col divide-y divide-slate-200 rounded-3xl border border-slate-200 bg-white">
                 {item.reviews.map((review) => (
                   <div key={review.id} className="px-5 py-4 text-sm">
@@ -288,7 +288,7 @@ export default async function EquipmentDetailPage({ params }: { params: { id: st
         <section>
           <div className="flex flex-wrap items-end justify-between gap-4">
             <div>
-              <div className="eyebrow text-amber-600">Ещё в каталоге</div>
+              <div className="eyebrow text-amber-700">Ещё в каталоге</div>
               <h2 className="mt-3 text-3xl font-extrabold tracking-[-0.03em] sm:text-4xl">
                 Похожая техника
               </h2>

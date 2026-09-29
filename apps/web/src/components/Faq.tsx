@@ -20,7 +20,7 @@ export function Faq({
   return (
     <section className="grid gap-8 lg:grid-cols-12">
       <div className="lg:sticky lg:top-28 lg:col-span-5 lg:self-start">
-        <div className="eyebrow text-amber-600">FAQ</div>
+        <div className="eyebrow text-amber-700">FAQ</div>
         <h2 className="mt-3 text-3xl font-extrabold tracking-[-0.03em] sm:text-4xl">{title}</h2>
       </div>
       <div className="flex flex-col gap-2 lg:col-span-7">

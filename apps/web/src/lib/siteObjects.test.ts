@@ -9,7 +9,7 @@ describe('SITE_OBJECTS', () => {
   it('only uses clips that exist in every format', () => {
     for (const item of SITE_OBJECTS) {
       for (const clip of [item.hero, ...Object.values(item.clips)]) {
-        for (const ext of ['webm', 'mp4', 'jpg']) {
+        for (const ext of ['webm', 'mp4', 'webp']) {
           expect(existsSync(join(VIDEO_DIR, `${clip}.${ext}`)), `${clip}.${ext}`).toBe(true);
         }
       }

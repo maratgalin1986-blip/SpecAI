@@ -2,7 +2,7 @@
 // footage and footage at the stops of the site journey. The projects come
 // from a shuffled deck kept in localStorage, so none repeats until all of
 // them have been shown, and a new deck never starts with the last one.
-// Clips live in public/video/<name>.{webm,mp4,jpg}.
+// Clips live in public/video/<name>.{webm,mp4} with a .webp poster frame.
 
 /** Journey stops whose footage depends on the project. */
 export type ObjectStop = 'gate' | 'pit' | 'yard' | 'height' | 'demolition' | 'finale';

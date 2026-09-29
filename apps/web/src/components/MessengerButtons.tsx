@@ -24,7 +24,7 @@ export function MessengerButtons() {
       >
         <a
           href={SITE.phoneHref}
-          className="flex items-center justify-center gap-2 rounded-lg bg-amber-600 py-2.5 text-sm font-semibold text-white"
+          className="flex items-center justify-center gap-2 rounded-lg bg-amber-500 py-2.5 text-sm font-semibold text-slate-950"
         >
           📞 Позвонить
         </a>
@@ -32,7 +32,7 @@ export function MessengerButtons() {
           href={SITE.whatsappHref}
           target="_blank"
           rel="noopener"
-          className="flex items-center justify-center gap-2 rounded-lg bg-emerald-600 py-2.5 text-sm font-semibold text-white"
+          className="flex items-center justify-center gap-2 rounded-lg bg-emerald-700 py-2.5 text-sm font-semibold text-white"
         >
           <WhatsAppIcon /> WhatsApp
         </a>
@@ -42,7 +42,7 @@ export function MessengerButtons() {
         target="_blank"
         rel="noopener"
         aria-label="Написать в WhatsApp"
-        className="fixed bottom-20 right-6 z-50 hidden h-12 w-12 items-center justify-center rounded-full bg-emerald-600 text-white shadow-lg transition hover:scale-105 hover:bg-emerald-500 sm:flex"
+        className="fixed bottom-20 right-6 z-50 hidden h-12 w-12 items-center justify-center rounded-full bg-emerald-700 text-white shadow-lg transition hover:scale-105 hover:bg-emerald-600 sm:flex"
       >
         <WhatsAppIcon className="h-6 w-6" />
       </a>

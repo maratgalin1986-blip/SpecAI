@@ -759,7 +759,15 @@ html {
 
 /* Title revealed like opening credits. */
 .cine-eyebrow {
-  animation: intro-rise 0.8s ease-out 0.35s both;
+  animation: cine-rise 0.8s ease-out 0.35s both;
+}
+/* Opacity and transform only: animating letter-spacing would re-wrap the
+   text on phones and push the page down (layout shift). */
+@keyframes cine-rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
 }
 .cine-title {
   animation: cine-title 1.1s cubic-bezier(0.2, 0.8, 0.2, 1) 0.45s both;
@@ -779,7 +787,7 @@ html {
   }
 }
 .cine-sub {
-  animation: intro-rise 0.9s ease-out 0.8s both;
+  animation: cine-rise 0.9s ease-out 0.8s both;
 }
 
 /* Every page opens behind a pair of black bars. */
@@ -895,6 +903,87 @@ html {
   .cine-sub,
   .cine-frame,
   .cine-cut {
+    animation: none;
+  }
+}
+
+/* ---- Weather monitor and site map (WeatherHud, SiteMap) ------------------ */
+
+/* A slow sky behind the forecast, tinted by the verdict. */
+.weather-sky {
+  background:
+    radial-gradient(60% 80% at 85% 0%, var(--sky, rgba(56, 189, 248, 0.25)), transparent 70%),
+    radial-gradient(50% 60% at 10% 100%, rgba(245, 158, 11, 0.12), transparent 70%);
+  animation: weather-sky 18s ease-in-out infinite alternate;
+}
+.weather-sky-ok {
+  --sky: rgba(56, 189, 248, 0.25);
+}
+.weather-sky-caution {
+  --sky: rgba(245, 158, 11, 0.28);
+}
+.weather-sky-stop {
+  --sky: rgba(239, 68, 68, 0.3);
+}
+@keyframes weather-sky {
+  to {
+    transform: translate3d(-4%, 3%, 0) scale(1.08);
+  }
+}
+
+/* Viewfinder corner brackets. */
+.hud-corners {
+  background:
+    linear-gradient(to right, rgba(255, 255, 255, 0.35) 18px, transparent 18px) 0 0 / 100% 1px
+      no-repeat,
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.35) 18px, transparent 18px) 0 0 / 1px 100%
+      no-repeat,
+    linear-gradient(to left, rgba(255, 255, 255, 0.35) 18px, transparent 18px) 100% 0 / 100% 1px
+      no-repeat,
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.35) 18px, transparent 18px) 100% 0 / 1px 100%
+      no-repeat,
+    linear-gradient(to right, rgba(255, 255, 255, 0.35) 18px, transparent 18px) 0 100% / 100% 1px
+      no-repeat,
+    linear-gradient(to top, rgba(255, 255, 255, 0.35) 18px, transparent 18px) 0 100% / 1px 100%
+      no-repeat,
+    linear-gradient(to left, rgba(255, 255, 255, 0.35) 18px, transparent 18px) 100% 100% / 100% 1px
+      no-repeat,
+    linear-gradient(to top, rgba(255, 255, 255, 0.35) 18px, transparent 18px) 100% 100% / 1px 100%
+      no-repeat;
+}
+
+/* The map descends like a drone onto the site, then holds. */
+.map-descent {
+  animation: map-descent 2.2s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+@keyframes map-descent {
+  from {
+    transform: scale(1.6) rotate(-6deg);
+    filter: blur(3px) saturate(0.4);
+  }
+  to {
+    transform: none;
+    filter: saturate(0.85) contrast(1.05);
+  }
+}
+.map-ping {
+  animation: map-ping 2s ease-out infinite;
+}
+@keyframes map-ping {
+  from {
+    transform: translate(-50%, -50%) scale(0.4);
+    opacity: 0.9;
+  }
+  to {
+    transform: translate(-50%, -50%) scale(2.6);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .weather-sky,
+  .map-descent,
+  .map-ping {
     animation: none;
   }
 }

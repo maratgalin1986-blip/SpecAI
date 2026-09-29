@@ -2,6 +2,19 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@specai/database';
 import { createOrderSchema } from '@specai/shared';
 import { getRequestUser } from '@/lib/requestUser';
+import { geocodeAddress } from '@/lib/geo';
+import { notifyTelegram } from '@/lib/notify';
+import { SITE } from '@/lib/site';
+import { machineTypeOf } from '@/lib/equipmentCatalog';
+import {
+  assessWork,
+  CHELNY,
+  fetchForecast,
+  machineGroup,
+  mskParts,
+  shiftWeather,
+  weatherLine,
+} from '@/lib/weather';
 
 export const dynamic = 'force-dynamic';
 
@@ -61,6 +74,21 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
 
+  // The work site: geocoded once here, used for the weather and the map.
+  const address = parsed.data.address;
+  const place = address ? await geocodeAddress(address) : null;
+  const location = address
+    ? await prisma.location.create({
+        data: {
+          addressLine: address,
+          city: place?.city ?? SITE.city,
+          country: 'Россия',
+          latitude: place?.lat ?? null,
+          longitude: place?.lon ?? null,
+        },
+      })
+    : null;
+
   const order = await prisma.order.create({
     data: {
       customerId: currentUser.id,
@@ -68,8 +96,50 @@ export async function POST(request: NextRequest) {
       desiredStartDate: parsed.data.desiredStartDate,
       desiredEndDate: parsed.data.desiredEndDate,
       categoryId: parsed.data.categoryId,
+      locationId: location?.id,
     },
+    include: { category: true },
   });
 
+  await notifyTelegram(await orderMessage(order, place, request.nextUrl.origin));
+
   return NextResponse.json({ order }, { status: 201 });
+}
+
+/** The owner's Telegram message about a new order, with the day's weather. */
+async function orderMessage(
+  order: {
+    id: string;
+    description: string;
+    desiredStartDate: Date;
+    desiredEndDate: Date;
+    category: { name: string } | null;
+    locationId: string | null;
+  },
+  place: { lat: number; lon: number; label: string } | null,
+  origin: string,
+) {
+  const where = place ?? { ...CHELNY, label: SITE.city };
+  const points = await fetchForecast(where.lat, where.lon);
+  const weather = points
+    ? shiftWeather(points, mskParts(order.desiredStartDate.toISOString()).date)
+    : null;
+  const type = machineTypeOf(order.category?.name ?? '');
+  const day = (date: Date) => date.toLocaleDateString('ru-RU');
+  return [
+    `🧾 Новая заявка на технику — ${SITE.name}`,
+    order.category ? `Техника: ${order.category.name}` : null,
+    `Когда: ${day(order.desiredStartDate)}${order.desiredEndDate > order.desiredStartDate ? ` – ${day(order.desiredEndDate)}` : ''}`,
+    place ? `Где: ${place.label}` : null,
+    `Задача: ${order.description}`,
+    weather
+      ? `Погода на смену: ${weatherLine(weather, assessWork(weather, machineGroup(type)))}`
+      : null,
+    place
+      ? `Карта: https://yandex.ru/maps/?pt=${place.lon.toFixed(6)},${place.lat.toFixed(6)}&z=18&l=map`
+      : null,
+    `Заявка: ${origin}/orders/${order.id}`,
+  ]
+    .filter(Boolean)
+    .join('\n');
 }

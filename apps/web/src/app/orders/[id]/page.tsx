@@ -8,6 +8,7 @@ import { AcceptBidButton } from '@/components/AcceptBidButton';
 import { pluralizeRu } from '@/lib/pluralize';
 import { formatMoney } from '@/lib/money';
 import { isAdminRequest } from '@/lib/admin';
+import { SiteConditions } from '@/components/SiteConditions';
 
 export const dynamic = 'force-dynamic';
 
@@ -26,6 +27,7 @@ export default async function OrderDetailPage({ params }: { params: { id: string
     include: {
       category: true,
       customer: true,
+      location: true,
       bids: {
         include: { equipment: { include: { company: true } } },
         orderBy: { price: 'asc' },
@@ -66,6 +68,12 @@ export default async function OrderDetailPage({ params }: { params: { id: string
         <h2 className="font-semibold">Описание</h2>
         <p className="mt-2 whitespace-pre-line text-sm text-slate-600">{order.description}</p>
       </Card>
+
+      <SiteConditions
+        date={order.desiredStartDate}
+        location={order.location}
+        categoryName={order.category?.name}
+      />
 
       {isImported && (
         <Card className="border-sky-200 bg-sky-50">
