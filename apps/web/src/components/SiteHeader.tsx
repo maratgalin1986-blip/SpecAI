@@ -17,23 +17,40 @@ export function SiteHeader() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   return (
-    <header className="border-b border-slate-200 bg-white">
+    <header className="site-header-vt sticky top-0 z-40 border-b border-slate-200/70 bg-white/75 backdrop-blur-md">
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3 sm:px-6 sm:py-4">
-        <a href="/" className="flex shrink-0 items-center gap-2 text-lg font-bold text-slate-900">
-          <span className="flex h-8 w-8 items-center justify-center rounded-md bg-amber-600 text-sm text-white">
+        <a
+          href="/"
+          className="flex shrink-0 items-center gap-2 text-lg font-extrabold tracking-tight text-slate-900"
+        >
+          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-500 font-mono text-sm text-slate-950">
             16
           </span>
           {SITE.name}
         </a>
 
-        <nav className="hidden items-center gap-6 text-sm font-medium text-slate-600 md:flex">
+        <nav className="hidden items-center gap-5 text-sm font-medium text-slate-600 lg:flex">
           {NAV_LINKS.map((link) => (
             <a key={link.href} href={link.href} className="hover:text-slate-900">
               {link.label}
             </a>
           ))}
           <AuthStatus />
+          <a
+            href="/#callback"
+            className="group inline-flex items-center gap-1.5 rounded-full bg-slate-900 px-4 py-2 text-white transition hover:bg-amber-500 hover:text-slate-950"
+          >
+            Заказать технику
+            <span className="transition group-hover:translate-x-0.5">→</span>
+          </a>
         </nav>
+
+        <a
+          href={SITE.phoneHref}
+          className="ml-auto rounded-full bg-slate-900 px-3 py-1.5 text-sm font-semibold text-white lg:hidden"
+        >
+          Позвонить
+        </a>
 
         <button
           type="button"
@@ -41,7 +58,7 @@ export function SiteHeader() {
           aria-label={isMenuOpen ? 'Закрыть меню' : 'Открыть меню'}
           aria-expanded={isMenuOpen}
           aria-controls="mobile-nav"
-          className="flex h-9 w-9 items-center justify-center rounded-md text-slate-600 hover:bg-slate-100 md:hidden"
+          className="flex h-9 w-9 items-center justify-center rounded-md text-slate-600 hover:bg-slate-100 lg:hidden"
         >
           {isMenuOpen ? (
             <svg
@@ -70,7 +87,7 @@ export function SiteHeader() {
       {isMenuOpen && (
         <nav
           id="mobile-nav"
-          className="flex flex-col gap-1 border-t border-slate-200 px-4 py-3 text-sm font-medium text-slate-600 md:hidden"
+          className="flex flex-col gap-1 border-t border-slate-200 px-4 py-3 text-sm font-medium text-slate-600 lg:hidden"
         >
           {NAV_LINKS.map((link) => (
             <a

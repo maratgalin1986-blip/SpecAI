@@ -1,9 +1,10 @@
 import { prisma } from '@specai/database';
 import { EQUIPMENT_SORT_OPTIONS } from '@specai/shared';
-import { Card, StatusBadge } from '@specai/ui';
-import { formatRate } from '@/lib/money';
 import { CallbackForm } from '@/components/CallbackForm';
+import { EquipmentCard } from '@/components/EquipmentCard';
+import { Icon } from '@/components/Icon';
 import { Pagination } from '@/components/Pagination';
+import { TASK_GROUPS, isTaskGroupId, taskGroupOf, type TaskGroupId } from '@/lib/equipmentCatalog';
 import {
   EQUIPMENT_ORDER_BY,
   EQUIPMENT_SORT_LABELS,
@@ -11,6 +12,8 @@ import {
   parsePage,
   totalPagesFor,
 } from '@/lib/pagination';
+import { pluralizeRu } from '@/lib/pluralize';
+import { SITE } from '@/lib/site';
 
 export const metadata = {
   title: 'Каталог спецтехники',
@@ -24,6 +27,7 @@ const PAGE_SIZE = 12;
 
 interface EquipmentSearchParams {
   category?: string;
+  group?: string;
   city?: string;
   minPrice?: string;
   maxPrice?: string;
@@ -32,12 +36,59 @@ interface EquipmentSearchParams {
   page?: string;
 }
 
-function pluralUnits(n: number): string {
-  const mod10 = n % 10;
-  const mod100 = n % 100;
-  if (mod10 === 1 && mod100 !== 11) return 'единица';
-  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return 'единицы';
-  return 'единиц';
+const FILTER_KEYS = ['q', 'city', 'minPrice', 'maxPrice', 'sort'] as const;
+
+/** Catalog link that keeps the search filters and replaces the category/group. */
+function catalogHref(
+  searchParams: EquipmentSearchParams,
+  selection: { group?: string; category?: string },
+) {
+  const params = new URLSearchParams();
+  for (const key of FILTER_KEYS) {
+    const value = searchParams[key];
+    if (value) params.set(key, value);
+  }
+  if (selection.group) params.set('group', selection.group);
+  if (selection.category) params.set('category', selection.category);
+  const query = params.toString();
+  return query ? `/equipment?${query}` : '/equipment';
+}
+
+function Pill({
+  href,
+  active,
+  label,
+  count,
+  small = false,
+}: {
+  href: string;
+  active: boolean;
+  label: string;
+  count: number;
+  small?: boolean;
+}) {
+  return (
+    <a
+      href={href}
+      aria-current={active ? 'page' : undefined}
+      className={`inline-flex shrink-0 items-center gap-2 whitespace-nowrap rounded-full font-semibold transition ${
+        small ? 'px-3.5 py-1.5 text-xs' : 'px-4 py-2 text-sm'
+      } ${
+        active
+          ? 'bg-slate-950 text-white'
+          : 'border border-slate-200 bg-white text-slate-700 hover:border-slate-900 hover:text-slate-950'
+      }`}
+    >
+      {label}
+      <span
+        className={`font-mono tabular-nums ${small ? 'text-[0.65rem]' : 'text-xs'} ${
+          active ? 'text-amber-400' : 'text-slate-400'
+        }`}
+      >
+        {count}
+      </span>
+    </a>
+  );
 }
 
 export default async function EquipmentCatalogPage({
@@ -50,8 +101,8 @@ export default async function EquipmentCatalogPage({
   const sort = parseEnumParam(searchParams.sort, EQUIPMENT_SORT_OPTIONS, 'newest');
   const requestedPage = parsePage(searchParams.page);
 
-  const where = {
-    categoryId: searchParams.category || undefined,
+  // Filters other than the category: the tab counts are computed against these.
+  const baseWhere = {
     location: searchParams.city
       ? { city: { equals: searchParams.city, mode: 'insensitive' as const } }
       : undefined,
@@ -62,11 +113,45 @@ export default async function EquipmentCatalogPage({
     name: searchParams.q ? { contains: searchParams.q, mode: 'insensitive' as const } : undefined,
   };
 
-  const [categories, total] = await Promise.all([
+  const [categories, countsByCategory] = await Promise.all([
     prisma.equipmentCategory.findMany({ orderBy: { name: 'asc' } }),
-    prisma.equipment.count({ where }),
+    prisma.equipment.groupBy({ by: ['categoryId'], where: baseWhere, _count: { _all: true } }),
   ]);
 
+  const countOf = new Map(countsByCategory.map((row) => [row.categoryId, row._count._all]));
+  const categoryRows = categories.map((category) => ({
+    ...category,
+    group: taskGroupOf(category.name),
+    count: countOf.get(category.id) ?? 0,
+  }));
+
+  const selectedCategory = categoryRows.find((category) => category.id === searchParams.category);
+  const activeGroup: TaskGroupId | undefined =
+    selectedCategory?.group ?? (isTaskGroupId(searchParams.group) ? searchParams.group : undefined);
+
+  const groupTabs = TASK_GROUPS.map((group) => {
+    const members = categoryRows.filter((category) => category.group === group.id);
+    return {
+      ...group,
+      members,
+      count: members.reduce((sum, category) => sum + category.count, 0),
+    };
+  }).filter((group) => group.count > 0 || group.id === activeGroup);
+  const allCount = categoryRows.reduce((sum, category) => sum + category.count, 0);
+  const activeGroupTab = groupTabs.find((group) => group.id === activeGroup);
+
+  const where = {
+    ...baseWhere,
+    categoryId: selectedCategory
+      ? selectedCategory.id
+      : searchParams.category
+        ? searchParams.category
+        : activeGroupTab
+          ? { in: activeGroupTab.members.map((category) => category.id) }
+          : undefined,
+  };
+
+  const total = await prisma.equipment.count({ where });
   const totalPages = totalPagesFor(total, PAGE_SIZE);
   const page = Math.min(requestedPage, totalPages);
 
@@ -81,78 +166,140 @@ export default async function EquipmentCatalogPage({
   const hasFilters = Boolean(
     searchParams.q ||
     searchParams.category ||
+    searchParams.group ||
     searchParams.city ||
     searchParams.minPrice ||
     searchParams.maxPrice,
   );
 
+  const hasSecondaryFilters = Boolean(
+    searchParams.city || searchParams.minPrice || searchParams.maxPrice || searchParams.sort,
+  );
+
+  const field =
+    'w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none transition placeholder:text-slate-400 focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20';
+
   return (
-    <div className="flex flex-col gap-6">
-      <h1 className="text-2xl font-bold">Каталог техники</h1>
+    <div className="flex flex-col gap-8">
+      <header className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <div className="eyebrow text-amber-600">Каталог · {SITE.city} и Татарстан</div>
+          <h1 className="mt-3 text-4xl font-extrabold tracking-[-0.03em] sm:text-5xl">
+            Спецтехника в аренду
+          </h1>
+          <p className="mt-3 max-w-2xl text-slate-600">
+            Цена за час и за смену 8 часов — на каждой карточке. Оставьте телефон прямо в карточке:{' '}
+            {SITE.callbackPromise.toLowerCase()}.
+          </p>
+        </div>
+        <a
+          href={SITE.phoneHref}
+          className="inline-flex w-fit items-center gap-2 rounded-full border border-slate-300 px-5 py-2.5 text-sm font-semibold transition hover:border-slate-900"
+        >
+          <Icon name="phone" className="h-4 w-4 text-amber-600" />
+          {SITE.phone}
+        </a>
+      </header>
+
+      <nav aria-label="Категории техники" className="flex flex-col gap-3">
+        <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0">
+          <Pill
+            href={catalogHref(searchParams, {})}
+            active={!activeGroup && !searchParams.category}
+            label="Вся техника"
+            count={allCount}
+          />
+          {groupTabs.map((group) => (
+            <Pill
+              key={group.id}
+              href={catalogHref(searchParams, { group: group.id })}
+              active={group.id === activeGroup && !selectedCategory}
+              label={group.label}
+              count={group.count}
+            />
+          ))}
+        </div>
+        {activeGroupTab && activeGroupTab.members.filter((c) => c.count > 0).length > 1 && (
+          <div className="-mx-4 flex items-center gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0">
+            <span className="eyebrow shrink-0 text-[0.65rem] text-slate-400">
+              {activeGroupTab.label}:
+            </span>
+            {activeGroupTab.members
+              .filter((category) => category.count > 0 || category.id === selectedCategory?.id)
+              .map((category) => (
+                <Pill
+                  key={category.id}
+                  small
+                  href={catalogHref(searchParams, { category: category.id })}
+                  active={category.id === selectedCategory?.id}
+                  label={category.name}
+                  count={category.count}
+                />
+              ))}
+          </div>
+        )}
+      </nav>
 
       <form
         method="get"
-        className="grid grid-cols-1 items-end gap-3 rounded-lg border border-slate-200 bg-white p-4 sm:grid-cols-2 lg:flex lg:flex-wrap"
+        className="grid grid-cols-2 items-end gap-3 rounded-3xl border border-slate-200 bg-white p-4 sm:p-5 lg:grid-cols-[minmax(0,2fr)_minmax(0,1.2fr)_repeat(2,minmax(0,0.9fr))_minmax(0,1.3fr)_auto]"
       >
-        <label className="flex flex-col gap-1 text-sm">
-          Поиск
+        {searchParams.category && (
+          <input type="hidden" name="category" value={searchParams.category} />
+        )}
+        {!searchParams.category && activeGroup && (
+          <input type="hidden" name="group" value={activeGroup} />
+        )}
+        <label className="col-span-2 flex flex-col gap-1.5 lg:col-span-1">
+          <span className="eyebrow text-[0.65rem] text-slate-500">Поиск</span>
           <input
             name="q"
             defaultValue={searchParams.q}
-            placeholder="Экскаватор, кран…"
-            className="w-full rounded-md border border-slate-300 px-3 py-2"
+            placeholder="Экскаватор, кран, JCB…"
+            className={field}
           />
         </label>
-        <label className="flex flex-col gap-1 text-sm">
-          Категория
-          <select
-            name="category"
-            defaultValue={searchParams.category ?? ''}
-            className="w-full rounded-md border border-slate-300 px-3 py-2"
-          >
-            <option value="">Все категории</option>
-            {categories.map((category) => (
-              <option key={category.id} value={category.id}>
-                {category.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="flex flex-col gap-1 text-sm">
-          Город
+        {/* Phones: the secondary filters fold away behind «Фильтры» (CSS only). */}
+        <input
+          type="checkbox"
+          id="catalog-more-filters"
+          className="peer sr-only"
+          defaultChecked={hasSecondaryFilters}
+        />
+        <label className="col-span-2 hidden flex-col gap-1.5 peer-checked:flex sm:col-span-1 sm:flex">
+          <span className="eyebrow text-[0.65rem] text-slate-500">Город</span>
           <input
             name="city"
             defaultValue={searchParams.city}
-            className="w-full rounded-md border border-slate-300 px-3 py-2"
+            placeholder="Любой"
+            className={field}
           />
         </label>
-        <label className="flex flex-col gap-1 text-sm">
-          Цена от, ₽/смена
+        <label className="hidden flex-col gap-1.5 peer-checked:flex sm:flex">
+          <span className="eyebrow text-[0.65rem] text-slate-500">Смена от, ₽</span>
           <input
             name="minPrice"
             type="number"
             min={0}
+            inputMode="numeric"
             defaultValue={searchParams.minPrice}
-            className="w-full rounded-md border border-slate-300 px-3 py-2 lg:w-28"
+            className={`${field} font-mono`}
           />
         </label>
-        <label className="flex flex-col gap-1 text-sm">
-          Цена до, ₽/смена
+        <label className="hidden flex-col gap-1.5 peer-checked:flex sm:flex">
+          <span className="eyebrow text-[0.65rem] text-slate-500">Смена до, ₽</span>
           <input
             name="maxPrice"
             type="number"
             min={0}
+            inputMode="numeric"
             defaultValue={searchParams.maxPrice}
-            className="w-full rounded-md border border-slate-300 px-3 py-2 lg:w-28"
+            className={`${field} font-mono`}
           />
         </label>
-        <label className="flex flex-col gap-1 text-sm">
-          Сортировка
-          <select
-            name="sort"
-            defaultValue={sort}
-            className="w-full rounded-md border border-slate-300 px-3 py-2"
-          >
+        <label className="col-span-2 hidden flex-col gap-1.5 peer-checked:flex sm:col-span-1 sm:flex">
+          <span className="eyebrow text-[0.65rem] text-slate-500">Сортировка</span>
+          <select name="sort" defaultValue={sort} className={field}>
             {EQUIPMENT_SORT_OPTIONS.map((option) => (
               <option key={option} value={option}>
                 {EQUIPMENT_SORT_LABELS[option]}
@@ -160,34 +307,44 @@ export default async function EquipmentCatalogPage({
             ))}
           </select>
         </label>
-        <div className="flex flex-wrap items-center gap-3 sm:col-span-2 lg:col-auto">
+        <div className="col-span-2 flex items-center gap-2 sm:col-span-1">
+          <label
+            htmlFor="catalog-more-filters"
+            className="flex-1 cursor-pointer rounded-full border border-slate-300 px-4 py-2.5 text-center text-sm font-semibold text-slate-700 sm:hidden"
+          >
+            Фильтры
+          </label>
           <button
             type="submit"
-            className="w-full rounded-md bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700 sm:w-auto"
+            className="flex-1 rounded-full bg-slate-950 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800 lg:w-auto lg:flex-none"
           >
-            Применить
+            Найти
           </button>
-          {hasFilters && (
-            <a
-              href="/equipment"
-              className="text-sm font-medium text-slate-500 hover:text-slate-900"
-            >
-              Сбросить фильтры
-            </a>
-          )}
         </div>
       </form>
 
-      <p className="text-sm text-slate-600" aria-live="polite">
-        Найдено {total} {pluralUnits(total)}
-        {totalPages > 1 && ` · страница ${page} из ${totalPages}`}
-      </p>
+      <div className="-mt-2 flex flex-wrap items-center justify-between gap-2 text-sm text-slate-600">
+        <p aria-live="polite">
+          <span className="font-mono font-semibold text-slate-900">
+            {pluralizeRu(total, ['единица', 'единицы', 'единиц'])}
+          </span>{' '}
+          техники
+          {selectedCategory && ` · ${selectedCategory.name}`}
+          {!selectedCategory && activeGroupTab && ` · ${activeGroupTab.label.toLowerCase()}`}
+          {totalPages > 1 && ` · страница ${page} из ${totalPages}`}
+        </p>
+        {hasFilters && (
+          <a href="/equipment" className="font-medium text-slate-500 hover:text-slate-900">
+            Сбросить фильтры ×
+          </a>
+        )}
+      </div>
 
       {equipment.length === 0 ? (
         <div className="grid gap-6 lg:grid-cols-2">
-          <Card className="flex flex-col justify-center gap-2 p-6">
-            <div className="text-4xl">🔍</div>
-            <h2 className="text-lg font-semibold">
+          <div className="flex flex-col justify-center gap-3 rounded-3xl border border-slate-200 bg-white p-8">
+            <div className="eyebrow text-amber-600">Ничего не нашлось</div>
+            <h2 className="text-2xl font-bold tracking-tight">
               {hasFilters ? 'По этим фильтрам техника не найдена' : 'Каталог пополняется'}
             </h2>
             <p className="text-sm text-slate-600">
@@ -207,41 +364,15 @@ export default async function EquipmentCatalogPage({
               </a>
               .
             </p>
-          </Card>
-          <Card className="p-6">
+          </div>
+          <div className="rounded-3xl border border-slate-200 bg-white p-6">
             <CallbackForm source="catalog-empty" />
-          </Card>
+          </div>
         </div>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
           {equipment.map((item) => (
-            <a key={item.id} href={`/equipment/${item.id}`}>
-              <Card className="flex h-full flex-col gap-2 hover:border-amber-400">
-                {item.imageUrls[0] && (
-                  <img
-                    src={item.imageUrls[0]}
-                    alt={item.name}
-                    className="-mx-1 -mt-1 h-40 w-[calc(100%+0.5rem)] rounded-md object-cover"
-                  />
-                )}
-                <div className="flex items-start justify-between gap-2">
-                  <h2 className="font-semibold">{item.name}</h2>
-                  <StatusBadge status={item.status} />
-                </div>
-                <p className="text-sm text-slate-500">{item.category.name}</p>
-                {item.location && (
-                  <p className="text-sm text-slate-500">
-                    {item.location.city}, {item.location.country}
-                  </p>
-                )}
-                <p className="mt-auto text-lg font-semibold">
-                  {formatRate(item).price}
-                  <span className="text-sm font-normal text-slate-500">
-                    {formatRate(item).unit}
-                  </span>
-                </p>
-              </Card>
-            </a>
+            <EquipmentCard key={item.id} item={item} />
           ))}
         </div>
       )}
