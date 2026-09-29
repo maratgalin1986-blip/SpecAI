@@ -13,15 +13,30 @@ export function AdminLogin() {
     event.preventDefault();
     setIsSubmitting(true);
     setError(null);
-    const response = await fetch('/api/admin/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ password }),
-    });
-    setIsSubmitting(false);
-    if (!response.ok) {
-      setError('Неверный пароль');
+    try {
+      const response = await fetch('/api/admin/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password }),
+      });
+      if (!response.ok) {
+        const body = (await response.json().catch(() => null)) as { error?: unknown } | null;
+        // 401 — wrong password; 429 — too many attempts (the server explains);
+        // anything else is a server failure, not the password's fault.
+        setError(
+          response.status === 401
+            ? 'Неверный пароль'
+            : response.status === 429 && typeof body?.error === 'string'
+              ? body.error
+              : 'Сервис временно недоступен, попробуйте позже',
+        );
+        return;
+      }
+    } catch {
+      setError('Нет связи с сервером, попробуйте позже');
       return;
+    } finally {
+      setIsSubmitting(false);
     }
     router.refresh();
   }

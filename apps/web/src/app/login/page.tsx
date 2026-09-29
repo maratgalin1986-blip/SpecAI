@@ -1,21 +1,25 @@
 'use client';
 
 import { Suspense, useState } from 'react';
-import { signIn } from 'next-auth/react';
+import { getSession, signIn } from 'next-auth/react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Button, Card } from '@specai/ui';
 import { CinemaBackdrop } from '@/components/CinemaHero';
+import { homeForRole, loginErrorMessage } from '@/lib/loginErrors';
 
 // Where to go after signing in: the page that sent the user here (same site
-// only, to avoid open redirects), otherwise the dashboard.
-function safeCallbackUrl() {
+// only, to avoid open redirects), otherwise null — then the user's own cabinet.
+function safeCallbackUrl(): string | null {
   const raw = new URLSearchParams(window.location.search).get('callbackUrl');
-  if (!raw) return '/dashboard';
+  if (!raw) return null;
   try {
     const url = new URL(raw, window.location.origin);
-    return url.origin === window.location.origin ? url.pathname + url.search : '/dashboard';
+    if (url.origin !== window.location.origin) return null;
+    const target = url.pathname + url.search;
+    // /dashboard is the customer's cabinet; providers go to their own one.
+    return target === '/dashboard' ? null : target;
   } catch {
-    return '/dashboard';
+    return null;
   }
 }
 
@@ -51,15 +55,23 @@ export default function LoginPage() {
     setError(null);
     setIsSubmitting(true);
 
-    const result = await signIn('credentials', { email, password, redirect: false });
-    setIsSubmitting(false);
+    let result: Awaited<ReturnType<typeof signIn>>;
+    try {
+      result = await signIn('credentials', { email, password, redirect: false });
+    } catch {
+      result = { error: 'NetworkError', ok: false, status: 0, url: null };
+    }
 
-    if (result?.error) {
-      setError('Неверный e-mail или пароль');
+    if (!result || result.error) {
+      setIsSubmitting(false);
+      // Wrong password, too many attempts, or the service is down.
+      setError(loginErrorMessage(result?.error ?? 'NetworkError'));
       return;
     }
 
-    router.push(safeCallbackUrl());
+    const target = safeCallbackUrl() ?? homeForRole((await getSession())?.user?.role);
+    setIsSubmitting(false);
+    router.push(target);
     router.refresh();
   }
 
