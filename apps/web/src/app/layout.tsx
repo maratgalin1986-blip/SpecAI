@@ -78,6 +78,16 @@ const ORGANIZATION_JSON_LD = {
     addressCountry: 'RU',
   },
   areaServed: SITE.region,
+  // Shown by Yandex and Google in the business card of the search results.
+  image: `${siteUrl()}/opengraph-image.png`,
+  priceRange: 'от 2 500 ₽/ч',
+  openingHoursSpecification: {
+    '@type': 'OpeningHoursSpecification',
+    dayOfWeek: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'],
+    opens: '08:00',
+    closes: '20:00',
+  },
+  sameAs: [SITE.whatsappHref, ...(SITE.telegramBot ? [`https://t.me/${SITE.telegramBot}`] : [])],
 };
 
 export const viewport: Viewport = {
