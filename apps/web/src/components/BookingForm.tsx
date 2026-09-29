@@ -5,6 +5,12 @@ import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { Button } from '@specai/ui';
 import { pluralizeRu } from '@/lib/pluralize';
+import { formatMoney } from '@/lib/money';
+import { moscowDateKey } from '@/lib/bookingRules';
+
+function todayInMoscow() {
+  return moscowDateKey(new Date());
+}
 
 export function BookingForm({
   equipmentId,
@@ -28,17 +34,19 @@ export function BookingForm({
       <p className="text-sm text-slate-600">
         <a href="/login" className="font-medium text-amber-700">
           Войдите
-        </a>{' '}
+        </a>
         , чтобы отправить заявку на бронирование.
       </p>
     );
   }
 
+  // Both dates are included, as on the server: 1–3 March is 3 days.
   const days =
-    startDate && endDate
-      ? Math.max(1, Math.ceil((Date.parse(endDate) - Date.parse(startDate)) / 86_400_000))
+    startDate && endDate && endDate >= startDate
+      ? Math.round((Date.parse(endDate) - Date.parse(startDate)) / 86_400_000) + 1
       : 0;
   const estimatedTotal = days * dailyRate;
+  const today = todayInMoscow();
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -80,6 +88,7 @@ export function BookingForm({
         <input
           type="date"
           required
+          min={today}
           value={startDate}
           onChange={(e) => setStartDate(e.target.value)}
           className="rounded-md border border-slate-300 px-3 py-2"
@@ -90,6 +99,7 @@ export function BookingForm({
         <input
           type="date"
           required
+          min={startDate || today}
           value={endDate}
           onChange={(e) => setEndDate(e.target.value)}
           className="rounded-md border border-slate-300 px-3 py-2"
@@ -97,8 +107,8 @@ export function BookingForm({
       </label>
       {days > 0 && (
         <p className="text-sm text-slate-600">
-          {pluralizeRu(days, ['день', 'дня', 'дней'])} · ориентировочная стоимость {estimatedTotal}{' '}
-          {currency}
+          {pluralizeRu(days, ['день', 'дня', 'дней'])} · ориентировочная стоимость{' '}
+          {formatMoney(estimatedTotal, currency)}
         </p>
       )}
       {error && <p className="text-sm text-red-600">{error}</p>}

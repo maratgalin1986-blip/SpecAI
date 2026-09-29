@@ -23,6 +23,12 @@ export function BookingActionButtons({
   const [error, setError] = useState<string | null>(null);
 
   async function updateStatus(status: string) {
+    if (
+      status === 'CANCELLED' &&
+      !window.confirm('Отменить бронирование? Это действие нельзя отменить.')
+    ) {
+      return;
+    }
     setPending(status);
     setError(null);
 
