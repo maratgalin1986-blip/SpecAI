@@ -8,6 +8,7 @@ import { ModerationButtons, CopyField, TelegramSetupButton } from '@/components/
 import { headers } from 'next/headers';
 import { inboundApiToken, telegramWebhookSecret, whatsappWebhookToken } from '@/lib/integrations';
 import { isAdminConfigured, isAdminRequest } from '@/lib/admin';
+import { SITE } from '@/lib/site';
 import { formLabel, splitSource } from '@/lib/marketing';
 
 export const dynamic = 'force-dynamic';
@@ -85,7 +86,7 @@ export default async function AdminPage() {
     ['Каналы', tally('channel')],
     ['Формы на сайте', tally('form')],
   ];
-  const metrikaReady = /^\d+$/.test(process.env.NEXT_PUBLIC_YANDEX_METRIKA_ID ?? '');
+  const metrikaReady = /^\d+$/.test(SITE.metrikaId);
 
   return (
     <div className="flex flex-col gap-6">
@@ -141,7 +142,7 @@ export default async function AdminPage() {
         <p className="text-xs text-slate-500">
           Яндекс.Метрика:{' '}
           {metrikaReady
-            ? 'подключена. Цели: lead (заявка), call, whatsapp, telegram, email.'
+            ? `подключена, счётчик ${SITE.metrikaId}. Цели: lead (заявка), call, whatsapp, telegram, email.`
             : 'не подключена. Создайте бесплатный счётчик на metrika.yandex.ru и пришлите номер — пропишем NEXT_PUBLIC_YANDEX_METRIKA_ID.'}
         </p>
       </Card>
