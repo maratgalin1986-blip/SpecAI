@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { defaultPhotoOf, pickPhoto, type MachineType } from '@/lib/machinePhotos';
 
 // «Путешествие по объекту»: a pinned, scroll-driven fly-through of one big
 // construction site. Each stop is a photo; scrolling pulls the camera out of
@@ -9,8 +10,7 @@ import { useEffect, useRef, useState } from 'react';
 // scroll film. Every stop is also a section of the site with a link.
 
 type Scene = {
-  photo: string;
-  focus: [number, number]; // where the camera dives in, 0…1 of the frame
+  type: MachineType;
   place: string;
   title: string;
   text: string;
@@ -20,8 +20,7 @@ type Scene = {
 
 const SCENES: Scene[] = [
   {
-    photo: '/images/machines/crane-2.jpg',
-    focus: [0.4, 0.58],
+    type: 'crane',
     place: 'Ворота объекта',
     title: 'Большая стройка начинается с техники',
     text: 'Автокраны, экскаваторы, манипуляторы и катки — весь парк в одном каталоге.',
@@ -29,8 +28,7 @@ const SCENES: Scene[] = [
     cta: 'Открыть каталог',
   },
   {
-    photo: '/images/machines/excavator-2.jpg',
-    focus: [0.33, 0.74],
+    type: 'excavator',
     place: 'Котлован',
     title: 'Копаем котлован под фундамент',
     text: 'Гусеничные экскаваторы и экскаваторы-погрузчики с опытными машинистами.',
@@ -38,8 +36,7 @@ const SCENES: Scene[] = [
     cta: 'Экскаваторы',
   },
   {
-    photo: '/images/machines/kmu-2.jpg',
-    focus: [0.66, 0.52],
+    type: 'kmu',
     place: 'Склад материалов',
     title: 'Привезём и выгрузим',
     text: 'Манипулятор КМУ 7 т и самосвалы — от плит до контейнеров.',
@@ -47,8 +44,7 @@ const SCENES: Scene[] = [
     cta: 'Подобрать технику',
   },
   {
-    photo: '/images/machines/agp-1.jpg',
-    focus: [0.63, 0.1],
+    type: 'agp',
     place: 'Фасад',
     title: 'Работы на высоте',
     text: 'Автовышки АГП для фасадов, кровли и освещения.',
@@ -56,8 +52,7 @@ const SCENES: Scene[] = [
     cta: 'Автовышки',
   },
   {
-    photo: '/images/machines/roller-3.jpg',
-    focus: [0.44, 0.66],
+    type: 'roller',
     place: 'Дорога',
     title: 'Уплотняем и сдаём объект',
     text: 'Виброкатки и погрузчики доводят площадку до финиша.',
@@ -65,8 +60,7 @@ const SCENES: Scene[] = [
     cta: 'Катки и погрузчики',
   },
   {
-    photo: '/images/trench.jpg',
-    focus: [0.5, 0.5],
+    type: 'trench',
     place: 'Ваш объект',
     title: 'Следующая остановка — ваша стройка',
     text: 'Оставьте заявку — подберём технику и назовём цену за 15 минут.',
@@ -82,6 +76,23 @@ export function SiteJourney() {
   const sectionRef = useRef<HTMLElement>(null);
   const [progress, setProgress] = useState(0);
   const [reduced, setReduced] = useState(false);
+  // A different photo (machine model and backdrop) of every stop on each visit.
+  const [scenes, setScenes] = useState(SCENES);
+  const [photos, setPhotos] = useState(() => SCENES.map((scene) => defaultPhotoOf(scene.type)));
+  const [clock, setClock] = useState('');
+
+  useEffect(() => {
+    // The route between the gate and the finale is shuffled on every visit.
+    const middle = SCENES.slice(1, -1).sort(() => Math.random() - 0.5);
+    const route = [SCENES[0]!, ...middle, SCENES[SCENES.length - 1]!];
+    setScenes(route);
+    setPhotos(route.map((scene) => pickPhoto(scene.type, 'journey')));
+    const tick = () =>
+      setClock(new Date().toLocaleTimeString('ru-RU', { timeZone: 'Europe/Moscow' }));
+    tick();
+    const timer = window.setInterval(tick, 1000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
@@ -114,13 +125,17 @@ export function SiteJourney() {
   if (reduced) {
     return (
       <section aria-label="Путешествие по объекту" className="grid gap-4 sm:grid-cols-2">
-        {SCENES.map((scene) => (
+        {scenes.map((scene) => (
           <a
-            key={scene.photo}
+            key={scene.type}
             href={scene.href}
             className="overflow-hidden rounded-3xl border border-slate-200 bg-white"
           >
-            <img src={scene.photo} alt="" className="aspect-video w-full object-cover" />
+            <img
+              src={photos[scenes.indexOf(scene)]}
+              alt=""
+              className="aspect-video w-full object-cover"
+            />
             <div className="p-5">
               <div className="eyebrow text-amber-600">{scene.place}</div>
               <h3 className="mt-2 text-xl font-bold">{scene.title}</h3>
@@ -131,7 +146,7 @@ export function SiteJourney() {
     );
   }
 
-  const n = SCENES.length;
+  const n = scenes.length;
   const pos = progress * n; // 0…n
   const index = Math.min(n - 1, Math.floor(pos));
   const local = pos - index; // 0…1 inside the current stop
@@ -144,7 +159,7 @@ export function SiteJourney() {
       style={{ height: `${n * 110 + 100}vh` }}
     >
       <div className="sticky top-0 h-[100svh] overflow-hidden bg-black text-white">
-        {SCENES.map((scene, i) => {
+        {scenes.map((scene, i) => {
           // Arrive: the previous stop's dive lands us deep inside this shot.
           const arrive = i === 0 ? 1 : smooth(clamp((pos - i + 0.16) / 0.4));
           // Leave: dive into the focal point during the last third.
@@ -156,22 +171,28 @@ export function SiteJourney() {
           const blur = (1 - arrive) * 4 + leave * 5;
           return (
             <div
-              key={scene.photo}
+              key={scene.type}
               className="absolute inset-0 will-change-transform"
               style={{
                 opacity,
                 transform: `scale(${scale})`,
-                transformOrigin: `${scene.focus[0] * 100}% ${scene.focus[1] * 100}%`,
+                transformOrigin: '50% 55%',
                 filter: blur > 0.3 ? `blur(${blur.toFixed(1)}px)` : undefined,
                 zIndex: i,
               }}
             >
-              <img
-                src={scene.photo}
-                alt=""
-                loading={i < 2 ? 'eager' : 'lazy'}
-                className="h-full w-full object-cover"
-              />
+              {/* "Live" layer: a handheld camera drift, a slow push-in, cloud
+                  shadows and light flicker over the frame. */}
+              <div className="journey-handheld absolute inset-0">
+                <img
+                  src={photos[i]}
+                  alt=""
+                  loading={i < 2 ? 'eager' : 'lazy'}
+                  className="journey-push h-full w-full object-cover"
+                />
+                <div className="journey-clouds absolute inset-0" />
+                <div className="journey-flicker absolute inset-0" />
+              </div>
             </div>
           );
         })}
@@ -202,20 +223,25 @@ export function SiteJourney() {
         <div className="relative z-30 mx-auto flex h-full max-w-6xl flex-col px-4 pb-10 pt-24 sm:px-6">
           <div className="flex items-center justify-between gap-4">
             <div className="eyebrow text-amber-400">Путешествие по объекту</div>
-            <div className="font-mono text-sm tabular-nums text-white/70">
-              {String(index + 1).padStart(2, '0')} / {String(n).padStart(2, '0')}
+            <div className="flex items-center gap-3 font-mono text-xs tabular-nums text-white/80 sm:text-sm">
+              <span className="flex items-center gap-1.5 rounded bg-red-600/90 px-2 py-0.5 text-[0.65rem] font-bold uppercase tracking-widest text-white">
+                <span className="journey-rec h-1.5 w-1.5 rounded-full bg-white" />
+                Онлайн
+              </span>
+              <span className="hidden sm:inline">Камера {String(index + 1).padStart(2, '0')}</span>
+              <span>{clock}</span>
             </div>
           </div>
 
           <div className="mt-auto max-w-2xl">
-            {SCENES.map((scene, i) => {
+            {scenes.map((scene, i) => {
               const shown = i === index;
               const fade = shown
                 ? clamp(local < 0.5 ? (local - 0.12) / 0.2 : (0.7 - local) / 0.15)
                 : 0;
               return (
                 <div
-                  key={scene.photo}
+                  key={scene.type}
                   className={`${shown ? '' : 'pointer-events-none absolute'} transition-none`}
                   style={{
                     opacity: i === n - 1 && shown ? clamp((local - 0.06) / 0.14) : fade,
@@ -247,8 +273,8 @@ export function SiteJourney() {
 
           {/* Route: the stops of the site, the current one lit. */}
           <ol className="mt-10 flex gap-2">
-            {SCENES.map((scene, i) => (
-              <li key={scene.photo} className="flex-1">
+            {scenes.map((scene, i) => (
+              <li key={scene.type} className="flex-1">
                 <div className="h-0.5 overflow-hidden rounded-full bg-white/15">
                   <div
                     className="h-full bg-amber-400"
