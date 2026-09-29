@@ -14,6 +14,7 @@ import {
 } from '@/lib/pagination';
 import { pluralizeRu } from '@/lib/pluralize';
 import { SITE } from '@/lib/site';
+import { CinemaHero } from '@/components/CinemaHero';
 
 export const metadata = {
   title: 'Каталог спецтехники',
@@ -181,25 +182,24 @@ export default async function EquipmentCatalogPage({
 
   return (
     <div className="flex flex-col gap-8">
-      <header className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
-        <div>
-          <div className="eyebrow text-amber-600">Каталог · {SITE.city} и Татарстан</div>
-          <h1 className="mt-3 text-4xl font-extrabold tracking-[-0.03em] sm:text-5xl">
-            Спецтехника в аренду
-          </h1>
-          <p className="mt-3 max-w-2xl text-slate-600">
-            Цена за час и за смену 8 часов — на каждой карточке. Оставьте телефон прямо в карточке:{' '}
-            {SITE.callbackPromise.toLowerCase()}.
-          </p>
-        </div>
+      <CinemaHero
+        eyebrow={`Каталог · ${SITE.city} и Татарстан`}
+        title="Спецтехника в аренду"
+        clips={['excavator-truck', 'site-aerial', 'city-cranes']}
+        camera={2}
+      >
+        <p>
+          Цена за час и за смену 8 часов — на каждой карточке. Оставьте телефон прямо в карточке:{' '}
+          {SITE.callbackPromise.toLowerCase()}.
+        </p>
         <a
           href={SITE.phoneHref}
-          className="inline-flex w-fit items-center gap-2 rounded-full border border-slate-300 px-5 py-2.5 text-sm font-semibold transition hover:border-slate-900"
+          className="mt-5 inline-flex w-fit items-center gap-2 rounded-full bg-amber-500 px-5 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-amber-400"
         >
-          <Icon name="phone" className="h-4 w-4 text-amber-600" />
+          <Icon name="phone" className="h-4 w-4" />
           {SITE.phone}
         </a>
-      </header>
+      </CinemaHero>
 
       <nav aria-label="Категории техники" className="flex flex-col gap-3">
         <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0">

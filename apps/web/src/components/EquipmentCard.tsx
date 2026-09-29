@@ -54,7 +54,11 @@ export function EquipmentCard({ item }: { item: EquipmentCardItem }) {
   return (
     <TiltCard max={6} className="rounded-3xl border border-slate-200 bg-white">
       <article className="group/card flex h-full flex-col">
-        <a href={href} className="relative block aspect-[2/1] overflow-hidden" tabIndex={-1}>
+        <a
+          href={href}
+          className="cine-frame relative block aspect-[2/1] overflow-hidden"
+          tabIndex={-1}
+        >
           {item.imageUrls[0] ? (
             <img
               src={item.imageUrls[0]}

@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { Button, Card } from '@specai/ui';
+import { CinemaBackdrop } from '@/components/CinemaHero';
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('');
@@ -34,9 +35,10 @@ export default function ForgotPasswordPage() {
   }
 
   return (
-    <div className="mx-auto max-w-sm">
-      <Card>
-        <h1 className="mb-4 text-xl font-bold">Восстановление пароля</h1>
+    <div className="mx-auto max-w-sm py-6 sm:py-12">
+      <CinemaBackdrop clip="building-sun" />
+      <Card className="cine-sub shadow-2xl">
+        <h1 className="cine-title mb-4 text-xl font-bold">Восстановление пароля</h1>
         {isSent ? (
           <p className="text-sm text-slate-700">
             Если аккаунт с таким e-mail существует, мы отправили на него письмо со ссылкой для

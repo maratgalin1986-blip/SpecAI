@@ -3,6 +3,7 @@
 import { Suspense, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Button, Card } from '@specai/ui';
+import { CinemaBackdrop } from '@/components/CinemaHero';
 
 function ResetPasswordForm() {
   const searchParams = useSearchParams();
@@ -106,9 +107,10 @@ function ResetPasswordForm() {
 
 export default function ResetPasswordPage() {
   return (
-    <div className="mx-auto max-w-sm">
-      <Card>
-        <h1 className="mb-4 text-xl font-bold">Новый пароль</h1>
+    <div className="mx-auto max-w-sm py-6 sm:py-12">
+      <CinemaBackdrop clip="crane-sun" />
+      <Card className="cine-sub shadow-2xl">
+        <h1 className="cine-title mb-4 text-xl font-bold">Новый пароль</h1>
         <Suspense fallback={<p className="text-sm text-slate-500">Загрузка…</p>}>
           <ResetPasswordForm />
         </Suspense>

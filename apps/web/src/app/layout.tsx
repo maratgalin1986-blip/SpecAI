@@ -9,6 +9,7 @@ import { SiteFooter } from '@/components/SiteFooter';
 import { AgentChatWidget } from '@/components/AgentChatWidget';
 import { YandexMetrika } from '@/components/YandexMetrika';
 import { MarketingTracker } from '@/components/MarketingTracker';
+import { CinemaClicks } from '@/components/CinemaClicks';
 import { MessengerButtons } from '@/components/MessengerButtons';
 import { SITE } from '@/lib/site';
 import { siteUrl } from '@/lib/siteUrl';
@@ -89,6 +90,8 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="ru" className={`${sans.variable} ${mono.variable}`}>
       <body className="flex min-h-screen flex-col bg-[#f7f7f5] font-sans text-slate-900 antialiased grain">
+        {/* Black bars open on every page load, like the start of a scene. */}
+        <div className="cine-curtain" aria-hidden />
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(ORGANIZATION_JSON_LD) }}
@@ -107,6 +110,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           <TelegramMiniApp />
           <YandexMetrika />
           <MarketingTracker />
+          <CinemaClicks />
         </Providers>
       </body>
     </html>

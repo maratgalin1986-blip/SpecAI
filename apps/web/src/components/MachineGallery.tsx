@@ -9,13 +9,13 @@ export function MachineGallery({ images, name }: { images: string[]; name: strin
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="relative aspect-[4/3] overflow-hidden rounded-3xl bg-slate-100 sm:aspect-[16/10]">
+      <div className="relative aspect-[4/3] overflow-hidden rounded-3xl bg-slate-950 sm:aspect-[16/10]">
         {main && (
           <img
             key={main}
             src={main}
             alt={`${name} — фото ${current + 1}`}
-            className="h-full w-full object-cover"
+            className="cine-cut h-full w-full object-cover"
           />
         )}
         {images.length > 1 && (

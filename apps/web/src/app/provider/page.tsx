@@ -10,6 +10,7 @@ import { CallbackForm } from '@/components/CallbackForm';
 import { SITE } from '@/lib/site';
 import { Pagination } from '@/components/Pagination';
 import { parsePage, totalPagesFor } from '@/lib/pagination';
+import { CinemaLayer } from '@/components/CinemaHero';
 
 export const dynamic = 'force-dynamic';
 export const metadata: Metadata = {
@@ -43,11 +44,12 @@ const PROVIDER_BENEFITS = [
 function ProviderLanding({ signedIn }: { signedIn: boolean }) {
   return (
     <div className="flex flex-col gap-8">
-      <section className="rounded-3xl bg-slate-900 p-6 text-white sm:p-10">
-        <div className="text-sm font-semibold uppercase tracking-widest text-amber-400">
+      <section className="relative isolate overflow-hidden rounded-[2rem] bg-slate-950 p-6 text-white shadow-2xl sm:p-10 sm:py-16">
+        <CinemaLayer clips={['site-aerial', 'steel-frame', 'crane-sun']} />
+        <div className="cine-eyebrow text-sm font-semibold uppercase tracking-widest text-amber-400">
           Для владельцев техники
         </div>
-        <h1 className="mt-2 text-3xl font-bold sm:text-4xl">
+        <h1 className="cine-title mt-2 text-3xl font-bold sm:text-5xl">
           Сдавайте спецтехнику в аренду без простоев
         </h1>
         <p className="mt-3 max-w-2xl text-slate-300">
