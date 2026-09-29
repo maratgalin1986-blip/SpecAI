@@ -1,15 +1,33 @@
 import { notFound } from 'next/navigation';
 import { prisma } from '@specai/database';
-import { Card, StatusBadge } from '@specai/ui';
 import type { Metadata } from 'next';
+import { AvailabilityChip } from '@/components/AvailabilityChip';
 import { BookingForm } from '@/components/BookingForm';
-import { CallbackForm } from '@/components/CallbackForm';
-import { RentalCalculator } from '@/components/RentalCalculator';
-import { SITE } from '@/lib/site';
-import { pluralizeRu } from '@/lib/pluralize';
+import { EquipmentCard, categoryIcon } from '@/components/EquipmentCard';
+import { EstimateBox } from '@/components/EstimateBox';
+import { Icon } from '@/components/Icon';
+import { Machine3DViewer } from '@/components/Machine3DViewer';
+import { MachineGallery } from '@/components/MachineGallery';
+import {
+  headlinePrices,
+  keySpecs,
+  machineKindOf,
+  numericSpec,
+  specChip,
+  specEntries,
+  taskGroupOf,
+} from '@/lib/equipmentCatalog';
 import { formatMoney, formatRate } from '@/lib/money';
+import { pluralizeRu } from '@/lib/pluralize';
+import { SITE } from '@/lib/site';
 
 export const dynamic = 'force-dynamic';
+
+const STATUS_NOTE: Record<string, string> = {
+  RENTED: 'Сейчас эта машина в аренде — оставьте телефон, подскажем ближайшую дату.',
+  IN_MAINTENANCE: 'Сейчас машина на обслуживании — оставьте телефон, подскажем, когда освободится.',
+  RETIRED: 'Машина больше не сдаётся — оставьте телефон, подберём замену.',
+};
 
 export async function generateMetadata({ params }: { params: { id: string } }): Promise<Metadata> {
   const item = await prisma.equipment.findUnique({
@@ -38,160 +56,258 @@ export default async function EquipmentDetailPage({ params }: { params: { id: st
     notFound();
   }
 
-  const specs = (item.specs as Record<string, unknown> | null) ?? {};
+  const specs = item.specs;
+  const specRows = specEntries(specs);
+  const chips = keySpecs(specs, 4).map(specChip);
+  const { hour, shift } = headlinePrices(item);
+  const hammerRate = numericSpec(specs, /гидромолот.*₽/i) ?? undefined;
+  const kind = machineKindOf(item.category.name, item.name);
+  const envelope =
+    kind === 'backhoe'
+      ? {
+          digDepth: numericSpec(specs, /глубин\S* копания/i),
+          reach: numericSpec(specs, /радиус копания|вылет.*копани|досягаемост/i),
+        }
+      : undefined;
+  const ownFleet = item.company.name === SITE.legalName;
   const averageRating = item.reviews.length
     ? item.reviews.reduce((sum, review) => sum + review.rating, 0) / item.reviews.length
     : null;
 
-  return (
-    <div className="flex flex-col gap-6">
-      <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
-        <div className="min-w-0">
-          <h1 className="text-2xl font-bold break-words">{item.name}</h1>
-          <p className="text-slate-500">
-            {item.category.name} · Поставщик: {item.company.name}
-            {averageRating !== null && (
-              <>
-                {' '}
-                · ★ {averageRating.toFixed(1)} (
-                {pluralizeRu(item.reviews.length, ['отзыв', 'отзыва', 'отзывов'])})
-              </>
-            )}
-          </p>
-        </div>
-        <div className="shrink-0">
-          <StatusBadge status={item.status} />
-        </div>
-      </div>
+  // Same category first; if it has nothing else, the same task group.
+  let similar = await prisma.equipment.findMany({
+    where: { categoryId: item.categoryId, id: { not: item.id } },
+    include: { category: true, location: true },
+    orderBy: [{ status: 'asc' }, { createdAt: 'desc' }],
+    take: 3,
+  });
+  if (similar.length === 0) {
+    const group = taskGroupOf(item.category.name);
+    const categories = await prisma.equipmentCategory.findMany({
+      select: { id: true, name: true },
+    });
+    const groupIds = categories.filter((c) => taskGroupOf(c.name) === group).map((c) => c.id);
+    similar = await prisma.equipment.findMany({
+      where: { categoryId: { in: groupIds }, id: { not: item.id } },
+      include: { category: true, location: true },
+      orderBy: [{ status: 'asc' }, { createdAt: 'desc' }],
+      take: 3,
+    });
+  }
 
-      <div className="grid gap-6 lg:grid-cols-3">
-        <Card className="lg:col-span-2">
-          {item.imageUrls.length > 0 && (
-            <div className="mb-4 flex flex-col gap-2">
-              <img
-                src={item.imageUrls[0]}
-                alt={item.name}
-                className="max-h-96 w-full rounded-md object-cover"
-              />
-              {item.imageUrls.length > 1 && (
-                <div className="grid grid-cols-4 gap-2 sm:grid-cols-6">
-                  {item.imageUrls.slice(1).map((url, index) => (
-                    <a key={url} href={url} target="_blank" rel="noreferrer">
-                      <img
-                        src={url}
-                        alt={`${item.name} — фото ${index + 2}`}
-                        className="h-20 w-full rounded object-cover"
-                      />
-                    </a>
-                  ))}
-                </div>
+  const facts: { label: string; value: string }[] = [
+    { label: 'Категория', value: item.category.name },
+    ...(item.location
+      ? [{ label: 'Местоположение', value: `${item.location.city}, ${item.location.country}` }]
+      : []),
+    { label: 'Поставщик', value: item.company.name },
+    ...(hour !== null ? [{ label: 'Цена за час', value: formatMoney(hour, item.currency) }] : []),
+    ...(shift !== null
+      ? [{ label: 'Цена за смену 8 ч', value: formatMoney(shift, item.currency) }]
+      : []),
+    ...(item.weeklyRate
+      ? [{ label: 'Цена за неделю', value: formatMoney(item.weeklyRate, item.currency) }]
+      : []),
+    ...(item.monthlyRate
+      ? [{ label: 'Цена за месяц', value: formatMoney(item.monthlyRate, item.currency) }]
+      : []),
+    ...specRows.map((row) => ({
+      label: row.label,
+      value: row.unit ? `${row.value} ${row.unit}` : row.value,
+    })),
+  ];
+
+  return (
+    <div className="flex flex-col gap-16">
+      <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_400px] lg:gap-10">
+        {/* Title, chips and gallery */}
+        <div className="flex min-w-0 flex-col gap-6">
+          <nav aria-label="Навигация" className="eyebrow text-[0.65rem] text-slate-500">
+            <a href="/equipment" className="hover:text-slate-900">
+              Каталог
+            </a>
+            <span className="mx-2 text-slate-300">/</span>
+            <a href={`/equipment?category=${item.categoryId}`} className="hover:text-slate-900">
+              {item.category.name}
+            </a>
+          </nav>
+          <div>
+            <div className="flex flex-wrap items-center gap-3">
+              <AvailabilityChip status={item.status} />
+              {item.location && (
+                <span className="eyebrow text-[0.65rem] text-slate-500">{item.location.city}</span>
               )}
             </div>
+            <h1 className="mt-3 break-words text-3xl font-extrabold tracking-[-0.03em] sm:text-5xl">
+              {item.name}
+            </h1>
+            <p className="mt-3 text-sm text-slate-500">
+              {item.category.name} · Поставщик: {item.company.name}
+              {averageRating !== null && (
+                <>
+                  {' '}
+                  · ★ {averageRating.toFixed(1)} (
+                  {pluralizeRu(item.reviews.length, ['отзыв', 'отзыва', 'отзывов'])})
+                </>
+              )}
+            </p>
+          </div>
+
+          {(chips.length > 0 || hour !== null || shift !== null) && (
+            <ul className="flex flex-wrap gap-2" aria-label="Коротко о машине">
+              {hour !== null && (
+                <li className="rounded-full bg-slate-950 px-3.5 py-1.5 font-mono text-sm font-semibold text-amber-400">
+                  {formatMoney(hour, item.currency)}/ч
+                </li>
+              )}
+              {shift !== null && (
+                <li className="rounded-full bg-slate-950 px-3.5 py-1.5 font-mono text-sm font-semibold text-white">
+                  {formatMoney(shift, item.currency)}/смена
+                </li>
+              )}
+              {chips.map((chip) => (
+                <li
+                  key={chip}
+                  className="rounded-full border border-slate-200 bg-white px-3.5 py-1.5 text-sm font-medium text-slate-700"
+                >
+                  {chip}
+                </li>
+              ))}
+            </ul>
           )}
 
-          <h2 className="font-semibold">Описание</h2>
-          <p className="mt-2 whitespace-pre-line text-sm text-slate-600">
-            {item.description ?? 'Описание не указано.'}
-          </p>
-
-          {Object.keys(specs).length > 0 && (
-            <>
-              <h2 className="mt-6 font-semibold">Характеристики</h2>
-              <dl className="mt-2 grid grid-cols-1 gap-x-4 gap-y-1 break-words text-sm sm:grid-cols-2">
-                {Object.entries(specs).map(([key, value]) => (
-                  <div key={key} className="contents">
-                    <dt className="text-slate-500">{key}</dt>
-                    <dd>{String(value)}</dd>
-                  </div>
-                ))}
-              </dl>
-            </>
+          {item.imageUrls.length > 0 ? (
+            <MachineGallery images={item.imageUrls} name={item.name} />
+          ) : kind ? (
+            <Machine3DViewer
+              kind={kind}
+              fallbackIcon={categoryIcon(item.category.name)}
+              envelope={envelope}
+            />
+          ) : (
+            <div className="relative flex aspect-[16/9] items-center justify-center overflow-hidden rounded-3xl bg-slate-950 bg-[radial-gradient(ellipse_at_50%_35%,rgba(245,158,11,0.16),transparent_62%)]">
+              <div
+                className="absolute inset-0 opacity-[0.1] [background-image:linear-gradient(rgba(255,255,255,.5)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,.5)_1px,transparent_1px)] [background-size:32px_32px] [mask-image:radial-gradient(ellipse_at_center,black,transparent_75%)]"
+                aria-hidden
+              />
+              <Icon
+                name={categoryIcon(item.category.name)}
+                className="relative h-28 w-28 text-amber-400"
+              />
+              <span className="eyebrow absolute left-4 top-4 text-[0.65rem] text-amber-400">
+                {item.category.name}
+              </span>
+            </div>
           )}
+        </div>
+
+        {/* Estimate: sticky on desktop, right after the gallery on phones */}
+        <aside
+          id="estimate"
+          className="scroll-mt-24 lg:col-start-2 lg:row-span-2 lg:row-start-1"
+          aria-label="Расчёт и заказ"
+        >
+          <div className="flex flex-col gap-4 lg:sticky lg:top-24">
+            <EstimateBox
+              equipmentId={item.id}
+              equipmentName={item.name}
+              hourlyRate={hour}
+              shiftRate={shift}
+              hammerRate={hammerRate}
+              showVatNote={ownFleet}
+              statusNote={STATUS_NOTE[item.status]}
+            />
+            {item.status === 'AVAILABLE' && (
+              <details className="group rounded-3xl border border-slate-200 bg-white px-5 py-4">
+                <summary className="flex cursor-pointer list-none items-center justify-between gap-2 text-sm font-semibold [&::-webkit-details-marker]:hidden">
+                  Забронировать на даты
+                  <Icon
+                    name="plus"
+                    className="h-4 w-4 text-slate-500 transition group-open:rotate-45"
+                  />
+                </summary>
+                <div className="mt-4">
+                  <BookingForm
+                    equipmentId={item.id}
+                    dailyRate={Number(item.dailyRate)}
+                    currency={item.currency}
+                  />
+                </div>
+              </details>
+            )}
+          </div>
+        </aside>
+
+        {/* Specs, description, reviews */}
+        <div className="flex min-w-0 flex-col gap-10 lg:col-start-1 lg:row-start-2">
+          <section>
+            <div className="eyebrow text-amber-600">01 — Характеристики</div>
+            <dl className="mt-4 grid overflow-hidden rounded-3xl border border-slate-200 bg-white sm:grid-cols-2">
+              {facts.map((fact, index) => (
+                <div
+                  key={`${fact.label}-${index}`}
+                  className="flex items-baseline justify-between gap-4 border-slate-200 px-5 py-3.5 text-sm [&:not(:last-child)]:border-b sm:odd:border-r sm:[&:nth-last-child(2):nth-child(odd)]:border-b-0"
+                >
+                  <dt className="text-slate-500">{fact.label}</dt>
+                  <dd className="text-right font-medium text-slate-900">{fact.value}</dd>
+                </div>
+              ))}
+            </dl>
+          </section>
+
+          <section>
+            <div className="eyebrow text-amber-600">02 — Описание</div>
+            <p className="mt-4 max-w-3xl whitespace-pre-line leading-relaxed text-slate-700">
+              {item.description ?? 'Описание не указано — уточните детали у менеджера.'}
+            </p>
+          </section>
 
           {item.reviews.length > 0 && (
-            <>
-              <h2 className="mt-6 font-semibold">Отзывы</h2>
-              <div className="mt-2 flex flex-col gap-3">
+            <section>
+              <div className="eyebrow text-amber-600">03 — Отзывы</div>
+              <div className="mt-4 flex flex-col divide-y divide-slate-200 rounded-3xl border border-slate-200 bg-white">
                 {item.reviews.map((review) => (
-                  <div key={review.id} className="border-t border-slate-100 pt-2 text-sm">
+                  <div key={review.id} className="px-5 py-4 text-sm">
                     <p className="font-medium">
-                      {'★'.repeat(review.rating)}
-                      {'☆'.repeat(5 - review.rating)}{' '}
+                      <span className="text-amber-500">
+                        {'★'.repeat(review.rating)}
+                        {'☆'.repeat(5 - review.rating)}
+                      </span>{' '}
                       <span className="font-normal text-slate-500">{review.author.name}</span>
                     </p>
-                    {review.comment && <p className="mt-1 text-slate-600">{review.comment}</p>}
+                    {review.comment && <p className="mt-1 text-slate-700">{review.comment}</p>}
                   </div>
                 ))}
               </div>
-            </>
+            </section>
           )}
-        </Card>
+        </div>
+      </div>
 
-        <Card className="flex h-fit flex-col gap-3 lg:sticky lg:top-6">
-          <p className="text-2xl font-semibold">
-            {formatRate(item).price}
-            <span className="text-sm font-normal text-slate-500">{formatRate(item).unit}</span>
-          </p>
-          {formatRate(item).note && (
-            <p className="text-sm text-slate-600">{formatRate(item).note}</p>
-          )}
-          {item.weeklyRate && (
-            <p className="text-sm text-slate-600">
-              {formatMoney(item.weeklyRate, item.currency)}/неделя
-            </p>
-          )}
-          {item.monthlyRate && (
-            <p className="text-sm text-slate-600">
-              {formatMoney(item.monthlyRate, item.currency)}/месяц
-            </p>
-          )}
-          {item.location && (
-            <p className="text-sm text-slate-500">
-              {item.location.city}, {item.location.country}
-            </p>
-          )}
-
-          {item.status === 'AVAILABLE' && (
-            <div className="mt-2 border-t border-slate-200 pt-3">
-              <BookingForm
-                equipmentId={item.id}
-                dailyRate={Number(item.dailyRate)}
-                currency={item.currency}
-              />
+      {similar.length > 0 && (
+        <section>
+          <div className="flex flex-wrap items-end justify-between gap-4">
+            <div>
+              <div className="eyebrow text-amber-600">Ещё в каталоге</div>
+              <h2 className="mt-3 text-3xl font-extrabold tracking-[-0.03em] sm:text-4xl">
+                Похожая техника
+              </h2>
             </div>
-          )}
-
-          <div className="mt-2 border-t border-slate-200 pt-3">
-            {item.hourlyRate ? (
-              <RentalCalculator
-                equipmentId={item.id}
-                equipmentName={item.name}
-                hourlyRate={Number(item.hourlyRate)}
-                hammerRate={
-                  typeof specs['Цена с гидромолотом, ₽/ч'] === 'number'
-                    ? (specs['Цена с гидромолотом, ₽/ч'] as number)
-                    : undefined
-                }
-              />
-            ) : (
-              <CallbackForm
-                source={`equipment:${item.id}`}
-                defaultMessage={`Интересует: ${item.name}`}
-                title="Заказать по телефону"
-                subtitle={`${SITE.callbackPromise}.`}
-              />
-            )}
             <a
-              href={SITE.whatsappHref}
-              target="_blank"
-              rel="noopener"
-              className="mt-3 flex items-center justify-center gap-2 rounded-md border border-emerald-600 py-2 text-sm font-semibold text-emerald-700 hover:bg-emerald-50"
+              href={`/equipment?category=${item.categoryId}`}
+              className="group inline-flex items-center gap-2 rounded-full border border-slate-300 px-5 py-2.5 text-sm font-semibold transition hover:border-slate-900"
             >
-              Спросить в WhatsApp
+              Все: {item.category.name}
+              <Icon name="arrow" className="h-4 w-4 transition group-hover:translate-x-1" />
             </a>
           </div>
-        </Card>
-      </div>
+          <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+            {similar.map((other) => (
+              <EquipmentCard key={other.id} item={other} />
+            ))}
+          </div>
+        </section>
+      )}
     </div>
   );
 }

@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { SITE } from '@/lib/site';
+import { submitLead } from '@/lib/submitLead';
 
 // "Call me back" form. Works without an account and without the AI features.
 export function CallbackForm({
@@ -30,15 +31,7 @@ export function CallbackForm({
     setError(null);
     setStatus('sending');
     try {
-      const response = await fetch('/api/leads', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, phone, message, source, consent, website }),
-      });
-      if (!response.ok) {
-        const body = await response.json().catch(() => null);
-        throw new Error(typeof body?.error === 'string' ? body.error : 'Не удалось отправить');
-      }
+      await submitLead({ name, phone, message, source, consent, website });
       setStatus('sent');
     } catch (err) {
       setStatus('idle');
