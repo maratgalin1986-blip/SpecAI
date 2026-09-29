@@ -153,7 +153,7 @@ export default async function HomePage() {
 
   return (
     <div className="flex flex-col gap-24">
-      <section className="hero-backdrop relative -mt-2 overflow-hidden rounded-[2rem] text-white shadow-2xl">
+      <section className="depth-exit hero-backdrop relative -mt-2 overflow-hidden rounded-[2rem] text-white shadow-2xl">
         <div className="hero-grid" aria-hidden />
         <div className="relative grid lg:grid-cols-2">
           <div className="z-10 flex flex-col justify-center px-6 pb-4 pt-12 sm:px-10 lg:py-20">
@@ -202,7 +202,7 @@ export default async function HomePage() {
         </div>
       </section>
 
-      <section className="-mt-12 grid grid-cols-2 overflow-hidden rounded-3xl border border-slate-200 bg-white lg:grid-cols-4">
+      <section className="depth -mt-12 grid grid-cols-2 overflow-hidden rounded-3xl border border-slate-200 bg-white lg:grid-cols-4">
         {stats.map((stat, index) => (
           <Reveal
             key={stat.label}
@@ -219,7 +219,7 @@ export default async function HomePage() {
         ))}
       </section>
 
-      <div className="-my-10 overflow-hidden border-y border-slate-200 py-4" aria-hidden>
+      <div className="depth -my-10 overflow-hidden border-y border-slate-200 py-4" aria-hidden>
         <div className="marquee">
           {[...MARQUEE, ...MARQUEE].map((item, index) => (
             <span key={index} className="eyebrow flex items-center gap-8 pr-8 text-slate-500">
@@ -230,7 +230,7 @@ export default async function HomePage() {
         </div>
       </div>
 
-      <section>
+      <section className="depth">
         <Reveal>
           <div className="eyebrow text-amber-600">01 — Техника и цены</div>
           <div className="mt-3 flex flex-wrap items-end justify-between gap-4">
@@ -327,7 +327,7 @@ export default async function HomePage() {
         </div>
       </section>
 
-      <section className="relative overflow-hidden rounded-[2rem] bg-slate-950 px-6 py-14 text-white sm:px-10">
+      <section className="depth relative overflow-hidden rounded-[2rem] bg-slate-950 px-6 py-14 text-white sm:px-10">
         <div className="hero-grid opacity-40" aria-hidden />
         <div className="relative flex flex-col items-start gap-8 lg:flex-row lg:items-center">
           <Reveal className="flex-1">
@@ -394,7 +394,9 @@ export default async function HomePage() {
         </ol>
       </section>
 
-      <Faq items={HOME_FAQ} />
+      <div className="depth">
+        <Faq items={HOME_FAQ} />
+      </div>
 
       <Reveal>
         <section

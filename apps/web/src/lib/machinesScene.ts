@@ -358,6 +358,8 @@ export interface MachinesScene {
   /** Clicking/tapping the machine sounds the horn and flashes the lights. */
   poke(clientX: number, clientY: number): void;
   setRunning(running: boolean): void;
+  /** 0..1 — dolly the camera into the scene as the hero scrolls away. */
+  setDive(amount: number): void;
   dispose(): void;
 }
 
@@ -668,6 +670,8 @@ export function createMachinesScene(
     }
   }
 
+  let dive = 0;
+
   function placeCamera() {
     camera.position.set(
       cameraBase.x + smoothPointer.x * 1.4,
@@ -675,6 +679,7 @@ export function createMachinesScene(
       cameraBase.z - smoothPointer.x * 0.9,
     );
     if (camera.aspect < 1) camera.position.multiplyScalar(1.32);
+    camera.position.lerp(lookAt, dive * 0.72);
     camera.lookAt(lookAt);
     camera.updateMatrixWorld();
   }
@@ -948,6 +953,10 @@ export function createMachinesScene(
       options.sound?.play('horn');
       hornAt = elapsed;
       if (options.reducedMotion) render();
+    },
+    setDive(amount) {
+      dive = clamp(amount, 0, 1);
+      if (options.reducedMotion || !running) render();
     },
     setRunning(next) {
       if (next === running) return;

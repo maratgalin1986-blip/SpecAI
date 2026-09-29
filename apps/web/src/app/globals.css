@@ -198,6 +198,51 @@ body {
   }
 }
 
+/* ---- Depth scroll: blocks rise out of the depth and fly past the camera --
+   Scroll-driven animations where supported; elsewhere Reveal still applies. */
+
+@supports (animation-timeline: view()) {
+  .depth {
+    transform-origin: 50% 0;
+    animation:
+      depth-in linear both,
+      depth-out linear forwards;
+    animation-timeline: view(), view();
+    animation-range:
+      entry 0% cover 30%,
+      exit 55% exit 100%;
+  }
+
+  .depth-exit {
+    transform-origin: 50% 100%;
+    animation: depth-out linear forwards;
+    animation-timeline: view();
+    animation-range: exit 10% exit 100%;
+  }
+}
+
+@keyframes depth-in {
+  from {
+    opacity: 0;
+    transform: perspective(1200px) translate3d(0, 80px, -420px) rotateX(10deg);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes depth-out {
+  from {
+    opacity: 1;
+    transform: none;
+  }
+  to {
+    opacity: 0;
+    transform: perspective(1200px) translate3d(0, -40px, 260px);
+  }
+}
+
 /* ---- Rotating 3D cube (agents section) ----------------------------------- */
 
 .cube-scene {
@@ -267,6 +312,10 @@ body {
   .marquee,
   .story-dust,
   .float-in {
+    animation: none;
+  }
+  .depth,
+  .depth-exit {
     animation: none;
   }
   .reveal {

@@ -61,6 +61,17 @@ export function Hero3D() {
       sound.setSuspended(document.hidden);
     }
 
+    // Scrolling away dives the camera into the scene ("falling through").
+    let diveFrame = 0;
+    function onScroll() {
+      if (diveFrame || reducedMotion) return;
+      diveFrame = requestAnimationFrame(() => {
+        diveFrame = 0;
+        const rect = container!.getBoundingClientRect();
+        sceneRef.current?.setDive(Math.max(0, -rect.top) / Math.max(1, rect.height));
+      });
+    }
+
     // Stop rendering while the hero is scrolled out of view.
     const visibility = new IntersectionObserver(([entry]) => {
       sceneRef.current?.setRunning(entry?.isIntersecting ?? true);
@@ -87,6 +98,7 @@ export function Hero3D() {
         window.addEventListener('pointercancel', onPointerUp);
         window.addEventListener('blur', onPointerUp);
         window.addEventListener('keydown', onKeyDown);
+        window.addEventListener('scroll', onScroll, { passive: true });
         document.addEventListener('visibilitychange', onVisibilityChange);
       })
       .catch(() => undefined);
@@ -100,6 +112,8 @@ export function Hero3D() {
       window.removeEventListener('pointercancel', onPointerUp);
       window.removeEventListener('blur', onPointerUp);
       window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('scroll', onScroll);
+      cancelAnimationFrame(diveFrame);
       document.removeEventListener('visibilitychange', onVisibilityChange);
       sceneRef.current?.dispose();
       sceneRef.current = undefined;
