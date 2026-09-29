@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import withSerwistInit from '@serwist/next';
+import { PrismaPlugin } from '@prisma/nextjs-monorepo-workaround-plugin';
 
 // New revision on every build so the precached offline page is refreshed.
 const revision = randomUUID();
@@ -19,6 +20,14 @@ const withSerwist = withSerwistInit({
 const nextConfig = {
   reactStrictMode: true,
   transpilePackages: ['@specai/ui', '@specai/shared', '@specai/ai-service', '@specai/database'],
+  webpack(config, { isServer }) {
+    // The Prisma client lives in packages/database and is bundled into the
+    // server chunks, so its query engine (.so.node) and schema would be left
+    // behind on Vercel ("could not locate the Query Engine"). The plugin copies
+    // them next to the chunks.
+    if (isServer) config.plugins = [...config.plugins, new PrismaPlugin()];
+    return config;
+  },
 };
 
 export default withSerwist(nextConfig);
