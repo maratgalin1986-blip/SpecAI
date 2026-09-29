@@ -12,6 +12,8 @@ export const SITE = {
   email: 'specplast16@mail.ru',
   // WhatsApp chat with the same number (click-to-chat).
   whatsappHref: 'https://wa.me/79272428088',
+  // Yandex.Metrika counter (created 2026-09-29); the env var can override it.
+  metrikaId: process.env.NEXT_PUBLIC_YANDEX_METRIKA_ID || '113179760',
   // Telegram bot username without "@", once the bot exists (NEXT_PUBLIC_TELEGRAM_BOT).
   telegramBot: process.env.NEXT_PUBLIC_TELEGRAM_BOT ?? '',
   // Promise shown next to callback forms. Keep it realistic.

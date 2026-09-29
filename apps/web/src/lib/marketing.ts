@@ -1,3 +1,5 @@
+import { SITE } from './site';
+
 // Marketing attribution: where a visitor came from (ad campaign, search,
 // maps, messenger…) is remembered for 30 days and attached to every lead, so
 // the admin panel can show which channel brings requests. Goals are also sent
@@ -109,7 +111,7 @@ export function currentChannel(): string {
 export type Goal = 'lead' | 'call' | 'whatsapp' | 'telegram' | 'email';
 
 export function reachGoal(goal: Goal) {
-  const id = Number(process.env.NEXT_PUBLIC_YANDEX_METRIKA_ID);
+  const id = Number(SITE.metrikaId);
   const ym = (window as unknown as { ym?: (...args: unknown[]) => void }).ym;
   if (id && ym) ym(id, 'reachGoal', goal);
 }
