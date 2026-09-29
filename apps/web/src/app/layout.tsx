@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import type { ReactNode } from 'react';
 import { JetBrains_Mono, Manrope } from 'next/font/google';
 import { InstallPrompt } from '@/components/InstallPrompt';
+import { TelegramMiniApp } from '@/components/TelegramMiniApp';
 import { Providers } from '@/components/Providers';
 import { SiteHeader } from '@/components/SiteHeader';
 import { SiteFooter } from '@/components/SiteFooter';
@@ -102,6 +103,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           <AgentChatWidget />
           <MessengerButtons />
           <InstallPrompt />
+          <TelegramMiniApp />
           <YandexMetrika />
         </Providers>
       </body>
