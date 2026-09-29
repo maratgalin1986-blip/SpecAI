@@ -1,8 +1,9 @@
 import { PrismaClient } from '../generated/client';
-import { resolveDatabaseUrl } from './connection';
+import { locateQueryEngine, resolveDatabaseUrl } from './connection';
 
 /** A Prisma client that also handles Yandex Cloud TLS (see connection.ts). */
 export function createPrismaClient() {
+  locateQueryEngine();
   const url = resolveDatabaseUrl(process.env.DATABASE_URL);
   return new PrismaClient(url ? { datasources: { db: { url } } } : undefined);
 }
@@ -25,4 +26,9 @@ export * from '../generated/client';
 // prisma/ensure-fleet.ts. Fixed id so the fleet can be linked to an account.
 export const HOUSE_COMPANY_ID = 'specplast16-house';
 
-export { isYandexDatabaseUrl, resolveDatabaseUrl, withYandexTls } from './connection';
+export {
+  isYandexDatabaseUrl,
+  locateQueryEngine,
+  resolveDatabaseUrl,
+  withYandexTls,
+} from './connection';

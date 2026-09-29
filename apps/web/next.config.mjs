@@ -20,6 +20,15 @@ const withSerwist = withSerwistInit({
 const nextConfig = {
   reactStrictMode: true,
   transpilePackages: ['@specai/ui', '@specai/shared', '@specai/ai-service', '@specai/database'],
+  experimental: {
+    // Belt and braces for the Prisma engine: ship it in every server function
+    // at its own path, where packages/database/src/connection.ts
+    // (locateQueryEngine) finds it even if the plugin below did not copy it —
+    // which happened on a Vercel build that reused the build cache.
+    outputFileTracingIncludes: {
+      '/**': ['../../packages/database/generated/client/libquery_engine-*'],
+    },
+  },
   webpack(config, { isServer }) {
     // The Prisma client lives in packages/database and is bundled into the
     // server chunks, so its query engine (.so.node) and schema would be left
