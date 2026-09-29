@@ -4,13 +4,16 @@ import { useEffect, useRef, useState } from 'react';
 import { defaultPhotoOf, pickPhoto, type MachineType } from '@/lib/machinePhotos';
 
 // «Путешествие по объекту»: a pinned, scroll-driven fly-through of one big
-// construction site. Each stop is a photo; scrolling pulls the camera out of
+// construction site. Each stop is a looping clip of real footage (over a
+// photo that shows while it loads); scrolling pulls the camera out of
 // the previous shot, holds, then dives into a focal point (a load on the hook,
 // the pit, the platform…) and comes out of the next shot — like an Apple-style
 // scroll film. Every stop is also a section of the site with a link.
 
 type Scene = {
   type: MachineType;
+  /** Real footage (public/video/<name>.webm|.mp4|.jpg); one is picked per visit. */
+  videos: string[];
   place: string;
   title: string;
   text: string;
@@ -21,6 +24,7 @@ type Scene = {
 const SCENES: Scene[] = [
   {
     type: 'crane',
+    videos: ['site-aerial', 'city-cranes'],
     place: 'Ворота объекта',
     title: 'Большая стройка начинается с техники',
     text: 'Автокраны, экскаваторы, манипуляторы и катки — весь парк в одном каталоге.',
@@ -29,6 +33,7 @@ const SCENES: Scene[] = [
   },
   {
     type: 'excavator',
+    videos: ['excavator-truck'],
     place: 'Котлован',
     title: 'Копаем котлован под фундамент',
     text: 'Гусеничные экскаваторы и экскаваторы-погрузчики с опытными машинистами.',
@@ -37,6 +42,7 @@ const SCENES: Scene[] = [
   },
   {
     type: 'kmu',
+    videos: ['workers'],
     place: 'Склад материалов',
     title: 'Привезём и выгрузим',
     text: 'Манипулятор КМУ 7 т и самосвалы — от плит до контейнеров.',
@@ -45,6 +51,7 @@ const SCENES: Scene[] = [
   },
   {
     type: 'agp',
+    videos: ['tower-glass'],
     place: 'Фасад',
     title: 'Работы на высоте',
     text: 'Автовышки АГП для фасадов, кровли и освещения.',
@@ -52,15 +59,17 @@ const SCENES: Scene[] = [
     cta: 'Автовышки',
   },
   {
-    type: 'roller',
-    place: 'Дорога',
-    title: 'Уплотняем и сдаём объект',
-    text: 'Виброкатки и погрузчики доводят площадку до финиша.',
+    type: 'wheeled-excavator',
+    videos: ['demolition'],
+    place: 'Демонтаж',
+    title: 'Ломаем старое под новое',
+    text: 'Колёсные экскаваторы с гидромолотом и ножницами — бетон, асфальт, перекрытия.',
     href: '/equipment',
-    cta: 'Катки и погрузчики',
+    cta: 'Техника для демонтажа',
   },
   {
     type: 'trench',
+    videos: ['frame-sunset'],
     place: 'Ваш объект',
     title: 'Следующая остановка — ваша стройка',
     text: 'Оставьте заявку — подберём технику и назовём цену за 15 минут.',
@@ -79,6 +88,7 @@ export function SiteJourney() {
   // A different photo (machine model and backdrop) of every stop on each visit.
   const [scenes, setScenes] = useState(SCENES);
   const [photos, setPhotos] = useState(() => SCENES.map((scene) => defaultPhotoOf(scene.type)));
+  const [clips, setClips] = useState(() => SCENES.map((scene) => scene.videos[0]!));
   const [clock, setClock] = useState('');
 
   useEffect(() => {
@@ -87,6 +97,7 @@ export function SiteJourney() {
     const route = [SCENES[0]!, ...middle, SCENES[SCENES.length - 1]!];
     setScenes(route);
     setPhotos(route.map((scene) => pickPhoto(scene.type, 'journey')));
+    setClips(route.map((scene) => scene.videos[Math.floor(Math.random() * scene.videos.length)]!));
     const tick = () =>
       setClock(new Date().toLocaleTimeString('ru-RU', { timeZone: 'Europe/Moscow' }));
     tick();
@@ -188,8 +199,22 @@ export function SiteJourney() {
                   src={photos[i]}
                   alt=""
                   loading={i < 2 ? 'eager' : 'lazy'}
-                  className="journey-push h-full w-full object-cover"
+                  className="journey-push absolute inset-0 h-full w-full object-cover"
                 />
+                {/* Real footage over the photo: people and machines at work. */}
+                <video
+                  key={clips[i]}
+                  className="journey-push absolute inset-0 h-full w-full object-cover"
+                  autoPlay
+                  muted
+                  loop
+                  playsInline
+                  preload={i < 2 ? 'auto' : 'metadata'}
+                  poster={`/video/${clips[i]}.jpg`}
+                >
+                  <source src={`/video/${clips[i]}.webm`} type="video/webm" />
+                  <source src={`/video/${clips[i]}.mp4`} type="video/mp4" />
+                </video>
                 <div className="journey-clouds absolute inset-0" />
                 <div className="journey-flicker absolute inset-0" />
               </div>
@@ -294,7 +319,7 @@ export function SiteJourney() {
         </div>
 
         <span className="absolute right-4 top-20 z-30 text-[0.6rem] text-white/40">
-          Фото для примера
+          Видео и фото для примера
         </span>
       </div>
     </section>
