@@ -13,6 +13,17 @@ import {
 const CUID = 'cjld2cjxh0000qzrmn831i7rn';
 
 describe('createEquipmentSchema', () => {
+  it('accepts only https image links', () => {
+    const base = { name: 'Кран', categoryId: CUID, companyId: CUID, dailyRate: 1000 };
+    expect(
+      createEquipmentSchema.safeParse({ ...base, imageUrls: ['https://cdn.example.com/a.jpg'] })
+        .success,
+    ).toBe(true);
+    for (const url of ['http://example.com/a.jpg', 'javascript:alert(1)', 'data:image/png,xx']) {
+      expect(createEquipmentSchema.safeParse({ ...base, imageUrls: [url] }).success).toBe(false);
+    }
+  });
+
   it('applies defaults for currency and imageUrls', () => {
     const result = createEquipmentSchema.parse({
       name: 'Экскаватор JCB 3CX',
@@ -71,6 +82,7 @@ describe('registerSchema', () => {
       name: 'Иван',
       email: 'ivan@example.com',
       password: 'password123',
+      consent: true,
     });
     expect(customer.success).toBe(true);
 
@@ -79,6 +91,7 @@ describe('registerSchema', () => {
       name: 'ООО Техника',
       email: 'ops@example.com',
       password: 'password123',
+      consent: true,
     });
     expect(providerWithoutCompany.success).toBe(false);
 
@@ -87,8 +100,21 @@ describe('registerSchema', () => {
       name: 'Иван',
       email: 'ivan@example.com',
       password: 'short',
+      consent: true,
     });
     expect(shortPassword.success).toBe(false);
+  });
+
+  it('requires consent to the processing of personal data', () => {
+    const base = {
+      accountType: 'CUSTOMER',
+      name: 'Иван',
+      email: 'ivan@example.com',
+      password: 'password123',
+    };
+    expect(registerSchema.safeParse(base).success).toBe(false);
+    expect(registerSchema.safeParse({ ...base, consent: false }).success).toBe(false);
+    expect(registerSchema.safeParse({ ...base, consent: true }).success).toBe(true);
   });
 
   it('normalizes email to trimmed lower case', () => {
@@ -97,6 +123,7 @@ describe('registerSchema', () => {
       name: 'Иван',
       email: '  Ivan.Petrov@Example.COM ',
       password: 'password123',
+      consent: true,
     });
     expect(result.email).toBe('ivan.petrov@example.com');
   });

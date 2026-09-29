@@ -20,6 +20,8 @@ const baseRegistration = {
   email: emailSchema,
   password: z.string().min(8).max(100),
   phone: z.string().max(30).optional(),
+  /** Согласие на обработку персональных данных (152-ФЗ): без него аккаунт не создаётся. */
+  consent: z.literal(true),
 };
 
 export const registerCustomerSchema = z.object({

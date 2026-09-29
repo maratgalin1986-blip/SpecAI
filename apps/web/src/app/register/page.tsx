@@ -33,6 +33,7 @@ export default function RegisterPage() {
         password,
         ...(phone ? { phone } : {}),
         ...(accountType === 'PROVIDER' ? { companyName } : {}),
+        consent,
       }),
     });
 
