@@ -99,7 +99,7 @@ export function HeroPhotos() {
         <div className="hero-parallax-photo absolute -inset-8">
           <video
             key={video}
-            className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-1000 ${
+            className={`hero-drone absolute inset-0 h-full w-full object-cover transition-opacity duration-1000 ${
               current === -1 ? 'opacity-100' : 'opacity-0'
             }`}
             autoPlay

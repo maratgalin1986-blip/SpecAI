@@ -8,6 +8,7 @@ import { ModerationButtons, CopyField, TelegramSetupButton } from '@/components/
 import { headers } from 'next/headers';
 import { inboundApiToken, telegramWebhookSecret, whatsappWebhookToken } from '@/lib/integrations';
 import { isAdminConfigured, isAdminRequest } from '@/lib/admin';
+import { formLabel, splitSource } from '@/lib/marketing';
 
 export const dynamic = 'force-dynamic';
 export const metadata: Metadata = { title: 'Заявки на звонок', robots: { index: false } };
@@ -68,6 +69,23 @@ export default async function AdminPage() {
   const whatsappToken = whatsappWebhookToken();
   const inboundToken = inboundApiToken();
   const newCount = leads.filter((lead) => lead.status === 'NEW').length;
+  // Marketing: which channels and which forms brought requests in 30 days.
+  const monthAgo = Date.now() - 30 * 86_400_000;
+  const recentLeads = leads.filter((lead) => lead.createdAt.getTime() >= monthAgo);
+  const tally = (key: 'channel' | 'form') =>
+    Object.entries(
+      recentLeads.reduce<Record<string, number>>((acc, lead) => {
+        const parts = splitSource(lead.source);
+        const name = key === 'form' ? formLabel(parts.form) : parts.channel;
+        acc[name] = (acc[name] ?? 0) + 1;
+        return acc;
+      }, {}),
+    ).sort((a, b) => b[1] - a[1]);
+  const reports: [string, [string, number][]][] = [
+    ['Каналы', tally('channel')],
+    ['Формы на сайте', tally('form')],
+  ];
+  const metrikaReady = /^\d+$/.test(process.env.NEXT_PUBLIC_YANDEX_METRIKA_ID ?? '');
 
   return (
     <div className="flex flex-col gap-6">
@@ -81,6 +99,52 @@ export default async function AdminPage() {
         </div>
         <AdminLogout />
       </div>
+
+      <Card className="flex flex-col gap-4">
+        <div>
+          <h2 className="font-semibold">Маркетинг: откуда заявки за 30 дней</h2>
+          <p className="text-sm text-slate-600">
+            Заявок: {recentLeads.length}. Канал запоминается на 30 дней: реклама с UTM-метками,
+            Яндекс Директ, поиск, 2ГИС, Авито, соцсети. Помечайте ссылки в рекламе меткой utm_source
+            — тогда здесь будет видно, какая реклама окупается.
+          </p>
+        </div>
+        <div className="grid gap-6 md:grid-cols-2">
+          {reports.map(([title, rows]) => (
+            <div key={title}>
+              <h3 className="text-sm font-semibold">{title}</h3>
+              {rows.length === 0 ? (
+                <p className="mt-2 text-sm text-slate-500">Пока нет заявок.</p>
+              ) : (
+                <ul className="mt-2 flex flex-col gap-2">
+                  {rows.map(([name, count]) => (
+                    <li key={name} className="text-sm">
+                      <div className="flex justify-between gap-3">
+                        <span className="truncate">{name}</span>
+                        <span className="font-mono tabular-nums">
+                          {count} · {Math.round((count / recentLeads.length) * 100)}%
+                        </span>
+                      </div>
+                      <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-slate-100">
+                        <div
+                          className="h-full rounded-full bg-amber-500"
+                          style={{ width: `${(count / recentLeads.length) * 100}%` }}
+                        />
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          ))}
+        </div>
+        <p className="text-xs text-slate-500">
+          Яндекс.Метрика:{' '}
+          {metrikaReady
+            ? 'подключена. Цели: lead (заявка), call, whatsapp, telegram, email.'
+            : 'не подключена. Создайте бесплатный счётчик на metrika.yandex.ru и пришлите номер — пропишем NEXT_PUBLIC_YANDEX_METRIKA_ID.'}
+        </p>
+      </Card>
 
       <Card className="flex flex-col gap-3">
         <div>

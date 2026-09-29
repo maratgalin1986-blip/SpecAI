@@ -1,5 +1,8 @@
 // Posts a "call me back" lead to /api/leads. Shared by CallbackForm, the
-// catalog quick order and the estimate box on the machine page.
+// catalog quick order and the estimate box on the machine page. The visitor's
+// marketing channel is appended to the source (see marketing.ts).
+
+import { currentChannel, reachGoal, withChannel } from '@/lib/marketing';
 
 export interface LeadPayload {
   name?: string;
@@ -20,6 +23,7 @@ export async function submitLead(payload: LeadPayload): Promise<void> {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       ...payload,
+      source: withChannel(payload.source, currentChannel()),
       name: payload.name?.trim() || ANONYMOUS_LEAD_NAME,
       website: payload.website ?? '',
     }),
@@ -28,4 +32,5 @@ export async function submitLead(payload: LeadPayload): Promise<void> {
     const body = await response.json().catch(() => null);
     throw new Error(typeof body?.error === 'string' ? body.error : 'Не удалось отправить');
   }
+  reachGoal('lead');
 }
