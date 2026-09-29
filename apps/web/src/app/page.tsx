@@ -8,6 +8,7 @@ import { Hero3D } from '@/components/Hero3D';
 import { Icon, type IconName } from '@/components/Icon';
 import { Reveal } from '@/components/Reveal';
 import { ShiftStory } from '@/components/ShiftStory';
+import { TaskWizard } from '@/components/TaskWizard';
 import { TiltCard } from '@/components/TiltCard';
 import { pluralizeRu } from '@/lib/pluralize';
 import { SITE } from '@/lib/site';
@@ -186,10 +187,10 @@ export default async function HomePage() {
                 <Icon name="arrow" className="h-4 w-4 transition group-hover:translate-x-1" />
               </a>
               <a
-                href="/agents"
+                href="#podbor"
                 className="inline-flex items-center gap-2 rounded-full px-6 py-3.5 text-base font-semibold text-white ring-1 ring-white/30 backdrop-blur transition hover:bg-white/10"
               >
-                Спросить ИИ-агента
+                Подобрать технику
               </a>
             </div>
             <p className="float-in mt-5 text-sm text-slate-400" style={{ animationDelay: '480ms' }}>
@@ -228,6 +229,10 @@ export default async function HomePage() {
             </span>
           ))}
         </div>
+      </div>
+
+      <div className="depth">
+        <TaskWizard />
       </div>
 
       <section className="depth">

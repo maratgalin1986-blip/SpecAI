@@ -1,0 +1,260 @@
+'use client';
+
+import { useState } from 'react';
+import { CallbackForm } from '@/components/CallbackForm';
+import { Icon, type IconName } from '@/components/Icon';
+
+// «Подобрать технику»: three quick questions → a recommended machine, a rough
+// price range from the price list and a callback form with the answers filled in.
+
+const TASKS: {
+  id: string;
+  icon: IconName;
+  label: string;
+  machine: string;
+  rate?: number;
+  landing?: string;
+}[] = [
+  {
+    id: 'dig',
+    icon: 'excavator',
+    label: 'Траншея, котлован, планировка',
+    machine: 'Экскаватор-погрузчик',
+    rate: 3000,
+    landing: 'ekskavator-pogruzchik',
+  },
+  {
+    id: 'break',
+    icon: 'hammer',
+    label: 'Демонтаж, асфальт, бетон',
+    machine: 'Экскаватор-погрузчик с гидромолотом',
+    rate: 3500,
+    landing: 'ekskavator-pogruzchik',
+  },
+  {
+    id: 'lift',
+    icon: 'crane',
+    label: 'Поднять, смонтировать груз',
+    machine: 'Автокран',
+    rate: 3500,
+    landing: 'avtokran',
+  },
+  {
+    id: 'load',
+    icon: 'loader',
+    label: 'Погрузка сыпучих, уборка снега',
+    machine: 'Фронтальный погрузчик',
+    rate: 3000,
+    landing: 'frontalnyj-pogruzchik',
+  },
+  {
+    id: 'utility',
+    icon: 'tractor',
+    label: 'Коммунальные и вспомогательные работы',
+    machine: 'Трактор МТЗ',
+    rate: 2500,
+    landing: 'traktor',
+  },
+  { id: 'other', icon: 'helmet', label: 'Другое — опишу сам', machine: 'Подберёт менеджер' },
+];
+
+const WHEN = ['Сегодня', 'Завтра', 'На этой неделе', 'Позже'];
+
+const VOLUME: { label: string; hours?: [number, number] }[] = [
+  { label: 'Несколько часов', hours: [4, 6] },
+  { label: 'Одна смена (8 ч)', hours: [8, 8] },
+  { label: '2–3 смены', hours: [16, 24] },
+  { label: 'Не знаю' },
+];
+
+const rub = (value: number) => `${value.toLocaleString('ru-RU')} ₽`;
+
+export function TaskWizard() {
+  const [step, setStep] = useState(0);
+  const [task, setTask] = useState<(typeof TASKS)[number] | null>(null);
+  const [when, setWhen] = useState('');
+  const [volume, setVolume] = useState<(typeof VOLUME)[number] | null>(null);
+
+  const estimate =
+    task?.rate && volume?.hours
+      ? volume.hours[0] === volume.hours[1]
+        ? rub(task.rate * volume.hours[0])
+        : `${rub(task.rate * volume.hours[0])} – ${rub(task.rate * volume.hours[1])}`
+      : null;
+
+  const summary = task
+    ? `Подбор техники: ${task.label}. Когда: ${when || '—'}. Объём: ${volume?.label ?? '—'}. ` +
+      `Рекомендация: ${task.machine}${estimate ? `, ориентир ${estimate}` : ''}.`
+    : '';
+
+  const choice = (active: boolean) =>
+    `flex items-center gap-3 rounded-2xl border p-4 text-left text-sm font-semibold transition ${
+      active
+        ? 'border-amber-500 bg-amber-50 text-slate-900'
+        : 'border-slate-200 bg-white hover:-translate-y-0.5 hover:border-slate-400'
+    }`;
+
+  return (
+    <section
+      id="podbor"
+      className="scroll-mt-24 overflow-hidden rounded-[2rem] border border-slate-200 bg-white"
+    >
+      <div className="grid lg:grid-cols-12">
+        <div className="bg-slate-950 p-6 text-white sm:p-10 lg:col-span-4">
+          <div className="eyebrow text-amber-400">Подбор за 30 секунд</div>
+          <h2 className="mt-3 text-3xl font-extrabold tracking-[-0.03em] sm:text-4xl">
+            Подобрать технику под задачу
+          </h2>
+          <p className="mt-4 text-slate-400">
+            Три вопроса — и вы увидите подходящую машину и ориентир по цене из нашего прайса.
+          </p>
+          <ol className="mt-8 hidden flex-col gap-3 font-mono text-sm sm:flex">
+            {['Задача', 'Когда', 'Объём', 'Результат'].map((label, index) => (
+              <li
+                key={label}
+                className={`flex items-center gap-3 ${index <= step ? 'text-white' : 'text-slate-600'}`}
+              >
+                <span
+                  className={`flex h-7 w-7 items-center justify-center rounded-full text-xs ${
+                    index < step
+                      ? 'bg-amber-500 text-slate-950'
+                      : index === step
+                        ? 'ring-1 ring-amber-500'
+                        : 'ring-1 ring-slate-700'
+                  }`}
+                >
+                  {index < step ? '✓' : index + 1}
+                </span>
+                {label}
+              </li>
+            ))}
+          </ol>
+        </div>
+
+        <div className="p-6 sm:p-10 lg:col-span-8">
+          {step === 0 && (
+            <div>
+              <h3 className="text-xl font-bold">Что нужно сделать?</h3>
+              <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                {TASKS.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    className={choice(task?.id === item.id)}
+                    onClick={() => {
+                      setTask(item);
+                      setStep(1);
+                    }}
+                  >
+                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-900 text-amber-400">
+                      <Icon name={item.icon} className="h-6 w-6" />
+                    </span>
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {step === 1 && (
+            <div>
+              <h3 className="text-xl font-bold">Когда нужна техника?</h3>
+              <div className="mt-5 grid grid-cols-2 gap-3">
+                {WHEN.map((item) => (
+                  <button
+                    key={item}
+                    type="button"
+                    className={choice(when === item)}
+                    onClick={() => {
+                      setWhen(item);
+                      setStep(2);
+                    }}
+                  >
+                    {item}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {step === 2 && (
+            <div>
+              <h3 className="text-xl font-bold">Сколько примерно работы?</h3>
+              <div className="mt-5 grid grid-cols-2 gap-3">
+                {VOLUME.map((item) => (
+                  <button
+                    key={item.label}
+                    type="button"
+                    className={choice(volume?.label === item.label)}
+                    onClick={() => {
+                      setVolume(item);
+                      setStep(3);
+                    }}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {step === 3 && task && (
+            <div className="grid gap-6 xl:grid-cols-2">
+              <div>
+                <div className="eyebrow text-amber-600">Рекомендуем</div>
+                <h3 className="mt-2 text-2xl font-extrabold tracking-tight">{task.machine}</h3>
+                <dl className="mt-4 divide-y divide-slate-200 rounded-2xl border border-slate-200 text-sm">
+                  {[
+                    ['Задача', task.label],
+                    ['Когда', when],
+                    ['Объём', volume?.label ?? '—'],
+                    ['Ставка', task.rate ? `от ${rub(task.rate)}/ч с машинистом` : 'по запросу'],
+                  ].map(([label, value]) => (
+                    <div key={label} className="flex justify-between gap-4 px-4 py-2.5">
+                      <dt className="text-slate-500">{label}</dt>
+                      <dd className="text-right font-medium">{value}</dd>
+                    </div>
+                  ))}
+                </dl>
+                {estimate && (
+                  <div className="mt-4 rounded-2xl bg-slate-950 p-4 text-white">
+                    <div className="eyebrow text-[0.65rem] text-slate-400">
+                      Ориентир, без доставки
+                    </div>
+                    <div className="mt-1 font-mono text-2xl font-bold text-amber-400">
+                      {estimate}
+                    </div>
+                  </div>
+                )}
+                <div className="mt-4 flex flex-wrap gap-4 text-sm">
+                  {task.landing && (
+                    <a
+                      href={`/arenda/${task.landing}`}
+                      className="font-semibold text-amber-700 hover:underline"
+                    >
+                      Подробнее о технике →
+                    </a>
+                  )}
+                  <button
+                    type="button"
+                    className="text-slate-500 hover:text-slate-900"
+                    onClick={() => setStep(0)}
+                  >
+                    ← Начать заново
+                  </button>
+                </div>
+              </div>
+              <CallbackForm
+                key={summary}
+                source="wizard"
+                defaultMessage={summary}
+                title="Забронировать"
+                subtitle="Менеджер уточнит адрес и подачу и назовёт точную цену."
+              />
+            </div>
+          )}
+        </div>
+      </div>
+    </section>
+  );
+}
