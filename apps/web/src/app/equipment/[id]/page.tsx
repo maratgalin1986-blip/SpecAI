@@ -132,7 +132,10 @@ export default async function EquipmentDetailPage({ params }: { params: { id: st
                 <span className="eyebrow text-[0.65rem] text-slate-500">{item.location.city}</span>
               )}
             </div>
-            <h1 className="mt-3 break-words text-3xl font-extrabold tracking-[-0.03em] sm:text-5xl">
+            <h1
+              className="mt-3 break-words text-3xl font-extrabold tracking-[-0.03em] sm:text-5xl"
+              style={{ viewTransitionName: 'machine-title' }}
+            >
               {item.name}
             </h1>
             <p className="mt-3 text-sm text-slate-500">
@@ -150,7 +153,10 @@ export default async function EquipmentDetailPage({ params }: { params: { id: st
           {(chips.length > 0 || hour !== null || shift !== null) && (
             <ul className="flex flex-wrap gap-2" aria-label="Коротко о машине">
               {hour !== null && (
-                <li className="rounded-full bg-slate-950 px-3.5 py-1.5 font-mono text-sm font-semibold text-amber-400">
+                <li
+                  className="rounded-full bg-slate-950 px-3.5 py-1.5 font-mono text-sm font-semibold text-amber-400"
+                  style={{ viewTransitionName: 'machine-price' }}
+                >
                   {formatMoney(hour, item.currency)}/ч
                 </li>
               )}
@@ -171,9 +177,14 @@ export default async function EquipmentDetailPage({ params }: { params: { id: st
           )}
 
           {item.imageUrls.length > 0 ? (
-            <MachineGallery images={item.imageUrls} name={item.name} />
+            <div style={{ viewTransitionName: 'machine-photo' }}>
+              <MachineGallery images={item.imageUrls} name={item.name} />
+            </div>
           ) : illustration ? (
-            <figure className="relative aspect-[16/9] overflow-hidden rounded-3xl bg-slate-950">
+            <figure
+              className="relative aspect-[16/9] overflow-hidden rounded-3xl bg-slate-950"
+              style={{ viewTransitionName: 'machine-photo' }}
+            >
               <MachinePhoto
                 type={illustration}
                 alt={item.category.name}

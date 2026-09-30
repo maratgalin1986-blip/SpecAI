@@ -114,6 +114,7 @@ export function currentChannel(): string {
  */
 export type Goal =
   | 'lead'
+  | 'card_open'
   | 'call'
   | 'whatsapp'
   | 'telegram'

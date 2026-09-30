@@ -1064,3 +1064,16 @@ html {
     animation: none;
   }
 }
+
+/* Catalog card -> machine page: photo, title and price fly between pages.
+   The names are set by VtMorph on the clicked card only, so they stay unique. */
+::view-transition-group(machine-photo),
+::view-transition-group(machine-title),
+::view-transition-group(machine-price) {
+  animation-duration: 0.6s;
+  animation-timing-function: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+::view-transition-group(machine-photo) {
+  z-index: 5;
+}
