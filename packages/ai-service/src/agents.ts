@@ -300,7 +300,7 @@ export async function routeToAgent(history: AgentChatMessage[]): Promise<AgentId
 
   const response = await client.messages.create({
     model: DEFAULT_MODEL,
-    max_tokens: 1024,
+    max_tokens: 16000,
     system:
       'You route messages on an equipment rental website to one specialist agent:\n' +
       roster +
