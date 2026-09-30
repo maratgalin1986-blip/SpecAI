@@ -616,7 +616,7 @@ html {
    site, the titles and the partner card come in, then the camera dives into
    the page. All timings are CSS, so it ends even before hydration. */
 .intro {
-  animation: intro-out 0.55s cubic-bezier(0.7, 0, 0.84, 0) 3.05s forwards;
+  animation: intro-out 0.55s cubic-bezier(0.7, 0, 0.84, 0) 2.25s forwards;
 }
 @keyframes intro-out {
   to {
@@ -628,7 +628,7 @@ html {
 }
 .intro-drone {
   transform-origin: 50% 60%;
-  animation: intro-drone 3.6s cubic-bezier(0.25, 0.1, 0.25, 1) both;
+  animation: intro-drone 2.8s cubic-bezier(0.25, 0.1, 0.25, 1) both;
 }
 @keyframes intro-drone {
   from {
@@ -661,7 +661,7 @@ html {
     radial-gradient(120% 90% at 100% 0%, rgba(245, 158, 11, 0.45), transparent 55%),
     linear-gradient(135deg, #111827 0%, #0b0f19 55%, #1f2937 100%);
   transform-style: preserve-3d;
-  animation: intro-card 1.5s cubic-bezier(0.2, 0.8, 0.2, 1) 0.8s both;
+  animation: intro-card 1.3s cubic-bezier(0.2, 0.8, 0.2, 1) 0.6s both;
 }
 @keyframes intro-card {
   from {
@@ -684,7 +684,7 @@ html {
     transparent 60%
   );
   background-size: 250% 100%;
-  animation: intro-shine 1.4s ease-in-out 1.6s both;
+  animation: intro-shine 1.2s ease-in-out 1.2s both;
 }
 @keyframes intro-shine {
   from {
@@ -1002,5 +1002,20 @@ html {
 @media (prefers-reduced-motion: reduce) {
   .qr-scan {
     display: none;
+  }
+}
+
+/* Mobile contact bar: the status light blinks twice, then stays on. */
+.radio-led {
+  animation: radio-led 0.8s ease-in-out 2;
+}
+@keyframes radio-led {
+  50% {
+    opacity: 0.2;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .radio-led {
+    animation: none;
   }
 }

@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { CinemaVideo } from '@/components/CinemaVideo';
 import { SITE } from '@/lib/site';
+import { reachGoal } from '@/lib/marketing';
 
 // Opening titles of the home page, about 3 seconds: a drone shot descends over
 // a construction site, «ООО «СпецПласт 16» представляет», then the partner card
@@ -14,14 +15,18 @@ import { SITE } from '@/lib/site';
 // visitors who have already seen it.
 
 const SEEN_KEY = 'sp16_intro_seen';
-const DURATION_MS = 3600;
+const DURATION_MS = 2800;
 
 // `?intro=0` in the address skips the titles too (ad landings, QA, links
 // sent to someone who has already seen them).
-const HIDE_IF_SEEN = `try{if(sessionStorage.getItem('${SEEN_KEY}')||/[?&]intro=0/.test(location.search)||matchMedia('(prefers-reduced-motion: reduce)').matches){document.getElementById('intro').hidden=true}}catch(e){}`;
+const HIDE_IF_SEEN = `try{if(sessionStorage.getItem('${SEEN_KEY}')||/[?&](intro=0|yclid|gclid|utm_medium=cpc)/.test(location.search)||matchMedia('(prefers-reduced-motion: reduce)').matches){document.getElementById('intro').hidden=true}}catch(e){}`;
 
 export function IntroSplash() {
   const [done, setDone] = useState(false);
+  const skip = () => {
+    reachGoal('intro_skip');
+    setDone(true);
+  };
 
   useEffect(() => {
     // The inline script has already hidden it for a repeat visit; the flag
@@ -35,12 +40,18 @@ export function IntroSplash() {
     } catch {
       // Storage blocked: the titles just play on every visit.
     }
-    const skip = () => setDone(true);
-    const timer = window.setTimeout(skip, DURATION_MS);
-    window.addEventListener('keydown', skip, { once: true });
+    const onKey = () => {
+      reachGoal('intro_skip');
+      setDone(true);
+    };
+    const timer = window.setTimeout(() => {
+      reachGoal('intro_full');
+      setDone(true);
+    }, DURATION_MS);
+    window.addEventListener('keydown', onKey, { once: true });
     return () => {
       window.clearTimeout(timer);
-      window.removeEventListener('keydown', skip);
+      window.removeEventListener('keydown', onKey);
     };
   }, []);
 
@@ -51,7 +62,7 @@ export function IntroSplash() {
       <div
         id="intro"
         className="intro fixed inset-0 z-[100] overflow-hidden bg-black text-white"
-        onClick={() => setDone(true)}
+        onClick={skip}
         role="presentation"
         suppressHydrationWarning
       >
@@ -111,7 +122,7 @@ export function IntroSplash() {
         <button
           type="button"
           className="absolute bottom-6 right-6 rounded-full bg-white/10 px-4 py-2 text-xs font-semibold text-white/80 ring-1 ring-white/20 backdrop-blur hover:bg-white/20"
-          onClick={() => setDone(true)}
+          onClick={skip}
         >
           Пропустить →
         </button>
