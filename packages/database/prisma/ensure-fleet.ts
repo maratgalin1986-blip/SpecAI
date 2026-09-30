@@ -114,6 +114,81 @@ const FLEET: FleetItem[] = [
     description: 'Автокран с машинистом для монтажных и погрузочно-разгрузочных работ.',
     specs: {},
   },
+  {
+    id: 'sp16-excavator-crawler',
+    name: 'Гусеничный экскаватор',
+    make: '',
+    model: '',
+    categorySlug: 'excavators',
+    hourlyRate: 3000,
+    description:
+      'Гусеничный экскаватор с машинистом: котлованы, траншеи, планировка, работа на слабых грунтах.',
+    specs: {},
+  },
+  {
+    id: 'sp16-excavator-wheeled',
+    name: 'Колёсный экскаватор с гидромолотом',
+    make: '',
+    model: '',
+    categorySlug: 'excavators',
+    hourlyRate: 3000,
+    description:
+      'Колёсный экскаватор с машинистом: земляные работы в городе, демонтаж и разбивка гидромолотом.',
+    specs: { 'Навесное оборудование': 'ковш, гидромолот' },
+  },
+  {
+    id: 'sp16-kmu-7t',
+    name: 'Манипулятор КМУ 7 т',
+    make: '',
+    model: '',
+    categorySlug: 'crane-trucks',
+    hourlyRate: 3000,
+    description:
+      'Грузовик с краном-манипулятором и водителем: погрузка, перевозка и разгрузка грузов до 7 т.',
+    specs: { 'Грузоподъёмность КМУ, т': 7 },
+  },
+  {
+    id: 'sp16-agp',
+    name: 'Автовышка АГП',
+    make: '',
+    model: '',
+    categorySlug: 'aerial-platforms',
+    hourlyRate: 2500,
+    description:
+      'Автогидроподъёмник с машинистом: высотные работы, фасады, кровля, освещение, спил деревьев.',
+    specs: {},
+  },
+  {
+    id: 'sp16-roller',
+    name: 'Виброкаток',
+    make: '',
+    model: '',
+    categorySlug: 'rollers',
+    hourlyRate: 3000,
+    description: 'Виброкаток с машинистом: уплотнение грунта, щебня и асфальта.',
+    specs: {},
+  },
+  {
+    id: 'sp16-dump-truck',
+    name: 'Самосвал',
+    make: '',
+    model: '',
+    categorySlug: 'dump-trucks',
+    hourlyRate: 2300,
+    description: 'Самосвал с водителем: вывоз грунта и мусора, доставка песка, щебня, ПГС.',
+    specs: {},
+  },
+  {
+    id: 'sp16-bulldozer',
+    name: 'Бульдозер',
+    make: '',
+    model: '',
+    categorySlug: 'bulldozers',
+    hourlyRate: 3000,
+    description:
+      'Бульдозер с машинистом: планировка участка, перемещение и разравнивание грунта, засыпка.',
+    specs: {},
+  },
 ];
 
 async function main() {
