@@ -132,3 +132,22 @@ export function tilesAround(lat: number, lon: number, zoom: number, cols = 5, ro
 export function formatCoords(lat: number, lon: number) {
   return `${lat.toFixed(4)}° с. ш., ${lon.toFixed(4)}° в. д.`;
 }
+
+// Only street-level tiles around Tatarstan and neighbours are proxied, so the
+// endpoint cannot be used to mirror OSM (the map shows ~12 tiles at z15–19).
+const AREA = { north: 57.5, south: 53, west: 45, east: 56 };
+
+function tileLat(y: number, z: number) {
+  const n = Math.PI - (2 * Math.PI * y) / 2 ** z;
+  return (180 / Math.PI) * Math.atan(Math.sinh(n));
+}
+
+/** Whether the tile proxy serves this tile (see /api/tiles). */
+export function tileAllowed(z: number, x: number, y: number) {
+  if (z < 14 || z > 19) return false;
+  const west = (x / 2 ** z) * 360 - 180;
+  const east = ((x + 1) / 2 ** z) * 360 - 180;
+  const north = tileLat(y, z);
+  const south = tileLat(y + 1, z);
+  return east > AREA.west && west < AREA.east && north > AREA.south && south < AREA.north;
+}
