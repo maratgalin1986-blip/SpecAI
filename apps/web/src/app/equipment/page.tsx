@@ -15,6 +15,7 @@ import {
 import { pluralizeRu } from '@/lib/pluralize';
 import { SITE } from '@/lib/site';
 import { CinemaHero } from '@/components/CinemaHero';
+import { OWN_FLEET } from '@/lib/fleet';
 
 export const metadata = {
   title: 'Каталог спецтехники',
@@ -104,6 +105,7 @@ export default async function EquipmentCatalogPage({
 
   // Filters other than the category: the tab counts are computed against these.
   const baseWhere = {
+    ...OWN_FLEET,
     location: searchParams.city
       ? { city: { equals: searchParams.city, mode: 'insensitive' as const } }
       : undefined,
@@ -358,12 +360,11 @@ export default async function EquipmentCatalogPage({
                   .{' '}
                 </>
               )}
-              Часть парка мы подбираем под заказ — оставьте заявку, найдём технику под вашу задачу,
-              или разместите{' '}
+              Не нашли нужную машину — оставьте{' '}
               <a href="/orders" className="text-amber-700 underline">
-                заявку для поставщиков
+                заявку
               </a>
-              .
+              , подскажем, чем {SITE.name} закроет вашу задачу.
             </p>
           </div>
           <div className="rounded-3xl border border-slate-200 bg-white p-6">

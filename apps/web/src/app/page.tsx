@@ -1,7 +1,7 @@
 import dynamic from 'next/dynamic';
 import { prisma } from '@specai/database';
 import { Button } from '@specai/ui';
-import { AGENT_PROFILES } from '@specai/shared';
+import { PUBLIC_AGENT_PROFILES } from '@specai/shared';
 import { CallbackForm } from '@/components/CallbackForm';
 import { CountUp } from '@/components/CountUp';
 import { Faq } from '@/components/Faq';
@@ -130,7 +130,10 @@ const ADVANTAGES = [
 const STEPS = [
   { title: 'Опишите задачу', text: 'Своими словами — в чате ИИ-агенту или в форме заявки.' },
   { title: 'Получите варианты', text: 'Агент подберёт технику из каталога и посчитает стоимость.' },
-  { title: 'Забронируйте', text: 'Подтвердите бронь или выберите лучшее предложение поставщиков.' },
+  {
+    title: 'Забронируйте',
+    text: 'Подтвердите бронь — СпецПласт16 закрепит за вами машину и машиниста.',
+  },
   { title: 'Работайте', text: 'Следите за статусом в личном кабинете, оставьте отзыв.' },
 ];
 
@@ -435,7 +438,7 @@ export default async function HomePage() {
           </Reveal>
           <div className="cube-scene mx-auto shrink-0 lg:mx-12" aria-hidden>
             <div className="cube">
-              {[...AGENT_PROFILES.map((a) => a.name), 'ИИ', SITE.name].map((label) => (
+              {[...PUBLIC_AGENT_PROFILES.map((a) => a.name), 'ИИ', SITE.name].map((label) => (
                 <div key={label} className="cube-face">
                   {label}
                 </div>
@@ -444,7 +447,7 @@ export default async function HomePage() {
           </div>
         </div>
         <div className="relative mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
-          {AGENT_PROFILES.map((agent, index) => (
+          {PUBLIC_AGENT_PROFILES.map((agent, index) => (
             <Reveal key={agent.id} delay={index * 100}>
               <TiltCard dark>
                 <div className="eyebrow text-[0.65rem] text-amber-400">{agent.role}</div>
@@ -523,14 +526,16 @@ export default async function HomePage() {
       <Reveal>
         <section className="grid gap-6 rounded-[2rem] border border-amber-200 bg-gradient-to-br from-amber-50 to-orange-100 p-6 sm:grid-cols-2 sm:p-10">
           <div>
-            <div className="eyebrow text-amber-700">Поставщикам</div>
-            <h2 className="mt-3 text-3xl font-extrabold tracking-tight">Владеете техникой?</h2>
+            <div className="eyebrow text-amber-700">Без посредников</div>
+            <h2 className="mt-3 text-3xl font-extrabold tracking-tight">
+              Своя техника и свои машинисты
+            </h2>
             <p className="mt-3 text-slate-700">
-              Разместите парк на {SITE.name}, получайте заявки клиентов и делайте ставки. ИИ
-              заполнит характеристики техники по описанию из паспорта.
+              {SITE.name} сам выполняет каждую заявку: никаких перекупщиков и «поставщиков». Цену
+              называем один раз и отвечаем за результат.
             </p>
-            <a href="/register" className="mt-5 inline-block">
-              <Button>Стать поставщиком</Button>
+            <a href="/orders" className="mt-5 inline-block">
+              <Button>Оставить заявку</Button>
             </a>
           </div>
           <div className="flex flex-col gap-2 text-slate-700">

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { AGENT_PROFILES, type AgentId } from '@specai/shared';
+import { AGENT_PROFILES, PUBLIC_AGENT_PROFILES, type AgentId } from '@specai/shared';
 
 type Selection = AgentId | 'auto';
 
@@ -13,7 +13,7 @@ interface ChatMessage {
 
 const AUTO_GREETING =
   'Здравствуйте! Я ИИ-ассистент СпецПласт16. Задайте вопрос — подключу нужного специалиста: ' +
-  'консультанта, диспетчера, поддержку или помощника поставщика.';
+  'консультанта, диспетчера или поддержку.';
 
 function agentName(id?: AgentId) {
   return AGENT_PROFILES.find((p) => p.id === id)?.name ?? 'Ассистент';
@@ -118,7 +118,7 @@ export function AgentChat({
   return (
     <div className={`flex flex-col ${compact ? 'h-full' : 'h-[640px]'} min-h-0`}>
       <div className="flex gap-2 overflow-x-auto border-b border-slate-200 p-3">
-        {(['auto', ...AGENT_PROFILES.map((p) => p.id)] as Selection[]).map((id) => (
+        {(['auto', ...PUBLIC_AGENT_PROFILES.map((p) => p.id)] as Selection[]).map((id) => (
           <button
             key={id}
             type="button"

@@ -13,6 +13,15 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
 
+  // СпецПласт16 is the only executor on its site: no sign-up for outside
+  // equipment providers. The owner's fleet account is linked in /admin.
+  if (parsed.data.accountType === 'PROVIDER') {
+    return NextResponse.json(
+      { error: 'Регистрация поставщиков закрыта: всю технику предоставляет СпецПласт16.' },
+      { status: 403 },
+    );
+  }
+
   const existing = await findUserByEmail(parsed.data.email, { select: { id: true } });
   if (existing) {
     return NextResponse.json({ error: 'Этот e-mail уже зарегистрирован' }, { status: 409 });
@@ -20,32 +29,14 @@ export async function POST(request: NextRequest) {
 
   const passwordHash = await bcrypt.hash(parsed.data.password, 10);
 
-  const user = await prisma.$transaction(async (tx) => {
-    if (parsed.data.accountType === 'PROVIDER') {
-      const company = await tx.company.create({
-        data: { name: parsed.data.companyName, isProvider: true },
-      });
-      return tx.user.create({
-        data: {
-          name: parsed.data.name,
-          email: parsed.data.email,
-          phone: parsed.data.phone,
-          passwordHash,
-          role: 'PROVIDER_ADMIN',
-          companyId: company.id,
-        },
-      });
-    }
-
-    return tx.user.create({
-      data: {
-        name: parsed.data.name,
-        email: parsed.data.email,
-        phone: parsed.data.phone,
-        passwordHash,
-        role: 'CUSTOMER',
-      },
-    });
+  const user = await prisma.user.create({
+    data: {
+      name: parsed.data.name,
+      email: parsed.data.email,
+      phone: parsed.data.phone,
+      passwordHash,
+      role: 'CUSTOMER',
+    },
   });
 
   // Письмо подтверждения — best-effort: сбой не должен ломать регистрацию.

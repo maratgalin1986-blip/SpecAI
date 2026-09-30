@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { AGENT_PROFILES, agentIdSchema } from '@specai/shared';
+import { PUBLIC_AGENT_PROFILES, agentIdSchema } from '@specai/shared';
 import { AgentChat } from '@/components/AgentChat';
 import { CinemaHero } from '@/components/CinemaHero';
 
@@ -29,7 +29,7 @@ export default function AgentsPage({ searchParams }: { searchParams: { agent?: s
         </div>
 
         <aside className="flex flex-col gap-3">
-          {AGENT_PROFILES.map((agent) => (
+          {PUBLIC_AGENT_PROFILES.map((agent) => (
             <a
               key={agent.id}
               href={`/agents?agent=${agent.id}`}

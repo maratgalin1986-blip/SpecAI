@@ -2,6 +2,7 @@ import type { MetadataRoute } from 'next';
 import { prisma } from '@specai/database';
 import { LANDINGS } from '@/lib/landings';
 import { siteUrl } from '@/lib/siteUrl';
+import { OWN_FLEET } from '@/lib/fleet';
 
 export const revalidate = 3600;
 
@@ -11,14 +12,15 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     '',
     ...LANDINGS.map((landing) => `/arenda/${landing.slug}`),
     '/equipment',
-    '/orders',
     '/agents',
-    '/provider',
     '/contacts',
     '/privacy',
   ];
   const equipment = await prisma.equipment
-    .findMany({ where: { status: { not: 'RETIRED' } }, select: { id: true, updatedAt: true } })
+    .findMany({
+      where: { ...OWN_FLEET, status: { not: 'RETIRED' } },
+      select: { id: true, updatedAt: true },
+    })
     .catch(() => []);
   return [
     ...staticPages.map((path) => ({

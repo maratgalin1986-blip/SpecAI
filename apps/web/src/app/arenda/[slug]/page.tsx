@@ -10,6 +10,7 @@ import { formatMoney, formatRate } from '@/lib/money';
 import { SITE } from '@/lib/site';
 import { siteUrl } from '@/lib/siteUrl';
 import { CinemaLayer } from '@/components/CinemaHero';
+import { OWN_FLEET } from '@/lib/fleet';
 
 // Footage behind the landing header, by machine kind.
 const LANDING_CLIPS: Record<string, string[]> = {
@@ -28,7 +29,7 @@ export function generateStaticParams() {
 async function loadEquipment(categorySlug: string) {
   try {
     return await prisma.equipment.findMany({
-      where: { category: { slug: categorySlug }, status: { not: 'RETIRED' } },
+      where: { ...OWN_FLEET, category: { slug: categorySlug }, status: { not: 'RETIRED' } },
       include: { location: true },
       orderBy: { hourlyRate: 'asc' },
     });

@@ -20,6 +20,7 @@ import {
 import { formatMoney, formatRate } from '@/lib/money';
 import { pluralizeRu } from '@/lib/pluralize';
 import { SITE } from '@/lib/site';
+import { HOUSE_COMPANY_ID, OWN_FLEET } from '@/lib/fleet';
 
 export const dynamic = 'force-dynamic';
 
@@ -52,7 +53,7 @@ export default async function EquipmentDetailPage({ params }: { params: { id: st
     },
   });
 
-  if (!item) {
+  if (!item || item.companyId !== HOUSE_COMPANY_ID) {
     notFound();
   }
 
@@ -69,7 +70,7 @@ export default async function EquipmentDetailPage({ params }: { params: { id: st
 
   // Same category first; if it has nothing else, the same task group.
   let similar = await prisma.equipment.findMany({
-    where: { categoryId: item.categoryId, id: { not: item.id } },
+    where: { ...OWN_FLEET, categoryId: item.categoryId, id: { not: item.id } },
     include: { category: true, location: true },
     orderBy: [{ status: 'asc' }, { createdAt: 'desc' }],
     take: 3,
@@ -81,7 +82,7 @@ export default async function EquipmentDetailPage({ params }: { params: { id: st
     });
     const groupIds = categories.filter((c) => taskGroupOf(c.name) === group).map((c) => c.id);
     similar = await prisma.equipment.findMany({
-      where: { categoryId: { in: groupIds }, id: { not: item.id } },
+      where: { ...OWN_FLEET, categoryId: { in: groupIds }, id: { not: item.id } },
       include: { category: true, location: true },
       orderBy: [{ status: 'asc' }, { createdAt: 'desc' }],
       take: 3,

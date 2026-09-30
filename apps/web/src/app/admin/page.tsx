@@ -187,8 +187,8 @@ export default async function AdminPage() {
         <div>
           <h2 className="font-semibold">Подключение мессенджеров</h2>
           <p className="text-sm text-slate-600">
-            Заявки из групп и чатов автоматически попадают на сайт на торги. Реклама других
-            поставщиков и болтовня отсекаются.
+            Заявки из групп и чатов автоматически попадают к вам в заявки и в Telegram — на сайте их
+            видите только вы. Реклама и болтовня отсекаются.
           </p>
         </div>
         <div className="flex flex-col gap-2 rounded-lg border border-slate-200 p-3">

@@ -5,6 +5,7 @@ import { getRequestUser } from '@/lib/requestUser';
 import { sendEmail } from '@/lib/email';
 import { bookingStatusChanged } from '@/lib/emailTemplates';
 import { getStripe } from '@/lib/stripe';
+import { isFleetManager } from '@/lib/fleet';
 
 const updateSchema = z.object({
   status: z.enum(['CONFIRMED', 'ACTIVE', 'COMPLETED', 'CANCELLED']),
@@ -97,7 +98,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
   }
 
   const isOwningProvider =
-    currentUser.role === 'PROVIDER_ADMIN' && currentUser.companyId === booking.equipment.companyId;
+    isFleetManager(currentUser) && currentUser.companyId === booking.equipment.companyId;
   const isCustomer = booking.customerId === currentUser.id;
 
   if (isOwningProvider) {

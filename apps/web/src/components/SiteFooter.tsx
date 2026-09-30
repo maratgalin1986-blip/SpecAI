@@ -20,13 +20,10 @@ export function SiteFooter() {
             </a>
           ))}
           <a href="/orders" className="hover:text-white">
-            Заявки
+            Заявка на технику
           </a>
           <a href="/agents" className="hover:text-white">
             ИИ-агенты
-          </a>
-          <a href="/register" className="hover:text-white">
-            Стать поставщиком
           </a>
           <a href="/contacts" className="hover:text-white">
             Контакты

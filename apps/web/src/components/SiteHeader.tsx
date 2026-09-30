@@ -6,9 +6,8 @@ import { SITE } from '@/lib/site';
 
 const NAV_LINKS = [
   { href: '/equipment', label: 'Техника' },
-  { href: '/orders', label: 'Заявки' },
+  { href: '/orders', label: 'Заявка' },
   { href: '/agents', label: 'ИИ-агенты' },
-  { href: '/provider', label: 'Поставщикам' },
   { href: '/contacts', label: 'Контакты' },
   { href: '/dashboard', label: 'Кабинет' },
 ];

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { prisma } from '@specai/database';
 import { getRequestUser } from '@/lib/requestUser';
+import { isFleetManager } from '@/lib/fleet';
 
 export const dynamic = 'force-dynamic';
 
@@ -29,7 +30,7 @@ export async function GET(request: NextRequest) {
   }
 
   if (request.nextUrl.searchParams.get('as') === 'provider') {
-    if (currentUser.role !== 'PROVIDER_ADMIN' || !currentUser.companyId) {
+    if (!isFleetManager(currentUser)) {
       return NextResponse.json({ error: 'Требуется аккаунт поставщика' }, { status: 403 });
     }
 

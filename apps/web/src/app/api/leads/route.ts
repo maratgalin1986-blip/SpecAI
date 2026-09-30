@@ -33,25 +33,38 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const lead = await prisma.lead.create({
-    data: {
-      name: parsed.data.name,
-      phone: parsed.data.phone,
-      message: parsed.data.message || null,
-      source: parsed.data.source || null,
-    },
-  });
+  const lead = {
+    name: parsed.data.name,
+    phone: parsed.data.phone,
+    message: parsed.data.message || null,
+    source: parsed.data.source || null,
+  };
+  const lines = [
+    `Имя: ${lead.name}`,
+    `Телефон: ${lead.phone}`,
+    lead.message ? `Сообщение: ${lead.message}` : null,
+    lead.source ? `Откуда: ${lead.source}` : null,
+  ];
+
+  try {
+    await prisma.lead.create({ data: lead });
+  } catch (error) {
+    // The database is down: the lead must still reach the owner.
+    console.error('[leads] failed to save lead', error);
+    const delivered = await notifyTelegram(
+      [`⚠️ Заявка на звонок — БАЗА НЕДОСТУПНА, заявка только здесь`, ...lines]
+        .filter(Boolean)
+        .join('\n'),
+    );
+    if (delivered) return NextResponse.json({ ok: true }, { status: 202 });
+    return NextResponse.json(
+      { error: `Не удалось отправить заявку. Позвоните нам: ${SITE.phone}` },
+      { status: 503 },
+    );
+  }
 
   await notifyTelegram(
-    [
-      `📞 Новая заявка на звонок — ${SITE.name}`,
-      `Имя: ${lead.name}`,
-      `Телефон: ${lead.phone}`,
-      lead.message ? `Сообщение: ${lead.message}` : null,
-      lead.source ? `Откуда: ${lead.source}` : null,
-    ]
-      .filter(Boolean)
-      .join('\n'),
+    [`📞 Новая заявка на звонок — ${SITE.name}`, ...lines].filter(Boolean).join('\n'),
   );
 
   return NextResponse.json({ ok: true }, { status: 201 });

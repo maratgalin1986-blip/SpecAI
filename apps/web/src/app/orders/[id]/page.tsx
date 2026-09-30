@@ -9,6 +9,7 @@ import { pluralizeRu } from '@/lib/pluralize';
 import { formatMoney } from '@/lib/money';
 import { isAdminRequest } from '@/lib/admin';
 import { SiteConditions } from '@/components/SiteConditions';
+import { isFleetManager } from '@/lib/fleet';
 
 export const dynamic = 'force-dynamic';
 
@@ -42,8 +43,12 @@ export default async function OrderDetailPage({ params }: { params: { id: string
 
   const isOwner = session?.user.id === order.customerId;
   const isImported = order.source !== 'SITE';
-  // Contacts of people from chats are shown only to equipment providers.
-  const canSeeContact = session?.user.role === 'PROVIDER_ADMIN' || isAdminRequest();
+  // СпецПласт16 is the only executor: an order is seen by its author and the
+  // company owner, not published to anyone else.
+  const canSeeContact = isFleetManager(session?.user) || isAdminRequest();
+  if (!isOwner && !canSeeContact) {
+    notFound();
+  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -103,20 +108,13 @@ export default async function OrderDetailPage({ params }: { params: { id: string
                 <p className="mt-1 whitespace-pre-line text-slate-600">«{order.rawText}»</p>
               )}
             </div>
-          ) : (
-            <p className="mt-2 text-sm text-slate-600">
-              Контакты заказчика видны зарегистрированным поставщикам техники.{' '}
-              <a href="/provider" className="font-medium text-amber-700 underline">
-                Стать поставщиком
-              </a>
-            </p>
-          )}
+          ) : null}
         </Card>
       )}
 
       {order.status === 'OPEN' && !isOwner && (
         <section>
-          <h2 className="mb-3 text-lg font-semibold">Предложить свою технику</h2>
+          <h2 className="mb-3 text-lg font-semibold">Предложение СпецПласт16</h2>
           <Card className="max-w-xl">
             <BidForm orderId={order.id} />
           </Card>

@@ -10,6 +10,7 @@ import {
 } from '@specai/ai-service';
 import { getRequestUser } from '@/lib/requestUser';
 import { checkRateLimit } from '@/lib/rateLimit';
+import { OWN_FLEET } from '@/lib/fleet';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -41,6 +42,7 @@ async function loadOwnedConversation(conversationId: string, userId: string) {
 async function searchEquipment(input: SearchEquipmentInput) {
   const { query, category, city, maxDailyRate } = input;
   const where: Prisma.EquipmentWhereInput = {
+    ...OWN_FLEET,
     status: 'AVAILABLE',
     category: category
       ? {

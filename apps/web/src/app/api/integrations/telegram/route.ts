@@ -57,7 +57,7 @@ export async function POST(request: NextRequest) {
     await reply(
       message.chat.id,
       `Здравствуйте! Это бот ${SITE.name}. Напишите, какая техника нужна, где и когда — ` +
-        `заявку увидят поставщики, мы перезвоним. Телефон: ${SITE.phone}`,
+        `заявка придёт напрямую в ${SITE.name}, мы перезвоним. Телефон: ${SITE.phone}`,
     );
     return NextResponse.json({ ok: true });
   }

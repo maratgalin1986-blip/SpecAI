@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { getServerSession } from 'next-auth';
 import { prisma } from '@specai/database';
 import { orderStatusSchema, type OrderStatus } from '@specai/shared';
 import { Card } from '@specai/ui';
@@ -6,10 +7,15 @@ import { NewOrderForm } from '@/components/NewOrderForm';
 import { Pagination } from '@/components/Pagination';
 import { parseEnumParam, parsePage, totalPagesFor } from '@/lib/pagination';
 import { CinemaHero } from '@/components/CinemaHero';
+import { authOptions } from '@/lib/auth';
+import { isAdminRequest } from '@/lib/admin';
+import { isFleetManager } from '@/lib/fleet';
+import { SITE } from '@/lib/site';
 
 export const metadata: Metadata = {
-  title: 'Заявки на технику',
-  description: 'Опубликуйте задачу — поставщики спецтехники предложат технику и цену.',
+  title: 'Заявка на технику',
+  description:
+    'Опишите задачу — СпецПласт16 подберёт свою технику с машинистом и ответит ценой. Без посредников.',
 };
 
 export const dynamic = 'force-dynamic';
@@ -48,8 +54,16 @@ export default async function OrdersPage({ searchParams }: { searchParams: Order
     'OPEN',
   );
   const requestedPage = parsePage(searchParams.page);
+  // СпецПласт16 is the only executor: the owner sees every order, a customer
+  // only their own, a guest only the form.
+  const session = await getServerSession(authOptions);
+  const seesAll = isFleetManager(session?.user) || isAdminRequest();
+  const viewerId = session?.user.id;
   // Orders imported from messengers stay hidden until the admin publishes them.
-  const where = status === 'ALL' ? { status: { not: 'PENDING_REVIEW' as const } } : { status };
+  const where = {
+    ...(status === 'ALL' ? { status: { not: 'PENDING_REVIEW' as const } } : { status }),
+    ...(seesAll ? {} : { customerId: viewerId ?? '-' }),
+  };
 
   const total = await prisma.order.count({ where });
   const totalPages = totalPagesFor(total, PAGE_SIZE);
@@ -69,15 +83,15 @@ export default async function OrdersPage({ searchParams }: { searchParams: Order
   return (
     <div className="flex flex-col gap-8">
       <CinemaHero
-        eyebrow="Биржа заявок"
-        title="Заявки на технику"
+        eyebrow="Своя техника · свои машинисты"
+        title="Заявка на технику"
         clips={['workers', 'house-frame']}
         camera={4}
         compact
       >
         <p>
-          Опубликуйте, что вам нужно — поставщики поблизости предложат свою технику и цену. Похоже
-          на заказ такси, только для спецтехники.
+          Опишите задачу — {SITE.name} подберёт технику с машинистом и ответит ценой. Без
+          посредников: заявка приходит напрямую владельцу.
         </p>
       </CinemaHero>
 
@@ -88,87 +102,91 @@ export default async function OrdersPage({ searchParams }: { searchParams: Order
         </Card>
       </section>
 
-      <section className="flex flex-col gap-3">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <h2 className="text-lg font-semibold">{STATUS_HEADINGS[status]}</h2>
-          <nav aria-label="Фильтр по статусу" className="flex flex-wrap gap-2">
-            {STATUS_FILTERS.map((filter) => (
-              <a
-                key={filter.value}
-                href={statusHref(filter.value)}
-                aria-current={filter.value === status ? 'page' : undefined}
-                className={
-                  filter.value === status
-                    ? 'rounded-full bg-amber-500 px-3 py-1 text-sm font-medium text-slate-950'
-                    : 'rounded-full border border-slate-300 bg-white px-3 py-1 text-sm text-slate-700 hover:border-amber-400'
-                }
-              >
-                {filter.label}
-              </a>
-            ))}
-          </nav>
-        </div>
-
-        <p className="text-sm text-slate-600">
-          Найдено: {total}
-          {totalPages > 1 && ` · страница ${page} из ${totalPages}`}
-        </p>
-
-        {orders.length === 0 ? (
-          <div className="rounded-lg border border-dashed border-slate-300 bg-white p-8 text-center">
-            <p className="font-medium text-slate-700">
-              {status === 'ALL' ? 'Заявок пока нет.' : 'Заявок с таким статусом нет.'}
-            </p>
-            {status !== 'OPEN' && (
-              <p className="mt-2 text-sm text-slate-500">
-                <a href="/orders" className="font-medium text-amber-700 hover:underline">
-                  Сбросить фильтры
+      {(seesAll || viewerId) && (
+        <section className="flex flex-col gap-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h2 className="text-lg font-semibold">
+              {seesAll
+                ? STATUS_HEADINGS[status]
+                : `Мои заявки · ${STATUS_HEADINGS[status].toLowerCase()}`}
+            </h2>
+            <nav aria-label="Фильтр по статусу" className="flex flex-wrap gap-2">
+              {STATUS_FILTERS.map((filter) => (
+                <a
+                  key={filter.value}
+                  href={statusHref(filter.value)}
+                  aria-current={filter.value === status ? 'page' : undefined}
+                  className={
+                    filter.value === status
+                      ? 'rounded-full bg-amber-500 px-3 py-1 text-sm font-medium text-slate-950'
+                      : 'rounded-full border border-slate-300 bg-white px-3 py-1 text-sm text-slate-700 hover:border-amber-400'
+                  }
+                >
+                  {filter.label}
                 </a>
-              </p>
-            )}
+              ))}
+            </nav>
           </div>
-        ) : (
-          <div className="grid gap-3 sm:grid-cols-2">
-            {orders.map((order) => (
-              <a key={order.id} href={`/orders/${order.id}`}>
-                <Card className="flex h-full flex-col gap-2 hover:border-amber-400">
-                  <div className="flex items-start justify-between gap-2">
-                    <p className="font-medium">{order.description}</p>
-                    {status === 'ALL' && (
-                      <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600">
-                        {STATUS_LABELS[order.status as OrderStatus]}
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-sm text-slate-500">
-                    {order.category?.name ?? 'Любая категория'} ·{' '}
-                    {order.desiredStartDate.toLocaleDateString('ru-RU')} –{' '}
-                    {order.desiredEndDate.toLocaleDateString('ru-RU')}
-                  </p>
-                  {order.source !== 'SITE' && (
-                    <p className="w-fit rounded-full bg-sky-50 px-2 py-0.5 text-xs font-medium text-sky-700">
-                      Из {order.source === 'WHATSAPP' ? 'WhatsApp' : 'Telegram'}
-                      {order.sourceChat ? ` · ${order.sourceChat}` : ''}
-                    </p>
-                  )}
-                  <p className="text-sm text-slate-500">
-                    {order.bids.length > 0
-                      ? `Предложений: ${order.bids.length}`
-                      : 'Пока нет предложений'}
-                  </p>
-                </Card>
-              </a>
-            ))}
-          </div>
-        )}
 
-        <Pagination
-          page={page}
-          totalPages={totalPages}
-          basePath="/orders"
-          searchParams={{ status: status === 'OPEN' ? undefined : status }}
-        />
-      </section>
+          <p className="text-sm text-slate-600">
+            Найдено: {total}
+            {totalPages > 1 && ` · страница ${page} из ${totalPages}`}
+          </p>
+
+          {orders.length === 0 ? (
+            <div className="rounded-lg border border-dashed border-slate-300 bg-white p-8 text-center">
+              <p className="font-medium text-slate-700">
+                {status === 'ALL' ? 'Заявок пока нет.' : 'Заявок с таким статусом нет.'}
+              </p>
+              {status !== 'OPEN' && (
+                <p className="mt-2 text-sm text-slate-500">
+                  <a href="/orders" className="font-medium text-amber-700 hover:underline">
+                    Сбросить фильтры
+                  </a>
+                </p>
+              )}
+            </div>
+          ) : (
+            <div className="grid gap-3 sm:grid-cols-2">
+              {orders.map((order) => (
+                <a key={order.id} href={`/orders/${order.id}`}>
+                  <Card className="flex h-full flex-col gap-2 hover:border-amber-400">
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="font-medium">{order.description}</p>
+                      {status === 'ALL' && (
+                        <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600">
+                          {STATUS_LABELS[order.status as OrderStatus]}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-sm text-slate-500">
+                      {order.category?.name ?? 'Любая категория'} ·{' '}
+                      {order.desiredStartDate.toLocaleDateString('ru-RU')} –{' '}
+                      {order.desiredEndDate.toLocaleDateString('ru-RU')}
+                    </p>
+                    {order.source !== 'SITE' && (
+                      <p className="w-fit rounded-full bg-sky-50 px-2 py-0.5 text-xs font-medium text-sky-700">
+                        Из {order.source === 'WHATSAPP' ? 'WhatsApp' : 'Telegram'}
+                        {order.sourceChat ? ` · ${order.sourceChat}` : ''}
+                      </p>
+                    )}
+                    <p className="text-sm text-slate-500">
+                      {order.bids.length > 0 ? 'Есть предложение СпецПласт16' : 'Ждёт ответа'}
+                    </p>
+                  </Card>
+                </a>
+              ))}
+            </div>
+          )}
+
+          <Pagination
+            page={page}
+            totalPages={totalPages}
+            basePath="/orders"
+            searchParams={{ status: status === 'OPEN' ? undefined : status }}
+          />
+        </section>
+      )}
     </div>
   );
 }
