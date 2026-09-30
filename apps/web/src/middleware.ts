@@ -1,6 +1,6 @@
 import { NextResponse, type NextFetchEvent, type NextRequest } from 'next/server';
 import authMiddleware from 'next-auth/middleware';
-import { AB_COOKIE, AB_MAX_AGE, parseAbVariant, pickVariant } from '@/lib/ab';
+import { AB_COOKIE, AB_MAX_AGE, parseAbVariant } from '@/lib/ab';
 
 type AuthMiddleware = (
   request: NextRequest,
@@ -20,7 +20,9 @@ export default async function middleware(request: NextRequest, event: NextFetchE
 
   const forced = parseAbVariant(request.nextUrl.searchParams.get('ab'));
   const current = parseAbVariant(request.cookies.get(AB_COOKIE)?.value);
-  const variant = forced ?? current ?? pickVariant();
+  // The owner wants the cinema for every visitor: the calm variant is only
+  // reachable with ?ab=calm (for comparison), and stored «calm» cookies reset.
+  const variant = forced ?? 'cine';
   if (variant !== current) {
     response.cookies.set(AB_COOKIE, variant, {
       path: '/',
