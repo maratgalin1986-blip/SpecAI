@@ -6,7 +6,13 @@ import { Icon, type IconName } from '@/components/Icon';
 import { MachinePhoto } from '@/components/MachinePhoto';
 import type { MachineType } from '@/lib/machinePhotos';
 import { WeatherHud } from '@/components/WeatherHud';
-import { mskToday, weatherLine, type ShiftWeather, type WorkNote } from '@/lib/weather';
+import {
+  machineGroup,
+  mskToday,
+  weatherLine,
+  type ShiftWeather,
+  type WorkNote,
+} from '@/lib/weather';
 
 // «Подобрать технику»: three quick questions → a recommended machine, a rough
 // price range from the price list and a callback form with the answers filled in.
@@ -356,6 +362,7 @@ export function TaskWizard() {
                     place="Набережные Челны"
                     dateLabel={when.toLowerCase()}
                     machineLabel={`для: ${task.machine.toLowerCase()}`}
+                    group={machineGroup(task.photo)}
                   />
                 </div>
               )}

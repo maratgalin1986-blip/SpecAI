@@ -5,6 +5,7 @@ import { SiteMap } from '@/components/SiteMap';
 import { WeatherHud } from '@/components/WeatherHud';
 import { machineTypeOf } from '@/lib/equipmentCatalog';
 import { reachGoal } from '@/lib/marketing';
+import { machineGroup } from '@/lib/weather';
 import type { ShiftWeather, WorkNote } from '@/lib/weather';
 
 // Live preview under an order form: the weather for the chosen day at the
@@ -115,6 +116,7 @@ export function ConditionsPreview({
             }
             dateLabel={dateLabel}
             machineLabel={kind ? `для выбранной техники` : undefined}
+            group={machineGroup(kind)}
           />
           {!hasAddress && /\d/.test(address) && address.trim().length >= 5 && (
             <p className="text-sm text-slate-500">

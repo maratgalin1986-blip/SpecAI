@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   assessWork,
+  bestWindow,
   machineGroup,
   mskParts,
   parseForecast,
@@ -127,5 +128,41 @@ describe('helpers', () => {
     expect(windFrom(0)).toBe('С');
     expect(windFrom(225)).toBe('ЮЗ');
     expect(windFrom(359)).toBe('С');
+  });
+});
+
+describe('bestWindow', () => {
+  // Shift hours 08..16 MSK = 05..13 UTC.
+  const hours = (wind: (h: number) => number, precip: (h: number) => number = () => 0) =>
+    ({
+      hourly: true,
+      points: Array.from({ length: 9 }, (_, i) => ({
+        time: `2026-10-01T${String(5 + i).padStart(2, '0')}:00:00Z`,
+        temp: 10,
+        wind: wind(8 + i),
+        windDir: 0,
+        precip: precip(8 + i),
+        stepHours: 1,
+        symbol: 'cloudy',
+        fog: 0,
+      })),
+    }) as unknown as ShiftWeather;
+
+  it('finds the calm hours before the wind picks up for a crane', () => {
+    const w = hours((h) => (h >= 13 ? 12 : 4));
+    expect(bestWindow(w, 'lifting')).toEqual({ from: 8, to: 13 });
+    expect(bestWindow(w, 'earth')).toEqual({ from: 8, to: 17 });
+  });
+
+  it('returns null when it rains all day', () => {
+    expect(
+      bestWindow(
+        hours(
+          () => 3,
+          () => 1,
+        ),
+        'earth',
+      ),
+    ).toBeNull();
   });
 });
