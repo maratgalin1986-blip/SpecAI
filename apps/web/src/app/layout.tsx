@@ -11,6 +11,7 @@ import { YandexMetrika } from '@/components/YandexMetrika';
 import { MarketingTracker } from '@/components/MarketingTracker';
 import { CinemaClicks } from '@/components/CinemaClicks';
 import { VtMorph } from '@/components/VtMorph';
+import { Cinema3D } from '@/components/Cinema3D';
 import { MessengerButtons } from '@/components/MessengerButtons';
 import { CookieNotice } from '@/components/CookieNotice';
 import { SITE } from '@/lib/site';
@@ -131,6 +132,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           <MarketingTracker />
           <CinemaClicks />
           <VtMorph />
+          <Cinema3D />
         </Providers>
       </body>
     </html>
