@@ -10,6 +10,7 @@ import { AgentChatWidget } from '@/components/AgentChatWidget';
 import { YandexMetrika } from '@/components/YandexMetrika';
 import { MarketingTracker } from '@/components/MarketingTracker';
 import { CinemaClicks } from '@/components/CinemaClicks';
+import { VtMorph } from '@/components/VtMorph';
 import { MessengerButtons } from '@/components/MessengerButtons';
 import { SITE } from '@/lib/site';
 import { siteUrl } from '@/lib/siteUrl';
@@ -121,6 +122,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           <YandexMetrika />
           <MarketingTracker />
           <CinemaClicks />
+          <VtMorph />
         </Providers>
       </body>
     </html>
