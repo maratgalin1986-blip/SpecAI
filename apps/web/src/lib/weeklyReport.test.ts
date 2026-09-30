@@ -22,6 +22,19 @@ describe('buildWeeklyReport', () => {
     expect(text).toContain('Из чатов Telegram/WhatsApp: 1');
   });
 
+  it('sums deals of the week', () => {
+    const text = buildWeeklyReport(
+      [
+        { createdAt: daysAgo(1), source: 'home', status: 'DONE', outcome: 'deal', amount: 120000 },
+        { createdAt: daysAgo(2), source: 'home', status: 'DONE', outcome: 'deal', amount: 30000 },
+        { createdAt: daysAgo(2), source: 'home', status: 'DONE', outcome: 'no_deal' },
+      ],
+      [],
+      now,
+    );
+    expect(text).toMatch(/Сделок: 2 на 150[\s\u00a0\u202f]000 ₽/);
+  });
+
   it('handles an empty week', () => {
     expect(buildWeeklyReport([], [], now)).toContain('Заявки на звонок: 0');
   });

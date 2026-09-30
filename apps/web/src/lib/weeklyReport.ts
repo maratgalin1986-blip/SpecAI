@@ -3,7 +3,13 @@ import { formLabel, splitSource } from '@/lib/marketing';
 // Monday-morning summary for the owner in Telegram: how many requests came
 // in over the last 7 days, against the week before, and from where.
 
-type LeadRow = { createdAt: Date; source: string | null; status: string };
+type LeadRow = {
+  createdAt: Date;
+  source: string | null;
+  status: string;
+  outcome?: string | null;
+  amount?: number | null;
+};
 type OrderRow = { createdAt: Date; source: string };
 
 const DAY = 86_400_000;
@@ -53,6 +59,11 @@ export function buildWeeklyReport(
   if (leadsNow.length > 0) {
     lines.push('Откуда пришли:', ...top(leadsNow.map((l) => splitSource(l.source).channel)));
     lines.push('Какие формы:', ...top(leadsNow.map((l) => formLabel(splitSource(l.source).form))));
+  }
+  const deals = leadsNow.filter((l) => l.outcome === 'deal');
+  if (deals.length > 0) {
+    const sum = deals.reduce((total, l) => total + (l.amount ?? 0), 0);
+    lines.push(`Сделок: ${deals.length} на ${sum.toLocaleString('ru-RU')} ₽`);
   }
   const fromChats = ordersNow.filter((o) => o.source !== 'SITE').length;
   if (fromChats > 0) lines.push(`Из чатов Telegram/WhatsApp: ${fromChats}`);
