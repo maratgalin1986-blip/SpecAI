@@ -404,12 +404,15 @@ html {
 }
 
 .journey-push {
-  animation: push-in 14s ease-in-out infinite alternate;
+  animation: push-in 12s ease-in-out infinite alternate;
 }
 
 @keyframes push-in {
+  from {
+    transform: scale(1.02) translate(0, 0);
+  }
   to {
-    transform: scale(1.08);
+    transform: scale(1.2) translate(2.5%, -2%);
   }
 }
 
@@ -687,7 +690,20 @@ html {
 /* The hero footage starts from above, like a drone coming down. */
 .hero-drone {
   transform-origin: 50% 40%;
-  animation: hero-drone 7s cubic-bezier(0.25, 0.1, 0.25, 1) both;
+  /* After the drone lands, the camera keeps moving: a slow push-in and pan,
+     so the shot stays alive even where the video can't play (iPhone low
+     power mode blocks autoplay). */
+  animation:
+    hero-drone 7s cubic-bezier(0.25, 0.1, 0.25, 1) both,
+    camera-move 16s ease-in-out 7s infinite alternate;
+}
+@keyframes camera-move {
+  from {
+    transform: scale(1) translate(0, 0);
+  }
+  to {
+    transform: scale(1.18) translate(-3%, 2%);
+  }
 }
 @keyframes hero-drone {
   from {

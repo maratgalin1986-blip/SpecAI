@@ -20,7 +20,11 @@ const SKIP_ANCESTOR =
 // Tilt and parallax only need to stay clear of other effects' own transforms.
 const SKIP_DECOR = '[class*="cine-"], .tilt-card, .tilt-wrap, [data-vt-id], [data-c3-skip]';
 const EASE = 'cubic-bezier(.2,.8,.2,1)';
-const FROM = 'perspective(1000px) rotateX(12deg) translateY(40px) translateZ(-60px)';
+const FROM_DESKTOP = 'perspective(1000px) rotateX(12deg) translateY(40px) translateZ(-60px)';
+// Phones have no hover effects, so the fly-in carries the cinema there: a
+// deeper, more visible move.
+const FROM_TOUCH =
+  'perspective(900px) rotateX(28deg) translateY(90px) translateZ(-140px) scale(0.9)';
 const MAX_TILT = 6;
 const MAX_DRIFT = 20;
 
@@ -88,11 +92,13 @@ export function Cinema3D() {
 
     function prepFly(el: HTMLElement) {
       el.style.opacity = '0';
-      el.style.transform = FROM;
+      el.style.transform = window.matchMedia('(pointer: coarse)').matches
+        ? FROM_TOUCH
+        : FROM_DESKTOP;
       pending.set(el, () => {
         el.dataset.c3Fly = '1';
         el.style.willChange = 'opacity, transform';
-        el.style.transition = `opacity 700ms ${EASE}, transform 700ms ${EASE}`;
+        el.style.transition = `opacity 800ms ${EASE}, transform 900ms ${EASE}`;
         el.style.opacity = '';
         el.style.transform = '';
         const done = () => {
