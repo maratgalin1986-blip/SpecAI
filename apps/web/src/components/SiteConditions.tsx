@@ -40,9 +40,12 @@ async function placeOf(location: OrderLocation | null) {
       : `${location.city}, ${location.addressLine}`;
   const found = await geocodeAddress(query);
   if (!found) return null;
-  await prisma.location
-    .update({ where: { id: location.id }, data: { latitude: found.lat, longitude: found.lon } })
-    .catch(() => undefined);
+  // Previews share the production database: only production caches coordinates.
+  if (!process.env.VERCEL_ENV || process.env.VERCEL_ENV === 'production') {
+    await prisma.location
+      .update({ where: { id: location.id }, data: { latitude: found.lat, longitude: found.lon } })
+      .catch(() => undefined);
+  }
   return { lat: found.lat, lon: found.lon, label: location.addressLine };
 }
 

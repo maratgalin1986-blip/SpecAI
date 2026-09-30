@@ -85,16 +85,6 @@ html {
     radial-gradient(50% 70% at 10% 90%, rgba(56, 189, 248, 0.18), transparent 60%),
     linear-gradient(160deg, #0f172a 0%, #111827 55%, #1c1917 100%);
   background-size: 160% 160%;
-  animation: aurora 16s ease-in-out infinite alternate;
-}
-
-@keyframes aurora {
-  from {
-    background-position: 0% 0%;
-  }
-  to {
-    background-position: 100% 100%;
-  }
 }
 
 .hero-grid {
@@ -107,13 +97,6 @@ html {
   background-size: 48px 48px;
   transform: perspective(500px) rotateX(62deg);
   mask-image: linear-gradient(to top, black, transparent 85%);
-  animation: grid-move 3s linear infinite;
-}
-
-@keyframes grid-move {
-  to {
-    background-position: 0 48px;
-  }
 }
 
 .text-gradient {
@@ -786,6 +769,21 @@ html {
     transform: none;
   }
 }
+/* Phones: blur rasterisation is costly on weak GPUs, keep opacity/transform. */
+@media (hover: none) {
+  @keyframes cine-title {
+    from {
+      opacity: 0;
+      clip-path: inset(0 100% 0 0);
+      transform: translateX(-12px);
+    }
+    to {
+      opacity: 1;
+      clip-path: inset(0 0 0 0);
+      transform: none;
+    }
+  }
+}
 .cine-sub {
   animation: cine-rise 0.9s ease-out 0.8s both;
 }
@@ -802,6 +800,11 @@ html {
   z-index: 90;
   pointer-events: none;
   animation: cine-curtain 0.75s cubic-bezier(0.7, 0, 0.2, 1) both;
+}
+/* Repeat visit within 30 s (flag set in layout.tsx): short curtain. */
+html[data-curtain='fast'] .cine-curtain::before,
+html[data-curtain='fast'] .cine-curtain::after {
+  animation-duration: 0.3s;
 }
 .cine-curtain::before {
   top: 0;

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
-import { GEO_USER_AGENT } from '@/lib/geo';
+import { GEO_USER_AGENT, tileAllowed } from '@/lib/geo';
+import { checkRateLimit } from '@/lib/rateLimit';
 
 // OpenStreetMap tiles through the site: cached for a week on Vercel's CDN,
 // so visitors get them fast and reliably and the volunteer-run OSM servers
@@ -8,7 +9,7 @@ import { GEO_USER_AGENT } from '@/lib/geo';
 // the map. GET /api/tiles/17/84614/40983 (a .png suffix on y is accepted).
 
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: { z: string; x: string; y: string } },
 ) {
   const z = Number(params.z);
@@ -25,6 +26,11 @@ export async function GET(
     y >= max
   ) {
     return new NextResponse('Bad tile', { status: 400 });
+  }
+  if (!tileAllowed(z, x, y)) return new NextResponse('Outside the service area', { status: 404 });
+  const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown';
+  if (!checkRateLimit(`tiles:${ip}`, { limit: 240, windowMs: 60_000 }).ok) {
+    return new NextResponse('Too many requests', { status: 429 });
   }
   try {
     const upstream = await fetch(`https://tile.openstreetmap.org/${z}/${x}/${y}.png`, {

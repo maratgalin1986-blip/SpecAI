@@ -181,18 +181,17 @@ export default async function EquipmentDetailPage({ params }: { params: { id: st
               <MachineGallery images={item.imageUrls} name={item.name} />
             </div>
           ) : illustration ? (
-            <figure
-              className="relative aspect-[16/9] overflow-hidden rounded-3xl bg-slate-950"
-              style={{ viewTransitionName: 'machine-photo' }}
-            >
-              <MachinePhoto
-                type={illustration}
-                alt={item.category.name}
-                priority
-                sizes="(min-width: 1024px) 720px, 100vw"
-                className="machine-hero-photo absolute inset-0"
-              />
-              <figcaption className="absolute bottom-3 left-4 rounded-full bg-slate-950/60 px-3 py-1 text-xs text-white/80 backdrop-blur">
+            <figure style={{ viewTransitionName: 'machine-photo' }}>
+              <div className="relative aspect-[16/9] overflow-hidden rounded-3xl bg-slate-950">
+                <MachinePhoto
+                  type={illustration}
+                  alt={item.category.name}
+                  priority
+                  sizes="(min-width: 1024px) 720px, 100vw"
+                  className="machine-hero-photo absolute inset-0"
+                />
+              </div>
+              <figcaption className="mt-2 text-xs text-slate-500">
                 Фото для примера — не эта машина
               </figcaption>
             </figure>

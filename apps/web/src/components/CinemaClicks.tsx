@@ -13,7 +13,7 @@ export function CinemaClicks() {
     if (parseAbCookie(document.cookie) === 'calm') return;
     const onDown = (event: PointerEvent) => {
       const target = (event.target as Element | null)?.closest?.(
-        'a[href], button, [role="button"], summary, label',
+        'a[href], button, [role="button"], summary',
       );
       if (!target || (target as HTMLButtonElement).disabled) return;
       const ring = document.createElement('span');
@@ -22,11 +22,14 @@ export function CinemaClicks() {
       ring.style.top = `${event.clientY}px`;
       document.body.appendChild(ring);
       window.setTimeout(() => ring.remove(), 650);
+      // Restart the animation on repeated presses without a forced reflow.
       target.classList.remove('cine-press');
-      // Restart the animation on repeated presses.
-      void (target as HTMLElement).offsetWidth;
-      target.classList.add('cine-press');
-      window.setTimeout(() => target.classList.remove('cine-press'), 400);
+      requestAnimationFrame(() =>
+        requestAnimationFrame(() => {
+          target.classList.add('cine-press');
+          window.setTimeout(() => target.classList.remove('cine-press'), 400);
+        }),
+      );
     };
     document.addEventListener('pointerdown', onDown, { passive: true });
     return () => document.removeEventListener('pointerdown', onDown);

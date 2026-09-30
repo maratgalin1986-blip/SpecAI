@@ -5,6 +5,7 @@ import { Icon } from '@/components/Icon';
 import { rub, SHIFT_HOURS } from '@/lib/equipmentCatalog';
 import { SITE } from '@/lib/site';
 import { submitLead } from '@/lib/submitLead';
+import { LeadSuccess } from '@/components/LeadSuccess';
 
 type Mode = 'hours' | 'shifts';
 
@@ -240,18 +241,9 @@ export function EstimateBox({
       )}
 
       {status === 'sent' ? (
-        <div
-          role="status"
-          className="rounded-2xl bg-emerald-50 p-4 text-sm text-emerald-900 ring-1 ring-emerald-600/15"
-        >
-          <p className="font-semibold">Заявка с расчётом отправлена</p>
-          <p className="mt-1 text-emerald-800">
-            {SITE.callbackPromise}. Срочно —{' '}
-            <a href={SITE.phoneHref} className="font-semibold underline">
-              {SITE.phone}
-            </a>
-          </p>
-        </div>
+        <LeadSuccess
+          summary={`${equipmentName}${total !== null ? `, расчёт ${rub(total)}` : ''}`}
+        />
       ) : (
         <form onSubmit={handleSubmit} className="flex flex-col gap-3">
           <input

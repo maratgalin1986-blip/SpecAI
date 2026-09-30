@@ -12,6 +12,7 @@ import { MarketingTracker } from '@/components/MarketingTracker';
 import { CinemaClicks } from '@/components/CinemaClicks';
 import { VtMorph } from '@/components/VtMorph';
 import { MessengerButtons } from '@/components/MessengerButtons';
+import { CookieNotice } from '@/components/CookieNotice';
 import { SITE } from '@/lib/site';
 import { siteUrl } from '@/lib/siteUrl';
 import './globals.css';
@@ -99,10 +100,16 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="ru" className={`${sans.variable} ${mono.variable}`}>
+    <html lang="ru" className={`${sans.variable} ${mono.variable}`} suppressHydrationWarning>
       <body className="flex min-h-screen flex-col bg-[#f7f7f5] font-sans text-slate-900 antialiased grain">
         {/* Black bars open on every page load, like the start of a scene. */}
         <div className="cine-curtain" aria-hidden />
+        <script
+          dangerouslySetInnerHTML={{
+            __html:
+              "try{var k='cine-curtain-at',t=+sessionStorage.getItem(k)||0,n=Date.now();if(n-t<30000)document.documentElement.setAttribute('data-curtain','fast');sessionStorage.setItem(k,String(n))}catch(e){}",
+          }}
+        />
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(ORGANIZATION_JSON_LD) }}
@@ -119,6 +126,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           <MessengerButtons />
           <InstallPrompt />
           <TelegramMiniApp />
+          <CookieNotice />
           <YandexMetrika />
           <MarketingTracker />
           <CinemaClicks />

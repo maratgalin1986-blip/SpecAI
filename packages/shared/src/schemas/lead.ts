@@ -3,6 +3,9 @@ import { z } from 'zod';
 export const leadStatusSchema = z.enum(['NEW', 'IN_PROGRESS', 'DONE']);
 export type LeadStatus = z.infer<typeof leadStatusSchema>;
 
+export const leadOutcomeSchema = z.enum(['deal', 'no_deal', 'no_answer']);
+export type LeadOutcome = z.infer<typeof leadOutcomeSchema>;
+
 export const createLeadSchema = z.object({
   name: z.string().trim().min(1).max(100),
   // Accepts any common formatting; must contain 10–15 digits.
@@ -18,6 +21,8 @@ export const createLeadSchema = z.object({
   source: z.string().trim().max(100).optional(),
   // Consent to personal data processing (152-ФЗ) is required.
   consent: z.literal(true),
+  // Yandex Metrika ClientID (the _ym_uid cookie), digits only.
+  ymClientId: z.string().max(40).regex(/^\d+$/).optional(),
   // Honeypot: real visitors never fill this hidden field.
   website: z.string().max(0).optional(),
 });

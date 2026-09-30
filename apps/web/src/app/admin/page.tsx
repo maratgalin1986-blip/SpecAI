@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { prisma } from '@specai/database';
 import { Card } from '@specai/ui';
 import { AdminLogin, AdminLogout } from '@/components/AdminLogin';
+import { LeadOutcome } from '@/components/LeadOutcome';
 import { LeadStatusSelect } from '@/components/LeadStatusSelect';
 import { LinkOwnerForm } from '@/components/LinkOwnerForm';
 import { ModerationButtons, CopyField, TelegramSetupButton } from '@/components/AdminIntegrations';
@@ -73,16 +74,22 @@ export default async function AdminPage() {
   // Marketing: which channels and which forms brought requests in 30 days.
   const monthAgo = Date.now() - 30 * 86_400_000;
   const recentLeads = leads.filter((lead) => lead.createdAt.getTime() >= monthAgo);
-  const tally = (key: 'channel' | 'form') =>
-    Object.entries(
-      recentLeads.reduce<Record<string, number>>((acc, lead) => {
+  type Row = [name: string, count: number, deals: number, dealSum: number];
+  const tally = (key: 'channel' | 'form'): Row[] =>
+    Object.values(
+      recentLeads.reduce<Record<string, Row>>((acc, lead) => {
         const parts = splitSource(lead.source);
         const name = key === 'form' ? formLabel(parts.form) : parts.channel;
-        acc[name] = (acc[name] ?? 0) + 1;
+        const row = (acc[name] ??= [name, 0, 0, 0]);
+        row[1] += 1;
+        if (lead.outcome === 'deal') {
+          row[2] += 1;
+          row[3] += lead.amount ?? 0;
+        }
         return acc;
       }, {}),
     ).sort((a, b) => b[1] - a[1]);
-  const reports: [string, [string, number][]][] = [
+  const reports: [string, Row[]][] = [
     ['Каналы', tally('channel')],
     ['Формы на сайте', tally('form')],
   ];
@@ -118,7 +125,7 @@ export default async function AdminPage() {
                 <p className="mt-2 text-sm text-slate-500">Пока нет заявок.</p>
               ) : (
                 <ul className="mt-2 flex flex-col gap-2">
-                  {rows.map(([name, count]) => (
+                  {rows.map(([name, count, deals, dealSum]) => (
                     <li key={name} className="text-sm">
                       <div className="flex justify-between gap-3">
                         <span className="truncate">{name}</span>
@@ -126,6 +133,11 @@ export default async function AdminPage() {
                           {count} · {Math.round((count / recentLeads.length) * 100)}%
                         </span>
                       </div>
+                      {deals > 0 && (
+                        <p className="text-xs text-emerald-700">
+                          Сделок: {deals} на {dealSum.toLocaleString('ru-RU')} ₽
+                        </p>
+                      )}
                       <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-slate-100">
                         <div
                           className="h-full rounded-full bg-amber-500"
@@ -286,7 +298,10 @@ export default async function AdminPage() {
                   {lead.source ? ` · ${lead.source}` : ''}
                 </p>
               </div>
-              <LeadStatusSelect id={lead.id} status={lead.status} />
+              <div className="flex flex-col items-end gap-2">
+                <LeadStatusSelect id={lead.id} status={lead.status} />
+                <LeadOutcome id={lead.id} outcome={lead.outcome} amount={lead.amount} />
+              </div>
             </Card>
           ))}
         </div>

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   addressLabel,
+  tileAllowed,
   formatCoords,
   shortLabel,
   TILE_SIZE,
@@ -49,5 +50,17 @@ describe('addressLabel', () => {
       'проспект Мира, 49А, Набережные Челны',
     );
     expect(addressLabel({}, 'Набережные Челны')).toBeNull();
+  });
+});
+
+describe('tileAllowed', () => {
+  it('serves street-level tiles in Naberezhnye Chelny', () => {
+    const { x, y } = tilePosition(55.7436, 52.3959, 17);
+    expect(tileAllowed(17, Math.floor(x), Math.floor(y))).toBe(true);
+  });
+  it('refuses world-level zooms and tiles far away', () => {
+    expect(tileAllowed(5, 20, 10)).toBe(false);
+    const { x, y } = tilePosition(48.8566, 2.3522, 17); // Paris
+    expect(tileAllowed(17, Math.floor(x), Math.floor(y))).toBe(false);
   });
 });

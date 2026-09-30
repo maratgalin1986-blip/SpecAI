@@ -41,6 +41,16 @@ function saveDraft(payload: LeadPayload | null) {
   }
 }
 
+/** Metrika's ClientID from the _ym_uid cookie, if the counter has set it. */
+function readYmClientId(): string | undefined {
+  try {
+    const match = document.cookie.match(/(?:^|;\s*)_ym_uid=(\d{1,40})(?:;|$)/);
+    return match?.[1];
+  } catch {
+    return undefined;
+  }
+}
+
 async function post(payload: LeadPayload) {
   return fetch('/api/leads', {
     method: 'POST',
@@ -50,6 +60,7 @@ async function post(payload: LeadPayload) {
       source: withChannel(payload.source, currentChannel()),
       name: payload.name?.trim() || ANONYMOUS_LEAD_NAME,
       website: payload.website ?? '',
+      ymClientId: readYmClientId(),
     }),
   });
 }
