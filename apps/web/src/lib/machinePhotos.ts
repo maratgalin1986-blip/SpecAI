@@ -53,6 +53,9 @@ export const MACHINE_PHOTO_VARIANTS: Partial<Record<MachineType, number>> = {
   roller: 3,
   crane: 3,
   loader: 3,
+  truck: 3,
+  dozer: 3,
+  tractor: 3,
 };
 
 /** Photos that already ship with the site; used until a type has variants. */
