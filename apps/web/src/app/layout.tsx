@@ -12,6 +12,7 @@ import { MarketingTracker } from '@/components/MarketingTracker';
 import { CinemaClicks } from '@/components/CinemaClicks';
 import { VtMorph } from '@/components/VtMorph';
 import { MessengerButtons } from '@/components/MessengerButtons';
+import { CookieNotice } from '@/components/CookieNotice';
 import { SITE } from '@/lib/site';
 import { siteUrl } from '@/lib/siteUrl';
 import './globals.css';
@@ -119,6 +120,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           <MessengerButtons />
           <InstallPrompt />
           <TelegramMiniApp />
+          <CookieNotice />
           <YandexMetrika />
           <MarketingTracker />
           <CinemaClicks />
