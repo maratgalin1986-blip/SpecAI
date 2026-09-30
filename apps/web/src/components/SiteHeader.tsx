@@ -46,7 +46,7 @@ export function SiteHeader() {
 
         <a
           href={SITE.phoneHref}
-          className="ml-auto rounded-full bg-slate-900 px-3 py-1.5 text-sm font-semibold text-white lg:hidden"
+          className="vt-phone ml-auto rounded-full bg-slate-900 px-3 py-1.5 text-sm font-semibold text-white lg:hidden"
         >
           Позвонить
         </a>

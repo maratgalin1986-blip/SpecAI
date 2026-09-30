@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { flushSync } from 'react-dom';
 import { CinemaVideo } from '@/components/CinemaVideo';
 import { SITE } from '@/lib/site';
 import { reachGoal } from '@/lib/marketing';
@@ -21,11 +22,43 @@ const DURATION_MS = 2800;
 // sent to someone who has already seen them).
 const HIDE_IF_SEEN = `try{if(sessionStorage.getItem('${SEEN_KEY}')||/[?&](intro=0|yclid|gclid|utm_medium=cpc)/.test(location.search)||matchMedia('(prefers-reduced-motion: reduce)').matches){document.getElementById('intro').hidden=true}}catch(e){}`;
 
+// The card number flies into the header «Позвонить» button through a View
+// Transition. Old snapshot: only the card number carries the name. In the
+// update callback the html gets `intro-live` (the header button takes the name
+// in CSS) and the intro unmounts, so the name is never twice in one snapshot.
+const LIVE_CLASS = 'intro-live';
+
 export function IntroSplash() {
   const [done, setDone] = useState(false);
+  const finishing = useRef(false);
+  const finish = () => {
+    if (finishing.current) return;
+    finishing.current = true;
+    const root = document.documentElement;
+    const canMorph =
+      typeof document.startViewTransition === 'function' &&
+      !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (!canMorph) {
+      setDone(true);
+      return;
+    }
+    const transition = document.startViewTransition(() => {
+      root.classList.add(LIVE_CLASS);
+      flushSync(() => setDone(true));
+    });
+    const land = () => {
+      root.classList.remove(LIVE_CLASS);
+      const button = document.querySelector('.vt-phone');
+      if (button) {
+        button.classList.add('phone-land');
+        window.setTimeout(() => button.classList.remove('phone-land'), 900);
+      }
+    };
+    transition.finished.then(land, land);
+  };
   const skip = () => {
     reachGoal('intro_skip');
-    setDone(true);
+    finish();
   };
 
   useEffect(() => {
@@ -42,11 +75,11 @@ export function IntroSplash() {
     }
     const onKey = () => {
       reachGoal('intro_skip');
-      setDone(true);
+      finish();
     };
     const timer = window.setTimeout(() => {
       reachGoal('intro_full');
-      setDone(true);
+      finish();
     }, DURATION_MS);
     window.addEventListener('keydown', onKey, { once: true });
     return () => {
@@ -106,7 +139,10 @@ export function IntroSplash() {
                 </div>
                 <div className="mt-auto">
                   <div className="intro-chip mb-3 h-7 w-10 rounded-md" aria-hidden />
-                  <div className="font-mono text-base tracking-[0.18em] text-white/90 sm:text-lg">
+                  <div
+                    className="font-mono text-base tracking-[0.18em] text-white/90 sm:text-lg"
+                    style={{ viewTransitionName: 'sp-phone' }}
+                  >
                     {SITE.phone}
                   </div>
                   <div className="mt-2 flex items-end justify-between gap-3 text-[0.65rem] uppercase tracking-[0.15em] text-white/60">
