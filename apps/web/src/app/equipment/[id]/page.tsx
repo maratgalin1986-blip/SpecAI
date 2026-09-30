@@ -94,7 +94,7 @@ export default async function EquipmentDetailPage({ params }: { params: { id: st
     ...(item.location
       ? [{ label: 'Местоположение', value: `${item.location.city}, ${item.location.country}` }]
       : []),
-    { label: 'Поставщик', value: item.company.name },
+    { label: 'Исполнитель', value: 'Своя техника · машинист в штате' },
     ...(hour !== null ? [{ label: 'Цена за час', value: formatMoney(hour, item.currency) }] : []),
     ...(shift !== null
       ? [{ label: 'Цена за смену 8 ч', value: formatMoney(shift, item.currency) }]
@@ -136,7 +136,7 @@ export default async function EquipmentDetailPage({ params }: { params: { id: st
               {item.name}
             </h1>
             <p className="mt-3 text-sm text-slate-500">
-              {item.category.name} · Поставщик: {item.company.name}
+              {item.category.name} · Своя техника · машинист в штате
               {averageRating !== null && (
                 <>
                   {' '}

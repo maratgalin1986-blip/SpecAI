@@ -11,6 +11,7 @@ import { authOptions } from '@/lib/auth';
 import { isAdminRequest } from '@/lib/admin';
 import { isFleetManager } from '@/lib/fleet';
 import { SITE } from '@/lib/site';
+import { CallbackForm } from '@/components/CallbackForm';
 
 export const metadata: Metadata = {
   title: 'Заявка на технику',
@@ -97,9 +98,40 @@ export default async function OrdersPage({ searchParams }: { searchParams: Order
 
       <section>
         <h2 className="mb-3 text-lg font-semibold">Новая заявка</h2>
-        <Card className="max-w-xl">
-          <NewOrderForm />
-        </Card>
+        {viewerId ? (
+          <Card className="max-w-xl">
+            <NewOrderForm />
+          </Card>
+        ) : (
+          <div className="grid gap-4 lg:grid-cols-2">
+            <Card>
+              <CallbackForm
+                source="orders"
+                title="Заявка без регистрации"
+                subtitle="Оставьте телефон и коротко опишите задачу — перезвоним и назовём цену."
+              />
+            </Card>
+            <Card className="flex flex-col justify-center gap-3">
+              <p className="font-semibold">Не знаете, какая техника нужна?</p>
+              <p className="text-sm text-slate-600">
+                Ответьте на 3 вопроса — подберём машину, покажем цену и погоду на день работ.
+              </p>
+              <a
+                href="/#podbor"
+                className="w-fit rounded-full bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white hover:bg-slate-800"
+              >
+                Подобрать технику за 30 секунд
+              </a>
+              <p className="text-xs text-slate-500">
+                Есть аккаунт?{' '}
+                <a href="/login?callbackUrl=/orders" className="text-amber-700 underline">
+                  Войдите
+                </a>{' '}
+                — заявка с адресом покажет прогноз и карту места работ.
+              </p>
+            </Card>
+          </div>
+        )}
       </section>
 
       {(seesAll || viewerId) && (

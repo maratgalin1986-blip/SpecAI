@@ -69,7 +69,8 @@ const FORM_LABELS: Record<string, string> = {
   'catalog-empty': 'Каталог, ничего не нашли',
   landing: 'Страница вида техники',
   contacts: 'Контакты',
-  provider: 'Поставщикам',
+  orders: 'Страница заявки',
+  provider: 'Поставщикам (старая форма)',
 };
 
 /** A readable name of the form a lead came from ("estimate:<id>" → its kind). */
