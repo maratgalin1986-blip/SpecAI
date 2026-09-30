@@ -59,6 +59,7 @@ const TASKS: {
     icon: 'crane',
     label: 'Подъём и перевозка груза манипулятором',
     machine: 'Манипулятор КМУ 7 т',
+    landing: 'manipulyator-kmu',
     photo: 'kmu',
   },
   {
@@ -66,6 +67,7 @@ const TASKS: {
     icon: 'lift',
     label: 'Работы на высоте',
     machine: 'Автовышка АГП',
+    landing: 'avtovyshka-agp',
     photo: 'agp',
   },
   {
@@ -82,6 +84,7 @@ const TASKS: {
     icon: 'roller',
     label: 'Уплотнение грунта и асфальта',
     machine: 'Виброкаток',
+    landing: 'vibrokatok',
     photo: 'roller',
   },
   {
