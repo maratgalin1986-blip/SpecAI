@@ -19,7 +19,7 @@ export async function GET(request: NextRequest) {
   const [leads, orders] = await Promise.all([
     prisma.lead.findMany({
       where: { createdAt: { gte: since } },
-      select: { createdAt: true, source: true, status: true },
+      select: { createdAt: true, source: true, status: true, outcome: true, amount: true },
     }),
     prisma.order.findMany({
       where: { createdAt: { gte: since } },

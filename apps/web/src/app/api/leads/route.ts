@@ -47,7 +47,7 @@ export async function POST(request: NextRequest) {
   ];
 
   try {
-    await prisma.lead.create({ data: lead });
+    await prisma.lead.create({ data: { ...lead, ymClientId: parsed.data.ymClientId ?? null } });
   } catch (error) {
     // The database is down: the lead must still reach the owner.
     console.error('[leads] failed to save lead', error);
