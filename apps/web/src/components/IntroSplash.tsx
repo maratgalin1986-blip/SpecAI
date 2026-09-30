@@ -20,7 +20,7 @@ const DURATION_MS = 2800;
 
 // `?intro=0` in the address skips the titles too (ad landings, QA, links
 // sent to someone who has already seen them).
-const HIDE_IF_SEEN = `try{if(sessionStorage.getItem('${SEEN_KEY}')||/[?&](intro=0|yclid|gclid|utm_medium=cpc)/.test(location.search)||matchMedia('(prefers-reduced-motion: reduce)').matches){document.getElementById('intro').hidden=true}}catch(e){}`;
+const HIDE_IF_SEEN = `try{if(/(?:^|;\\s*)sp_ab=calm/.test(document.cookie)||sessionStorage.getItem('${SEEN_KEY}')||/[?&](intro=0|yclid|gclid|utm_medium=cpc)/.test(location.search)||matchMedia('(prefers-reduced-motion: reduce)').matches){document.getElementById('intro').hidden=true}}catch(e){}`;
 
 // The card number flies into the header «Позвонить» button through a View
 // Transition. Old snapshot: only the card number carries the name. In the
