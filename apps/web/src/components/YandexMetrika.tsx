@@ -16,7 +16,7 @@ export function YandexMetrika() {
       <script
         id="yandex-metrika-init"
         dangerouslySetInnerHTML={{
-          __html: `(function(m,i){if(/^\\/admin/.test(location.pathname))return;m[i]=m[i]||function(){(m[i].a=m[i].a||[]).push(arguments)};m[i].l=1*new Date();m[i](${id},"init",{ssr:true,webvisor:true,clickmap:true,ecommerce:"dataLayer",referrer:document.referrer,url:location.href,accurateTrackBounce:true,trackLinks:true});var c=/(?:^|;\\s*)sp_ab=(cine|calm)/.exec(document.cookie);if(c)m[i](${id},"params",{ab:c[1]})})(window,"ym");`,
+          __html: `(function(m,i){try{if(localStorage.getItem('cookie-consent')==='no')return}catch(e){}if(/^\\/admin/.test(location.pathname))return;m[i]=m[i]||function(){(m[i].a=m[i].a||[]).push(arguments)};m[i].l=1*new Date();m[i](${id},"init",{ssr:true,webvisor:true,clickmap:true,ecommerce:"dataLayer",referrer:document.referrer,url:location.href,accurateTrackBounce:true,trackLinks:true});var c=/(?:^|;\\s*)sp_ab=(cine|calm)/.exec(document.cookie);if(c)m[i](${id},"params",{ab:c[1]})})(window,"ym");`,
         }}
       />
       <Script id="yandex-metrika" strategy="lazyOnload">

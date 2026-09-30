@@ -130,7 +130,19 @@ export type Goal =
   | 'lead_retry'
   | 'lead_offline_call';
 
+/** The visitor pressed «Отказаться» in the cookie notice. */
+export const COOKIE_CONSENT_KEY = 'cookie-consent';
+
+export function analyticsRefused(): boolean {
+  try {
+    return localStorage.getItem(COOKIE_CONSENT_KEY) === 'no';
+  } catch {
+    return false;
+  }
+}
+
 export function reachGoal(goal: Goal) {
+  if (analyticsRefused()) return;
   const id = Number(SITE.metrikaId);
   const ym = (window as unknown as { ym?: (...args: unknown[]) => void }).ym;
   if (id && ym) ym(id, 'reachGoal', goal);
