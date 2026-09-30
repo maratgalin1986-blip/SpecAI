@@ -4,6 +4,7 @@ import { useId, useRef, useState } from 'react';
 import { Icon } from '@/components/Icon';
 import { SITE } from '@/lib/site';
 import { submitLead } from '@/lib/submitLead';
+import { LeadSuccess } from '@/components/LeadSuccess';
 
 // Card actions: «Заказать» opens a short inline order form (phone, optional
 // name, consent) that sends a lead without leaving the catalog; «Подробнее»
@@ -59,20 +60,7 @@ export function QuickOrder({
   }
 
   if (status === 'sent') {
-    return (
-      <div
-        role="status"
-        className="rounded-2xl bg-emerald-50 p-4 text-sm text-emerald-900 ring-1 ring-emerald-600/15"
-      >
-        <p className="font-semibold">Заявка принята</p>
-        <p className="mt-1 text-emerald-800">
-          {SITE.callbackPromise}. Срочно —{' '}
-          <a href={SITE.phoneHref} className="font-semibold underline">
-            {SITE.phone}
-          </a>
-        </p>
-      </div>
-    );
+    return <LeadSuccess />;
   }
 
   const input =

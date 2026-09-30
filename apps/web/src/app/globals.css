@@ -1019,3 +1019,28 @@ html {
     animation: none;
   }
 }
+
+/* «Принято»: a rubber stamp lands once on the success screen. */
+.stamp {
+  border: 3px double #f59e0b;
+  border-radius: 0.5rem;
+  padding: 0.25rem 0.9rem;
+  color: #fbbf24;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-weight: 800;
+  letter-spacing: 0.25em;
+  text-transform: uppercase;
+  transform: rotate(-6deg);
+  animation: stamp-land 0.35s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+@keyframes stamp-land {
+  from {
+    opacity: 0;
+    transform: rotate(-6deg) scale(2);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .stamp {
+    animation: none;
+  }
+}
