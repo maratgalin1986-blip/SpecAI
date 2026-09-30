@@ -4,11 +4,14 @@ import { useEffect, useState } from 'react';
 import { SiteMap } from '@/components/SiteMap';
 import { WeatherHud } from '@/components/WeatherHud';
 import { machineTypeOf } from '@/lib/equipmentCatalog';
+import { reachGoal } from '@/lib/marketing';
+import { machineGroup } from '@/lib/weather';
 import type { ShiftWeather, WorkNote } from '@/lib/weather';
 
 // Live preview under an order form: the weather for the chosen day at the
-// typed address, and the top-down map once the address is found. Requests
-// are debounced; the server caches forecasts and geocoding.
+// typed address, and the top-down map once the address is found. The address
+// is looked up only after a 1.5 s pause and once it has a house number, not on
+// every keystroke; the server caches forecasts and geocoding.
 
 type Result = {
   place: { lat: number; lon: number; label: string };
@@ -38,24 +41,33 @@ export function ConditionsPreview({
     const params = new URLSearchParams({ date });
     const kind = machineTypeOf(categoryName ?? '');
     if (kind) params.set('kind', kind);
-    if (address.trim().length >= 5) params.set('q', address.trim());
+    const query = address.trim();
+    const withAddress = query.length >= 5 && /\d/.test(query);
+    if (withAddress) params.set('q', query);
     const controller = new AbortController();
-    const timer = window.setTimeout(async () => {
-      setState('loading');
-      try {
-        const response = await fetch(`/api/weather?${params}`, { signal: controller.signal });
-        if (response.status === 400) {
-          setResult(null);
-          setState('far');
-          return;
+    const timer = window.setTimeout(
+      async () => {
+        setState('loading');
+        try {
+          const response = await fetch(`/api/weather?${params}`, { signal: controller.signal });
+          if (response.status === 400) {
+            setResult(null);
+            setState('far');
+            return;
+          }
+          if (!response.ok) throw new Error('weather');
+          const data = (await response.json()) as Result;
+          setResult(data);
+          setState('idle');
+          if (withAddress) {
+            reachGoal(data.place.label !== 'Набережные Челны' ? 'geo_found' : 'geo_fail');
+          }
+        } catch (error) {
+          if ((error as Error).name !== 'AbortError') setState('error');
         }
-        if (!response.ok) throw new Error('weather');
-        setResult((await response.json()) as Result);
-        setState('idle');
-      } catch (error) {
-        if ((error as Error).name !== 'AbortError') setState('error');
-      }
-    }, 700);
+      },
+      withAddress ? 1500 : 300,
+    );
     return () => {
       controller.abort();
       window.clearTimeout(timer);
@@ -69,7 +81,10 @@ export function ConditionsPreview({
   });
   const kind = machineTypeOf(categoryName ?? '');
   const hasAddress =
-    address.trim().length >= 5 && result?.place && result.place.label !== 'Набережные Челны';
+    address.trim().length >= 5 &&
+    /\d/.test(address) &&
+    result?.place &&
+    result.place.label !== 'Набережные Челны';
 
   return (
     <div className="flex flex-col gap-3" aria-live="polite">
@@ -101,7 +116,14 @@ export function ConditionsPreview({
             }
             dateLabel={dateLabel}
             machineLabel={kind ? `для выбранной техники` : undefined}
+            group={machineGroup(kind)}
           />
+          {!hasAddress && /\d/.test(address) && address.trim().length >= 5 && (
+            <p className="text-sm text-slate-500">
+              Адрес на карте не нашёлся — не страшно: точку уточним по телефону, заявку можно
+              отправлять.
+            </p>
+          )}
           {hasAddress && (
             <SiteMap
               lat={result.place.lat}

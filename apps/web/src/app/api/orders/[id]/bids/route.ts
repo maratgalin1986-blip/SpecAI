@@ -7,6 +7,7 @@ import { newBidReceived } from '@/lib/emailTemplates';
 import { notifyTelegram } from '@/lib/notify';
 import { formatMoney } from '@/lib/money';
 import { siteUrl } from '@/lib/siteUrl';
+import { isFleetManager } from '@/lib/fleet';
 
 const requestSchema = z.object({
   equipmentId: z.string().cuid(),
@@ -16,7 +17,7 @@ const requestSchema = z.object({
 
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
   const currentUser = await getRequestUser(request);
-  if (!currentUser || currentUser.role !== 'PROVIDER_ADMIN' || !currentUser.companyId) {
+  if (!isFleetManager(currentUser)) {
     return NextResponse.json({ error: 'Требуется аккаунт поставщика' }, { status: 403 });
   }
 

@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { Button } from '@specai/ui';
 import { formatMoney } from '@/lib/money';
+import { isFleetManager } from '@/lib/fleet';
 
 interface EquipmentOption {
   id: string;
@@ -30,7 +31,7 @@ export function BidForm({ orderId }: { orderId: string }) {
       .then((data) => setEquipmentOptions(data.equipment ?? []));
   }, [session?.user.companyId]);
 
-  if (status !== 'authenticated' || session.user.role !== 'PROVIDER_ADMIN') {
+  if (status !== 'authenticated' || !isFleetManager(session.user)) {
     return null;
   }
 
@@ -66,7 +67,7 @@ export function BidForm({ orderId }: { orderId: string }) {
       <p className="text-sm text-slate-500">
         Нет доступной техники для предложения. Добавьте технику в{' '}
         <a href="/provider" className="font-medium text-amber-700">
-          кабинете поставщика
+          кабинете парка
         </a>
         .
       </p>

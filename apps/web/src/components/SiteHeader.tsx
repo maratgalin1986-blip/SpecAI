@@ -6,9 +6,8 @@ import { SITE } from '@/lib/site';
 
 const NAV_LINKS = [
   { href: '/equipment', label: 'Техника' },
-  { href: '/orders', label: 'Заявки' },
+  { href: '/orders', label: 'Заявка' },
   { href: '/agents', label: 'ИИ-агенты' },
-  { href: '/provider', label: 'Поставщикам' },
   { href: '/contacts', label: 'Контакты' },
   { href: '/dashboard', label: 'Кабинет' },
 ];
@@ -47,7 +46,7 @@ export function SiteHeader() {
 
         <a
           href={SITE.phoneHref}
-          className="ml-auto rounded-full bg-slate-900 px-3 py-1.5 text-sm font-semibold text-white lg:hidden"
+          className="vt-phone ml-auto rounded-full bg-slate-900 px-3 py-1.5 text-sm font-semibold text-white lg:hidden"
         >
           Позвонить
         </a>

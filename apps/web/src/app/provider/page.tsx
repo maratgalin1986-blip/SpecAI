@@ -1,106 +1,23 @@
 import type { Metadata } from 'next';
 import { getServerSession } from 'next-auth';
+import { redirect } from 'next/navigation';
 import { prisma } from '@specai/database';
 import { BookingStatusBadge, Card, StatusBadge } from '@specai/ui';
 import { authOptions } from '@/lib/auth';
 import { NewEquipmentForm } from '@/components/NewEquipmentForm';
 import { BookingActionButtons } from '@/components/BookingActionButtons';
 import { formatMoney, formatRate } from '@/lib/money';
-import { CallbackForm } from '@/components/CallbackForm';
 import { SITE } from '@/lib/site';
 import { Pagination } from '@/components/Pagination';
 import { parsePage, totalPagesFor } from '@/lib/pagination';
-import { CinemaLayer } from '@/components/CinemaHero';
-import { Icon, type IconName } from '@/components/Icon';
+import { isFleetManager } from '@/lib/fleet';
 
 export const dynamic = 'force-dynamic';
 export const metadata: Metadata = {
-  title: 'Поставщикам техники',
-  description: `Сдавайте спецтехнику в аренду через ${SITE.name}: заявки клиентов, бронирования, ИИ-помощник.`,
+  title: 'Кабинет парка',
+  description: `Парк техники ${SITE.name}: бронирования и заявки клиентов.`,
+  robots: { index: false },
 };
-
-const PROVIDER_BENEFITS: { icon: IconName; title: string; text: string }[] = [
-  {
-    icon: 'inbox',
-    title: 'Заявки клиентов',
-    text: 'Клиенты публикуют задачи — вы предлагаете свою технику и цену.',
-  },
-  {
-    icon: 'calendar',
-    title: 'Бронирования онлайн',
-    text: 'Подтверждайте брони и следите за загрузкой парка в одном кабинете.',
-  },
-  {
-    icon: 'spark',
-    title: 'ИИ заполнит карточку',
-    text: 'Вставьте текст из паспорта техники — ИИ разложит характеристики по полям.',
-  },
-  {
-    icon: 'tag',
-    title: 'Бесплатное размещение',
-    text: 'Регистрация и размещение техники ничего не стоят.',
-  },
-];
-
-function ProviderLanding({ signedIn }: { signedIn: boolean }) {
-  return (
-    <div className="flex flex-col gap-8">
-      <section className="relative isolate overflow-hidden rounded-[2rem] bg-slate-950 p-6 text-white shadow-2xl sm:p-10 sm:py-16">
-        <CinemaLayer clips={['site-aerial', 'steel-frame', 'crane-sun']} />
-        <div className="cine-eyebrow text-sm font-semibold uppercase tracking-widest text-amber-400">
-          Для владельцев техники
-        </div>
-        <h1 className="cine-title mt-2 text-3xl font-bold sm:text-5xl">
-          Сдавайте спецтехнику в аренду без простоев
-        </h1>
-        <p className="mt-3 max-w-2xl text-slate-300">
-          Разместите парк на {SITE.name} и получайте заказы от клиентов по всему Татарстану.
-        </p>
-        <div className="mt-6 flex flex-wrap gap-3">
-          {signedIn ? (
-            <p className="rounded-md bg-white/10 px-4 py-3 text-sm">
-              Вы вошли как клиент. Чтобы размещать технику, зарегистрируйте отдельный аккаунт
-              поставщика.
-            </p>
-          ) : (
-            <>
-              <a
-                href="/register"
-                className="rounded-md bg-amber-500 px-6 py-3 font-semibold text-slate-950 hover:bg-amber-400"
-              >
-                Зарегистрироваться как поставщик
-              </a>
-              <a
-                href="/login?callbackUrl=/provider"
-                className="rounded-md px-6 py-3 font-semibold ring-1 ring-white/30 hover:bg-white/10"
-              >
-                Войти
-              </a>
-            </>
-          )}
-        </div>
-      </section>
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {PROVIDER_BENEFITS.map((benefit) => (
-          <Card key={benefit.title}>
-            <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-slate-900 text-amber-400">
-              <Icon name={benefit.icon} className="h-6 w-6" />
-            </span>
-            <h2 className="mt-4 font-semibold">{benefit.title}</h2>
-            <p className="mt-1 text-sm text-slate-600">{benefit.text}</p>
-          </Card>
-        ))}
-      </div>
-      <Card className="p-6">
-        <CallbackForm
-          source="provider"
-          title="Есть вопросы по размещению?"
-          subtitle="Оставьте телефон — расскажем, как начать получать заказы."
-        />
-      </Card>
-    </div>
-  );
-}
 
 const PAGE_SIZE = 20;
 
@@ -122,9 +39,10 @@ export default async function ProviderPage({
 }) {
   const session = await getServerSession(authOptions);
 
-  if (!session || session.user.role !== 'PROVIDER_ADMIN' || !session.user.companyId) {
-    return <ProviderLanding signedIn={Boolean(session)} />;
-  }
+  // Only the owner's fleet account manages the fleet: СпецПласт16 is the only
+  // executor on the site, there is no sign-up for outside providers.
+  if (!session) redirect('/login?callbackUrl=/provider');
+  if (!isFleetManager(session.user) || !session.user.companyId) redirect('/dashboard');
 
   const equipmentWhere = { companyId: session.user.companyId };
   const bookingsWhere = { equipment: { companyId: session.user.companyId } };
@@ -165,7 +83,7 @@ export default async function ProviderPage({
 
   return (
     <div className="flex flex-col gap-8">
-      <h1 className="text-2xl font-bold">Кабинет поставщика</h1>
+      <h1 className="text-2xl font-bold">Кабинет парка СпецПласт16</h1>
 
       <section className="flex flex-col gap-3">
         <div className="flex flex-wrap items-baseline justify-between gap-2">

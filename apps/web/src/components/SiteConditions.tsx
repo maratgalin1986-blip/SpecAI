@@ -73,6 +73,7 @@ export async function SiteConditions({
       <WeatherHud
         weather={weather}
         notes={weather ? assessWork(weather, machineGroup(type)) : []}
+        group={machineGroup(type)}
         place={location?.city ?? 'Набережные Челны'}
         dateLabel={dateLabel}
         machineLabel={type ? `для: ${MACHINE_LABELS[type].toLowerCase()}` : undefined}

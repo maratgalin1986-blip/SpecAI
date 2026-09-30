@@ -69,7 +69,8 @@ const FORM_LABELS: Record<string, string> = {
   'catalog-empty': 'Каталог, ничего не нашли',
   landing: 'Страница вида техники',
   contacts: 'Контакты',
-  provider: 'Поставщикам',
+  orders: 'Страница заявки',
+  provider: 'Поставщикам (старая форма)',
 };
 
 /** A readable name of the form a lead came from ("estimate:<id>" → its kind). */
@@ -107,8 +108,27 @@ export function currentChannel(): string {
   return DIRECT;
 }
 
-/** Goals set up in Metrika: lead, call, whatsapp, telegram, email. */
-export type Goal = 'lead' | 'call' | 'whatsapp' | 'telegram' | 'email';
+/**
+ * Goals sent to Metrika. The first five are the contact goals set up in the
+ * counter; the rest are micro-steps of the funnel (JS goals with these ids).
+ */
+export type Goal =
+  | 'lead'
+  | 'card_open'
+  | 'call'
+  | 'whatsapp'
+  | 'telegram'
+  | 'email'
+  | 'intro_skip'
+  | 'intro_full'
+  | 'hero_call'
+  | 'geo_search'
+  | 'geo_found'
+  | 'geo_fail'
+  | 'window_book'
+  | 'card_open'
+  | 'lead_retry'
+  | 'lead_offline_call';
 
 export function reachGoal(goal: Goal) {
   const id = Number(SITE.metrikaId);

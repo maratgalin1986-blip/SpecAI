@@ -1,5 +1,7 @@
 import { WeatherIcon, WindArrow } from '@/components/WeatherIcon';
+import { SITE } from '@/lib/site';
 import {
+  bestWindow,
   LEVEL_LABEL,
   mskParts,
   tempRange,
@@ -9,6 +11,7 @@ import {
   symbolLabel,
   windFrom,
   worstLevel,
+  type MachineGroup,
   type ShiftWeather,
   type WorkLevel,
   type WorkNote,
@@ -40,8 +43,11 @@ export function WeatherHud({
   place,
   dateLabel,
   machineLabel,
+  group = 'any',
   emptyReason = 'far',
 }: {
+  /** Whose wind limit picks the best window. */
+  group?: MachineGroup;
   weather: ShiftWeather | null;
   /** Why there is no forecast: the date is too far ahead, or the service is down. */
   emptyReason?: 'far' | 'unavailable';
@@ -74,6 +80,8 @@ export function WeatherHud({
   const style = LEVEL_STYLE[level];
   const hours = weather.hourly ? weather.points : [];
   const windPeak = Math.max(10, ...hours.map((p) => p.wind));
+  const slot = bestWindow(weather, group);
+  const pad = (h: number) => String(h).padStart(2, '0');
 
   return (
     <section
@@ -147,7 +155,11 @@ export function WeatherHud({
             return (
               <li
                 key={point.time}
-                className="flex min-w-[2.6rem] flex-col items-center gap-1 text-center"
+                className={`flex min-w-[2.6rem] flex-col items-center gap-1 rounded-lg text-center ${
+                  slot && hour >= slot.from && hour < slot.to
+                    ? 'bg-emerald-400/10 ring-1 ring-emerald-400/40'
+                    : ''
+                }`}
               >
                 <span className="font-mono text-[0.6rem] text-white/50">
                   {String(hour).padStart(2, '0')}:00
@@ -171,6 +183,28 @@ export function WeatherHud({
             );
           })}
         </ol>
+      )}
+
+      {weather.hourly && (
+        <div className="relative mx-5 mb-4 flex flex-wrap items-center gap-3 sm:mx-7">
+          {slot ? (
+            <span className="stamp text-xs">
+              Окно {pad(slot.from)}–{pad(slot.to)}
+            </span>
+          ) : (
+            <a
+              href={SITE.phoneHref}
+              className="rounded-full bg-amber-500 px-4 py-2 text-sm font-semibold text-slate-950 hover:bg-amber-400"
+            >
+              Позвонить — подберём день
+            </a>
+          )}
+          <span className="text-sm text-white/70">
+            {slot
+              ? `Лучшее время для работ: ${pad(slot.from)}:00–${pad(slot.to)}:00`
+              : 'Удобного окна в эту смену нет'}
+          </span>
+        </div>
       )}
 
       <div className={`relative mx-5 mb-5 rounded-2xl p-4 ring-1 sm:mx-7 ${style.badge}`}>

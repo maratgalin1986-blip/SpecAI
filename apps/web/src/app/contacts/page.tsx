@@ -59,6 +59,25 @@ export default function ContactsPage() {
               Спросить ИИ-агента
             </a>
           </div>
+          <a
+            href="/qr"
+            className="mt-2 flex items-center gap-4 rounded-xl border border-slate-200 p-3 hover:bg-slate-50"
+          >
+            <img
+              src="/qr/code.svg"
+              alt=""
+              width={72}
+              height={72}
+              loading="lazy"
+              className="shrink-0"
+            />
+            <span>
+              <span className="block font-semibold text-slate-900">QR-код сайта</span>
+              <span className="text-sm text-slate-500">
+                Наведите камеру телефона — откроется сайт. Скачать для визиток и техники.
+              </span>
+            </span>
+          </a>
         </Card>
         <Card className="p-6">
           <CallbackForm source="contacts" />

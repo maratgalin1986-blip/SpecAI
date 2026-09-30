@@ -51,7 +51,7 @@ const TOOLS: Record<AgentToolName, Anthropic.Tool> = {
   get_equipment_details: {
     name: 'get_equipment_details',
     description:
-      'Returns full details of one equipment listing: specs, rates, provider, rating and ' +
+      'Returns full details of one equipment listing: specs, rates, rating and ' +
       'a link to its page.',
     input_schema: {
       type: 'object',
@@ -76,8 +76,8 @@ const TOOLS: Record<AgentToolName, Anthropic.Tool> = {
   create_order: {
     name: 'create_order',
     description:
-      'Creates a job order on behalf of the signed-in customer; providers will then bid on ' +
-      'it. Only call after the user has confirmed the description and dates.',
+      'Creates a job order on behalf of the signed-in customer; СпецПласт16 then replies ' +
+      'with its price. Only call after the user has confirmed the description and dates.',
     input_schema: {
       type: 'object',
       properties: {
@@ -99,12 +99,12 @@ const TOOLS: Record<AgentToolName, Anthropic.Tool> = {
   },
   get_my_orders: {
     name: 'get_my_orders',
-    description: "Returns the signed-in user's job orders with status and number of bids.",
+    description: "Returns the signed-in user's job orders with status and number of price offers.",
     input_schema: { type: 'object', properties: {} },
   },
   list_open_orders: {
     name: 'list_open_orders',
-    description: 'Returns open customer job orders that providers can bid on.',
+    description: 'Returns open customer job orders waiting for a price from СпецПласт16.',
     input_schema: {
       type: 'object',
       properties: { categoryId: { type: 'string' } },
@@ -113,7 +113,7 @@ const TOOLS: Record<AgentToolName, Anthropic.Tool> = {
   get_my_fleet: {
     name: 'get_my_fleet',
     description:
-      "Returns the signed-in provider's equipment with status and count of pending bookings.",
+      "Returns СпецПласт16's own fleet with status and count of pending bookings (owner only).",
     input_schema: { type: 'object', properties: {} },
   },
 };
@@ -125,9 +125,10 @@ const TOOLS: Record<AgentToolName, Anthropic.Tool> = {
 const COMPANY_CONTEXT =
   'You work for СпецПласт16 (ООО «СПЕЦПЛАСТ 16», Naberezhnye Chelny) — a special-equipment ' +
   'rental and construction services ' +
-  'platform in the Republic of Tatarstan (region 16). Customers rent excavators, cranes, ' +
-  'loaders, dump trucks and other machinery from verified providers, either by booking a ' +
-  'catalog listing directly or by posting a job order that providers bid on. ' +
+  'company in the Republic of Tatarstan (region 16). СпецПласт16 is the only executor: its own ' +
+  'machines and its own operators, no intermediaries or third-party providers. Customers rent ' +
+  'excavators, cranes, loaders, dump trucks and other machinery by booking a catalog listing ' +
+  'or by leaving a job order that СпецПласт16 answers with its price. ' +
   'Always answer in Russian, concisely and politely. Prices are in the listing currency; ' +
   'hourlyRate is per machine-hour with an operator (quote it when present), dailyRate is an ' +
   '8-hour shift. ' +
@@ -163,14 +164,14 @@ const AGENTS: Record<AgentId, AgentDefinition> = {
       'using the tools, and explain how the platform works: bookings go PENDING → ' +
       'CONFIRMED → ACTIVE → COMPLETED; a customer can cancel a pending or confirmed ' +
       'booking from /dashboard; after completion they can leave a review; orders collect ' +
-      'bids from providers and the customer accepts one on the order page. If you cannot ' +
+      'a price offer from СпецПласт16 and the customer accepts it on the order page. If you cannot ' +
       'resolve something, suggest contacting a manager via the contacts on the home page.',
     tools: ['get_my_bookings', 'get_my_orders'],
   },
   provider: {
     system:
-      'You assist equipment providers. Show open customer orders, match them against the ' +
-      "provider's fleet, point out which orders are worth bidding on and link to them, " +
+      'You assist the owner of СпецПласт16 with the company fleet. Show open customer orders, ' +
+      'match them against the fleet, point out which orders to quote first and link to them, ' +
       'and summarize fleet status and pending bookings. Fleet management happens at /provider.',
     tools: ['list_open_orders', 'get_my_fleet', 'list_categories'],
   },

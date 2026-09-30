@@ -372,3 +372,45 @@ export function tempRange(w: ShiftWeather) {
 export function weatherLine(w: ShiftWeather, notes: WorkNote[]) {
   return `${tempRange(w)}, ${symbolLabel(w.symbol)}, ветер ${Math.round(w.windMax)} м/с ${windFrom(w.windDir)}${w.precip ? `, осадки ${w.precip} мм` : ''} — ${LEVEL_LABEL[worstLevel(notes)]}`;
 }
+
+/**
+ * The longest run of shift hours fit for work: no thunder, no rain or snow
+ * worth mentioning, no fog, wind under the machine's caution limit. Needs
+ * an hourly forecast; returns MSK hours [from, to) or null.
+ */
+export function bestWindow(
+  w: ShiftWeather,
+  group: MachineGroup,
+): { from: number; to: number } | null {
+  if (!w.hourly) return null;
+  const windLimit = group === 'lifting' ? LIFT_WIND_CAUTION : WIND_CAUTION_ANY;
+  let best: { from: number; to: number } | null = null;
+  let start: number | null = null;
+  let last = -1;
+  const close = () => {
+    if (start !== null && (!best || last + 1 - start > best.to - best.from)) {
+      best = { from: start, to: last + 1 };
+    }
+    start = null;
+  };
+  for (const point of w.points) {
+    const hour = mskParts(point.time).hour;
+    const fit =
+      !point.symbol.includes('thunder') &&
+      point.precip < 0.3 &&
+      point.fog < 50 &&
+      point.wind < windLimit;
+    if (fit && start !== null && hour === last + 1) {
+      last = hour;
+    } else if (fit) {
+      close();
+      start = hour;
+      last = hour;
+    } else {
+      close();
+    }
+  }
+  close();
+  const found = best as { from: number; to: number } | null;
+  return found && found.to - found.from >= 2 ? found : null;
+}

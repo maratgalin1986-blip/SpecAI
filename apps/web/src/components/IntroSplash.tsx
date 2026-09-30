@@ -1,8 +1,10 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { flushSync } from 'react-dom';
 import { CinemaVideo } from '@/components/CinemaVideo';
 import { SITE } from '@/lib/site';
+import { reachGoal } from '@/lib/marketing';
 
 // Opening titles of the home page, about 3 seconds: a drone shot descends over
 // a construction site, «ООО «СпецПласт 16» представляет», then the partner card
@@ -14,14 +16,50 @@ import { SITE } from '@/lib/site';
 // visitors who have already seen it.
 
 const SEEN_KEY = 'sp16_intro_seen';
-const DURATION_MS = 3600;
+const DURATION_MS = 2800;
 
 // `?intro=0` in the address skips the titles too (ad landings, QA, links
 // sent to someone who has already seen them).
-const HIDE_IF_SEEN = `try{if(sessionStorage.getItem('${SEEN_KEY}')||/[?&]intro=0/.test(location.search)||matchMedia('(prefers-reduced-motion: reduce)').matches){document.getElementById('intro').hidden=true}}catch(e){}`;
+const HIDE_IF_SEEN = `try{if(/(?:^|;\\s*)sp_ab=calm/.test(document.cookie)||sessionStorage.getItem('${SEEN_KEY}')||/[?&](intro=0|yclid|gclid|utm_medium=cpc)/.test(location.search)||matchMedia('(prefers-reduced-motion: reduce)').matches){document.getElementById('intro').hidden=true}}catch(e){}`;
+
+// The card number flies into the header «Позвонить» button through a View
+// Transition. Old snapshot: only the card number carries the name. In the
+// update callback the html gets `intro-live` (the header button takes the name
+// in CSS) and the intro unmounts, so the name is never twice in one snapshot.
+const LIVE_CLASS = 'intro-live';
 
 export function IntroSplash() {
   const [done, setDone] = useState(false);
+  const finishing = useRef(false);
+  const finish = () => {
+    if (finishing.current) return;
+    finishing.current = true;
+    const root = document.documentElement;
+    const canMorph =
+      typeof document.startViewTransition === 'function' &&
+      !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (!canMorph) {
+      setDone(true);
+      return;
+    }
+    const transition = document.startViewTransition(() => {
+      root.classList.add(LIVE_CLASS);
+      flushSync(() => setDone(true));
+    });
+    const land = () => {
+      root.classList.remove(LIVE_CLASS);
+      const button = document.querySelector('.vt-phone');
+      if (button) {
+        button.classList.add('phone-land');
+        window.setTimeout(() => button.classList.remove('phone-land'), 900);
+      }
+    };
+    transition.finished.then(land, land);
+  };
+  const skip = () => {
+    reachGoal('intro_skip');
+    finish();
+  };
 
   useEffect(() => {
     // The inline script has already hidden it for a repeat visit; the flag
@@ -35,12 +73,18 @@ export function IntroSplash() {
     } catch {
       // Storage blocked: the titles just play on every visit.
     }
-    const skip = () => setDone(true);
-    const timer = window.setTimeout(skip, DURATION_MS);
-    window.addEventListener('keydown', skip, { once: true });
+    const onKey = () => {
+      reachGoal('intro_skip');
+      finish();
+    };
+    const timer = window.setTimeout(() => {
+      reachGoal('intro_full');
+      finish();
+    }, DURATION_MS);
+    window.addEventListener('keydown', onKey, { once: true });
     return () => {
       window.clearTimeout(timer);
-      window.removeEventListener('keydown', skip);
+      window.removeEventListener('keydown', onKey);
     };
   }, []);
 
@@ -51,7 +95,7 @@ export function IntroSplash() {
       <div
         id="intro"
         className="intro fixed inset-0 z-[100] overflow-hidden bg-black text-white"
-        onClick={() => setDone(true)}
+        onClick={skip}
         role="presentation"
         suppressHydrationWarning
       >
@@ -95,7 +139,10 @@ export function IntroSplash() {
                 </div>
                 <div className="mt-auto">
                   <div className="intro-chip mb-3 h-7 w-10 rounded-md" aria-hidden />
-                  <div className="font-mono text-base tracking-[0.18em] text-white/90 sm:text-lg">
+                  <div
+                    className="font-mono text-base tracking-[0.18em] text-white/90 sm:text-lg"
+                    style={{ viewTransitionName: 'sp-phone' }}
+                  >
                     {SITE.phone}
                   </div>
                   <div className="mt-2 flex items-end justify-between gap-3 text-[0.65rem] uppercase tracking-[0.15em] text-white/60">
@@ -111,7 +158,7 @@ export function IntroSplash() {
         <button
           type="button"
           className="absolute bottom-6 right-6 rounded-full bg-white/10 px-4 py-2 text-xs font-semibold text-white/80 ring-1 ring-white/20 backdrop-blur hover:bg-white/20"
-          onClick={() => setDone(true)}
+          onClick={skip}
         >
           Пропустить →
         </button>

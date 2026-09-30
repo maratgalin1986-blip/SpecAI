@@ -1,13 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@specai/database';
 import { getRequestUser } from '@/lib/requestUser';
+import { isFleetManager } from '@/lib/fleet';
 
 export const dynamic = 'force-dynamic';
 
 /**
- * Заявка с предложениями поставщиков (техника, компания, цена, сообщение).
- * Как и страница /orders/[id] на сайте, доступна любому вошедшему пользователю;
- * `isOwner` подсказывает клиенту, можно ли принимать предложения.
+ * Заявка с предложением СпецПласт16 (техника, цена, сообщение).
+ * Как и страница /orders/[id], доступна только автору и владельцу компании;
+ * `isOwner` подсказывает клиенту, можно ли принимать предложение.
  */
 export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
   const currentUser = await getRequestUser(request);
@@ -35,14 +36,18 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       },
     },
   });
-  if (!order || order.status === 'PENDING_REVIEW') {
+  const isManager = isFleetManager(currentUser);
+  if (
+    !order ||
+    order.status === 'PENDING_REVIEW' ||
+    (order.customerId !== currentUser.id && !isManager)
+  ) {
     return NextResponse.json({ error: 'Заявка не найдена' }, { status: 404 });
   }
 
-  // Contacts of people from messenger chats are for equipment providers only.
+  // Contacts of people from messenger chats are for the owner only.
   const { contactName, contactPhone, rawText, sourceUrl, externalId, fingerprint, ...rest } = order;
-  const contact =
-    currentUser.role === 'PROVIDER_ADMIN' ? { contactName, contactPhone, rawText, sourceUrl } : {};
+  const contact = isManager ? { contactName, contactPhone, rawText, sourceUrl } : {};
   void externalId;
   void fingerprint;
   return NextResponse.json({

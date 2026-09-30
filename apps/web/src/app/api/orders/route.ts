@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@specai/database';
 import { createOrderSchema } from '@specai/shared';
 import { getRequestUser } from '@/lib/requestUser';
+import { isFleetManager } from '@/lib/fleet';
 import { geocodeAddress } from '@/lib/geo';
 import { notifyTelegram } from '@/lib/notify';
 import { SITE } from '@/lib/site';
@@ -20,7 +21,7 @@ export const dynamic = 'force-dynamic';
 
 /**
  * Список заявок.
- * - `?open=1` — открытые заявки всех клиентов (лента для поставщиков), как раньше.
+ * - `?open=1` — открытые заявки всех клиентов, только для владельца СпецПласт16.
  * - без параметра — все заявки текущего пользователя (любого статуса), требует входа;
  *   используется вкладкой «Заявки» мобильного приложения.
  * Формат ответа один и тот же: `{ orders }` с category, customer (id, name) и bids.
@@ -30,14 +31,17 @@ export async function GET(request: NextRequest) {
   const categoryId = searchParams.get('categoryId') ?? undefined;
   const openFeed = searchParams.get('open') === '1';
 
+  const currentUser = await getRequestUser(request);
+  if (!currentUser) {
+    return NextResponse.json({ error: 'Необходимо войти в аккаунт' }, { status: 401 });
+  }
   let where: { status?: 'OPEN'; categoryId?: string; customerId?: string };
   if (openFeed) {
+    if (!isFleetManager(currentUser)) {
+      return NextResponse.json({ error: 'Доступно только владельцу' }, { status: 403 });
+    }
     where = { status: 'OPEN', categoryId };
   } else {
-    const currentUser = await getRequestUser(request);
-    if (!currentUser) {
-      return NextResponse.json({ error: 'Необходимо войти в аккаунт' }, { status: 401 });
-    }
     where = { customerId: currentUser.id, categoryId };
   }
 
