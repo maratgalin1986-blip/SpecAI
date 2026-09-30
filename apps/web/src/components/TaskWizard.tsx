@@ -5,6 +5,7 @@ import { CallbackForm } from '@/components/CallbackForm';
 import { Icon, type IconName } from '@/components/Icon';
 import { MachinePhoto } from '@/components/MachinePhoto';
 import type { MachineType } from '@/lib/machinePhotos';
+import { WorkOrderPreview } from '@/components/WorkOrderPreview';
 import { WeatherHud } from '@/components/WeatherHud';
 import {
   machineGroup,
@@ -340,20 +341,29 @@ export function TaskWizard() {
                   </button>
                 </div>
               </div>
-              {forecastDone ? (
-                <CallbackForm
-                  key={summary}
-                  source="wizard"
-                  defaultMessage={summary}
-                  title="Забронировать"
-                  subtitle="Менеджер уточнит адрес и подачу и назовёт точную цену."
+              <div className="flex flex-col gap-4">
+                <WorkOrderPreview
+                  machine={task.machine}
+                  when={when}
+                  task={volume ? `${task.label} · ${volume.label}` : task.label}
+                  weather={forecast?.weather ? weatherLine(forecast.weather, forecast.notes) : null}
+                  price={estimate ?? 'по запросу'}
                 />
-              ) : (
-                <div
-                  className="h-72 animate-pulse rounded-2xl bg-slate-100"
-                  aria-label="Проверяем погоду"
-                />
-              )}
+                {forecastDone ? (
+                  <CallbackForm
+                    key={summary}
+                    source="wizard"
+                    defaultMessage={summary}
+                    title="Забронировать"
+                    subtitle="Менеджер уточнит адрес и подачу и назовёт точную цену."
+                  />
+                ) : (
+                  <div
+                    className="h-72 animate-pulse rounded-2xl bg-slate-100"
+                    aria-label="Проверяем погоду"
+                  />
+                )}
+              </div>
               {forecast?.weather && (
                 <div className="xl:col-span-2">
                   <WeatherHud

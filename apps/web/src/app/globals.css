@@ -1044,3 +1044,23 @@ html {
     animation: none;
   }
 }
+
+/* «Бланк наряда» in the wizard: each filled row types itself in. */
+.work-order-value {
+  display: inline-block;
+  animation: work-order-type 350ms steps(12) both;
+}
+@keyframes work-order-type {
+  from {
+    clip-path: inset(0 100% 0 0);
+  }
+  to {
+    clip-path: inset(0);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .work-order-value,
+  .work-order .stamp {
+    animation: none;
+  }
+}
