@@ -987,3 +987,20 @@ html {
     animation: none;
   }
 }
+
+/* QR page: a laser line sweeps the code like a scanner. */
+.qr-scan {
+  background: linear-gradient(90deg, transparent, rgba(245, 158, 11, 0.9), transparent);
+  box-shadow: 0 0 12px rgba(245, 158, 11, 0.8);
+  animation: qr-scan 2.6s ease-in-out infinite alternate;
+}
+@keyframes qr-scan {
+  to {
+    top: calc(100% - 1rem);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .qr-scan {
+    display: none;
+  }
+}

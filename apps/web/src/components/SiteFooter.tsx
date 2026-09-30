@@ -47,6 +47,21 @@ export function SiteFooter() {
             {SITE.city}, {SITE.region}
           </span>
           <span>{SITE.workingHours}</span>
+          <a href="/qr" className="mt-3 hidden items-center gap-3 hover:text-white sm:flex">
+            <img
+              src="/qr/code.svg"
+              alt=""
+              width={64}
+              height={64}
+              loading="lazy"
+              className="rounded bg-white p-1"
+            />
+            <span>
+              QR-код сайта
+              <br />
+              <span className="text-xs text-slate-400">для визиток и техники</span>
+            </span>
+          </a>
         </div>
       </div>
       <div className="border-t border-slate-800 py-4 text-center text-xs text-slate-400">
