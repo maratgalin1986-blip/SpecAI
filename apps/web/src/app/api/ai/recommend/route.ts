@@ -5,6 +5,7 @@ import { recommendEquipment } from '@specai/ai-service';
 import { getRequestUser } from '@/lib/requestUser';
 import { checkRateLimit } from '@/lib/rateLimit';
 import { OWN_FLEET } from '@/lib/fleet';
+import { matchTask } from '@/lib/dispatcher';
 
 const requestSchema = z.object({
   jobDescription: z.string().min(1).max(2000),
@@ -56,11 +57,30 @@ export async function POST(request: NextRequest) {
     specs: (item.specs as Record<string, unknown> | null) ?? undefined,
   }));
 
+  // Without an AI key (or if the AI fails) the rule-based dispatcher picks
+  // the machine type for the job, so the page always answers.
+  const byRules = () => {
+    const task = matchTask(parsed.data.jobDescription);
+    const picked = task ? candidates.filter((c) => c.category === task.category) : [];
+    return {
+      recommendations: picked
+        .sort((x, y) => x.dailyRate - y.dailyRate)
+        .slice(0, 3)
+        .map((c) => ({ equipmentId: c.id, reason: `Подходит: ${task?.why}.` })),
+      followUpQuestion: task
+        ? undefined
+        : 'Опишите задачу подробнее: что нужно сделать (копать, поднять, вывезти, уплотнить…), объём и адрес.',
+    };
+  };
   let result;
-  try {
-    result = await recommendEquipment(parsed.data.jobDescription, candidates);
-  } catch {
-    return NextResponse.json({ error: 'ИИ-подбор сейчас недоступен' }, { status: 502 });
+  if (!process.env.ANTHROPIC_API_KEY) {
+    result = byRules();
+  } else {
+    try {
+      result = await recommendEquipment(parsed.data.jobDescription, candidates);
+    } catch {
+      result = byRules();
+    }
   }
 
   const byId = new Map(candidates.map((c) => [c.id, c]));

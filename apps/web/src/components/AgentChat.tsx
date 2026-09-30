@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { AGENT_PROFILES, PUBLIC_AGENT_PROFILES, type AgentId } from '@specai/shared';
+import { reachGoal } from '@/lib/marketing';
 
 type Selection = AgentId | 'auto';
 
@@ -104,6 +105,8 @@ export function AgentChat({
       if (!response.ok || !data?.reply) {
         throw new Error(typeof data?.error === 'string' ? data.error : 'Агент не ответил.');
       }
+      // A phone number typed into the chat became a callback request.
+      if (data.lead) reachGoal('lead');
       setMessages([
         ...nextMessages,
         { role: 'assistant', content: data.reply, agentId: data.agentId },

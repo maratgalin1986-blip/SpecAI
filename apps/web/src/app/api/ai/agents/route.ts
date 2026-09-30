@@ -6,8 +6,17 @@ import { routeToAgent, runAgent, type AgentToolHandlers } from '@specai/ai-servi
 import { authOptions } from '@/lib/auth';
 import { formatRate } from '@/lib/money';
 import { checkRateLimit } from '@/lib/rateLimit';
-import { SITE } from '@/lib/site';
 import { isFleetManager, OWN_FLEET } from '@/lib/fleet';
+import { notifyTelegram } from '@/lib/notify';
+import { isOnShift, SITE } from '@/lib/site';
+import {
+  ASK_FOR_PHONE,
+  faqAnswers,
+  findPhone,
+  leadAcceptedText,
+  matchTask,
+  wantsPrice,
+} from '@/lib/dispatcher';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -277,8 +286,9 @@ export async function POST(request: NextRequest) {
   };
 
   // Without an API key (or if the AI service fails) the agents still help in
-  // a simplified mode: catalog search by keywords, the user's bookings and
-  // orders, and a nudge towards a callback request.
+  // the rule-based dispatcher (lib/dispatcher.ts): the machine for the job,
+  // common questions, the user's bookings, and a phone number typed into the
+  // chat becomes a callback request for the owner.
   async function offlineReply(agentId: AgentId) {
     const text = (messages.at(-1)?.content ?? '').toLowerCase();
     const lines: string[] = [];
@@ -309,43 +319,76 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    const userText = messages
+      .filter((m) => m.role === 'user')
+      .map((m) => m.content)
+      .join('\n');
+    const phone = findPhone(messages.at(-1)?.content ?? '');
+    if (phone) {
+      const lead = {
+        name: user?.name?.trim() || 'Имя не указано',
+        phone,
+        message: `Из чата на сайте:\n${userText}`.slice(0, 1000),
+        source: 'agents-chat',
+      };
+      const summary = [`Имя: ${lead.name}`, `Телефон: ${phone}`, lead.message];
+      try {
+        await prisma.lead.create({ data: lead });
+        await notifyTelegram([`💬 Заявка из чата — ${SITE.name}`, ...summary].join('\n'));
+      } catch (error) {
+        console.error('[agents] failed to save chat lead', error);
+        await notifyTelegram(
+          ['⚠️ Заявка из чата — БАЗА НЕДОСТУПНА, заявка только здесь', ...summary].join('\n'),
+        );
+      }
+      return {
+        agentId,
+        reply: leadAcceptedText(isOnShift()),
+        toolsUsed: [],
+        offline: true,
+        lead: true,
+      };
+    }
+
+    const task = matchTask(text) ?? matchTask(userText);
+    const faq = faqAnswers(text);
     if (lines.length === 0) {
-      const category = OFFLINE_CATEGORIES.find(({ stem }) => text.includes(stem));
+      lines.push(...faq);
       const categories = (await handlers.list_categories({})) as { id: string; name: string }[];
-      const categoryId = category
-        ? categories.find((c) => c.name === category.name)?.id
-        : undefined;
-      const found = (await handlers.search_equipment(categoryId ? { categoryId } : {})) as {
-        name: string;
-        dailyRate: number;
-        currency: string;
-        link: string;
-      }[];
-      if (found.length > 0) {
-        lines.push(
-          category
-            ? `Вот что есть по запросу «${category.name}»:`
-            : 'Сейчас доступна такая техника:',
-        );
-        for (const item of found.slice(0, 5)) {
-          lines.push(
-            `• [${item.name}](${item.link}) — ${formatRate(item).price}${formatRate(item).unit}`,
-          );
+      const categoryId = task ? categories.find((c) => c.name === task.category)?.id : undefined;
+      if (task || faq.length === 0 || wantsPrice(text)) {
+        const found = (await handlers.search_equipment(categoryId ? { categoryId } : {})) as {
+          name: string;
+          dailyRate: number;
+          hourlyRate: number | null;
+          currency: string;
+          link: string;
+        }[];
+        if (task) {
+          if (lines.length > 0) lines.push('');
+          lines.push(`Под вашу задачу подойдёт: ${task.category.toLowerCase()} — ${task.why}.`);
         }
-        lines.push('[Весь каталог техники](/equipment)');
-      } else {
-        lines.push(
-          category
-            ? `${category.name} сейчас подбираем под заказ — в каталоге свободных нет.`
-            : 'Подберём технику под вашу задачу.',
-        );
+        if (found.length > 0) {
+          if (!task) lines.push('Техника и цены с машинистом:');
+          for (const item of found.slice(0, task ? 3 : 5)) {
+            const shift = item.hourlyRate
+              ? `, смена от ${Math.round(item.hourlyRate * 8).toLocaleString('ru-RU')} ₽`
+              : '';
+            lines.push(
+              `• [${item.name}](${item.link}) — ${formatRate(item).price}${formatRate(item).unit}${shift}`,
+            );
+          }
+          lines.push('[Весь каталог техники](/equipment)');
+        } else if (task) {
+          lines.push('Подберём машину под заказ — уточним по телефону.');
+        }
+      }
+      if (lines.length === 0) {
+        lines.push('Опишите задачу: что нужно сделать, где и когда — подскажу технику и цену.');
       }
     }
 
-    lines.push(
-      '',
-      `Сейчас я работаю в упрощённом режиме. Для точного подбора и цены [оставьте заявку на звонок](/contacts) или позвоните ${SITE.phone}.`,
-    );
+    lines.push('', ASK_FOR_PHONE);
     return { agentId, reply: lines.join('\n'), toolsUsed: [], offline: true };
   }
 
@@ -370,17 +413,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(await offlineReply(fallbackAgent));
   }
 }
-
-const OFFLINE_CATEGORIES = [
-  { stem: 'экскаватор-погруз', name: 'Экскаваторы-погрузчики' },
-  { stem: 'экскав', name: 'Экскаваторы' },
-  { stem: 'кран', name: 'Краны' },
-  { stem: 'бульд', name: 'Бульдозеры' },
-  { stem: 'погруз', name: 'Погрузчики' },
-  { stem: 'самосв', name: 'Самосвалы' },
-  { stem: 'манипул', name: 'Манипуляторы' },
-  { stem: 'вышк', name: 'Автовышки' },
-];
 
 const BOOKING_STATUS_RU: Record<string, string> = {
   PENDING: 'ожидает подтверждения',

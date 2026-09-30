@@ -70,6 +70,7 @@ const FORM_LABELS: Record<string, string> = {
   landing: 'Страница вида техники',
   contacts: 'Контакты',
   orders: 'Страница заявки',
+  'agents-chat': 'Чат с ИИ-агентами',
   provider: 'Поставщикам (старая форма)',
 };
 
