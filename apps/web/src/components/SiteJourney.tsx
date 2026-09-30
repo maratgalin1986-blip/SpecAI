@@ -235,7 +235,7 @@ export function SiteJourney() {
                 <Icon name="phone" className="h-4 w-4" /> {SITE.phone}
               </a>
               <a
-                href="/#podbor"
+                href={scene.type === 'trench' ? '/#podbor' : `/?m=${scene.type}#podbor`}
                 className="inline-flex items-center rounded-full bg-amber-500 px-4 py-2 text-sm font-semibold text-slate-950"
               >
                 Наряд
@@ -420,7 +420,7 @@ export function SiteJourney() {
                       <Icon name="phone" className="h-3.5 w-3.5" /> {SITE.phone}
                     </a>
                     <a
-                      href="/#podbor"
+                      href={scene.type === 'trench' ? '/#podbor' : `/?m=${scene.type}#podbor`}
                       className="inline-flex items-center rounded-full bg-amber-500 px-3 py-1 text-xs font-semibold text-slate-950 hover:bg-amber-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white"
                     >
                       Наряд

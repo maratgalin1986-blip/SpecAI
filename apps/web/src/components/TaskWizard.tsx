@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { MACHINE_WORKS, machineFromQuery, machineLabel } from '@/lib/machineWorks';
 import { CallbackForm } from '@/components/CallbackForm';
 import { Icon, type IconName } from '@/components/Icon';
 import { MachinePhoto } from '@/components/MachinePhoto';
@@ -116,6 +117,23 @@ const rub = (value: number) => `${value.toLocaleString('ru-RU')} ₽`;
 export function TaskWizard() {
   const [step, setStep] = useState(0);
   const [task, setTask] = useState<(typeof TASKS)[number] | null>(null);
+  // «Наряд» buttons open the wizard for one machine (`/?m=kmu#podbor`): the
+  // first step then lists that machine's own jobs.
+  const [machine, setMachine] = useState<MachineType | null>(null);
+  useEffect(() => {
+    const read = () => {
+      const picked = machineFromQuery(new URLSearchParams(location.search).get('m'));
+      if (picked) {
+        setMachine(picked);
+        setTask(null);
+        setStep(0);
+      }
+    };
+    read();
+    window.addEventListener('popstate', read);
+    return () => window.removeEventListener('popstate', read);
+  }, []);
+  const works = machine ? MACHINE_WORKS[machine] : undefined;
   const [when, setWhen] = useState('');
   const [volume, setVolume] = useState<(typeof VOLUME)[number] | null>(null);
   // Forecast for «Сегодня»/«Завтра» at the result step; the booking form waits
@@ -221,9 +239,44 @@ export function TaskWizard() {
         <div className="p-6 sm:p-10 lg:col-span-8">
           {step === 0 && (
             <div>
-              <h3 className="text-xl font-bold">Что нужно сделать?</h3>
+              <h3 className="text-xl font-bold">
+                {works && machine
+                  ? `Что нужно сделать ${works.instrumental}?`
+                  : 'Что нужно сделать?'}
+              </h3>
+              {works && machine && (
+                <button
+                  type="button"
+                  onClick={() => setMachine(null)}
+                  className="mt-2 text-sm text-slate-400 underline hover:text-white"
+                >
+                  Другая техника
+                </button>
+              )}
               <div className="mt-5 grid gap-3 sm:grid-cols-2">
-                {TASKS.map((item) => (
+                {(works && machine
+                  ? [
+                      ...works.works.map((label, index) => ({
+                        id: `${machine}-${index}`,
+                        icon: 'helmet' as IconName,
+                        label,
+                        machine: `${machineLabel(machine)} — ${label.toLowerCase()}`,
+                        rate: works.rate,
+                        landing: works.landing,
+                        photo: machine,
+                      })),
+                      {
+                        id: 'other',
+                        icon: 'helmet' as IconName,
+                        label: 'Другое — опишу сам',
+                        machine: machineLabel(machine),
+                        rate: works.rate,
+                        landing: works.landing,
+                        photo: machine,
+                      },
+                    ]
+                  : TASKS
+                ).map((item) => (
                   <button
                     key={item.id}
                     type="button"
