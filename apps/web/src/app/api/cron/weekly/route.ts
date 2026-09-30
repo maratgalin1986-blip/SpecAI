@@ -3,6 +3,8 @@ import { prisma } from '@specai/database';
 import { notifyTelegram } from '@/lib/notify';
 import { SITE } from '@/lib/site';
 import { buildWeeklyReport } from '@/lib/weeklyReport';
+import { submitToIndexNow } from '@/lib/indexNow';
+import sitemap from '@/app/sitemap';
 
 export const dynamic = 'force-dynamic';
 
@@ -27,5 +29,10 @@ export async function GET(request: NextRequest) {
     }),
   ]);
   const sent = await notifyTelegram(buildWeeklyReport(leads, orders, Date.now(), SITE.name));
-  return NextResponse.json({ ok: true, sent });
+  // Also remind Yandex of every page (new machines and landings get indexed).
+  const indexNow =
+    process.env.VERCEL_ENV === 'production'
+      ? await submitToIndexNow((await sitemap()).map((entry) => entry.url))
+      : null;
+  return NextResponse.json({ ok: true, sent, indexNow });
 }
