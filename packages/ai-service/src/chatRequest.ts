@@ -64,7 +64,7 @@ export async function analyzeChatMessage(
   const client = getAnthropicClient();
   const message = await client.messages.create({
     model: DEFAULT_MODEL,
-    max_tokens: 1024,
+    max_tokens: 16000,
     system:
       'You classify messages from Russian construction/equipment chats in Tatarstan for a ' +
       'special-equipment rental company. Decide whether the author needs equipment ' +

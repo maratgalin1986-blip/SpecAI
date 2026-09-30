@@ -96,7 +96,7 @@ async function runExtraction(
 
   const message = await client.messages.create({
     model: DEFAULT_MODEL,
-    max_tokens: 1024,
+    max_tokens: 16000,
     system,
     tools: [EXTRACTION_TOOL],
     tool_choice: { type: 'tool', name: EXTRACTION_TOOL.name },

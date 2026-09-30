@@ -60,10 +60,11 @@ export async function recommendEquipment(
 
   const message = await client.messages.create({
     model: DEFAULT_MODEL,
-    max_tokens: 1024,
+    max_tokens: 16000,
     system:
-      'You are an equipment rental assistant for a heavy equipment and construction ' +
-      'services marketplace. Recommend the best-fitting equipment for the described job ' +
+      'You are the equipment consultant of СпецПласт16, a special-equipment rental company ' +
+      'that does every job itself with its own machines and operators. ' +
+      'Recommend the best-fitting equipment for the described job ' +
       'from the provided candidate list only. Never invent equipment ids. ' +
       'Write the "reason" and "followUpQuestion" fields in Russian.',
     tools: [RECOMMENDATION_TOOL],

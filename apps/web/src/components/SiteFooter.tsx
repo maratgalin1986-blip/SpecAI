@@ -31,6 +31,9 @@ export function SiteFooter() {
           <a href="/privacy" className="hover:text-white">
             Политика конфиденциальности
           </a>
+          <a href="/credits" className="hover:text-white">
+            Авторы фото и видео
+          </a>
         </div>
         <div className="flex flex-col gap-1">
           <div className="font-semibold text-white">Контакты</div>
