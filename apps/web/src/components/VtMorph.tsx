@@ -54,6 +54,12 @@ export function VtMorph() {
       if (!id || location.pathname.startsWith('/equipment/')) return;
       const card = findCard(id);
       if (!card) return;
+      // The press/tilt transforms would make the snapshot start off-size.
+      document.querySelectorAll('.cine-press').forEach((el) => el.classList.remove('cine-press'));
+      card.querySelectorAll('.cine-press, .tilt-zoom').forEach((el) => {
+        el.classList.remove('cine-press', 'tilt-zoom');
+      });
+      if (card.classList.contains('tilt-zoom')) card.classList.remove('tilt-zoom');
       nameParts(card);
       reachGoal('card_open');
     };
@@ -69,7 +75,7 @@ export function VtMorph() {
   return (
     <script
       dangerouslySetInnerHTML={{
-        __html: `(function(){if(!('onpagereveal' in window)||matchMedia('(prefers-reduced-motion: reduce)').matches)return;addEventListener('pagereveal',function(e){var vt=e.viewTransition;var a=window.navigation&&navigation.activation;var m=a&&a.from&&/\\/equipment\\/([^/?#]+)/.exec(new URL(a.from.url).pathname);if(!vt||!m||location.pathname.indexOf('/equipment/')===0)return;var id=decodeURIComponent(m[1]);var card=Array.prototype.find.call(document.querySelectorAll('[data-vt-id]'),function(c){return c.getAttribute('data-vt-id')===id});if(!card)return;var names={photo:'machine-photo',title:'machine-title',price:'machine-price'};var els=[];for(var k in names){var el=card.querySelector('[data-vt-part="'+k+'"]');if(el){el.style.viewTransitionName=names[k];els.push(el)}}var clear=function(){els.forEach(function(x){x.style.viewTransitionName=''})};vt.finished.then(clear,clear)})})();`,
+        __html: `(function(){if(!('onpagereveal' in window)||matchMedia('(prefers-reduced-motion: reduce)').matches)return;addEventListener('pagereveal',function(e){var vt=e.viewTransition;var a=window.navigation&&navigation.activation;var m=a&&a.from&&/\\/equipment\\/([^/?#]+)/.exec(new URL(a.from.url).pathname);var de=document.documentElement;if(vt){de.setAttribute('data-vt','1');if(m||location.pathname.indexOf('/equipment/')===0){de.setAttribute('data-vt-kind','fade');var rm=function(){de.removeAttribute('data-vt-kind')};vt.finished.then(rm,rm)}}if(!vt||!m||location.pathname.indexOf('/equipment/')===0)return;var id=decodeURIComponent(m[1]);var card=Array.prototype.find.call(document.querySelectorAll('[data-vt-id]'),function(c){return c.getAttribute('data-vt-id')===id});if(!card)return;var names={photo:'machine-photo',title:'machine-title',price:'machine-price'};var els=[];for(var k in names){var el=card.querySelector('[data-vt-part="'+k+'"]');if(el){el.style.viewTransitionName=names[k];els.push(el)}}var clear=function(){els.forEach(function(x){x.style.viewTransitionName=''})};vt.finished.then(clear,clear)})})();`,
       }}
     />
   );

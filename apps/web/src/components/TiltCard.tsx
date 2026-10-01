@@ -19,19 +19,36 @@ export function TiltCard({
 }) {
   const ref = useRef<HTMLDivElement>(null);
 
-  function onPointerMove(event: React.PointerEvent<HTMLDivElement>) {
+  // Stronger lean than before; a touch press leans about 5 degrees.
+  const boost = 1.5;
+
+  function lean(event: React.PointerEvent<HTMLDivElement>, amount: number) {
     const el = ref.current;
-    if (!el || event.pointerType !== 'mouse') return;
+    if (!el) return;
     const rect = el.getBoundingClientRect();
     const x = (event.clientX - rect.left) / rect.width;
     const y = (event.clientY - rect.top) / rect.height;
-    el.style.setProperty('--rx', `${(0.5 - y) * max}deg`);
-    el.style.setProperty('--ry', `${(x - 0.5) * max}deg`);
+    el.style.setProperty('--rx', `${(0.5 - y) * amount}deg`);
+    el.style.setProperty('--ry', `${(x - 0.5) * amount}deg`);
     el.style.setProperty('--gx', `${x * 100}%`);
     el.style.setProperty('--gy', `${y * 100}%`);
   }
 
+  function onPointerMove(event: React.PointerEvent<HTMLDivElement>) {
+    if (event.pointerType === 'mouse') lean(event, max * boost);
+    else if (event.pointerType === 'touch' && ref.current?.hasAttribute('data-touch')) {
+      lean(event, 10);
+    }
+  }
+
+  function onPointerDown(event: React.PointerEvent<HTMLDivElement>) {
+    if (event.pointerType !== 'touch') return;
+    ref.current?.setAttribute('data-touch', '1');
+    lean(event, 10);
+  }
+
   function onPointerLeave() {
+    ref.current?.removeAttribute('data-touch');
     ref.current?.style.setProperty('--rx', '0deg');
     ref.current?.style.setProperty('--ry', '0deg');
   }
@@ -49,6 +66,9 @@ export function TiltCard({
       <div
         ref={ref}
         onPointerMove={onPointerMove}
+        onPointerDown={onPointerDown}
+        onPointerUp={onPointerLeave}
+        onPointerCancel={onPointerLeave}
         onPointerLeave={onPointerLeave}
         className={`tilt-card relative h-full overflow-hidden ${look}`}
       >
