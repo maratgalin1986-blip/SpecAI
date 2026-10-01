@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { CinemaHero } from '@/components/CinemaHero';
 import { PHOTO_CREDITS } from '@/lib/photoCredits';
 import { SITE } from '@/lib/site';
 
@@ -11,7 +12,13 @@ export const metadata: Metadata = {
 export default function CreditsPage() {
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-6 py-6">
-      <h1 className="text-2xl font-bold">Авторы фото и видео</h1>
+      <CinemaHero
+        eyebrow="Документы"
+        title="Авторы фото и видео"
+        clips={['site-aerial']}
+        camera={7}
+        still
+      />
       <p className="text-slate-600">
         Фото и видео на сайте — иллюстрации, это не техника {SITE.name}. Ролики — из бесплатной
         библиотеки Mixkit (лицензия Mixkit), часть фото техники сгенерирована для сайта, фото

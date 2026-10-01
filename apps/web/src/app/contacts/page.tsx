@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { Card } from '@specai/ui';
 import { CallbackForm } from '@/components/CallbackForm';
 import { SITE } from '@/lib/site';
+import { CinemaBand } from '@/components/CinemaBand';
 import { CinemaHero } from '@/components/CinemaHero';
 
 export const metadata: Metadata = {
@@ -17,7 +18,6 @@ export default function ContactsPage() {
         title="Контакты"
         clips={['crane-sun', 'building-sun']}
         camera={5}
-        compact
       >
         <p>Звоните, пишите или оставьте заявку — подберём технику под вашу задачу.</p>
       </CinemaHero>
@@ -83,6 +83,11 @@ export default function ContactsPage() {
           <CallbackForm source="contacts" />
         </Card>
       </div>
+      <CinemaBand
+        machine="crane"
+        eyebrow="Пн–Сб, 8:00–20:00"
+        phrase="Звоните — техника выедет сегодня"
+      />
     </div>
   );
 }
