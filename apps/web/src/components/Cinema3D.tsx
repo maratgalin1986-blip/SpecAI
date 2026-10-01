@@ -11,12 +11,16 @@ import { usePathname } from 'next/navigation';
 // Transform/opacity only (plus a short blur on headings), everything plays once,
 // nothing is hidden until JS runs, and reduced motion switches the layer off.
 
-const FLY_SELECTOR = 'main section, main article, main figure, main img, main [data-card]';
+const FLY_SELECTOR =
+  'main section, main article, main figure, main img, main [data-card], main .tilt-wrap';
 const HEADING_SELECTOR = 'main h1, main h2';
 const TILT_SELECTOR = '[data-card], figure, img';
 // Already animated by other effects, or unsafe to transform.
 const SKIP_ANCESTOR =
   '.reveal, [class*="cine-"], .tilt-card, .tilt-wrap, [data-vt-id], header, footer, nav, form, dialog, [aria-hidden="true"], [data-c3-skip]';
+// Touch press targets: cards, photos and button-like links.
+const TOUCH_SELECTOR =
+  '[data-card], figure, img, a[class*="rounded"], a.button, a[class*="btn"], button[class*="rounded"]';
 // Tilt and parallax only need to stay clear of other effects' own transforms.
 const SKIP_DECOR = '[class*="cine-"], .tilt-card, .tilt-wrap, [data-vt-id], [data-c3-skip]';
 const EASE = 'cubic-bezier(.2,.8,.2,1)';
@@ -25,7 +29,9 @@ const FROM_DESKTOP = 'perspective(1000px) rotateX(12deg) translateY(40px) transl
 // deeper, more visible move.
 const FROM_TOUCH =
   'perspective(900px) rotateX(28deg) translateY(90px) translateZ(-140px) scale(0.9)';
-const MAX_TILT = 6;
+const MAX_TILT = 9;
+const TOUCH_TILT = 5;
+const STAGGER = 90;
 const MAX_DRIFT = 20;
 
 // Elements handled once per page load, across route changes.
@@ -52,6 +58,56 @@ function isFixedOrSticky(el: Element): boolean {
     if (p === 'fixed' || p === 'sticky') return true;
   }
   return false;
+}
+
+function sizeOk(el: Element, minW: number, minH: number): boolean {
+  const r = el.getBoundingClientRect();
+  return r.width >= minW && r.height >= minH;
+}
+
+function cardLike(el: Element): boolean {
+  const cs = getComputedStyle(el);
+  return (
+    parseFloat(cs.borderTopWidth) > 0 ||
+    cs.boxShadow !== 'none' ||
+    !/^(rgba\(0, 0, 0, 0\)|transparent)$/.test(cs.backgroundColor)
+  );
+}
+
+// Children of grids, wrapping flex rows and card columns: each flies in on its own.
+function collectItems(root: ParentNode): HTMLElement[] {
+  const out: HTMLElement[] = [];
+  root.querySelectorAll<HTMLElement>('div, ul, ol, section, dl').forEach((c) => {
+    if (c.children.length < 3 || !c.closest('main')) return;
+    const cs = getComputedStyle(c);
+    const grid = cs.display === 'grid' || cs.display === 'inline-grid';
+    const flex = cs.display === 'flex' || cs.display === 'inline-flex';
+    const wrap = flex && cs.flexWrap.startsWith('wrap');
+    const column = flex && cs.flexDirection.startsWith('column');
+    if (!grid && !wrap && !column) return;
+    const kids = Array.from(c.children).filter((k): k is HTMLElement => {
+      if (!(k instanceof HTMLElement)) return false;
+      const p = getComputedStyle(k).position;
+      return p !== 'fixed' && p !== 'absolute' && sizeOk(k, 60, 50);
+    });
+    const counts = new Map<string, number>();
+    kids.forEach((k) => counts.set(k.tagName, (counts.get(k.tagName) ?? 0) + 1));
+    let tag = '';
+    let best = 0;
+    counts.forEach((n, t) => {
+      if (n > best) {
+        best = n;
+        tag = t;
+      }
+    });
+    if (best < 3) return;
+    kids.forEach((k) => {
+      if (k.tagName !== tag) return;
+      if (column && !grid && !wrap && !cardLike(k)) return;
+      out.push(k);
+    });
+  });
+  return out;
 }
 
 export function Cinema3D() {
@@ -83,19 +139,46 @@ export function Cinema3D() {
           if (!play) continue;
           pending.delete(entry.target);
           io.unobserve(entry.target);
-          window.setTimeout(play, Math.min(i, 5) * 70);
+          window.setTimeout(play, Math.min(i, 6) * STAGGER);
           i += 1;
         }
       },
       { threshold: 0, rootMargin: '0px 0px -8% 0px' },
     );
 
+    // Safety net: whatever sits in view after scrolling stops is never left hidden
+    // (IntersectionObserver can miss elements inside clipped or pinned stages).
+    let sweepTimer = 0;
+    const sweep = () => {
+      window.clearTimeout(sweepTimer);
+      sweepTimer = window.setTimeout(() => {
+        const h = vh();
+        let i = 0;
+        Array.from(pending.keys()).forEach((el) => {
+          const r = el.getBoundingClientRect();
+          if (r.width === 0 || r.top >= h * 0.9 || r.bottom <= 0) return;
+          const play = pending.get(el);
+          if (!play) return;
+          pending.delete(el);
+          io.unobserve(el);
+          window.setTimeout(play, Math.min(i++, 6) * STAGGER);
+        });
+      }, 250);
+    };
+    window.addEventListener('scroll', sweep, { passive: true });
+    cleanups.push(() => {
+      window.clearTimeout(sweepTimer);
+      window.removeEventListener('scroll', sweep);
+    });
+
     function prepFly(el: HTMLElement) {
+      el.dataset.c3Wait = '1';
       el.style.opacity = '0';
       el.style.transform = window.matchMedia('(pointer: coarse)').matches
         ? FROM_TOUCH
         : FROM_DESKTOP;
       pending.set(el, () => {
+        delete el.dataset.c3Wait;
         el.dataset.c3Fly = '1';
         el.style.willChange = 'opacity, transform';
         el.style.transition = `opacity 800ms ${EASE}, transform 900ms ${EASE}`;
@@ -127,12 +210,15 @@ export function Cinema3D() {
         s.style.display = 'inline-block';
         s.style.opacity = '0';
         s.style.transform = 'translateY(0.6em)';
-        if (hoverable) s.style.filter = 'blur(6px)';
+        // Phones get a lighter blur: cheaper to paint, still visible.
+        s.style.filter = hoverable ? 'blur(6px)' : 'blur(3px)';
         spans.push(s);
         frag.appendChild(s);
       });
       el.replaceChildren(frag);
+      el.dataset.c3Wait = '1';
       pending.set(el, () => {
+        delete el.dataset.c3Wait;
         spans.forEach((s, idx) => {
           const d = `${idx * 55}ms`;
           s.style.willChange = 'opacity, transform';
@@ -208,7 +294,15 @@ export function Cinema3D() {
       if (disposed) return;
       const h = vh();
       retry = false;
-      root.querySelectorAll<HTMLElement>(`${HEADING_SELECTOR}, ${FLY_SELECTOR}`).forEach((el) => {
+      const items = new Set(collectItems(root));
+      const list = new Set(
+        root.querySelectorAll<HTMLElement>(`${HEADING_SELECTOR}, ${FLY_SELECTOR}`),
+      );
+      items.forEach((i) => list.add(i));
+      const ordered = Array.from(list).sort((a, b) =>
+        a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1,
+      );
+      ordered.forEach((el) => {
         if (seen.has(el)) return;
         if (!hydrated(el)) {
           retry = true;
@@ -227,9 +321,19 @@ export function Cinema3D() {
             isHeading
               ? '[class*="cine-"], [data-vt-id], header, nav, [data-c3-skip]'
               : SKIP_ANCESTOR,
+          ) &&
+          // A tilt wrapper is the flying part of a tilt card: only its ancestors count.
+          !(
+            el.classList.contains('tilt-wrap') &&
+            !el.parentElement?.closest(SKIP_ANCESTOR) &&
+            !el.querySelector('[data-vt-id]')
           )
         )
           return;
+        // A section that holds flying cards stays put: the cards carry the motion.
+        if (el.matches('section, article') && !items.has(el)) {
+          for (const it of items) if (el !== it && el.contains(it)) return;
+        }
         // Already on screen at load (or above): never delay LCP or cause layout shift.
         if (r.top < h * 0.95) return;
         // Tall scroll-stage containers (sticky storytelling) are never hidden.
@@ -260,6 +364,25 @@ export function Cinema3D() {
     let tx = 0;
     let ty = 0;
     let tilt = 0;
+    let amount = MAX_TILT;
+    let touching = false;
+    function touchTarget(t: EventTarget | null): HTMLElement | null {
+      if (!(t instanceof Element)) return null;
+      const main = t.closest('main');
+      if (!main) return null;
+      const el = t.closest<HTMLElement>(TOUCH_SELECTOR);
+      if (!el || !main.contains(el)) return null;
+      const isLink = el.matches('a, button');
+      const box = isLink
+        ? el
+        : (el.closest<HTMLElement>('[data-card]') ?? el.closest<HTMLElement>('figure') ?? el);
+      if (box.closest(`${SKIP_DECOR}, header, nav, form, dialog`) || hasVt(box)) return null;
+      if (pending.has(box) || box.dataset.c3Fly) return null;
+      const r = box.getBoundingClientRect();
+      if (r.width < (isLink ? 60 : 120) || r.height < (isLink ? 30 : 90) || r.width > 900)
+        return null;
+      return box;
+    }
     function tiltTarget(t: EventTarget | null): HTMLElement | null {
       if (!(t instanceof Element)) return null;
       const main = t.closest('main');
@@ -282,7 +405,7 @@ export function Cinema3D() {
         'position:fixed;left:0;top:0;pointer-events:none;overflow:hidden;z-index:30;opacity:0;transition:opacity .25s';
       blob = document.createElement('div');
       blob.style.cssText =
-        'position:absolute;left:0;top:0;width:320px;height:320px;margin:-160px 0 0 -160px;border-radius:50%;background:radial-gradient(closest-side,rgba(255,255,255,.28),rgba(255,255,255,0));will-change:transform';
+        'position:absolute;left:0;top:0;width:320px;height:320px;margin:-160px 0 0 -160px;border-radius:50%;background:radial-gradient(closest-side,rgba(255,255,255,.35),rgba(255,255,255,0));will-change:transform';
       glare.appendChild(blob);
       document.body.appendChild(glare);
     }
@@ -303,31 +426,35 @@ export function Cinema3D() {
       // The rect includes the current tilt; it is tiny at 6deg.
       const x = Math.max(0, Math.min(1, (tx - r.left) / r.width));
       const y = Math.max(0, Math.min(1, (ty - r.top) / r.height));
-      const t = `perspective(900px) rotateX(${((0.5 - y) * 2 * MAX_TILT).toFixed(2)}deg) rotateY(${((x - 0.5) * 2 * MAX_TILT).toFixed(2)}deg)`;
+      const t = `perspective(900px) rotateX(${((0.5 - y) * 2 * amount).toFixed(2)}deg) rotateY(${((x - 0.5) * 2 * amount).toFixed(2)}deg)${touching ? ' scale(0.985)' : ''}`;
       active.style.transform = t;
       glare.style.transform = t;
       blob.style.transform = `translate(${(x * r.width).toFixed(0)}px, ${(y * r.height).toFixed(0)}px)`;
     }
+    function engage(box: HTMLElement | null, ms: number) {
+      release(active);
+      active = box;
+      if (!box) return;
+      ensureGlare();
+      const r = box.getBoundingClientRect();
+      if (glare) {
+        glare.style.width = `${r.width}px`;
+        glare.style.height = `${r.height}px`;
+        glare.style.left = `${r.left}px`;
+        glare.style.top = `${r.top}px`;
+        glare.style.borderRadius = getComputedStyle(box).borderRadius;
+        glare.style.opacity = '1';
+      }
+      box.style.willChange = 'transform';
+      box.style.transition = `transform ${ms}ms ease-out`;
+    }
     const onMove = (e: PointerEvent) => {
       if (e.pointerType !== 'mouse') return;
+      if (touching) return;
       const box = tiltTarget(e.target);
       if (box !== active) {
-        release(active);
-        active = box;
-        if (box) {
-          ensureGlare();
-          const r = box.getBoundingClientRect();
-          if (glare) {
-            glare.style.width = `${r.width}px`;
-            glare.style.height = `${r.height}px`;
-            glare.style.left = `${r.left}px`;
-            glare.style.top = `${r.top}px`;
-            glare.style.borderRadius = getComputedStyle(box).borderRadius;
-            glare.style.opacity = '1';
-          }
-          box.style.willChange = 'transform';
-          box.style.transition = 'transform 120ms ease-out';
-        }
+        amount = MAX_TILT;
+        engage(box, 120);
       }
       if (!active) return;
       tx = e.clientX;
@@ -352,6 +479,58 @@ export function Cinema3D() {
         document.documentElement.removeEventListener('pointerleave', flatten);
         window.removeEventListener('pageswap', flatten);
         window.removeEventListener('scroll', flatten);
+        if (tilt) cancelAnimationFrame(tilt);
+        glare?.remove();
+      });
+    }
+
+    /* ---------- touch: the pressed card leans towards the finger ---------- */
+    let letGo = 0;
+    const touchEnd = () => {
+      window.clearTimeout(letGo);
+      touching = false;
+      const el = active;
+      active = null;
+      release(el);
+    };
+    // A tap is over in ~80 ms; hold the lean long enough to be seen.
+    const touchUp = () => {
+      window.clearTimeout(letGo);
+      letGo = window.setTimeout(touchEnd, 160);
+    };
+    const onTouchDown = (e: PointerEvent) => {
+      if (e.pointerType !== 'touch') return;
+      touchEnd();
+      const box = touchTarget(e.target);
+      if (!box) return;
+      touching = true;
+      amount = TOUCH_TILT;
+      engage(box, 90);
+      tx = e.clientX;
+      ty = e.clientY;
+      if (!tilt) tilt = requestAnimationFrame(frame);
+    };
+    const onTouchMove = (e: PointerEvent) => {
+      if (e.pointerType !== 'touch' || !touching || !active) return;
+      tx = e.clientX;
+      ty = e.clientY;
+      if (!tilt) tilt = requestAnimationFrame(frame);
+    };
+    if (!saveData) {
+      document.addEventListener('pointerdown', onTouchDown, { passive: true });
+      document.addEventListener('pointermove', onTouchMove, { passive: true });
+      document.addEventListener('pointerup', touchUp, { passive: true });
+      document.addEventListener('pointercancel', touchEnd, { passive: true });
+      window.addEventListener('scroll', touchEnd, { passive: true });
+      window.addEventListener('pageswap', touchEnd);
+      cleanups.push(() => {
+        window.clearTimeout(letGo);
+        document.removeEventListener('pointerdown', onTouchDown);
+        document.removeEventListener('pointermove', onTouchMove);
+        document.removeEventListener('pointerup', touchUp);
+        document.removeEventListener('pointercancel', touchEnd);
+        window.removeEventListener('scroll', touchEnd);
+        window.removeEventListener('pageswap', touchEnd);
         if (tilt) cancelAnimationFrame(tilt);
         glare?.remove();
       });
