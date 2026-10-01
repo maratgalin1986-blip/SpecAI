@@ -133,7 +133,10 @@ export const MACHINE_WORKS: Partial<Record<MachineType, MachineWorks>> = {
 
 /** The machine a «Наряд» link asked for (`?m=kmu`), if it has a works list. */
 export function machineFromQuery(value: string | null): MachineType | null {
-  return value && value in MACHINE_WORKS ? (value as MachineType) : null;
+  // Own keys only: `?m=toString` must not reach Object.prototype.
+  return value && Object.prototype.hasOwnProperty.call(MACHINE_WORKS, value)
+    ? (value as MachineType)
+    : null;
 }
 
 export function machineLabel(type: MachineType) {

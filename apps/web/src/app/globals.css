@@ -836,9 +836,11 @@ html[data-vt] .cine-curtain::before,
 html[data-vt] .cine-curtain::after {
   display: none;
 }
+/* visibility, not display: toggling display would restart the bars when the
+   transition ends. */
 html:active-view-transition .cine-curtain::before,
 html:active-view-transition .cine-curtain::after {
-  display: none;
+  visibility: hidden;
 }
 @keyframes cine-curtain {
   from {
