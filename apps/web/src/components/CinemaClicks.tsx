@@ -16,12 +16,22 @@ export function CinemaClicks() {
         'a[href], button, [role="button"], summary',
       );
       if (!target || (target as HTMLButtonElement).disabled) return;
-      const ring = document.createElement('span');
-      ring.className = 'cine-ring';
-      ring.style.left = `${event.clientX}px`;
-      ring.style.top = `${event.clientY}px`;
-      document.body.appendChild(ring);
-      window.setTimeout(() => ring.remove(), 650);
+      // Two rings, the second one 80 ms behind.
+      ['cine-ring', 'cine-ring cine-ring-2'].forEach((cls) => {
+        const ring = document.createElement('span');
+        ring.className = cls;
+        ring.style.left = `${event.clientX}px`;
+        ring.style.top = `${event.clientY}px`;
+        document.body.appendChild(ring);
+        window.setTimeout(() => ring.remove(), 1000);
+      });
+      if (event.pointerType === 'touch' && typeof navigator.vibrate === 'function') {
+        try {
+          navigator.vibrate(12);
+        } catch {
+          /* vibration is optional */
+        }
+      }
       // Restart the animation on repeated presses without a forced reflow.
       target.classList.remove('cine-press');
       requestAnimationFrame(() =>

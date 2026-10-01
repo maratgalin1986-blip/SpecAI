@@ -9,7 +9,9 @@ import { LANDINGS, landingBySlug } from '@/lib/landings';
 import { formatMoney, formatRate } from '@/lib/money';
 import { SITE } from '@/lib/site';
 import { siteUrl } from '@/lib/siteUrl';
+import { CinemaBand } from '@/components/CinemaBand';
 import { CinemaLayer } from '@/components/CinemaHero';
+import type { MachineType } from '@/lib/machinePhotos';
 import { OWN_FLEET } from '@/lib/fleet';
 
 // Footage behind the landing header, by machine kind.
@@ -25,6 +27,21 @@ const LANDING_CLIPS: Record<string, string[]> = {
   vibrokatok: ['site-aerial', 'workers'],
   samosval: ['excavator-truck', 'site-aerial'],
   buldozer: ['site-aerial', 'excavator-truck'],
+};
+
+// Machine shown in the cinema bands of each landing (and put into «Наряд»).
+const LANDING_MACHINE: Record<string, MachineType> = {
+  'ekskavator-pogruzchik': 'backhoe',
+  avtokran: 'crane',
+  'frontalnyj-pogruzchik': 'loader',
+  traktor: 'tractor',
+  'gusenichnyj-ekskavator': 'excavator',
+  'kolyosnyj-ekskavator-gidromolot': 'wheeled-excavator',
+  'manipulyator-kmu': 'kmu',
+  'avtovyshka-agp': 'agp',
+  vibrokatok: 'roller',
+  samosval: 'truck',
+  buldozer: 'dozer',
 };
 
 export const revalidate = 300;
@@ -73,6 +90,7 @@ export default async function LandingPage({ params }: { params: { slug: string }
   if (!landing) notFound();
   const items = await loadEquipment(landing.categorySlug);
   const from = minHourly(items);
+  const machine = LANDING_MACHINE[landing.slug] ?? 'backhoe';
 
   const jsonLd = {
     '@context': 'https://schema.org',
@@ -175,6 +193,12 @@ export default async function LandingPage({ params }: { params: { slug: string }
         </section>
       )}
 
+      <CinemaBand
+        machine={machine}
+        eyebrow={`Аренда ${landing.title}`}
+        phrase="Скажите задачу — приедет машина и машинист"
+      />
+
       <section>
         <h2 className="text-2xl font-bold">Какие задачи решаем</h2>
         <ul className="mt-4 grid gap-3 sm:grid-cols-2">
@@ -195,6 +219,13 @@ export default async function LandingPage({ params }: { params: { slug: string }
           <li>• Подача техники на объект — рассчитывается по адресу</li>
         </ul>
       </section>
+
+      <CinemaBand
+        machine={machine}
+        eyebrow="Подача сегодня"
+        phrase="Позвоните — назовём цену за пять минут"
+        className="sm:min-h-[340px]"
+      />
 
       <Faq items={landing.faq} />
 

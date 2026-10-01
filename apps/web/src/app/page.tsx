@@ -3,6 +3,8 @@ import { prisma } from '@specai/database';
 import { Button } from '@specai/ui';
 import { PUBLIC_AGENT_PROFILES } from '@specai/shared';
 import { CallbackForm } from '@/components/CallbackForm';
+import { CallbackIris } from '@/components/CallbackIris';
+import { CinemaBand } from '@/components/CinemaBand';
 import { CountUp } from '@/components/CountUp';
 import { Faq } from '@/components/Faq';
 import { HeroPhotos } from '@/components/HeroPhotos';
@@ -40,7 +42,7 @@ const SERVICES: {
     title: 'Гусеничные экскаваторы',
     photo: 'excavator',
     text: 'Котлованы, карьеры и большие объёмы грунта — ковш под задачу.',
-    price: 'по запросу',
+    price: 'от 3 000 ₽/ч',
   },
   {
     icon: 'hammer',
@@ -54,7 +56,7 @@ const SERVICES: {
     title: 'Колёсный экскаватор с гидромолотом',
     photo: 'wheeled-excavator',
     text: 'Дробление бетона и асфальта в городе — своим ходом, без трала.',
-    price: 'по запросу',
+    price: 'от 3 000 ₽/ч',
   },
   {
     icon: 'crane',
@@ -68,14 +70,14 @@ const SERVICES: {
     title: 'Манипулятор КМУ 7 т',
     photo: 'kmu',
     text: 'Погрузка, перевозка и разгрузка одной машиной: блоки, плиты, бытовки.',
-    price: 'по запросу',
+    price: 'от 3 000 ₽/ч',
   },
   {
     icon: 'lift',
     title: 'Автовышка АГП',
     photo: 'agp',
     text: 'Работы на высоте: фасады, кровля, освещение, вывески, обрезка деревьев.',
-    price: 'по запросу',
+    price: 'от 2 500 ₽/ч',
   },
   {
     icon: 'loader',
@@ -89,7 +91,7 @@ const SERVICES: {
     title: 'Виброкаток',
     photo: 'roller',
     text: 'Уплотнение грунта, щебня и асфальта на дорогах и благоустройстве.',
-    price: 'по запросу',
+    price: 'от 3 000 ₽/ч',
   },
   {
     icon: 'tractor',
@@ -217,10 +219,10 @@ export default async function HomePage() {
   return (
     <div className="flex flex-col gap-24">
       <IntroSplash />
-      <section className="depth-exit relative -mt-2 min-h-[640px] overflow-hidden rounded-[2rem] bg-slate-950 text-white shadow-2xl lg:min-h-[680px]">
+      <section className="hero-short depth-exit relative -mt-2 min-h-[640px] overflow-hidden rounded-[2rem] bg-slate-950 text-white shadow-2xl lg:min-h-[680px]">
         <HeroPhotos />
         <div className="hero-parallax-text relative grid lg:grid-cols-2">
-          <div className="z-10 flex flex-col justify-center px-6 pb-20 pt-14 sm:px-10 lg:py-24">
+          <div className="hero-copy z-10 flex flex-col justify-center px-6 pb-20 pt-14 sm:px-10 lg:py-24">
             <div className="float-in inline-flex w-fit items-center gap-2 rounded-full bg-white/10 px-3 py-1.5 ring-1 ring-white/15">
               <span className="relative flex h-2 w-2">
                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75 motion-reduce:animate-none" />
@@ -400,6 +402,12 @@ export default async function HomePage() {
         </div>
       </section>
 
+      <CinemaBand
+        machine="excavator"
+        eyebrow="Свой парк"
+        phrase="Котлован к утру — не обещание, а наряд"
+      />
+
       <ShiftStory />
 
       <section className="grid gap-10 lg:grid-cols-12">
@@ -499,39 +507,43 @@ export default async function HomePage() {
         </ol>
       </section>
 
+      <CinemaBand
+        machine="crane"
+        eyebrow="Подача сегодня"
+        phrase="Техника уже едет. Осталось сказать куда"
+      />
+
       <div className="depth">
         <Faq items={HOME_FAQ} />
       </div>
 
-      <Reveal>
-        <section
-          id="callback"
-          className="relative grid scroll-mt-24 grid-cols-1 gap-8 overflow-hidden rounded-[2rem] bg-slate-950 p-6 text-white sm:p-10 lg:grid-cols-2"
-        >
-          <div className="hero-grid opacity-30" aria-hidden />
-          <div className="relative flex min-w-0 flex-col justify-center">
-            <div className="eyebrow text-amber-400">Быстрый заказ</div>
-            <h2 className="mt-3 text-4xl font-extrabold uppercase leading-[0.95] tracking-[-0.03em] sm:text-6xl">
-              Нужна техника сегодня?
-            </h2>
-            <ul className="mt-6 space-y-2 text-slate-300">
-              <li>✔ Подберём технику под задачу и бюджет</li>
-              <li>✔ Назовём точную цену с доставкой</li>
-              <li>✔ Работаем в Набережных Челнах и по всему Татарстану</li>
-            </ul>
-            <a
-              href={SITE.phoneHref}
-              className="mt-6 inline-flex items-center gap-2 text-2xl font-bold text-amber-400"
-            >
-              <Icon name="phone" className="h-6 w-6" />
-              {SITE.phone}
-            </a>
+      <section id="callback" className="scroll-mt-24">
+        <CallbackIris backdrop="/images/trench.jpg">
+          <div className="grid grid-cols-1 gap-8 p-6 sm:p-10 lg:grid-cols-2">
+            <div className="flex min-w-0 flex-col justify-center">
+              <div className="eyebrow text-amber-400">Быстрый заказ</div>
+              <h2 className="mt-3 text-4xl font-extrabold uppercase leading-[0.95] tracking-[-0.03em] sm:text-6xl">
+                Нужна техника сегодня?
+              </h2>
+              <ul className="mt-6 space-y-2 text-slate-200">
+                <li>✔ Подберём технику под задачу и бюджет</li>
+                <li>✔ Назовём точную цену с доставкой</li>
+                <li>✔ Работаем в Набережных Челнах и по всему Татарстану</li>
+              </ul>
+              <a
+                href={SITE.phoneHref}
+                className="mt-6 inline-flex items-center gap-2 text-2xl font-bold text-amber-400"
+              >
+                <Icon name="phone" className="h-6 w-6" />
+                {SITE.phone}
+              </a>
+            </div>
+            <div className="min-w-0 rounded-3xl bg-slate-950/50 p-4 ring-1 ring-white/10 backdrop-blur sm:p-6">
+              <CallbackForm source="home" dark />
+            </div>
           </div>
-          <div className="relative min-w-0 rounded-3xl bg-white/5 p-4 ring-1 ring-white/10 backdrop-blur sm:p-6">
-            <CallbackForm source="home" dark />
-          </div>
-        </section>
-      </Reveal>
+        </CallbackIris>
+      </section>
 
       <Reveal>
         <section className="grid gap-6 rounded-[2rem] border border-amber-200 bg-gradient-to-br from-amber-50 to-orange-100 p-6 sm:grid-cols-2 sm:p-10">

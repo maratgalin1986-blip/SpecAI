@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { JOURNEY_SELECTOR } from '@/components/useJourneyInView';
 import { AuthStatus } from '@/components/AuthStatus';
 import { SITE } from '@/lib/site';
 
@@ -14,9 +15,41 @@ const NAV_LINKS = [
 
 export function SiteHeader() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  // Dark translucent variant while the header is over the journey scene.
+  const [dark, setDark] = useState(false);
+  useEffect(() => {
+    let observer: IntersectionObserver | null = null;
+    let timer = 0;
+    let tries = 0;
+    const attach = () => {
+      const el = document.querySelector(JOURNEY_SELECTOR);
+      if (!el) {
+        if (tries++ < 40) timer = window.setTimeout(attach, 250);
+        return;
+      }
+      // Only the strip the header covers counts as the viewport.
+      const bottom = Math.max(0, window.innerHeight - 72);
+      observer = new IntersectionObserver(
+        (entries) => {
+          const last = entries[entries.length - 1];
+          if (last) setDark(last.isIntersecting);
+        },
+        { rootMargin: `0px 0px -${bottom}px 0px` },
+      );
+      observer.observe(el);
+    };
+    attach();
+    return () => {
+      window.clearTimeout(timer);
+      observer?.disconnect();
+    };
+  }, []);
 
   return (
-    <header className="site-header-vt sticky top-0 z-40 border-b border-slate-200/70 bg-white/75 backdrop-blur-md">
+    <header
+      data-dark={dark ? 'true' : undefined}
+      className="site-header-vt sticky top-0 z-40 border-b border-slate-200/70 bg-white/75 backdrop-blur-md"
+    >
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3 sm:px-6 sm:py-4">
         <a
           href="/"

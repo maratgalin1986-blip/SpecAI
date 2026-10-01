@@ -16,7 +16,7 @@ export default function PrivacyPage() {
         title="Политика обработки персональных данных"
         clips={['building-sun', 'tower-glass']}
         camera={9}
-        compact
+        still
       />
       <p className="text-sm text-slate-500">Редакция от 27 сентября 2026 г.</p>
 
