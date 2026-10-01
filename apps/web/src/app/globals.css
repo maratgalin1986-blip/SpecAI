@@ -1126,3 +1126,40 @@ html.intro-live .vt-phone {
     animation: none;
   }
 }
+
+/* overlays cleanup */
+html {
+  scroll-padding-top: 5.5rem;
+}
+
+/* Chat button: above the contact bar on phones, above the cookie strip when shown. */
+.chat-fab {
+  bottom: calc(4.75rem + env(safe-area-inset-bottom));
+}
+html[data-cookie-strip] .chat-fab {
+  bottom: calc(7.25rem + env(safe-area-inset-bottom));
+}
+@media (min-width: 640px) {
+  .chat-fab,
+  html[data-cookie-strip] .chat-fab {
+    bottom: 1rem;
+  }
+}
+
+/* Header over the dark journey scene: dark translucent glass. */
+.site-header-vt {
+  transition:
+    background-color 0.25s,
+    border-color 0.25s;
+}
+.site-header-vt[data-dark='true'] {
+  background-color: rgb(2 6 23 / 0.45);
+  border-color: rgb(255 255 255 / 0.1);
+}
+.site-header-vt[data-dark='true'] a:not(.vt-phone),
+.site-header-vt[data-dark='true'] button {
+  color: rgb(255 255 255 / 0.9);
+}
+.site-header-vt[data-dark='true'] .vt-phone {
+  background-color: rgb(255 255 255 / 0.18);
+}

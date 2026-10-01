@@ -247,6 +247,11 @@ export function SiteJourney() {
     );
   }
 
+  const skip = () => {
+    const el = sectionRef.current;
+    if (el) window.scrollTo({ top: el.offsetTop + el.offsetHeight, behavior: 'smooth' });
+  };
+
   const n = scenes.length;
   const pos = progress * n; // 0…n
   posRef.current = pos;
@@ -344,7 +349,7 @@ export function SiteJourney() {
         />
 
         {/* HUD */}
-        <div className="relative z-30 mx-auto flex h-full max-w-6xl flex-col px-4 pb-28 pt-24 sm:px-6 sm:pb-10">
+        <div className="relative z-30 mx-auto flex h-full max-w-6xl flex-col px-4 pb-24 pt-20 sm:px-6 sm:pb-10 sm:pt-24">
           <div className="flex items-center justify-between gap-4">
             <div>
               <div className="eyebrow text-amber-400">Путешествие по объекту</div>
@@ -358,6 +363,17 @@ export function SiteJourney() {
               <span className="hidden sm:inline">Камера {String(index + 1).padStart(2, '0')}</span>
               <LiveClock />
             </div>
+          </div>
+          {/* Second HUD row: the note and (on phones) Skip, clear of the clock. */}
+          <div className="mt-2 flex items-center justify-between gap-3 text-[0.6rem] text-white/50 sm:hidden">
+            <span>Видео и фото для примера</span>
+            <button
+              type="button"
+              onClick={skip}
+              className="rounded-full bg-white/10 px-3 py-1.5 text-xs font-semibold text-white/80 ring-1 ring-white/20 backdrop-blur"
+            >
+              Пропустить ↓
+            </button>
           </div>
 
           <div className="mt-auto max-w-2xl">
@@ -402,7 +418,7 @@ export function SiteJourney() {
           <div className="mt-6 flex min-h-[4.5rem] justify-center sm:min-h-[3.5rem]">
             {(() => {
               const scene = scenes[index]!;
-              const on = index === n - 1 || (local > 0.12 && local < 0.85);
+              const on = index === n - 1 || (local > 0.05 && local < 0.92);
               return (
                 <div
                   key={scene.type}
@@ -453,17 +469,14 @@ export function SiteJourney() {
           </ol>
         </div>
 
-        <span className="absolute right-4 top-20 z-30 text-[0.6rem] text-white/40">
+        <span className="absolute right-4 top-20 z-30 hidden text-[0.6rem] text-white/40 sm:block">
           Видео и фото для примера
         </span>
         {/* A long fly-through can be skipped. */}
         <button
           type="button"
-          onClick={() => {
-            const el = sectionRef.current;
-            if (el) window.scrollTo({ top: el.offsetTop + el.offsetHeight, behavior: 'smooth' });
-          }}
-          className="absolute right-4 top-28 z-30 rounded-full bg-white/10 px-3 py-1.5 text-xs font-semibold text-white/80 ring-1 ring-white/20 backdrop-blur hover:bg-white/20 sm:bottom-28 sm:right-6 sm:top-auto"
+          onClick={skip}
+          className="absolute bottom-28 right-6 z-30 hidden rounded-full bg-white/10 px-3 py-1.5 text-xs font-semibold text-white/80 ring-1 ring-white/20 backdrop-blur hover:bg-white/20 sm:block"
         >
           Пропустить ↓
         </button>
