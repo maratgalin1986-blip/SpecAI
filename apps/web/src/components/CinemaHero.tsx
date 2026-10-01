@@ -17,6 +17,7 @@ export function CinemaHero({
   clips,
   camera = 1,
   compact = false,
+  still = false,
 }: {
   eyebrow: string;
   title: ReactNode;
@@ -25,6 +26,8 @@ export function CinemaHero({
   clips: string[];
   camera?: number;
   compact?: boolean;
+  /** No footage: the poster frame only, darker (legal and reference pages). */
+  still?: boolean;
 }) {
   const [clip, setClip] = useState(clips[0]!);
 
@@ -34,16 +37,22 @@ export function CinemaHero({
 
   return (
     <section
-      className={`cine-hero relative isolate overflow-hidden rounded-[2rem] bg-slate-950 text-white shadow-2xl ${
-        compact ? 'min-h-[260px]' : 'min-h-[360px] sm:min-h-[420px]'
-      }`}
+      className={`cine-hero relative isolate flex min-h-[max(320px,45vh)] flex-col overflow-hidden rounded-[2rem] bg-slate-950 text-white shadow-2xl sm:min-h-[max(320px,55vh)]`}
     >
-      <CinemaVideo
-        clip={clip}
-        poster={clips[0]}
-        priority
-        className="journey-push absolute inset-0 -z-10 h-full w-full"
-      />
+      {still ? (
+        <img
+          src={`/video/${clips[0]}.webp`}
+          alt=""
+          className="absolute inset-0 -z-10 h-full w-full object-cover opacity-40"
+        />
+      ) : (
+        <CinemaVideo
+          clip={clip}
+          poster={clips[0]}
+          priority
+          className="journey-push absolute inset-0 -z-10 h-full w-full"
+        />
+      )}
       <div className="absolute inset-0 -z-10 bg-gradient-to-r from-slate-950/85 via-slate-950/45 to-transparent" />
       <div className="absolute inset-0 -z-10 bg-gradient-to-t from-slate-950/80 via-transparent to-slate-950/40" />
       <div className="journey-scanlines pointer-events-none absolute inset-0 -z-10 opacity-50" />
@@ -60,17 +69,13 @@ export function CinemaHero({
         <LiveClock className="tabular-nums" />
       </div>
 
-      <div className={`px-6 sm:px-10 ${compact ? 'pb-8 pt-10' : 'pb-10 pt-14 sm:pt-20'}`}>
+      <div className={`mt-auto px-6 sm:px-10 ${compact ? 'pb-8 pt-10' : 'pb-10 pt-14 sm:pt-20'}`}>
         <div className="cine-eyebrow eyebrow text-amber-400">{eyebrow}</div>
         <h1 className="cine-title mt-3 max-w-3xl text-3xl font-extrabold leading-[1.05] tracking-[-0.03em] drop-shadow-lg sm:text-5xl">
           {title}
         </h1>
         {children && <div className="cine-sub mt-4 max-w-2xl text-white/80">{children}</div>}
       </div>
-
-      <span className="absolute bottom-3 right-5 text-[0.6rem] text-white/40">
-        Видео для примера
-      </span>
     </section>
   );
 }
