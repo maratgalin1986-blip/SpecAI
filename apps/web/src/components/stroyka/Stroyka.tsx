@@ -992,9 +992,7 @@ export function Stroyka() {
                 </div>
               )}
               <span className="text-right text-[10px] leading-tight text-white/60">
-                <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">
-                  © участники OpenStreetMap
-                </a>
+                <a href="/credits">© участники OpenStreetMap</a>
                 <br />
                 Погода: MET Norway
               </span>

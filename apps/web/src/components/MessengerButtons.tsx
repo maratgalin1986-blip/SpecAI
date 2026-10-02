@@ -52,7 +52,8 @@ export function MessengerButtons() {
     };
   }, []);
   const inJourney = useJourneyInView(pathname);
-  if (pathname?.startsWith('/admin')) return null;
+  // /stroyka is full-screen with its own call buttons and no outbound links.
+  if (pathname?.startsWith('/admin') || pathname?.startsWith('/stroyka')) return null;
   return (
     <>
       <nav
