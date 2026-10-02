@@ -18,7 +18,7 @@ describe('buildSmeta', () => {
     }
   });
 
-  it('prices a trench with the backhoe at 3000 ₽/h and the minimum booking', () => {
+  it('prices a trench with the backhoe at 4000 ₽/h and the minimum booking', () => {
     const smeta = buildSmeta('trench', {
       length: 10,
       width: 0.5,
@@ -29,8 +29,8 @@ describe('buildSmeta', () => {
     expect(smeta.rows[0]).toMatchObject({
       machine: 'backhoe',
       hours: MIN_HOURS,
-      rate: 3000,
-      sum: 12000,
+      rate: 4000,
+      sum: 16000,
     });
   });
 
@@ -38,14 +38,14 @@ describe('buildSmeta', () => {
     const smeta = buildSmeta('pit', { length: 20, width: 15, depth: 2 })!; // 600 m³
     expect(smeta.rows.map((r) => r.machine)).toEqual(['excavator', 'truck']);
     expect(smeta.rows[0]!.hours).toBe(14); // 600 / 45 = 13.3
-    expect(smeta.rows[1]!.rate).toBe(2300);
+    expect(smeta.rows[1]!.rate).toBe(3300);
   });
 
   it('uses the hammer rate for demolition and the 32 t crane for heavy lifts', () => {
-    expect(buildSmeta('demolition')!.rows[0]!.rate).toBe(3500);
+    expect(buildSmeta('demolition')!.rows[0]!.rate).toBe(4500);
     expect(buildSmeta('lift', { weight: 12 })!.rows[0]!.rate).toBe(CRANE_HEAVY_RATE);
-    expect(buildSmeta('lift', { weight: 3 })!.rows[0]!.rate).toBe(3500);
-    expect(buildSmeta('height')!.rows[0]!.rate).toBe(2500);
+    expect(buildSmeta('lift', { weight: 3 })!.rows[0]!.rate).toBe(4500);
+    expect(buildSmeta('height')!.rows[0]!.rate).toBe(3500);
   });
 
   it('clamps values to the field limits and rejects unknown jobs', () => {
