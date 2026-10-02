@@ -90,11 +90,13 @@ export default async function OrderDetailPage({ params }: { params: { id: string
         <p className="mt-2 whitespace-pre-line text-sm text-slate-600">{order.description}</p>
       </Card>
 
-      <SiteConditions
-        date={order.desiredStartDate}
-        location={order.location}
-        categoryName={order.category?.name}
-      />
+      {/* An async server component, awaited directly so the JSX types do not
+          depend on the @types/react version the build happens to resolve. */}
+      {await SiteConditions({
+        date: order.desiredStartDate,
+        location: order.location,
+        categoryName: order.category?.name,
+      })}
 
       {isImported && (
         <Card className="border-sky-200 bg-sky-50">
