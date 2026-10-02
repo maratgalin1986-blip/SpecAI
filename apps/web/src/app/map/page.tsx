@@ -8,10 +8,11 @@ import { SITE } from '@/lib/site';
 export const dynamic = 'force-dynamic';
 
 export const metadata: Metadata = {
-  title: `Карта исполнителей — ${SITE.name}`,
+  // The layout's template adds «· ИИСтройка · СпецПласт16».
+  title: 'Наша техника на карте',
   description:
-    'Где стоит спецтехника в Набережных Челнах и по Татарстану: поставщики на карте, их цены и ' +
-    'условия. Выберите ближайшего и оставьте заявку — это бесплатно.',
+    'Где стоит техника СпецПласт16 в Набережных Челнах и по Татарстану: наш парк, наши ' +
+    'машинисты, одна цена от диспетчера. Оставьте заявку — перезвоним и назовём цену с подачей.',
   alternates: { canonical: '/map' },
 };
 
@@ -43,11 +44,11 @@ main { max-width: none !important; padding: 0 0 16px !important; }`}</style>
         <header className="flex flex-col gap-2">
           <p className="eyebrow text-amber-700">Карта · {SITE.city} и Татарстан</p>
           <h1 className="text-3xl font-extrabold tracking-tight sm:text-4xl">
-            Исполнители на карте
+            Наша техника на карте
           </h1>
           <p className="max-w-2xl text-slate-600">
-            Где стоит техника поставщиков: выберите ближайшего — подача быстрее и дешевле. Нажмите
-            на значок, чтобы увидеть условия, технику поставщика и оставить заявку.
+            Где стоит парк {SITE.name}: наши машины и наши машинисты, одна цена от диспетчера — с
+            подачей. Нажмите на значок, чтобы увидеть технику и оставить заявку.
           </p>
           <div className="flex flex-wrap gap-2 text-sm font-semibold">
             <a
@@ -55,12 +56,6 @@ main { max-width: none !important; padding: 0 0 16px !important; }`}</style>
               className="rounded-full border border-slate-300 px-4 py-2 hover:border-slate-900"
             >
               Каталог техники
-            </a>
-            <a
-              href="/register?type=provider"
-              className="rounded-full border border-slate-300 px-4 py-2 hover:border-slate-900"
-            >
-              Я сдаю технику — добавить себя на карту
             </a>
           </div>
         </header>

@@ -17,6 +17,7 @@ import { TiltCard } from '@/components/TiltCard';
 import type { MachineType } from '@/lib/machinePhotos';
 import { pluralizeRu } from '@/lib/pluralize';
 import { SITE } from '@/lib/site';
+import { fromPrice, HAMMER_RATE, MIN_RATE, priceFaqAnswer, SHIFT_HOURS } from '@/lib/prices';
 
 // Big interactive blocks below the fold: separate chunks, so the browser
 // hydrates them in their own short tasks instead of one long one.
@@ -36,70 +37,70 @@ const SERVICES: {
     title: 'Экскаваторы-погрузчики',
     photo: 'backhoe',
     text: 'JCB 4CX, CASE 570, Hidromek 102B, LGCE B877F — траншеи, котлованы, планировка.',
-    price: 'от 4 000 ₽/ч',
+    price: fromPrice('backhoe'),
   },
   {
     icon: 'excavator',
     title: 'Гусеничные экскаваторы',
     photo: 'excavator',
     text: 'Котлованы, карьеры и большие объёмы грунта — ковш под задачу.',
-    price: 'от 4 000 ₽/ч',
+    price: fromPrice('excavator'),
   },
   {
     icon: 'hammer',
     title: 'Гидромолот',
     photo: 'trench',
     text: 'Демонтаж, вскрытие асфальта и бетона, работа по мёрзлому грунту.',
-    price: 'от 4 500 ₽/ч',
+    price: fromPrice(HAMMER_RATE),
   },
   {
     icon: 'hammer',
     title: 'Колёсный экскаватор с гидромолотом',
     photo: 'wheeled-excavator',
     text: 'Дробление бетона и асфальта в городе — своим ходом, без трала.',
-    price: 'от 4 000 ₽/ч',
+    price: fromPrice('wheeled-excavator'),
   },
   {
     icon: 'crane',
     title: 'Автокраны',
     photo: 'crane',
     text: 'До 32 т — монтаж конструкций, погрузка и подъём грузов.',
-    price: 'от 4 500 ₽/ч',
+    price: fromPrice('crane'),
   },
   {
     icon: 'crane',
     title: 'Манипулятор КМУ 7 т',
     photo: 'kmu',
     text: 'Погрузка, перевозка и разгрузка одной машиной: блоки, плиты, бытовки.',
-    price: 'от 4 000 ₽/ч',
+    price: fromPrice('kmu'),
   },
   {
     icon: 'lift',
     title: 'Автовышка АГП',
     photo: 'agp',
     text: 'Работы на высоте: фасады, кровля, освещение, вывески, обрезка деревьев.',
-    price: 'от 3 500 ₽/ч',
+    price: fromPrice('agp'),
   },
   {
     icon: 'loader',
     title: 'Фронтальные погрузчики',
     photo: 'loader',
     text: 'Погрузка грунта, щебня и песка, уборка снега на объектах.',
-    price: 'от 4 000 ₽/ч',
+    price: fromPrice('loader'),
   },
   {
     icon: 'roller',
     title: 'Виброкаток',
     photo: 'roller',
     text: 'Уплотнение грунта, щебня и асфальта на дорогах и благоустройстве.',
-    price: 'от 4 000 ₽/ч',
+    price: fromPrice('roller'),
   },
   {
     icon: 'tractor',
     title: 'Тракторы',
     photo: 'tractor',
     text: 'МТЗ «Беларус» для вспомогательных и коммунальных работ.',
-    price: 'от 3 500 ₽/ч',
+    price: fromPrice('tractor'),
   },
   {
     icon: 'helmet',
@@ -125,10 +126,13 @@ const ADVANTAGES = [
     title: 'С машинистом',
     text: 'Опытный оператор на каждой машине — вам не нужно искать своего.',
   },
-  { title: 'Цена видна сразу', text: 'Почасовая ставка без скрытых доплат, смена — 8 часов.' },
   {
-    title: 'Несколько предложений',
-    text: 'Исполнители отвечают на заявку ценой — вы выбираете, сервис бесплатный.',
+    title: 'Цена видна сразу',
+    text: `Почасовая ставка на сайте, смена — ${SHIFT_HOURS} часов. Подачу техники диспетчер назовёт заранее.`,
+  },
+  {
+    title: 'Одна цена от диспетчера',
+    text: `Наш парк и наши машинисты: диспетчер ${SITE.name} называет одну цену с подачей — без посредников и торгов.`,
   },
   { title: 'Круглосуточно', text: 'ИИ-агенты подберут технику и примут заявку даже ночью.' },
 ];
@@ -197,7 +201,7 @@ const SERVICE_LANDING: Record<string, string> = {
 const HOME_FAQ = [
   {
     q: 'Сколько стоит аренда спецтехники?',
-    a: 'Экскаватор-погрузчик, фронтальный погрузчик, гусеничный и колёсный экскаватор, манипулятор КМУ, бульдозер и каток — от 4 000 ₽/ч, с гидромолотом — от 4 500 ₽/ч, автокраны — от 4 500 ₽/ч, трактор и автовышка — от 3 500 ₽/ч, самосвал — от 3 300 ₽/ч. Все цены — с машинистом, смена 8 часов.',
+    a: priceFaqAnswer(),
   },
   {
     q: 'Как быстро приедет техника?',
@@ -223,8 +227,8 @@ export default async function HomePage() {
     ...(available > 0
       ? [{ prefix: '', value: available, suffix: '', label: 'единиц техники свободно' }]
       : []),
-    { prefix: 'от ', value: 3300, suffix: ' ₽', label: 'час работы с машинистом' },
-    { prefix: '', value: 8, suffix: ' ч', label: 'смена, оплата по факту' },
+    { prefix: 'от ', value: MIN_RATE, suffix: ' ₽', label: 'час работы с машинистом' },
+    { prefix: '', value: SHIFT_HOURS, suffix: ' ч', label: 'смена, оплата по факту' },
     { prefix: '', value: 15, suffix: ' мин', label: 'перезвоним в рабочее время' },
   ];
 
@@ -255,8 +259,8 @@ export default async function HomePage() {
               style={{ animationDelay: '240ms' }}
             >
               Экскаваторы-погрузчики, автокраны и погрузчики с машинистами в Набережных Челнах и по
-              Татарстану — от 3 300 ₽/ч. Свой парк и свои машинисты {SITE.name}, без посредников:
-              подача в день заявки, работаем с НДС.
+              Татарстану — {fromPrice(MIN_RATE)}. Свой парк и свои машинисты {SITE.name}, без
+              посредников: подача в день заявки, работаем с НДС.
             </p>
             <div className="float-in mt-8 flex flex-wrap gap-3" style={{ animationDelay: '360ms' }}>
               <a
@@ -339,7 +343,7 @@ export default async function HomePage() {
           <div className="eyebrow text-amber-700">Техника и цены</div>
           <div className="mt-3 flex flex-wrap items-end justify-between gap-4">
             <h2 className="max-w-2xl text-4xl font-extrabold tracking-[-0.03em] sm:text-5xl">
-              Цена видна сразу, без скрытых доплат
+              Цена видна сразу. Подачу техники диспетчер назовёт заранее
             </h2>
             <a
               href="/equipment"
@@ -352,11 +356,14 @@ export default async function HomePage() {
               href="/map"
               className="group inline-flex items-center gap-2 rounded-full border border-slate-300 px-5 py-2.5 text-sm font-semibold transition hover:border-slate-900"
             >
-              Исполнители на карте
+              Наша техника на карте
               <Icon name="arrow" className="h-4 w-4 transition group-hover:translate-x-1" />
             </a>
           </div>
-          <p className="mt-3 text-slate-600">Все цены — с машинистом, смена 8 часов.</p>
+          <p className="mt-3 text-slate-600">
+            Все цены — с машинистом, смена {SHIFT_HOURS} часов. Подача зависит от расстояния до
+            объекта.
+          </p>
         </Reveal>
         <div className="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
           {SERVICES.map((service, index) => {
@@ -446,12 +453,12 @@ export default async function HomePage() {
           <Reveal>
             <div className="eyebrow text-amber-700">Почему мы</div>
             <h2 className="mt-3 text-4xl font-extrabold tracking-[-0.03em] sm:text-5xl">
-              Исполнители с техникой и машинистами
+              Наш парк, наши машинисты
             </h2>
             <p className="mt-4 text-slate-600">
-              {SITE.name} — сервис заказа спецтехники в{' '}
+              {SITE.name} — аренда спецтехники в{' '}
               {SITE.city === 'Набережные Челны' ? 'Набережных Челнах' : SITE.city}: собственный парк
-              и машинисты в штате. Подберём машину под задачу и сразу назовём цену с подачей.
+              и машинисты в штате. Одна цена от диспетчера {SITE.name} — с подачей, без посредников.
             </p>
           </Reveal>
         </div>

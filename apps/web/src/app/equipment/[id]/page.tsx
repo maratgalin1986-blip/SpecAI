@@ -122,7 +122,7 @@ export default async function EquipmentDetailPage({ params }: { params: { id: st
     ...(item.location
       ? [{ label: 'Местоположение', value: `${item.location.city}, ${item.location.country}` }]
       : []),
-    { label: 'Исполнитель', value: executor },
+    { label: 'Кто работает', value: executor },
     ...(item.make || item.model
       ? [{ label: 'Марка и модель', value: [item.make, item.model].filter(Boolean).join(' ') }]
       : []),
@@ -333,20 +333,20 @@ export default async function EquipmentDetailPage({ params }: { params: { id: st
           <section id="comments" className="scroll-mt-24">
             <div className="eyebrow text-amber-700">Комментарии заказчиков</div>
             <p className="mt-2 text-sm text-slate-500">
-              Об исполнителе «{item.company.name}». Публикуются после проверки.
+              О работе {house ? SITE.name : `«${item.company.name}»`}. Публикуются после проверки.
             </p>
             <div className="mt-4 flex flex-col gap-4">
               <CommentList comments={comments} empty="Комментариев пока нет." />
               {canComment ? (
                 <CommentForm
                   targetCompanyId={item.companyId}
-                  label="Оставить комментарий об исполнителе"
+                  label="Оставить комментарий о работе"
                   compact={comments.length > 0}
                 />
               ) : (
                 <p className="text-xs text-slate-500">
                   {session?.user ? (
-                    'Комментарий можно оставить после брони этой техники или предложения исполнителя по вашей заявке.'
+                    'Комментарий можно оставить после брони этой техники или ответа диспетчера по вашей заявке.'
                   ) : (
                     <>
                       <a

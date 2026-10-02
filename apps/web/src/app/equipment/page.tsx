@@ -216,14 +216,14 @@ export default async function EquipmentCatalogPage({
           href="/map"
           className="ml-2 mt-5 inline-flex w-fit items-center gap-2 rounded-full border border-white/40 px-5 py-2.5 text-sm font-semibold text-white transition hover:border-white"
         >
-          Исполнители на карте
+          Наша техника на карте
         </a>
       </CinemaHero>
 
       {companyFilter && (
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm">
           <span>
-            Техника поставщика <strong className="break-words">{companyFilter.name}</strong>
+            Техника базы <strong className="break-words">{companyFilter.name}</strong>
           </span>
           <span className="flex gap-3 font-semibold">
             <a href="/map" className="text-amber-800 underline">

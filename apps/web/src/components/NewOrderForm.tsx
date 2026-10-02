@@ -25,7 +25,7 @@ export function NewOrderForm({ provider }: { provider?: { name: string } | null 
   const [categoryId, setCategoryId] = useState('');
   // From the map's «Оставить заявку»: the order names the chosen provider.
   const [description, setDescription] = useState(
-    provider ? `Для исполнителя «${provider.name}». ` : '',
+    provider ? `Техника базы «${provider.name}». ` : '',
   );
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');

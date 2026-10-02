@@ -94,15 +94,15 @@ export type NewBidReceivedParams = {
 export function newBidReceived(params: NewBidReceivedParams): EmailTemplate {
   const url = `${getEmailBaseUrl()}/orders/${params.orderId}`;
   const price = formatPrice(params.price, params.currency);
-  const title = 'Новое предложение по вашей заявке';
-  const subject = `${SITE.name}: новое предложение по заявке — ${params.equipmentName}`;
+  const title = 'Цена по вашей заявке';
+  const subject = `${SITE.name}: цена по заявке — ${params.equipmentName}`;
 
   const lines = [
-    `По вашей заявке «${params.orderDescription}» поступило новое предложение.`,
+    `Диспетчер ${SITE.name} назвал цену по вашей заявке «${params.orderDescription}».`,
     `Техника: ${params.equipmentName}`,
     `Цена: ${price}`,
-    ...(params.message ? [`Сообщение поставщика: ${params.message}`] : []),
-    'Откройте заявку, чтобы принять предложение или сравнить его с другими.',
+    ...(params.message ? [`Комментарий диспетчера: ${params.message}`] : []),
+    'Откройте заявку, чтобы принять цену, или позвоните диспетчеру.',
   ];
 
   return {

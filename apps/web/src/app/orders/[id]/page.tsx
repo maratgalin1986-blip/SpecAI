@@ -15,6 +15,7 @@ import { isSafeHttpUrl } from '@/lib/privacy';
 import { approvedComments } from '@/lib/commentAccess';
 import { CommentForm, CommentList } from '@/components/Comments';
 import { customerShortName } from '@/lib/customerPrivacy';
+import { SITE } from '@/lib/site';
 
 export const dynamic = 'force-dynamic';
 
@@ -89,7 +90,7 @@ export default async function OrderDetailPage({ params }: { params: { id: string
       {isOwner && order.status === 'OPEN' && <CancelOrderButton orderId={order.id} />}
       {isOwner && order.status === 'MATCHED' && (
         <p className="rounded-md border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
-          Бронь создана — исполнитель подтвердит её и свяжется с вами.{' '}
+          Бронь создана — диспетчер {SITE.name} подтвердит её и свяжется с вами.{' '}
           <a href="/dashboard#bookings" className="font-semibold underline">
             Мои брони
           </a>
@@ -178,12 +179,18 @@ export default async function OrderDetailPage({ params }: { params: { id: string
 
       <section>
         <h2 className="mb-3 text-lg font-semibold">
-          {seesAllBids
-            ? `Предложения исполнителей · ${order.bids.length}`
-            : `Ваши предложения (всего по заявке: ${order.bids.length})`}
+          {isOwner
+            ? `Цена от ${SITE.name}`
+            : seesAllBids
+              ? `Предложения исполнителей · ${order.bids.length}`
+              : `Ваши предложения (всего по заявке: ${order.bids.length})`}
         </h2>
         {visibleBids.length === 0 ? (
-          <p className="text-sm text-slate-600">Пока никто не предложил технику.</p>
+          <p className="text-sm text-slate-600">
+            {isOwner
+              ? `Диспетчер ${SITE.name} ещё не назвал цену — обычно в течение рабочего дня. Срочно: ${SITE.phone}.`
+              : 'Пока никто не предложил технику.'}
+          </p>
         ) : (
           <div className="flex flex-col gap-3">
             {visibleBids.map((bid) => (
@@ -207,7 +214,7 @@ export default async function OrderDetailPage({ params }: { params: { id: string
                   <CommentForm
                     compact
                     targetCompanyId={bid.equipment.companyId}
-                    label="Комментарий об исполнителе"
+                    label="Комментарий о работе"
                   />
                 )}
                 {bid.status === 'ACCEPTED' && (
