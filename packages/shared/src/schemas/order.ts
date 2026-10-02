@@ -8,7 +8,7 @@ export const createOrderSchema = z
     description: z.string().min(1).max(2000),
     desiredStartDate: z.coerce.date(),
     desiredEndDate: z.coerce.date(),
-    categoryId: z.string().cuid().optional(),
+    categoryId: z.string().min(1).max(64).optional(),
     // Where the machine is needed — geocoded for the weather and the map.
     address: z.string().trim().max(200).optional(),
   })

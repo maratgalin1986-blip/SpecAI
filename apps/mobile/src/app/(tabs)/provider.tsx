@@ -6,6 +6,7 @@ import {
   Image,
   Pressable,
   RefreshControl,
+  Linking,
   StyleSheet,
   Text,
   View,
@@ -144,6 +145,14 @@ function BookingRow({
         <Badge text={BOOKING_STATUS_LABELS[booking.status]} tone={STATUS_TONES[booking.status]} />
       </View>
       <Text style={styles.meta}>Клиент: {booking.customer.name}</Text>
+      {booking.customer.email ? (
+        <Text
+          style={styles.contact}
+          onPress={() => void Linking.openURL(`mailto:${booking.customer.email}`)}
+        >
+          {booking.customer.email}
+        </Text>
+      ) : null}
       <Text style={styles.meta}>
         {formatDate(booking.startDate)} – {formatDate(booking.endDate)}
       </Text>
@@ -182,12 +191,15 @@ export default function ProviderScreen() {
     if (mode === 'refresh') setRefreshing(true);
     setError(null);
     try {
-      const [equipmentData, bookingsData] = await Promise.all([
+      // Load both lists independently: one failing request must not empty the other.
+      const [equipmentResult, bookingsResult] = await Promise.allSettled([
         fetchMyEquipment(),
         fetchProviderBookings(),
       ]);
-      setEquipment(equipmentData.equipment);
-      setBookings(bookingsData.bookings);
+      if (equipmentResult.status === 'fulfilled') setEquipment(equipmentResult.value.equipment);
+      if (bookingsResult.status === 'fulfilled') setBookings(bookingsResult.value.bookings);
+      const failed = [equipmentResult, bookingsResult].find((r) => r.status === 'rejected');
+      if (failed) throw failed.reason;
     } catch (caught) {
       setError(caught instanceof ApiError ? caught.message : 'Не удалось загрузить данные');
       setEquipment((prev) => prev ?? []);
@@ -360,6 +372,7 @@ const styles = StyleSheet.create({
   },
   cardTitle: { flex: 1, fontSize: 16, fontWeight: '600', color: colors.text },
   meta: { fontSize: 14, color: colors.textMuted },
+  contact: { fontSize: 14, color: colors.primaryDark, fontWeight: '600' },
   row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   price: { fontSize: 16, fontWeight: '700', color: colors.primaryDark },
   priceUnit: { fontSize: 13, fontWeight: '400', color: colors.textMuted },

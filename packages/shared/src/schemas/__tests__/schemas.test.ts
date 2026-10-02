@@ -35,10 +35,10 @@ describe('createEquipmentSchema', () => {
     expect(result.imageUrls).toEqual([]);
   });
 
-  it('rejects a non-positive dailyRate and a non-cuid categoryId', () => {
+  it('rejects a non-positive dailyRate and an empty categoryId', () => {
     const result = createEquipmentSchema.safeParse({
       name: 'Кран',
-      categoryId: 'not-a-cuid',
+      categoryId: '',
       companyId: CUID,
       dailyRate: 0,
     });
@@ -48,6 +48,16 @@ describe('createEquipmentSchema', () => {
       expect(paths).toContain('dailyRate');
       expect(paths).toContain('categoryId');
     }
+  });
+
+  it("accepts the owner's readable company id", () => {
+    const result = createEquipmentSchema.safeParse({
+      name: 'Кран',
+      categoryId: CUID,
+      companyId: 'specplast16-house',
+      dailyRate: 20000,
+    });
+    expect(result.success).toBe(true);
   });
 });
 

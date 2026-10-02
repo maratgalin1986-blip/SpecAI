@@ -55,6 +55,8 @@ interface RequestOptions {
   anonymous?: boolean;
 }
 
+const REQUEST_TIMEOUT_MS = 20_000;
+
 /** fetch к API с JSON-телом и Bearer-токеном из SecureStore. */
 export async function apiFetch<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const headers: Record<string, string> = { Accept: 'application/json' };
@@ -62,14 +64,25 @@ export async function apiFetch<T>(path: string, options: RequestOptions = {}): P
   if (!options.anonymous) Object.assign(headers, await authHeaders());
 
   let response: Response;
+  // Without a timeout a hung network leaves the screen loading forever.
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
   try {
     response = await fetch(`${API_URL}${path}`, {
       method: options.method ?? 'GET',
       headers,
       body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
+      signal: controller.signal,
     });
   } catch {
-    throw new ApiError(0, 'Нет соединения с сервером');
+    throw new ApiError(
+      0,
+      controller.signal.aborted
+        ? 'Сервер долго не отвечает, попробуйте ещё раз'
+        : 'Нет соединения с сервером',
+    );
+  } finally {
+    clearTimeout(timer);
   }
 
   const text = await response.text();

@@ -138,12 +138,16 @@ export default function ProviderOrdersScreen() {
     if (mode === 'refresh') setRefreshing(true);
     setError(null);
     try {
-      const [ordersData, equipmentData] = await Promise.all([
+      const [ordersResult, equipmentResult] = await Promise.allSettled([
         fetchOpenOrders(),
         fetchMyEquipment(),
       ]);
-      setOrders(ordersData.orders.filter((order) => order.status === 'OPEN'));
-      setEquipment(equipmentData.equipment);
+      if (ordersResult.status === 'fulfilled') {
+        setOrders(ordersResult.value.orders.filter((order) => order.status === 'OPEN'));
+      }
+      if (equipmentResult.status === 'fulfilled') setEquipment(equipmentResult.value.equipment);
+      const failed = [ordersResult, equipmentResult].find((r) => r.status === 'rejected');
+      if (failed) throw failed.reason;
     } catch (caught) {
       setError(caught instanceof ApiError ? caught.message : 'Не удалось загрузить заявки');
       setOrders((prev) => prev ?? []);

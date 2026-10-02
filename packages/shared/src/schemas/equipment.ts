@@ -13,9 +13,9 @@ export const createEquipmentSchema = z.object({
     .min(1950)
     .max(new Date().getFullYear() + 1)
     .optional(),
-  categoryId: z.string().cuid(),
-  companyId: z.string().cuid(),
-  locationId: z.string().cuid().optional(),
+  categoryId: z.string().min(1).max(64),
+  companyId: z.string().min(1).max(64),
+  locationId: z.string().min(1).max(64).optional(),
   dailyRate: z.number().positive(),
   hourlyRate: z.number().positive().optional(),
   weeklyRate: z.number().positive().optional(),
@@ -41,8 +41,8 @@ export type EquipmentSort = z.infer<typeof equipmentSortSchema>;
 export const EQUIPMENT_SORT_OPTIONS = equipmentSortSchema.options;
 
 export const equipmentSearchQuerySchema = z.object({
-  categoryId: z.string().cuid().optional(),
-  companyId: z.string().cuid().optional(),
+  categoryId: z.string().min(1).max(64).optional(),
+  companyId: z.string().min(1).max(64).optional(),
   status: equipmentStatusSchema.optional(),
   city: z.string().optional(),
   minDailyRate: z.number().nonnegative().optional(),

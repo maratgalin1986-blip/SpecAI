@@ -27,8 +27,15 @@ export function BidForm({ orderId }: { orderId: string }) {
   useEffect(() => {
     if (!session?.user.companyId) return;
     fetch(`/api/equipment?companyId=${session.user.companyId}&status=AVAILABLE`)
-      .then((res) => res.json())
-      .then((data) => setEquipmentOptions(data.equipment ?? []));
+      .then(async (res) => {
+        const data = await res.json().catch(() => null);
+        if (!res.ok) {
+          setError(typeof data?.error === 'string' ? data.error : 'Не удалось загрузить технику');
+          return;
+        }
+        setEquipmentOptions(data?.equipment ?? []);
+      })
+      .catch(() => setError('Не удалось загрузить технику, проверьте связь'));
   }, [session?.user.companyId]);
 
   if (status !== 'authenticated' || !isFleetManager(session.user)) {
