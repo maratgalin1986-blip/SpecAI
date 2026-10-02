@@ -7,6 +7,7 @@ import { currentSiteObject, SITE_OBJECTS, type ObjectStop } from '@/lib/siteObje
 import { footageAllowed } from '@/components/CinemaVideo';
 import { LiveClock } from '@/components/LiveClock';
 import { Icon } from '@/components/Icon';
+import { useMachineSound } from '@/components/useMachineSound';
 import { SITE } from '@/lib/site';
 
 // «Путешествие по объекту»: a pinned, scroll-driven fly-through of one big
@@ -114,6 +115,8 @@ export function SiteJourney() {
   // photos would otherwise be fetched and then replaced by this visit's pick.
   const [hydrated, setHydrated] = useState(false);
   const [near, setNear] = useState(false);
+  // The stage fills the screen (the visitor is inside the journey).
+  const [onStage, setOnStage] = useState(false);
   const posRef = useRef(0);
 
   useEffect(() => {
@@ -142,6 +145,7 @@ export function SiteJourney() {
       setProgress(scrollable > 0 ? clamp(-rect.top / scrollable) : 0);
       // Start fetching footage only when the stage is about to come in.
       setNear(rect.top < window.innerHeight * 1.5 && rect.bottom > -window.innerHeight);
+      setOnStage(rect.top < window.innerHeight * 0.5 && rect.bottom > window.innerHeight * 0.5);
     };
     const onScroll = () => {
       if (!frame) frame = requestAnimationFrame(update);
@@ -205,6 +209,11 @@ export function SiteJourney() {
       cancelAnimationFrame(raf);
     };
   }, [reduced]);
+
+  // Sound (only when the visitor turned it on): each stop's machine while
+  // the stage is on screen, cross-fading as the camera moves on.
+  const stop = scenes[Math.min(scenes.length - 1, Math.floor(progress * scenes.length))];
+  useMachineSound('journey', stop?.type, onStage && !reduced);
 
   // Reduced motion: a plain list of the stops.
   if (reduced) {

@@ -1671,3 +1671,19 @@ html[data-vt-kind='fade']::view-transition-group(root) {
     animation-delay: 0.1s;
   }
 }
+
+/* Sound toggle hint «Включите звук — как в кино»: fades in under the switch. */
+.sound-hint {
+  animation: sound-hint-in 0.5s ease-out both;
+}
+@keyframes sound-hint-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sound-hint {
+    animation: none;
+  }
+}

@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react';
 import { parseAbCookie } from '@/lib/ab';
+import { playCue } from '@/lib/sound';
 
 // Every press on the site gets a film-style response: a ring of light spreads
 // from the finger or cursor, and the pressed button "clicks" like a clapper.
@@ -26,7 +27,27 @@ function burst(x: number, y: number) {
   }
 }
 
+// Heavier «thunk» for «Позвонить», «Наряд» and «Отправить».
+const THUNK_TARGET = "a[href^='tel:'], a[href*='#podbor'], button[type='submit']";
+
 export function CinemaClicks() {
+  // Sound: a light mechanical tick on every press, a thunk on the main
+  // actions. Silent unless the visitor turned sound on (SoundDirector), and
+  // independent of the visual effects below (it works with reduced motion).
+  useEffect(() => {
+    const onDown = (event: PointerEvent) => {
+      if (event.button > 0) return;
+      const target = (event.target as Element | null)?.closest?.(
+        'a[href], button, [role="button"], summary',
+      );
+      if (!target || (target as HTMLButtonElement).disabled) return;
+      if (target.matches('[data-sound-toggle]')) return;
+      playCue(target.matches(THUNK_TARGET) ? 'thunk' : 'click');
+    };
+    document.addEventListener('pointerdown', onDown, { passive: true });
+    return () => document.removeEventListener('pointerdown', onDown);
+  }, []);
+
   useEffect(() => {
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
     // A/B group «calm»: no click effects.

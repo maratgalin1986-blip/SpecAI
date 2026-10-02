@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { JOURNEY_SELECTOR } from '@/components/useJourneyInView';
 import { AuthStatus } from '@/components/AuthStatus';
+import { SoundToggle } from '@/components/SoundToggle';
 import { SITE } from '@/lib/site';
 
 const NAV_LINKS = [
@@ -89,14 +90,18 @@ export function SiteHeader() {
             Заказать технику
             <span className="transition group-hover:translate-x-0.5">→</span>
           </a>
+          <SoundToggle />
         </nav>
 
-        <a
-          href={SITE.phoneHref}
-          className="vt-phone ml-auto rounded-full bg-slate-900 px-3 py-1.5 text-sm font-semibold text-white lg:hidden"
-        >
-          Позвонить
-        </a>
+        <div className="ml-auto flex items-center gap-2 lg:hidden">
+          <SoundToggle />
+          <a
+            href={SITE.phoneHref}
+            className="vt-phone rounded-full bg-slate-900 px-3 py-1.5 text-sm font-semibold text-white"
+          >
+            Позвонить
+          </a>
+        </div>
 
         <button
           type="button"
