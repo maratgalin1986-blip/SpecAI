@@ -4,7 +4,7 @@ import Image from 'next/image';
 import { useEffect, useRef, useState } from 'react';
 import { defaultPhotoOf, pickPhoto, type MachineType } from '@/lib/machinePhotos';
 import { currentSiteObject, SITE_OBJECTS, type ObjectStop } from '@/lib/siteObjects';
-import { footageAllowed } from '@/components/CinemaVideo';
+import { clipSources, footageAllowed, lightFootage } from '@/components/CinemaVideo';
 import { LiveClock } from '@/components/LiveClock';
 import { Icon } from '@/components/Icon';
 import { useMachineSound } from '@/components/useMachineSound';
@@ -111,6 +111,8 @@ export function SiteJourney() {
   // Clips are mounted only after hydration, once this visit's project is
   // known, so the server-side default clips are never downloaded.
   const [mounted, setMounted] = useState(false);
+  // Phones and 3G get the light cut of each clip (CinemaVideo).
+  const [light, setLight] = useState(false);
   // Photos too: the stage is far below the fold, and the server-side default
   // photos would otherwise be fetched and then replaced by this visit's pick.
   const [hydrated, setHydrated] = useState(false);
@@ -126,6 +128,7 @@ export function SiteJourney() {
     setScenes(route);
     setPhotos(route.map((scene) => pickPhoto(scene.type, 'journey')));
     setObject(currentSiteObject());
+    setLight(lightFootage());
     setMounted(footageAllowed());
     setHydrated(true);
   }, []);
@@ -324,8 +327,7 @@ export function SiteJourney() {
                     preload={near && pos > i - 1.5 ? 'auto' : 'none'}
                     poster={`/video/${object.clips[scene.stop]}.webp`}
                   >
-                    <source src={`/video/${object.clips[scene.stop]}.webm`} type="video/webm" />
-                    <source src={`/video/${object.clips[scene.stop]}.mp4`} type="video/mp4" />
+                    {clipSources(object.clips[scene.stop]!, light)}
                   </video>
                 )}
                 <div className="journey-clouds absolute inset-0" />
