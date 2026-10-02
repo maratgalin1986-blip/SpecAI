@@ -599,11 +599,11 @@ html {
   }
 }
 
-/* Opening titles (IntroSplash): ~3.6 s in total. The drone descends over the
+/* Opening titles (IntroSplash): ~4.8 s in total. The drone descends over the
    site, the titles and the partner card come in, then the camera dives into
    the page. All timings are CSS, so it ends even before hydration. */
 .intro {
-  animation: intro-out 0.55s cubic-bezier(0.7, 0, 0.84, 0) 2.25s forwards;
+  animation: intro-out 0.55s cubic-bezier(0.7, 0, 0.84, 0) 4.25s forwards;
 }
 @keyframes intro-out {
   to {
@@ -615,7 +615,7 @@ html {
 }
 .intro-drone {
   transform-origin: 50% 60%;
-  animation: intro-drone 2.8s cubic-bezier(0.25, 0.1, 0.25, 1) both;
+  animation: intro-drone 4.8s cubic-bezier(0.25, 0.1, 0.25, 1) both;
 }
 @keyframes intro-drone {
   from {
@@ -648,7 +648,18 @@ html {
     radial-gradient(120% 90% at 100% 0%, rgba(245, 158, 11, 0.45), transparent 55%),
     linear-gradient(135deg, #111827 0%, #0b0f19 55%, #1f2937 100%);
   transform-style: preserve-3d;
-  animation: intro-card 1.3s cubic-bezier(0.2, 0.8, 0.2, 1) 0.6s both;
+  animation:
+    intro-card 1.3s cubic-bezier(0.2, 0.8, 0.2, 1) 0.6s both,
+    intro-card-hold 2.4s ease-in-out 1.9s forwards;
+}
+/* While the card holds the screen it keeps turning slowly towards the viewer. */
+@keyframes intro-card-hold {
+  from {
+    transform: translateY(0) rotateY(-8deg) rotateX(6deg) scale(1);
+  }
+  to {
+    transform: translateY(-4px) rotateY(5deg) rotateX(2deg) scale(1.04);
+  }
 }
 @keyframes intro-card {
   from {
@@ -671,7 +682,9 @@ html {
     transparent 60%
   );
   background-size: 250% 100%;
-  animation: intro-shine 1.2s ease-in-out 1.2s both;
+  animation:
+    intro-shine 1.2s ease-in-out 1.2s both,
+    intro-shine 1.2s ease-in-out 3s forwards;
 }
 @keyframes intro-shine {
   from {
