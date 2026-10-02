@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@specai/database';
 import { createLeadSchema } from '@specai/shared';
 import { notifyTelegram } from '@/lib/notify';
+import { acceptLead } from '@/lib/leadIntake';
 import { siteUrl } from '@/lib/siteUrl';
 import { PHOTO_AFTER_PATH } from '@/lib/photoShare';
 import { checkRateLimit } from '@/lib/rateLimit';
@@ -41,39 +42,21 @@ export async function POST(request: NextRequest) {
     message: parsed.data.message || null,
     source: parsed.data.source || null,
   };
-  const lines = [
-    `Имя: ${lead.name}`,
-    `Телефон: ${lead.phone}`,
-    lead.message ? `Сообщение: ${lead.message}` : null,
-    lead.source ? `Откуда: ${lead.source}` : null,
-  ];
-
-  try {
-    await prisma.lead.create({ data: { ...lead, ymClientId: parsed.data.ymClientId ?? null } });
-  } catch (error) {
-    // The database is down: the lead must still reach the owner.
-    console.error('[leads] failed to save lead', error);
-    const delivered = await notifyTelegram(
-      [`⚠️ Заявка на звонок — БАЗА НЕДОСТУПНА, заявка только здесь`, ...lines]
-        .filter(Boolean)
-        .join('\n'),
-    );
-    if (delivered) return NextResponse.json({ ok: true }, { status: 202 });
-    return NextResponse.json(
-      { error: `Не удалось отправить заявку. Позвоните нам: ${SITE.phone}` },
-      { status: 503 },
-    );
-  }
-
-  await notifyTelegram(
-    [
-      `📞 Новая заявка на звонок — ${SITE.name}`,
-      ...lines,
-      `📷 После работ можно попросить фото: ${siteUrl()}${PHOTO_AFTER_PATH}`,
-    ]
-      .filter(Boolean)
-      .join('\n'),
+  const outcome = await acceptLead(lead, {
+    save: (data) =>
+      prisma.lead.create({ data: { ...data, ymClientId: parsed.data.ymClientId ?? null } }),
+    notify: notifyTelegram,
+    siteName: SITE.name,
+    footer: `📷 После работ можно попросить фото: ${siteUrl()}${PHOTO_AFTER_PATH}`,
+    // The database is down: Telegram gets only the phone (lib/leadIntake.ts),
+    // the full lead stays in the server log so it can be recovered.
+    onSaveError: (error, data) =>
+      console.error('[leads] failed to save lead', error, JSON.stringify(data)),
+  });
+  if (outcome === 'saved') return NextResponse.json({ ok: true }, { status: 201 });
+  if (outcome === 'notified-only') return NextResponse.json({ ok: true }, { status: 202 });
+  return NextResponse.json(
+    { error: `Не удалось отправить заявку. Позвоните нам: ${SITE.phone}` },
+    { status: 503 },
   );
-
-  return NextResponse.json({ ok: true }, { status: 201 });
 }
