@@ -32,7 +32,10 @@ const mono = JetBrains_Mono({
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl()),
-  title: { default: `${SITE.name} — ${SITE.tagline}`, template: `%s · ${SITE.name}` },
+  title: {
+    default: `${SITE.platform} от ${SITE.name} — ${SITE.tagline}`,
+    template: `%s · ${SITE.platform} · ${SITE.name}`,
+  },
   description: SITE.description,
   applicationName: SITE.name,
   keywords: [
@@ -43,12 +46,13 @@ export const metadata: Metadata = {
     'аренда самосвала',
     'спецтехника Татарстан',
     SITE.name,
+    SITE.platform,
   ],
   openGraph: {
     type: 'website',
     locale: 'ru_RU',
-    siteName: SITE.name,
-    title: `${SITE.name} — ${SITE.tagline}`,
+    siteName: `${SITE.platform} от ${SITE.name}`,
+    title: `${SITE.platform} от ${SITE.name} — ${SITE.tagline}`,
     description: SITE.description,
   },
   manifest: '/manifest.webmanifest',
