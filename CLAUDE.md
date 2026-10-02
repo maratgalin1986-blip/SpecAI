@@ -36,9 +36,26 @@ small so merges stay conflict-free.
    `cd apps/web && npx next build` with dummy `DATABASE_URL`/`DIRECT_URL`.
 6. Commits and PRs end with the attribution lines the session is given; do not
    put model names into code, comments or commit messages.
+7. **A green Vercel build does not mean production works.** On 2026‑09‑29
+   every database request in production failed with "Prisma Client could not
+   locate the Query Engine for runtime rhel-openssl-3.0.x" while the build
+   passed; Prisma's monorepo plugin in `apps/web/next.config.mjs` fixes it
+   (#17), keep it. After a production deploy open
+   `https://spec-ai-web.vercel.app/api/categories` (must be 200); if it fails,
+   read Vercel → Logs first.
+8. **Secrets for cloud sessions are plain environment variables** of the cloud
+   environment (that is how `EXPO_TOKEN` works); the "API credentials" form did
+   not reach the CLI. Only a new container sees a new value, and each service
+   host must also be allowed under Network access. Never ask the owner to paste
+   a secret into the chat.
 
 ## Project facts
 
+- Shared memory lives in the repo: `docs/owner-requests.md` (the owner's
+  requests and their status), `docs/ai-office.md` (how the sessions work
+  together, lessons log), `docs/marketing.md`.
+- The mobile app is on Expo: project `@maratgalin1986s-team/specai`, EAS Update
+  branch `preview` for Expo Go; steps in `apps/mobile/README.md`.
 - pnpm 10 workspaces, Node 20 in CI. Packages: `apps/web` (Next.js 14),
   `apps/mobile` (Expo SDK 57), `packages/{database,shared,ui,ai-service}`.
 - Checks: `pnpm lint`, `pnpm typecheck`, `pnpm format:check`, `pnpm test`

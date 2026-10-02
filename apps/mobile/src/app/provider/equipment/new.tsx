@@ -22,6 +22,7 @@ import {
   type Category,
   type SpecValue,
 } from '@/lib/api';
+import { suggestShiftRate } from '@/lib/format';
 import { colors, radius, spacing } from '@/lib/theme';
 
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024; // Anthropic не принимает изображения больше 5 МБ
@@ -70,6 +71,8 @@ export default function NewEquipmentScreen() {
   const [year, setYear] = useState('');
   const [hourlyRate, setHourlyRate] = useState('');
   const [dailyRate, setDailyRate] = useState('');
+  // true, когда пользователь сам ввёл цену смены: автоподстановка «час × 8» выключается.
+  const [dailyTouched, setDailyTouched] = useState(false);
   const [description, setDescription] = useState('');
   const [photos, setPhotos] = useState<Photo[]>([]);
   const [selectedUrl, setSelectedUrl] = useState<string | null>(null);
@@ -293,11 +296,9 @@ export default function NewEquipmentScreen() {
                   value={hourlyRate}
                   onChangeText={(value) => {
                     setHourlyRate(value);
-                    // Как на сайте: смена 8 ч подставляется из часовой ставки, пока не задана.
-                    const hourly = Number(value.replace(',', '.'));
-                    if (!dailyRate && value && !Number.isNaN(hourly)) {
-                      setDailyRate(String(hourly * 8));
-                    }
+                    // Как на сайте: смена 8 ч = часовая × 8 при каждом вводе,
+                    // пока пользователь сам не изменил цену смены.
+                    if (!dailyTouched) setDailyRate(suggestShiftRate(value));
                   }}
                   placeholder="2500"
                   keyboardType="decimal-pad"
@@ -307,7 +308,11 @@ export default function NewEquipmentScreen() {
             <Input
               label="₽ за смену 8 ч *"
               value={dailyRate}
-              onChangeText={setDailyRate}
+              onChangeText={(value) => {
+                setDailyRate(value);
+                // Очистили поле — снова подставляем из часовой ставки.
+                setDailyTouched(value.trim() !== '');
+              }}
               placeholder="20000"
               keyboardType="decimal-pad"
             />

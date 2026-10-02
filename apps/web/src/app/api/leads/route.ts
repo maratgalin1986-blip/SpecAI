@@ -12,17 +12,17 @@ const LEAD_RATE_LIMIT = { limit: 5, windowMs: 10 * 60 * 1000 };
 
 export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => null);
+  // Bots that fill the honeypot get a fake success before validation, so they
+  // cannot tell the trap from a real form.
+  if (body && typeof body === 'object' && typeof body.website === 'string' && body.website) {
+    return NextResponse.json({ ok: true }, { status: 201 });
+  }
   const parsed = createLeadSchema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json(
       { error: 'Проверьте имя, телефон и согласие на обработку данных' },
       { status: 400 },
     );
-  }
-
-  // Bots that fill the honeypot get a fake success.
-  if (parsed.data.website) {
-    return NextResponse.json({ ok: true }, { status: 201 });
   }
 
   const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown';

@@ -47,6 +47,7 @@ function BookingCard({
   onReview,
   cancelling,
   paying,
+  paymentsEnabled,
 }: {
   booking: Booking;
   onCancel: (booking: Booking) => void;
@@ -54,12 +55,16 @@ function BookingCard({
   onReview: (booking: Booking) => void;
   cancelling: boolean;
   paying: boolean;
+  paymentsEnabled: boolean;
 }) {
   const paid = isPaid(booking);
   const canCancel = booking.status === 'PENDING' || booking.status === 'CONFIRMED';
   const refundRequired = booking.payment?.refundRequired === true;
   const canPay =
-    (booking.status === 'PENDING' || booking.status === 'CONFIRMED') && !paid && !refundRequired;
+    paymentsEnabled &&
+    (booking.status === 'PENDING' || booking.status === 'CONFIRMED') &&
+    !paid &&
+    !refundRequired;
   const canReview = booking.status === 'COMPLETED' && !booking.review;
   return (
     <Card style={styles.card}>
@@ -109,6 +114,8 @@ export default function BookingsScreen() {
   const [error, setError] = useState<string | null>(null);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
   const [payingId, setPayingId] = useState<string | null>(null);
+  // Онлайн-оплата подключена на сервере; без неё кнопку «Оплатить» не показываем.
+  const [paymentsEnabled, setPaymentsEnabled] = useState(false);
 
   const load = useCallback(async (mode: 'initial' | 'refresh' = 'initial') => {
     if (mode === 'refresh') setRefreshing(true);
@@ -116,6 +123,7 @@ export default function BookingsScreen() {
     try {
       const data = await fetchMyBookings();
       setBookings(data.bookings);
+      setPaymentsEnabled(data.paymentsEnabled === true);
     } catch (caught) {
       setError(caught instanceof ApiError ? caught.message : 'Не удалось загрузить бронирования');
       setBookings((prev) => prev ?? []);
@@ -202,6 +210,7 @@ export default function BookingsScreen() {
           onReview={handleReview}
           cancelling={cancellingId === item.id}
           paying={payingId === item.id}
+          paymentsEnabled={paymentsEnabled}
         />
       )}
       contentContainerStyle={styles.list}

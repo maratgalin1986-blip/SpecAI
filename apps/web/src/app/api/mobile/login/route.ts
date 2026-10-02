@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { authenticateWithCredentials } from '@/lib/credentials';
 import { signMobileToken } from '@/lib/mobileAuth';
 import { checkRateLimit } from '@/lib/rateLimit';
+import { LoginError, WRONG_CREDENTIALS_MESSAGE, loginFailure } from '@/lib/loginErrors';
 
 export const runtime = 'nodejs';
 
@@ -32,9 +33,23 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Некорректный JSON' }, { status: 400 });
   }
 
-  const user = await authenticateWithCredentials(body);
+  let user: Awaited<ReturnType<typeof authenticateWithCredentials>>;
+  try {
+    user = await authenticateWithCredentials(body);
+  } catch (error) {
+    // Лимит попыток на e-mail → 429, база недоступна → 503 «Сервис временно недоступен».
+    if (!(error instanceof LoginError)) throw error;
+    const failure = loginFailure(error);
+    return NextResponse.json(
+      { error: failure.message },
+      {
+        status: failure.status,
+        headers: error.retryAfterSec ? { 'Retry-After': String(error.retryAfterSec) } : undefined,
+      },
+    );
+  }
   if (!user) {
-    return NextResponse.json({ error: 'Неверный e-mail или пароль' }, { status: 401 });
+    return NextResponse.json({ error: WRONG_CREDENTIALS_MESSAGE }, { status: 401 });
   }
 
   const token = await signMobileToken({ userId: user.id, role: user.role });

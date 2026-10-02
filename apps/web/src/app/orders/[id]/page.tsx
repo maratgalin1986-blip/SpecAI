@@ -10,6 +10,7 @@ import { formatMoney } from '@/lib/money';
 import { isAdminRequest } from '@/lib/admin';
 import { SiteConditions } from '@/components/SiteConditions';
 import { isFleetManager } from '@/lib/fleet';
+import { isSafeHttpUrl } from '@/lib/privacy';
 
 export const dynamic = 'force-dynamic';
 
@@ -94,7 +95,7 @@ export default async function OrderDetailPage({ params }: { params: { id: string
                   </a>
                 </p>
               )}
-              {order.sourceUrl && (
+              {order.sourceUrl && isSafeHttpUrl(order.sourceUrl) && (
                 <a
                   href={order.sourceUrl}
                   target="_blank"

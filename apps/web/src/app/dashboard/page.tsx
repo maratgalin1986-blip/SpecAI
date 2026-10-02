@@ -6,6 +6,9 @@ import { authOptions } from '@/lib/auth';
 import { ReviewForm } from '@/components/ReviewForm';
 import { formatMoney } from '@/lib/money';
 import { PayBookingButton } from '@/components/PayBookingButton';
+import { BookingActionButtons } from '@/components/BookingActionButtons';
+import { isOnlinePaymentEnabled } from '@/lib/stripe';
+import { SITE } from '@/lib/site';
 import { VerifyEmailBanner } from '@/components/VerifyEmailBanner';
 import { OWN_FLEET } from '@/lib/fleet';
 
@@ -49,6 +52,7 @@ export default async function DashboardPage({
 }) {
   const session = await getServerSession(authOptions);
   const paymentNotice = searchParams?.payment ? PAYMENT_NOTICE[searchParams.payment] : undefined;
+  const paymentsEnabled = isOnlinePaymentEnabled();
 
   const [equipmentCount, activeBookings, myBookings, myOrders, me] = await Promise.all([
     prisma.equipment.count({ where: { ...OWN_FLEET, status: { not: 'RETIRED' } } }),
@@ -145,6 +149,14 @@ export default async function DashboardPage({
 
       <div>
         <h2 className="mb-3 text-lg font-semibold">Мои бронирования</h2>
+        {!paymentsEnabled && myBookings.length > 0 && (
+          <p className="mb-3 text-sm text-slate-600">
+            Оплата — по счёту после подтверждения брони, менеджер свяжется с вами. Вопросы:{' '}
+            <a href={SITE.phoneHref} className="font-medium text-amber-700">
+              {SITE.phone}
+            </a>
+          </p>
+        )}
         {myBookings.length === 0 ? (
           <p className="text-sm text-slate-600">Бронирований пока нет.</p>
         ) : (
@@ -173,7 +185,10 @@ export default async function DashboardPage({
                       </span>
                     </div>
                   ) : (
-                    booking.status !== 'CANCELLED' && (
+                    booking.status !== 'CANCELLED' &&
+                    (paymentsEnabled ||
+                      booking.depositPaid ||
+                      booking.payment?.status === 'PAID') && (
                       <div className="mt-2">
                         <PaymentStatusLabel
                           paid={booking.depositPaid || booking.payment?.status === 'PAID'}
@@ -189,10 +204,17 @@ export default async function DashboardPage({
                 </div>
                 <div className="flex flex-wrap items-center gap-2 sm:flex-col sm:items-end">
                   <BookingStatusBadge status={booking.status} />
-                  {(booking.status === 'PENDING' || booking.status === 'CONFIRMED') &&
+                  {paymentsEnabled &&
+                    (booking.status === 'PENDING' || booking.status === 'CONFIRMED') &&
                     !booking.depositPaid &&
                     booking.payment?.status !== 'PAID' &&
                     !booking.payment?.refundRequired && <PayBookingButton bookingId={booking.id} />}
+                  {(booking.status === 'PENDING' || booking.status === 'CONFIRMED') && (
+                    <BookingActionButtons
+                      bookingId={booking.id}
+                      availableTransitions={['CANCELLED']}
+                    />
+                  )}
                 </div>
               </Card>
             ))}

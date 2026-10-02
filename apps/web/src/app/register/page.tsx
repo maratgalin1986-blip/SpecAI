@@ -28,6 +28,7 @@ export default function RegisterPage() {
         email,
         password,
         ...(phone ? { phone } : {}),
+        consent,
       }),
     });
 

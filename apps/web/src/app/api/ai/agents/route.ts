@@ -5,6 +5,7 @@ import { agentChatRequestSchema, createOrderSchema, type AgentId } from '@specai
 import { routeToAgent, runAgent, type AgentToolHandlers } from '@specai/ai-service';
 import { authOptions } from '@/lib/auth';
 import { formatRate } from '@/lib/money';
+import { maskContacts } from '@/lib/privacy';
 import { checkRateLimit } from '@/lib/rateLimit';
 import { isFleetManager, OWN_FLEET } from '@/lib/fleet';
 import { notifyTelegram } from '@/lib/notify';
@@ -251,7 +252,8 @@ export async function POST(request: NextRequest) {
       });
       return orders.map((o) => ({
         id: o.id,
-        description: o.description,
+        // Contacts in orders imported from chats are hidden (152-ФЗ).
+        description: o.source === 'SITE' ? o.description : maskContacts(o.description),
         category: o.category?.name ?? null,
         desiredStartDate: o.desiredStartDate.toISOString().slice(0, 10),
         desiredEndDate: o.desiredEndDate.toISOString().slice(0, 10),

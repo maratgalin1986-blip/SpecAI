@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { ingestMessage } from '@/lib/ingest';
 import { bearerToken, inboundApiToken, safeEqual } from '@/lib/integrations';
+import { isSafeHttpUrl } from '@/lib/privacy';
 
 export const dynamic = 'force-dynamic';
 
@@ -14,7 +15,13 @@ const schema = z.object({
   chat: z.string().max(200).optional(),
   author: z.string().max(200).optional(),
   phone: z.string().max(30).optional(),
-  url: z.string().url().max(500).optional(),
+  // Rendered as a link for admins and providers: http(s) only, never javascript:.
+  url: z
+    .string()
+    .url()
+    .max(500)
+    .refine(isSafeHttpUrl, 'Ссылка должна начинаться с http:// или https://')
+    .optional(),
 });
 
 export async function POST(request: NextRequest) {

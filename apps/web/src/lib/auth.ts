@@ -3,6 +3,7 @@ import CredentialsProvider from 'next-auth/providers/credentials';
 import { prisma } from '@specai/database';
 import { authenticateWithCredentials } from '@/lib/credentials';
 import { isTokenIssuedBeforePasswordChange } from '@/lib/passwordChanged';
+import { clientIpFrom } from '@/lib/loginErrors';
 
 export const authOptions: AuthOptions = {
   session: { strategy: 'jwt' },
@@ -14,9 +15,14 @@ export const authOptions: AuthOptions = {
         email: { label: 'Email', type: 'email' },
         password: { label: 'Password', type: 'password' },
       },
-      authorize(credentials) {
+      authorize(credentials, req) {
         // Общая проверка с POST /api/mobile/login (см. lib/credentials.ts).
-        return authenticateWithCredentials(credentials);
+        // LoginError (лимит попыток, база недоступна) доходит до страницы входа
+        // как result.error с кодом, а не как «неверный пароль».
+        const headers = (req?.headers ?? {}) as Record<string, string | undefined>;
+        return authenticateWithCredentials(credentials, {
+          ip: clientIpFrom((name) => headers[name]),
+        });
       },
     }),
   ],
