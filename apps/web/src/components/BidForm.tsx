@@ -94,7 +94,7 @@ export function BidForm({ orderId }: { orderId: string }) {
         </select>
       </label>
       <label className="flex flex-col gap-1 text-sm">
-        Цена за весь период, $
+        Цена за весь период, ₽
         <input
           type="number"
           required

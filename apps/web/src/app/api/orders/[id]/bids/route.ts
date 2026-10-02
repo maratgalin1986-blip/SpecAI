@@ -7,11 +7,20 @@ import { newBidReceived } from '@/lib/emailTemplates';
 import { notifyTelegram } from '@/lib/notify';
 import { formatMoney } from '@/lib/money';
 import { siteUrl } from '@/lib/siteUrl';
+import { INVALID_JSON_MESSAGE, readJson, zodErrorMessage } from '@/lib/apiInput';
+import { unavailableEquipmentMessage } from '@/lib/bookingRules';
 
 const requestSchema = z.object({
-  equipmentId: z.string().cuid(),
-  price: z.number().positive(),
-  message: z.string().max(1000).optional(),
+  // Not a cuid: the owner's own fleet uses readable ids like "sp16-jcb-4cx".
+  equipmentId: z
+    .string({ required_error: 'Выберите технику' })
+    .min(1, 'Выберите технику')
+    .max(64, 'Техника не найдена'),
+  price: z
+    .number({ invalid_type_error: 'Укажите цену числом', required_error: 'Укажите цену' })
+    .positive('Цена должна быть больше нуля')
+    .max(99_999_999, 'Слишком большая цена'),
+  message: z.string().max(1000, 'Сообщение слишком длинное (до 1000 знаков)').optional(),
 });
 
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
@@ -20,10 +29,13 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     return NextResponse.json({ error: 'Требуется аккаунт поставщика' }, { status: 403 });
   }
 
-  const body = await request.json();
+  const body = await readJson(request);
+  if (body === null) {
+    return NextResponse.json({ error: INVALID_JSON_MESSAGE }, { status: 400 });
+  }
   const parsed = requestSchema.safeParse(body);
   if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
+    return NextResponse.json({ error: zodErrorMessage(parsed.error) }, { status: 400 });
   }
 
   const order = await prisma.order.findUnique({
@@ -39,6 +51,13 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     return NextResponse.json(
       { error: 'Можно предлагать только собственную технику' },
       { status: 403 },
+    );
+  }
+  const unavailable = unavailableEquipmentMessage(equipment.status);
+  if (unavailable) {
+    return NextResponse.json(
+      { error: `${unavailable} — предложить можно только доступную технику` },
+      { status: 409 },
     );
   }
 

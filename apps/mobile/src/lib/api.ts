@@ -3,11 +3,12 @@ import { STORAGE_KEYS, getItem } from './storage';
 /**
  * Базовый URL API. Задаётся через EXPO_PUBLIC_API_URL (например,
  * https://specplast16.ru). Сайт СпецПласт16 и API живут на одном хосте. Без завершающего слэша.
+ * Без переменной: при разработке — локальный сервер, в сборке — боевой сайт.
  */
-export const API_URL = (process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:3000').replace(
-  /\/+$/,
-  '',
-);
+const PRODUCTION_API_URL = 'https://spec-ai-web.vercel.app';
+export const API_URL = (
+  process.env.EXPO_PUBLIC_API_URL || (__DEV__ ? 'http://localhost:3000' : PRODUCTION_API_URL)
+).replace(/\/+$/, '');
 
 export class ApiError extends Error {
   status: number;
@@ -303,7 +304,8 @@ export function sendVerificationEmail() {
 }
 
 export function fetchMyBookings() {
-  return apiFetch<{ bookings: Booking[] }>('/api/bookings');
+  // paymentsEnabled: подключена ли онлайн-оплата (старый сервер поле не отдаёт).
+  return apiFetch<{ bookings: Booking[]; paymentsEnabled?: boolean }>('/api/bookings');
 }
 
 /** Создаёт Stripe Checkout для PENDING-бронирования и возвращает ссылку на оплату. */

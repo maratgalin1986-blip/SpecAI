@@ -1,16 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@specai/database';
 import { getRequestUser } from '@/lib/requestUser';
-import { getAppUrl, getStripe } from '@/lib/stripe';
+import { getAppUrl, getStripe, isOnlinePaymentEnabled } from '@/lib/stripe';
+import { SITE } from '@/lib/site';
 import { decideCheckout, isPayableBookingStatus } from '@/lib/checkoutSession';
 import { toStripeAmount } from '@/lib/stripeAmount';
 
 export const runtime = 'nodejs';
 
+const PAYMENTS_DISABLED_MESSAGE = `Онлайн-оплата пока не подключена, оплата по счёту — позвоните ${SITE.phone}`;
+
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
   const currentUser = await getRequestUser(request);
   if (!currentUser) {
     return NextResponse.json({ error: 'Необходимо войти в аккаунт' }, { status: 401 });
+  }
+  if (!isOnlinePaymentEnabled()) {
+    return NextResponse.json({ error: PAYMENTS_DISABLED_MESSAGE }, { status: 503 });
   }
 
   const booking = await prisma.booking.findUnique({

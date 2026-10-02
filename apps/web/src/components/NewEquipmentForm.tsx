@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@specai/ui';
+import { suggestShiftRate } from '@/lib/shiftRate';
 
 interface Category {
   id: string;
@@ -37,6 +38,8 @@ export function NewEquipmentForm() {
   const [categoryId, setCategoryId] = useState('');
   const [dailyRate, setDailyRate] = useState('');
   const [hourlyRate, setHourlyRate] = useState('');
+  // True once the user typed a shift price themselves; stops the hourly × 8 suggestion.
+  const [dailyTouched, setDailyTouched] = useState(false);
   const [description, setDescription] = useState('');
   const [specSheetText, setSpecSheetText] = useState('');
   const [specs, setSpecs] = useState<Record<string, unknown> | null>(null);
@@ -193,6 +196,7 @@ export function NewEquipmentForm() {
       setCategoryId('');
       setDailyRate('');
       setHourlyRate('');
+      setDailyTouched(false);
       setDescription('');
       setSpecSheetText('');
       setSpecs(null);
@@ -248,8 +252,9 @@ export function NewEquipmentForm() {
           value={hourlyRate}
           onChange={(e) => {
             setHourlyRate(e.target.value);
-            // Suggest an 8-hour shift price when the daily price is still empty.
-            if (!dailyRate && e.target.value) setDailyRate(String(Number(e.target.value) * 8));
+            // Keep the shift price at hourly × 8 on every keystroke until the
+            // user types a shift price of their own.
+            if (!dailyTouched) setDailyRate(suggestShiftRate(e.target.value));
           }}
           className="rounded-md border border-slate-300 px-3 py-2"
         />
@@ -263,7 +268,11 @@ export function NewEquipmentForm() {
           min={1}
           step="0.01"
           value={dailyRate}
-          onChange={(e) => setDailyRate(e.target.value)}
+          onChange={(e) => {
+            setDailyRate(e.target.value);
+            // Clearing the field hands it back to the automatic suggestion.
+            setDailyTouched(e.target.value !== '');
+          }}
           className="rounded-md border border-slate-300 px-3 py-2"
         />
       </label>

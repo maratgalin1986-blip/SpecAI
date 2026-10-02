@@ -2,6 +2,11 @@ import Stripe from 'stripe';
 
 let client: Stripe | null = null;
 
+/** Online card payment is offered only when Stripe is configured. */
+export function isOnlinePaymentEnabled(): boolean {
+  return Boolean(process.env.STRIPE_SECRET_KEY);
+}
+
 // Stripe keys are read lazily so `next build` (which imports route modules)
 // does not fail on machines/CI where STRIPE_* are not configured.
 export function getStripe(): Stripe {

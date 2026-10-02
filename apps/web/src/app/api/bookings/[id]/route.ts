@@ -5,6 +5,9 @@ import { getRequestUser } from '@/lib/requestUser';
 import { sendEmail } from '@/lib/email';
 import { bookingStatusChanged } from '@/lib/emailTemplates';
 import { getStripe } from '@/lib/stripe';
+import { INVALID_JSON_MESSAGE, readJson } from '@/lib/apiInput';
+import { BOOKING_TIME_ZONE, CONFIRMED_BOOKING_STATUSES } from '@/lib/bookingRules';
+import { findOverlappingBooking, lockEquipment } from '@/lib/bookingConflicts';
 
 const updateSchema = z.object({
   status: z.enum(['CONFIRMED', 'ACTIVE', 'COMPLETED', 'CANCELLED']),
@@ -82,10 +85,13 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
     return NextResponse.json({ error: 'Необходимо войти в аккаунт' }, { status: 401 });
   }
 
-  const body = await request.json();
+  const body = await readJson(request);
+  if (body === null) {
+    return NextResponse.json({ error: INVALID_JSON_MESSAGE }, { status: 400 });
+  }
   const parsed = updateSchema.safeParse(body);
   if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
+    return NextResponse.json({ error: 'Неизвестный статус бронирования' }, { status: 400 });
   }
 
   const booking = await prisma.booking.findUnique({
@@ -129,10 +135,41 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
     );
   }
 
-  const updated = await prisma.booking.update({
-    where: { id: params.id },
-    data: { status: parsed.data.status },
+  const nextStatus = parsed.data.status;
+  const result = await prisma.$transaction(async (tx) => {
+    // Confirming or starting a rental promises the machine: under the same
+    // per-machine lock as booking creation, refuse when another confirmed or
+    // active booking of this machine shares a day with this one.
+    if (nextStatus === 'CONFIRMED' || nextStatus === 'ACTIVE') {
+      await lockEquipment(tx, booking.equipmentId);
+      const conflict = await findOverlappingBooking(tx, {
+        equipmentId: booking.equipmentId,
+        startDate: booking.startDate,
+        endDate: booking.endDate,
+        statuses: CONFIRMED_BOOKING_STATUSES,
+        excludeBookingId: booking.id,
+      });
+      if (conflict) {
+        return {
+          error: `На эти даты у этой техники уже есть подтверждённая бронь (${conflict.startDate.toLocaleDateString('ru-RU', { timeZone: BOOKING_TIME_ZONE })} – ${conflict.endDate.toLocaleDateString('ru-RU', { timeZone: BOOKING_TIME_ZONE })}). Отмените одну из броней`,
+        } as const;
+      }
+    }
+    // Only move from the status we checked above: a double click or a second
+    // device must not overwrite a status that changed in between.
+    const { count } = await tx.booking.updateMany({
+      where: { id: booking.id, status: booking.status },
+      data: { status: nextStatus },
+    });
+    if (count === 0) {
+      return { error: 'Статус бронирования уже изменён — обновите страницу' } as const;
+    }
+    return { updated: await tx.booking.findUniqueOrThrow({ where: { id: booking.id } }) } as const;
   });
+  if ('error' in result) {
+    return NextResponse.json({ error: result.error }, { status: 409 });
+  }
+  const { updated } = result;
 
   if (updated.status === 'CANCELLED' && booking.status !== 'CANCELLED') {
     await closePendingCheckout(booking.payment);
