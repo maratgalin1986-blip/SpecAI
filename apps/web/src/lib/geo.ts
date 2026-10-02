@@ -133,9 +133,19 @@ export function formatCoords(lat: number, lon: number) {
   return `${lat.toFixed(4)}° с. ш., ${lon.toFixed(4)}° в. д.`;
 }
 
-// Only street-level tiles around Tatarstan and neighbours are proxied, so the
-// endpoint cannot be used to mirror OSM (the map shows ~12 tiles at z15–19).
-const AREA = { north: 57.5, south: 53, west: 45, east: 56 };
+// Only tiles around Tatarstan and neighbours are proxied, so the endpoint
+// cannot be used to mirror OSM: the street map of an order shows ~12 tiles at
+// z15–19, the providers map (/map) starts with an overview of the republic
+// (z6–8) and zooms in. Everything is cached on the CDN for a week.
+export const SERVICE_AREA = { north: 57.5, south: 53, west: 45, east: 56 } as const;
+const AREA = SERVICE_AREA;
+export const TILE_MIN_ZOOM = 6;
+export const TILE_MAX_ZOOM = 19;
+
+/** Whether a point lies in the service area (Tatarstan and neighbouring regions). */
+export function inServiceArea(lat: number, lon: number) {
+  return lat >= AREA.south && lat <= AREA.north && lon >= AREA.west && lon <= AREA.east;
+}
 
 function tileLat(y: number, z: number) {
   const n = Math.PI - (2 * Math.PI * y) / 2 ** z;
@@ -144,7 +154,7 @@ function tileLat(y: number, z: number) {
 
 /** Whether the tile proxy serves this tile (see /api/tiles). */
 export function tileAllowed(z: number, x: number, y: number) {
-  if (z < 14 || z > 19) return false;
+  if (z < TILE_MIN_ZOOM || z > TILE_MAX_ZOOM) return false;
   const west = (x / 2 ** z) * 360 - 180;
   const east = ((x + 1) / 2 ** z) * 360 - 180;
   const north = tileLat(y, z);

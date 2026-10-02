@@ -324,6 +324,13 @@ export default async function HomePage() {
               Весь каталог
               <Icon name="arrow" className="h-4 w-4 transition group-hover:translate-x-1" />
             </a>
+            <a
+              href="/map"
+              className="group inline-flex items-center gap-2 rounded-full border border-slate-300 px-5 py-2.5 text-sm font-semibold transition hover:border-slate-900"
+            >
+              Исполнители на карте
+              <Icon name="arrow" className="h-4 w-4 transition group-hover:translate-x-1" />
+            </a>
           </div>
           <p className="mt-3 text-slate-600">Все цены — с машинистом, смена 8 часов.</p>
         </Reveal>

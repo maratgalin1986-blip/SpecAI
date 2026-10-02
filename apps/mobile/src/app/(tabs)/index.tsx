@@ -1,3 +1,4 @@
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { Link } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
@@ -134,6 +135,16 @@ export default function CatalogScreen() {
           clearButtonMode="while-editing"
           onSubmitEditing={() => setAppliedQuery(query.trim())}
         />
+        <Link href="/map" asChild>
+          <Pressable
+            accessibilityRole="button"
+            style={({ pressed }) => [styles.mapButton, pressed && styles.cardPressed]}
+          >
+            <Ionicons name="map-outline" size={20} color={colors.primaryDark} />
+            <Text style={styles.mapButtonText}>Исполнители на карте</Text>
+            <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+          </Pressable>
+        </Link>
         {!loading && !error ? (
           <Text style={styles.count}>{total > 0 ? `Найдено: ${total}` : 'Ничего не найдено'}</Text>
         ) : null}
@@ -209,6 +220,18 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.border,
   },
   count: { fontSize: 13, color: colors.textMuted },
+  mapButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    minHeight: 44,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.background,
+  },
+  mapButtonText: { flex: 1, fontSize: 15, fontWeight: '600', color: colors.text },
   padded: { padding: spacing.lg },
   loader: { marginTop: spacing.xl },
   footerLoader: { marginVertical: spacing.lg },

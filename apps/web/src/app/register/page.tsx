@@ -1,32 +1,39 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { signIn } from 'next-auth/react';
 import { Button, Card } from '@specai/ui';
 import { CinemaBackdrop } from '@/components/CinemaHero';
+import { BasePicker, type BaseValue } from '@/components/BasePicker';
 
 type AccountType = 'CUSTOMER' | 'PROVIDER';
 
 export default function RegisterPage() {
   // /register?type=provider opens the provider form directly.
-  const [accountType, setAccountType] = useState<AccountType>(() =>
-    typeof window !== 'undefined' &&
-    new URLSearchParams(window.location.search).get('type') === 'provider'
-      ? 'PROVIDER'
-      : 'CUSTOMER',
-  );
+  // Read after mounting, so the server and the first client render match.
+  const [accountType, setAccountType] = useState<AccountType>('CUSTOMER');
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get('type') === 'provider') {
+      setAccountType('PROVIDER');
+    }
+  }, []);
   const [companyName, setCompanyName] = useState('');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [phone, setPhone] = useState('');
   const [consent, setConsent] = useState(false);
+  const [base, setBase] = useState<BaseValue>({ address: '', lat: null, lon: null });
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
     setError(null);
+    if (accountType === 'PROVIDER' && base.lat === null && base.address.trim().length < 3) {
+      setError('Укажите адрес базы или поставьте точку на карте — по ней вас найдут заказчики');
+      return;
+    }
     setIsSubmitting(true);
 
     const response = await fetch('/api/auth/register', {
@@ -34,7 +41,15 @@ export default function RegisterPage() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         accountType,
-        ...(accountType === 'PROVIDER' ? { companyName } : {}),
+        ...(accountType === 'PROVIDER'
+          ? {
+              companyName,
+              baseAddress: base.address.trim(),
+              ...(base.lat !== null && base.lon !== null
+                ? { baseLat: base.lat, baseLon: base.lon }
+                : {}),
+            }
+          : {}),
         name,
         email,
         password,
@@ -97,6 +112,18 @@ export default function RegisterPage() {
                 className="rounded-md border border-slate-300 px-3 py-2"
               />
             </label>
+          )}
+          {accountType === 'PROVIDER' && (
+            <div className="flex flex-col gap-1 text-sm">
+              <span>
+                Где стоит техника <span className="text-red-600">*</span>
+              </span>
+              <span className="text-xs text-slate-500">
+                Адрес базы или стоянки — по нему заказчики увидят вас на карте и выберут ближайшего.
+                Телефон и e-mail на карте не показываются.
+              </span>
+              <BasePicker value={base} onChange={setBase} />
+            </div>
           )}
           <label className="flex flex-col gap-1 text-sm">
             Имя
