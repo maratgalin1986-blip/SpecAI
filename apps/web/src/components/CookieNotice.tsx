@@ -96,14 +96,14 @@ export function CookieNotice() {
       <button
         type="button"
         onClick={() => choose('yes')}
-        className="shrink-0 rounded-full bg-slate-900 px-3 py-1 font-semibold text-white hover:bg-slate-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-600"
+        className="min-h-9 shrink-0 rounded-full bg-slate-900 px-4 py-1.5 font-semibold text-white hover:bg-slate-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-600"
       >
         OK
       </button>
       <button
         type="button"
         onClick={() => choose('no')}
-        className="shrink-0 px-1.5 py-1 text-slate-600 underline hover:text-slate-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-600"
+        className="min-h-9 shrink-0 px-2 py-1.5 text-slate-600 underline hover:text-slate-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-600"
       >
         Нет
       </button>

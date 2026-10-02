@@ -104,7 +104,13 @@ export async function POST(request: NextRequest) {
     // The same per-IP lead limit as the site's forms (/api/leads).
     if (!checkRateLimit(`leads:${ip}`, LEAD_RATE_LIMIT).ok) {
       return NextResponse.json(
-        { agentId, reply: `Слишком много заявок. Позвоните нам: ${SITE.phone}.`, toolsUsed: [] },
+        {
+          agentId,
+          reply: `Слишком много заявок. Позвоните нам: ${SITE.phone}.`,
+          // The chat shows `error` for non-2xx answers.
+          error: `Слишком много заявок. Позвоните нам: ${SITE.phone}.`,
+          toolsUsed: [],
+        },
         { status: 429 },
       );
     }
@@ -451,7 +457,8 @@ export async function POST(request: NextRequest) {
     const result = await runAgent(agentId, aiMessages, handlers, {
       today: new Date().toISOString().slice(0, 10),
       userDescription: user
-        ? `${user.name ?? user.email} (role ${user.role})`
+        ? // No e-mail: contacts never go to the AI provider.
+          `${user.name?.trim() || 'signed-in user'} (role ${user.role})`
         : 'not signed in (guest)',
     });
     return NextResponse.json(result);

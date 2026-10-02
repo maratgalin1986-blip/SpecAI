@@ -11,6 +11,7 @@ import {
 import { getRequestUser } from '@/lib/requestUser';
 import { checkRateLimit } from '@/lib/rateLimit';
 import { PUBLIC_FLEET } from '@/lib/fleet';
+import { maskMessagesForAi } from '@/lib/privacy';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -171,7 +172,8 @@ export async function POST(request: NextRequest) {
 
       try {
         const reply = streamAssistantReply({
-          history,
+          // Phones and e-mails never reach the AI provider.
+          history: maskMessagesForAi(history),
           signal: request.signal,
           onToolCall: async (name, input) => {
             if (name === SEARCH_EQUIPMENT_TOOL_NAME) {
