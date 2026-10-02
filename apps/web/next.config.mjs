@@ -31,6 +31,11 @@ const nextConfig = {
       { source: '/audio/:path*', headers: media },
     ];
   },
+  async redirects() {
+    // «Поддержать проект» is gone (СпецПласт16 sells its own work, no donations);
+    // old links, including the app's «О приложении», land on the home page.
+    return [{ source: '/support', destination: '/', permanent: true }];
+  },
   transpilePackages: ['@specai/ui', '@specai/shared', '@specai/ai-service', '@specai/database'],
   experimental: {
     // Belt and braces for the Prisma engine: ship it in every server function
