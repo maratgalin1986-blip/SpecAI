@@ -9,7 +9,7 @@ import { pluralizeRu } from '@/lib/pluralize';
 import { formatMoney } from '@/lib/money';
 import { isAdminRequest } from '@/lib/admin';
 import { SiteConditions } from '@/components/SiteConditions';
-import { isFleetManager } from '@/lib/fleet';
+import { isProvider, isHouseManager } from '@/lib/fleet';
 import { isSafeHttpUrl } from '@/lib/privacy';
 
 export const dynamic = 'force-dynamic';
@@ -44,12 +44,18 @@ export default async function OrderDetailPage({ params }: { params: { id: string
 
   const isOwner = session?.user.id === order.customerId;
   const isImported = order.source !== 'SITE';
-  // СпецПласт16 is the only executor: an order is seen by its author and the
-  // company owner, not published to anyone else.
-  const canSeeContact = isFleetManager(session?.user) || isAdminRequest();
-  if (!isOwner && !canSeeContact) {
+  // Aggregator: an order is seen by its author, every provider and the admin.
+  // Chat contacts are for СпецПласт16 and the admin; a provider sees only its
+  // own bids and not the customer's name (competitors' prices stay private).
+  const isAdmin = isAdminRequest();
+  const canSeeContact = isHouseManager(session?.user) || isAdmin;
+  const seesAllBids = isOwner || isAdmin;
+  if (!isOwner && !isAdmin && !isProvider(session?.user)) {
     notFound();
   }
+  const visibleBids = seesAllBids
+    ? order.bids
+    : order.bids.filter((bid) => bid.equipment.companyId === session?.user.companyId);
 
   return (
     <div className="flex flex-col gap-6">
@@ -62,7 +68,7 @@ export default async function OrderDetailPage({ params }: { params: { id: string
             {order.desiredEndDate.toLocaleDateString('ru-RU')} ·{' '}
             {isImported
               ? `из ${order.source === 'WHATSAPP' ? 'WhatsApp' : 'Telegram'}${order.sourceChat ? ` (${order.sourceChat})` : ''}`
-              : `от ${order.customer.name}`}
+              : `от ${seesAllBids ? order.customer.name : 'клиента'}`}
           </p>
         </div>
         <span className="w-fit shrink-0 rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-700">
@@ -126,11 +132,11 @@ export default async function OrderDetailPage({ params }: { params: { id: string
         <h2 className="mb-3 text-lg font-semibold">
           {pluralizeRu(order.bids.length, ['предложение', 'предложения', 'предложений'])}
         </h2>
-        {order.bids.length === 0 ? (
+        {visibleBids.length === 0 ? (
           <p className="text-sm text-slate-600">Пока никто не предложил технику.</p>
         ) : (
           <div className="flex flex-col gap-3">
-            {order.bids.map((bid) => (
+            {visibleBids.map((bid) => (
               <Card
                 key={bid.id}
                 className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4"

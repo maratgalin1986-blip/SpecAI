@@ -7,7 +7,7 @@ import { authOptions } from '@/lib/auth';
 import { formatRate } from '@/lib/money';
 import { maskContacts } from '@/lib/privacy';
 import { checkRateLimit } from '@/lib/rateLimit';
-import { isFleetManager, OWN_FLEET } from '@/lib/fleet';
+import { PUBLIC_FLEET, isProvider } from '@/lib/fleet';
 import { notifyTelegram } from '@/lib/notify';
 import { isOnShift, SITE } from '@/lib/site';
 import {
@@ -98,7 +98,7 @@ export async function POST(request: NextRequest) {
       const maxDailyRate = typeof input.maxDailyRate === 'number' ? input.maxDailyRate : undefined;
       const items = await prisma.equipment.findMany({
         where: {
-          ...OWN_FLEET,
+          ...PUBLIC_FLEET,
           status: input.onlyAvailable === false ? { not: 'RETIRED' } : 'AVAILABLE',
           categoryId: optionalString(input, 'categoryId'),
           dailyRate: maxDailyRate !== undefined ? { lte: maxDailyRate } : undefined,
@@ -131,9 +131,9 @@ export async function POST(request: NextRequest) {
     async get_equipment_details(input) {
       const item = await prisma.equipment.findUnique({
         where: { id: requireString(input, 'equipmentId') },
-        include: { category: true, location: true, reviews: true },
+        include: { category: true, location: true, reviews: true, company: true },
       });
-      if (!item || item.companyId !== OWN_FLEET.companyId) {
+      if (!item || !item.company?.isProvider) {
         throw new ToolError('Техника не найдена');
       }
       const ratings = item.reviews.map((r) => r.rating);
@@ -167,8 +167,9 @@ export async function POST(request: NextRequest) {
       }
       const item = await prisma.equipment.findUnique({
         where: { id: requireString(input, 'equipmentId') },
+        include: { company: true },
       });
-      if (!item || item.companyId !== OWN_FLEET.companyId) {
+      if (!item || !item.company?.isProvider) {
         throw new ToolError('Техника не найдена');
       }
       const daily = Number(item.dailyRate);
@@ -264,7 +265,7 @@ export async function POST(request: NextRequest) {
 
     async get_my_fleet() {
       const currentUser = requireUser();
-      if (!isFleetManager(currentUser) || !currentUser.companyId) {
+      if (!isProvider(currentUser) || !currentUser.companyId) {
         throw new ToolError('Парк техники доступен только владельцу СпецПласт16.');
       }
       const fleet = await prisma.equipment.findMany({

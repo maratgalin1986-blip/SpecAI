@@ -8,7 +8,7 @@ import {
 import { getRequestUser } from '@/lib/requestUser';
 import { checkRateLimit } from '@/lib/rateLimit';
 import { getUploadMaxBytes, isImageMediaType, isOurBlobUrl } from '@/lib/blob';
-import { isFleetManager } from '@/lib/fleet';
+import { isProvider } from '@/lib/fleet';
 
 const requestSchema = z.union([
   z.object({ sourceText: z.string().min(1).max(8000) }),
@@ -62,7 +62,7 @@ async function fetchBlobAsBase64(fileUrl: string) {
 
 export async function POST(request: NextRequest) {
   const currentUser = await getRequestUser(request);
-  if (!isFleetManager(currentUser)) {
+  if (!isProvider(currentUser)) {
     return NextResponse.json({ error: 'Требуется аккаунт поставщика' }, { status: 403 });
   }
 

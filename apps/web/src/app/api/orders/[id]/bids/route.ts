@@ -9,7 +9,7 @@ import { formatMoney } from '@/lib/money';
 import { siteUrl } from '@/lib/siteUrl';
 import { INVALID_JSON_MESSAGE, readJson, zodErrorMessage } from '@/lib/apiInput';
 import { unavailableEquipmentMessage } from '@/lib/bookingRules';
-import { isFleetManager } from '@/lib/fleet';
+import { isProvider } from '@/lib/fleet';
 
 const requestSchema = z.object({
   // Not a cuid: the owner's own fleet uses readable ids like "sp16-jcb-4cx".
@@ -26,7 +26,7 @@ const requestSchema = z.object({
 
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
   const currentUser = await getRequestUser(request);
-  if (!isFleetManager(currentUser)) {
+  if (!isProvider(currentUser)) {
     return NextResponse.json({ error: 'Требуется аккаунт поставщика' }, { status: 403 });
   }
 

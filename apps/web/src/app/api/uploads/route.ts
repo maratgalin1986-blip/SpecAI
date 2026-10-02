@@ -8,13 +8,13 @@ import {
   isAllowedUploadType,
   uploadTooLargeMessage,
 } from '@/lib/blob';
-import { isFleetManager } from '@/lib/fleet';
+import { isProvider } from '@/lib/fleet';
 
 const RATE_LIMIT = { limit: 30, windowMs: 60_000 };
 
 export async function POST(request: NextRequest) {
   const currentUser = await getRequestUser(request);
-  if (!isFleetManager(currentUser)) {
+  if (!isProvider(currentUser)) {
     return NextResponse.json({ error: 'Требуется аккаунт поставщика' }, { status: 403 });
   }
 

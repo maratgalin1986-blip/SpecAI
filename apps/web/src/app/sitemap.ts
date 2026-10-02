@@ -2,7 +2,7 @@ import type { MetadataRoute } from 'next';
 import { prisma } from '@specai/database';
 import { LANDINGS } from '@/lib/landings';
 import { siteUrl } from '@/lib/siteUrl';
-import { OWN_FLEET } from '@/lib/fleet';
+import { PUBLIC_FLEET } from '@/lib/fleet';
 
 export const revalidate = 3600;
 
@@ -18,7 +18,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   ];
   const equipment = await prisma.equipment
     .findMany({
-      where: { ...OWN_FLEET, status: { not: 'RETIRED' } },
+      where: { ...PUBLIC_FLEET, status: { not: 'RETIRED' } },
       select: { id: true, updatedAt: true },
     })
     .catch(() => []);

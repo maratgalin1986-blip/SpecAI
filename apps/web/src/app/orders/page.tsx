@@ -9,7 +9,7 @@ import { parseEnumParam, parsePage, totalPagesFor } from '@/lib/pagination';
 import { CinemaHero } from '@/components/CinemaHero';
 import { authOptions } from '@/lib/auth';
 import { isAdminRequest } from '@/lib/admin';
-import { isFleetManager } from '@/lib/fleet';
+import { isProvider } from '@/lib/fleet';
 import { SITE } from '@/lib/site';
 import { CallbackForm } from '@/components/CallbackForm';
 
@@ -55,10 +55,10 @@ export default async function OrdersPage({ searchParams }: { searchParams: Order
     'OPEN',
   );
   const requestedPage = parsePage(searchParams.page);
-  // СпецПласт16 is the only executor: the owner sees every order, a customer
-  // only their own, a guest only the form.
+  // Aggregator: providers and the admin see every order (an open board), a
+  // customer only their own, a guest only the form.
   const session = await getServerSession(authOptions);
-  const seesAll = isFleetManager(session?.user) || isAdminRequest();
+  const seesAll = isProvider(session?.user) || isAdminRequest();
   const viewerId = session?.user.id;
   // Orders imported from messengers stay hidden until the admin publishes them.
   const where = {
@@ -203,7 +203,7 @@ export default async function OrdersPage({ searchParams }: { searchParams: Order
                       </p>
                     )}
                     <p className="text-sm text-slate-500">
-                      {order.bids.length > 0 ? 'Есть предложение СпецПласт16' : 'Ждёт ответа'}
+                      {order.bids.length > 0 ? `Предложений: ${order.bids.length}` : 'Ждёт ответа'}
                     </p>
                   </Card>
                 </a>

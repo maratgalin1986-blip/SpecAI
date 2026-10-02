@@ -12,7 +12,7 @@ import { siteUrl } from '@/lib/siteUrl';
 import { CinemaBand } from '@/components/CinemaBand';
 import { CinemaLayer } from '@/components/CinemaHero';
 import type { MachineType } from '@/lib/machinePhotos';
-import { OWN_FLEET } from '@/lib/fleet';
+import { PUBLIC_FLEET } from '@/lib/fleet';
 
 // Footage behind the landing header, by machine kind.
 const LANDING_CLIPS: Record<string, string[]> = {
@@ -53,7 +53,7 @@ export function generateStaticParams() {
 async function loadEquipment(categorySlug: string) {
   try {
     return await prisma.equipment.findMany({
-      where: { ...OWN_FLEET, category: { slug: categorySlug }, status: { not: 'RETIRED' } },
+      where: { ...PUBLIC_FLEET, category: { slug: categorySlug }, status: { not: 'RETIRED' } },
       include: { location: true },
       orderBy: { hourlyRate: 'asc' },
     });

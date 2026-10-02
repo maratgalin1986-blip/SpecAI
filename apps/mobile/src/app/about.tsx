@@ -83,7 +83,10 @@ export default function AboutScreen() {
           <LinkRow label="Главная страница" onPress={() => void openSite('/')} />
           <LinkRow label="Каталог техники" onPress={() => void openSite('/equipment')} />
           <LinkRow label="ИИ-агенты" onPress={() => void openSite('/agents')} />
-          <LinkRow label="Поставщикам" onPress={() => void openSite('/provider')} />
+          <LinkRow
+            label="Сдавать свою технику"
+            onPress={() => void openSite('/register?type=provider')}
+          />
           <LinkRow label="Контакты" onPress={() => void openSite('/contacts')} />
           <LinkRow label="♥ Поддержать проект" onPress={() => void openSite('/support')} />
           <LinkRow label="Политика конфиденциальности" onPress={() => void openSite('/privacy')} />

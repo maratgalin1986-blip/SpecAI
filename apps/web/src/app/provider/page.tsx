@@ -10,7 +10,7 @@ import { formatMoney, formatRate } from '@/lib/money';
 import { SITE } from '@/lib/site';
 import { Pagination } from '@/components/Pagination';
 import { parsePage, totalPagesFor } from '@/lib/pagination';
-import { isFleetManager } from '@/lib/fleet';
+import { isProvider } from '@/lib/fleet';
 
 export const dynamic = 'force-dynamic';
 export const metadata: Metadata = {
@@ -42,7 +42,7 @@ export default async function ProviderPage({
   // Only the owner's fleet account manages the fleet: СпецПласт16 is the only
   // executor on the site, there is no sign-up for outside providers.
   if (!session) redirect('/login?callbackUrl=/provider');
-  if (!isFleetManager(session.user) || !session.user.companyId) redirect('/dashboard');
+  if (!isProvider(session.user) || !session.user.companyId) redirect('/dashboard');
 
   const equipmentWhere = { companyId: session.user.companyId };
   const bookingsWhere = { equipment: { companyId: session.user.companyId } };

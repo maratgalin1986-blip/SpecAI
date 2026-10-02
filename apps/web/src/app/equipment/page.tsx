@@ -15,7 +15,7 @@ import {
 import { pluralizeRu } from '@/lib/pluralize';
 import { SITE } from '@/lib/site';
 import { CinemaHero } from '@/components/CinemaHero';
-import { OWN_FLEET } from '@/lib/fleet';
+import { PUBLIC_FLEET } from '@/lib/fleet';
 
 export const metadata = {
   title: 'Каталог спецтехники',
@@ -105,7 +105,7 @@ export default async function EquipmentCatalogPage({
 
   // Filters other than the category: the tab counts are computed against these.
   const baseWhere = {
-    ...OWN_FLEET,
+    ...PUBLIC_FLEET,
     location: searchParams.city
       ? { city: { equals: searchParams.city, mode: 'insensitive' as const } }
       : undefined,
@@ -160,7 +160,7 @@ export default async function EquipmentCatalogPage({
 
   const equipment = await prisma.equipment.findMany({
     where,
-    include: { category: true, location: true },
+    include: { category: true, location: true, company: { select: { name: true } } },
     orderBy: EQUIPMENT_ORDER_BY[sort],
     skip: (page - 1) * PAGE_SIZE,
     take: PAGE_SIZE,

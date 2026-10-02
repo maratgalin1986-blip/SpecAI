@@ -36,7 +36,11 @@ export type RegisterCustomerInput = z.infer<typeof registerCustomerSchema>;
 export const registerProviderSchema = z.object({
   accountType: z.literal('PROVIDER'),
   ...baseRegistration,
-  companyName: z.string().min(1).max(200),
+  companyName: z
+    .string()
+    .trim()
+    .min(1, 'Укажите название компании')
+    .max(200, 'Слишком длинное название компании'),
 });
 export type RegisterProviderInput = z.infer<typeof registerProviderSchema>;
 

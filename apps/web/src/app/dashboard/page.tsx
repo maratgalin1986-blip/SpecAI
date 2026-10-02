@@ -10,7 +10,7 @@ import { BookingActionButtons } from '@/components/BookingActionButtons';
 import { isOnlinePaymentEnabled } from '@/lib/stripe';
 import { SITE } from '@/lib/site';
 import { VerifyEmailBanner } from '@/components/VerifyEmailBanner';
-import { OWN_FLEET, isFleetManager } from '@/lib/fleet';
+import { PUBLIC_FLEET, isProvider } from '@/lib/fleet';
 import { redirect } from 'next/navigation';
 
 export const metadata: Metadata = { title: 'Личный кабинет', robots: { index: false } };
@@ -53,12 +53,12 @@ export default async function DashboardPage({
 }) {
   const session = await getServerSession(authOptions);
   // The fleet manager's cabinet is /provider (the header's «Кабинет» leads here).
-  if (isFleetManager(session?.user)) redirect('/provider');
+  if (isProvider(session?.user)) redirect('/provider');
   const paymentNotice = searchParams?.payment ? PAYMENT_NOTICE[searchParams.payment] : undefined;
   const paymentsEnabled = isOnlinePaymentEnabled();
 
   const [equipmentCount, activeBookings, myBookings, myOrders, me] = await Promise.all([
-    prisma.equipment.count({ where: { ...OWN_FLEET, status: { not: 'RETIRED' } } }),
+    prisma.equipment.count({ where: { ...PUBLIC_FLEET, status: { not: 'RETIRED' } } }),
     session
       ? prisma.booking.count({
           where: { customerId: session.user.id, status: { in: ['CONFIRMED', 'ACTIVE'] } },

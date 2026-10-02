@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@specai/database';
 import { getRequestUser } from '@/lib/requestUser';
-import { isFleetManager } from '@/lib/fleet';
+import { isProvider, isHouseManager } from '@/lib/fleet';
 
 export const dynamic = 'force-dynamic';
 
@@ -36,7 +36,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       },
     },
   });
-  const isManager = isFleetManager(currentUser);
+  const isManager = isProvider(currentUser);
   if (
     !order ||
     order.status === 'PENDING_REVIEW' ||
@@ -45,13 +45,27 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     return NextResponse.json({ error: 'Заявка не найдена' }, { status: 404 });
   }
 
-  // Contacts of people from messenger chats are for the owner only.
+  // Aggregator privacy (152-ФЗ): contacts of people from messenger chats are
+  // for СпецПласт16 only; the customer sees every bid, a provider sees only
+  // its own bids and their count, and never the customer's name.
+  const isOwner = order.customerId === currentUser.id;
   const { contactName, contactPhone, rawText, sourceUrl, externalId, fingerprint, ...rest } = order;
-  const contact = isManager ? { contactName, contactPhone, rawText, sourceUrl } : {};
+  const contact = isHouseManager(currentUser)
+    ? { contactName, contactPhone, rawText, sourceUrl }
+    : {};
   void externalId;
   void fingerprint;
+  const bids = isOwner
+    ? rest.bids
+    : rest.bids.filter((bid) => bid.equipment.company.id === currentUser.companyId);
   return NextResponse.json({
-    order: { ...rest, ...contact },
-    isOwner: order.customerId === currentUser.id,
+    order: {
+      ...rest,
+      ...contact,
+      customer: isOwner ? rest.customer : null,
+      bids,
+      bidCount: rest.bids.length,
+    },
+    isOwner,
   });
 }

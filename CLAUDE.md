@@ -51,6 +51,13 @@ small so merges stay conflict-free.
 
 ## Project facts
 
+- **Business model (owner's decision, 2026-10-02): an aggregator, "a taxi for
+  heavy machinery".** Any provider company signs up, publishes its fleet and
+  answers customers' orders; СпецПласт16's own fleet takes part alongside them
+  (`apps/web/src/lib/fleet.ts`: `isProvider`, `PUBLIC_FLEET`, `isHouseManager`).
+  Do not switch the site to a single executor. Providers see only their own
+  bids and never the customer's name or chat contacts. The service is free:
+  no online payment, only a voluntary «Поддержать проект» (`/support`).
 - Shared memory lives in the repo: `docs/owner-requests.md` (the owner's
   requests and their status), `docs/ai-office.md` (how the sessions work
   together, lessons log), `docs/marketing.md`.

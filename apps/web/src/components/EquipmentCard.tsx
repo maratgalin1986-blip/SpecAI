@@ -1,3 +1,4 @@
+import { isHouseEquipment } from '@/lib/fleet';
 import type { EquipmentStatus } from '@specai/ui';
 import { AvailabilityChip } from '@/components/AvailabilityChip';
 import { Icon, type IconName } from '@/components/Icon';
@@ -25,6 +26,9 @@ export interface EquipmentCardItem {
   imageUrls: string[];
   category: { name: string };
   location: { city: string } | null;
+  /** Owner of the machine; the house fleet gets a «Парк СпецПласт16» badge. */
+  companyId?: string;
+  company?: { name: string } | null;
 }
 
 const GROUP_ICON: Record<ReturnType<typeof taskGroupOf>, IconName> = {
@@ -107,6 +111,17 @@ export function EquipmentCard({ item }: { item: EquipmentCardItem }) {
                 {item.name}
               </a>
             </h2>
+            {item.companyId && (
+              <p className="mt-1 text-xs font-medium text-slate-500">
+                {isHouseEquipment(item) ? (
+                  <span className="rounded-full bg-amber-100 px-2 py-0.5 text-amber-800">
+                    Парк СпецПласт16
+                  </span>
+                ) : (
+                  item.company?.name
+                )}
+              </p>
+            )}
           </div>
 
           {chips.length > 0 && (

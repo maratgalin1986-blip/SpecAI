@@ -8,7 +8,7 @@ import { getStripe } from '@/lib/stripe';
 import { INVALID_JSON_MESSAGE, readJson } from '@/lib/apiInput';
 import { BOOKING_TIME_ZONE, CONFIRMED_BOOKING_STATUSES } from '@/lib/bookingRules';
 import { findOverlappingBooking, lockEquipment } from '@/lib/bookingConflicts';
-import { isFleetManager } from '@/lib/fleet';
+import { isProvider } from '@/lib/fleet';
 import { BOOKING_STATUS_LABELS } from '@/lib/emailTemplates';
 
 const updateSchema = z.object({
@@ -105,7 +105,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
   }
 
   const isOwningProvider =
-    isFleetManager(currentUser) && currentUser.companyId === booking.equipment.companyId;
+    isProvider(currentUser) && currentUser.companyId === booking.equipment.companyId;
   const isCustomer = booking.customerId === currentUser.id;
 
   if (isOwningProvider) {

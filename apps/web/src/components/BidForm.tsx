@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { Button } from '@specai/ui';
 import { formatMoney } from '@/lib/money';
-import { isFleetManager } from '@/lib/fleet';
+import { isProvider } from '@/lib/fleet';
 
 interface EquipmentOption {
   id: string;
@@ -38,7 +38,7 @@ export function BidForm({ orderId }: { orderId: string }) {
       .catch(() => setError('Не удалось загрузить технику, проверьте связь'));
   }, [session?.user.companyId]);
 
-  if (status !== 'authenticated' || !isFleetManager(session.user)) {
+  if (status !== 'authenticated' || !isProvider(session.user)) {
     return null;
   }
 

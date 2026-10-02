@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@specai/database';
 import { createOrderSchema } from '@specai/shared';
 import { getRequestUser } from '@/lib/requestUser';
-import { isFleetManager } from '@/lib/fleet';
+import { isProvider } from '@/lib/fleet';
 import { geocodeAddress } from '@/lib/geo';
 import { notifyTelegram } from '@/lib/notify';
 import { SITE } from '@/lib/site';
@@ -39,8 +39,8 @@ export async function GET(request: NextRequest) {
   }
   let where: { status?: 'OPEN'; categoryId?: string; customerId?: string };
   if (openFeed) {
-    if (!isFleetManager(currentUser)) {
-      return NextResponse.json({ error: 'Доступно только владельцу' }, { status: 403 });
+    if (!isProvider(currentUser)) {
+      return NextResponse.json({ error: 'Доступно только поставщикам' }, { status: 403 });
     }
     where = { status: 'OPEN', categoryId };
   } else {
@@ -52,17 +52,25 @@ export async function GET(request: NextRequest) {
     include: {
       category: { select: { id: true, name: true } },
       customer: { select: { id: true, name: true } },
-      bids: true,
+      bids: { include: { equipment: { select: { companyId: true } } } },
     },
     orderBy: { createdAt: 'desc' },
     take: 50,
   });
 
   // Never expose contacts of people whose requests were imported from chats.
+  // In the open feed a provider sees only its own bids (and how many there
+  // are), and not the customer's name: competitors' prices stay private.
   const safeOrders = orders.map(
     ({ contactName, contactPhone, rawText, sourceUrl, externalId, fingerprint, ...order }) => {
       void [contactName, contactPhone, rawText, sourceUrl, externalId, fingerprint];
-      return order;
+      if (order.customerId === currentUser.id) return { ...order, bidCount: order.bids.length };
+      return {
+        ...order,
+        customer: null,
+        bids: order.bids.filter((bid) => bid.equipment.companyId === currentUser.companyId),
+        bidCount: order.bids.length,
+      };
     },
   );
   return NextResponse.json({ orders: safeOrders });
