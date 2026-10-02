@@ -83,6 +83,12 @@ export function SiteHeader() {
               {link.label}
             </a>
           ))}
+          <a
+            href="/smeta"
+            className="rounded-full px-3 py-1.5 font-semibold text-amber-700 ring-2 ring-amber-400 transition hover:bg-amber-400 hover:text-slate-950"
+          >
+            Смета
+          </a>
           <AuthStatus />
           <a
             href="/#callback"
@@ -151,6 +157,13 @@ export function SiteHeader() {
               {link.label}
             </a>
           ))}
+          <a
+            href="/smeta"
+            onClick={() => setIsMenuOpen(false)}
+            className="rounded-md bg-amber-100 px-2 py-2 font-semibold text-amber-800"
+          >
+            🧮 Рассчитать смету
+          </a>
           <div className="px-2 py-2">
             <AuthStatus />
           </div>

@@ -279,6 +279,12 @@ export default async function HomePage() {
               >
                 Подобрать технику
               </a>
+              <a
+                href="/smeta"
+                className="inline-flex items-center gap-2 rounded-full px-6 py-3.5 text-base font-semibold text-amber-300 ring-2 ring-amber-400 backdrop-blur transition hover:bg-amber-400 hover:text-slate-950"
+              >
+                🧮 Рассчитать смету
+              </a>
             </div>
             <p className="float-in mt-5 text-sm text-slate-400" style={{ animationDelay: '480ms' }}>
               Свой парк · Свои машинисты · Без посредников · Работаем с НДС и ЭДО
