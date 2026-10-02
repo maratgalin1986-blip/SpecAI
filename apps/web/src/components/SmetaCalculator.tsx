@@ -174,18 +174,21 @@ function Calculating({ lines, onDone }: { lines: string[]; onDone: () => void })
 export function SmetaCalculator({
   initialJob,
   initialAudience = 'foreman',
+  initialProject,
 }: {
   initialJob?: string;
   initialAudience?: Audience;
+  /** Sizes passed from the design project; the form opens on «Размеры». */
+  initialProject?: Partial<ProjectInput>;
 }) {
   const [audience, setAudience] = useState<Audience>(initialAudience);
   const knownJob = SMETA_JOBS.some((job) => job.id === initialJob);
   const [mode, setMode] = useState<Mode>(knownJob ? 'job' : 'project');
-  const [step, setStep] = useState(knownJob ? 1 : 0);
+  const [step, setStep] = useState(knownJob || initialProject ? 1 : 0);
   const [phase, setPhase] = useState<'form' | 'calc' | 'result'>('form');
 
   // Whole project.
-  const [p, setP] = useState<ProjectInput>(normalizeInput({ object: 'house' }));
+  const [p, setP] = useState<ProjectInput>(normalizeInput({ object: 'house', ...initialProject }));
   const project = useMemo(() => buildProject(p), [p]);
   const spec = OBJECTS[p.object];
 
