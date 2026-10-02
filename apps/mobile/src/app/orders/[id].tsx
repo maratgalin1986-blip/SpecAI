@@ -1,4 +1,4 @@
-import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import { Link, Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
 import { Alert, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Badge, Button, Card, ErrorBanner, Loader, type BadgeTone } from '@/components/ui';
@@ -37,9 +37,11 @@ function BidCard({
   canAccept,
   accepting,
   onAccept,
+  showComment = false,
 }: {
   bid: Bid;
   canAccept: boolean;
+  showComment?: boolean;
   accepting: boolean;
   onAccept: (bid: Bid) => void;
 }) {
@@ -58,6 +60,17 @@ function BidCard({
       {bid.message ? <Text style={styles.bidMessage}>{bid.message}</Text> : null}
       {canAccept && bid.status === 'PENDING' ? (
         <Button title="Принять предложение" loading={accepting} onPress={() => onAccept(bid)} />
+      ) : null}
+      {showComment && bid.equipment?.company ? (
+        <Link
+          href={{
+            pathname: '/comments',
+            params: { companyId: bid.equipment.company.id, name: bid.equipment.company.name },
+          }}
+          asChild
+        >
+          <Button title="Комментарий об исполнителе" variant="secondary" />
+        </Link>
       ) : null}
     </Card>
   );
@@ -184,6 +197,7 @@ export default function OrderDetailScreen() {
               key={bid.id}
               bid={bid}
               canAccept={canAccept}
+              showComment={isOwner}
               accepting={acceptingId === bid.id}
               onAccept={handleAccept}
             />

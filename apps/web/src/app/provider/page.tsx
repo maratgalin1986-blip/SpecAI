@@ -11,6 +11,10 @@ import { SITE } from '@/lib/site';
 import { Pagination } from '@/components/Pagination';
 import { parsePage, totalPagesFor } from '@/lib/pagination';
 import { isProvider } from '@/lib/fleet';
+import { GuideCard } from '@/components/GuideCard';
+import { CommentForm, CommentList } from '@/components/Comments';
+import { guideFor } from '@/lib/guideState';
+import { toPublicComment } from '@/lib/comments';
 
 export const dynamic = 'force-dynamic';
 export const metadata: Metadata = {
@@ -74,6 +78,27 @@ export default async function ProviderPage({
     }),
   ]);
 
+  // Approved comments about these customers from any provider, and the assistant.
+  const customerIds = [...new Set(bookings.map((booking) => booking.customerId))];
+  const [guide, customerComments] = await Promise.all([
+    guideFor(session.user),
+    customerIds.length > 0
+      ? prisma.comment.findMany({
+          where: { status: 'APPROVED', targetUserId: { in: customerIds } },
+          include: {
+            author: { select: { name: true, role: true, company: { select: { name: true } } } },
+          },
+          orderBy: { createdAt: 'desc' },
+          take: 200,
+        })
+      : Promise.resolve([]),
+  ]);
+  const commentsAbout = (customerId: string) =>
+    customerComments
+      .filter((comment) => comment.targetUserId === customerId)
+      .slice(0, 3)
+      .map(toPublicComment);
+
   // The two lists are paginated independently: `page` drives equipment,
   // `bookingsPage` drives bookings, and each keeps the other's value.
   const currentQuery = {
@@ -84,6 +109,7 @@ export default async function ProviderPage({
   return (
     <div className="flex flex-col gap-8">
       <h1 className="text-2xl font-bold">Кабинет парка СпецПласт16</h1>
+      <GuideCard guide={guide} />
 
       <section className="flex flex-col gap-3">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -123,14 +149,14 @@ export default async function ProviderPage({
         />
       </section>
 
-      <section>
+      <section id="add-equipment" className="scroll-mt-24">
         <h2 className="mb-3 text-lg font-semibold">Добавить технику</h2>
         <Card className="max-w-xl">
           <NewEquipmentForm />
         </Card>
       </section>
 
-      <section className="flex flex-col gap-3">
+      <section id="bookings" className="flex scroll-mt-24 flex-col gap-3">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
           <h2 className="text-lg font-semibold">Бронирования</h2>
           <p className="text-sm text-slate-600">
@@ -156,6 +182,23 @@ export default async function ProviderPage({
                     {booking.endDate.toLocaleDateString('ru-RU')} ·{' '}
                     {formatMoney(booking.totalPrice, booking.currency)}
                   </p>
+                  {commentsAbout(booking.customerId).length > 0 && (
+                    <div className="mt-2">
+                      <p className="mb-1 text-xs font-semibold text-slate-600">
+                        Комментарии исполнителей о заказчике
+                      </p>
+                      <CommentList comments={commentsAbout(booking.customerId)} />
+                    </div>
+                  )}
+                  {booking.status !== 'CANCELLED' && (
+                    <div className="mt-2">
+                      <CommentForm
+                        compact
+                        targetUserId={booking.customerId}
+                        label="Комментарий о заказчике"
+                      />
+                    </div>
+                  )}
                 </div>
                 <div className="flex flex-wrap items-center gap-3 sm:justify-end">
                   <BookingStatusBadge status={booking.status} />

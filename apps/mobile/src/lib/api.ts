@@ -165,7 +165,7 @@ export interface Booking {
   depositPaid: boolean;
   notes: string | null;
   createdAt: string;
-  equipment: { id: string; name: string; imageUrls?: string[] };
+  equipment: { id: string; name: string; imageUrls?: string[]; companyId?: string };
   payment?: { status: PaymentStatus; refundRequired?: boolean } | null;
   review?: { id: string; rating: number } | null;
 }
@@ -452,4 +452,67 @@ export function createBid(
     method: 'POST',
     body: input,
   });
+}
+
+// ---- Комментарии (с модерацией) и помощник «Что дальше?» ----
+
+/** Опубликованный комментарий: без контактов, имя автора сокращено («Иван П.»). */
+export interface PublicComment {
+  id: string;
+  text: string;
+  createdAt: string;
+  authorName: string;
+  authorCompany: string | null;
+}
+
+export type CommentTarget = { companyId: string } | { userId: string };
+
+export function fetchComments(target: CommentTarget) {
+  const query =
+    'companyId' in target
+      ? `companyId=${encodeURIComponent(target.companyId)}`
+      : `userId=${encodeURIComponent(target.userId)}`;
+  return apiFetch<{ comments: PublicComment[]; canComment: boolean }>(`/api/comments?${query}`);
+}
+
+/** Комментарий уходит на модерацию; в ответе — текст «Комментарий отправлен на проверку». */
+export function createComment(target: CommentTarget, text: string) {
+  return apiFetch<{ comment: { id: string; status: string }; message: string }>('/api/comments', {
+    method: 'POST',
+    body: {
+      text,
+      ...('companyId' in target
+        ? { targetCompanyId: target.companyId }
+        : { targetUserId: target.userId }),
+    },
+  });
+}
+
+export interface GuideLink {
+  label: string;
+  href: string;
+  /** Маршрут приложения (expo-router). */
+  app?: string;
+}
+
+export interface GuideStep {
+  id: string;
+  title: string;
+  hint: string;
+  done: boolean;
+  action?: GuideLink;
+}
+
+export interface Guide {
+  role: 'GUEST' | 'CUSTOMER' | 'PROVIDER';
+  title: string;
+  steps: GuideStep[];
+  next: GuideStep;
+  progress: { done: number; total: number };
+  /** Ответ на «Что дальше?» текстом для чата. */
+  reply: string;
+}
+
+export function fetchGuide() {
+  return apiFetch<Guide>('/api/guide?links=plain');
 }

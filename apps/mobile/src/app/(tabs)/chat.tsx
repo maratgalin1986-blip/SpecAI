@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { EmptyState } from '@/components/ui';
-import { ApiError, fetchConversation } from '@/lib/api';
+import { ApiError, fetchConversation, fetchGuide } from '@/lib/api';
 import { streamChat } from '@/lib/sse';
 import { STORAGE_KEYS, getItem, removeItem, setItem } from '@/lib/storage';
 import { colors, radius, spacing } from '@/lib/theme';
@@ -27,6 +27,10 @@ interface UiMessage {
 
 let localId = 0;
 const nextId = () => `local-${Date.now()}-${localId++}`;
+
+/** «Что дальше?» отвечает помощник по данным с сервера — без ИИ-ключа и без истории диалога. */
+const WHAT_NEXT =
+  /что\s+(?:мне\s+)?(?:дальше|делать)|следующ\p{L}*\s+шаг|с\s+чего\s+начать|^\s*дальше\s*\??\s*$/iu;
 
 export default function ChatScreen() {
   const insets = useSafeAreaInsets();
@@ -76,10 +80,37 @@ export default function ChatScreen() {
     requestAnimationFrame(() => listRef.current?.scrollToEnd({ animated: true }));
   }, []);
 
+  const askWhatNext = (text = 'Что дальше?') => {
+    if (streaming) return;
+    const assistantId = nextId();
+    setMessages((prev) => [
+      ...prev,
+      { id: nextId(), role: 'user', content: text },
+      { id: assistantId, role: 'assistant', content: '', pending: true },
+    ]);
+    scrollToEnd();
+    fetchGuide()
+      .then((guide) => ({ content: guide.reply, error: false }))
+      .catch((caught: unknown) => ({
+        content: caught instanceof ApiError ? caught.message : 'Помощник сейчас недоступен',
+        error: true,
+      }))
+      .then(({ content, error }) => {
+        setMessages((prev) =>
+          prev.map((m) => (m.id === assistantId ? { ...m, content, error, pending: false } : m)),
+        );
+        scrollToEnd();
+      });
+  };
+
   const send = () => {
     const text = input.trim();
     if (!text || streaming) return;
     setInput('');
+    if (WHAT_NEXT.test(text)) {
+      askWhatNext(text);
+      return;
+    }
 
     const userMessage: UiMessage = { id: nextId(), role: 'user', content: text };
     const assistantId = nextId();
@@ -168,6 +199,17 @@ export default function ChatScreen() {
         }
         keyboardShouldPersistTaps="handled"
       />
+      <View style={styles.quickRow}>
+        <Pressable
+          onPress={() => askWhatNext()}
+          disabled={streaming}
+          accessibilityRole="button"
+          style={({ pressed }) => [styles.quick, pressed && { opacity: 0.85 }]}
+        >
+          <Text style={styles.quickText}>Что дальше?</Text>
+        </Pressable>
+        <Text style={styles.quickHint}>Помощник подскажет следующий шаг</Text>
+      </View>
       <View style={styles.composer}>
         <TextInput
           style={styles.input}
@@ -252,8 +294,6 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     padding: spacing.md,
     backgroundColor: colors.card,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
   },
   input: {
     flex: 1,
@@ -277,4 +317,22 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   sendButtonDisabled: { opacity: 0.4 },
+  quickRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.sm,
+    backgroundColor: colors.card,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  quick: {
+    backgroundColor: colors.primaryLight,
+    borderRadius: radius.lg,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs + 2,
+  },
+  quickText: { color: colors.primaryDark, fontWeight: '700', fontSize: 13 },
+  quickHint: { flex: 1, color: colors.textMuted, fontSize: 12 },
 });

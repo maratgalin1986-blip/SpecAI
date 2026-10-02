@@ -11,6 +11,8 @@ import { isAdminRequest } from '@/lib/admin';
 import { SiteConditions } from '@/components/SiteConditions';
 import { isProvider, isHouseManager } from '@/lib/fleet';
 import { isSafeHttpUrl } from '@/lib/privacy';
+import { approvedComments } from '@/lib/commentAccess';
+import { CommentForm, CommentList } from '@/components/Comments';
 
 export const dynamic = 'force-dynamic';
 
@@ -56,6 +58,13 @@ export default async function OrderDetailPage({ params }: { params: { id: string
   const visibleBids = seesAllBids
     ? order.bids
     : order.bids.filter((bid) => bid.equipment.companyId === session?.user.companyId);
+
+  // A provider sees what other providers wrote about this customer (no name).
+  const viewerIsProvider = !isOwner && isProvider(session?.user);
+  const customerComments = viewerIsProvider
+    ? await approvedComments({ targetUserId: order.customerId }, 10)
+    : [];
+  const providerHasBid = viewerIsProvider && visibleBids.length > 0;
 
   return (
     <div className="flex flex-col gap-6">
@@ -128,6 +137,20 @@ export default async function OrderDetailPage({ params }: { params: { id: string
         </section>
       )}
 
+      {viewerIsProvider && order.source === 'SITE' && (
+        <section className="flex flex-col gap-3">
+          <h2 className="text-lg font-semibold">Комментарии исполнителей о заказчике</h2>
+          <CommentList comments={customerComments} empty="Комментариев пока нет." />
+          {providerHasBid && (
+            <CommentForm
+              compact
+              targetUserId={order.customerId}
+              label="Оставить комментарий о заказчике"
+            />
+          )}
+        </section>
+      )}
+
       <section>
         <h2 className="mb-3 text-lg font-semibold">
           {pluralizeRu(order.bids.length, ['предложение', 'предложения', 'предложений'])}
@@ -152,6 +175,13 @@ export default async function OrderDetailPage({ params }: { params: { id: string
                 </div>
                 {isOwner && order.status === 'OPEN' && bid.status === 'PENDING' && (
                   <AcceptBidButton bidId={bid.id} />
+                )}
+                {isOwner && (
+                  <CommentForm
+                    compact
+                    targetCompanyId={bid.equipment.companyId}
+                    label="Комментарий об исполнителе"
+                  />
                 )}
                 {bid.status === 'ACCEPTED' && (
                   <span className="w-fit shrink-0 rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-semibold text-green-800">

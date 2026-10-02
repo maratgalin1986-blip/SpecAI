@@ -12,6 +12,9 @@ import { SITE } from '@/lib/site';
 import { VerifyEmailBanner } from '@/components/VerifyEmailBanner';
 import { PUBLIC_FLEET, isProvider } from '@/lib/fleet';
 import { redirect } from 'next/navigation';
+import { GuideCard } from '@/components/GuideCard';
+import { CommentForm } from '@/components/Comments';
+import { guideFor } from '@/lib/guideState';
 
 export const metadata: Metadata = { title: 'Личный кабинет', robots: { index: false } };
 
@@ -57,7 +60,8 @@ export default async function DashboardPage({
   const paymentNotice = searchParams?.payment ? PAYMENT_NOTICE[searchParams.payment] : undefined;
   const paymentsEnabled = isOnlinePaymentEnabled();
 
-  const [equipmentCount, activeBookings, myBookings, myOrders, me] = await Promise.all([
+  const [guide, equipmentCount, activeBookings, myBookings, myOrders, me] = await Promise.all([
+    guideFor(session?.user),
     prisma.equipment.count({ where: { ...PUBLIC_FLEET, status: { not: 'RETIRED' } } }),
     session
       ? prisma.booking.count({
@@ -96,6 +100,7 @@ export default async function DashboardPage({
   return (
     <div className="flex flex-col gap-6">
       <h1 className="text-2xl font-bold">Личный кабинет</h1>
+      <GuideCard guide={guide} />
       {searchParams?.verified === '1' && (
         <p className="rounded-md border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
           Email подтверждён. Спасибо!
@@ -207,6 +212,15 @@ export default async function DashboardPage({
                   {booking.status === 'COMPLETED' && !booking.review && (
                     <div className="mt-2">
                       <ReviewForm bookingId={booking.id} />
+                    </div>
+                  )}
+                  {booking.status !== 'CANCELLED' && (
+                    <div className="mt-2">
+                      <CommentForm
+                        compact
+                        targetCompanyId={booking.equipment.companyId}
+                        label="Комментарий об исполнителе"
+                      />
                     </div>
                   )}
                 </div>

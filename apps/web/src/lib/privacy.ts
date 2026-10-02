@@ -37,6 +37,23 @@ export function maskContacts(text: string): string {
     });
 }
 
+export const HIDDEN_LINK = '[ссылка скрыта]';
+
+// Any web link: with a scheme, starting with www., or a bare domain with a
+// common zone (site.ru/page). Runs after maskContacts, so e-mails are gone.
+// Trailing punctuation after a link stays in the text.
+const WEB_LINK =
+  /(?:https?:\/\/|www\.)[^\s<>"']*[^\s<>"'.,;:!?)]|(?<![\p{L}\p{N}@-])[\p{L}\p{N}-]+(?:\.[\p{L}\p{N}-]+)*\.(?:ru|рф|com|net|org|su|info|biz|pro|site|online|store|shop|me|io|ua|by|kz)(?![\p{L}\p{N}])(?:\/(?:[^\s<>"']*[^\s<>"'.,;:!?)])?)?/giu;
+
+/**
+ * Text written by users for other users (comments): contacts and any web
+ * links are hidden, so the platform is not used to lure clients away or to
+ * post spam.
+ */
+export function maskContactsAndLinks(text: string): string {
+  return maskContacts(text).replace(WEB_LINK, HIDDEN_LINK);
+}
+
 /** Only absolute http(s) links may be rendered as <a href>. */
 export function isSafeHttpUrl(value: string | null | undefined): value is string {
   if (!value) return false;

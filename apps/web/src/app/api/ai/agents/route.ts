@@ -9,6 +9,8 @@ import { maskContacts } from '@/lib/privacy';
 import { checkRateLimit } from '@/lib/rateLimit';
 import { PUBLIC_FLEET, isProvider } from '@/lib/fleet';
 import { notifyTelegram } from '@/lib/notify';
+import { asksWhatNext, guideReply } from '@/lib/guide';
+import { guideFor } from '@/lib/guideState';
 import { isOnShift, SITE } from '@/lib/site';
 import {
   ASK_FOR_PHONE,
@@ -75,6 +77,19 @@ export async function POST(request: NextRequest) {
         { status: 429, headers: { 'Retry-After': String(rate.retryAfterSec) } },
       );
     }
+  }
+
+  // «Что дальше?» — the assistant's checklist from the database, the same with
+  // or without an AI key, so the answer is exact and free.
+  if (asksWhatNext(messages.at(-1)?.content ?? '')) {
+    const agentId: AgentId = parsed.data.agentId === 'auto' ? 'support' : parsed.data.agentId;
+    return NextResponse.json({
+      agentId,
+      reply: guideReply(await guideFor(user)),
+      toolsUsed: [],
+      offline: true,
+      guide: true,
+    });
   }
 
   function requireUser() {

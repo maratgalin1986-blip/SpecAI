@@ -21,6 +21,10 @@ import { formatMoney, formatRate } from '@/lib/money';
 import { pluralizeRu } from '@/lib/pluralize';
 import { SITE } from '@/lib/site';
 import { PUBLIC_FLEET } from '@/lib/fleet';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth';
+import { approvedComments, commentAccessError } from '@/lib/commentAccess';
+import { CommentForm, CommentList } from '@/components/Comments';
 
 export const dynamic = 'force-dynamic';
 
@@ -56,6 +60,14 @@ export default async function EquipmentDetailPage({ params }: { params: { id: st
   if (!item || !item.company.isProvider) {
     notFound();
   }
+
+  const session = await getServerSession(authOptions);
+  const commentTarget = { targetCompanyId: item.companyId };
+  const [comments, commentDenied] = await Promise.all([
+    approvedComments(commentTarget),
+    session?.user ? commentAccessError(session.user, commentTarget) : Promise.resolve(null),
+  ]);
+  const canComment = Boolean(session?.user) && commentDenied === null;
 
   const specs = item.specs;
   const specRows = specEntries(specs);
@@ -292,6 +304,39 @@ export default async function EquipmentDetailPage({ params }: { params: { id: st
               </div>
             </section>
           )}
+
+          <section id="comments" className="scroll-mt-24">
+            <div className="eyebrow text-amber-700">Комментарии заказчиков</div>
+            <p className="mt-2 text-sm text-slate-500">
+              Об исполнителе «{item.company.name}». Публикуются после проверки.
+            </p>
+            <div className="mt-4 flex flex-col gap-4">
+              <CommentList comments={comments} empty="Комментариев пока нет." />
+              {canComment ? (
+                <CommentForm
+                  targetCompanyId={item.companyId}
+                  label="Оставить комментарий об исполнителе"
+                  compact={comments.length > 0}
+                />
+              ) : (
+                <p className="text-xs text-slate-500">
+                  {session?.user ? (
+                    'Комментарий можно оставить после брони этой техники или предложения исполнителя по вашей заявке.'
+                  ) : (
+                    <>
+                      <a
+                        href={`/login?callbackUrl=/equipment/${item.id}`}
+                        className="font-medium text-amber-700 underline"
+                      >
+                        Войдите
+                      </a>
+                      , чтобы оставить комментарий после брони.
+                    </>
+                  )}
+                </p>
+              )}
+            </div>
+          </section>
         </div>
       </div>
 

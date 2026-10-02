@@ -1,6 +1,7 @@
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Alert, Image, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { CommentsSection } from '@/components/CommentsSection';
 import { ContactActions } from '@/components/ContactActions';
 import { DateField } from '@/components/DateField';
 import { Badge, Button, Card, ErrorBanner, Loader } from '@/components/ui';
@@ -231,6 +232,14 @@ export default function EquipmentDetailScreen() {
             message={`Интересует: ${item.name}`}
           />
         </Card>
+
+        <View style={styles.comments}>
+          <CommentsSection
+            target={{ companyId: item.company.id }}
+            title={`Комментарии об исполнителе «${item.company.name}»`}
+            formLabel="Комментарий об исполнителе"
+          />
+        </View>
       </ScrollView>
     </>
   );
@@ -247,6 +256,7 @@ function PriceRow({ label, value, primary }: { label: string; value: string; pri
 
 const styles = StyleSheet.create({
   padded: { padding: spacing.lg },
+  comments: { marginHorizontal: spacing.lg },
   container: { paddingBottom: spacing.xl * 2, gap: spacing.lg },
   gallery: { height: 240 },
   image: { width: 400, maxWidth: '100%', height: 240, backgroundColor: colors.border },

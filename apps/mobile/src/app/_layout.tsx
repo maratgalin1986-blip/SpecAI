@@ -34,6 +34,7 @@ function RootNavigator() {
         <Stack.Screen name="orders/new" options={{ title: 'Новая заявка' }} />
         <Stack.Screen name="orders/[id]" options={{ title: 'Заявка' }} />
         <Stack.Screen name="bookings/[id]/review" options={{ title: 'Отзыв' }} />
+        <Stack.Screen name="comments" options={{ title: 'Комментарии' }} />
       </Stack.Protected>
       {/* Доступны и без входа: заявка на звонок и сведения о компании. */}
       <Stack.Screen name="callback" options={{ title: 'Заказать звонок', presentation: 'modal' }} />

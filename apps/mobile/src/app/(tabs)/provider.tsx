@@ -37,6 +37,7 @@ import {
   formatRate,
 } from '@/lib/format';
 import { colors, radius, spacing } from '@/lib/theme';
+import { NextStepCard } from '@/components/NextStepCard';
 
 type Section = 'equipment' | 'bookings';
 
@@ -160,6 +161,17 @@ function BookingRow({
         <Text style={styles.price}>{formatMoney(booking.totalPrice, booking.currency)}</Text>
       </View>
       {booking.notes ? <Text style={styles.notes}>{booking.notes}</Text> : null}
+      {booking.status !== 'CANCELLED' ? (
+        <Link
+          href={{
+            pathname: '/comments',
+            params: { userId: booking.customer.id, name: booking.customer.name },
+          }}
+          asChild
+        >
+          <Button title="Комментарий о заказчике" variant="secondary" />
+        </Link>
+      ) : null}
       {transitions.length > 0 ? (
         <View style={styles.actions}>
           {transitions.map((status) => (
@@ -252,6 +264,7 @@ export default function ProviderScreen() {
 
   const header = (
     <View style={styles.header}>
+      <NextStepCard />
       <Segmented value={section} onChange={setSection} />
       {error ? <ErrorBanner message={error} onRetry={() => void load()} /> : null}
       {section === 'equipment' ? (

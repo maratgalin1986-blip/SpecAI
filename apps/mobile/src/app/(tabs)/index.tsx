@@ -11,6 +11,8 @@ import {
   View,
 } from 'react-native';
 import { ContactActions } from '@/components/ContactActions';
+import { NextStepCard } from '@/components/NextStepCard';
+import { useAuth } from '@/lib/auth';
 import { Badge, EmptyState, ErrorBanner, Input } from '@/components/ui';
 import { ApiError, fetchEquipment, type Equipment } from '@/lib/api';
 import { EQUIPMENT_STATUS_LABELS, formatRate } from '@/lib/format';
@@ -59,6 +61,9 @@ function EquipmentCard({ item }: { item: Equipment }) {
 }
 
 export default function CatalogScreen() {
+  const { user } = useAuth();
+  // Исполнителю следующий шаг показывается в «Кабинете».
+  const showGuide = user?.role !== 'PROVIDER_ADMIN';
   const [query, setQuery] = useState('');
   const [appliedQuery, setAppliedQuery] = useState('');
   const [items, setItems] = useState<Equipment[]>([]);
@@ -153,6 +158,13 @@ export default function CatalogScreen() {
           keyExtractor={(item) => item.id}
           renderItem={({ item }) => <EquipmentCard item={item} />}
           contentContainerStyle={styles.list}
+          ListHeaderComponent={
+            showGuide ? (
+              <View style={styles.guide}>
+                <NextStepCard />
+              </View>
+            ) : null
+          }
           ItemSeparatorComponent={() => <View style={{ height: spacing.md }} />}
           refreshControl={
             <RefreshControl
@@ -201,6 +213,7 @@ const styles = StyleSheet.create({
   loader: { marginTop: spacing.xl },
   footerLoader: { marginVertical: spacing.lg },
   list: { padding: spacing.lg, paddingBottom: spacing.xl },
+  guide: { marginBottom: spacing.md },
   card: {
     backgroundColor: colors.card,
     borderRadius: radius.lg,

@@ -1,4 +1,4 @@
-import { useFocusEffect, useRouter } from 'expo-router';
+import { Link, useFocusEffect, useRouter } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import React, { useCallback, useState } from 'react';
 import { Alert, FlatList, RefreshControl, StyleSheet, Text, View } from 'react-native';
@@ -94,6 +94,17 @@ function BookingCard({
       {canPay ? <Button title="Оплатить" loading={paying} onPress={() => onPay(booking)} /> : null}
       {canReview ? (
         <Button title="Оставить отзыв" variant="secondary" onPress={() => onReview(booking)} />
+      ) : null}
+      {booking.status !== 'CANCELLED' && booking.equipment.companyId ? (
+        <Link
+          href={{
+            pathname: '/comments',
+            params: { companyId: booking.equipment.companyId, name: booking.equipment.name },
+          }}
+          asChild
+        >
+          <Button title="Комментарий об исполнителе" variant="secondary" />
+        </Link>
       ) : null}
       {canCancel ? (
         <Button
