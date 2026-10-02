@@ -1,5 +1,54 @@
 import { describe, expect, it } from 'vitest';
-import { asSpeaker, SITE_LINES, splitCensored, styleFor, voiceFor } from './soundVoices';
+import {
+  asSpeaker,
+  moodVoice,
+  SITE_LINES,
+  speechParts,
+  splitCensored,
+  styleFor,
+  voiceFor,
+} from './soundVoices';
+import { moodLine, MOODS } from '@/lib/stroyka/mood';
+import { LINES } from '@/lib/stroyka/lines';
+
+const EMOJI = /\p{Extended_Pictographic}|\p{Regional_Indicator}|\u{FE0F}|\u{200D}/u;
+
+describe('speechParts', () => {
+  it('never hands an emoji to speechSynthesis', () => {
+    const spoken = (text: string) =>
+      speechParts(text)
+        .map((p) => (p.beep ? '<beep>' : p.text))
+        .join(' ');
+    expect(spoken('👷 Здравствуйте! Экскаватор свободен 🚜')).toBe(
+      'Здравствуйте! Экскаватор свободен',
+    );
+    expect(spoken('Кто ковш поставил, #@%&! 🤬🚜')).toBe('Кто ковш поставил, <beep>');
+    expect(spoken('Гав! 🐶')).toBe('Гав!');
+    expect(speechParts('🎄🎉')).toEqual([]);
+    for (const speaker of Object.keys(LINES) as (keyof typeof LINES)[])
+      for (const line of LINES[speaker].slice(0, 120))
+        for (const kind of ['business', 'joke', 'radio'] as const) {
+          const shown = moodLine({ speaker, text: line.text, kind, tags: line.tags, hour: 23 });
+          for (const part of speechParts(shown.text))
+            if (!part.beep) expect(EMOJI.test(part.text)).toBe(false);
+        }
+  });
+});
+
+describe('moodVoice', () => {
+  it('nudges pitch and rate a little, never wildly', () => {
+    const base = { pitch: 1, rate: 1 };
+    expect(moodVoice(base, 'laugh').rate).toBeGreaterThan(1);
+    expect(moodVoice(base, 'angry').pitch).toBeLessThan(1);
+    expect(moodVoice(base, undefined)).toEqual(base);
+    expect(moodVoice(base, 'nonsense')).toEqual(base);
+    for (const mood of MOODS) {
+      const v = moodVoice(base, mood);
+      expect(Math.abs(v.pitch - 1)).toBeLessThanOrEqual(0.1);
+      expect(Math.abs(v.rate - 1)).toBeLessThanOrEqual(0.1);
+    }
+  });
+});
 
 describe('splitCensored', () => {
   it('turns a symbol run into a beep and never speaks the symbols', () => {

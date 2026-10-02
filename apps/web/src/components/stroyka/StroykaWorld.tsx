@@ -18,6 +18,7 @@ export default function StroykaWorld({
   onProgress,
   onWantFree,
   onAdClick,
+  onDog,
   onError,
 }: {
   mobile: boolean;
@@ -28,13 +29,14 @@ export default function StroykaWorld({
   onProgress: (p: number) => void;
   onWantFree: () => void;
   onAdClick: (target: AdTarget) => void;
+  onDog?: () => void;
   onError: (error: unknown) => void;
 }) {
   const canvas = useRef<HTMLCanvasElement>(null);
   const overlay = useRef<HTMLDivElement>(null);
   // Callbacks change identity on every render; the engine reads the latest ones.
-  const cb = useRef({ onZone, onProgress, onWantFree, onAdClick, onEngine, onError });
-  cb.current = { onZone, onProgress, onWantFree, onAdClick, onEngine, onError };
+  const cb = useRef({ onZone, onProgress, onWantFree, onAdClick, onDog, onEngine, onError });
+  cb.current = { onZone, onProgress, onWantFree, onAdClick, onDog, onEngine, onError };
 
   useEffect(() => {
     let engine: StroykaEngine | null = null;
@@ -49,6 +51,7 @@ export default function StroykaWorld({
       onProgress: (p) => cb.current.onProgress(p),
       onWantFree: () => cb.current.onWantFree(),
       onAdClick: (m) => cb.current.onAdClick(m),
+      onDog: () => cb.current.onDog?.(),
     })
       .then((created) => {
         if (cancelled) {

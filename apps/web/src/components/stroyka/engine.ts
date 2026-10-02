@@ -29,16 +29,7 @@ import {
 import { splitCensored, type BanterSpeaker } from '@/lib/stroykaJokes';
 import { Atmosphere } from './atmosphere';
 import type { WorldProgress } from '@/lib/stroyka/progress';
-import {
-  createMaterials,
-  Debris,
-  node,
-  pixelTexture,
-  retint,
-  Rig,
-  smooth,
-  type MatKey,
-} from './kit';
+import { createMaterials, Debris, node, pixelTexture, retint, Rig, smooth } from './kit';
 import { buildDistrict, buildProject, buildTowerCrane, type ProjectBuild } from './project';
 import { buildCity } from './cityMesh';
 import { placeSite, type CityData } from '@/lib/stroyka/city';
@@ -52,15 +43,33 @@ import {
   makeDumpTruck,
   makeKmu,
   makeLoader,
-  makePerson,
   makeRoller,
   makeTractor,
   palletBuilder,
-  walk,
-  type Person,
 } from './machines';
 import {
+  animateDog,
+  animatePerson,
+  HAT,
+  lookFor,
+  makeDog,
+  makePerson,
+  MoodFace,
+  resetPeopleMaterials,
+  setDetail,
+  VEST,
+  voxelMesh,
+  walk,
+  type Dog,
+  type DogPose,
+  type PersonLook,
+  type Person,
+} from './people';
+import type { Mood } from '@/lib/stroyka/mood';
+import type { SeasonEvent } from '@/lib/stroyka/seasonal';
+import {
   brandTexture,
+  canvasTexture,
   buildCraneTargets,
   buildWorld,
   MASTS,
@@ -89,6 +98,8 @@ export interface Telemetry {
   drawCalls: number;
   pixelRatio: number;
   cityInstances?: number;
+  /** People drawn in full detail / as one-mesh stand-ins, last frame. */
+  people?: { detailed: number; lod: number };
 }
 
 export interface EngineOptions {
@@ -102,6 +113,8 @@ export interface EngineOptions {
   onWantFree(): void;
   /** A billboard, branded truck or a cabin was tapped. */
   onAdClick(target: AdTarget): void;
+  /** The site dog was tapped. */
+  onDog?(): void;
 }
 
 interface Character {
@@ -116,15 +129,48 @@ interface Character {
   patrol?: THREE.Vector3[];
   guard?: boolean;
   sitter?: boolean;
+  /** The mood face and talking gestures last until this time. */
+  faceUntil: number;
+  mood: Mood;
+  dist: number;
 }
 
-const HELMETS: Record<SpeakerId, MatKey> = {
-  mihalych: 'white',
-  rinat: 'vest',
-  sveta: 'red',
-  ildar: 'yellow',
-  alsu: 'cabin',
+/** The named characters, matching their portraits (Portraits.tsx). */
+const LOOKS: Record<SpeakerId, Partial<PersonLook>> = {
+  mihalych: {
+    hat: HAT.white,
+    facial: 'moustache',
+    hair: 0x9ca3af,
+    skin: 0xd39a74,
+    shirt: 0x2f4f7f,
+    build: 1.12,
+    height: 1.0,
+  },
+  rinat: { hat: HAT.orange, facial: 'beard', hair: 0x1f2937, skin: 0xc98d68, shirt: 0x5b6573 },
+  sveta: {
+    female: true,
+    hat: HAT.red,
+    vest: VEST.yellow,
+    headset: true,
+    skin: 0xe6b08c,
+    hair: 0x7c4a2a,
+    facial: 'none',
+    gloves: null,
+  },
+  ildar: { hat: HAT.yellow, glasses: true, skin: 0xc48a62, hair: 0x374151, facial: 'none' },
+  alsu: {
+    female: true,
+    hat: HAT.blue,
+    vest: VEST.yellow,
+    skin: 0xe2a982,
+    hair: 0x2b1d14,
+    facial: 'none',
+    gloves: null,
+  },
 };
+
+/** Detailed people beyond this distance become one-mesh stand-ins. */
+const DETAIL_DISTANCE = 25;
 
 const nextFrame = () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
 const damp = (k: number, dt: number) => 1 - Math.exp(-k * dt);
@@ -159,6 +205,22 @@ export class StroykaEngine {
   private updaters: ((time: number, dt: number) => void)[] = [];
   private characters: Character[] = [];
   private avatar!: Person;
+  private face!: MoodFace;
+  private dog!: Dog;
+  private dogState = {
+    pos: new THREE.Vector3(4.2, 0, 51.8),
+    yaw: 0,
+    phase: 0,
+    pose: 'sit' as DogPose,
+    bubble: null as HTMLDivElement | null,
+    bubbleUntil: 0,
+  };
+  private nextLod = 0;
+  private dogPlaced = false;
+  private craneBoom: THREE.Group | null = null;
+  private season: SeasonEvent | null = null;
+  private seasonGroup: THREE.Group | null = null;
+  private garland: { mesh: THREE.InstancedMesh; colors: THREE.Color[] } | null = null;
   private debris: Debris[] = [];
   private headBeams: THREE.Mesh[] = [];
   private headBeamMat!: THREE.MeshBasicMaterial;
@@ -433,6 +495,7 @@ export class StroykaEngine {
     this.scene.add(targets.group);
     const crane = makeCrane(rig, targets.stackTop, targets.frameTop);
     this.place(crane.root, 36, 22, Math.PI);
+    this.craneBoom = crane.boom;
     this.updaters.push((_t, dt) => {
       // Strong wind or a storm: the crane finishes the cycle and stays with the hook up.
       const period = 24;
@@ -556,18 +619,17 @@ export class StroykaEngine {
   }
 
   private buildPeople() {
-    const rig = new Rig(this.M);
+    this.face = new MoodFace();
     const add = (
       id: string,
       speaker: BanterSpeaker,
-      helmet: MatKey,
+      look: PersonLook,
       x: number,
       z: number,
       yaw: number,
       extra: Partial<Character> = {},
-      vest: MatKey = 'vest',
     ) => {
-      const person = makePerson(rig, helmet, vest);
+      const person = makePerson(look, id);
       this.place(person.root, x, z, yaw);
       const c: Character = {
         id,
@@ -576,6 +638,9 @@ export class StroykaEngine {
         home: new THREE.Vector3(x, 0, z),
         baseYaw: yaw,
         bubbleUntil: 0,
+        faceUntil: 0,
+        mood: 'neutral',
+        dist: 0,
         ...extra,
       };
       this.characters.push(c);
@@ -587,22 +652,25 @@ export class StroykaEngine {
       add(
         `npc-${zone.id}`,
         zone.speaker,
-        HELMETS[zone.speaker],
+        lookFor(`npc-${zone.id}`, LOOKS[zone.speaker]),
         x,
         z,
         yaw,
-        { zone: zone.id },
-        zone.speaker === 'sveta' || zone.speaker === 'alsu' ? 'yellow' : 'vest',
+        {
+          zone: zone.id,
+        },
       );
     }
-    add('worker-pit', 'worker', 'white', -31, 28.2, 0.4, { sitter: true });
-    add('worker-sling', 'worker', 'yellow', 27.5, 17.5, -2.2);
-    add('worker-yard', 'worker', 'white', -20, -48.5, 1.2, { sitter: true });
-    add('worker-road', 'worker', 'yellow', -12, -8.3, 2.6, { sitter: true });
-    add('worker-walk', 'worker', 'white', 7, 36, Math.PI, {
+    // The crew: seeded skin, hats (orange or yellow), build and height.
+    const crew = (id: string) => lookFor(id);
+    add('worker-pit', 'worker', crew('worker-pit'), -31, 28.2, 0.4, { sitter: true });
+    add('worker-sling', 'worker', crew('worker-sling'), 27.5, 17.5, -2.2);
+    add('worker-yard', 'worker', crew('worker-yard'), -20, -48.5, 1.2, { sitter: true });
+    add('worker-road', 'worker', crew('worker-road'), -12, -8.3, 2.6, { sitter: true });
+    add('worker-walk', 'worker', crew('worker-walk'), 7, 36, Math.PI, {
       patrol: [new THREE.Vector3(7, 0, 36), new THREE.Vector3(7, 0, -8)],
     });
-    add('guard', 'worker', 'dark', -8, 58, 0, {
+    add('guard', 'worker', lookFor('guard', { hat: HAT.dark, vest: VEST.dark }), -8, 58, 0, {
       guard: true,
       patrol: [
         new THREE.Vector3(-8, 0, 58),
@@ -611,9 +679,8 @@ export class StroykaEngine {
         new THREE.Vector3(-8, 0, 30),
       ],
     });
-    this.avatar = makePerson(rig, 'yellow');
+    this.avatar = makePerson(lookFor('avatar', { hat: HAT.yellow }), 'avatar');
     this.scene.add(this.avatar.root);
-    rig.bake({ cast: true });
     // The guard's flashlight.
     const g = this.characters.find((c) => c.guard)!;
     const geo = new THREE.CylinderGeometry(0.08, 1.6, 7, 4, 1, true);
@@ -621,6 +688,11 @@ export class StroykaEngine {
     geo.translate(0, 1.0, 3.4);
     this.guardBeam = new THREE.Mesh(geo, this.headBeamMat);
     g.person.root.add(this.guardBeam);
+    // «Бетон», the site dog.
+    this.dog = makeDog();
+    this.dog.hit.userData.dog = true;
+    this.clickables.push(this.dog.hit);
+    this.place(this.dog.root, this.dogState.pos.x, this.dogState.pos.z);
   }
 
   // ------------------------------------------------------------------ public API
@@ -691,6 +763,23 @@ export class StroykaEngine {
     this.startBlend(1.8);
   }
 
+  /** Screen position (CSS px) of a world point, or null behind the camera (tests). */
+  toScreen(x: number, y: number, z: number) {
+    const v = new THREE.Vector3(x, y, z).project(this.camera);
+    if (v.z > 1) return null;
+    const c = this.opts.canvas;
+    return { x: ((v.x + 1) / 2) * c.clientWidth, y: ((1 - v.y) / 2) * c.clientHeight };
+  }
+
+  /** Free walk: stand at x, z looking along yaw (tests and screenshots). */
+  standAt(x: number, z: number, yaw: number, pitch = 0) {
+    this.setMode('free');
+    this.blend = null;
+    this.player.set(x, 0, z);
+    this.yaw = yaw;
+    this.pitch = pitch;
+  }
+
   setActiveZone(zone: ZoneId | null) {
     this.activeZone = zone;
   }
@@ -742,6 +831,141 @@ export class StroykaEngine {
     }
   }
 
+  /**
+   * Holiday dressing by the real date (lib/stroyka/seasonal.ts): a garland on
+   * the crane and a fir tree for the New Year, a banner and fireworks for the
+   * Builder's Day, bunting for Сабантуй, flowers on 8 March.
+   */
+  setSeason(event: SeasonEvent | null) {
+    if (event?.id === this.season?.id) return;
+    this.season = event;
+    if (this.seasonGroup) {
+      this.seasonGroup.removeFromParent();
+      this.seasonGroup.traverse((o) => (o as THREE.Mesh).geometry?.dispose?.());
+    }
+    this.garland?.mesh.removeFromParent();
+    this.garland = null;
+    this.seasonGroup = null;
+    if (!event) return;
+    const group = new THREE.Group();
+    this.seasonGroup = group;
+    this.scene.add(group);
+    const LIGHTS = [0xff3b3b, 0xffd23f, 0x3bd16f, 0x3fa9ff, 0xff8a3b];
+    const lights = (count: number, at: (i: number) => [number, number, number], size = 0.2) => {
+      const mesh = new THREE.InstancedMesh<THREE.BufferGeometry, THREE.Material>(
+        new THREE.BoxGeometry(size, size, size),
+        new THREE.MeshBasicMaterial({ color: 0xffffff }),
+        count,
+      );
+      const m = new THREE.Matrix4();
+      const colors: THREE.Color[] = [];
+      for (let i = 0; i < count; i++) {
+        mesh.setMatrixAt(i, m.makeTranslation(...at(i)));
+        const c = new THREE.Color(LIGHTS[i % LIGHTS.length]!);
+        colors.push(c);
+        mesh.setColorAt(i, c);
+      }
+      mesh.computeBoundingSphere();
+      return { mesh, colors };
+    };
+    if (event.garland && this.craneBoom) {
+      // Along the boom, sagging a little between the sections.
+      this.garland = lights(40, (i) => [
+        0.4 + i * 0.39,
+        0.5 - Math.abs(Math.sin(i * 0.8)) * 0.12,
+        0,
+      ]);
+      this.craneBoom.add(this.garland.mesh);
+    }
+    type Block = [[number, number, number], [number, number, number], number];
+    if (event.tree) {
+      const blocks: Block[] = [[[0.3, 0.7, 0.3], [0, 0.35, 0], 0x6b4423]];
+      for (let i = 0; i < 6; i++) {
+        const w = 2.3 - i * 0.36;
+        blocks.push([[w, 0.55, w], [0, 0.9 + i * 0.5, 0], i % 2 ? 0x1f6b3a : 0x23784a]);
+        // Baubles on the tier corners.
+        const r = w / 2;
+        const corners: [number, number][] = [
+          [r, r],
+          [-r, -r],
+          [r, -r],
+          [-r, r],
+        ];
+        corners.forEach(([x, z], k) =>
+          blocks.push([[0.16, 0.16, 0.16], [x, 0.72 + i * 0.5, z], LIGHTS[(i + k) % 5]!]),
+        );
+      }
+      blocks.push([[0.35, 0.35, 0.12], [0, 3.95, 0], 0xffd23f]);
+      const tree = voxelMesh(blocks);
+      tree.matrixAutoUpdate = true;
+      tree.position.set(23.4, 0, 51.6);
+      group.add(tree);
+    }
+    if (event.banner) {
+      const text = event.banner;
+      const { texture } = canvasTexture(1024, 128, (ctx) => {
+        ctx.fillStyle = '#f59e0b';
+        ctx.fillRect(0, 0, 1024, 128);
+        ctx.fillStyle = '#0f172a';
+        ctx.fillRect(0, 0, 1024, 10);
+        ctx.fillRect(0, 118, 1024, 10);
+        ctx.font = 'bold 64px Arial, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(text, 512, 66, 990);
+      });
+      // Self-lit like the gate sign, so it reads in the evening too.
+      const mat = new THREE.MeshBasicMaterial({ map: texture, side: THREE.DoubleSide });
+      const banner = new THREE.Mesh(new THREE.PlaneGeometry(10, 1.25), mat);
+      banner.position.set(0, 3.35, 64.25);
+      group.add(banner);
+    }
+    if (event.flags) {
+      // Bunting across the entrance, in plain festive colours.
+      const n = 26;
+      const bunting = lights(
+        n,
+        (i) => {
+          const t = i / (n - 1);
+          return [-8 + 16 * t, 4.05 - Math.sin(t * Math.PI) * 0.7, 61.6];
+        },
+        0.32,
+      );
+      (bunting.mesh.material as THREE.Material).dispose();
+      bunting.mesh.material = new THREE.MeshLambertMaterial({ color: 0xffffff });
+      group.add(bunting.mesh);
+    }
+    if (event.flowers) {
+      const bouquet = (x: number, z: number) => {
+        const blocks: Block[] = [[[0.22, 0.3, 0.22], [0, 0.15, 0], 0x64748b]];
+        const petals = [0xf43f5e, 0xfacc15, 0xf472b6, 0xffffff, 0xfb7185];
+        for (let i = 0; i < 7; i++) {
+          const a = (i / 7) * Math.PI * 2;
+          const px = Math.cos(a) * 0.09;
+          const pz = Math.sin(a) * 0.09;
+          blocks.push([[0.025, 0.3, 0.025], [px, 0.42, pz], 0x2f7d32]);
+          blocks.push([
+            [0.09, 0.08, 0.09],
+            [px * 1.3, 0.6 + (i % 2) * 0.05, pz * 1.3],
+            petals[i % 5]!,
+          ]);
+        }
+        const mesh = voxelMesh(blocks);
+        mesh.matrixAutoUpdate = true;
+        mesh.position.set(x, 0, z);
+        group.add(mesh);
+      };
+      for (const zone of ZONES)
+        if (zone.speaker === 'sveta' || zone.speaker === 'alsu')
+          bouquet(zone.npc[0] + 0.7, zone.npc[1] + 0.5);
+    }
+    if (event.fireworks && !this.fireworks) {
+      this.fireworks = new Debris(this.opts.mobile ? 160 : 320, 0xffd36b, 0.5, -5);
+      this.scene.add(this.fireworks.points);
+    }
+    if (event.snow) this.setEnvironment(this.lastDate, this.lastPoint, this.lift, true);
+  }
+
   /** Skip the opening fly-over. */
   skipIntro() {
     if (!this.intro.active) return;
@@ -762,6 +986,8 @@ export class StroykaEngine {
 
   /** Real (or overridden) time and the forecast point. */
   private externalEnv = false;
+  private lastDate = new Date();
+  private lastPoint: WeatherPoint | null = null;
   setEnvironment(
     date: Date,
     point: WeatherPoint | null,
@@ -773,10 +999,24 @@ export class StroykaEngine {
       this.externalEnv = true;
       immediate = true;
     }
+    this.lastDate = date;
+    this.lastPoint = point;
     const sun = sunPosition(date);
     const moon = moonPosition(date);
     const palette = skyPalette(sun.elevation);
     this.weather = weatherScene(point);
+    if (this.season?.snow) {
+      // New Year: snow on the ground and a light snowfall whatever the forecast.
+      const w = this.weather;
+      this.weather = {
+        ...w,
+        snow: Math.max(w.snow, w.rain, 0.3),
+        rain: 0,
+        wet: false,
+        snowGround: true,
+        temp: Math.min(w.temp, -2),
+      };
+    }
     this.lift = lift;
     this.hour = (date.getUTCHours() + 3) % 24;
     const w = this.weather;
@@ -839,16 +1079,54 @@ export class StroykaEngine {
       .sort((a, b) => a.dist - b.dist);
   }
 
-  /** A speech bubble over a character for `seconds`. */
-  say(id: string, text: string, seconds = 5) {
+  /** A speech bubble over a character (or the dog) for `seconds`; the speaker shows the mood. */
+  say(id: string, text: string, seconds = 5, mood: Mood = 'neutral') {
+    if (id === 'dog') {
+      const d = this.dogState;
+      d.bubble ??= this.bubbleEl();
+      this.fillBubble(d.bubble, text);
+      d.bubbleUntil = this.time + seconds;
+      return;
+    }
     const c = this.characters.find((ch) => ch.id === id);
     if (!c) return;
-    if (!c.bubble) {
-      c.bubble = document.createElement('div');
-      c.bubble.className = 'stroyka-bubble';
-      this.opts.overlay.appendChild(c.bubble);
-    }
-    c.bubble.replaceChildren(
+    c.bubble ??= this.bubbleEl();
+    this.fillBubble(c.bubble, text);
+    c.bubbleUntil = this.time + seconds;
+    this.setFace(c, mood, seconds);
+  }
+
+  /**
+   * The character speaking in the dialogue box: the one in the active zone
+   * with this voice, else the nearest with it. Shows the mood face and the
+   * talking gestures for `seconds`.
+   */
+  speak(speaker: BanterSpeaker, mood: Mood, seconds = 6) {
+    const c =
+      this.characters.find(
+        (ch) => ch.speaker === speaker && ch.zone && ch.zone === this.activeZone,
+      ) ??
+      this.characters
+        .filter((ch) => ch.speaker === speaker && ch.person.root.visible)
+        .sort((a, b) => a.dist - b.dist)[0];
+    if (c) this.setFace(c, mood, seconds);
+  }
+
+  private setFace(c: Character, mood: Mood, seconds: number) {
+    c.mood = mood;
+    c.faceUntil = this.time + seconds;
+    this.face.show(c.person, mood);
+  }
+
+  private bubbleEl() {
+    const el = document.createElement('div');
+    el.className = 'stroyka-bubble';
+    this.opts.overlay.appendChild(el);
+    return el;
+  }
+
+  private fillBubble(el: HTMLDivElement, text: string) {
+    el.replaceChildren(
       ...splitCensored(text).map((part) => {
         const span = document.createElement('span');
         span.textContent = part.text;
@@ -856,7 +1134,13 @@ export class StroykaEngine {
         return span;
       }),
     );
-    c.bubbleUntil = this.time + seconds;
+  }
+
+  /** The current frame as a PNG data URL (rendered and read in the same tick). */
+  snapshot(): { url: string; width: number; height: number } {
+    this.renderer.render(this.scene, this.camera);
+    const canvas = this.renderer.domElement;
+    return { url: canvas.toDataURL('image/png'), width: canvas.width, height: canvas.height };
   }
 
   get state() {
@@ -872,7 +1156,13 @@ export class StroykaEngine {
         id: ch.id,
         p: [ch.person.root.position.x, ch.person.root.position.z],
         v: ch.person.root.visible,
+        d: ch.person.detailed,
       })),
+      dog: {
+        p: [this.dogState.pos.x, this.dogState.pos.z].map((v) => Math.round(v * 10) / 10),
+        pose: this.dogState.pose,
+      },
+      season: this.season?.id ?? null,
     };
   }
 
@@ -883,13 +1173,35 @@ export class StroykaEngine {
     this.cleanups.forEach((fn) => fn());
     this.observer?.disconnect();
     this.characters.forEach((c) => c.bubble?.remove());
+    this.dogState.bubble?.remove();
+    // Geometries, materials and every texture they hold (canvas prints, the
+    // pixel grain, decals): iPhones run out of WebGL memory and contexts
+    // after a few visits otherwise.
+    const textures = new Set<THREE.Texture>();
+    const materials = new Set<THREE.Material>([this.voxelMat, this.brandMat]);
     this.scene.traverse((obj) => {
       const mesh = obj as THREE.Mesh;
       mesh.geometry?.dispose?.();
       const mat = mesh.material as THREE.Material | THREE.Material[] | undefined;
-      if (Array.isArray(mat)) mat.forEach((m) => m.dispose());
-      else mat?.dispose?.();
+      for (const m of Array.isArray(mat) ? mat : mat ? [mat] : []) materials.add(m);
     });
+    for (const m of materials) {
+      for (const value of Object.values(m)) if (value instanceof THREE.Texture) textures.add(value);
+      const uniforms = (m as THREE.ShaderMaterial).uniforms;
+      if (uniforms)
+        for (const u of Object.values(uniforms))
+          if (u?.value instanceof THREE.Texture) textures.add(u.value);
+      m.dispose();
+    }
+    textures.forEach((t) => t.dispose());
+    resetPeopleMaterials();
+    // Shadow maps are render targets of their own.
+    this.scene.traverse((obj) => {
+      const light = obj as THREE.DirectionalLight;
+      if (light.isLight && light.shadow) light.shadow.dispose();
+    });
+    this.renderer.renderLists.dispose();
+    this.renderer.forceContextLoss();
     this.renderer.dispose();
   }
 
@@ -976,6 +1288,10 @@ export class StroykaEngine {
         return visible && o.visible;
       });
       const hit = raycaster.intersectObjects(targets, false)[0];
+      if (hit?.object.userData.dog) {
+        this.opts.onDog?.();
+        return;
+      }
       const target = hit?.object.userData.machine as AdTarget | undefined;
       if (target) this.opts.onAdClick(target);
     };
@@ -1086,7 +1402,7 @@ export class StroykaEngine {
     for (const update of this.updaters) update(time, dt);
     for (const d of this.debris) d.update(dt);
     this.updateCamera(realDt);
-    this.updatePeople(dt);
+    this.updatePeople(dt, realDt);
     this.updateEnvironment(dt, realDt);
   }
 
@@ -1250,7 +1566,7 @@ export class StroykaEngine {
     t.yaw = heading;
   }
 
-  private updatePeople(dt: number) {
+  private updatePeople(dt: number, realDt = dt) {
     const time = this.time;
     const cam = this.camera.position;
     const lunch = this.hour >= 12 && this.hour < 13;
@@ -1265,6 +1581,7 @@ export class StroykaEngine {
         this.guardBeam.visible = night;
       }
       let moving = 0;
+      let phase = 0;
       if (c.patrol && root.visible && !(lunch && !c.guard)) {
         // Walk the patrol path back and forth.
         const pts = c.patrol;
@@ -1279,43 +1596,162 @@ export class StroykaEngine {
         root.position.lerpVectors(a, b, d / legs[i]!);
         root.rotation.y = Math.atan2(b.x - a.x, b.z - a.z);
         moving = 1;
-      } else {
-        const dx = cam.x - root.position.x;
-        const dz = cam.z - root.position.z;
-        const near = dx * dx + dz * dz < 14 * 14;
-        const want = near && c.zone ? Math.atan2(dx, dz) : c.baseYaw;
+        // Steps follow the distance walked: about 1.4 m per stride.
+        phase = time * speed * 4.4;
+      }
+      const dx = cam.x - root.position.x;
+      const dz = cam.z - root.position.z;
+      c.dist = Math.hypot(dx, dz);
+      const toCam = Math.atan2(dx, dz);
+      if (!moving) {
+        const want = c.dist < 14 && c.zone ? toCam : c.baseYaw;
         let diff = want - root.rotation.y;
         diff = Math.atan2(Math.sin(diff), Math.cos(diff));
         root.rotation.y += diff * damp(3, dt);
       }
-      walk(c.person, time * 6.5, moving);
-      // Lunch: the crew sits down with thermoses; otherwise idle or gesturing.
-      const sitting = lunch && c.sitter;
+      // The head turns to a visitor who comes close.
+      let look = 0;
+      if (c.dist < 8 && !moving) {
+        const rel = Math.atan2(
+          Math.sin(toCam - root.rotation.y),
+          Math.cos(toCam - root.rotation.y),
+        );
+        look = Math.max(-1, Math.min(1, rel));
+      }
+      const talking =
+        c.bubbleUntil > time || c.faceUntil > time || (!!c.zone && c.zone === this.activeZone);
+      // Lunch: the crew sits down with thermoses.
+      const sitting = lunch && !!c.sitter;
       root.position.y = sitting ? -0.45 : 0;
-      if (sitting) {
-        c.person.legL.rotation.x = c.person.legR.rotation.x = -1.4;
-        c.person.armR.rotation.x = -1.2 + Math.sin(time * 0.8 + root.position.x) * 0.2;
-      } else if (!moving) {
-        const talking = c.zone && c.zone === this.activeZone;
-        const k = talking ? 1 : 0.15;
-        c.person.armR.rotation.x = -Math.abs(Math.sin(time * (talking ? 2.6 : 0.6))) * 0.9 * k;
-        c.person.armL.rotation.x = Math.sin(time * 0.5) * 0.05;
-      }
+      if (c.person.detailed && root.visible)
+        animatePerson(c.person, {
+          time,
+          walk: moving,
+          phase,
+          sit: sitting,
+          talking,
+          mood: c.faceUntil > time ? c.mood : 'neutral',
+          look,
+        });
       // Speech bubble.
-      if (c.bubble) {
-        const show = c.bubbleUntil > time && root.visible;
-        if (show) {
-          project.copy(root.position).setY(2.45).project(this.camera);
-          const behind = project.z > 1;
-          const far = root.position.distanceTo(cam) > 45;
-          if (behind || far) c.bubble.style.opacity = '0';
-          else {
-            c.bubble.style.opacity = '1';
-            c.bubble.style.transform = `translate(${((project.x + 1) / 2) * w}px, ${((1 - project.y) / 2) * h}px) translate(-50%, -100%)`;
-          }
-        } else c.bubble.style.opacity = '0';
-      }
+      if (c.bubble) this.placeBubble(c.bubble, c.bubbleUntil, root, 2.45, project, w, h);
     }
+    // The mood face stays on the speaker while their line lasts.
+    const speaker = this.face.person;
+    if (speaker) {
+      const c = this.characters.find((ch) => ch.person === speaker);
+      if (!c || c.faceUntil <= time || !speaker.detailed) this.face.hide();
+    }
+    this.updateLod(time);
+    this.updateDog(realDt, night, project, w, h);
+  }
+
+  /**
+   * Full detail for the nearest people within DETAIL_DISTANCE, capped on
+   * phones; one-mesh stand-ins for the rest. Re-ranked a few times a second.
+   */
+  private updateLod(time: number) {
+    if (time < this.nextLod) return;
+    this.nextLod = time + 0.3;
+    const cap = this.opts.mobile ? 6 : 14;
+    const ranked = this.characters
+      .filter((c) => c.person.root.visible)
+      .sort(
+        (a, b) => a.dist - (a.faceUntil > time ? 50 : 0) - (b.dist - (b.faceUntil > time ? 50 : 0)),
+      );
+    let detailed = 0;
+    let lod = 0;
+    ranked.forEach((c, i) => {
+      const on = c.dist < DETAIL_DISTANCE && i < cap;
+      setDetail(c.person, on);
+      if (on) detailed++;
+      else lod++;
+    });
+    this.opts.telemetry.people = { detailed, lod };
+  }
+
+  private placeBubble(
+    el: HTMLDivElement,
+    until: number,
+    root: THREE.Object3D,
+    height: number,
+    project: THREE.Vector3,
+    w: number,
+    h: number,
+  ) {
+    const show = until > this.time && root.visible;
+    if (!show) {
+      el.style.opacity = '0';
+      return;
+    }
+    project.copy(root.position).setY(height).project(this.camera);
+    const behind = project.z > 1;
+    const far = root.position.distanceTo(this.camera.position) > 45;
+    if (behind || far) el.style.opacity = '0';
+    else {
+      el.style.opacity = '1';
+      el.style.transform = `translate(${((project.x + 1) / 2) * w}px, ${((1 - project.y) / 2) * h}px) translate(-50%, -100%)`;
+    }
+  }
+
+  /**
+   * «Бетон»: sits by Михалыч at the gate, trots after the visitor in free
+   * walk, sleeps by the cabin at night.
+   */
+  private updateDog(dt: number, night: boolean, project: THREE.Vector3, w: number, h: number) {
+    const d = this.dogState;
+    const root = this.dog.root;
+    let target: THREE.Vector3;
+    let rest: DogPose = 'sit';
+    let restYaw = 0.2;
+    if (night && !(this.mode === 'free' && this.player.distanceTo(d.pos) < 12)) {
+      target = this.tmpB.set(19.6, 0, 49.9);
+      rest = 'sleep';
+      restYaw = 1.2;
+    } else if (this.mode === 'free' && !this.intro.active) {
+      // At the visitor's side, a little ahead: in view in both cameras.
+      const side = this.yaw - 0.3;
+      target = this.tmpB.set(
+        this.player.x + Math.sin(side) * 2.3,
+        0,
+        this.player.z + Math.cos(side) * 2.3,
+      );
+      rest = 'sit';
+      restYaw = Math.atan2(this.player.x - d.pos.x, this.player.z - d.pos.z);
+    } else {
+      target = this.tmpB.set(4.2, 0, 51.8);
+      restYaw = Math.atan2(0 - 4.2, 58 - 51.8);
+    }
+    const to = this.tmpA.copy(target).sub(d.pos).setY(0);
+    const dist = to.length();
+    let moving = false;
+    if (dist > 0.6) {
+      // Trot (or run to catch up).
+      const speed = Math.min(dist > 6 ? 6.5 : 3.6, dist * 2.5);
+      const step = Math.min(dist, speed * dt);
+      to.multiplyScalar(step / dist);
+      const [x, z] = resolveCollision(d.pos.x + to.x, d.pos.z + to.z, 0.3, this.obstacles);
+      d.pos.set(x, 0, z);
+      d.phase += step * 7;
+      let diff = Math.atan2(to.x, to.z) - d.yaw;
+      diff = Math.atan2(Math.sin(diff), Math.cos(diff));
+      d.yaw += diff * damp(8, dt);
+      moving = true;
+      // Lost far behind (a teleport, a long jump of the tour): catch up at once.
+      if (dist > 40 || !this.dogPlaced) d.pos.copy(target);
+    } else {
+      let diff = restYaw - d.yaw;
+      diff = Math.atan2(Math.sin(diff), Math.cos(diff));
+      d.yaw += diff * damp(3, dt);
+    }
+    this.dogPlaced = true;
+    d.pose = moving ? 'trot' : rest;
+    root.position.copy(d.pos);
+    root.rotation.y = d.yaw;
+    const near = d.pos.distanceTo(this.camera.position) < 60;
+    root.visible = near;
+    if (near) animateDog(this.dog, d.pose, this.time, d.phase);
+    if (d.bubble) this.placeBubble(d.bubble, d.bubbleUntil, root, 1.1, project, w, h);
   }
 
   private updateEnvironment(dt: number, realDt: number) {
@@ -1461,6 +1897,17 @@ export class StroykaEngine {
     if (this.tower?.root.visible) {
       this.tower.jib.rotation.y = Math.sin(this.time * 0.07) * 1.4 + 0.6;
       this.tower.red.color.setHex(Math.sin(this.time * 3) > 0 || n < 0.3 ? 0xff2020 : 0x400000);
+    }
+    // Holiday garland: the colours run along the string.
+    if (this.garland) {
+      const g = this.garland;
+      const shift = Math.floor(this.time * 3);
+      const c = new THREE.Color();
+      for (let i = 0; i < g.colors.length; i++) {
+        c.copy(g.colors[(i + shift) % g.colors.length]!).multiplyScalar(0.6 + 0.6 * n);
+        g.mesh.setColorAt(i, c);
+      }
+      if (g.mesh.instanceColor) g.mesh.instanceColor.needsUpdate = true;
     }
     // Handover night: fireworks over the finished object.
     if (this.fireworks) {

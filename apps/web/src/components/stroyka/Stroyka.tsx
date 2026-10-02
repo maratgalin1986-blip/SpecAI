@@ -40,6 +40,16 @@ import {
   type WorldProgress,
 } from '@/lib/stroyka/progress';
 import { loadUsed, saveUsed } from '@/lib/stroyka/shuffleBag';
+import { moodLine, type Mood } from '@/lib/stroyka/mood';
+import { seasonalEvent } from '@/lib/stroyka/seasonal';
+import {
+  applyBadge,
+  BADGES,
+  emptyBadges,
+  loadBadges,
+  saveBadges,
+  type BadgeEvent,
+} from '@/lib/stroyka/badges';
 import { stageNode } from '@/lib/stroyka/stage';
 import { BANTER_NAMES, type BanterSpeaker } from '@/lib/stroykaJokes';
 import {
@@ -71,6 +81,7 @@ import { Joystick } from './Joystick';
 import { MiniMap, type MiniCity } from './MiniMap';
 import { placeSite, points as cityPoints, type CityData } from '@/lib/stroyka/city';
 import { OrderPanel } from './OrderPanel';
+import { PhotoBooth } from './PhotoBooth';
 
 const StroykaWorld = dynamic(() => import('./StroykaWorld'), { ssr: false });
 
@@ -94,11 +105,19 @@ const WEATHER_KEY = 'stroyka.weather.v1';
 function hasWebGL() {
   try {
     const canvas = document.createElement('canvas');
-    return !!(canvas.getContext('webgl2') || canvas.getContext('webgl'));
+    const gl = (canvas.getContext('webgl2') || canvas.getContext('webgl')) as
+      WebGLRenderingContext | WebGL2RenderingContext | null;
+    // Release the probe at once: iPhones allow only a few live contexts.
+    gl?.getExtension('WEBGL_lose_context')?.loseContext();
+    return !!gl;
   } catch {
     return false;
   }
 }
+
+/** Every voice on the site, for «Поговорил со всеми». */
+const ALL_SPEAKERS = [...new Set(ZONES.map((z) => z.speaker))];
+const ALL_ZONES = ZONES.map((z) => z.id);
 
 const uniq = <T,>(list: T[]) => [...new Set(list)];
 
@@ -159,9 +178,17 @@ export function Stroyka() {
   const linesMod = useRef<typeof import('@/lib/stroyka/lines') | null>(null);
   const keyRef = useRef(0);
   const prevZone = useRef<ZoneId | null>(null);
-  const [chat, setChat] = useState<{ speaker: SpeakerId; text: string; quick: Quick[] } | null>(
-    null,
-  );
+  const [chat, setChat] = useState<{
+    speaker: SpeakerId;
+    text: string;
+    quick: Quick[];
+    mood: Mood;
+  } | null>(null);
+  const [badges, setBadges] = useState(emptyBadges);
+  const badgesRef = useRef(badges);
+  badgesRef.current = badges;
+  const [shelfOpen, setShelfOpen] = useState(false);
+  const seasonSaid = useRef(new Set<string>());
   const [pendingPhone, setPendingPhone] = useState<string | null>(null);
   const [phoneSending, setPhoneSending] = useState(false);
   const brain = useRef<typeof import('@/lib/stroyka/brain') | null>(null);
@@ -205,7 +232,35 @@ export function Stroyka() {
     [overrides.weather, point, serverLift],
   );
   const hour = (now.getUTCHours() + 3) % 24;
+  const hourRef = useRef(hour);
+  hourRef.current = hour;
   const sun = useMemo(() => sunPosition(now), [now]);
+
+  // Holidays by the real date (?date=YYYY-MM-DD to preview one).
+  const [dateOverride, setDateOverride] = useState<Date | null>(null);
+  const dayKey = (dateOverride ?? now).toISOString().slice(0, 10);
+  const season = useMemo(() => seasonalEvent(dateOverride ?? now), [dayKey]);
+  const seasonRef = useRef(season);
+  seasonRef.current = season;
+  /** The next holiday line for this voice, once each. */
+  const seasonLine = useCallback((speaker: BanterSpeaker) => {
+    const line = seasonRef.current?.lines.find(
+      (l) => l.speaker === speaker && !seasonSaid.current.has(l.text),
+    );
+    if (line) seasonSaid.current.add(line.text);
+    return line ?? null;
+  }, []);
+
+  // «Значки прораба»: just for fun, kept in localStorage.
+  useEffect(() => setBadges(loadBadges()), []);
+  const earn = useCallback((event: BadgeEvent) => {
+    const { state, earned } = applyBadge(badgesRef.current, event);
+    if (JSON.stringify(state) === JSON.stringify(badgesRef.current)) return;
+    badgesRef.current = state;
+    setBadges(state);
+    saveBadges(state);
+    for (const b of earned) setToast(`🏅 Новый значок: ${b.icon} «${b.title}»`);
+  }, []);
 
   // ------------------------------------------------------------ boot
   useEffect(() => {
@@ -219,6 +274,13 @@ export function Stroyka() {
     const force3d = params.get('3d') === '1';
     setPhase(force2d || !hasWebGL() || (prefersReduced && !force3d) ? 'fallback' : '3d');
     if (ov.time) setNow(atMskTime(new Date(), ov.time.h, ov.time.m));
+    if (params.get('order') === '1') {
+      setOrder({ open: true, machine: null });
+      setMode('free');
+    }
+    const forcedDate = params.get('date');
+    if (forcedDate && /^\d{4}-\d{2}-\d{2}$/.test(forcedDate))
+      setDateOverride(new Date(`${forcedDate}T09:00:00Z`));
     // Full-screen page: the site chrome stays behind, the page does not scroll.
     const html = document.documentElement;
     const prev = html.style.overflow;
@@ -349,8 +411,21 @@ export function Stroyka() {
 
   // ------------------------------------------------------------ engine sync
   useEffect(() => {
+    engine?.setSeason(season);
     engine?.setEnvironment(now, point, lift);
-  }, [engine, now, point, lift]);
+  }, [engine, season, now, point, lift]);
+
+  // «Собрал наряд»: every point of the order filled in, or the order sent.
+  useEffect(() => {
+    if (ctx.sent || orderProgress(ctx).done >= 5) earn({ type: 'order' });
+  }, [ctx, earn]);
+
+  // Badges for the conditions of the visit.
+  useEffect(() => {
+    if (!engine) return;
+    if (hour >= 22 || hour < 5) earn({ type: 'night' });
+    if (weather.rain > 0.05) earn({ type: 'rain' });
+  }, [engine, hour, weather, earn]);
   useEffect(() => {
     if (engine && progressReady) engine.setProgress(progress, timelapse);
   }, [engine, progress, progressReady, timelapse]);
@@ -372,6 +447,11 @@ export function Stroyka() {
       goTo: (z: ZoneId) => engine.goToZone(z),
       skipIntro: () => engine.skipIntro(),
       state: () => engine.state,
+      toScreen: (x: number, y: number, z: number) => engine.toScreen(x, y, z),
+      standAt: (x: number, z: number, yaw: number, pitch?: number) => {
+        setMode('free');
+        engine.standAt(x, z, yaw, pitch);
+      },
     };
   }, [engine, telemetry]);
 
@@ -421,8 +501,17 @@ export function Stroyka() {
 
   const logRadio = useCallback((lines: { speaker: BanterSpeaker; text: string }[]) => {
     if (!lines.length) return;
-    for (const line of lines) emitDialog(line.speaker, line.text, 'radio');
-    setRadioLog((log) => [...log, ...lines.map((l) => ({ ...l, id: ++keyRef.current }))].slice(-8));
+    const shown = lines.map((l) => ({
+      speaker: l.speaker,
+      ...moodLine({ speaker: l.speaker, text: l.text, kind: 'radio', hour: hourRef.current }),
+    }));
+    for (const line of shown) emitDialog(line.speaker, line.text, 'radio', line.mood);
+    setRadioLog((log) =>
+      [
+        ...log,
+        ...shown.map((l) => ({ speaker: l.speaker, text: l.text, id: ++keyRef.current })),
+      ].slice(-8),
+    );
   }, []);
 
   const openNode = useCallback(
@@ -434,13 +523,20 @@ export function Stroyka() {
         awayShown.current = true;
         text = `${away} ${text}`;
       }
-      emitDialog(node.speaker, text, 'business');
+      const shown = moodLine({
+        speaker: node.speaker,
+        text,
+        kind: 'business',
+        hour: hourRef.current,
+      });
+      emitDialog(node.speaker, shown.text, 'business', shown.mood);
+      engine?.speak(node.speaker, shown.mood, 6);
       setExtra(null);
       setChat(null);
       setPendingPhone(null);
       setDialog({ nodeId, radio, engaged, key: ++keyRef.current });
     },
-    [nodeFor, away],
+    [nodeFor, away, engine, earn],
   );
 
   const openZoneDialog = useCallback(
@@ -449,19 +545,26 @@ export function Stroyka() {
       const radio = pendingRadio.current;
       pendingRadio.current = [];
       openNode(zn.root, radio, false);
-      // The NPC reacts: a greeting the first time, «вернулся» after.
-      const line = picker.current?.pick(
-        zn.speaker,
-        [visited.current.has(z) ? 'return' : 'greet'],
-        false,
-      );
+      // The NPC reacts: a holiday line, a greeting the first time, «вернулся» after.
+      const holiday = seasonLine(zn.speaker);
+      const line = holiday
+        ? { text: holiday.text, tags: ['joke'] }
+        : picker.current?.pick(zn.speaker, [visited.current.has(z) ? 'return' : 'greet'], false);
       visited.current.add(z);
+      earn({ type: 'talk', speaker: zn.speaker, all: ALL_SPEAKERS });
       if (line && engine) {
-        engine.say(`npc-${z}`, line.text, 4.5);
-        emitDialog(zn.speaker, line.text, 'joke');
+        const shown = moodLine({
+          speaker: zn.speaker,
+          text: line.text,
+          kind: 'joke',
+          tags: line.tags,
+          hour: hourRef.current,
+        });
+        engine.say(`npc-${z}`, shown.text, 4.5, shown.mood);
+        emitDialog(zn.speaker, shown.text, 'joke', shown.mood);
       }
     },
-    [openNode, engine],
+    [openNode, engine, earn, seasonLine],
   );
 
   // Zone changes: sound events, the zone's dialogue unless the visitor is busy.
@@ -471,6 +574,7 @@ export function Stroyka() {
     if (before) for (const m of zoneById(before).machines) emitScene(m, false);
     if (zone) for (const m of zoneById(zone).machines) emitScene(m, true);
     engine?.setActiveZone(zone);
+    if (zone) earn({ type: 'zone', zone, all: ALL_ZONES });
     if (dialogRef.current?.engaged) return;
     if (!zone) {
       setDialog(null);
@@ -553,10 +657,12 @@ export function Stroyka() {
   // ------------------------------------------------------------ free-text chat (rule-based, free)
   const sayAs = useCallback(
     (speaker: SpeakerId, text: string, quick: Quick[], kind: 'business' | 'joke' = 'business') => {
-      setChat({ speaker, text, quick });
-      emitDialog(speaker, text, kind);
+      const shown = moodLine({ speaker, text, kind, hour: hourRef.current });
+      setChat({ speaker, text: shown.text, quick, mood: shown.mood });
+      emitDialog(speaker, shown.text, kind, shown.mood);
+      engine?.speak(speaker, shown.mood, 6);
     },
-    [],
+    [engine],
   );
 
   const weatherStory = useCallback(
@@ -701,11 +807,19 @@ export function Stroyka() {
       if (!node || !picker.current) return;
       const line = picker.current.pick(node.speaker, ['idle', 'joke']);
       if (!line) return;
-      setExtra({ speaker: node.speaker, text: line.text });
-      emitDialog(node.speaker, line.text, 'joke');
+      const shown = moodLine({
+        speaker: node.speaker,
+        text: line.text,
+        kind: 'joke',
+        tags: line.tags,
+        hour: hourRef.current,
+      });
+      setExtra({ speaker: node.speaker, text: shown.text });
+      emitDialog(node.speaker, shown.text, 'joke', shown.mood);
+      engine?.speak(node.speaker, shown.mood, 5);
     }, 14_000);
     return () => window.clearTimeout(timer);
-  }, [dialog, nodeFor]);
+  }, [dialog, nodeFor, engine]);
 
   // ------------------------------------------------------------ ambient banter, site events, radio
   const conditions = useMemo<LineConditions>(
@@ -742,14 +856,25 @@ export function Stroyka() {
       if (conditions.hour >= 22 || conditions.hour < 6) events.push('event:guard');
       if (conditions.wind) events.push('event:windcheck');
       events.push(
-        ['event:smoke', 'event:search', 'event:concrete'][Math.floor(Math.random() * 3)]!,
+        ['event:smoke', 'event:search', 'event:concrete', 'dog'][Math.floor(Math.random() * 4)]!,
       );
       const r = Math.random();
       const want = r < 0.3 ? events : r < 0.6 ? tags : [];
-      const line = picker.current.pick(who.speaker, want);
+      const holiday = seasonLine(who.speaker);
+      const line = holiday
+        ? { text: holiday.text, tags: ['joke'] }
+        : picker.current.pick(who.speaker, want);
       if (!line) return;
-      engine.say(who.id, line.text, 5.5);
-      emitDialog(who.speaker, line.text, line.tags.includes('business') ? 'business' : 'joke');
+      const kind = line.tags.includes('business') ? 'business' : 'joke';
+      const shown = moodLine({
+        speaker: who.speaker,
+        text: line.text,
+        kind,
+        tags: line.tags,
+        hour: conditions.hour,
+      });
+      engine.say(who.id, shown.text, 5.5, shown.mood);
+      emitDialog(who.speaker, shown.text, kind, shown.mood);
       saveUsed(picker.current.used);
     };
     timer = window.setTimeout(tick, 4000);
@@ -766,7 +891,15 @@ export function Stroyka() {
       window.clearTimeout(timer);
       window.clearInterval(radioTimer);
     };
-  }, [phase, engine, order.open, zone, conditions, logRadio]);
+  }, [phase, engine, order.open, zone, conditions, logRadio, seasonLine]);
+
+  // «Бетон» barks when tapped.
+  const onDog = useCallback(() => {
+    const text = 'Гав! 🐶';
+    engine?.say('dog', text, 2.5);
+    emitDialog('dog', text, 'joke', 'happy');
+    earn({ type: 'dog' });
+  }, [engine, earn]);
 
   useEffect(() => {
     if (!toast) return;
@@ -775,7 +908,10 @@ export function Stroyka() {
   }, [toast]);
 
   // ------------------------------------------------------------ actions
-  const skipToOrder = () => {
+  // A link, so a tap before hydration (slow phones, the loading screen) still
+  // works: it reloads with ?order=1 and the panel opens on boot.
+  const skipToOrder = (event?: { preventDefault(): void }) => {
+    event?.preventDefault();
     setSkipTyping((n) => n + 1);
     engine?.skipIntro();
     if (mode === 'tour') setMode('free');
@@ -801,6 +937,11 @@ export function Stroyka() {
 
   const node = dialog ? nodeFor(dialog.nodeId, ctx) : null;
   const gateAway = node?.id === 'gate' && away && awayShown.current ? `${away} ` : '';
+  const shownLine = chat
+    ? { text: chat.text, mood: chat.mood }
+    : node
+      ? moodLine({ speaker: node.speaker, text: `${gateAway}${node.text}`, kind: 'business', hour })
+      : null;
   const loading = phase === '3d' && !engine;
   const loadPct = Math.round(Math.max(loadSim, loadReal * 0.95 + 0.05) * 100);
   const steps = orderProgress(ctx);
@@ -831,6 +972,7 @@ export function Stroyka() {
             else if (target === 'snab') window.location.href = '/smeta?mode=snab';
             else setOrder({ open: true, machine: target });
           }}
+          onDog={onDog}
           onError={() => setPhase('fallback')}
         />
       )}
@@ -872,14 +1014,15 @@ export function Stroyka() {
           >
             Позвонить
           </a>
-          <button
-            type="button"
+          <a
+            href="?order=1"
             data-testid="skip-to-order"
             onClick={skipToOrder}
-            className="pointer-events-auto rounded-full bg-amber-500 px-3 py-2 text-sm font-bold text-slate-950 shadow-lg shadow-amber-600/30 hover:bg-amber-400"
+            className="pointer-events-auto whitespace-nowrap rounded-full bg-amber-500 px-3 py-2 text-sm font-bold text-slate-950 shadow-lg shadow-amber-600/30 hover:bg-amber-400"
           >
-            Пропустить → к заказу
-          </button>
+            <span className="sm:hidden">К заказу →</span>
+            <span className="hidden sm:inline">Пропустить → к заказу</span>
+          </a>
         </div>
       </header>
 
@@ -1009,6 +1152,45 @@ export function Stroyka() {
                   ))}
                 </div>
               )}
+              <button
+                type="button"
+                data-testid="badges-toggle"
+                onClick={() => setShelfOpen((v) => !v)}
+                aria-expanded={shelfOpen}
+                className="rounded-full bg-slate-950/75 px-3 py-1.5 text-xs font-semibold backdrop-blur hover:bg-slate-800"
+              >
+                🏅 Значки · {badges.earned.length}/{BADGES.length}
+              </button>
+              {shelfOpen && (
+                <div
+                  data-testid="badge-shelf"
+                  className="w-64 max-w-[70vw] rounded-xl border border-amber-400/30 bg-slate-950/85 p-2 text-[11px] backdrop-blur"
+                >
+                  <div className="mb-1 font-mono text-[10px] uppercase tracking-widest text-amber-400">
+                    Значки прораба · для души
+                  </div>
+                  <ul className="grid gap-1">
+                    {BADGES.map((b) => {
+                      const got = badges.earned.includes(b.id);
+                      return (
+                        <li
+                          key={b.id}
+                          className={`flex items-center gap-2 ${got ? 'text-white' : 'text-slate-500'}`}
+                        >
+                          <span className={`text-base ${got ? '' : 'opacity-40 grayscale'}`}>
+                            {b.icon}
+                          </span>
+                          <span>
+                            <b className="font-semibold">{b.title}</b>
+                            {!got && <span className="block text-[10px]">{b.hint}</span>}
+                          </span>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              )}
+              {engine && <PhotoBooth snap={() => engine.snapshot()} />}
               <span className="text-right text-[10px] leading-tight text-white/60">
                 <a href="/credits">© участники OpenStreetMap</a>
                 <br />
@@ -1062,7 +1244,8 @@ export function Stroyka() {
           <DialogueBox
             key={dialog.key}
             speaker={chat?.speaker ?? node.speaker}
-            text={chat ? chat.text : `${gateAway}${node.text}`}
+            text={shownLine?.text ?? node.text}
+            mood={shownLine?.mood}
             chat={{
               placeholder:
                 (chat?.speaker ?? node.speaker) === 'sveta'
@@ -1119,14 +1302,14 @@ export function Stroyka() {
           <div className="mt-2 font-mono text-xs text-slate-400" data-testid="loading-pct">
             Заезжаем на объект… {loadPct}%
           </div>
-          <button
-            type="button"
+          <a
+            href="?order=1"
             data-testid="loading-skip"
             onClick={skipToOrder}
             className="mt-8 rounded-full bg-amber-500 px-5 py-2.5 text-sm font-bold text-slate-950 hover:bg-amber-400"
           >
             Пропустить → к заказу
-          </button>
+          </a>
         </div>
       )}
 

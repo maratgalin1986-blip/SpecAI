@@ -3,6 +3,7 @@
 // caller bakes it, and update(time, dt) animates the hierarchy.
 import * as THREE from 'three';
 import { Debris, keyframes, node, Rig, smooth, type MatKey } from './kit';
+import { HAT, lookFor, makePerson } from './people';
 
 export interface Animated {
   root: THREE.Group;
@@ -10,54 +11,6 @@ export interface Animated {
 }
 
 // ---------------------------------------------------------------- people
-
-const BACK_PLANE = new THREE.PlaneGeometry(1, 1);
-
-export interface Person {
-  root: THREE.Group;
-  legL: THREE.Group;
-  legR: THREE.Group;
-  armL: THREE.Group;
-  armR: THREE.Group;
-}
-
-/** A worker facing +Z: hard hat, hi-vis vest. */
-export function makePerson(rig: Rig, helmet: MatKey, vest: MatKey = 'vest'): Person {
-  const root = node(null);
-  const legL = node(root, [0.11, 0.9, 0]);
-  const legR = node(root, [-0.11, 0.9, 0]);
-  for (const leg of [legL, legR]) {
-    rig.box(leg, [0.17, 0.86, 0.2], 'pants', [0, -0.43, 0]);
-    rig.box(leg, [0.19, 0.1, 0.3], 'black', [0, -0.85, 0.05]);
-  }
-  rig.box(root, [0.4, 0.16, 0.24], 'pants', [0, 0.94, 0]);
-  rig.box(root, [0.46, 0.6, 0.27], vest, [0, 1.3, 0]);
-  rig.box(root, [0.47, 0.06, 0.28], 'white', [0, 1.2, 0]);
-  // «СпецПласт16» on the back.
-  rig.add(root, BACK_PLANE, 'vestLogo', [0, 1.38, -0.141], [0, Math.PI, 0], [0.44, 0.11, 1]);
-  rig.box(root, [0.21, 0.24, 0.22], 'skin', [0, 1.74, 0]);
-  // A face, so you can tell which way they look.
-  rig.box(root, [0.04, 0.04, 0.02], 'black', [0.05, 1.77, 0.11]);
-  rig.box(root, [0.04, 0.04, 0.02], 'black', [-0.05, 1.77, 0.11]);
-  rig.box(root, [0.27, 0.14, 0.29], helmet, [0, 1.92, 0]);
-  rig.box(root, [0.33, 0.04, 0.37], helmet, [0, 1.86, 0.03]);
-  const armL = node(root, [0.3, 1.56, 0]);
-  const armR = node(root, [-0.3, 1.56, 0]);
-  for (const arm of [armL, armR]) {
-    rig.box(arm, [0.13, 0.56, 0.14], vest, [0, -0.26, 0]);
-    rig.box(arm, [0.11, 0.12, 0.12], 'skin', [0, -0.6, 0]);
-  }
-  return { root, legL, legR, armL, armR };
-}
-
-/** Walk cycle; `phase` grows with the distance walked. */
-export function walk(person: Person, phase: number, amount: number) {
-  const swing = Math.sin(phase) * 0.55 * amount;
-  person.legL.rotation.x = swing;
-  person.legR.rotation.x = -swing;
-  person.armL.rotation.x = -swing * 0.8;
-  person.armR.rotation.x = swing * 0.8;
-}
 
 /** A seated operator merged into a cab node, facing +X. */
 function operator(rig: Rig, cab: THREE.Object3D, pos: [number, number, number]) {
@@ -229,7 +182,11 @@ export function craneTip() {
   };
 }
 
-export function makeCrane(rig: Rig, groundA: number, groundB: number): Animated {
+export function makeCrane(
+  rig: Rig,
+  groundA: number,
+  groundB: number,
+): Animated & { boom: THREE.Group } {
   const root = node(null);
   rig.box(root, [10.5, 0.9, 2.5], 'yellow', [0, 1.25, 0]);
   rig.box(root, [10.6, 0.25, 2.2], 'dark', [0, 0.75, 0]);
@@ -318,6 +275,7 @@ export function makeCrane(rig: Rig, groundA: number, groundB: number): Animated 
   let sway = 0;
   return {
     root,
+    boom,
     update(time, dt) {
       keyframes(keys, time, pose);
       const yaw = pose[0]!;
@@ -374,7 +332,7 @@ export function makeAgp(rig: Rig): Animated {
   rig.box(basket, [0.07, 0.07, 1.75], 'yellow', [0.05, 0.1, 0]);
   rig.box(basket, [1.0, 0.35, 0.04], 'amber', [0.55, -0.68, 0.86]);
   rig.box(basket, [1.0, 0.35, 0.04], 'amber', [0.55, -0.68, -0.86]);
-  const worker = makePerson(rig, 'yellow');
+  const worker = makePerson(lookFor('agp-worker', { hat: HAT.yellow }), 'agp-worker');
   worker.root.position.set(0.5, -0.86, 0.2);
   worker.root.rotation.y = Math.PI / 2;
   basket.add(worker.root);

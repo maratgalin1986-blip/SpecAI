@@ -2,10 +2,12 @@
 // how the comic «#@%&!» swearing becomes a TV-style beep. Pure helpers, so
 // they can be tested without a browser; soundEngine.ts does the speaking.
 
+import { stripEmoji } from '@/lib/stripEmoji';
+
 export type Speaker = 'mihalych' | 'rinat' | 'sveta' | 'ildar' | 'worker';
 export type LineKind = 'business' | 'joke' | 'radio';
 
-export type Line = { speaker: Speaker; text: string; kind?: LineKind };
+export type Line = { speaker: Speaker; text: string; kind?: LineKind; mood?: string };
 
 /** How each character sounds when only pitch and rate can tell them apart. */
 export const SPEAKER_STYLE: Record<
@@ -69,6 +71,14 @@ export function splitCensored(text: string): SpeechPart[] {
   return parts;
 }
 
+/**
+ * What speechSynthesis actually gets: emojis stripped (many engines read
+ * «🚜» aloud), then split at the «#@%&!» beeps.
+ */
+export function speechParts(text: string): SpeechPart[] {
+  return splitCensored(stripEmoji(text));
+}
+
 type VoiceLike = { name: string; lang: string };
 
 const FEMALE =
@@ -111,6 +121,28 @@ export function styleFor(
     pitch: style.female && femaleVoice ? Math.min(pitch, 1.05) : pitch,
     rate: pick(style.rate),
   };
+}
+
+/**
+ * A small nudge by mood (lib/stroyka/mood.ts): laughing a bit faster, angry a
+ * bit lower, surprised a bit higher, tired a bit slower. Speech engines clamp
+ * pitch to 0–2 and rate to 0.1–10; the nudges stay well inside.
+ */
+export function moodVoice(
+  style: { pitch: number; rate: number },
+  mood?: string,
+): { pitch: number; rate: number } {
+  const k: Record<string, [number, number]> = {
+    laugh: [1.04, 1.08],
+    happy: [1.02, 1.03],
+    angry: [0.9, 1.04],
+    surprised: [1.08, 1.02],
+    tired: [0.97, 0.92],
+    worried: [0.98, 1.02],
+    thinking: [1, 0.95],
+  };
+  const [p, r] = (mood && k[mood]) || [1, 1];
+  return { pitch: style.pitch * p, rate: style.rate * r };
 }
 
 export function isFemaleVoice(voice: VoiceLike | null): boolean {

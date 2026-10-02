@@ -28,8 +28,9 @@ import {
 } from '@/lib/soundSynth';
 import {
   isFemaleVoice,
+  moodVoice,
   SITE_LINES,
-  splitCensored,
+  speechParts,
   styleFor,
   voiceFor,
   type Line,
@@ -308,7 +309,7 @@ export class SoundEngine {
   private async say({ line, radio, volume }: Queued): Promise<void> {
     const token = this.speechToken;
     const voice = voiceFor(line.speaker, russianVoices());
-    const style = styleFor(line.speaker, isFemaleVoice(voice));
+    const style = moodVoice(styleFor(line.speaker, isFemaleVoice(voice)), line.mood);
     const pan = Math.random() - 0.5;
     const [squelch, beep, hiss] = await Promise.all([
       this.synth('squelch', () => renderSquelch(this.ctx)),
@@ -323,7 +324,8 @@ export class SoundEngine {
     // the static around the words and a faint band-limited hiss under them.
     const bed = hiss ? this.play(hiss, this.fx, { gain: 0.025, pan }) : null;
     if (bed) bed.loop = true;
-    const parts = splitCensored(line.text);
+    // Emojis are for the eyes: many engines read «🚜» aloud as «трактор».
+    const parts = speechParts(line.text);
     await new Promise<void>((resolve) => {
       let done = false;
       const finish = () => {

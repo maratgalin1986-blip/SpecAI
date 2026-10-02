@@ -6,6 +6,7 @@ import { SITE } from '@/lib/site';
 import { SPEAKERS, type Reply } from '@/lib/stroyka';
 import type { RadioLine } from '@/lib/stroyka/context';
 import { BANTER_NAMES, splitCensored, type BanterSpeaker } from '@/lib/stroykaJokes';
+import { moodLine, type Mood } from '@/lib/stroyka/mood';
 import { Portrait } from './Portraits';
 
 export function Censored({ text }: { text: string }) {
@@ -24,17 +25,20 @@ export function Censored({ text }: { text: string }) {
   );
 }
 
+// Counted in code points, so an emoji is never cut in half mid-typing.
 function useTypewriter(text: string, instant: boolean) {
-  const [shown, setShown] = useState(instant ? text.length : 0);
+  const chars = Array.from(text);
+  const total = chars.length;
+  const [shown, setShown] = useState(instant ? total : 0);
   useEffect(() => {
     if (instant) {
-      setShown(text.length);
+      setShown(total);
       return;
     }
     setShown(0);
     const timer = window.setInterval(() => {
       setShown((n) => {
-        if (n >= text.length) {
+        if (n >= total) {
           window.clearInterval(timer);
           return n;
         }
@@ -42,8 +46,9 @@ function useTypewriter(text: string, instant: boolean) {
       });
     }, 28);
     return () => window.clearInterval(timer);
-  }, [text, instant]);
-  return { shown: Math.min(shown, text.length), finish: () => setShown(text.length) };
+  }, [text, instant, total]);
+  const n = Math.min(shown, total);
+  return { shown: n, total, text: chars.slice(0, n).join(''), finish: () => setShown(total) };
 }
 
 export interface DialogueChat {
@@ -69,6 +74,7 @@ export interface DialogueForm {
 export function DialogueBox({
   speaker,
   text,
+  mood = 'neutral',
   replies,
   radio = [],
   extra,
@@ -80,7 +86,10 @@ export function DialogueBox({
   onClose,
 }: {
   speaker: BanterSpeaker;
+  /** The line as shown, emojis included (lib/stroyka/mood.ts). */
   text: string;
+  /** The speaker's mood: the portrait's expression. */
+  mood?: Mood;
   replies: Reply[];
   radio?: RadioLine[];
   extra?: { speaker: BanterSpeaker; text: string } | null;
@@ -92,7 +101,7 @@ export function DialogueBox({
   onReply: (reply: Reply) => void;
   onClose: () => void;
 }) {
-  const { shown, finish } = useTypewriter(text, instant);
+  const { shown, total, text: typed, finish } = useTypewriter(text, instant);
   const [address, setAddress] = useState('');
   const [message, setMessage] = useState('');
   const [consent, setConsent] = useState(false);
@@ -118,7 +127,8 @@ export function DialogueBox({
             </div>
             {radio.map((line, i) => (
               <p key={i}>
-                <b>{SPEAKERS[line.speaker].name.split(' ').pop()}:</b> «{line.text}»{' '}
+                <b>{SPEAKERS[line.speaker].name.split(' ').pop()}:</b> «
+                {moodLine({ speaker: line.speaker, text: line.text, kind: 'radio' }).text}»{' '}
                 <span className="opacity-60">кшш</span>
               </p>
             ))}
@@ -127,6 +137,7 @@ export function DialogueBox({
         <div className="flex gap-3" onClick={finish}>
           <Portrait
             speaker={speaker}
+            mood={mood}
             className="h-14 w-14 shrink-0 rounded-lg ring-2 ring-amber-400/70 sm:h-16 sm:w-16"
           />
           <div className="min-w-0 flex-1">
@@ -147,8 +158,8 @@ export function DialogueBox({
               </button>
             </div>
             <p className="mt-1 text-[15px] leading-snug sm:text-base" data-testid="dialogue-text">
-              {text.slice(0, shown)}
-              {shown < text.length && <span className="animate-pulse text-amber-400">▌</span>}
+              {typed}
+              {shown < total && <span className="animate-pulse text-amber-400">▌</span>}
             </p>
           </div>
         </div>
@@ -200,7 +211,11 @@ export function DialogueBox({
                 className="mt-0.5"
               />
               <span>
-                Согласен(на) на обработку персональных данных в соответствии с{' '}
+                Согласен(на) на обработку персональных данных (
+                <a href="/soglasie" className="underline" target="_blank">
+                  согласие
+                </a>
+                ) в соответствии с{' '}
                 <a href="/privacy" className="underline" target="_blank">
                   политикой конфиденциальности
                 </a>

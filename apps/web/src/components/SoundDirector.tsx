@@ -14,6 +14,7 @@ import {
 } from '@/lib/sound';
 import type { SoundEngine } from '@/lib/soundEngine';
 import { asSpeaker } from '@/lib/soundVoices';
+import { stripEmoji } from '@/lib/stripEmoji';
 
 // The cinematic sound layer, mounted once in the layout. Off by default; it
 // wakes only after the visitor turns it on (SoundToggle) and only inside a
@@ -22,7 +23,7 @@ import { asSpeaker } from '@/lib/soundVoices';
 //
 // Components only announce what is on screen (lib/sound.ts: playCue,
 // announceMachine, useMachineSound); a 3D scene can also dispatch
-// `sp:scene` {machine, active} and `sp:dialog` {speaker, text}.
+// `sp:scene` {machine, active} and `sp:dialog` {speaker, text, kind, mood}.
 
 const GESTURES = ['pointerdown', 'keydown', 'touchend', 'click', 'scroll', 'wheel'] as const;
 const FIELD =
@@ -261,13 +262,20 @@ export function SoundDirector() {
       applyMachine(true);
     };
     const onDialog = (event: Event) => {
-      const detail = (event as CustomEvent<{ speaker?: string; text?: string; kind?: string }>)
-        .detail;
+      const detail = (
+        event as CustomEvent<{ speaker?: string; text?: string; kind?: string; mood?: string }>
+      ).detail;
       if (!live() || !detail?.text) return;
+      // Only the people talk: the site dog («Гав!») and other extras stay silent here.
+      if (detail.speaker === 'dog') return;
+      // Emojis are display-only; speechSynthesis would read them aloud.
+      const text = stripEmoji(String(detail.text));
+      if (!text) return;
       engine!.dialog({
         speaker: asSpeaker(detail.speaker),
-        text: String(detail.text),
+        text,
         kind: detail.kind === 'business' || detail.kind === 'radio' ? detail.kind : 'joke',
+        mood: typeof detail.mood === 'string' ? detail.mood : undefined,
       });
     };
 
