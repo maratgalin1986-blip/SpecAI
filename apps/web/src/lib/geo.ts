@@ -14,10 +14,26 @@ export const GEO_USER_AGENT =
 // preferred, not required, so an address elsewhere is still found.
 const VIEWBOX = '51.2,56.2,53.4,55.3';
 
+/**
+ * An address lookup that tells «not found» from «the service did not answer»
+ * (timeout, HTTP error, broken response): the forms say different things.
+ */
+export type GeocodeResult =
+  { status: 'found'; place: GeoPoint } | { status: 'not_found' } | { status: 'unavailable' };
+
+export const GEOCODER_UNAVAILABLE_MESSAGE =
+  'Сервис поиска адресов сейчас не отвечает — попробуйте через минуту или поставьте точку на карте';
+
 /** Coordinates of an address in Russia, or null (server side, cached). */
 export async function geocodeAddress(query: string): Promise<GeoPoint | null> {
+  const result = await lookupAddress(query);
+  return result.status === 'found' ? result.place : null;
+}
+
+/** Like geocodeAddress, with the reason when there is no place. */
+export async function lookupAddress(query: string): Promise<GeocodeResult> {
   const q = query.trim().replace(/\s+/g, ' ').slice(0, 200);
-  if (q.length < 3) return null;
+  if (q.length < 3) return { status: 'not_found' };
   const params = new URLSearchParams({
     q,
     format: 'jsonv2',
@@ -34,8 +50,8 @@ export async function geocodeAddress(query: string): Promise<GeoPoint | null> {
       next: { revalidate: 60 * 60 * 24 * 30 },
       signal: AbortSignal.timeout(6000),
     });
-    if (!response.ok) return null;
-    const [hit] = (await response.json()) as {
+    if (!response.ok) return { status: 'unavailable' };
+    const hits = (await response.json()) as {
       lat: string;
       lon: string;
       display_name: string;
@@ -48,19 +64,24 @@ export async function geocodeAddress(query: string): Promise<GeoPoint | null> {
         village?: string;
       };
     }[];
-    if (!hit) return null;
+    if (!Array.isArray(hits)) return { status: 'unavailable' };
+    const hit = hits[0];
+    if (!hit) return { status: 'not_found' };
     const lat = Number(hit.lat);
     const lon = Number(hit.lon);
-    if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) return { status: 'not_found' };
     const city = hit.address?.city ?? hit.address?.town ?? hit.address?.village;
     return {
-      lat,
-      lon,
-      label: addressLabel(hit.address, city) ?? shortLabel(hit.display_name),
-      city,
+      status: 'found',
+      place: {
+        lat,
+        lon,
+        label: addressLabel(hit.address, city) ?? shortLabel(hit.display_name ?? ''),
+        city,
+      },
     };
   } catch {
-    return null;
+    return { status: 'unavailable' };
   }
 }
 

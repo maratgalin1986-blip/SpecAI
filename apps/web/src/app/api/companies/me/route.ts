@@ -6,7 +6,7 @@ import { INVALID_JSON_MESSAGE, readJson } from '@/lib/apiInput';
 import { checkRateLimit } from '@/lib/rateLimit';
 import { getBlobToken } from '@/lib/blob';
 import { resolveProviderBase } from '@/lib/providerBase';
-import { isAllowedPinImage, isDisplayableImage, sanitizePinNote } from '@/lib/providerMap';
+import { isAllowedPinImage, pinPhotoChoices, sanitizePinNote } from '@/lib/providerMap';
 
 // The provider's own point on the customers' map (/map): the base address or
 // point, the marker picture (a photo of its own machinery or an upload) and a
@@ -23,7 +23,10 @@ const PIN_SELECT = {
   pinNote: true,
 } as const;
 
-/** Photos of the company's own machinery (newest first, without repeats). */
+/**
+ * Photos of the company's own machinery (newest first, without repeats); the
+ * own fleet also gets the site's machine photos.
+ */
 async function ownPhotos(companyId: string): Promise<string[]> {
   const rows = await prisma.equipment.findMany({
     where: { companyId },
@@ -31,7 +34,10 @@ async function ownPhotos(companyId: string): Promise<string[]> {
     orderBy: { createdAt: 'desc' },
     take: 100,
   });
-  return [...new Set(rows.flatMap((row) => row.imageUrls))].filter(isDisplayableImage).slice(0, 40);
+  return pinPhotoChoices(
+    companyId,
+    rows.flatMap((row) => row.imageUrls),
+  );
 }
 
 const FORBIDDEN = { error: 'Точку на карте меняет только аккаунт поставщика' };
@@ -69,10 +75,12 @@ export async function PATCH(request: NextRequest) {
   } = {};
 
   // The base: a new point or a new address replaces the old one; it cannot be
-  // removed, a provider always has a place on the map.
+  // removed, a provider always has a place on the map. A point sent without
+  // the address key keeps the saved address; an address sent without a point
+  // is geocoded and checked against the service area.
   if ('baseLat' in input || 'baseLon' in input || 'baseAddress' in input) {
     const base = await resolveProviderBase(input);
-    if (!base.ok) return NextResponse.json({ error: base.error }, { status: 400 });
+    if (!base.ok) return NextResponse.json({ error: base.error }, { status: base.status ?? 400 });
     Object.assign(data, base.value);
   }
 

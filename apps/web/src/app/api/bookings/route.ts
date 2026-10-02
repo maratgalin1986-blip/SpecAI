@@ -11,6 +11,7 @@ import { findOverlappingBooking, lockEquipment } from '@/lib/bookingConflicts';
 import { INVALID_JSON_MESSAGE, prismaErrorCode, readJson, zodErrorMessage } from '@/lib/apiInput';
 import { isOnlinePaymentEnabled } from '@/lib/stripe';
 import { isProvider } from '@/lib/fleet';
+import { customerForProvider } from '@/lib/customerPrivacy';
 
 export const dynamic = 'force-dynamic';
 
@@ -28,7 +29,8 @@ const createBookingRequestSchema = z.object({
 
 /**
  * Бронирования текущего пользователя (клиента), новые сверху.
- * `?as=provider` — бронирования техники компании поставщика (с данными клиента).
+ * `?as=provider` — бронирования техники компании поставщика: заказчик как «Анна П.»,
+ * телефон и e-mail — только после подтверждения брони (CONFIRMED/ACTIVE/COMPLETED).
  * `paymentsEnabled` — подключена ли онлайн-оплата (иначе кнопку «Оплатить» не показывать).
  */
 export async function GET(request: NextRequest) {
@@ -47,13 +49,19 @@ export async function GET(request: NextRequest) {
       where: { equipment: { companyId: currentUser.companyId } },
       include: {
         equipment: { select: { id: true, name: true, imageUrls: true } },
-        customer: { select: { id: true, name: true, email: true } },
+        customer: { select: { id: true, name: true, email: true, phone: true } },
       },
       orderBy: { createdAt: 'desc' },
       take: 100,
     });
 
-    return NextResponse.json({ bookings, paymentsEnabled });
+    return NextResponse.json({
+      bookings: bookings.map((booking) => ({
+        ...booking,
+        customer: customerForProvider(booking.customer, booking.status),
+      })),
+      paymentsEnabled,
+    });
   }
 
   const bookings = await prisma.booking.findMany({

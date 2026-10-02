@@ -119,6 +119,14 @@ export const EQUIPMENT_STATUS_LABELS: Record<string, string> = {
   RETIRED: 'Списана',
 } satisfies Record<EquipmentStatus, string>;
 
+/** Статусы, которые поставщик выбирает сам (как EQUIPMENT_STATUS_OPTIONS на сайте). */
+export const EQUIPMENT_STATUS_OPTIONS: { value: EquipmentStatus; label: string }[] = [
+  { value: 'AVAILABLE', label: 'Свободна' },
+  { value: 'RENTED', label: 'Занята' },
+  { value: 'IN_MAINTENANCE', label: 'На ремонте' },
+  { value: 'RETIRED', label: 'Снята с публикации' },
+];
+
 export const PAYMENT_STATUS_LABELS: Record<'PENDING' | 'PAID' | 'FAILED' | 'REFUNDED', string> = {
   PENDING: 'Ожидает оплаты',
   PAID: 'Оплачено',

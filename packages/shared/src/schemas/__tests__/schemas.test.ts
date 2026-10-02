@@ -3,6 +3,7 @@ import {
   createBidSchema,
   createBookingSchema,
   createEquipmentSchema,
+  updateEquipmentSchema,
   emailSchema,
   equipmentSearchQuerySchema,
   loginSchema,
@@ -195,5 +196,38 @@ describe('equipmentSearchQuerySchema and createBidSchema', () => {
     expect(createBidSchema.safeParse({ orderId: CUID, equipmentId: '', price: 100 }).success).toBe(
       false,
     );
+  });
+});
+
+describe('updateEquipmentSchema', () => {
+  it('accepts a partial update and null to clear optional fields', () => {
+    expect(updateEquipmentSchema.parse({ status: 'RETIRED' })).toEqual({ status: 'RETIRED' });
+    expect(
+      updateEquipmentSchema.parse({ hourlyRate: null, description: null, specs: null, year: null }),
+    ).toEqual({ hourlyRate: null, description: null, specs: null, year: null });
+  });
+
+  it('rejects unknown statuses, bad prices and non-https photos in Russian', () => {
+    expect(updateEquipmentSchema.safeParse({ status: 'IN_USE' }).success).toBe(false);
+    const price = updateEquipmentSchema.safeParse({ dailyRate: 0 });
+    expect(price.success || price.error.issues[0]?.message).toBe(
+      'Цена за смену должна быть больше нуля',
+    );
+    expect(updateEquipmentSchema.safeParse({ imageUrls: ['javascript:alert(1)'] }).success).toBe(
+      false,
+    );
+  });
+
+  it('drops the company id: equipment never changes owner', () => {
+    expect(updateEquipmentSchema.parse({ companyId: 'other', name: 'Кран' })).toEqual({
+      name: 'Кран',
+    });
+  });
+
+  it('createEquipmentSchema accepts a status and answers in Russian', () => {
+    const base = { name: 'Кран', categoryId: 'cat', companyId: 'co', dailyRate: 1 };
+    expect(createEquipmentSchema.parse({ ...base, status: 'RETIRED' }).status).toBe('RETIRED');
+    const missing = createEquipmentSchema.safeParse({ ...base, dailyRate: undefined });
+    expect(missing.success || missing.error.issues[0]?.message).toBe('Укажите цену за смену');
   });
 });

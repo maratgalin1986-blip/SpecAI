@@ -20,7 +20,8 @@ import {
 import { formatMoney, formatRate } from '@/lib/money';
 import { pluralizeRu } from '@/lib/pluralize';
 import { SITE } from '@/lib/site';
-import { PUBLIC_FLEET } from '@/lib/fleet';
+import { PUBLISHED_FLEET, isHouseEquipment } from '@/lib/fleet';
+import { isDisplayableImage } from '@/lib/providerMap';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { approvedComments, commentAccessError } from '@/lib/commentAccess';
@@ -76,13 +77,17 @@ export default async function EquipmentDetailPage({ params }: { params: { id: st
   const hammerRate = numericSpec(specs, /гидромолот.*₽/i) ?? undefined;
   const illustration = machineTypeOf(item.category.name, item.name);
   const ownFleet = item.company.name === SITE.legalName;
+  // Aggregator: who does the job — СпецПласт16's own fleet or a provider company.
+  const house = isHouseEquipment(item);
+  const executor = house ? 'Парк СпецПласт16 · машинист в штате' : item.company.name;
+  const photos = item.imageUrls.filter(isDisplayableImage);
   const averageRating = item.reviews.length
     ? item.reviews.reduce((sum, review) => sum + review.rating, 0) / item.reviews.length
     : null;
 
   // Same category first; if it has nothing else, the same task group.
   let similar = await prisma.equipment.findMany({
-    where: { ...PUBLIC_FLEET, categoryId: item.categoryId, id: { not: item.id } },
+    where: { ...PUBLISHED_FLEET, categoryId: item.categoryId, id: { not: item.id } },
     include: { category: true, location: true },
     orderBy: [{ status: 'asc' }, { createdAt: 'desc' }],
     take: 3,
@@ -94,7 +99,7 @@ export default async function EquipmentDetailPage({ params }: { params: { id: st
     });
     const groupIds = categories.filter((c) => taskGroupOf(c.name) === group).map((c) => c.id);
     similar = await prisma.equipment.findMany({
-      where: { ...PUBLIC_FLEET, categoryId: { in: groupIds }, id: { not: item.id } },
+      where: { ...PUBLISHED_FLEET, categoryId: { in: groupIds }, id: { not: item.id } },
       include: { category: true, location: true },
       orderBy: [{ status: 'asc' }, { createdAt: 'desc' }],
       take: 3,
@@ -106,7 +111,11 @@ export default async function EquipmentDetailPage({ params }: { params: { id: st
     ...(item.location
       ? [{ label: 'Местоположение', value: `${item.location.city}, ${item.location.country}` }]
       : []),
-    { label: 'Исполнитель', value: 'Своя техника · машинист в штате' },
+    { label: 'Исполнитель', value: executor },
+    ...(item.make || item.model
+      ? [{ label: 'Марка и модель', value: [item.make, item.model].filter(Boolean).join(' ') }]
+      : []),
+    ...(item.year ? [{ label: 'Год выпуска', value: String(item.year) }] : []),
     ...(hour !== null ? [{ label: 'Цена за час', value: formatMoney(hour, item.currency) }] : []),
     ...(shift !== null
       ? [{ label: 'Цена за смену 8 ч', value: formatMoney(shift, item.currency) }]
@@ -151,7 +160,7 @@ export default async function EquipmentDetailPage({ params }: { params: { id: st
               {item.name}
             </h1>
             <p className="mt-3 text-sm text-slate-500">
-              {item.category.name} · Своя техника · машинист в штате
+              {item.category.name} · {executor}
               {averageRating !== null && (
                 <>
                   {' '}
@@ -188,9 +197,9 @@ export default async function EquipmentDetailPage({ params }: { params: { id: st
             </ul>
           )}
 
-          {item.imageUrls.length > 0 ? (
+          {photos.length > 0 ? (
             <div style={{ viewTransitionName: 'machine-photo' }}>
-              <MachineGallery images={item.imageUrls} name={item.name} />
+              <MachineGallery images={photos} name={item.name} />
             </div>
           ) : illustration ? (
             <figure style={{ viewTransitionName: 'machine-photo' }}>
@@ -359,7 +368,10 @@ export default async function EquipmentDetailPage({ params }: { params: { id: st
           </div>
           <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
             {similar.map((other) => (
-              <EquipmentCard key={other.id} item={other} />
+              <EquipmentCard
+                key={other.id}
+                item={{ ...other, imageUrls: other.imageUrls.filter(isDisplayableImage) }}
+              />
             ))}
           </div>
         </section>

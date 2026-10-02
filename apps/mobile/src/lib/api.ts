@@ -202,15 +202,26 @@ export interface Order {
   desiredEndDate: string;
   status: OrderStatus;
   createdAt: string;
-  customerId: string;
+  /** Только у автора заявки: исполнителю id заказчика не отдаётся. */
+  customerId?: string;
   category: Category | null;
-  customer?: { id: string; name: string };
+  /** Исполнитель видит заказчика как «Анна П.». */
+  customer?: { id?: string; name: string } | null;
   bids: Bid[];
 }
 
-/** Бронирование техники поставщика (GET /api/bookings?as=provider). */
+/**
+ * Бронирование техники поставщика (GET /api/bookings?as=provider): заказчик как
+ * «Анна П.»; телефон и e-mail — только после подтверждения брони.
+ */
 export interface ProviderBooking extends Booking {
-  customer: { id: string; name: string; email: string };
+  customer: {
+    id: string;
+    name: string;
+    email: string | null;
+    phone?: string | null;
+    contactsVisible?: boolean;
+  };
 }
 
 export interface UploadedFile {
@@ -239,6 +250,22 @@ export interface CreateEquipmentInput {
   description?: string;
   specs?: Record<string, unknown>;
   imageUrls: string[];
+  status?: EquipmentStatus;
+}
+
+/** PATCH /api/equipment/[id]: null очищает необязательное поле. */
+export interface UpdateEquipmentInput {
+  name?: string;
+  categoryId?: string;
+  make?: string | null;
+  model?: string | null;
+  year?: number | null;
+  status?: EquipmentStatus;
+  dailyRate?: number;
+  hourlyRate?: number | null;
+  description?: string | null;
+  specs?: Record<string, unknown> | null;
+  imageUrls?: string[];
 }
 
 /** Заявка на обратный звонок (POST /api/leads, как форма CallbackForm на сайте). */
@@ -302,10 +329,22 @@ export function createLead(input: CreateLeadInput) {
   });
 }
 
-export function register(input: { name: string; email: string; password: string; phone?: string }) {
+export type RegisterInput = {
+  name: string;
+  email: string;
+  password: string;
+  phone?: string;
+  consent: true;
+} & (
+  | { accountType: 'CUSTOMER' }
+  | { accountType: 'PROVIDER'; companyName: string; baseAddress: string }
+);
+
+/** Регистрация заказчика или исполнителя (с компанией и адресом базы). */
+export function register(input: RegisterInput) {
   return apiFetch<{ id: string; email: string }>('/api/auth/register', {
     method: 'POST',
-    body: { accountType: 'CUSTOMER', ...input },
+    body: input,
     anonymous: true,
   });
 }
@@ -402,6 +441,13 @@ export function createEquipment(input: CreateEquipmentInput) {
   return apiFetch<{ equipment: Equipment }>('/api/equipment', { method: 'POST', body: input });
 }
 
+export function updateEquipment(id: string, input: UpdateEquipmentInput) {
+  return apiFetch<{ equipment: Equipment; message?: string }>(
+    `/api/equipment/${encodeURIComponent(id)}`,
+    { method: 'PATCH', body: input },
+  );
+}
+
 export function extractSpecsFromFile(fileUrl: string) {
   return apiFetch<ExtractedSpecs>('/api/ai/extract-specs', { method: 'POST', body: { fileUrl } });
 }
@@ -475,10 +521,14 @@ export function createBid(
   orderId: string,
   input: { equipmentId: string; price: number; message?: string },
 ) {
-  return apiFetch<{ bid: Bid }>(`/api/orders/${encodeURIComponent(orderId)}/bids`, {
-    method: 'POST',
-    body: input,
-  });
+  // 201 — новое предложение, 200 — обновлено прежнее (одно предложение от компании).
+  return apiFetch<{ bid: Bid; message?: string }>(
+    `/api/orders/${encodeURIComponent(orderId)}/bids`,
+    {
+      method: 'POST',
+      body: input,
+    },
+  );
 }
 
 // ---- Комментарии (с модерацией) и помощник «Что дальше?» ----

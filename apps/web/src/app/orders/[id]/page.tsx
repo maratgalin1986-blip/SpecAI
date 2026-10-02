@@ -13,6 +13,7 @@ import { isProvider, isHouseManager } from '@/lib/fleet';
 import { isSafeHttpUrl } from '@/lib/privacy';
 import { approvedComments } from '@/lib/commentAccess';
 import { CommentForm, CommentList } from '@/components/Comments';
+import { customerShortName } from '@/lib/customerPrivacy';
 
 export const dynamic = 'force-dynamic';
 
@@ -65,6 +66,10 @@ export default async function OrderDetailPage({ params }: { params: { id: string
     ? await approvedComments({ targetUserId: order.customerId }, 10)
     : [];
   const providerHasBid = viewerIsProvider && visibleBids.length > 0;
+  // One bid per company: a repeat updates the pending one.
+  const ownPendingBid = viewerIsProvider
+    ? visibleBids.find((bid) => bid.status === 'PENDING')
+    : undefined;
 
   return (
     <div className="flex flex-col gap-6">
@@ -77,7 +82,7 @@ export default async function OrderDetailPage({ params }: { params: { id: string
             {order.desiredEndDate.toLocaleDateString('ru-RU')} ·{' '}
             {isImported
               ? `из ${order.source === 'WHATSAPP' ? 'WhatsApp' : 'Telegram'}${order.sourceChat ? ` (${order.sourceChat})` : ''}`
-              : `от ${seesAllBids ? order.customer.name : 'клиента'}`}
+              : `от ${seesAllBids ? order.customer.name : customerShortName(order.customer.name)}`}
           </p>
         </div>
         <span className="w-fit shrink-0 rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-700">
@@ -132,9 +137,21 @@ export default async function OrderDetailPage({ params }: { params: { id: string
 
       {order.status === 'OPEN' && !isOwner && (
         <section>
-          <h2 className="mb-3 text-lg font-semibold">Предложение СпецПласт16</h2>
+          <h2 className="mb-3 text-lg font-semibold">Ваше предложение</h2>
           <Card className="max-w-xl">
-            <BidForm orderId={order.id} />
+            <BidForm
+              orderId={order.id}
+              existing={
+                ownPendingBid
+                  ? {
+                      price: Number(ownPendingBid.price),
+                      currency: ownPendingBid.currency,
+                      message: ownPendingBid.message,
+                      equipmentId: ownPendingBid.equipmentId,
+                    }
+                  : undefined
+              }
+            />
           </Card>
         </section>
       )}
@@ -155,7 +172,9 @@ export default async function OrderDetailPage({ params }: { params: { id: string
 
       <section>
         <h2 className="mb-3 text-lg font-semibold">
-          {pluralizeRu(order.bids.length, ['предложение', 'предложения', 'предложений'])}
+          {seesAllBids
+            ? `Предложения исполнителей · ${order.bids.length}`
+            : `Ваши предложения · всего по заявке ${pluralizeRu(order.bids.length, ['предложение', 'предложения', 'предложений'])}`}
         </h2>
         {visibleBids.length === 0 ? (
           <p className="text-sm text-slate-600">Пока никто не предложил технику.</p>

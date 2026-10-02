@@ -9,6 +9,7 @@ import { SITE } from '@/lib/site';
 import { machineTypeOf } from '@/lib/equipmentCatalog';
 import { INVALID_JSON_MESSAGE, readJson, zodErrorMessage } from '@/lib/apiInput';
 import { checkBookingDates } from '@/lib/bookingRules';
+import { customerShortName } from '@/lib/customerPrivacy';
 import {
   assessWork,
   CHELNY,
@@ -23,7 +24,7 @@ export const dynamic = 'force-dynamic';
 
 /**
  * Список заявок.
- * - `?open=1` — открытые заявки всех клиентов, только для владельца СпецПласт16.
+ * - `?open=1` — открытые заявки всех заказчиков (лента для любого исполнителя).
  * - без параметра — все заявки текущего пользователя (любого статуса), требует входа;
  *   используется вкладкой «Заявки» мобильного приложения.
  * Формат ответа один и тот же: `{ orders }` с category, customer (id, name) и bids.
@@ -60,14 +61,17 @@ export async function GET(request: NextRequest) {
 
   // Never expose contacts of people whose requests were imported from chats.
   // In the open feed a provider sees only its own bids (and how many there
-  // are), and not the customer's name: competitors' prices stay private.
+  // are), the customer only as «Анна П.» and without the account id:
+  // competitors' prices and the customer's identity stay private.
   const safeOrders = orders.map(
     ({ contactName, contactPhone, rawText, sourceUrl, externalId, fingerprint, ...order }) => {
       void [contactName, contactPhone, rawText, sourceUrl, externalId, fingerprint];
       if (order.customerId === currentUser.id) return { ...order, bidCount: order.bids.length };
+      const { customerId, customer, ...rest } = order;
+      void customerId;
       return {
-        ...order,
-        customer: null,
+        ...rest,
+        customer: { name: customerShortName(customer.name) },
         bids: order.bids.filter((bid) => bid.equipment.companyId === currentUser.companyId),
         bidCount: order.bids.length,
       };

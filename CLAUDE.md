@@ -56,7 +56,9 @@ small so merges stay conflict-free.
   answers customers' orders; СпецПласт16's own fleet takes part alongside them
   (`apps/web/src/lib/fleet.ts`: `isProvider`, `PUBLIC_FLEET`, `isHouseManager`).
   Do not switch the site to a single executor. Providers see only their own
-  bids and never the customer's name or chat contacts. The service is free:
+  bids, never chat contacts or the customer's id, and the customer only as
+  «Анна П.» (`lib/customerPrivacy.ts`); the customer's phone and e-mail only
+  once the booking is CONFIRMED/ACTIVE/COMPLETED. The service is free:
   no online payment, only a voluntary «Поддержать проект» (`/support`).
 - Shared memory lives in the repo: `docs/owner-requests.md` (the owner's
   requests and their status), `docs/ai-office.md` (how the sessions work

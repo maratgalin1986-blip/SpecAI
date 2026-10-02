@@ -180,15 +180,21 @@ export default function OrderDetailScreen() {
         </Card>
 
         <Text style={styles.sectionTitle}>
-          {order.bids.length === 0
-            ? 'Предложения'
-            : pluralizeRu(order.bids.length, ['предложение', 'предложения', 'предложений'])}
+          {isOwner
+            ? `Предложения исполнителей${order.bids.length > 0 ? ` · ${order.bids.length}` : ''}`
+            : order.bids.length === 0
+              ? 'Ваше предложение'
+              : pluralizeRu(order.bids.length, [
+                  'ваше предложение',
+                  'ваших предложения',
+                  'ваших предложений',
+                ])}
         </Text>
         {order.bids.length === 0 ? (
           <Card>
             <Text style={styles.empty}>
-              Пока никто не предложил технику. Поставщики получают уведомления о новых заявках —
-              загляните позже.
+              Пока никто не предложил технику. Исполнители видят заявку в своей ленте — загляните
+              позже.
             </Text>
           </Card>
         ) : (

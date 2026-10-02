@@ -2,13 +2,15 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@specai/database';
 import { getRequestUser } from '@/lib/requestUser';
 import { isProvider, isHouseManager } from '@/lib/fleet';
+import { customerShortName } from '@/lib/customerPrivacy';
 
 export const dynamic = 'force-dynamic';
 
 /**
- * Заявка с предложением СпецПласт16 (техника, цена, сообщение).
- * Как и страница /orders/[id], доступна только автору и владельцу компании;
- * `isOwner` подсказывает клиенту, можно ли принимать предложение.
+ * Заявка с предложениями исполнителей (техника, цена, сообщение).
+ * Как и страница /orders/[id], доступна автору и любому исполнителю: автор
+ * видит все предложения, исполнитель — только свои и «Заказчик А.» без id
+ * аккаунта. `isOwner` подсказывает клиенту, можно ли принимать предложение.
  */
 export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
   const currentUser = await getRequestUser(request);
@@ -49,7 +51,16 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
   // for СпецПласт16 only; the customer sees every bid, a provider sees only
   // its own bids and their count, and never the customer's name.
   const isOwner = order.customerId === currentUser.id;
-  const { contactName, contactPhone, rawText, sourceUrl, externalId, fingerprint, ...rest } = order;
+  const {
+    contactName,
+    contactPhone,
+    rawText,
+    sourceUrl,
+    externalId,
+    fingerprint,
+    customerId,
+    ...rest
+  } = order;
   const contact = isHouseManager(currentUser)
     ? { contactName, contactPhone, rawText, sourceUrl }
     : {};
@@ -61,8 +72,9 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
   return NextResponse.json({
     order: {
       ...rest,
+      ...(isOwner ? { customerId } : {}),
       ...contact,
-      customer: isOwner ? rest.customer : null,
+      customer: isOwner ? rest.customer : { name: customerShortName(rest.customer.name) },
       bids,
       bidCount: rest.bids.length,
     },

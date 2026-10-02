@@ -6,12 +6,15 @@ import {
   PIN_NOTE_CONTACTS_MESSAGE,
   PIN_NOTE_EXAMPLES,
   PIN_NOTE_MAX,
+  baseAfterAddressEdit,
   hasCoords,
   isAllowedPinImage,
   isDisplayableImage,
   machineCountLabel,
   parseBaseCoords,
+  pinPhotoChoices,
   sanitizePinNote,
+  siteMachinePhotos,
   toMapPins,
   type ProviderMapRow,
 } from './providerMap';
@@ -125,6 +128,19 @@ describe('isAllowedPinImage', () => {
     expect(isAllowedPinImage('javascript:alert(1)', owner)).toBe(false);
     expect(isAllowedPinImage('', owner)).toBe(false);
   });
+  it('lets only the own fleet use the site machine photos', () => {
+    const photo = siteMachinePhotos()[0]!;
+    expect(photo).toMatch(/^\/images\//);
+    expect(isAllowedPinImage(photo, { companyId: HOUSE_COMPANY_ID, ownImageUrls: [] })).toBe(true);
+    expect(isAllowedPinImage(photo, owner)).toBe(false);
+    expect(pinPhotoChoices(HOUSE_COMPANY_ID, ['javascript:x', 'https://a.ru/1.jpg'])).toEqual([
+      'https://a.ru/1.jpg',
+      ...siteMachinePhotos(),
+    ]);
+    expect(pinPhotoChoices('c1', ['https://a.ru/1.jpg', 'https://a.ru/1.jpg'])).toEqual([
+      'https://a.ru/1.jpg',
+    ]);
+  });
   it('isDisplayableImage accepts https and site paths only', () => {
     expect(isDisplayableImage('https://x.ru/a.jpg')).toBe(true);
     expect(isDisplayableImage('/photos/a.jpg')).toBe(true);
@@ -189,6 +205,10 @@ describe('toMapPins', () => {
     expect(pin?.note).toBeNull();
   });
 
+  it('skips providers without published machinery', () => {
+    expect(toMapPins([{ ...base, equipmentCount: 0 }])).toEqual([]);
+  });
+
   it('marks the own fleet and puts it first', () => {
     const pins = toMapPins([
       { ...base, id: 'p2', equipmentCount: 10 },
@@ -206,5 +226,26 @@ describe('machineCountLabel', () => {
     expect(machineCountLabel(3)).toBe('3 единицы техники');
     expect(machineCountLabel(11)).toBe('11 единиц техники');
     expect(machineCountLabel(0)).toBe('0 единиц техники');
+  });
+});
+
+describe('baseAfterAddressEdit', () => {
+  const found = { address: 'Челны, Мира 49', lat: 55.7, lon: 52.4 };
+  it('drops a point found for another address', () => {
+    expect(baseAfterAddressEdit(found, 'Челны, Мира 51', 'Челны, Мира 49')).toEqual({
+      address: 'Челны, Мира 51',
+      lat: null,
+      lon: null,
+    });
+    expect(baseAfterAddressEdit(found, 'Челны, Мира 49 ', 'Челны, Мира 49')).toEqual({
+      ...found,
+      address: 'Челны, Мира 49 ',
+    });
+  });
+  it('keeps a point placed by hand', () => {
+    expect(baseAfterAddressEdit(found, 'База у трассы', null)).toEqual({
+      ...found,
+      address: 'База у трассы',
+    });
   });
 });

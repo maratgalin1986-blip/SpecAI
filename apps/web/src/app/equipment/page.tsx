@@ -15,7 +15,7 @@ import {
 import { pluralizeRu } from '@/lib/pluralize';
 import { SITE } from '@/lib/site';
 import { CinemaHero } from '@/components/CinemaHero';
-import { PUBLIC_FLEET } from '@/lib/fleet';
+import { PUBLISHED_FLEET } from '@/lib/fleet';
 
 export const metadata = {
   title: 'Каталог спецтехники',
@@ -115,7 +115,7 @@ export default async function EquipmentCatalogPage({
       : null;
 
   const baseWhere = {
-    ...PUBLIC_FLEET,
+    ...PUBLISHED_FLEET,
     companyId: companyFilter?.id,
     location: searchParams.city
       ? { city: { equals: searchParams.city, mode: 'insensitive' as const } }

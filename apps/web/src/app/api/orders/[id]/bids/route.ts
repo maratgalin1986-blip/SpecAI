@@ -8,7 +8,8 @@ import { notifyTelegram } from '@/lib/notify';
 import { formatMoney } from '@/lib/money';
 import { siteUrl } from '@/lib/siteUrl';
 import { INVALID_JSON_MESSAGE, readJson, zodErrorMessage } from '@/lib/apiInput';
-import { unavailableEquipmentMessage } from '@/lib/bookingRules';
+import { BLOCKING_BOOKING_STATUSES, unavailableEquipmentMessage } from '@/lib/bookingRules';
+import { findOverlappingBooking } from '@/lib/bookingConflicts';
 import { isProvider } from '@/lib/fleet';
 
 const requestSchema = z.object({
@@ -62,13 +63,54 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     );
   }
 
+  // The machine must be free on the order's dates.
+  const busy = await findOverlappingBooking(prisma, {
+    equipmentId: equipment.id,
+    startDate: order.desiredStartDate,
+    endDate: order.desiredEndDate,
+    statuses: BLOCKING_BOOKING_STATUSES,
+  });
+  if (busy) {
+    return NextResponse.json(
+      {
+        error: `«${equipment.name}» уже забронирована на ${busy.startDate.toLocaleDateString('ru-RU')} – ${busy.endDate.toLocaleDateString('ru-RU')} — предложите другую машину`,
+      },
+      { status: 409 },
+    );
+  }
+
+  // One bid per company on an order: a repeat updates the pending bid
+  // (price, machine, message) instead of adding another one.
+  const message = parsed.data.message?.trim() || null;
+  const previous = await prisma.bid.findFirst({
+    where: {
+      orderId: order.id,
+      status: 'PENDING',
+      equipment: { companyId: currentUser.companyId },
+    },
+    orderBy: { createdAt: 'desc' },
+    select: { id: true },
+  });
+  if (previous) {
+    const bid = await prisma.bid.update({
+      where: { id: previous.id },
+      data: {
+        equipmentId: equipment.id,
+        price: parsed.data.price,
+        currency: equipment.currency,
+        message,
+      },
+    });
+    return NextResponse.json({ bid, message: 'Предложение обновлено' }, { status: 200 });
+  }
+
   const bid = await prisma.bid.create({
     data: {
       orderId: order.id,
       equipmentId: equipment.id,
       price: parsed.data.price,
       currency: equipment.currency,
-      message: parsed.data.message,
+      message,
     },
   });
 
@@ -93,5 +135,5 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     console.error('[email] newBidReceived failed', error);
   }
 
-  return NextResponse.json({ bid }, { status: 201 });
+  return NextResponse.json({ bid, message: 'Предложение отправлено' }, { status: 201 });
 }
