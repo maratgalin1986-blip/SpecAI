@@ -25,13 +25,6 @@ export function CinemaClicks() {
         document.body.appendChild(ring);
         window.setTimeout(() => ring.remove(), 1000);
       });
-      if (event.pointerType === 'touch' && typeof navigator.vibrate === 'function') {
-        try {
-          navigator.vibrate(12);
-        } catch {
-          /* vibration is optional */
-        }
-      }
       // Restart the animation on repeated presses without a forced reflow.
       target.classList.remove('cine-press');
       requestAnimationFrame(() =>
@@ -41,8 +34,27 @@ export function CinemaClicks() {
         }),
       );
     };
+    // A short buzz only for a finished tap: pointerdown also starts every
+    // scroll gesture, and before the first tap the browser blocks vibrate().
+    const onClick = (event: MouseEvent) => {
+      if ((event as PointerEvent).pointerType !== 'touch') return;
+      if (typeof navigator.vibrate !== 'function') return;
+      const target = (event.target as Element | null)?.closest?.(
+        'a[href], button, [role="button"], summary',
+      );
+      if (!target || (target as HTMLButtonElement).disabled) return;
+      try {
+        navigator.vibrate(12);
+      } catch {
+        /* vibration is optional */
+      }
+    };
     document.addEventListener('pointerdown', onDown, { passive: true });
-    return () => document.removeEventListener('pointerdown', onDown);
+    document.addEventListener('click', onClick, { passive: true });
+    return () => {
+      document.removeEventListener('pointerdown', onDown);
+      document.removeEventListener('click', onClick);
+    };
   }, []);
   return null;
 }

@@ -35,6 +35,7 @@ export function CookieNotice() {
     const check = () => {
       if (revealed || !(scrolled || timedOut) || introOn()) return;
       revealed = true;
+      window.clearInterval(poll);
       setVisible(true);
       frame = requestAnimationFrame(() => setShown(true));
     };

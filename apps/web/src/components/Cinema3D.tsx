@@ -48,8 +48,8 @@ function hasVt(el: Element): boolean {
 
 // React tags DOM nodes once hydrated; touching them earlier breaks hydration.
 function hydrated(el: Element): boolean {
-  for (const k in el) if (k.startsWith('__reactFiber')) return true;
-  return false;
+  // Own keys only: a for…in here would walk every DOM property of the prototype.
+  return Object.keys(el).some((k) => k.startsWith('__reactFiber'));
 }
 
 function isFixedOrSticky(el: Element): boolean {
@@ -247,6 +247,8 @@ export function Cinema3D() {
     const paint = () => {
       raf = 0;
       const h = vh();
+      // Read every rect first, then write: no forced style recalc per image.
+      const moves: Array<[HTMLElement, string]> = [];
       visible.forEach((el) => {
         const amp = drift.get(el);
         if (amp === undefined) return;
@@ -255,7 +257,10 @@ export function Cinema3D() {
           -1,
           Math.min(1, (r.top + r.height / 2 - h / 2) / (h / 2 + r.height / 2)),
         );
-        el.style.translate = `0 ${(-p * amp).toFixed(1)}px`;
+        moves.push([el, `0 ${(-p * amp).toFixed(1)}px`]);
+      });
+      moves.forEach(([el, t]) => {
+        el.style.translate = t;
       });
     };
     const schedule = () => {
