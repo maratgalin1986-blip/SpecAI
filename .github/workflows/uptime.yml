@@ -1,0 +1,35 @@
+name: Проверка сайта
+
+# Every hour: opens the key pages and API of the live site. Pages that use the
+# database are included on purpose — a broken database connection (the Prisma
+# engine missing on Vercel, 2026-09-29) once went unnoticed because only the
+# static home page was checked. A failed run is e-mailed by GitHub.
+# Run it by hand from the Actions tab after a deploy, too.
+
+on:
+  schedule:
+    - cron: '17 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      SITE: https://spec-ai-web.vercel.app
+    steps:
+      - name: Pages and API answer 200
+        run: |
+          failed=0
+          for path in / /equipment /orders /contacts /arenda/avtokran /api/equipment /api/categories; do
+            code=$(curl -s -o /dev/null -w '%{http_code}' --retry 2 --retry-delay 5 --max-time 30 "$SITE$path")
+            echo "$code $path"
+            if [ "$code" != "200" ]; then
+              echo "::error::$SITE$path answered $code"
+              failed=1
+            fi
+          done
+          exit $failed

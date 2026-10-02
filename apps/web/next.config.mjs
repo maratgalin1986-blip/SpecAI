@@ -1,4 +1,3 @@
-import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
 import withSerwistInit from '@serwist/next';
 import { PrismaPlugin } from '@prisma/nextjs-monorepo-workaround-plugin';
@@ -22,14 +21,12 @@ const nextConfig = {
   reactStrictMode: true,
   transpilePackages: ['@specai/ui', '@specai/shared', '@specai/ai-service', '@specai/database'],
   experimental: {
-    // Belt and braces for the plugin below: every server function carries the
-    // generated Prisma client's engines and schema, even after a cached build.
-    outputFileTracingRoot: fileURLToPath(new URL('../../', import.meta.url)),
+    // Belt and braces for the Prisma engine: ship it in every server function
+    // at its own path, where packages/database/src/connection.ts
+    // (locateQueryEngine) finds it even if the plugin below did not copy it —
+    // which happened on a Vercel build that reused the build cache.
     outputFileTracingIncludes: {
-      '/**': [
-        '../../packages/database/generated/client/*.so.node',
-        '../../packages/database/generated/client/schema.prisma',
-      ],
+      '/**': ['../../packages/database/generated/client/libquery_engine-*'],
     },
   },
   webpack(config, { isServer }) {

@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { AGENT_PROFILES, type AgentId } from '@specai/shared';
+import { AGENT_PROFILES, PUBLIC_AGENT_PROFILES, type AgentId } from '@specai/shared';
+import { reachGoal } from '@/lib/marketing';
 
 type Selection = AgentId | 'auto';
 
@@ -13,7 +14,7 @@ interface ChatMessage {
 
 const AUTO_GREETING =
   'Здравствуйте! Я ИИ-ассистент СпецПласт16. Задайте вопрос — подключу нужного специалиста: ' +
-  'консультанта, диспетчера, поддержку или помощника поставщика.';
+  'консультанта, диспетчера или поддержку.';
 
 function agentName(id?: AgentId) {
   return AGENT_PROFILES.find((p) => p.id === id)?.name ?? 'Ассистент';
@@ -104,6 +105,8 @@ export function AgentChat({
       if (!response.ok || !data?.reply) {
         throw new Error(typeof data?.error === 'string' ? data.error : 'Агент не ответил.');
       }
+      // A phone number typed into the chat became a callback request.
+      if (data.lead) reachGoal('lead');
       setMessages([
         ...nextMessages,
         { role: 'assistant', content: data.reply, agentId: data.agentId },
@@ -118,14 +121,14 @@ export function AgentChat({
   return (
     <div className={`flex flex-col ${compact ? 'h-full' : 'h-[640px]'} min-h-0`}>
       <div className="flex gap-2 overflow-x-auto border-b border-slate-200 p-3">
-        {(['auto', ...AGENT_PROFILES.map((p) => p.id)] as Selection[]).map((id) => (
+        {(['auto', ...PUBLIC_AGENT_PROFILES.map((p) => p.id)] as Selection[]).map((id) => (
           <button
             key={id}
             type="button"
             onClick={() => changeAgent(id)}
             className={`shrink-0 rounded-full px-3 py-1 text-xs font-medium transition-colors ${
               selection === id
-                ? 'bg-amber-600 text-white'
+                ? 'bg-amber-500 text-slate-950'
                 : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
             }`}
           >
@@ -191,7 +194,7 @@ export function AgentChat({
         <button
           type="submit"
           disabled={isSending || !input.trim()}
-          className="rounded-md bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700 disabled:opacity-50"
+          className="rounded-md bg-amber-500 px-4 py-2 text-sm font-medium text-slate-950 hover:bg-amber-400 disabled:opacity-50"
         >
           Отправить
         </button>

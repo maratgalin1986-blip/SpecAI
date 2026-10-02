@@ -13,6 +13,8 @@ export interface AgentProfile {
   description: string;
   greeting: string;
   suggestions: string[];
+  /** Works only for the owner's fleet account; hidden from the public picker. */
+  ownerOnly?: boolean;
 }
 
 export const AGENT_PROFILES: AgentProfile[] = [
@@ -34,8 +36,7 @@ export const AGENT_PROFILES: AgentProfile[] = [
     id: 'dispatcher',
     name: 'Диспетчер',
     role: 'Оформление заявок',
-    description:
-      'Соберёт детали работ и сроки, а затем оформит заявку, на которую откликнутся поставщики.',
+    description: 'Соберёт детали работ и сроки и оформит заявку — СпецПласт16 ответит своей ценой.',
     greeting:
       'Я диспетчер СпецПласт16. Расскажите, что нужно сделать и когда, — оформлю заявку за вас.',
     suggestions: [
@@ -55,14 +56,18 @@ export const AGENT_PROFILES: AgentProfile[] = [
   },
   {
     id: 'provider',
-    name: 'Помощник поставщика',
-    role: 'Для владельцев техники',
+    name: 'Помощник владельца',
+    role: 'Парк СпецПласт16',
     description:
-      'Покажет открытые заявки клиентов, состояние вашего парка и подскажет, где сделать ставку.',
-    greeting: 'Я помогаю поставщикам техники. Покажу открытые заявки и загрузку вашего парка.',
-    suggestions: ['Какие есть открытые заявки?', 'Покажи мою технику и её статус'],
+      'Покажет открытые заявки клиентов и загрузку парка СпецПласт16, подскажет, кому ответить первым.',
+    greeting: 'Я помогаю владельцу СпецПласт16. Покажу открытые заявки и загрузку парка.',
+    suggestions: ['Какие есть открытые заявки?', 'Покажи технику и её статус'],
+    ownerOnly: true,
   },
 ];
+
+/** Agents offered to site visitors. */
+export const PUBLIC_AGENT_PROFILES = AGENT_PROFILES.filter((profile) => !profile.ownerOnly);
 
 export const agentChatRequestSchema = z.object({
   // 'auto' lets the router pick the best agent for the latest message.

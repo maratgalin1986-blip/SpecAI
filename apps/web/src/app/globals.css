@@ -24,16 +24,16 @@ html {
 }
 
 ::view-transition-group(root) {
-  animation-duration: 0.75s;
+  animation-duration: 0.55s;
 }
 
 ::view-transition-old(root) {
-  animation: vortex-out 0.55s cubic-bezier(0.55, 0, 0.9, 0.4) both;
+  animation: vortex-out 0.35s cubic-bezier(0.55, 0, 0.9, 0.4) both;
   transform-origin: 50% 40vh;
 }
 
 ::view-transition-new(root) {
-  animation: vortex-in 0.75s cubic-bezier(0.16, 1, 0.3, 1) 0.12s both;
+  animation: vortex-in 0.45s cubic-bezier(0.16, 1, 0.3, 1) 0.1s both;
   transform-origin: 50% 40vh;
 }
 
@@ -85,16 +85,6 @@ html {
     radial-gradient(50% 70% at 10% 90%, rgba(56, 189, 248, 0.18), transparent 60%),
     linear-gradient(160deg, #0f172a 0%, #111827 55%, #1c1917 100%);
   background-size: 160% 160%;
-  animation: aurora 16s ease-in-out infinite alternate;
-}
-
-@keyframes aurora {
-  from {
-    background-position: 0% 0%;
-  }
-  to {
-    background-position: 100% 100%;
-  }
 }
 
 .hero-grid {
@@ -107,13 +97,6 @@ html {
   background-size: 48px 48px;
   transform: perspective(500px) rotateX(62deg);
   mask-image: linear-gradient(to top, black, transparent 85%);
-  animation: grid-move 3s linear infinite;
-}
-
-@keyframes grid-move {
-  to {
-    background-position: 0 48px;
-  }
 }
 
 .text-gradient {
@@ -172,6 +155,7 @@ html {
 
 .tilt-content {
   transform: translateZ(30px);
+  backface-visibility: hidden;
 }
 
 .tilt-glare {
@@ -181,14 +165,14 @@ html {
   opacity: 0;
   background: radial-gradient(
     circle at var(--gx) var(--gy),
-    rgba(251, 191, 36, 0.25),
+    rgba(251, 191, 36, 0.4),
     transparent 55%
   );
   transition: opacity 0.3s;
 }
 
 .tilt-card:hover .tilt-glare {
-  opacity: 1;
+  opacity: 0.9;
 }
 
 .tilt-glare {
@@ -421,12 +405,15 @@ html {
 }
 
 .journey-push {
-  animation: push-in 14s ease-in-out infinite alternate;
+  animation: push-in 12s ease-in-out infinite alternate;
 }
 
 @keyframes push-in {
+  from {
+    transform: scale(1.02) translate(0, 0);
+  }
   to {
-    transform: scale(1.08);
+    transform: scale(1.2) translate(2.5%, -2%);
   }
 }
 
@@ -616,7 +603,7 @@ html {
    site, the titles and the partner card come in, then the camera dives into
    the page. All timings are CSS, so it ends even before hydration. */
 .intro {
-  animation: intro-out 0.55s cubic-bezier(0.7, 0, 0.84, 0) 3.05s forwards;
+  animation: intro-out 0.55s cubic-bezier(0.7, 0, 0.84, 0) 2.25s forwards;
 }
 @keyframes intro-out {
   to {
@@ -628,7 +615,7 @@ html {
 }
 .intro-drone {
   transform-origin: 50% 60%;
-  animation: intro-drone 3.6s cubic-bezier(0.25, 0.1, 0.25, 1) both;
+  animation: intro-drone 2.8s cubic-bezier(0.25, 0.1, 0.25, 1) both;
 }
 @keyframes intro-drone {
   from {
@@ -661,7 +648,7 @@ html {
     radial-gradient(120% 90% at 100% 0%, rgba(245, 158, 11, 0.45), transparent 55%),
     linear-gradient(135deg, #111827 0%, #0b0f19 55%, #1f2937 100%);
   transform-style: preserve-3d;
-  animation: intro-card 1.5s cubic-bezier(0.2, 0.8, 0.2, 1) 0.8s both;
+  animation: intro-card 1.3s cubic-bezier(0.2, 0.8, 0.2, 1) 0.6s both;
 }
 @keyframes intro-card {
   from {
@@ -684,7 +671,7 @@ html {
     transparent 60%
   );
   background-size: 250% 100%;
-  animation: intro-shine 1.4s ease-in-out 1.6s both;
+  animation: intro-shine 1.2s ease-in-out 1.2s both;
 }
 @keyframes intro-shine {
   from {
@@ -704,7 +691,20 @@ html {
 /* The hero footage starts from above, like a drone coming down. */
 .hero-drone {
   transform-origin: 50% 40%;
-  animation: hero-drone 7s cubic-bezier(0.25, 0.1, 0.25, 1) both;
+  /* After the drone lands, the camera keeps moving: a slow push-in and pan,
+     so the shot stays alive even where the video can't play (iPhone low
+     power mode blocks autoplay). */
+  animation:
+    hero-drone 7s cubic-bezier(0.25, 0.1, 0.25, 1) both,
+    camera-move 16s ease-in-out 7s infinite alternate;
+}
+@keyframes camera-move {
+  from {
+    transform: scale(1) translate(0, 0);
+  }
+  to {
+    transform: scale(1.18) translate(-3%, 2%);
+  }
 }
 @keyframes hero-drone {
   from {
@@ -759,7 +759,15 @@ html {
 
 /* Title revealed like opening credits. */
 .cine-eyebrow {
-  animation: intro-rise 0.8s ease-out 0.35s both;
+  animation: cine-rise 0.8s ease-out 0.35s both;
+}
+/* Opacity and transform only: animating letter-spacing would re-wrap the
+   text on phones and push the page down (layout shift). */
+@keyframes cine-rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
 }
 .cine-title {
   animation: cine-title 1.1s cubic-bezier(0.2, 0.8, 0.2, 1) 0.45s both;
@@ -778,8 +786,23 @@ html {
     transform: none;
   }
 }
+/* Phones: blur rasterisation is costly on weak GPUs, keep opacity/transform. */
+@media (hover: none) {
+  @keyframes cine-title {
+    from {
+      opacity: 0;
+      clip-path: inset(0 100% 0 0);
+      transform: translateX(-12px);
+    }
+    to {
+      opacity: 1;
+      clip-path: inset(0 0 0 0);
+      transform: none;
+    }
+  }
+}
 .cine-sub {
-  animation: intro-rise 0.9s ease-out 0.8s both;
+  animation: cine-rise 0.9s ease-out 0.8s both;
 }
 
 /* Every page opens behind a pair of black bars. */
@@ -795,6 +818,11 @@ html {
   pointer-events: none;
   animation: cine-curtain 0.75s cubic-bezier(0.7, 0, 0.2, 1) both;
 }
+/* Repeat visit within 30 s (flag set in layout.tsx): short curtain. */
+html[data-curtain='fast'] .cine-curtain::before,
+html[data-curtain='fast'] .cine-curtain::after {
+  animation-duration: 0.3s;
+}
 .cine-curtain::before {
   top: 0;
   transform-origin: top;
@@ -802,6 +830,17 @@ html {
 .cine-curtain::after {
   bottom: 0;
   transform-origin: bottom;
+}
+/* One effect per navigation: no bars while a view transition plays. */
+html[data-vt] .cine-curtain::before,
+html[data-vt] .cine-curtain::after {
+  display: none;
+}
+/* visibility, not display: toggling display would restart the bars when the
+   transition ends. */
+html:active-view-transition .cine-curtain::before,
+html:active-view-transition .cine-curtain::after {
+  visibility: hidden;
 }
 @keyframes cine-curtain {
   from {
@@ -855,14 +894,30 @@ html {
   height: 12px;
   margin: -6px 0 0 -6px;
   border-radius: 9999px;
-  border: 2px solid rgba(245, 158, 11, 0.9);
-  box-shadow: 0 0 18px rgba(245, 158, 11, 0.6);
+  border: 2px solid rgba(245, 158, 11, 0.95);
+  /* dark outer stroke keeps the ring readable on light backgrounds */
+  box-shadow:
+    0 0 0 1.5px rgba(120, 53, 15, 0.55),
+    0 0 22px rgba(245, 158, 11, 0.75);
   pointer-events: none;
-  animation: cine-ring 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+  animation:
+    cine-ring-scale 0.8s cubic-bezier(0.2, 0.8, 0.2, 1) forwards,
+    cine-ring-fade 0.8s linear forwards;
 }
-@keyframes cine-ring {
+.cine-ring-2 {
+  animation-delay: 0.08s;
+  opacity: 0;
+}
+@keyframes cine-ring-scale {
   to {
-    transform: scale(7);
+    transform: scale(11);
+  }
+}
+@keyframes cine-ring-fade {
+  from {
+    opacity: 1;
+  }
+  to {
     opacity: 0;
   }
 }
@@ -897,4 +952,370 @@ html {
   .cine-cut {
     animation: none;
   }
+}
+
+/* ---- Weather monitor and site map (WeatherHud, SiteMap) ------------------ */
+
+/* A slow sky behind the forecast, tinted by the verdict. */
+.weather-sky {
+  background:
+    radial-gradient(60% 80% at 85% 0%, var(--sky, rgba(56, 189, 248, 0.25)), transparent 70%),
+    radial-gradient(50% 60% at 10% 100%, rgba(245, 158, 11, 0.12), transparent 70%);
+  animation: weather-sky 18s ease-in-out infinite alternate;
+}
+.weather-sky-ok {
+  --sky: rgba(56, 189, 248, 0.25);
+}
+.weather-sky-caution {
+  --sky: rgba(245, 158, 11, 0.28);
+}
+.weather-sky-stop {
+  --sky: rgba(239, 68, 68, 0.3);
+}
+@keyframes weather-sky {
+  to {
+    transform: translate3d(-4%, 3%, 0) scale(1.08);
+  }
+}
+
+/* Viewfinder corner brackets. */
+.hud-corners {
+  background:
+    linear-gradient(to right, rgba(255, 255, 255, 0.35) 18px, transparent 18px) 0 0 / 100% 1px
+      no-repeat,
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.35) 18px, transparent 18px) 0 0 / 1px 100%
+      no-repeat,
+    linear-gradient(to left, rgba(255, 255, 255, 0.35) 18px, transparent 18px) 100% 0 / 100% 1px
+      no-repeat,
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.35) 18px, transparent 18px) 100% 0 / 1px 100%
+      no-repeat,
+    linear-gradient(to right, rgba(255, 255, 255, 0.35) 18px, transparent 18px) 0 100% / 100% 1px
+      no-repeat,
+    linear-gradient(to top, rgba(255, 255, 255, 0.35) 18px, transparent 18px) 0 100% / 1px 100%
+      no-repeat,
+    linear-gradient(to left, rgba(255, 255, 255, 0.35) 18px, transparent 18px) 100% 100% / 100% 1px
+      no-repeat,
+    linear-gradient(to top, rgba(255, 255, 255, 0.35) 18px, transparent 18px) 100% 100% / 1px 100%
+      no-repeat;
+}
+
+/* The map descends like a drone onto the site, then holds. */
+.map-descent {
+  animation: map-descent 2.2s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+@keyframes map-descent {
+  from {
+    transform: scale(1.6) rotate(-6deg);
+    filter: blur(3px) saturate(0.4);
+  }
+  to {
+    transform: none;
+    filter: saturate(0.85) contrast(1.05);
+  }
+}
+.map-ping {
+  animation: map-ping 2s ease-out infinite;
+}
+@keyframes map-ping {
+  from {
+    transform: translate(-50%, -50%) scale(0.4);
+    opacity: 0.9;
+  }
+  to {
+    transform: translate(-50%, -50%) scale(2.6);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .weather-sky,
+  .map-descent,
+  .map-ping {
+    animation: none;
+  }
+}
+
+/* QR page: a laser line sweeps the code like a scanner. */
+.qr-scan {
+  background: linear-gradient(90deg, transparent, rgba(245, 158, 11, 0.9), transparent);
+  box-shadow: 0 0 12px rgba(245, 158, 11, 0.8);
+  animation: qr-scan 2.6s ease-in-out infinite alternate;
+}
+@keyframes qr-scan {
+  to {
+    top: calc(100% - 1rem);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .qr-scan {
+    display: none;
+  }
+}
+
+/* Mobile contact bar: the status light blinks twice, then stays on. */
+.radio-led {
+  animation: radio-led 0.8s ease-in-out 2;
+}
+@keyframes radio-led {
+  50% {
+    opacity: 0.2;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .radio-led {
+    animation: none;
+  }
+}
+
+/* «Принято»: a rubber stamp lands once on the success screen. */
+.stamp {
+  border: 3px double #f59e0b;
+  border-radius: 0.5rem;
+  padding: 0.25rem 0.9rem;
+  color: #fbbf24;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-weight: 800;
+  letter-spacing: 0.25em;
+  text-transform: uppercase;
+  transform: rotate(-6deg);
+  animation: stamp-land 0.35s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+@keyframes stamp-land {
+  from {
+    opacity: 0;
+    transform: rotate(-6deg) scale(2);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .stamp {
+    animation: none;
+  }
+}
+
+/* «Бланк наряда» in the wizard: each filled row types itself in. */
+.work-order-value {
+  display: inline-block;
+  animation: work-order-type 350ms steps(12) both;
+}
+@keyframes work-order-type {
+  from {
+    clip-path: inset(0 100% 0 0);
+  }
+  to {
+    clip-path: inset(0);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .work-order-value,
+  .work-order .stamp {
+    animation: none;
+  }
+}
+
+/* Catalog card -> machine page: photo, title and price fly between pages.
+   The names are set by VtMorph on the clicked card only, so they stay unique. */
+::view-transition-group(machine-photo),
+::view-transition-group(machine-title),
+::view-transition-group(machine-price) {
+  animation-duration: 0.6s;
+  animation-timing-function: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+::view-transition-group(machine-photo) {
+  z-index: 5;
+}
+
+/* ---- Intro: the card number flies into the header «Позвонить» button ---- */
+html.intro-live .vt-phone {
+  view-transition-name: sp-phone;
+}
+
+::view-transition-group(sp-phone) {
+  animation-duration: 0.7s;
+  animation-timing-function: cubic-bezier(0.2, 0.8, 0.2, 1);
+  z-index: 11;
+}
+
+.phone-land {
+  animation: phone-land 0.9s ease-out 1;
+}
+
+@keyframes phone-land {
+  0% {
+    box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.9);
+  }
+  100% {
+    box-shadow: 0 0 0 16px rgba(245, 158, 11, 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .phone-land {
+    animation: none;
+  }
+}
+
+/* overlays cleanup */
+html {
+  scroll-padding-top: 5.5rem;
+}
+
+/* Chat button: above the contact bar on phones, above the cookie strip when shown. */
+.chat-fab {
+  bottom: calc(4.75rem + env(safe-area-inset-bottom));
+}
+html[data-cookie-strip] .chat-fab {
+  bottom: calc(7.25rem + env(safe-area-inset-bottom));
+}
+@media (min-width: 640px) {
+  .chat-fab,
+  html[data-cookie-strip] .chat-fab {
+    bottom: 1rem;
+  }
+}
+
+/* Header over the dark journey scene: dark translucent glass. */
+.site-header-vt {
+  transition:
+    background-color 0.25s,
+    border-color 0.25s;
+}
+.site-header-vt[data-dark='true'] {
+  background-color: rgb(2 6 23 / 0.45);
+  border-color: rgb(255 255 255 / 0.1);
+}
+.site-header-vt[data-dark='true'] a:not(.vt-phone),
+.site-header-vt[data-dark='true'] button {
+  color: rgb(255 255 255 / 0.9);
+}
+.site-header-vt[data-dark='true'] .vt-phone {
+  background-color: rgb(255 255 255 / 0.18);
+}
+
+/* cinema content */
+
+/* CinemaBand: letterbox bars open once when the band scrolls into view, the
+   photo pushes in slowly. */
+.cine-band-bar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 22%;
+  background: #000;
+  z-index: 5;
+  pointer-events: none;
+  transition: transform 1.1s cubic-bezier(0.7, 0, 0.2, 1);
+}
+.cine-band-bar-top {
+  top: 0;
+  transform-origin: top;
+}
+.cine-band-bar-bottom {
+  bottom: 0;
+  transform-origin: bottom;
+}
+.cine-band[data-open='false'] .cine-band-bar {
+  transform: scaleY(2.2);
+}
+.cine-band[data-open='true'] .cine-band-bar {
+  transform: scaleY(0);
+}
+.cine-band-photo {
+  transform: scale(1.02);
+}
+.cine-band[data-open='true'] .cine-band-photo {
+  animation: cine-band-push 22s ease-out both;
+}
+@keyframes cine-band-push {
+  from {
+    transform: scale(1.02);
+  }
+  to {
+    transform: scale(1.16) translate3d(-1.5%, -1%, 0);
+  }
+}
+
+/* Home finale: an iris opens over the night-site background. Without script
+   (or with reduced motion) the block is simply shown. */
+.cine-iris {
+  transition: clip-path 1.4s cubic-bezier(0.6, 0, 0.2, 1);
+}
+.cine-iris[data-iris='armed'] {
+  clip-path: circle(0% at 50% 50%);
+}
+.cine-iris[data-iris='open'] {
+  clip-path: circle(150% at 50% 50%);
+}
+.cine-iris-bg {
+  transition: transform 6s ease-out;
+}
+.cine-iris[data-iris='armed'] .cine-iris-bg {
+  transform: scale(1.12);
+}
+
+/* Short laptop screens: both hero buttons must fit at 1280x720. */
+@media (min-width: 1024px) and (max-height: 760px) {
+  .hero-short h1 {
+    font-size: clamp(2.2rem, 7.2vh, 3.4rem);
+  }
+  .hero-short {
+    min-height: 560px;
+  }
+  .hero-short .hero-copy {
+    padding-top: 2rem;
+    padding-bottom: 2rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cine-band-bar {
+    display: none;
+  }
+  .cine-band-photo,
+  .cine-band[data-open='true'] .cine-band-photo {
+    animation: none;
+    transform: none;
+  }
+  .cine-iris,
+  .cine-iris[data-iris] {
+    clip-path: none;
+    transition: none;
+  }
+  .cine-iris-bg,
+  .cine-iris[data-iris] .cine-iris-bg {
+    transform: none;
+    transition: none;
+  }
+}
+
+/* effects v2 */
+/* Catalog <-> machine page: a light cross-fade so the card morph is not fighting a rotating root. */
+html[data-vt-kind='fade']::view-transition-old(root) {
+  animation: vt-fade-out 0.2s ease-out both;
+  transform: none;
+}
+html[data-vt-kind='fade']::view-transition-new(root) {
+  animation: vt-fade-in 0.3s ease-out both;
+  transform: none;
+}
+html[data-vt-kind='fade']::view-transition-group(root) {
+  animation-duration: 0.3s;
+}
+@keyframes vt-fade-out {
+  to {
+    opacity: 0;
+  }
+}
+@keyframes vt-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cine-ring {
+    display: none;
+  }
+}
+.tilt-card[data-touch] .tilt-glare {
+  opacity: 0.9;
 }

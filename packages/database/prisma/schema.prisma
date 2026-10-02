@@ -480,6 +480,13 @@ model Lead {
   // Where the form was sent from (e.g. "home", "equipment:<id>", "agents").
   source    String?
   status    LeadStatus @default(NEW)
+  // Owner's result: 'deal' | 'no_deal' | 'no_answer'. String, not an enum
+  // (a new enum value breaks the deploy).
+  outcome   String?
+  // Deal amount, rubles.
+  amount    Int?
+  // Yandex Metrika ClientID (_ym_uid).
+  ymClientId String?
   createdAt DateTime   @default(now())
   updatedAt DateTime   @updatedAt
 

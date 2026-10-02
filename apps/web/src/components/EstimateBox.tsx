@@ -5,6 +5,7 @@ import { Icon } from '@/components/Icon';
 import { rub, SHIFT_HOURS } from '@/lib/equipmentCatalog';
 import { SITE } from '@/lib/site';
 import { submitLead } from '@/lib/submitLead';
+import { LeadSuccess } from '@/components/LeadSuccess';
 
 type Mode = 'hours' | 'shifts';
 
@@ -116,7 +117,7 @@ export function EstimateBox({
     <div className="flex flex-col gap-5 rounded-3xl border border-slate-200 bg-white p-5 shadow-xl shadow-slate-900/5 sm:p-6">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <div className="eyebrow text-[0.65rem] text-amber-600">Расчёт стоимости</div>
+          <div className="eyebrow text-[0.65rem] text-amber-700">Расчёт стоимости</div>
           <div className="mt-2 flex flex-wrap items-baseline gap-x-4 gap-y-1">
             {hourlyRate !== null && (
               <span className="font-mono text-2xl font-bold tabular-nums tracking-tight">
@@ -240,18 +241,9 @@ export function EstimateBox({
       )}
 
       {status === 'sent' ? (
-        <div
-          role="status"
-          className="rounded-2xl bg-emerald-50 p-4 text-sm text-emerald-900 ring-1 ring-emerald-600/15"
-        >
-          <p className="font-semibold">Заявка с расчётом отправлена</p>
-          <p className="mt-1 text-emerald-800">
-            {SITE.callbackPromise}. Срочно —{' '}
-            <a href={SITE.phoneHref} className="font-semibold underline">
-              {SITE.phone}
-            </a>
-          </p>
-        </div>
+        <LeadSuccess
+          summary={`${equipmentName}${total !== null ? `, расчёт ${rub(total)}` : ''}`}
+        />
       ) : (
         <form onSubmit={handleSubmit} className="flex flex-col gap-3">
           <input
@@ -313,7 +305,7 @@ export function EstimateBox({
           href={SITE.phoneHref}
           className="inline-flex items-center justify-center gap-2 rounded-full border border-slate-300 px-3 py-2.5 text-sm font-semibold transition hover:border-slate-900"
         >
-          <Icon name="phone" className="h-4 w-4 text-amber-600" />
+          <Icon name="phone" className="h-4 w-4 text-amber-700" />
           Позвонить
         </a>
         <a

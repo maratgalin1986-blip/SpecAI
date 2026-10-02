@@ -7,7 +7,17 @@ import { authOptions } from '@/lib/auth';
 import { formatRate } from '@/lib/money';
 import { maskContacts } from '@/lib/privacy';
 import { checkRateLimit } from '@/lib/rateLimit';
-import { SITE } from '@/lib/site';
+import { isFleetManager, OWN_FLEET } from '@/lib/fleet';
+import { notifyTelegram } from '@/lib/notify';
+import { isOnShift, SITE } from '@/lib/site';
+import {
+  ASK_FOR_PHONE,
+  faqAnswers,
+  findPhone,
+  leadAcceptedText,
+  matchTask,
+  wantsPrice,
+} from '@/lib/dispatcher';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -88,6 +98,7 @@ export async function POST(request: NextRequest) {
       const maxDailyRate = typeof input.maxDailyRate === 'number' ? input.maxDailyRate : undefined;
       const items = await prisma.equipment.findMany({
         where: {
+          ...OWN_FLEET,
           status: input.onlyAvailable === false ? { not: 'RETIRED' } : 'AVAILABLE',
           categoryId: optionalString(input, 'categoryId'),
           dailyRate: maxDailyRate !== undefined ? { lte: maxDailyRate } : undefined,
@@ -120,9 +131,9 @@ export async function POST(request: NextRequest) {
     async get_equipment_details(input) {
       const item = await prisma.equipment.findUnique({
         where: { id: requireString(input, 'equipmentId') },
-        include: { category: true, location: true, company: true, reviews: true },
+        include: { category: true, location: true, reviews: true },
       });
-      if (!item) {
+      if (!item || item.companyId !== OWN_FLEET.companyId) {
         throw new ToolError('Техника не найдена');
       }
       const ratings = item.reviews.map((r) => r.rating);
@@ -135,7 +146,6 @@ export async function POST(request: NextRequest) {
         category: item.category.name,
         status: item.status,
         city: item.location?.city ?? null,
-        provider: item.company.name,
         dailyRate: Number(item.dailyRate),
         hourlyRate: item.hourlyRate ? Number(item.hourlyRate) : null,
         weeklyRate: item.weeklyRate ? Number(item.weeklyRate) : null,
@@ -158,7 +168,7 @@ export async function POST(request: NextRequest) {
       const item = await prisma.equipment.findUnique({
         where: { id: requireString(input, 'equipmentId') },
       });
-      if (!item) {
+      if (!item || item.companyId !== OWN_FLEET.companyId) {
         throw new ToolError('Техника не найдена');
       }
       const daily = Number(item.dailyRate);
@@ -254,8 +264,8 @@ export async function POST(request: NextRequest) {
 
     async get_my_fleet() {
       const currentUser = requireUser();
-      if (!currentUser.companyId) {
-        throw new ToolError('У пользователя нет компании-поставщика. Регистрация: /register');
+      if (!isFleetManager(currentUser) || !currentUser.companyId) {
+        throw new ToolError('Парк техники доступен только владельцу СпецПласт16.');
       }
       const fleet = await prisma.equipment.findMany({
         where: { companyId: currentUser.companyId },
@@ -278,8 +288,9 @@ export async function POST(request: NextRequest) {
   };
 
   // Without an API key (or if the AI service fails) the agents still help in
-  // a simplified mode: catalog search by keywords, the user's bookings and
-  // orders, and a nudge towards a callback request.
+  // the rule-based dispatcher (lib/dispatcher.ts): the machine for the job,
+  // common questions, the user's bookings, and a phone number typed into the
+  // chat becomes a callback request for the owner.
   async function offlineReply(agentId: AgentId) {
     const text = (messages.at(-1)?.content ?? '').toLowerCase();
     const lines: string[] = [];
@@ -310,43 +321,76 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    const userText = messages
+      .filter((m) => m.role === 'user')
+      .map((m) => m.content)
+      .join('\n');
+    const phone = findPhone(messages.at(-1)?.content ?? '');
+    if (phone) {
+      const lead = {
+        name: user?.name?.trim() || 'Имя не указано',
+        phone,
+        message: `Из чата на сайте:\n${userText}`.slice(0, 1000),
+        source: 'agents-chat',
+      };
+      const summary = [`Имя: ${lead.name}`, `Телефон: ${phone}`, lead.message];
+      try {
+        await prisma.lead.create({ data: lead });
+        await notifyTelegram([`💬 Заявка из чата — ${SITE.name}`, ...summary].join('\n'));
+      } catch (error) {
+        console.error('[agents] failed to save chat lead', error);
+        await notifyTelegram(
+          ['⚠️ Заявка из чата — БАЗА НЕДОСТУПНА, заявка только здесь', ...summary].join('\n'),
+        );
+      }
+      return {
+        agentId,
+        reply: leadAcceptedText(isOnShift()),
+        toolsUsed: [],
+        offline: true,
+        lead: true,
+      };
+    }
+
+    const task = matchTask(text) ?? matchTask(userText);
+    const faq = faqAnswers(text);
     if (lines.length === 0) {
-      const category = OFFLINE_CATEGORIES.find(({ stem }) => text.includes(stem));
+      lines.push(...faq);
       const categories = (await handlers.list_categories({})) as { id: string; name: string }[];
-      const categoryId = category
-        ? categories.find((c) => c.name === category.name)?.id
-        : undefined;
-      const found = (await handlers.search_equipment(categoryId ? { categoryId } : {})) as {
-        name: string;
-        dailyRate: number;
-        currency: string;
-        link: string;
-      }[];
-      if (found.length > 0) {
-        lines.push(
-          category
-            ? `Вот что есть по запросу «${category.name}»:`
-            : 'Сейчас доступна такая техника:',
-        );
-        for (const item of found.slice(0, 5)) {
-          lines.push(
-            `• [${item.name}](${item.link}) — ${formatRate(item).price}${formatRate(item).unit}`,
-          );
+      const categoryId = task ? categories.find((c) => c.name === task.category)?.id : undefined;
+      if (task || faq.length === 0 || wantsPrice(text)) {
+        const found = (await handlers.search_equipment(categoryId ? { categoryId } : {})) as {
+          name: string;
+          dailyRate: number;
+          hourlyRate: number | null;
+          currency: string;
+          link: string;
+        }[];
+        if (task) {
+          if (lines.length > 0) lines.push('');
+          lines.push(`Под вашу задачу подойдёт: ${task.category.toLowerCase()} — ${task.why}.`);
         }
-        lines.push('[Весь каталог техники](/equipment)');
-      } else {
-        lines.push(
-          category
-            ? `${category.name} сейчас подбираем под заказ — в каталоге свободных нет.`
-            : 'Подберём технику под вашу задачу.',
-        );
+        if (found.length > 0) {
+          if (!task) lines.push('Техника и цены с машинистом:');
+          for (const item of found.slice(0, task ? 3 : 5)) {
+            const shift = item.hourlyRate
+              ? `, смена от ${Math.round(item.hourlyRate * 8).toLocaleString('ru-RU')} ₽`
+              : '';
+            lines.push(
+              `• [${item.name}](${item.link}) — ${formatRate(item).price}${formatRate(item).unit}${shift}`,
+            );
+          }
+          lines.push('[Весь каталог техники](/equipment)');
+        } else if (task) {
+          lines.push('Подберём машину под заказ — уточним по телефону.');
+        }
+      }
+      if (lines.length === 0) {
+        lines.push('Опишите задачу: что нужно сделать, где и когда — подскажу технику и цену.');
       }
     }
 
-    lines.push(
-      '',
-      `Сейчас я работаю в упрощённом режиме. Для точного подбора и цены [оставьте заявку на звонок](/contacts) или позвоните ${SITE.phone}.`,
-    );
+    lines.push('', ASK_FOR_PHONE);
     return { agentId, reply: lines.join('\n'), toolsUsed: [], offline: true };
   }
 
@@ -371,17 +415,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(await offlineReply(fallbackAgent));
   }
 }
-
-const OFFLINE_CATEGORIES = [
-  { stem: 'экскаватор-погруз', name: 'Экскаваторы-погрузчики' },
-  { stem: 'экскав', name: 'Экскаваторы' },
-  { stem: 'кран', name: 'Краны' },
-  { stem: 'бульд', name: 'Бульдозеры' },
-  { stem: 'погруз', name: 'Погрузчики' },
-  { stem: 'самосв', name: 'Самосвалы' },
-  { stem: 'манипул', name: 'Манипуляторы' },
-  { stem: 'вышк', name: 'Автовышки' },
-];
 
 const BOOKING_STATUS_RU: Record<string, string> = {
   PENDING: 'ожидает подтверждения',

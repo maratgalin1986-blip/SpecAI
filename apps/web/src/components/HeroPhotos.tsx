@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { CinemaVideo } from '@/components/CinemaVideo';
 import { MachinePhoto } from '@/components/MachinePhoto';
 import { MACHINE_LABELS, type MachineType } from '@/lib/machinePhotos';
 import { currentSiteObject, SITE_OBJECTS } from '@/lib/siteObjects';
@@ -35,6 +36,12 @@ export function HeroPhotos() {
   const [object, setObject] = useState(SITE_OBJECTS[0]!);
   const video = object.hero;
   const [paused, setPaused] = useState(false);
+  // The furthest slide that may be mounted: the current one plus the next.
+  const [reach, setReach] = useState(0);
+
+  useEffect(() => {
+    setReach((value) => Math.max(value, current + 1));
+  }, [current]);
 
   // A different project on every visit, chosen after hydration.
   useEffect(() => {
@@ -97,33 +104,34 @@ export function HeroPhotos() {
     <>
       <div ref={rootRef} className="absolute inset-0 overflow-hidden" aria-hidden>
         <div className="hero-parallax-photo absolute -inset-8">
-          <video
-            key={video}
-            className={`hero-drone absolute inset-0 h-full w-full object-cover transition-opacity duration-1000 ${
+          <div
+            className={`absolute inset-0 transition-opacity duration-1000 ${
               current === -1 ? 'opacity-100' : 'opacity-0'
             }`}
-            autoPlay
-            muted
-            loop
-            playsInline
-            poster={`/video/${video}.jpg`}
           >
-            <source src={`/video/${video}.webm`} type="video/webm" />
-            <source src={`/video/${video}.mp4`} type="video/mp4" />
-          </video>
-          {SLIDES.map((item, index) => (
-            <MachinePhoto
-              key={item.type}
-              type={item.type}
-              slot="hero"
-              priority={index === 0}
-              sizes="(min-width: 1152px) 1200px, 100vw"
-              className={`absolute inset-0 transition-opacity duration-1000 ${
-                index === current ? 'opacity-100' : 'opacity-0'
-              }`}
-              imgClassName={index === current ? 'hero-kenburns' : ''}
+            <CinemaVideo
+              clip={video}
+              poster={SITE_OBJECTS[0]!.hero}
+              priority
+              className="hero-drone absolute inset-0 h-full w-full"
             />
-          ))}
+          </div>
+          {SLIDES.map((item, index) =>
+            // Only slides already shown and the next one are mounted, so the
+            // photos are not all fetched while the opening footage plays.
+            index > reach ? null : (
+              <MachinePhoto
+                key={item.type}
+                type={item.type}
+                slot="hero"
+                sizes="(min-width: 1152px) 1200px, 100vw"
+                className={`absolute inset-0 transition-opacity duration-1000 ${
+                  index === current ? 'opacity-100' : 'opacity-0'
+                }`}
+                imgClassName={index === current ? 'hero-kenburns' : ''}
+              />
+            ),
+          )}
         </div>
         <div className="absolute inset-0 bg-slate-950/45 lg:bg-gradient-to-r lg:from-slate-950/95 lg:via-slate-950/35 lg:to-transparent" />
         <div className="absolute inset-0 bg-gradient-to-t from-slate-950/70 via-transparent to-transparent" />

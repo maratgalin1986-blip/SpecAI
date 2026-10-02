@@ -69,7 +69,9 @@ const FORM_LABELS: Record<string, string> = {
   'catalog-empty': 'Каталог, ничего не нашли',
   landing: 'Страница вида техники',
   contacts: 'Контакты',
-  provider: 'Поставщикам',
+  orders: 'Страница заявки',
+  'agents-chat': 'Чат с ИИ-агентами',
+  provider: 'Поставщикам (старая форма)',
 };
 
 /** A readable name of the form a lead came from ("estimate:<id>" → its kind). */
@@ -107,10 +109,41 @@ export function currentChannel(): string {
   return DIRECT;
 }
 
-/** Goals set up in Metrika: lead, call, whatsapp, telegram, email. */
-export type Goal = 'lead' | 'call' | 'whatsapp' | 'telegram' | 'email';
+/**
+ * Goals sent to Metrika. The first five are the contact goals set up in the
+ * counter; the rest are micro-steps of the funnel (JS goals with these ids).
+ */
+export type Goal =
+  | 'lead'
+  | 'card_open'
+  | 'call'
+  | 'whatsapp'
+  | 'telegram'
+  | 'email'
+  | 'intro_skip'
+  | 'intro_full'
+  | 'hero_call'
+  | 'geo_search'
+  | 'geo_found'
+  | 'geo_fail'
+  | 'window_book'
+  | 'card_open'
+  | 'lead_retry'
+  | 'lead_offline_call';
+
+/** The visitor pressed «Отказаться» in the cookie notice. */
+export const COOKIE_CONSENT_KEY = 'cookie-consent';
+
+export function analyticsRefused(): boolean {
+  try {
+    return localStorage.getItem(COOKIE_CONSENT_KEY) === 'no';
+  } catch {
+    return false;
+  }
+}
 
 export function reachGoal(goal: Goal) {
+  if (analyticsRefused()) return;
   const id = Number(SITE.metrikaId);
   const ym = (window as unknown as { ym?: (...args: unknown[]) => void }).ym;
   if (id && ym) ym(id, 'reachGoal', goal);

@@ -10,6 +10,7 @@ import {
 import { findOverlappingBooking, lockEquipment } from '@/lib/bookingConflicts';
 import { INVALID_JSON_MESSAGE, prismaErrorCode, readJson, zodErrorMessage } from '@/lib/apiInput';
 import { isOnlinePaymentEnabled } from '@/lib/stripe';
+import { isFleetManager } from '@/lib/fleet';
 
 export const dynamic = 'force-dynamic';
 
@@ -38,7 +39,7 @@ export async function GET(request: NextRequest) {
   const paymentsEnabled = isOnlinePaymentEnabled();
 
   if (request.nextUrl.searchParams.get('as') === 'provider') {
-    if (currentUser.role !== 'PROVIDER_ADMIN' || !currentUser.companyId) {
+    if (!isFleetManager(currentUser)) {
       return NextResponse.json({ error: 'Требуется аккаунт поставщика' }, { status: 403 });
     }
 

@@ -53,10 +53,11 @@ export function EquipmentCard({ item }: { item: EquipmentCardItem }) {
 
   return (
     <TiltCard max={6} className="rounded-3xl border border-slate-200 bg-white">
-      <article className="group/card flex h-full flex-col">
+      <article className="group/card flex h-full flex-col" data-vt-id={item.id}>
         <a
           href={href}
-          className="cine-frame relative block aspect-[2/1] overflow-hidden"
+          className="relative block aspect-[2/1] overflow-hidden"
+          data-vt-part="photo"
           tabIndex={-1}
         >
           {item.imageUrls[0] ? (
@@ -98,7 +99,10 @@ export function EquipmentCard({ item }: { item: EquipmentCardItem }) {
               {item.category.name}
               {item.location && ` · ${item.location.city}`}
             </div>
-            <h2 className="mt-1.5 text-lg font-bold leading-snug tracking-tight">
+            <h2
+              className="mt-1.5 text-lg font-bold leading-snug tracking-tight"
+              data-vt-part="title"
+            >
               <a href={href} className="hover:text-amber-700">
                 {item.name}
               </a>
@@ -121,14 +125,17 @@ export function EquipmentCard({ item }: { item: EquipmentCardItem }) {
           <dl className="mt-auto grid grid-cols-2 overflow-hidden rounded-2xl border border-slate-200">
             <div className="border-r border-slate-200 px-3 py-2.5">
               <dt className="eyebrow text-[0.6rem] text-slate-500">Час</dt>
-              <dd className="mt-0.5 whitespace-nowrap font-mono text-base font-semibold tabular-nums text-slate-900">
-                {hour !== null ? rub(hour) : <span className="text-slate-400">по запросу</span>}
+              <dd
+                className="mt-0.5 whitespace-nowrap font-mono text-base font-semibold tabular-nums text-slate-900"
+                data-vt-part="price"
+              >
+                {hour !== null ? rub(hour) : <span className="text-slate-500">по запросу</span>}
               </dd>
             </div>
             <div className="px-3 py-2.5">
               <dt className="eyebrow text-[0.6rem] text-slate-500">Смена 8 ч</dt>
               <dd className="mt-0.5 whitespace-nowrap font-mono text-base font-semibold tabular-nums text-slate-900">
-                {shift !== null ? rub(shift) : <span className="text-slate-400">по запросу</span>}
+                {shift !== null ? rub(shift) : <span className="text-slate-500">по запросу</span>}
               </dd>
             </div>
           </dl>

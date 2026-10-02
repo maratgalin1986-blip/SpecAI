@@ -10,6 +10,7 @@ import { BookingActionButtons } from '@/components/BookingActionButtons';
 import { isOnlinePaymentEnabled } from '@/lib/stripe';
 import { SITE } from '@/lib/site';
 import { VerifyEmailBanner } from '@/components/VerifyEmailBanner';
+import { OWN_FLEET } from '@/lib/fleet';
 
 export const metadata: Metadata = { title: 'Личный кабинет', robots: { index: false } };
 
@@ -53,10 +54,9 @@ export default async function DashboardPage({
   const paymentNotice = searchParams?.payment ? PAYMENT_NOTICE[searchParams.payment] : undefined;
   const paymentsEnabled = isOnlinePaymentEnabled();
 
-  const [equipmentCount, activeBookings, companies, myBookings, myOrders, me] = await Promise.all([
-    prisma.equipment.count(),
+  const [equipmentCount, activeBookings, myBookings, myOrders, me] = await Promise.all([
+    prisma.equipment.count({ where: { ...OWN_FLEET, status: { not: 'RETIRED' } } }),
     prisma.booking.count({ where: { status: { in: ['CONFIRMED', 'ACTIVE'] } } }),
-    prisma.company.count({ where: { isProvider: true } }),
     session
       ? prisma.booking.findMany({
           where: { customerId: session.user.id },
@@ -82,9 +82,8 @@ export default async function DashboardPage({
   ]);
 
   const stats = [
-    { label: 'Техники размещено', value: equipmentCount },
+    { label: 'Машин в парке СпецПласт16', value: equipmentCount },
     { label: 'Активных бронирований', value: activeBookings },
-    { label: 'Компаний-поставщиков', value: companies },
   ];
 
   return (
@@ -106,7 +105,7 @@ export default async function DashboardPage({
           {paymentNotice.text}
         </p>
       )}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2">
         {stats.map((stat) => (
           <Card key={stat.label}>
             <p className="text-sm text-slate-500">{stat.label}</p>

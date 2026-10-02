@@ -2,19 +2,29 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@specai/database';
 import { createOrderSchema } from '@specai/shared';
 import { getRequestUser } from '@/lib/requestUser';
-import { orderViewerFor } from '@/lib/orderViewer';
-import { canSeeCustomerName, orderDescriptionFor, visibleBids } from '@/lib/privacy';
+import { isFleetManager } from '@/lib/fleet';
+import { geocodeAddress } from '@/lib/geo';
+import { notifyTelegram } from '@/lib/notify';
+import { SITE } from '@/lib/site';
+import { machineTypeOf } from '@/lib/equipmentCatalog';
+import {
+  assessWork,
+  CHELNY,
+  fetchForecast,
+  machineGroup,
+  mskParts,
+  shiftWeather,
+  weatherLine,
+} from '@/lib/weather';
 
 export const dynamic = 'force-dynamic';
 
 /**
  * Список заявок.
- * - `?open=1` — открытые заявки всех клиентов (лента для поставщиков), как раньше.
+ * - `?open=1` — открытые заявки всех клиентов, только для владельца СпецПласт16.
  * - без параметра — все заявки текущего пользователя (любого статуса), требует входа;
  *   используется вкладкой «Заявки» мобильного приложения.
- * Формат ответа один и тот же: `{ orders }` с category, bids и bidCount. customer
- * (id, name) и все ставки видят только автор заявки и админ; поставщик видит свои
- * ставки, остальные — только их число (bidCount).
+ * Формат ответа один и тот же: `{ orders }` с category, customer (id, name) и bids.
  */
 export async function GET(request: NextRequest) {
   const { searchParams } = request.nextUrl;
@@ -22,54 +32,35 @@ export async function GET(request: NextRequest) {
   const openFeed = searchParams.get('open') === '1';
 
   const currentUser = await getRequestUser(request);
+  if (!currentUser) {
+    return NextResponse.json({ error: 'Необходимо войти в аккаунт' }, { status: 401 });
+  }
   let where: { status?: 'OPEN'; categoryId?: string; customerId?: string };
   if (openFeed) {
+    if (!isFleetManager(currentUser)) {
+      return NextResponse.json({ error: 'Доступно только владельцу' }, { status: 403 });
+    }
     where = { status: 'OPEN', categoryId };
   } else {
-    if (!currentUser) {
-      return NextResponse.json({ error: 'Необходимо войти в аккаунт' }, { status: 401 });
-    }
     where = { customerId: currentUser.id, categoryId };
   }
-  const viewer = await orderViewerFor(currentUser);
 
   const orders = await prisma.order.findMany({
     where,
     include: {
       category: { select: { id: true, name: true } },
       customer: { select: { id: true, name: true } },
-      bids: { include: { equipment: { select: { companyId: true } } } },
+      bids: true,
     },
     orderBy: { createdAt: 'desc' },
     take: 50,
   });
 
-  // Personal data (152-ФЗ): contacts of people from chats are never listed here,
-  // the customer's name and the bids with prices go only to those who may see
-  // them; everybody gets the number of bids.
+  // Never expose contacts of people whose requests were imported from chats.
   const safeOrders = orders.map(
-    ({
-      contactName,
-      contactPhone,
-      rawText,
-      sourceUrl,
-      externalId,
-      fingerprint,
-      customer,
-      bids,
-      ...order
-    }) => {
+    ({ contactName, contactPhone, rawText, sourceUrl, externalId, fingerprint, ...order }) => {
       void [contactName, contactPhone, rawText, sourceUrl, externalId, fingerprint];
-      return {
-        ...order,
-        description: orderDescriptionFor(order, viewer),
-        customer: canSeeCustomerName(viewer, order.customerId) ? customer : undefined,
-        bids: visibleBids(bids, viewer, order.customerId).map(({ equipment, ...bid }) => {
-          void equipment;
-          return bid;
-        }),
-        bidCount: bids.length,
-      };
+      return order;
     },
   );
   return NextResponse.json({ orders: safeOrders });
@@ -87,6 +78,21 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
 
+  // The work site: geocoded once here, used for the weather and the map.
+  const address = parsed.data.address;
+  const place = address ? await geocodeAddress(address) : null;
+  const location = address
+    ? await prisma.location.create({
+        data: {
+          addressLine: address,
+          city: place?.city ?? SITE.city,
+          country: 'Россия',
+          latitude: place?.lat ?? null,
+          longitude: place?.lon ?? null,
+        },
+      })
+    : null;
+
   const order = await prisma.order.create({
     data: {
       customerId: currentUser.id,
@@ -94,8 +100,50 @@ export async function POST(request: NextRequest) {
       desiredStartDate: parsed.data.desiredStartDate,
       desiredEndDate: parsed.data.desiredEndDate,
       categoryId: parsed.data.categoryId,
+      locationId: location?.id,
     },
+    include: { category: true },
   });
 
+  await notifyTelegram(await orderMessage(order, place, request.nextUrl.origin));
+
   return NextResponse.json({ order }, { status: 201 });
+}
+
+/** The owner's Telegram message about a new order, with the day's weather. */
+async function orderMessage(
+  order: {
+    id: string;
+    description: string;
+    desiredStartDate: Date;
+    desiredEndDate: Date;
+    category: { name: string } | null;
+    locationId: string | null;
+  },
+  place: { lat: number; lon: number; label: string } | null,
+  origin: string,
+) {
+  const where = place ?? { ...CHELNY, label: SITE.city };
+  const points = await fetchForecast(where.lat, where.lon);
+  const weather = points
+    ? shiftWeather(points, mskParts(order.desiredStartDate.toISOString()).date)
+    : null;
+  const type = machineTypeOf(order.category?.name ?? '');
+  const day = (date: Date) => date.toLocaleDateString('ru-RU');
+  return [
+    `🧾 Новая заявка на технику — ${SITE.name}`,
+    order.category ? `Техника: ${order.category.name}` : null,
+    `Когда: ${day(order.desiredStartDate)}${order.desiredEndDate > order.desiredStartDate ? ` – ${day(order.desiredEndDate)}` : ''}`,
+    place ? `Где: ${place.label}` : null,
+    `Задача: ${order.description}`,
+    weather
+      ? `Погода на смену: ${weatherLine(weather, assessWork(weather, machineGroup(type)))}`
+      : null,
+    place
+      ? `Карта: https://yandex.ru/maps/?pt=${place.lon.toFixed(6)},${place.lat.toFixed(6)}&z=18&l=map`
+      : null,
+    `Заявка: ${origin}/orders/${order.id}`,
+  ]
+    .filter(Boolean)
+    .join('\n');
 }

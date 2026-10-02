@@ -9,7 +9,10 @@ import { LANDINGS, landingBySlug } from '@/lib/landings';
 import { formatMoney, formatRate } from '@/lib/money';
 import { SITE } from '@/lib/site';
 import { siteUrl } from '@/lib/siteUrl';
+import { CinemaBand } from '@/components/CinemaBand';
 import { CinemaLayer } from '@/components/CinemaHero';
+import type { MachineType } from '@/lib/machinePhotos';
+import { OWN_FLEET } from '@/lib/fleet';
 
 // Footage behind the landing header, by machine kind.
 const LANDING_CLIPS: Record<string, string[]> = {
@@ -17,6 +20,28 @@ const LANDING_CLIPS: Record<string, string[]> = {
   avtokran: ['city-cranes', 'crane-sun'],
   'frontalnyj-pogruzchik': ['excavator-truck', 'workers'],
   traktor: ['house-frame', 'site-aerial'],
+  'gusenichnyj-ekskavator': ['excavator-truck', 'site-aerial'],
+  'kolyosnyj-ekskavator-gidromolot': ['demolition', 'excavator-truck'],
+  'manipulyator-kmu': ['city-cranes', 'workers'],
+  'avtovyshka-agp': ['welder-height', 'tower-glass'],
+  vibrokatok: ['site-aerial', 'workers'],
+  samosval: ['excavator-truck', 'site-aerial'],
+  buldozer: ['site-aerial', 'excavator-truck'],
+};
+
+// Machine shown in the cinema bands of each landing (and put into «Наряд»).
+const LANDING_MACHINE: Record<string, MachineType> = {
+  'ekskavator-pogruzchik': 'backhoe',
+  avtokran: 'crane',
+  'frontalnyj-pogruzchik': 'loader',
+  traktor: 'tractor',
+  'gusenichnyj-ekskavator': 'excavator',
+  'kolyosnyj-ekskavator-gidromolot': 'wheeled-excavator',
+  'manipulyator-kmu': 'kmu',
+  'avtovyshka-agp': 'agp',
+  vibrokatok: 'roller',
+  samosval: 'truck',
+  buldozer: 'dozer',
 };
 
 export const revalidate = 300;
@@ -28,7 +53,7 @@ export function generateStaticParams() {
 async function loadEquipment(categorySlug: string) {
   try {
     return await prisma.equipment.findMany({
-      where: { category: { slug: categorySlug }, status: { not: 'RETIRED' } },
+      where: { ...OWN_FLEET, category: { slug: categorySlug }, status: { not: 'RETIRED' } },
       include: { location: true },
       orderBy: { hourlyRate: 'asc' },
     });
@@ -65,6 +90,7 @@ export default async function LandingPage({ params }: { params: { slug: string }
   if (!landing) notFound();
   const items = await loadEquipment(landing.categorySlug);
   const from = minHourly(items);
+  const machine = LANDING_MACHINE[landing.slug] ?? 'backhoe';
 
   const jsonLd = {
     '@context': 'https://schema.org',
@@ -114,7 +140,7 @@ export default async function LandingPage({ params }: { params: { slug: string }
             <div className="mt-6 flex flex-wrap gap-3">
               <a
                 href={SITE.phoneHref}
-                className="rounded-md bg-amber-600 px-5 py-3 font-semibold hover:bg-amber-500"
+                className="rounded-md bg-amber-500 px-5 py-3 font-semibold hover:bg-amber-400 text-slate-950"
               >
                 {SITE.phone}
               </a>
@@ -122,7 +148,7 @@ export default async function LandingPage({ params }: { params: { slug: string }
                 href={SITE.whatsappHref}
                 target="_blank"
                 rel="noopener"
-                className="rounded-md bg-emerald-600 px-5 py-3 font-semibold hover:bg-emerald-500"
+                className="rounded-md bg-emerald-700 px-5 py-3 font-semibold hover:bg-emerald-600"
               >
                 Написать в WhatsApp
               </a>
@@ -167,6 +193,12 @@ export default async function LandingPage({ params }: { params: { slug: string }
         </section>
       )}
 
+      <CinemaBand
+        machine={machine}
+        eyebrow={`Аренда ${landing.title}`}
+        phrase="Скажите задачу — приедет машина и машинист"
+      />
+
       <section>
         <h2 className="text-2xl font-bold">Какие задачи решаем</h2>
         <ul className="mt-4 grid gap-3 sm:grid-cols-2">
@@ -187,6 +219,13 @@ export default async function LandingPage({ params }: { params: { slug: string }
           <li>• Подача техники на объект — рассчитывается по адресу</li>
         </ul>
       </section>
+
+      <CinemaBand
+        machine={machine}
+        eyebrow="Подача сегодня"
+        phrase="Позвоните — назовём цену за пять минут"
+        className="sm:min-h-[340px]"
+      />
 
       <Faq items={landing.faq} />
 

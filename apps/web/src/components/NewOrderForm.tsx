@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { ConditionsPreview } from '@/components/ConditionsPreview';
 import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { Button } from '@specai/ui';
@@ -18,6 +19,7 @@ export function NewOrderForm() {
   const [description, setDescription] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+  const [address, setAddress] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -51,6 +53,7 @@ export function NewOrderForm() {
         desiredStartDate: startDate,
         desiredEndDate: endDate,
         categoryId: categoryId || undefined,
+        address: address.trim() || undefined,
       }),
     });
 
@@ -66,6 +69,7 @@ export function NewOrderForm() {
     setCategoryId('');
     setStartDate('');
     setEndDate('');
+    setAddress('');
     router.refresh();
   }
 
@@ -121,6 +125,27 @@ export function NewOrderForm() {
           />
         </label>
       </div>
+
+      <label className="flex flex-col gap-1 text-sm">
+        Адрес работ
+        <input
+          value={address}
+          onChange={(e) => setAddress(e.target.value)}
+          placeholder="Набережные Челны, проспект Мира, 49"
+          autoComplete="street-address"
+          maxLength={200}
+          className="rounded-md border border-slate-300 px-3 py-2"
+        />
+        <span className="text-xs text-slate-500">
+          По адресу покажем погоду на день работ и вид места сверху.
+        </span>
+      </label>
+
+      <ConditionsPreview
+        date={startDate}
+        address={address}
+        categoryName={categories.find((category) => category.id === categoryId)?.name}
+      />
 
       {error && <p className="text-sm text-red-600">{error}</p>}
       <Button type="submit" disabled={isSubmitting}>

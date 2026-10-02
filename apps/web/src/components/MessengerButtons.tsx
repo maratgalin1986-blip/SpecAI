@@ -1,7 +1,10 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
-import { SITE } from '@/lib/site';
+import { Icon } from '@/components/Icon';
+import { useJourneyInView } from '@/components/useJourneyInView';
+import { isOnShift, SHIFT, SITE } from '@/lib/site';
 
 function WhatsAppIcon({ className = 'h-5 w-5' }: { className?: string }) {
   return (
@@ -15,6 +18,15 @@ function WhatsAppIcon({ className = 'h-5 w-5' }: { className?: string }) {
 // Desktop: a round WhatsApp button above the AI assistant.
 export function MessengerButtons() {
   const pathname = usePathname();
+  // Known only on the client (the server does not know the visitor's time).
+  const [onShift, setOnShift] = useState<boolean | null>(null);
+  useEffect(() => {
+    const update = () => setOnShift(isOnShift());
+    update();
+    const timer = window.setInterval(update, 60_000);
+    return () => window.clearInterval(timer);
+  }, []);
+  const inJourney = useJourneyInView(pathname);
   if (pathname?.startsWith('/admin')) return null;
   return (
     <>
@@ -24,15 +36,26 @@ export function MessengerButtons() {
       >
         <a
           href={SITE.phoneHref}
-          className="flex items-center justify-center gap-2 rounded-lg bg-amber-600 py-2.5 text-sm font-semibold text-white"
+          className="flex min-h-12 flex-col items-center justify-center rounded-lg bg-amber-500 leading-tight text-slate-950"
         >
-          📞 Позвонить
+          <span className="flex items-center gap-2 text-base font-bold">
+            <Icon name="phone" className="h-5 w-5" /> Позвонить
+          </span>
+          {onShift !== null && (
+            <span className="flex items-center gap-1 text-[0.65rem] font-medium">
+              <span
+                className={`radio-led h-1.5 w-1.5 rounded-full ${onShift ? 'bg-emerald-700' : 'bg-slate-700'}`}
+                aria-hidden
+              />
+              {onShift ? `на связи до ${SHIFT.to}:00` : `ответим с ${SHIFT.from}:00`}
+            </span>
+          )}
         </a>
         <a
           href={SITE.whatsappHref}
           target="_blank"
           rel="noopener"
-          className="flex items-center justify-center gap-2 rounded-lg bg-emerald-600 py-2.5 text-sm font-semibold text-white"
+          className="flex min-h-12 items-center justify-center gap-2 rounded-lg bg-emerald-700 text-base font-semibold text-white"
         >
           <WhatsAppIcon /> WhatsApp
         </a>
@@ -42,7 +65,9 @@ export function MessengerButtons() {
         target="_blank"
         rel="noopener"
         aria-label="Написать в WhatsApp"
-        className="fixed bottom-20 right-6 z-50 hidden h-12 w-12 items-center justify-center rounded-full bg-emerald-600 text-white shadow-lg transition hover:scale-105 hover:bg-emerald-500 sm:flex"
+        className={`fixed bottom-20 right-6 z-50 hidden h-12 w-12 items-center justify-center rounded-full bg-emerald-700 text-white shadow-lg transition hover:scale-105 hover:bg-emerald-600 sm:flex ${
+          inJourney ? 'pointer-events-none opacity-0' : 'opacity-100'
+        }`}
       >
         <WhatsAppIcon className="h-6 w-6" />
       </a>

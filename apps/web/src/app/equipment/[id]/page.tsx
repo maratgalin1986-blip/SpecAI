@@ -20,6 +20,7 @@ import {
 import { formatMoney, formatRate } from '@/lib/money';
 import { pluralizeRu } from '@/lib/pluralize';
 import { SITE } from '@/lib/site';
+import { HOUSE_COMPANY_ID, OWN_FLEET } from '@/lib/fleet';
 
 export const dynamic = 'force-dynamic';
 
@@ -52,7 +53,7 @@ export default async function EquipmentDetailPage({ params }: { params: { id: st
     },
   });
 
-  if (!item) {
+  if (!item || item.companyId !== HOUSE_COMPANY_ID) {
     notFound();
   }
 
@@ -69,7 +70,7 @@ export default async function EquipmentDetailPage({ params }: { params: { id: st
 
   // Same category first; if it has nothing else, the same task group.
   let similar = await prisma.equipment.findMany({
-    where: { categoryId: item.categoryId, id: { not: item.id } },
+    where: { ...OWN_FLEET, categoryId: item.categoryId, id: { not: item.id } },
     include: { category: true, location: true },
     orderBy: [{ status: 'asc' }, { createdAt: 'desc' }],
     take: 3,
@@ -81,7 +82,7 @@ export default async function EquipmentDetailPage({ params }: { params: { id: st
     });
     const groupIds = categories.filter((c) => taskGroupOf(c.name) === group).map((c) => c.id);
     similar = await prisma.equipment.findMany({
-      where: { categoryId: { in: groupIds }, id: { not: item.id } },
+      where: { ...OWN_FLEET, categoryId: { in: groupIds }, id: { not: item.id } },
       include: { category: true, location: true },
       orderBy: [{ status: 'asc' }, { createdAt: 'desc' }],
       take: 3,
@@ -93,7 +94,7 @@ export default async function EquipmentDetailPage({ params }: { params: { id: st
     ...(item.location
       ? [{ label: 'Местоположение', value: `${item.location.city}, ${item.location.country}` }]
       : []),
-    { label: 'Поставщик', value: item.company.name },
+    { label: 'Исполнитель', value: 'Своя техника · машинист в штате' },
     ...(hour !== null ? [{ label: 'Цена за час', value: formatMoney(hour, item.currency) }] : []),
     ...(shift !== null
       ? [{ label: 'Цена за смену 8 ч', value: formatMoney(shift, item.currency) }]
@@ -131,11 +132,14 @@ export default async function EquipmentDetailPage({ params }: { params: { id: st
                 <span className="eyebrow text-[0.65rem] text-slate-500">{item.location.city}</span>
               )}
             </div>
-            <h1 className="mt-3 break-words text-3xl font-extrabold tracking-[-0.03em] sm:text-5xl">
+            <h1
+              className="mt-3 break-words text-3xl font-extrabold tracking-[-0.03em] sm:text-5xl"
+              style={{ viewTransitionName: 'machine-title' }}
+            >
               {item.name}
             </h1>
             <p className="mt-3 text-sm text-slate-500">
-              {item.category.name} · Поставщик: {item.company.name}
+              {item.category.name} · Своя техника · машинист в штате
               {averageRating !== null && (
                 <>
                   {' '}
@@ -149,7 +153,10 @@ export default async function EquipmentDetailPage({ params }: { params: { id: st
           {(chips.length > 0 || hour !== null || shift !== null) && (
             <ul className="flex flex-wrap gap-2" aria-label="Коротко о машине">
               {hour !== null && (
-                <li className="rounded-full bg-slate-950 px-3.5 py-1.5 font-mono text-sm font-semibold text-amber-400">
+                <li
+                  className="rounded-full bg-slate-950 px-3.5 py-1.5 font-mono text-sm font-semibold text-amber-400"
+                  style={{ viewTransitionName: 'machine-price' }}
+                >
                   {formatMoney(hour, item.currency)}/ч
                 </li>
               )}
@@ -170,17 +177,21 @@ export default async function EquipmentDetailPage({ params }: { params: { id: st
           )}
 
           {item.imageUrls.length > 0 ? (
-            <MachineGallery images={item.imageUrls} name={item.name} />
+            <div style={{ viewTransitionName: 'machine-photo' }}>
+              <MachineGallery images={item.imageUrls} name={item.name} />
+            </div>
           ) : illustration ? (
-            <figure className="relative aspect-[16/9] overflow-hidden rounded-3xl bg-slate-950">
-              <MachinePhoto
-                type={illustration}
-                alt={item.category.name}
-                priority
-                sizes="(min-width: 1024px) 720px, 100vw"
-                className="machine-hero-photo absolute inset-0"
-              />
-              <figcaption className="absolute bottom-3 left-4 rounded-full bg-slate-950/60 px-3 py-1 text-xs text-white/80 backdrop-blur">
+            <figure style={{ viewTransitionName: 'machine-photo' }}>
+              <div className="relative aspect-[16/9] overflow-hidden rounded-3xl bg-slate-950">
+                <MachinePhoto
+                  type={illustration}
+                  alt={item.category.name}
+                  priority
+                  sizes="(min-width: 1024px) 720px, 100vw"
+                  className="machine-hero-photo absolute inset-0"
+                />
+              </div>
+              <figcaption className="mt-2 text-xs text-slate-500">
                 Фото для примера — не эта машина
               </figcaption>
             </figure>
@@ -241,7 +252,7 @@ export default async function EquipmentDetailPage({ params }: { params: { id: st
         {/* Specs, description, reviews */}
         <div className="flex min-w-0 flex-col gap-10 lg:col-start-1 lg:row-start-2">
           <section>
-            <div className="eyebrow text-amber-600">01 — Характеристики</div>
+            <div className="eyebrow text-amber-700">Характеристики</div>
             <dl className="mt-4 grid overflow-hidden rounded-3xl border border-slate-200 bg-white sm:grid-cols-2">
               {facts.map((fact, index) => (
                 <div
@@ -256,7 +267,7 @@ export default async function EquipmentDetailPage({ params }: { params: { id: st
           </section>
 
           <section>
-            <div className="eyebrow text-amber-600">02 — Описание</div>
+            <div className="eyebrow text-amber-700">Описание</div>
             <p className="mt-4 max-w-3xl whitespace-pre-line leading-relaxed text-slate-700">
               {item.description ?? 'Описание не указано — уточните детали у менеджера.'}
             </p>
@@ -264,7 +275,7 @@ export default async function EquipmentDetailPage({ params }: { params: { id: st
 
           {item.reviews.length > 0 && (
             <section>
-              <div className="eyebrow text-amber-600">03 — Отзывы</div>
+              <div className="eyebrow text-amber-700">Отзывы</div>
               <div className="mt-4 flex flex-col divide-y divide-slate-200 rounded-3xl border border-slate-200 bg-white">
                 {item.reviews.map((review) => (
                   <div key={review.id} className="px-5 py-4 text-sm">
@@ -288,7 +299,7 @@ export default async function EquipmentDetailPage({ params }: { params: { id: st
         <section>
           <div className="flex flex-wrap items-end justify-between gap-4">
             <div>
-              <div className="eyebrow text-amber-600">Ещё в каталоге</div>
+              <div className="eyebrow text-amber-700">Ещё в каталоге</div>
               <h2 className="mt-3 text-3xl font-extrabold tracking-[-0.03em] sm:text-4xl">
                 Похожая техника
               </h2>

@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@specai/database';
 import { createLeadSchema } from '@specai/shared';
-import { acceptLead } from '@/lib/leadIntake';
 import { notifyTelegram } from '@/lib/notify';
 import { checkRateLimit } from '@/lib/rateLimit';
 import { SITE } from '@/lib/site';
@@ -12,10 +11,10 @@ export const dynamic = 'force-dynamic';
 const LEAD_RATE_LIMIT = { limit: 5, windowMs: 10 * 60 * 1000 };
 
 export async function POST(request: NextRequest) {
-  const body = (await request.json().catch(() => null)) as { website?: unknown } | null;
-  // Bots that fill the honeypot get a fake success. Checked before the schema,
-  // which rejects a filled field with 400 and would tell the bot it was caught.
-  if (typeof body?.website === 'string' && body.website.trim() !== '') {
+  const body = await request.json().catch(() => null);
+  // Bots that fill the honeypot get a fake success before validation, so they
+  // cannot tell the trap from a real form.
+  if (body && typeof body === 'object' && typeof body.website === 'string' && body.website) {
     return NextResponse.json({ ok: true }, { status: 201 });
   }
   const parsed = createLeadSchema.safeParse(body);
@@ -34,27 +33,39 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const outcome = await acceptLead(
-    {
-      name: parsed.data.name,
-      phone: parsed.data.phone,
-      message: parsed.data.message || null,
-      source: parsed.data.source || null,
-    },
-    {
-      save: (data) => prisma.lead.create({ data }),
-      notify: notifyTelegram,
-      siteName: SITE.name,
-      onSaveError: (error) => console.error('Lead was not saved to the database', error),
-    },
-  );
+  const lead = {
+    name: parsed.data.name,
+    phone: parsed.data.phone,
+    message: parsed.data.message || null,
+    source: parsed.data.source || null,
+  };
+  const lines = [
+    `Имя: ${lead.name}`,
+    `Телефон: ${lead.phone}`,
+    lead.message ? `Сообщение: ${lead.message}` : null,
+    lead.source ? `Откуда: ${lead.source}` : null,
+  ];
 
-  if (outcome === 'lost') {
+  try {
+    await prisma.lead.create({ data: { ...lead, ymClientId: parsed.data.ymClientId ?? null } });
+  } catch (error) {
+    // The database is down: the lead must still reach the owner.
+    console.error('[leads] failed to save lead', error);
+    const delivered = await notifyTelegram(
+      [`⚠️ Заявка на звонок — БАЗА НЕДОСТУПНА, заявка только здесь`, ...lines]
+        .filter(Boolean)
+        .join('\n'),
+    );
+    if (delivered) return NextResponse.json({ ok: true }, { status: 202 });
     return NextResponse.json(
       { error: `Не удалось отправить заявку. Позвоните нам: ${SITE.phone}` },
       { status: 503 },
     );
   }
+
+  await notifyTelegram(
+    [`📞 Новая заявка на звонок — ${SITE.name}`, ...lines].filter(Boolean).join('\n'),
+  );
 
   return NextResponse.json({ ok: true }, { status: 201 });
 }

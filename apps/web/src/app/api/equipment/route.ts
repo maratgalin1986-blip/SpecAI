@@ -3,6 +3,7 @@ import { Prisma, prisma } from '@specai/database';
 import { createEquipmentSchema, equipmentSearchQuerySchema } from '@specai/shared';
 import { getRequestUser } from '@/lib/requestUser';
 import { EQUIPMENT_ORDER_BY, totalPagesFor } from '@/lib/pagination';
+import { isFleetManager, OWN_FLEET } from '@/lib/fleet';
 
 export async function GET(request: NextRequest) {
   const { mine, ...params } = Object.fromEntries(request.nextUrl.searchParams.entries());
@@ -11,7 +12,7 @@ export async function GET(request: NextRequest) {
   // Заменяет companyId из строки запроса значением из аккаунта.
   if (mine === '1' || mine === 'true') {
     const currentUser = await getRequestUser(request);
-    if (!currentUser || currentUser.role !== 'PROVIDER_ADMIN' || !currentUser.companyId) {
+    if (!isFleetManager(currentUser)) {
       return NextResponse.json({ error: 'Требуется аккаунт поставщика' }, { status: 403 });
     }
     params.companyId = currentUser.companyId;
@@ -42,9 +43,10 @@ export async function GET(request: NextRequest) {
     sort,
   } = parsed.data;
 
+  void companyId;
   const where: Prisma.EquipmentWhereInput = {
     categoryId,
-    companyId,
+    ...OWN_FLEET,
     status,
     location: city ? { city: { equals: city, mode: 'insensitive' } } : undefined,
     dailyRate:
@@ -76,7 +78,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   const currentUser = await getRequestUser(request);
-  if (!currentUser || currentUser.role !== 'PROVIDER_ADMIN' || !currentUser.companyId) {
+  if (!isFleetManager(currentUser)) {
     return NextResponse.json({ error: 'Требуется аккаунт поставщика' }, { status: 403 });
   }
 

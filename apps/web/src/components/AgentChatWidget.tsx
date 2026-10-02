@@ -1,14 +1,29 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { AgentChat } from '@/components/AgentChat';
+import { useJourneyInView } from '@/components/useJourneyInView';
 
 // Floating chat button shown on every page except /agents, which has the
 // full-size chat already.
 export function AgentChatWidget() {
   const [isOpen, setIsOpen] = useState(false);
   const pathname = usePathname();
+  const inJourney = useJourneyInView(pathname);
+  // Hidden over the first screen (the cinema), shown after it.
+  const [pastTop, setPastTop] = useState(false);
+  useEffect(() => {
+    const update = () => setPastTop(window.scrollY >= window.innerHeight * 0.6);
+    update();
+    window.addEventListener('scroll', update, { passive: true });
+    window.addEventListener('resize', update);
+    return () => {
+      window.removeEventListener('scroll', update);
+      window.removeEventListener('resize', update);
+    };
+  }, []);
+  const show = isOpen || (pastTop && !inJourney);
 
   if (pathname === '/agents') {
     return null;
@@ -17,7 +32,7 @@ export function AgentChatWidget() {
   return (
     <>
       {isOpen && (
-        <div className="fixed inset-x-2 bottom-36 z-50 sm:bottom-20 flex h-[70vh] flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl sm:inset-x-auto sm:right-6 sm:w-[400px]">
+        <div className="fixed inset-x-2 bottom-40 z-50 sm:bottom-20 flex h-[70vh] flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl sm:inset-x-auto sm:right-6 sm:w-[400px]">
           <div className="flex items-center justify-between bg-slate-900 px-4 py-3 text-white">
             <div>
               <div className="text-sm font-semibold">ИИ-агенты СпецПласт16</div>
@@ -48,7 +63,11 @@ export function AgentChatWidget() {
         type="button"
         onClick={() => setIsOpen((open) => !open)}
         aria-label="Открыть чат с ИИ-агентами"
-        className="fixed bottom-20 right-4 z-50 flex items-center gap-2 sm:bottom-4 rounded-full bg-amber-600 p-3.5 text-sm font-semibold text-white shadow-lg hover:bg-amber-700 sm:right-6 sm:px-5 sm:py-3"
+        tabIndex={show ? undefined : -1}
+        aria-hidden={show ? undefined : true}
+        className={`chat-fab fixed right-4 z-50 flex items-center gap-2 rounded-full bg-amber-500 p-3.5 text-sm font-semibold text-slate-950 shadow-lg hover:bg-amber-400 sm:right-6 sm:px-5 sm:py-3 motion-safe:transition-opacity motion-safe:duration-300 ${
+          show ? 'opacity-100' : 'pointer-events-none opacity-0'
+        }`}
       >
         <svg
           viewBox="0 0 24 24"

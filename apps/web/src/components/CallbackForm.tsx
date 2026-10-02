@@ -1,8 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { SITE } from '@/lib/site';
-import { submitLead } from '@/lib/submitLead';
+import { readLeadDraft, submitLead } from '@/lib/submitLead';
+import { LeadSuccess } from '@/components/LeadSuccess';
 
 // "Call me back" form. Works without an account and without the AI features.
 export function CallbackForm({
@@ -26,6 +27,15 @@ export function CallbackForm({
   const [status, setStatus] = useState<'idle' | 'sending' | 'sent'>('idle');
   const [error, setError] = useState<string | null>(null);
 
+  // A lead that did not go through last time (bad connection) comes back.
+  useEffect(() => {
+    const draft = readLeadDraft();
+    if (!draft?.phone) return;
+    setPhone(draft.phone);
+    if (draft.name) setName(draft.name);
+    if (draft.message) setMessage(draft.message);
+  }, []);
+
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
     setError(null);
@@ -48,28 +58,13 @@ export function CallbackForm({
   }`;
 
   if (status === 'sent') {
-    return (
-      <div
-        className={`rounded-xl p-6 text-center ${dark ? 'bg-emerald-900/40 text-emerald-100' : 'bg-emerald-50 text-emerald-900'}`}
-        role="status"
-      >
-        <div className="text-3xl">✅</div>
-        <h3 className="mt-2 text-lg font-semibold">Заявка отправлена!</h3>
-        <p className="mt-1 text-sm">
-          Перезвоним в рабочее время ({SITE.workingHours.split(' · ')[0]}). Срочно — звоните{' '}
-          <a href={SITE.phoneHref} className="font-semibold underline">
-            {SITE.phone}
-          </a>
-          .
-        </p>
-      </div>
-    );
+    return <LeadSuccess dark={dark} summary={message || undefined} />;
   }
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-3">
       <div>
-        <h3 className={`text-lg font-semibold ${dark ? 'text-white' : ''}`}>{title}</h3>
+        <h2 className={`text-lg font-semibold ${dark ? 'text-white' : ''}`}>{title}</h2>
         <p className={`mt-1 text-sm ${dark ? 'text-slate-300' : 'text-slate-600'}`}>{subtitle}</p>
       </div>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -136,7 +131,7 @@ export function CallbackForm({
       <button
         type="submit"
         disabled={status === 'sending'}
-        className="rounded-md bg-amber-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-amber-600/30 transition hover:bg-amber-500 disabled:opacity-60"
+        className="rounded-md bg-amber-500 px-5 py-2.5 text-sm font-semibold text-slate-950 shadow-lg shadow-amber-600/30 transition hover:bg-amber-400 disabled:opacity-60"
       >
         {status === 'sending' ? 'Отправляем…' : 'Жду звонка'}
       </button>

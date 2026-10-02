@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { COOKIE_CONSENT_KEY } from '@/lib/marketing';
 import { SITE } from '@/lib/site';
 
 const DISMISS_KEY = 'specai:install-prompt-dismissed-at';
@@ -66,9 +67,22 @@ export function InstallPrompt() {
     window.addEventListener('beforeinstallprompt', onBeforeInstall);
     window.addEventListener('appinstalled', onInstalled);
 
-    if (isIosSafari()) setMode('ios');
+    // Not on arrival: the first screen belongs to the site and the call
+    // button. The hint comes after half a minute, once the cookie notice is
+    // answered, so the two never stack over the content.
+    const timer = window.setTimeout(() => {
+      let cookieAnswered = true;
+      try {
+        cookieAnswered = !!window.localStorage.getItem(COOKIE_CONSENT_KEY);
+      } catch {
+        // Storage blocked: the cookie notice shows every visit, skip the hint.
+        cookieAnswered = false;
+      }
+      if (isIosSafari() && cookieAnswered) setMode('ios');
+    }, 30_000);
 
     return () => {
+      window.clearTimeout(timer);
       window.removeEventListener('beforeinstallprompt', onBeforeInstall);
       window.removeEventListener('appinstalled', onInstalled);
     };
@@ -94,7 +108,7 @@ export function InstallPrompt() {
     <div
       role="dialog"
       aria-label="Установить приложение"
-      className="fixed inset-x-3 bottom-20 z-40 sm:bottom-3 mx-auto flex max-w-md items-center gap-3 rounded-xl border border-slate-200 bg-white p-3 shadow-lg sm:inset-x-auto sm:left-4"
+      className="fixed inset-x-3 bottom-[calc(8.5rem+env(safe-area-inset-bottom))] z-[60] mx-auto flex max-w-md items-center gap-3 rounded-xl border border-slate-200 bg-white p-3 shadow-lg sm:inset-x-auto sm:bottom-3 sm:left-4"
     >
       <img
         src="/icons/icon-192.png"
@@ -126,7 +140,7 @@ export function InstallPrompt() {
         type="button"
         onClick={dismiss}
         aria-label="Закрыть"
-        className="rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+        className="flex h-9 w-9 items-center justify-center rounded-md text-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700"
       >
         ×
       </button>

@@ -5,12 +5,8 @@ import { signIn } from 'next-auth/react';
 import { Button, Card } from '@specai/ui';
 import { CinemaBackdrop } from '@/components/CinemaHero';
 
-type AccountType = 'CUSTOMER' | 'PROVIDER';
-
 export default function RegisterPage() {
-  const [accountType, setAccountType] = useState<AccountType>('CUSTOMER');
   const [name, setName] = useState('');
-  const [companyName, setCompanyName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [phone, setPhone] = useState('');
@@ -27,12 +23,11 @@ export default function RegisterPage() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        accountType,
+        accountType: 'CUSTOMER',
         name,
         email,
         password,
         ...(phone ? { phone } : {}),
-        ...(accountType === 'PROVIDER' ? { companyName } : {}),
         consent,
       }),
     });
@@ -44,11 +39,11 @@ export default function RegisterPage() {
       return;
     }
 
-    // Sign straight in and go to the right cabinet.
+    // Sign straight in and go to the cabinet.
     await signIn('credentials', {
       email,
       password,
-      callbackUrl: accountType === 'PROVIDER' ? '/provider' : '/dashboard',
+      callbackUrl: '/dashboard',
     });
   }
 
@@ -57,31 +52,6 @@ export default function RegisterPage() {
       <CinemaBackdrop clip="frame-sunset" />
       <Card className="cine-sub shadow-2xl">
         <h1 className="cine-title mb-4 text-xl font-bold">Создать аккаунт</h1>
-
-        <div className="mb-4 flex flex-col gap-2 text-sm sm:flex-row">
-          <button
-            type="button"
-            onClick={() => setAccountType('CUSTOMER')}
-            className={`flex-1 rounded-md border px-3 py-2 font-medium ${
-              accountType === 'CUSTOMER'
-                ? 'border-amber-600 bg-amber-50 text-amber-800'
-                : 'border-slate-300 text-slate-600'
-            }`}
-          >
-            Хочу арендовать технику
-          </button>
-          <button
-            type="button"
-            onClick={() => setAccountType('PROVIDER')}
-            className={`flex-1 rounded-md border px-3 py-2 font-medium ${
-              accountType === 'PROVIDER'
-                ? 'border-amber-600 bg-amber-50 text-amber-800'
-                : 'border-slate-300 text-slate-600'
-            }`}
-          >
-            Хочу сдавать технику
-          </button>
-        </div>
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-3">
           <label className="flex flex-col gap-1 text-sm">
@@ -93,17 +63,6 @@ export default function RegisterPage() {
               className="rounded-md border border-slate-300 px-3 py-2"
             />
           </label>
-          {accountType === 'PROVIDER' && (
-            <label className="flex flex-col gap-1 text-sm">
-              Название компании
-              <input
-                required
-                value={companyName}
-                onChange={(e) => setCompanyName(e.target.value)}
-                className="rounded-md border border-slate-300 px-3 py-2"
-              />
-            </label>
-          )}
           <label className="flex flex-col gap-1 text-sm">
             E-mail
             <input

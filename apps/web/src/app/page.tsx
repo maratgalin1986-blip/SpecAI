@@ -1,7 +1,10 @@
+import dynamic from 'next/dynamic';
 import { prisma } from '@specai/database';
 import { Button } from '@specai/ui';
-import { AGENT_PROFILES } from '@specai/shared';
+import { PUBLIC_AGENT_PROFILES } from '@specai/shared';
 import { CallbackForm } from '@/components/CallbackForm';
+import { CallbackIris } from '@/components/CallbackIris';
+import { CinemaBand } from '@/components/CinemaBand';
 import { CountUp } from '@/components/CountUp';
 import { Faq } from '@/components/Faq';
 import { HeroPhotos } from '@/components/HeroPhotos';
@@ -9,13 +12,16 @@ import { Icon, type IconName } from '@/components/Icon';
 import { IntroSplash } from '@/components/IntroSplash';
 import { MachinePhoto } from '@/components/MachinePhoto';
 import { Reveal } from '@/components/Reveal';
-import { ShiftStory } from '@/components/ShiftStory';
-import { SiteJourney } from '@/components/SiteJourney';
-import { TaskWizard } from '@/components/TaskWizard';
 import { TiltCard } from '@/components/TiltCard';
 import type { MachineType } from '@/lib/machinePhotos';
 import { pluralizeRu } from '@/lib/pluralize';
 import { SITE } from '@/lib/site';
+
+// Big interactive blocks below the fold: separate chunks, so the browser
+// hydrates them in their own short tasks instead of one long one.
+const SiteJourney = dynamic(() => import('@/components/SiteJourney').then((m) => m.SiteJourney));
+const ShiftStory = dynamic(() => import('@/components/ShiftStory').then((m) => m.ShiftStory));
+const TaskWizard = dynamic(() => import('@/components/TaskWizard').then((m) => m.TaskWizard));
 
 const SERVICES: {
   icon: IconName;
@@ -36,7 +42,7 @@ const SERVICES: {
     title: 'Гусеничные экскаваторы',
     photo: 'excavator',
     text: 'Котлованы, карьеры и большие объёмы грунта — ковш под задачу.',
-    price: 'по запросу',
+    price: 'от 3 000 ₽/ч',
   },
   {
     icon: 'hammer',
@@ -50,7 +56,7 @@ const SERVICES: {
     title: 'Колёсный экскаватор с гидромолотом',
     photo: 'wheeled-excavator',
     text: 'Дробление бетона и асфальта в городе — своим ходом, без трала.',
-    price: 'по запросу',
+    price: 'от 3 000 ₽/ч',
   },
   {
     icon: 'crane',
@@ -64,14 +70,14 @@ const SERVICES: {
     title: 'Манипулятор КМУ 7 т',
     photo: 'kmu',
     text: 'Погрузка, перевозка и разгрузка одной машиной: блоки, плиты, бытовки.',
-    price: 'по запросу',
+    price: 'от 3 000 ₽/ч',
   },
   {
     icon: 'lift',
     title: 'Автовышка АГП',
     photo: 'agp',
     text: 'Работы на высоте: фасады, кровля, освещение, вывески, обрезка деревьев.',
-    price: 'по запросу',
+    price: 'от 2 500 ₽/ч',
   },
   {
     icon: 'loader',
@@ -85,7 +91,7 @@ const SERVICES: {
     title: 'Виброкаток',
     photo: 'roller',
     text: 'Уплотнение грунта, щебня и асфальта на дорогах и благоустройстве.',
-    price: 'по запросу',
+    price: 'от 3 000 ₽/ч',
   },
   {
     icon: 'tractor',
@@ -126,7 +132,10 @@ const ADVANTAGES = [
 const STEPS = [
   { title: 'Опишите задачу', text: 'Своими словами — в чате ИИ-агенту или в форме заявки.' },
   { title: 'Получите варианты', text: 'Агент подберёт технику из каталога и посчитает стоимость.' },
-  { title: 'Забронируйте', text: 'Подтвердите бронь или выберите лучшее предложение поставщиков.' },
+  {
+    title: 'Забронируйте',
+    text: 'Подтвердите бронь — СпецПласт16 закрепит за вами машину и машиниста.',
+  },
   { title: 'Работайте', text: 'Следите за статусом в личном кабинете, оставьте отзыв.' },
 ];
 
@@ -176,7 +185,7 @@ const SERVICE_LANDING: Record<string, string> = {
 const HOME_FAQ = [
   {
     q: 'Сколько стоит аренда спецтехники?',
-    a: 'Экскаватор-погрузчик и фронтальный погрузчик — от 3 000 ₽/ч, с гидромолотом — от 3 500 ₽/ч, автокраны — от 3 500 ₽/ч, трактор — от 2 500 ₽/ч. Все цены — с машинистом, смена 8 часов.',
+    a: 'Экскаватор-погрузчик, фронтальный погрузчик, гусеничный и колёсный экскаватор, манипулятор КМУ, бульдозер и каток — от 3 000 ₽/ч, с гидромолотом — от 3 500 ₽/ч, автокраны — от 3 500 ₽/ч, трактор и автовышка — от 2 500 ₽/ч, самосвал — от 2 300 ₽/ч. Все цены — с машинистом, смена 8 часов.',
   },
   {
     q: 'Как быстро приедет техника?',
@@ -202,7 +211,7 @@ export default async function HomePage() {
     ...(available > 0
       ? [{ prefix: '', value: available, suffix: '', label: 'единиц техники свободно' }]
       : []),
-    { prefix: 'от ', value: 2500, suffix: ' ₽', label: 'час работы с машинистом' },
+    { prefix: 'от ', value: 2300, suffix: ' ₽', label: 'час работы с машинистом' },
     { prefix: '', value: 8, suffix: ' ч', label: 'смена, оплата по факту' },
     { prefix: '', value: 15, suffix: ' мин', label: 'перезвоним в рабочее время' },
   ];
@@ -210,16 +219,18 @@ export default async function HomePage() {
   return (
     <div className="flex flex-col gap-24">
       <IntroSplash />
-      <section className="depth-exit relative -mt-2 min-h-[640px] overflow-hidden rounded-[2rem] bg-slate-950 text-white shadow-2xl lg:min-h-[680px]">
+      <section className="hero-short depth-exit relative -mt-2 min-h-[640px] overflow-hidden rounded-[2rem] bg-slate-950 text-white shadow-2xl lg:min-h-[680px]">
         <HeroPhotos />
         <div className="hero-parallax-text relative grid lg:grid-cols-2">
-          <div className="z-10 flex flex-col justify-center px-6 pb-20 pt-14 sm:px-10 lg:py-24">
+          <div className="hero-copy z-10 flex flex-col justify-center px-6 pb-20 pt-14 sm:px-10 lg:py-24">
             <div className="float-in inline-flex w-fit items-center gap-2 rounded-full bg-white/10 px-3 py-1.5 ring-1 ring-white/15">
               <span className="relative flex h-2 w-2">
                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75 motion-reduce:animate-none" />
                 <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-400" />
               </span>
-              <span className="eyebrow text-slate-200">{SITE.city} · техника свободна сегодня</span>
+              <span className="eyebrow text-slate-200">
+                {SITE.city} · свой парк, подача сегодня
+              </span>
             </div>
             <h1
               className="float-in mt-6 text-[2.6rem] font-extrabold leading-[1.02] tracking-[-0.04em] sm:text-6xl"
@@ -231,13 +242,21 @@ export default async function HomePage() {
               className="float-in mt-6 max-w-xl text-lg leading-relaxed text-slate-300"
               style={{ animationDelay: '240ms' }}
             >
-              Экскаваторы-погрузчики, автокраны и погрузчики в Набережных Челнах и по Татарстану —
-              от 2 500 ₽/ч. ИИ-агенты круглосуточно подберут технику и посчитают стоимость.
+              Своя техника и свои машинисты: экскаваторы-погрузчики, автокраны и погрузчики в
+              Набережных Челнах и по Татарстану — от 2 300 ₽/ч, без посредников. ИИ-агенты
+              круглосуточно подберут технику и посчитают стоимость.
             </p>
             <div className="float-in mt-8 flex flex-wrap gap-3" style={{ animationDelay: '360ms' }}>
               <a
+                href={SITE.phoneHref}
+                className="inline-flex w-full items-center justify-center gap-2.5 rounded-full bg-amber-500 px-6 py-3.5 font-mono text-lg font-bold tabular-nums text-slate-950 shadow-lg shadow-amber-500/30 transition hover:bg-amber-400 sm:w-auto"
+              >
+                <Icon name="phone" className="h-5 w-5" />
+                {SITE.phone}
+              </a>
+              <a
                 href="#callback"
-                className="group inline-flex items-center gap-2 rounded-full bg-amber-500 px-6 py-3.5 text-base font-semibold text-slate-950 shadow-lg shadow-amber-500/30 transition hover:bg-amber-400"
+                className="group inline-flex items-center gap-2 rounded-full bg-white px-6 py-3.5 text-base font-semibold text-slate-950 transition hover:bg-slate-100"
               >
                 Заказать технику
                 <Icon name="arrow" className="h-4 w-4 transition group-hover:translate-x-1" />
@@ -250,17 +269,18 @@ export default async function HomePage() {
               </a>
             </div>
             <p className="float-in mt-5 text-sm text-slate-400" style={{ animationDelay: '480ms' }}>
-              Работаем с НДС · Договор и ЭДО · Перезвоним за 15 минут
+              Свой парк · Свои машинисты · Без посредников · Работаем с НДС и ЭДО
             </p>
           </div>
         </div>
       </section>
 
-      <section className="depth -mt-12 grid grid-cols-2 overflow-hidden rounded-3xl border border-slate-200 bg-white lg:grid-cols-4">
-        {stats.map((stat, index) => (
-          <Reveal
+      {/* Right under the hero, so no entrance effect: it must read at rest.
+          The numbers themselves count up. */}
+      <section className="-mt-12 grid grid-cols-2 overflow-hidden rounded-3xl border border-slate-200 bg-white lg:grid-cols-4">
+        {stats.map((stat) => (
+          <div
             key={stat.label}
-            delay={index * 80}
             className="border-slate-200 p-5 sm:p-7 [&:not(:last-child)]:border-r max-lg:[&:nth-child(2)]:border-r-0 max-lg:[&:nth-child(-n+2)]:border-b"
           >
             <div className="whitespace-nowrap text-2xl font-extrabold tracking-tight sm:text-4xl">
@@ -269,7 +289,7 @@ export default async function HomePage() {
               {stat.suffix}
             </div>
             <div className="mt-1 text-sm text-slate-500">{stat.label}</div>
-          </Reveal>
+          </div>
         ))}
       </section>
 
@@ -292,7 +312,7 @@ export default async function HomePage() {
 
       <section className="depth">
         <Reveal>
-          <div className="eyebrow text-amber-600">01 — Техника и цены</div>
+          <div className="eyebrow text-amber-700">Техника и цены</div>
           <div className="mt-3 flex flex-wrap items-end justify-between gap-4">
             <h2 className="max-w-2xl text-4xl font-extrabold tracking-[-0.03em] sm:text-5xl">
               Цена видна сразу, без скрытых доплат
@@ -352,7 +372,7 @@ export default async function HomePage() {
                         </span>
                         <Icon
                           name="arrow"
-                          className="h-5 w-5 text-amber-600 transition group-hover:translate-x-1"
+                          className="h-5 w-5 text-amber-700 transition group-hover:translate-x-1"
                         />
                       </div>
                     </div>
@@ -382,12 +402,18 @@ export default async function HomePage() {
         </div>
       </section>
 
+      <CinemaBand
+        machine="excavator"
+        eyebrow="Свой парк"
+        phrase="Котлован к утру — не обещание, а наряд"
+      />
+
       <ShiftStory />
 
       <section className="grid gap-10 lg:grid-cols-12">
         <div className="lg:sticky lg:top-28 lg:col-span-5 lg:self-start">
           <Reveal>
-            <div className="eyebrow text-amber-600">02 — Почему мы</div>
+            <div className="eyebrow text-amber-700">Почему мы</div>
             <h2 className="mt-3 text-4xl font-extrabold tracking-[-0.03em] sm:text-5xl">
               Своя техника и свои машинисты
             </h2>
@@ -401,7 +427,7 @@ export default async function HomePage() {
           {ADVANTAGES.map((item, index) => (
             <Reveal key={item.title} delay={index * 80}>
               <div className="group flex items-start gap-5 border-b border-slate-200 pb-6">
-                <span className="font-mono text-sm text-amber-600">0{index + 1}</span>
+                <span className="font-mono text-sm text-amber-700">0{index + 1}</span>
                 <div>
                   <h3 className="text-2xl font-bold tracking-tight transition group-hover:text-amber-600 sm:text-3xl">
                     {item.title}
@@ -418,7 +444,7 @@ export default async function HomePage() {
         <div className="hero-grid opacity-40" aria-hidden />
         <div className="relative flex flex-col items-start gap-8 lg:flex-row lg:items-center">
           <Reveal className="flex-1">
-            <div className="eyebrow text-amber-400">03 — Искусственный интеллект</div>
+            <div className="eyebrow text-amber-400">Искусственный интеллект</div>
             <h2 className="mt-3 text-4xl font-extrabold tracking-[-0.03em] sm:text-5xl">
               Команда ИИ-агентов
             </h2>
@@ -430,7 +456,7 @@ export default async function HomePage() {
           </Reveal>
           <div className="cube-scene mx-auto shrink-0 lg:mx-12" aria-hidden>
             <div className="cube">
-              {[...AGENT_PROFILES.map((a) => a.name), 'ИИ', SITE.name].map((label) => (
+              {[...PUBLIC_AGENT_PROFILES.map((a) => a.name), 'ИИ', SITE.name].map((label) => (
                 <div key={label} className="cube-face">
                   {label}
                 </div>
@@ -439,7 +465,7 @@ export default async function HomePage() {
           </div>
         </div>
         <div className="relative mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
-          {AGENT_PROFILES.map((agent, index) => (
+          {PUBLIC_AGENT_PROFILES.map((agent, index) => (
             <Reveal key={agent.id} delay={index * 100}>
               <TiltCard dark>
                 <div className="eyebrow text-[0.65rem] text-amber-400">{agent.role}</div>
@@ -460,7 +486,7 @@ export default async function HomePage() {
       <section className="grid gap-10 lg:grid-cols-12">
         <div className="lg:sticky lg:top-28 lg:col-span-5 lg:self-start">
           <Reveal>
-            <div className="eyebrow text-amber-600">04 — Как это работает</div>
+            <div className="eyebrow text-amber-700">Как это работает</div>
             <h2 className="mt-3 text-4xl font-extrabold tracking-[-0.03em] sm:text-5xl">
               Четыре шага до техники на объекте
             </h2>
@@ -481,51 +507,57 @@ export default async function HomePage() {
         </ol>
       </section>
 
+      <CinemaBand
+        machine="crane"
+        eyebrow="Подача сегодня"
+        phrase="Техника уже едет. Осталось сказать куда"
+      />
+
       <div className="depth">
         <Faq items={HOME_FAQ} />
       </div>
 
-      <Reveal>
-        <section
-          id="callback"
-          className="relative grid scroll-mt-24 grid-cols-1 gap-8 overflow-hidden rounded-[2rem] bg-slate-950 p-6 text-white sm:p-10 lg:grid-cols-2"
-        >
-          <div className="hero-grid opacity-30" aria-hidden />
-          <div className="relative flex min-w-0 flex-col justify-center">
-            <div className="eyebrow text-amber-400">Быстрый заказ</div>
-            <h2 className="mt-3 text-4xl font-extrabold uppercase leading-[0.95] tracking-[-0.03em] sm:text-6xl">
-              Нужна техника сегодня?
-            </h2>
-            <ul className="mt-6 space-y-2 text-slate-300">
-              <li>✔ Подберём технику под задачу и бюджет</li>
-              <li>✔ Назовём точную цену с доставкой</li>
-              <li>✔ Работаем в Набережных Челнах и по всему Татарстану</li>
-            </ul>
-            <a
-              href={SITE.phoneHref}
-              className="mt-6 inline-flex items-center gap-2 text-2xl font-bold text-amber-400"
-            >
-              <Icon name="phone" className="h-6 w-6" />
-              {SITE.phone}
-            </a>
+      <section id="callback" className="scroll-mt-24">
+        <CallbackIris backdrop="/images/trench.jpg">
+          <div className="grid grid-cols-1 gap-8 p-6 sm:p-10 lg:grid-cols-2">
+            <div className="flex min-w-0 flex-col justify-center">
+              <div className="eyebrow text-amber-400">Быстрый заказ</div>
+              <h2 className="mt-3 text-4xl font-extrabold uppercase leading-[0.95] tracking-[-0.03em] sm:text-6xl">
+                Нужна техника сегодня?
+              </h2>
+              <ul className="mt-6 space-y-2 text-slate-200">
+                <li>✔ Подберём технику под задачу и бюджет</li>
+                <li>✔ Назовём точную цену с доставкой</li>
+                <li>✔ Работаем в Набережных Челнах и по всему Татарстану</li>
+              </ul>
+              <a
+                href={SITE.phoneHref}
+                className="mt-6 inline-flex items-center gap-2 text-2xl font-bold text-amber-400"
+              >
+                <Icon name="phone" className="h-6 w-6" />
+                {SITE.phone}
+              </a>
+            </div>
+            <div className="min-w-0 rounded-3xl bg-slate-950/50 p-4 ring-1 ring-white/10 backdrop-blur sm:p-6">
+              <CallbackForm source="home" dark />
+            </div>
           </div>
-          <div className="relative min-w-0 rounded-3xl bg-white/5 p-4 ring-1 ring-white/10 backdrop-blur sm:p-6">
-            <CallbackForm source="home" dark />
-          </div>
-        </section>
-      </Reveal>
+        </CallbackIris>
+      </section>
 
       <Reveal>
         <section className="grid gap-6 rounded-[2rem] border border-amber-200 bg-gradient-to-br from-amber-50 to-orange-100 p-6 sm:grid-cols-2 sm:p-10">
           <div>
-            <div className="eyebrow text-amber-700">Поставщикам</div>
-            <h2 className="mt-3 text-3xl font-extrabold tracking-tight">Владеете техникой?</h2>
+            <div className="eyebrow text-amber-700">Без посредников</div>
+            <h2 className="mt-3 text-3xl font-extrabold tracking-tight">
+              Своя техника и свои машинисты
+            </h2>
             <p className="mt-3 text-slate-700">
-              Разместите парк на {SITE.name}, получайте заявки клиентов и делайте ставки. ИИ
-              заполнит характеристики техники по описанию из паспорта.
+              {SITE.name} сам выполняет каждую заявку: никаких перекупщиков и «поставщиков». Цену
+              называем один раз и отвечаем за результат.
             </p>
-            <a href="/register" className="mt-5 inline-block">
-              <Button>Стать поставщиком</Button>
+            <a href="/orders" className="mt-5 inline-block">
+              <Button>Оставить заявку</Button>
             </a>
           </div>
           <div className="flex flex-col gap-2 text-slate-700">

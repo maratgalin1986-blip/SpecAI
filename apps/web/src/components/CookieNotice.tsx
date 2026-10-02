@@ -1,0 +1,111 @@
+'use client';
+
+import { useEffect, useState } from 'react';
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
+import { COOKIE_CONSENT_KEY } from '@/lib/marketing';
+
+// Notice about cookies and Yandex.Metrika (152-ФЗ). Metrika works until the
+// visitor refuses; the choice is kept in localStorage and read by the counter's
+// init script and by reachGoal. Nothing is rendered on the server, and the
+// card is fixed, so it cannot shift the page.
+export function CookieNotice() {
+  const pathname = usePathname();
+  const [visible, setVisible] = useState(false);
+  const [shown, setShown] = useState(false);
+
+  useEffect(() => {
+    let chosen = false;
+    try {
+      chosen = !!localStorage.getItem(COOKIE_CONSENT_KEY);
+    } catch {
+      // Storage blocked: the notice is shown on every visit.
+    }
+    if (chosen) return;
+    // Not on first paint: only after the intro has ended and the visitor
+    // has scrolled (or 6 s have passed).
+    let scrolled = false;
+    let timedOut = false;
+    let frame = 0;
+    let revealed = false;
+    const introOn = () => {
+      const intro = document.getElementById('intro');
+      return !!intro && !intro.hidden;
+    };
+    const check = () => {
+      if (revealed || !(scrolled || timedOut) || introOn()) return;
+      revealed = true;
+      window.clearInterval(poll);
+      setVisible(true);
+      frame = requestAnimationFrame(() => setShown(true));
+    };
+    const onScroll = () => {
+      if (window.scrollY > 4) {
+        scrolled = true;
+        check();
+      }
+    };
+    const timeout = window.setTimeout(() => {
+      timedOut = true;
+      check();
+    }, 6000);
+    const poll = window.setInterval(check, 400);
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => {
+      window.clearTimeout(timeout);
+      window.clearInterval(poll);
+      window.removeEventListener('scroll', onScroll);
+      cancelAnimationFrame(frame);
+    };
+  }, []);
+
+  // Lets the chat button sit above the strip (see globals.css).
+  const open = visible && !pathname?.startsWith('/admin');
+  useEffect(() => {
+    if (!open) return;
+    document.documentElement.setAttribute('data-cookie-strip', '');
+    return () => document.documentElement.removeAttribute('data-cookie-strip');
+  }, [open]);
+
+  function choose(value: 'yes' | 'no') {
+    try {
+      localStorage.setItem(COOKIE_CONSENT_KEY, value);
+    } catch {
+      // Ignore: the choice just lasts until the page is closed.
+    }
+    setVisible(false);
+  }
+
+  if (!open) return null;
+
+  return (
+    <div
+      role="region"
+      aria-label="Уведомление о cookie"
+      className={`fixed inset-x-0 bottom-[calc(4rem+env(safe-area-inset-bottom))] z-[45] flex h-10 items-center gap-2 border-t border-slate-200 bg-white/95 px-3 text-xs text-slate-700 shadow-md backdrop-blur motion-safe:transition motion-safe:duration-300 sm:inset-x-auto sm:bottom-4 sm:left-4 sm:h-auto sm:rounded-full sm:border sm:py-1.5 sm:pl-4 sm:pr-2 ${
+        shown ? 'translate-y-0 opacity-100' : 'translate-y-4 opacity-0 motion-reduce:translate-y-0'
+      }`}
+    >
+      <p className="min-w-0 flex-1 truncate">
+        Используем cookie и Яндекс.Метрику ·{' '}
+        <Link href="/privacy" className="text-amber-800 underline">
+          Политика
+        </Link>
+      </p>
+      <button
+        type="button"
+        onClick={() => choose('yes')}
+        className="rounded-full bg-slate-900 px-3 py-1 font-semibold text-white hover:bg-slate-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-600"
+      >
+        OK
+      </button>
+      <button
+        type="button"
+        onClick={() => choose('no')}
+        className="px-1.5 py-1 text-slate-600 underline hover:text-slate-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-600"
+      >
+        Нет
+      </button>
+    </div>
+  );
+}

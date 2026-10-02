@@ -130,7 +130,7 @@ export async function ingestMessage(message: IncomingMessage): Promise<IngestRes
   const sourceLabel = message.source === 'WHATSAPP' ? 'WhatsApp' : 'Telegram';
   await notifyTelegram(
     [
-      `${published ? '🆕 Новая заявка на торгах' : '🕵️ Заявка на модерации'} — ${SITE.name}`,
+      `${published ? '🆕 Новая заявка из чата' : '🕵️ Заявка на модерации'} — ${SITE.name}`,
       `Источник: ${sourceLabel}${message.chatTitle ? ` · ${message.chatTitle}` : ''}`,
       category ? `Техника: ${category.name}` : null,
       city ? `Где: ${city}` : null,

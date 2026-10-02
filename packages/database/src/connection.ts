@@ -1,4 +1,4 @@
-import { existsSync, writeFileSync } from 'node:fs';
+import { existsSync, readdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { YANDEX_CA } from './certs/yandexCa';
@@ -63,4 +63,43 @@ function yandexCaPath(): string | null {
 export function resolveDatabaseUrl(url: string | undefined): string | undefined {
   if (!url || !isYandexDatabaseUrl(url)) return url;
   return withYandexTls(url, yandexCaPath());
+}
+
+// Where the Prisma query engine may sit when the client is bundled into a
+// Next.js server build (see apps/web/next.config.mjs): next to the generated
+// client, relative to the app (Vercel runs functions with cwd = apps/web) or
+// to the repository root.
+const ENGINE_DIRS = [
+  '../../packages/database/generated/client',
+  'packages/database/generated/client',
+];
+
+/**
+ * Points Prisma at its query engine through PRISMA_QUERY_ENGINE_LIBRARY when
+ * exactly one engine file is found in ENGINE_DIRS. A bundled client cannot
+ * always locate the engine by itself (production 500s on Vercel, 2026-09-29);
+ * the build ships the file (outputFileTracingIncludes) and this names it.
+ * Leaves an explicit setting alone, and does nothing when several engines
+ * (other platforms) are present, so Prisma's own choice applies.
+ */
+export function locateQueryEngine(
+  cwd: string = process.cwd(),
+  env: NodeJS.ProcessEnv = process.env,
+): string | undefined {
+  if (env.PRISMA_QUERY_ENGINE_LIBRARY) return env.PRISMA_QUERY_ENGINE_LIBRARY;
+  for (const dir of ENGINE_DIRS) {
+    const full = join(cwd, dir);
+    let files: string[];
+    try {
+      files = readdirSync(full);
+    } catch {
+      continue;
+    }
+    const engines = files.filter((name) => /^libquery_engine-.+\.so\.node$/.test(name));
+    if (engines.length === 1) {
+      env.PRISMA_QUERY_ENGINE_LIBRARY = join(full, engines[0]!);
+      return env.PRISMA_QUERY_ENGINE_LIBRARY;
+    }
+  }
+  return undefined;
 }

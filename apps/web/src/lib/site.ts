@@ -25,3 +25,15 @@ export const SITE = {
   inn: '1650412557' as string,
   kpp: '165001001' as string,
 };
+
+/** Working hours for calls: Mon–Sat, 8:00–20:00 Moscow time. */
+export const SHIFT = { days: [1, 2, 3, 4, 5, 6], from: 8, to: 20 } as const;
+
+/** Whether the dispatcher answers the phone at this moment. */
+export function isOnShift(date: Date = new Date()): boolean {
+  // Moscow is UTC+3 all year.
+  const msk = new Date(date.getTime() + 3 * 3600 * 1000);
+  const day = msk.getUTCDay();
+  const hour = msk.getUTCHours();
+  return (SHIFT.days as readonly number[]).includes(day) && hour >= SHIFT.from && hour < SHIFT.to;
+}

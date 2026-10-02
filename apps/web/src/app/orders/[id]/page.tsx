@@ -7,14 +7,10 @@ import { BidForm } from '@/components/BidForm';
 import { AcceptBidButton } from '@/components/AcceptBidButton';
 import { pluralizeRu } from '@/lib/pluralize';
 import { formatMoney } from '@/lib/money';
-import { orderViewerFor } from '@/lib/orderViewer';
-import {
-  canSeeChatContacts,
-  canSeeCustomerName,
-  isSafeHttpUrl,
-  orderDescriptionFor,
-  visibleBids,
-} from '@/lib/privacy';
+import { isAdminRequest } from '@/lib/admin';
+import { SiteConditions } from '@/components/SiteConditions';
+import { isFleetManager } from '@/lib/fleet';
+import { isSafeHttpUrl } from '@/lib/privacy';
 
 export const dynamic = 'force-dynamic';
 
@@ -32,7 +28,8 @@ export default async function OrderDetailPage({ params }: { params: { id: string
     where: { id: params.id },
     include: {
       category: true,
-      customer: { select: { name: true } },
+      customer: true,
+      location: true,
       bids: {
         include: { equipment: { include: { company: true } } },
         orderBy: { price: 'asc' },
@@ -47,14 +44,12 @@ export default async function OrderDetailPage({ params }: { params: { id: string
 
   const isOwner = session?.user.id === order.customerId;
   const isImported = order.source !== 'SITE';
-  // Personal data (152-ФЗ), rules in lib/privacy.ts: chat contacts for admins
-  // and providers with a confirmed e-mail; the customer's name and all bids for
-  // the customer and admins; a provider sees only their own bids.
-  const viewer = await orderViewerFor(session?.user);
-  const canSeeContact = canSeeChatContacts(viewer);
-  const bids = visibleBids(order.bids, viewer, order.customerId);
-  const hiddenBids = order.bids.length - bids.length;
-  const isProvider = session?.user.role === 'PROVIDER_ADMIN';
+  // СпецПласт16 is the only executor: an order is seen by its author and the
+  // company owner, not published to anyone else.
+  const canSeeContact = isFleetManager(session?.user) || isAdminRequest();
+  if (!isOwner && !canSeeContact) {
+    notFound();
+  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -67,9 +62,7 @@ export default async function OrderDetailPage({ params }: { params: { id: string
             {order.desiredEndDate.toLocaleDateString('ru-RU')} ·{' '}
             {isImported
               ? `из ${order.source === 'WHATSAPP' ? 'WhatsApp' : 'Telegram'}${order.sourceChat ? ` (${order.sourceChat})` : ''}`
-              : canSeeCustomerName(viewer, order.customerId)
-                ? `от ${order.customer.name}`
-                : 'от заказчика с сайта'}
+              : `от ${order.customer.name}`}
           </p>
         </div>
         <span className="w-fit shrink-0 rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-700">
@@ -79,10 +72,14 @@ export default async function OrderDetailPage({ params }: { params: { id: string
 
       <Card>
         <h2 className="font-semibold">Описание</h2>
-        <p className="mt-2 whitespace-pre-line text-sm text-slate-600">
-          {orderDescriptionFor(order, viewer)}
-        </p>
+        <p className="mt-2 whitespace-pre-line text-sm text-slate-600">{order.description}</p>
       </Card>
+
+      <SiteConditions
+        date={order.desiredStartDate}
+        location={order.location}
+        categoryName={order.category?.name}
+      />
 
       {isImported && (
         <Card className="border-sky-200 bg-sky-50">
@@ -98,11 +95,11 @@ export default async function OrderDetailPage({ params }: { params: { id: string
                   </a>
                 </p>
               )}
-              {isSafeHttpUrl(order.sourceUrl) && (
+              {order.sourceUrl && isSafeHttpUrl(order.sourceUrl) && (
                 <a
                   href={order.sourceUrl}
                   target="_blank"
-                  rel="noopener noreferrer"
+                  rel="noopener"
                   className="text-sky-700 underline"
                 >
                   Открыть исходное сообщение
@@ -112,31 +109,13 @@ export default async function OrderDetailPage({ params }: { params: { id: string
                 <p className="mt-1 whitespace-pre-line text-slate-600">«{order.rawText}»</p>
               )}
             </div>
-          ) : (
-            <p className="mt-2 text-sm text-slate-600">
-              {isProvider ? (
-                <>
-                  Контакты заказчика видны поставщикам с подтверждённым e-mail.{' '}
-                  <a href="/dashboard" className="font-medium text-amber-700 underline">
-                    Подтвердить e-mail
-                  </a>
-                </>
-              ) : (
-                <>
-                  Контакты заказчика видны зарегистрированным поставщикам техники.{' '}
-                  <a href="/register" className="font-medium text-amber-700 underline">
-                    Стать поставщиком
-                  </a>
-                </>
-              )}
-            </p>
-          )}
+          ) : null}
         </Card>
       )}
 
       {order.status === 'OPEN' && !isOwner && (
         <section>
-          <h2 className="mb-3 text-lg font-semibold">Предложить свою технику</h2>
+          <h2 className="mb-3 text-lg font-semibold">Предложение СпецПласт16</h2>
           <Card className="max-w-xl">
             <BidForm orderId={order.id} />
           </Card>
@@ -151,13 +130,7 @@ export default async function OrderDetailPage({ params }: { params: { id: string
           <p className="text-sm text-slate-600">Пока никто не предложил технику.</p>
         ) : (
           <div className="flex flex-col gap-3">
-            {hiddenBids > 0 && (
-              <p className="text-sm text-slate-600">
-                {bids.length > 0 ? 'Ниже — ваши предложения. ' : ''}
-                Цены и компании других поставщиков видит только заказчик.
-              </p>
-            )}
-            {bids.map((bid) => (
+            {order.bids.map((bid) => (
               <Card
                 key={bid.id}
                 className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4"

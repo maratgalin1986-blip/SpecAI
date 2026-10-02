@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { Card } from '@specai/ui';
 import { CallbackForm } from '@/components/CallbackForm';
 import { SITE } from '@/lib/site';
+import { CinemaBand } from '@/components/CinemaBand';
 import { CinemaHero } from '@/components/CinemaHero';
 
 export const metadata: Metadata = {
@@ -17,7 +18,6 @@ export default function ContactsPage() {
         title="Контакты"
         clips={['crane-sun', 'building-sun']}
         camera={5}
-        compact
       >
         <p>Звоните, пишите или оставьте заявку — подберём технику под вашу задачу.</p>
       </CinemaHero>
@@ -48,7 +48,7 @@ export default function ContactsPage() {
           <div className="flex flex-wrap gap-2 pt-2">
             <a
               href={SITE.phoneHref}
-              className="rounded-md bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-500"
+              className="rounded-md bg-amber-500 px-4 py-2 text-sm font-semibold text-slate-950 hover:bg-amber-400"
             >
               Позвонить
             </a>
@@ -59,11 +59,35 @@ export default function ContactsPage() {
               Спросить ИИ-агента
             </a>
           </div>
+          <a
+            href="/qr"
+            className="mt-2 flex items-center gap-4 rounded-xl border border-slate-200 p-3 hover:bg-slate-50"
+          >
+            <img
+              src="/qr/code.svg"
+              alt=""
+              width={72}
+              height={72}
+              loading="lazy"
+              className="shrink-0"
+            />
+            <span>
+              <span className="block font-semibold text-slate-900">QR-код сайта</span>
+              <span className="text-sm text-slate-500">
+                Наведите камеру телефона — откроется сайт. Скачать для визиток и техники.
+              </span>
+            </span>
+          </a>
         </Card>
         <Card className="p-6">
           <CallbackForm source="contacts" />
         </Card>
       </div>
+      <CinemaBand
+        machine="crane"
+        eyebrow="Пн–Сб, 8:00–20:00"
+        phrase="Звоните — техника выедет сегодня"
+      />
     </div>
   );
 }
