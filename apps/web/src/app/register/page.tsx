@@ -173,7 +173,11 @@ export default function RegisterPage() {
             />
             <ConsentText />
           </label>
-          {error && <p className="text-sm text-red-600">{error}</p>}
+          {error && (
+            <p role="alert" className="text-sm text-red-700">
+              {error}
+            </p>
+          )}
           <Button type="submit" disabled={!hydrated || isSubmitting}>
             {isSubmitting ? 'Создание аккаунта…' : 'Создать аккаунт'}
           </Button>

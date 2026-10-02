@@ -181,7 +181,11 @@ export function NewOrderForm({ provider }: { provider?: { name: string } | null 
         categoryName={categories.find((category) => category.id === categoryId)?.name}
       />
 
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {error && (
+        <p role="alert" className="text-sm text-red-700">
+          {error}
+        </p>
+      )}
       <Button type="submit" disabled={isSubmitting}>
         {isSubmitting ? 'Публикация…' : 'Опубликовать заявку'}
       </Button>

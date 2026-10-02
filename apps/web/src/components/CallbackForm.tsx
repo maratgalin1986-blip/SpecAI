@@ -150,7 +150,11 @@ export function CallbackForm({
         />
         <ConsentText />
       </label>
-      {error && <p className="text-sm text-red-500">{error}</p>}
+      {error && (
+        <p role="alert" className={`text-sm ${dark ? 'text-red-300' : 'text-red-700'}`}>
+          {error}
+        </p>
+      )}
       <button
         type="submit"
         disabled={!hydrated || status === 'sending'}

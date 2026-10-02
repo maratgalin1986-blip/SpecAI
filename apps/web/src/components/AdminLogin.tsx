@@ -54,7 +54,11 @@ export function AdminLogin() {
         aria-label="Пароль администратора"
         className="rounded-md border border-slate-300 px-3 py-2"
       />
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {error && (
+        <p role="alert" className="text-sm text-red-700">
+          {error}
+        </p>
+      )}
       <button
         type="submit"
         disabled={!hydrated || isSubmitting}

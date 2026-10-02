@@ -163,7 +163,7 @@ export function PhotoShare({
         Разрешаю опубликовать эти фото на сайте СпецПласт16
       </label>
       {error && (
-        <p className="text-sm text-red-500" role="alert">
+        <p className={`text-sm ${dark ? 'text-red-300' : 'text-red-700'}`} role="alert">
           {error}
         </p>
       )}

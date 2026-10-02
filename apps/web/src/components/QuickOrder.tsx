@@ -146,7 +146,11 @@ export function QuickOrder({
             />
             <ConsentText />
           </label>
-          {error && <p className="text-xs text-red-600">{error}</p>}
+          {error && (
+            <p role="alert" className="text-xs text-red-700">
+              {error}
+            </p>
+          )}
           <button
             type="submit"
             disabled={!hydrated || status === 'sending'}

@@ -47,7 +47,11 @@ export default function ForgotPasswordPage() {
             сброса пароля. Ссылка действует 1 час.
           </p>
         ) : (
-          <form method="post" onSubmit={handleSubmit} className="ym-hide-content flex flex-col gap-3">
+          <form
+            method="post"
+            onSubmit={handleSubmit}
+            className="ym-hide-content flex flex-col gap-3"
+          >
             <p className="text-sm text-slate-600">
               Укажите e-mail, на который зарегистрирован аккаунт, — мы отправим ссылку для сброса
               пароля.
@@ -62,7 +66,11 @@ export default function ForgotPasswordPage() {
                 className="rounded-md border border-slate-300 px-3 py-2"
               />
             </label>
-            {error && <p className="text-sm text-red-600">{error}</p>}
+            {error && (
+              <p role="alert" className="text-sm text-red-700">
+                {error}
+              </p>
+            )}
             <Button type="submit" disabled={!hydrated || isSubmitting}>
               {isSubmitting ? 'Отправляем…' : 'Отправить ссылку'}
             </Button>

@@ -116,7 +116,11 @@ export function SmetaUnlock({ text, onUnlocked }: { text: string; onUnlocked: ()
         />
         <ConsentText />
       </label>
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {error && (
+        <p role="alert" className="text-sm text-red-700">
+          {error}
+        </p>
+      )}
       <button
         type="submit"
         disabled={!hydrated || status === 'sending'}

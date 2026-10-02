@@ -106,7 +106,11 @@ export default function LoginPage() {
               className="rounded-md border border-slate-300 px-3 py-2"
             />
           </label>
-          {error && <p className="text-sm text-red-600">{error}</p>}
+          {error && (
+            <p role="alert" className="text-sm text-red-700">
+              {error}
+            </p>
+          )}
           <Button type="submit" disabled={!hydrated || isSubmitting}>
             {isSubmitting ? 'Выполняется вход…' : 'Войти'}
           </Button>
