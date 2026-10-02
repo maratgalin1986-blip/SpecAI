@@ -12,6 +12,9 @@ import { MarketingTracker } from '@/components/MarketingTracker';
 import { CinemaClicks } from '@/components/CinemaClicks';
 import { VtMorph } from '@/components/VtMorph';
 import { Cinema3D } from '@/components/Cinema3D';
+import { CinemaDolly } from '@/components/CinemaDolly';
+import { CinemaFx } from '@/components/CinemaFx';
+import { CinemaParticles } from '@/components/CinemaParticles';
 import { MessengerButtons } from '@/components/MessengerButtons';
 import { CookieNotice } from '@/components/CookieNotice';
 import { SITE } from '@/lib/site';
@@ -133,6 +136,9 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           <CinemaClicks />
           <VtMorph />
           <Cinema3D />
+          <CinemaDolly />
+          <CinemaFx />
+          <CinemaParticles />
         </Providers>
       </body>
     </html>

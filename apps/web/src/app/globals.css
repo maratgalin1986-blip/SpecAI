@@ -1332,3 +1332,280 @@ html[data-vt-kind='fade']::view-transition-group(root) {
 .tilt-card[data-touch] .tilt-glare {
   opacity: 0.9;
 }
+
+/* ---- Cinema effects v3 (CinemaDolly / CinemaParticles / CinemaFx) ---------
+   Transform, opacity, clip and short blurs only. Everything is off with
+   reduced motion; nothing is hidden by CSS until script arms an element. */
+
+/* Home hero: the title slams in, the frame shakes once, a flare sweeps by. */
+.fx-particles {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+.cine-band > .fx-particles {
+  z-index: -10;
+}
+.fx-flare {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+.fx-flare::before,
+.fx-flare::after {
+  content: '';
+  position: absolute;
+  top: -20%;
+  left: 0;
+  height: 140%;
+  pointer-events: none;
+  opacity: 0;
+  will-change: transform, opacity;
+  animation: fx-flare 8s linear 3s infinite;
+}
+.fx-flare::before {
+  width: 38%;
+  background: linear-gradient(
+    100deg,
+    transparent 0%,
+    rgba(255, 214, 140, 0.05) 30%,
+    rgba(255, 244, 220, 0.34) 50%,
+    rgba(255, 214, 140, 0.05) 70%,
+    transparent 100%
+  );
+  mix-blend-mode: screen;
+}
+.fx-flare::after {
+  width: 38%;
+  top: 38%;
+  height: 3px;
+  background: linear-gradient(90deg, transparent, rgba(190, 220, 255, 0.9), transparent);
+  box-shadow: 0 0 22px 6px rgba(255, 220, 160, 0.45);
+  animation-name: fx-flare-streak;
+}
+.fx-flare[data-paused='1']::before,
+.fx-flare[data-paused='1']::after {
+  animation-play-state: paused;
+}
+@keyframes fx-flare {
+  0%,
+  80% {
+    opacity: 0;
+    transform: translate3d(-120%, 0, 0) skewX(-18deg);
+  }
+  84% {
+    opacity: 1;
+  }
+  96% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(300%, 0, 0) skewX(-18deg);
+  }
+}
+@keyframes fx-flare-streak {
+  0%,
+  80% {
+    opacity: 0;
+    transform: translate3d(-120%, 0, 0);
+  }
+  86% {
+    opacity: 1;
+  }
+  96% {
+    opacity: 0.8;
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(300%, 0, 0);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .hero-short h1 {
+    animation: fx-slam 0.65s cubic-bezier(0.2, 0.8, 0.2, 1) 0.12s both !important;
+  }
+  /* The photo layer has a 32px bleed, so the shake never shows an edge. The
+     section itself is left alone: it owns the scroll-driven depth-exit. */
+  .hero-short .hero-parallax-photo,
+  .hero-short .hero-parallax-text {
+    animation: fx-shake 0.15s linear 0.5s both;
+  }
+  /* Section headings: a letterbox mask opens with a slight slide, once. */
+  [data-fx-gate='wait'] {
+    clip-path: inset(50% 0 50% 0);
+    translate: -28px 0;
+  }
+  [data-fx-gate='go'] {
+    animation: fx-gate 0.8s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  }
+  /* Images: a quick focus pull as they come into view. */
+  img[data-fx-focus='wait'],
+  img[data-fx-focus='wait-f'] {
+    filter: blur(6px);
+  }
+  img[data-fx-focus='go'] {
+    animation: fx-focus 0.7s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  }
+  img[data-fx-focus='go-f'] {
+    animation: fx-focus-f 0.7s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  }
+  /* Call / «Наряд» / submit buttons: an amber pulse about every 4 s. */
+  :is(
+    a[href^='tel:'][class*='rounded'],
+    a[href*='#podbor'][class*='rounded-full'],
+    form button[type='submit'][class*='rounded']
+  ):not(.absolute, .fixed, .sticky, .relative, :disabled) {
+    position: relative;
+  }
+  :is(
+      a[href^='tel:'][class*='rounded'],
+      a[href*='#podbor'][class*='rounded-full'],
+      form button[type='submit'][class*='rounded']
+    ):not(:disabled)::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    pointer-events: none;
+    box-shadow:
+      0 0 0 2px rgba(251, 191, 36, 0.85),
+      0 0 22px 4px rgba(245, 158, 11, 0.7);
+    opacity: 0;
+    animation: fx-pulse 4s ease-out 1.5s infinite;
+  }
+  .cine-spark {
+    position: fixed;
+    z-index: 96;
+    left: 0;
+    top: 0;
+    width: 7px;
+    height: 7px;
+    margin: -3.5px 0 0 -3.5px;
+    border-radius: 9999px;
+    background: #fde68a;
+    box-shadow:
+      0 0 8px 2px rgba(251, 191, 36, 0.95),
+      0 0 16px 4px rgba(245, 158, 11, 0.55);
+    pointer-events: none;
+    animation: cine-spark 0.75s cubic-bezier(0.1, 0.7, 0.3, 1) forwards;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .fx-flare,
+  .fx-particles,
+  .cine-spark {
+    display: none;
+  }
+}
+@keyframes fx-slam {
+  0% {
+    opacity: 0;
+    transform: scale(1.4);
+  }
+  65% {
+    opacity: 1;
+    transform: scale(0.98);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+@keyframes fx-shake {
+  0%,
+  100% {
+    translate: 0 0;
+  }
+  20% {
+    translate: -4px 3px;
+  }
+  40% {
+    translate: 4px -3px;
+  }
+  60% {
+    translate: -3px -2px;
+  }
+  80% {
+    translate: 2px 2px;
+  }
+}
+@keyframes fx-gate {
+  from {
+    clip-path: inset(50% 0 50% 0);
+    translate: -28px 0;
+  }
+  to {
+    clip-path: inset(-12% -4% -12% -4%);
+    translate: 0 0;
+  }
+}
+@keyframes fx-focus {
+  from {
+    filter: blur(6px);
+    transform: scale(1.08);
+  }
+  to {
+    filter: blur(0);
+    transform: scale(1);
+  }
+}
+@keyframes fx-focus-f {
+  from {
+    filter: blur(6px);
+  }
+  to {
+    filter: blur(0);
+  }
+}
+@keyframes fx-pulse {
+  0% {
+    opacity: 0;
+    transform: scale(1);
+  }
+  8% {
+    opacity: 0.9;
+  }
+  30%,
+  100% {
+    opacity: 0;
+    transform: scale(1.18, 1.35);
+  }
+}
+@keyframes cine-spark {
+  from {
+    opacity: 1;
+    transform: translate(0, 0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translate(var(--dx), var(--dy)) scale(0.2);
+  }
+}
+
+/* Page enter: a short 3D push-in of the content. One effect per navigation:
+   the first load of a session keeps the full curtain, a view transition
+   (html[data-vt]) brings its own vortex, and a quick follow-up page (the
+   «fast» curtain flag) gets this push-in instead of a second curtain. */
+@media (prefers-reduced-motion: no-preference) {
+  html[data-curtain='fast']:not([data-vt]) .cine-curtain {
+    display: none;
+  }
+  html[data-curtain='fast']:not([data-vt]) main {
+    animation: fx-push 0.45s cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
+  }
+}
+@keyframes fx-push {
+  from {
+    opacity: 0.55;
+    transform: perspective(1200px) translateZ(-120px);
+  }
+  to {
+    opacity: 1;
+    transform: perspective(1200px) translateZ(0);
+  }
+}
