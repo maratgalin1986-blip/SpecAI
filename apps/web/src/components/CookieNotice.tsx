@@ -83,12 +83,12 @@ export function CookieNotice() {
       role="region"
       aria-label="Уведомление о cookie"
       data-bottom-bar
-      className={`fixed inset-x-0 bottom-[calc(4rem+env(safe-area-inset-bottom))] z-[45] flex h-10 items-center gap-2 border-t border-slate-200 bg-white/95 px-3 text-xs text-slate-700 shadow-md backdrop-blur motion-safe:transition motion-safe:duration-300 sm:inset-x-auto sm:bottom-4 sm:left-4 sm:h-auto sm:rounded-full sm:border sm:py-1.5 sm:pl-4 sm:pr-2 ${
+      className={`fixed inset-x-0 bottom-[calc(4rem+env(safe-area-inset-bottom))] z-[45] flex min-h-10 items-center gap-2 border-t border-slate-200 bg-white/95 px-3 py-1 text-xs text-slate-700 shadow-md backdrop-blur motion-safe:transition motion-safe:duration-300 sm:inset-x-auto sm:bottom-4 sm:left-4 sm:rounded-full sm:border sm:py-1.5 sm:pl-4 sm:pr-2 ${
         shown ? 'translate-y-0 opacity-100' : 'translate-y-4 opacity-0 motion-reduce:translate-y-0'
       }`}
     >
-      <p className="min-w-0 flex-1 truncate">
-        Используем cookie и Яндекс.Метрику ·{' '}
+      <p className="min-w-0 flex-1 leading-snug">
+        Cookie и Метрика ·{' '}
         <Link href="/privacy" className="text-amber-800 underline">
           Политика
         </Link>
@@ -96,14 +96,14 @@ export function CookieNotice() {
       <button
         type="button"
         onClick={() => choose('yes')}
-        className="rounded-full bg-slate-900 px-3 py-1 font-semibold text-white hover:bg-slate-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-600"
+        className="shrink-0 rounded-full bg-slate-900 px-3 py-1 font-semibold text-white hover:bg-slate-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-600"
       >
         OK
       </button>
       <button
         type="button"
         onClick={() => choose('no')}
-        className="px-1.5 py-1 text-slate-600 underline hover:text-slate-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-600"
+        className="shrink-0 px-1.5 py-1 text-slate-600 underline hover:text-slate-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-600"
       >
         Нет
       </button>
