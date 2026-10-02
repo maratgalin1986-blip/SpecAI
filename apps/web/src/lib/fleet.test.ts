@@ -6,7 +6,7 @@ describe('aggregator roles', () => {
   it('uses the same company id as the database package', () => {
     expect(HOUSE_COMPANY_ID).toBe(DB_HOUSE_ID);
     expect(OWN_FLEET).toEqual({ companyId: DB_HOUSE_ID });
-    expect(PUBLIC_FLEET).toEqual({ company: { isProvider: true } });
+    expect(PUBLIC_FLEET).toEqual({ companyId: HOUSE_COMPANY_ID });
   });
 
   it('treats every provider account with a company as a provider', () => {

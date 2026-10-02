@@ -13,9 +13,7 @@ export default function RegisterPage() {
   // Read after mounting, so the server and the first client render match.
   const [accountType, setAccountType] = useState<AccountType>('CUSTOMER');
   useEffect(() => {
-    if (new URLSearchParams(window.location.search).get('type') === 'provider') {
-      setAccountType('PROVIDER');
-    }
+    // Provider sign-up is closed: the site offers only СпецПласт16's own fleet.
   }, []);
   const [companyName, setCompanyName] = useState('');
   const [name, setName] = useState('');
@@ -80,12 +78,7 @@ export default function RegisterPage() {
         <h1 className="cine-title mb-4 text-xl font-bold">Создать аккаунт</h1>
 
         <div className="mb-4 flex flex-col gap-2 text-sm sm:flex-row">
-          {(
-            [
-              ['CUSTOMER', 'Хочу арендовать технику'],
-              ['PROVIDER', 'Хочу сдавать технику'],
-            ] as const
-          ).map(([type, label]) => (
+          {([['CUSTOMER', 'Хочу арендовать технику']] as const).map(([type, label]) => (
             <button
               key={type}
               type="button"

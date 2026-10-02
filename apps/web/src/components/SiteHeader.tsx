@@ -8,7 +8,6 @@ import { SITE } from '@/lib/site';
 
 const NAV_LINKS = [
   { href: '/equipment', label: 'Техника' },
-  { href: '/map', label: 'Карта' },
   { href: '/stroyka', label: 'Стройка' },
   { href: '/dizain', label: 'Дизайн' },
   { href: '/orders', label: 'Заявка' },

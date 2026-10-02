@@ -9,7 +9,8 @@ export const HOUSE_COMPANY_ID = 'specplast16-house';
 export const OWN_FLEET = { companyId: HOUSE_COMPANY_ID } as const;
 
 /** Prisma `where` fragment for public equipment queries: every provider's fleet. */
-export const PUBLIC_FLEET = { company: { isProvider: true } } as const;
+// Owner's decision (2026-10-02): customers see only СпецПласт16's own machinery.
+export const PUBLIC_FLEET = { companyId: HOUSE_COMPANY_ID } as const;
 
 /**
  * The catalog, the map and «Похожая техника»: every provider's machinery
