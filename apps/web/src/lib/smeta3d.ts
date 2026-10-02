@@ -294,6 +294,8 @@ export interface StageDrawing {
   hatch: string;
   /** Dimension and extension lines with arrows. */
   dims: string;
+  /** Machine symbols: drawn only while their stage plays. */
+  sym: string;
   dimTexts: DimText[];
   leaders: Leader[];
 }
@@ -332,7 +334,7 @@ export function sceneDrawing(scene: Scene, yaw: number, w: number, h: number): D
       W,
       depth: Math.max(D, 1),
       height: top + (built ? roofRise : 2),
-      margin: ground * 0.15 + 3,
+      margin: ground * 0.08 + 2,
     },
     w,
     h - 40,
@@ -342,12 +344,8 @@ export function sceneDrawing(scene: Scene, yaw: number, w: number, h: number): D
   // +y' on screen is towards the viewer.
   const towards = (nx: number, ny: number) => nx * Math.sin(yaw) + ny * Math.cos(yaw);
 
-  let cur: Record<'d' | 'chain' | 'hatch' | 'dims', string> = {
-    d: '',
-    chain: '',
-    hatch: '',
-    dims: '',
-  };
+  const empty = () => ({ d: '', chain: '', hatch: '', dims: '', sym: '' });
+  let cur: Record<'d' | 'chain' | 'hatch' | 'dims' | 'sym', string> = empty();
   let dimTexts: DimText[] = [];
   let leaders: Leader[] = [];
   type Target = keyof typeof cur;
@@ -436,20 +434,24 @@ export function sceneDrawing(scene: Scene, yaw: number, w: number, h: number): D
   };
   // Machines as legend-like symbols: a footprint and a line or two.
   const foot = (x: number, y: number, l: number, b: number) =>
-    line(rect(x - l / 2, y - b / 2, x + l / 2, y + b / 2, 0), true);
+    line(rect(x - l / 2, y - b / 2, x + l / 2, y + b / 2, 0), true, 'sym');
   const truck = (x: number, y: number) => {
     foot(x - 0.4, y, 2.6, 1.2);
-    line(rect(x + 1, y - 0.55, x + 1.7, y + 0.55, 0), true);
-    line([
-      [x - 1.7, y, 0],
-      [x - 1.7, y, 1],
-      [x + 0.9, y, 1],
-      [x + 0.9, y, 0],
-    ]);
+    line(rect(x + 1, y - 0.55, x + 1.7, y + 0.55, 0), true, 'sym');
+    line(
+      [
+        [x - 1.7, y, 0],
+        [x - 1.7, y, 1],
+        [x + 0.9, y, 1],
+        [x + 0.9, y, 0],
+      ],
+      false,
+      'sym',
+    );
   };
   const machine = (x: number, y: number, arm: Vec3) => {
     foot(x, y, 2.4, 1.4);
-    line([[x, y, 0.8], arm]);
+    line([[x, y, 0.8], arm], false, 'sym');
   };
   const first = (s: SceneStage) => s.machines.split(',')[0]!;
 
@@ -598,11 +600,15 @@ export function sceneDrawing(scene: Scene, yaw: number, w: number, h: number): D
           );
         const bx = -hx + L * 0.3;
         foot(bx, hy + 3.5, 2.6, 1.3);
-        line([
-          [bx, hy + 3.5, 1],
-          [bx, hy + 0.9, top * 0.8],
-        ]);
-        line(rect(bx - 0.6, hy + 0.3, bx + 0.6, hy + 1.3, top * 0.8), true);
+        line(
+          [
+            [bx, hy + 3.5, 1],
+            [bx, hy + 0.9, top * 0.8],
+          ],
+          false,
+          'sym',
+        );
+        line(rect(bx - 0.6, hy + 0.3, bx + 0.6, hy + 1.3, top * 0.8), true, 'sym');
         leader([bx, hy + 3.5, 0], `автовышка · ${stage.metric}`, -1);
         break;
       }
@@ -713,7 +719,7 @@ export function sceneDrawing(scene: Scene, yaw: number, w: number, h: number): D
       }
     }
     out.push({ ...cur, dimTexts, leaders });
-    cur = { d: '', chain: '', hatch: '', dims: '' };
+    cur = empty();
     dimTexts = [];
     leaders = [];
   }

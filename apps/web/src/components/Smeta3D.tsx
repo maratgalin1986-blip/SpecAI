@@ -94,7 +94,7 @@ export function Smeta3D({
   const s = scene.stages[stage]!;
   const btn =
     'inline-flex min-h-10 items-center justify-center rounded-full px-4 text-sm font-semibold';
-  const tbW = 150;
+  const tbW = 172;
 
   return (
     <div className="flex min-w-0 flex-col gap-2">
@@ -133,21 +133,20 @@ export function Smeta3D({
           <rect width={width} height={height} fill="url(#bp)" />
           {drawing.stages.slice(0, stage + 1).map((g, i) => {
             const now = i === stage;
-            const color = now ? WHITE : CYAN;
+            // Finished stages stay as faint outlines; the plot keeps its dimensions.
+            const showDims = now || i === 0;
             return (
-              <g
-                key={now ? `now-${stage}` : i}
-                fill="none"
-                strokeWidth="1"
-                opacity={now ? 1 : 0.55}
-              >
+              <g key={now ? `now-${stage}` : i} fill="none" strokeWidth="1" opacity={now ? 1 : 0.4}>
                 <path d={g.chain} stroke={CYAN} strokeDasharray="8 3 2 3" />
-                <path d={g.hatch} stroke={CYAN} strokeOpacity="0.45" strokeWidth="0.6" />
+                {now && <path d={g.hatch} stroke={CYAN} strokeOpacity="0.45" strokeWidth="0.6" />}
                 <g className={now && !reduced ? 'sd' : undefined}>
-                  <path d={g.d} stroke={color} pathLength={1} />
+                  <path d={g.d} stroke={now ? WHITE : CYAN} pathLength={1} />
                 </g>
-                <path d={g.dims} stroke={CYAN} strokeOpacity="0.8" strokeWidth="0.7" />
-                {g.dimTexts.map((t, k) => (
+                {now && <path d={g.sym} stroke={AMBER} strokeWidth="0.9" />}
+                {showDims && (
+                  <path d={g.dims} stroke={CYAN} strokeOpacity="0.8" strokeWidth="0.7" />
+                )}
+                {(showDims ? g.dimTexts : []).map((t, k) => (
                   <text
                     key={k}
                     x={t.x}
@@ -187,7 +186,7 @@ export function Smeta3D({
           <g transform={`translate(${width - tbW - 6} ${height - 50})`} fontSize="8.5" fill={CYAN}>
             <rect width={tbW} height="44" fill="#0a1a2f" stroke={CYAN} strokeWidth="0.8" />
             <path
-              d={`M0 11H${tbW}M0 22H${tbW}M0 33H${tbW}M96 22V44`}
+              d={`M0 11H${tbW}M0 22H${tbW}M0 33H${tbW}M112 22V44`}
               stroke={CYAN}
               strokeWidth="0.5"
             />
@@ -195,18 +194,18 @@ export function Smeta3D({
               {title.slice(0, 30)}
             </text>
             <text x="4" y="19.5">
-              Этап {stage + 1}/{n}: {s.title.slice(0, 22)}
+              Этап {stage + 1}/{n}: {s.title.slice(0, 20)}
             </text>
             <text x="4" y="30.5">
               Схема · примерно
             </text>
-            <text x="100" y="30.5">
+            <text x="116" y="30.5">
               М {drawing.scale}
             </text>
             <text x="4" y="41.5" fill={AMBER}>
               СпецПласт16
             </text>
-            <text x="100" y="41.5">
+            <text x="116" y="41.5">
               {max < n ? 'частично' : 'полная'}
             </text>
           </g>

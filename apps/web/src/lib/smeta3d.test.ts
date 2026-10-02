@@ -77,8 +77,8 @@ describe('scenes', () => {
       const d = sceneDrawing(scene, -0.6, 360, 300);
       expect(d.stages).toHaveLength(scene.stages.length);
       for (const s of d.stages) {
-        expect(s.d + s.chain + s.hatch).toMatch(/^M[\d.-]/);
-        expect(s.d + s.chain + s.hatch + s.dims).not.toContain('NaN');
+        expect(s.d + s.chain + s.hatch + s.sym).toMatch(/^M[\d.-]/);
+        expect(s.d + s.chain + s.hatch + s.dims + s.sym).not.toContain('NaN');
       }
     }
   });
