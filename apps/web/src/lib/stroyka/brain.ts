@@ -10,6 +10,110 @@ import { hourlyRate, PRICES, rub, type SpeakerId } from '@/lib/stroyka';
 import { contextFacts, type ContextSet, type OrderContext } from '@/lib/stroyka/context';
 import { SAFE_ADVICE, STORIES, type Hazard } from '@/lib/stroyka/lines/stories';
 import type { WorkNote } from '@/lib/weather';
+import { buildSmeta, type SmetaInput } from '@/lib/smeta';
+
+// ---------------------------------------------------------------- rough estimate (lib/smeta)
+
+const JOB_BY_TASK: [RegExp, string][] = [
+  [/транше|коммуникац|водопровод|канализ|кабел/, 'trench'],
+  [/котлован|фундамент|септик/, 'pit'],
+  [/планиров|выровн|разровн/, 'planning'],
+  [/вывоз|вывез|мусор|сыпуч|щеб|песок/, 'haul'],
+  [/демонтаж|разбить|снести/, 'demolition'],
+  [/плит|ферм|монтаж|кровл/, 'lift'],
+  [/блок|поддон|разгруз/, 'kmu'],
+  [/фасад|окн|вывеск|высот/, 'height'],
+  [/укат|катк|асфальт/, 'compaction'],
+  [/снег/, 'snow'],
+];
+const JOB_BY_MACHINE: Partial<Record<MachineType, string>> = {
+  backhoe: 'trench',
+  excavator: 'pit',
+  'wheeled-excavator': 'demolition',
+  crane: 'lift',
+  kmu: 'kmu',
+  agp: 'height',
+  roller: 'compaction',
+  truck: 'haul',
+  dozer: 'planning',
+  loader: 'snow',
+  tractor: 'snow',
+};
+
+/** The estimate job for the conversation (lib/smeta job ids). */
+export function smetaJob(task?: string | null, machine?: MachineType | null): string | null {
+  const t = task ? normalize(task) : '';
+  const byTask = JOB_BY_TASK.find(([re]) => re.test(t))?.[1];
+  return byTask ?? (machine ? (JOB_BY_MACHINE[machine] ?? null) : null);
+}
+
+/** «/smeta?job=pit» for the conversation, or the plain calculator. */
+export function smetaHref(task?: string | null, machine?: MachineType | null): string {
+  const job = smetaJob(task, machine);
+  return job ? `/smeta?job=${job}` : '/smeta';
+}
+
+const num = (s: string) => Number(s.replace(',', '.'));
+
+/** Sizes in the text: «30 метров», «10 на 8», «глубиной 1,5», «200 м2», «50 кубов». */
+export function parseDimensions(text: string): SmetaInput {
+  const n = normalize(text.replace(/(\d),(\d)/g, '$1.$2'));
+  const out: SmetaInput = {};
+  const by =
+    /(\d+(?:\.\d+)?)\s*(?:м(?![а-яё\d])|метр[а-яё]*)?\s*(?:на|x|х|\*)\s*(\d+(?:\.\d+)?)/.exec(n);
+  if (by) {
+    out.length = num(by[1]!);
+    out.width = num(by[2]!);
+  }
+  const depth =
+    /(?:глубин[а-яё]*|глубокий|глубокая)\s*(?:до\s*)?(\d+(?:\.\d+)?)/.exec(n) ??
+    /(\d+(?:\.\d+)?)\s*(?:м(?![а-яё\d])|метр[а-яё]*)?\s*в\s*глубин/.exec(n);
+  if (depth) out.depth = num(depth[1]!);
+  const width = /ширин[а-яё]*\s*(\d+(?:\.\d+)?)/.exec(n);
+  if (width) out.width = num(width[1]!);
+  const explicit = /длин[а-яё]*\s*(\d+(?:\.\d+)?)/.exec(n);
+  if (explicit) out.length = num(explicit[1]!);
+  else if (out.length === undefined) {
+    // The first «N м» that is not the depth.
+    for (const m of n.matchAll(/(\d+(?:\.\d+)?)\s*(?:м(?![а-яё\d])|метр[а-яё]*)/g)) {
+      const value = num(m[1]!);
+      if (value !== out.depth && value !== out.width) {
+        out.length = value;
+        break;
+      }
+    }
+  }
+  const area = /(\d+(?:\.\d+)?)\s*(?:м2|м²|кв\.?\s*м|квадрат[а-яё]*)/.exec(n);
+  if (area) {
+    out.area = num(area[1]!);
+    delete out.length;
+  }
+  const sotki = /(\d+(?:\.\d+)?)\s*сот/.exec(n);
+  if (sotki) out.area = num(sotki[1]!) * 100;
+  const volume = /(\d+(?:\.\d+)?)\s*(?:м3|м³|куб[а-яё]*)/.exec(n);
+  if (volume) out.volume = num(volume[1]!);
+  return out;
+}
+
+const rubles = (n: number) => n.toLocaleString('ru-RU');
+
+/** A rough estimate line from the sizes in the text, or null. */
+export function roughEstimate(
+  text: string,
+  task?: string | null,
+  machine?: MachineType | null,
+): { line: string; job: string } | null {
+  const sizes = parseDimensions(text);
+  if (!Object.keys(sizes).length) return null;
+  const job = smetaJob(task, machine);
+  if (!job) return null;
+  const smeta = buildSmeta(job, sizes);
+  if (!smeta) return null;
+  return {
+    job,
+    line: `Прикинул: ${smeta.job.title.toLowerCase()} — примерно ${rubles(smeta.total)}–${rubles(smeta.totalHigh)} ₽ (${smeta.rows.map((r) => `${r.name.toLowerCase()} ${r.hours} ч`).join(', ')}). Это примерно, точную цену назовёт диспетчер СпецПласт16.`,
+  };
+}
 
 export type Intent =
   | 'phone'
@@ -235,7 +339,7 @@ export interface Quick {
   label: string;
   /** Text sent as if the visitor typed it, or a special action. */
   say?: string;
-  action?: 'call' | 'form' | 'order-anyway' | 'other-day';
+  action?: 'call' | 'form' | 'order-anyway' | 'other-day' | 'smeta';
 }
 
 export interface BrainReply {
@@ -334,6 +438,20 @@ export function respond(
       set: u.set,
       phone: u.phone,
       handoff: speaker === 'sveta' ? undefined : 'sveta',
+    };
+  }
+  const estimate = roughEstimate(text, merged.task, merged.machine);
+  if (estimate) {
+    return {
+      speaker,
+      text: estimate.line,
+      quick: [
+        { label: '🧮 Открыть смету', action: 'smeta' },
+        { label: 'Оставить телефон', action: 'form' },
+        { label: 'Позвонить', action: 'call' },
+      ],
+      set: u.set,
+      phone: null,
     };
   }
   if (has('machine') || has('order') || has('when') || has('place')) {

@@ -4,6 +4,8 @@
 
 import { MACHINE_LABELS, type MachineType } from '@/lib/machinePhotos';
 import { SITE } from '@/lib/site';
+import { HAMMER_RATE, MACHINE_WORKS } from '@/lib/machineWorks';
+import { CRANE_HEAVY_RATE } from '@/lib/smeta';
 import type { LiftStop } from '@/lib/stroykaSky';
 import type { ContextSet } from '@/lib/stroyka/context';
 
@@ -19,30 +21,29 @@ export const SPEAKERS: Record<SpeakerId, { name: string; role: string }> = {
   ildar: { name: 'Крановщик Ильдар', role: 'крановщик' },
 };
 
-/** The owner's hourly rates with an operator, ₽/h. A shift is 8 hours. */
+/**
+ * The owner's hourly rates with an operator, ₽/h, read from the site's price
+ * sources (MACHINE_WORKS, HAMMER_RATE, CRANE_HEAVY_RATE). A shift is 8 hours.
+ */
 export const PRICES = {
-  truck: 2300,
-  agp: 2500,
-  tractor: 2500,
-  crane: 3500,
-  crane32: 4500,
-  hammer: 3500,
-  other: 3000,
-} as const;
+  truck: MACHINE_WORKS.truck!.rate,
+  agp: MACHINE_WORKS.agp!.rate,
+  tractor: MACHINE_WORKS.tractor!.rate,
+  crane: MACHINE_WORKS.crane!.rate,
+  crane32: CRANE_HEAVY_RATE,
+  hammer: HAMMER_RATE,
+  other: MACHINE_WORKS.backhoe!.rate,
+};
 export const SHIFT_HOURS = 8;
 
 /** Hourly rate of a machine type (the 25 t crane for `crane`). */
 export function hourlyRate(type: MachineType): number {
-  if (type === 'truck') return PRICES.truck;
-  if (type === 'agp') return PRICES.agp;
-  if (type === 'tractor') return PRICES.tractor;
-  if (type === 'crane') return PRICES.crane;
-  return PRICES.other;
+  return MACHINE_WORKS[type]?.rate ?? PRICES.other;
 }
 
-/** 3000 → «3 000» with a non-breaking space, as the rest of the site prints prices. */
+/** 3000 → «3 000», formatted the Russian way (toLocaleString). */
 export function rub(value: number): string {
-  return String(value).replace(/\B(?=(\d{3})+(?!\d))/g, '\u00a0');
+  return value.toLocaleString('ru-RU');
 }
 
 export type Vec2 = [number, number];

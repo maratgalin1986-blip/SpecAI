@@ -60,6 +60,8 @@ import { isOnShift } from '@/lib/site';
 import { leadAcceptedText } from '@/lib/dispatcher';
 import { submitLead } from '@/lib/submitLead';
 import type { Quick } from '@/lib/stroyka/brain';
+import { smetaHref } from '@/lib/stroyka/brain';
+import { SoundToggle } from '@/components/SoundToggle';
 import type { Mode, SharedInput, Telemetry, View } from './engine';
 import type { StroykaEngine } from './StroykaWorld';
 import { Censored, DialogueBox } from './DialogueBox';
@@ -372,6 +374,21 @@ export function Stroyka() {
         ZONES.some((z) => z.root === node!.id) && node.id !== 'gate' && node.id !== FORM_NODE;
       if (zoneRoot && contextFacts(c) && c.heardBy.includes(node.speaker))
         text = `${contextIntro(c, node.speaker)} ${text}`;
+      if (node.id === 'gate-next') {
+        // The foreman offers a rough estimate for the job (the /smeta calculator).
+        text = `${text} Хотите, прикину смету? Скажите размеры — посчитаю примерно, а Света уточнит.`;
+        return {
+          ...node,
+          text,
+          replies: [
+            ...node.replies,
+            {
+              label: '🧮 Прикинуть смету',
+              action: { kind: 'link', href: smetaHref(c.task, c.machine) },
+            },
+          ],
+        };
+      }
       if (node.id === FORM_NODE && contextFacts(c)) {
         const gaps = missing(c);
         text = `Записала: ${contextFacts(c)}. ${
@@ -618,6 +635,8 @@ export function Stroyka() {
     }
     const speaker = chat?.speaker ?? 'mihalych';
     if (q.action === 'call') window.location.href = SITE.phoneHref;
+    else if (q.action === 'smeta')
+      window.location.href = smetaHref(ctxRef.current.task, ctxRef.current.machine);
     else if (q.action === 'form') onReply({ label: q.label, action: { kind: 'form' } }, speaker);
     else if (q.action === 'order-anyway') {
       const task = ctxRef.current.task
@@ -824,6 +843,7 @@ export function Stroyka() {
           {chip}
         </span>
         <div className="ml-auto flex shrink-0 items-center gap-2">
+          <SoundToggle className="pointer-events-auto" />
           <a
             href={SITE.phoneHref}
             data-testid="call-btn"
@@ -870,6 +890,16 @@ export function Stroyka() {
                 >
                   Оформить наряд
                 </button>
+                <a
+                  href={smetaHref(
+                    ctx.task,
+                    ctx.machine ?? (zone ? zoneById(zone).order : undefined),
+                  )}
+                  data-testid="smeta-btn"
+                  className="rounded-full bg-white/10 px-3 py-1 text-xs font-semibold hover:bg-white/20"
+                >
+                  🧮 Рассчитать смету
+                </a>
                 <button
                   type="button"
                   onClick={() => setCardOpen((v) => !v)}

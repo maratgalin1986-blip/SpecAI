@@ -4,7 +4,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { MachineType } from '@/lib/machinePhotos';
-import { BUILDING, FENCE, GATE_HALF, PIT } from '@/lib/stroyka';
+import { BUILDING, FENCE, GATE_HALF, PIT, PRICES, rub } from '@/lib/stroyka';
 import { STAGES, type WorldProgress } from '@/lib/stroyka/progress';
 import { dotTexture, node, pixelTexture, Rig, Voxels, type Materials } from './kit';
 import { palletBuilder } from './machines';
@@ -55,11 +55,23 @@ export interface World {
 /** Ads on billboards: text, the machine a tap preselects. */
 export const AD_MESSAGES: { title: string; sub: string; machine: MachineType }[] = [
   { title: 'СпецПласт16', sub: 'аренда спецтехники с машинистом', machine: 'backhoe' },
-  { title: 'Экскаватор-погрузчик', sub: 'от 3 000 ₽/ч с машинистом', machine: 'backhoe' },
+  {
+    title: 'Экскаватор-погрузчик',
+    sub: `от ${rub(PRICES.other)} ₽/ч с машинистом`,
+    machine: 'backhoe',
+  },
   { title: 'Подача в день заявки', sub: 'свой парк · свои машинисты', machine: 'truck' },
-  { title: 'Автокран 25 т', sub: 'от 3 500 ₽/ч · 32 т — 4 500 ₽/ч', machine: 'crane' },
-  { title: 'Самосвал', sub: 'от 2 300 ₽/ч · щебень, песок, грунт', machine: 'truck' },
-  { title: 'Автовышка', sub: 'от 2 500 ₽/ч · фасады, окна, вывески', machine: 'agp' },
+  {
+    title: 'Автокран 25 т',
+    sub: `от ${rub(PRICES.crane)} ₽/ч · 32 т — ${rub(PRICES.crane32)} ₽/ч`,
+    machine: 'crane',
+  },
+  {
+    title: 'Самосвал',
+    sub: `от ${rub(PRICES.truck)} ₽/ч · щебень, песок, грунт`,
+    machine: 'truck',
+  },
+  { title: 'Автовышка', sub: `от ${rub(PRICES.agp)} ₽/ч · фасады, окна, вывески`, machine: 'agp' },
 ];
 
 /** A canvas texture drawn by `draw`. */

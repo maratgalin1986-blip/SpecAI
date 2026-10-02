@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
+  parseDimensions,
+  roughEstimate,
+  smetaHref,
   hazardOf,
   machineFor,
   parsePlace,
@@ -138,5 +141,37 @@ describe('brain: weather hazards', () => {
     expect(weatherStory('rain', 'roller', null, 1).quick.length).toBe(3);
     expect(story.text).not.toMatch(/СП16/);
     void CENSOR;
+  });
+});
+
+describe('brain: rough estimate (lib/smeta)', () => {
+  it('reads sizes from free text', () => {
+    expect(parseDimensions('траншея 30 метров, глубина 1,5')).toEqual({ length: 30, depth: 1.5 });
+    expect(parseDimensions('котлован 10 на 8, глубиной 2 м')).toEqual({
+      length: 10,
+      width: 8,
+      depth: 2,
+    });
+    expect(parseDimensions('площадка 200 м2')).toEqual({ area: 200 });
+    expect(parseDimensions('участок 6 соток')).toEqual({ area: 600 });
+    expect(parseDimensions('вывезти 50 кубов')).toEqual({ volume: 50 });
+    expect(parseDimensions('просто так')).toEqual({});
+  });
+
+  it('gives an approximate total and says so', () => {
+    const est = roughEstimate('котлован 10 на 8, глубина 2', 'котлован под фундамент', 'backhoe');
+    expect(est?.job).toBe('pit');
+    expect(est?.line).toMatch(/примерно \d[\d\s]*–\d[\d\s]* ₽/);
+    expect(est?.line).toContain('точную цену назовёт диспетчер СпецПласт16');
+    expect(roughEstimate('без размеров', 'котлован', 'backhoe')).toBe(null);
+    const reply = respond('траншея 30 метров глубина 1.5', 'rinat', emptyContext(), NOW);
+    expect(reply.text).toContain('Прикинул');
+    expect(reply.quick.map((q) => q.action)).toContain('smeta');
+  });
+
+  it('links the calculator for the job', () => {
+    expect(smetaHref('траншея под коммуникации', 'backhoe')).toBe('/smeta?job=trench');
+    expect(smetaHref(null, 'crane')).toBe('/smeta?job=lift');
+    expect(smetaHref(null, null)).toBe('/smeta');
   });
 });

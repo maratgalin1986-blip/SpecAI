@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { MACHINE_WORKS } from '@/lib/machineWorks';
+import { HAMMER_RATE, MACHINE_WORKS } from '@/lib/machineWorks';
+import { CRANE_HEAVY_RATE } from '@/lib/smeta';
 import {
   BOUNDS,
   DIALOGUE,
   FORM_NODE,
   OBSTACLES,
   PIT,
+  PRICES,
   PLAYER_RADIUS,
   SPEAKERS,
   TOUR_PATH,
@@ -52,7 +54,7 @@ describe('dialogue graph', () => {
 
   it('the excavator line and its replies match the brief', () => {
     const node = DIALOGUE.kotlovan!;
-    expect(node.text).toContain('От 3\u00a0000 ₽/ч с машинистом');
+    expect(node.text).toContain(`От ${rub(PRICES.other)} ₽/ч с машинистом`);
     expect(node.replies.map((r) => r.action)).toEqual([
       { kind: 'link', href: '/?m=backhoe#podbor' },
       { kind: 'link', href: 'tel:+79272428088' },
@@ -62,14 +64,18 @@ describe('dialogue graph', () => {
   });
 
   it('quotes the owner prices', () => {
-    expect(DIALOGUE.montazh!.text).toContain('3\u00a0500');
-    expect(DIALOGUE.montazh!.text).toContain('4\u00a0500');
-    expect(DIALOGUE.doroga!.text).toContain('2\u00a0300');
-    expect(DIALOGUE.korpus!.text).toContain('2\u00a0500');
-    expect(hourlyRate('truck')).toBe(2300);
-    expect(hourlyRate('agp')).toBe(2500);
-    expect(hourlyRate('backhoe')).toBe(3000);
-    expect(rub(24000)).toBe('24\u00a0000');
+    // Prices come from the site's sources of truth, never hard-coded.
+    expect(PRICES.truck).toBe(MACHINE_WORKS.truck!.rate);
+    expect(PRICES.crane).toBe(MACHINE_WORKS.crane!.rate);
+    expect(PRICES.hammer).toBe(HAMMER_RATE);
+    expect(PRICES.crane32).toBe(CRANE_HEAVY_RATE);
+    expect(DIALOGUE.montazh!.text).toContain(rub(PRICES.crane));
+    expect(DIALOGUE.montazh!.text).toContain(rub(PRICES.crane32));
+    expect(DIALOGUE.doroga!.text).toContain(rub(PRICES.truck));
+    expect(DIALOGUE.korpus!.text).toContain(rub(PRICES.agp));
+    expect(hourlyRate('truck')).toBe(MACHINE_WORKS.truck!.rate);
+    expect(hourlyRate('backhoe')).toBe(MACHINE_WORKS.backhoe!.rate);
+    expect(rub(24000)).toBe((24000).toLocaleString('ru-RU'));
     expect(orderMessage('crane')).toBe('Нужен: Автокран. ');
     expect(orderMessage(null)).toBe('');
   });

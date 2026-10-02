@@ -7,6 +7,7 @@ import { MACHINE_WORKS } from '@/lib/machineWorks';
 import { SITE } from '@/lib/site';
 import { hourlyRate, orderHref, PRICES, rub, SHIFT_HOURS } from '@/lib/stroyka';
 import { orderSummary, type OrderContext } from '@/lib/stroyka/context';
+import { smetaHref } from '@/lib/stroyka/brain';
 
 const MACHINES = Object.keys(MACHINE_WORKS) as MachineType[];
 
@@ -97,6 +98,12 @@ export function OrderPanel({
                   >
                     Позвонить
                   </a>
+                  <a
+                    href={smetaHref(null, type)}
+                    className="rounded-full bg-white/10 px-3 py-1.5 text-sm font-semibold hover:bg-white/20"
+                  >
+                    🧮 Смета
+                  </a>
                   <button
                     type="button"
                     onClick={() => setFormFor(formFor === type ? null : type)}
@@ -124,6 +131,13 @@ export function OrderPanel({
             );
           })}
         </ul>
+        <a
+          href={smetaHref(ctx.task, machine ?? ctx.machine)}
+          data-testid="order-smeta"
+          className="mx-4 mb-2 mt-1 rounded-full border border-amber-400/60 px-4 py-2 text-center text-sm font-bold text-amber-300 hover:bg-amber-400/10"
+        >
+          🧮 Рассчитать смету — примерно, за минуту
+        </a>
         <div className="border-t border-white/10 px-4 py-2 text-center text-xs text-slate-400">
           Цены с машинистом, смена — {SHIFT_HOURS} ч. Диспетчер: {SITE.phone}
         </div>

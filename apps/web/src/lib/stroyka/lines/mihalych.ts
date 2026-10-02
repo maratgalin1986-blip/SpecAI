@@ -1,6 +1,7 @@
 // Прораб Михалыч: 30 years on sites, grumbles, keeps everything in his head.
 // [text, tags] — tags: see lines/index.ts. Comic swearing only as #@%&$*!.
 import type { RawLine, Template } from './types';
+import { PRICES, rub } from '@/lib/stroyka';
 
 export const MIHALYCH: RawLine[] = [
   ['Прораб — это человек, который знает, где лопата, но не знает, где рабочий.', 'joke'],
@@ -35,7 +36,10 @@ export const MIHALYCH: RawLine[] = [
   ['Подача обычно в день заявки, если машина свободна. Света скажет точно.', 'business'],
   ['По Челнам, Елабуге, Нижнекамску — везде ездим.', 'business'],
   ['Сложный объект? Приедем, посмотрим, подберём машину под задачу.', 'business'],
-  ['Почасовая — от 2 300 ₽ за самосвал, экскаватор-погрузчик — от 3 000 ₽/ч.', 'business'],
+  [
+    `Почасовая — от ${rub(PRICES.truck)} ₽ за самосвал, экскаватор-погрузчик — от ${rub(PRICES.other)} ₽/ч.`,
+    'business',
+  ],
   ['Документы, допуски, наряд — всё в порядке, проверяй хоть сейчас.', 'business'],
   ['Технику берём только у СпецПласт16 — свои машинисты, не подводят.', 'ad'],
   [
