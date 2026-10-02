@@ -190,6 +190,8 @@ export function Stroyka() {
   const [shelfOpen, setShelfOpen] = useState(false);
   const seasonSaid = useRef(new Set<string>());
   const [pendingPhone, setPendingPhone] = useState<string | null>(null);
+  // The phone HUD menu («⋯»): mode, view, radio, badges and the photo booth.
+  const [hudOpen, setHudOpen] = useState(false);
   const [phoneSending, setPhoneSending] = useState(false);
   const brain = useRef<typeof import('@/lib/stroyka/brain') | null>(null);
   const [miniCity, setMiniCity] = useState<MiniCity | null>(null);
@@ -1088,7 +1090,7 @@ export function Stroyka() {
               </div>
               {cardOpen && (
                 <dl
-                  className="mt-2 grid grid-cols-[auto,1fr] gap-x-2 gap-y-0.5 text-[11px]"
+                  className="ym-hide-content mt-2 grid grid-cols-[auto,1fr] gap-x-2 gap-y-0.5 text-[11px]"
                   data-testid="order-card"
                 >
                   {steps.steps.map((s) => (
@@ -1106,98 +1108,110 @@ export function Stroyka() {
           {phase === '3d' && (
             <div className="pointer-events-auto flex flex-col items-end gap-1.5">
               <MiniMap telemetry={telemetry} active={zone} city={miniCity} />
+              {/* On a phone the tools fold into one «⋯» button; from sm up they are always shown. */}
               <button
                 type="button"
-                data-testid="mode-toggle"
-                onClick={() => setMode((m) => (m === 'tour' ? 'free' : 'tour'))}
-                className="rounded-full bg-slate-950/75 px-3 py-1.5 text-xs font-semibold backdrop-blur hover:bg-slate-800"
+                data-testid="hud-menu"
+                onClick={() => setHudOpen((v) => !v)}
+                aria-expanded={hudOpen}
+                aria-controls="stroyka-hud-tools"
+                aria-label={hudOpen ? 'Скрыть меню' : 'Меню: экскурсия, вид, рация, значки, фото'}
+                className="min-h-11 min-w-11 rounded-full bg-slate-950/75 px-3 text-lg font-bold leading-none backdrop-blur hover:bg-slate-800 sm:hidden"
               >
-                {mode === 'tour' ? 'Свободная прогулка' : 'Экскурсия'}
+                {hudOpen ? '✕' : '⋯'}
               </button>
-              {mode === 'free' && (
+              <div
+                id="stroyka-hud-tools"
+                className={`${hudOpen ? 'flex' : 'hidden'} flex-col items-end gap-1.5 sm:flex`}
+              >
                 <button
                   type="button"
-                  data-testid="view-toggle"
-                  onClick={() => setView((v) => (v === 'fp' ? 'tp' : 'fp'))}
+                  data-testid="mode-toggle"
+                  onClick={() => setMode((m) => (m === 'tour' ? 'free' : 'tour'))}
                   className="rounded-full bg-slate-950/75 px-3 py-1.5 text-xs font-semibold backdrop-blur hover:bg-slate-800"
                 >
-                  {view === 'fp' ? 'Вид: от 3-го лица' : 'Вид: от 1-го лица'}
+                  {mode === 'tour' ? 'Свободная прогулка' : 'Экскурсия'}
                 </button>
-              )}
-              <button
-                type="button"
-                data-testid="radio-toggle"
-                onClick={() => setLogOpen((v) => !v)}
-                aria-expanded={logOpen}
-                className="rounded-full bg-emerald-900/70 px-3 py-1.5 text-xs font-semibold text-emerald-100 backdrop-blur"
-              >
-                Рация{radioLog.length ? ` · ${radioLog.length}` : ''}
-              </button>
-              {logOpen && (
-                <div
-                  data-testid="radio-log"
-                  className="w-64 max-w-[70vw] rounded-xl border border-emerald-400/30 bg-slate-950/85 p-2 font-mono text-[11px] text-emerald-100 backdrop-blur"
+                {mode === 'free' && (
+                  <button
+                    type="button"
+                    data-testid="view-toggle"
+                    onClick={() => setView((v) => (v === 'fp' ? 'tp' : 'fp'))}
+                    className="rounded-full bg-slate-950/75 px-3 py-1.5 text-xs font-semibold backdrop-blur hover:bg-slate-800"
+                  >
+                    {view === 'fp' ? 'Вид: от 3-го лица' : 'Вид: от 1-го лица'}
+                  </button>
+                )}
+                <button
+                  type="button"
+                  data-testid="radio-toggle"
+                  onClick={() => setLogOpen((v) => !v)}
+                  aria-expanded={logOpen}
+                  className="rounded-full bg-emerald-900/70 px-3 py-1.5 text-xs font-semibold text-emerald-100 backdrop-blur"
                 >
-                  {radioLog.length === 0 && (
-                    <p className="text-emerald-300/60">Эфир пока тихий… кшш</p>
-                  )}
-                  {radioLog.slice(-6).map((line) => (
-                    <p key={line.id}>
-                      <b>
-                        {line.speaker === 'worker'
-                          ? 'Сторож'
-                          : SPEAKERS[line.speaker as SpeakerId].name.split(' ').pop()}
-                        :
-                      </b>{' '}
-                      <Censored text={line.text} />
-                    </p>
-                  ))}
-                </div>
-              )}
-              <button
-                type="button"
-                data-testid="badges-toggle"
-                onClick={() => setShelfOpen((v) => !v)}
-                aria-expanded={shelfOpen}
-                className="rounded-full bg-slate-950/75 px-3 py-1.5 text-xs font-semibold backdrop-blur hover:bg-slate-800"
-              >
-                🏅 Значки · {badges.earned.length}/{BADGES.length}
-              </button>
-              {shelfOpen && (
-                <div
-                  data-testid="badge-shelf"
-                  className="w-64 max-w-[70vw] rounded-xl border border-amber-400/30 bg-slate-950/85 p-2 text-[11px] backdrop-blur"
-                >
-                  <div className="mb-1 font-mono text-[10px] uppercase tracking-widest text-amber-400">
-                    Значки прораба · для души
+                  Рация{radioLog.length ? ` · ${radioLog.length}` : ''}
+                </button>
+                {logOpen && (
+                  <div
+                    data-testid="radio-log"
+                    className="w-64 max-w-[70vw] rounded-xl border border-emerald-400/30 bg-slate-950/85 p-2 font-mono text-[11px] text-emerald-100 backdrop-blur"
+                  >
+                    {radioLog.length === 0 && (
+                      <p className="text-emerald-300/60">Эфир пока тихий… кшш</p>
+                    )}
+                    {radioLog.slice(-6).map((line) => (
+                      <p key={line.id}>
+                        <b>
+                          {line.speaker === 'worker'
+                            ? 'Сторож'
+                            : SPEAKERS[line.speaker as SpeakerId].name.split(' ').pop()}
+                          :
+                        </b>{' '}
+                        <Censored text={line.text} />
+                      </p>
+                    ))}
                   </div>
-                  <ul className="grid gap-1">
-                    {BADGES.map((b) => {
-                      const got = badges.earned.includes(b.id);
-                      return (
-                        <li
-                          key={b.id}
-                          className={`flex items-center gap-2 ${got ? 'text-white' : 'text-slate-500'}`}
-                        >
-                          <span className={`text-base ${got ? '' : 'opacity-40 grayscale'}`}>
-                            {b.icon}
-                          </span>
-                          <span>
-                            <b className="font-semibold">{b.title}</b>
-                            {!got && <span className="block text-[10px]">{b.hint}</span>}
-                          </span>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                </div>
-              )}
-              {engine && <PhotoBooth snap={() => engine.snapshot()} />}
-              <span className="text-right text-[10px] leading-tight text-white/60">
-                <a href="/credits">© участники OpenStreetMap</a>
-                <br />
-                Погода: MET Norway
-              </span>
+                )}
+                <button
+                  type="button"
+                  data-testid="badges-toggle"
+                  onClick={() => setShelfOpen((v) => !v)}
+                  aria-expanded={shelfOpen}
+                  className="rounded-full bg-slate-950/75 px-3 py-1.5 text-xs font-semibold backdrop-blur hover:bg-slate-800"
+                >
+                  🏅 Значки · {badges.earned.length}/{BADGES.length}
+                </button>
+                {shelfOpen && (
+                  <div
+                    data-testid="badge-shelf"
+                    className="w-64 max-w-[70vw] rounded-xl border border-amber-400/30 bg-slate-950/85 p-2 text-[11px] backdrop-blur"
+                  >
+                    <div className="mb-1 font-mono text-[10px] uppercase tracking-widest text-amber-400">
+                      Значки прораба · для души
+                    </div>
+                    <ul className="grid gap-1">
+                      {BADGES.map((b) => {
+                        const got = badges.earned.includes(b.id);
+                        return (
+                          <li
+                            key={b.id}
+                            className={`flex items-center gap-2 ${got ? 'text-white' : 'text-slate-500'}`}
+                          >
+                            <span className={`text-base ${got ? '' : 'opacity-40 grayscale'}`}>
+                              {b.icon}
+                            </span>
+                            <span>
+                              <b className="font-semibold">{b.title}</b>
+                              {!got && <span className="block text-[10px]">{b.hint}</span>}
+                            </span>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
+                )}
+                {engine && <PhotoBooth snap={() => engine.snapshot()} />}
+              </div>
             </div>
           )}
         </div>
@@ -1283,6 +1297,12 @@ export function Stroyka() {
                 : null
             }
           />
+        )}
+        {/* Attribution: below everything, so it never covers the dialogue's ✕ or the HUD. */}
+        {phase === '3d' && (
+          <p className="pointer-events-auto text-center text-[10px] leading-tight text-white/60">
+            <a href="/credits">© участники OpenStreetMap</a> · Погода: MET Norway
+          </p>
         )}
       </div>
 

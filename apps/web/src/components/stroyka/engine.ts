@@ -1134,6 +1134,9 @@ export class StroykaEngine {
         return span;
       }),
     );
+    // Measured once per line (not every frame) for the on-screen clamp below.
+    el.dataset.w = String(el.offsetWidth);
+    el.dataset.h = String(el.offsetHeight);
   }
 
   /** The current frame as a PNG data URL (rendered and read in the same tick). */
@@ -1574,6 +1577,7 @@ export class StroykaEngine {
     const project = new THREE.Vector3();
     const w = this.opts.canvas.clientWidth;
     const h = this.opts.canvas.clientHeight;
+    this.bubbleRects.length = 0;
     for (const c of this.characters) {
       const root = c.person.root;
       if (c.guard) {
@@ -1670,6 +1674,9 @@ export class StroykaEngine {
     this.opts.telemetry.people = { detailed, lod };
   }
 
+  /** Bubbles placed this frame (centre x, bottom y, size), for the overlap check. */
+  private bubbleRects: { x: number; y: number; w: number; h: number }[] = [];
+
   private placeBubble(
     el: HTMLDivElement,
     until: number,
@@ -1690,7 +1697,21 @@ export class StroykaEngine {
     if (behind || far) el.style.opacity = '0';
     else {
       el.style.opacity = '1';
-      el.style.transform = `translate(${((project.x + 1) / 2) * w}px, ${((1 - project.y) / 2) * h}px) translate(-50%, -100%)`;
+      // Keep the bubble on screen and below the HUD (mission card, mini-map,
+      // menu button): on a phone they take the top ~third of the screen.
+      const bw = Number(el.dataset.w) || 0;
+      const bh = Number(el.dataset.h) || 0;
+      const safeTop = w < 640 ? Math.min(290, h * 0.36) : 72;
+      const x = Math.min(Math.max(((project.x + 1) / 2) * w, bw / 2 + 8), w - bw / 2 - 8);
+      let y = Math.max(((1 - project.y) / 2) * h, safeTop + bh);
+      // Two bubbles never cover each other: a later one moves below.
+      for (const r of this.bubbleRects) {
+        const overlapX = Math.abs(r.x - x) < (r.w + bw) / 2;
+        const overlapY = y > r.y - r.h && y - bh < r.y;
+        if (overlapX && overlapY) y = r.y + bh + 6;
+      }
+      this.bubbleRects.push({ x, y, w: bw, h: bh });
+      el.style.transform = `translate(${x}px, ${y}px) translate(-50%, -100%)`;
     }
   }
 
