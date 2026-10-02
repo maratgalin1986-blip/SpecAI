@@ -610,6 +610,33 @@ export function renderSquelch(ctx: BaseAudioContext): AudioBuffer {
   });
 }
 
+/** TV-style censor beep: a quiet 1 kHz tone, ~0.38 s. */
+export function renderBeep(ctx: BaseAudioContext): AudioBuffer {
+  return renderShot(
+    ctx,
+    0.38,
+    1,
+    (data, length, rate) => {
+      const out = data[0]!;
+      for (let i = 0; i < length; i++) out[i] = Math.sin((TAU * 1000 * i) / rate);
+    },
+    0.6,
+  );
+}
+
+/** Walkie-talkie hiss: noise band-limited to ~300–3000 Hz, a 1 s loop. */
+export function renderHiss(ctx: BaseAudioContext): AudioBuffer {
+  const rand = rng(67);
+  return renderLoop(ctx, 1, 1, BED_RATE, (data, length) => {
+    const out = data[0]!;
+    const f = svf(1200, 0.7, BED_RATE);
+    for (let i = 0; i < length; i++) {
+      const [, band] = f.run(rand());
+      out[i] = Math.tanh(band * 3);
+    }
+  });
+}
+
 /** Impulse response of a big open yard, for the reverb send. */
 export function renderImpulse(ctx: BaseAudioContext): AudioBuffer {
   const rand = rng(61);

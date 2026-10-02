@@ -6,6 +6,8 @@ import {
   renderArrival,
   renderBoom,
   renderClick,
+  renderHiss,
+  renderBeep,
   renderImpulse,
   renderMachine,
   renderMusic,
@@ -85,6 +87,8 @@ describe('procedural sounds', () => {
       renderBoom(ctx),
       renderStart(ctx, 'truck'),
       renderSquelch(ctx),
+      renderHiss(ctx),
+      renderBeep(ctx),
     ]) {
       check(cue);
       expect(cue.duration).toBeLessThan(3);

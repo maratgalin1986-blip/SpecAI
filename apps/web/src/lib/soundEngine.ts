@@ -13,8 +13,10 @@ import type { MachineType } from '@/lib/machinePhotos';
 import { SITE_SAMPLES, MACHINE_SAMPLES, type SampleName } from '@/lib/soundAssets';
 import {
   renderArrival,
+  renderBeep,
   renderBoom,
   renderClick,
+  renderHiss,
   renderImpulse,
   renderMachine,
   renderMusic,
@@ -24,6 +26,15 @@ import {
   renderThunk,
   renderWhoosh,
 } from '@/lib/soundSynth';
+import {
+  isFemaleVoice,
+  SITE_LINES,
+  splitCensored,
+  styleFor,
+  voiceFor,
+  type Line,
+  type Speaker,
+} from '@/lib/soundVoices';
 
 const LEVEL = {
   master: 0.85,
@@ -34,21 +45,9 @@ const LEVEL = {
   reverb: 0.35,
 };
 
-/** Foreman lines for the background voices. */
-export const FOREMAN_LINES = [
-  'Вира помалу!',
-  'Майна!',
-  'Стоп, стоп! Держи!',
-  'Сань, подавай самосвал!',
-  'Ковш левее давай!',
-  'Перекур пять минут.',
-  'Аккуратно, кабель!',
-  'Плиту на второй этаж, потихоньку.',
-  'Так, бетон через двадцать минут будет.',
-  'Каток сюда, тут ещё раз пройди.',
-  'Ещё полметра, ещё… стоп!',
-  'Мужики, стропы проверьте.',
-];
+type Queued = { line: Line; radio: boolean; volume: number };
+
+const wait = (ms: number) => new Promise<void>((resolve) => window.setTimeout(resolve, ms));
 
 type Voice = { source: AudioBufferSourceNode; gain: GainNode; type: MachineType };
 
@@ -68,6 +67,11 @@ export class SoundEngine {
   private machineToken = 0;
   private voiceTimer = 0;
   private ducked = false;
+  private speechToken = 0;
+  private speechQueue: Queued[] = [];
+  private speaking = false;
+  private lastSpeaker: Speaker | null = null;
+  private finishLine: (() => void) | null = null;
   private disposed = false;
 
   /** `ctx` is created by the director inside the visitor's gesture. */
@@ -225,8 +229,8 @@ export class SoundEngine {
     this.site.gain.setTargetAtTime(0, now, 0.3);
     const sources = this.bedSources;
     this.bedSources = [];
-    window.setTimeout(() => sources.forEach((s) => s.stop()), 1500);
-    cancelSpeech();
+    window.setTimeout(() => sources.forEach(stopSafely), 1500);
+    this.hush();
   }
 
   /** A foreman somewhere on the site, every 20–40 s, far back in the mix. */
@@ -236,7 +240,7 @@ export class SoundEngine {
       () => {
         if (!this.bedsOn || this.disposed) return;
         if (this.running && !this.ducked && document.visibilityState === 'visible') {
-          void this.sayLine();
+          this.sayLine();
         }
         this.scheduleVoice();
       },
@@ -244,38 +248,126 @@ export class SoundEngine {
     );
   }
 
-  private async sayLine() {
-    // No Russian voice in this browser: the foremen stay silent.
-    if (!russianVoice()) return;
-    const line = FOREMAN_LINES[Math.floor(Math.random() * FOREMAN_LINES.length)]!;
+  private sayLine() {
+    // No Russian voice in this browser, or someone is talking: stay quiet.
+    if (!russianVoices().length || this.speaking) return;
+    const line = SITE_LINES[Math.floor(Math.random() * SITE_LINES.length)]!;
     // Half the time the line comes over a walkie-talkie.
-    await this.say(line, Math.random() < 0.5);
+    this.enqueue({ line, radio: Math.random() < 0.5, volume: 0.16 });
   }
 
-  /** A line from a scene (`sp:dialog`): a radio blip, then the words if possible. */
-  async dialog(text: string): Promise<void> {
+  /**
+   * A line from a scene (`sp:dialog`). Lines are spoken one at a time, in
+   * order, each with radio static before and after; a business line cuts
+   * whatever is queued or playing, so nothing ever talks over it.
+   */
+  dialog(line: Line): void {
     if (!this.running || this.ducked) return;
-    await this.say(text, true);
+    if (line.kind === 'business') this.hush();
+    this.enqueue({
+      line,
+      radio: true,
+      volume: line.kind === 'business' ? 0.32 : 0.26,
+    });
   }
 
-  private async say(line: string, radio: boolean) {
-    const voice = russianVoice();
-    if (radio) {
-      const squelch = await this.synth('squelch', () => renderSquelch(this.ctx));
-      this.play(squelch, this.fx, { gain: 0.08, pan: Math.random() - 0.5 });
+  /** Stops the current and queued lines (and any pending beeps). */
+  hush(): void {
+    this.speechToken++;
+    this.speechQueue = [];
+    cancelSpeech();
+    this.finishLine?.();
+  }
+
+  private speakable() {
+    return this.running && !this.ducked && !this.disposed && document.visibilityState === 'visible';
+  }
+
+  private enqueue(item: Queued) {
+    this.speechQueue.push(item);
+    if (!this.speaking) void this.drain();
+  }
+
+  private async drain() {
+    this.speaking = true;
+    while (this.speechQueue.length) {
+      const item = this.speechQueue.shift()!;
+      // Radio exchanges: a short pause when the other side answers.
+      const answer = this.lastSpeaker && this.lastSpeaker !== item.line.speaker;
+      await wait(item.line.kind === 'radio' && answer ? 650 : 150);
+      await this.say(item);
+      this.lastSpeaker = item.line.speaker;
     }
-    if (!voice || !line) return;
-    const u = new SpeechSynthesisUtterance(line);
-    u.voice = voice;
-    u.lang = voice.lang;
-    u.volume = 0.16;
-    u.rate = 1 + Math.random() * 0.15;
-    u.pitch = 0.65 + Math.random() * 0.3;
-    try {
-      window.speechSynthesis.speak(u);
-    } catch {
-      /* speech is optional */
-    }
+    this.speaking = false;
+  }
+
+  /** Speaks one line; resolves when it is over or was cut. */
+  private async say({ line, radio, volume }: Queued): Promise<void> {
+    const token = this.speechToken;
+    const voice = voiceFor(line.speaker, russianVoices());
+    const style = styleFor(line.speaker, isFemaleVoice(voice));
+    const pan = Math.random() - 0.5;
+    const [squelch, beep, hiss] = await Promise.all([
+      this.synth('squelch', () => renderSquelch(this.ctx)),
+      this.synth('beep', () => renderBeep(this.ctx)),
+      line.kind === 'radio' ? this.synth('hiss', () => renderHiss(this.ctx)) : null,
+    ]);
+    const alive = () => token === this.speechToken && this.speakable();
+    if (!alive()) return;
+    if (radio) this.play(squelch, this.fx, { gain: 0.07, pan });
+    if (!voice) return;
+    // speechSynthesis cannot go through Web Audio, so the «walkie-talkie» is
+    // the static around the words and a faint band-limited hiss under them.
+    const bed = hiss ? this.play(hiss, this.fx, { gain: 0.025, pan }) : null;
+    if (bed) bed.loop = true;
+    const parts = splitCensored(line.text);
+    await new Promise<void>((resolve) => {
+      let done = false;
+      const finish = () => {
+        if (done) return;
+        done = true;
+        this.finishLine = null;
+        if (bed) stopSafely(bed);
+        resolve();
+      };
+      this.finishLine = finish;
+      // Parts are chained through onend; a «#@%&!» run is a 1 kHz beep instead.
+      const next = (i: number) => {
+        if (!alive()) return finish();
+        const part = parts[i];
+        if (!part) {
+          if (radio) this.play(squelch, this.fx, { gain: 0.05, pan });
+          return finish();
+        }
+        if (part.beep) {
+          this.play(beep, this.fx, { gain: 0.1 });
+          window.setTimeout(() => next(i + 1), 420);
+          return;
+        }
+        const u = new SpeechSynthesisUtterance(part.text);
+        u.voice = voice;
+        u.lang = voice.lang;
+        u.volume = volume;
+        u.rate = style.rate;
+        u.pitch = style.pitch;
+        // Some engines never fire onend: move on after a generous guess.
+        const guard = window.setTimeout(() => next(i + 1), 2500 + part.text.length * 110);
+        let moved = false;
+        u.onend = u.onerror = () => {
+          window.clearTimeout(guard);
+          if (moved) return;
+          moved = true;
+          next(i + 1);
+        };
+        try {
+          window.speechSynthesis.speak(u);
+        } catch {
+          window.clearTimeout(guard);
+          finish();
+        }
+      };
+      window.setTimeout(() => next(0), radio ? 220 : 0);
+    });
   }
 
   // ---- Machines -----------------------------------------------------------
@@ -297,7 +389,7 @@ export class SoundEngine {
       old.gain.gain.cancelScheduledValues(now);
       old.gain.gain.setTargetAtTime(0, now, 0.35);
       const src = old.source;
-      window.setTimeout(() => src.stop(), 2000);
+      window.setTimeout(() => stopSafely(src), 2000);
       this.voice = null;
     }
     if (!type) return;
@@ -380,7 +472,7 @@ export class SoundEngine {
     if (this.ducked === on) return;
     this.ducked = on;
     this.beds.gain.setTargetAtTime(on ? 0.25 : 1, this.ctx.currentTime, on ? 0.15 : 0.6);
-    if (on) cancelSpeech();
+    if (on) this.hush();
   }
 
   dispose(): void {
@@ -391,16 +483,20 @@ export class SoundEngine {
   }
 }
 
-function russianVoice(): SpeechSynthesisVoice | null {
-  if (typeof window === 'undefined' || !('speechSynthesis' in window)) return null;
+function stopSafely(source: AudioScheduledSourceNode) {
   try {
-    const voices = window.speechSynthesis.getVoices();
-    const ru = voices.filter((v) => v.lang.toLowerCase().startsWith('ru'));
-    if (!ru.length) return null;
-    // Prefer a male voice where the name says so.
-    return ru.find((v) => /male|муж|yuri|pavel|maxim|dmitr/i.test(v.name)) ?? ru[0]!;
+    source.stop();
   } catch {
-    return null;
+    /* already stopped */
+  }
+}
+
+function russianVoices(): SpeechSynthesisVoice[] {
+  if (typeof window === 'undefined' || !('speechSynthesis' in window)) return [];
+  try {
+    return window.speechSynthesis.getVoices().filter((v) => v.lang.toLowerCase().startsWith('ru'));
+  } catch {
+    return [];
   }
 }
 

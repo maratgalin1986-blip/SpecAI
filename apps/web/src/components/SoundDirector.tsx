@@ -12,6 +12,7 @@ import {
   type MachineSource,
 } from '@/lib/sound';
 import type { SoundEngine } from '@/lib/soundEngine';
+import { asSpeaker } from '@/lib/soundVoices';
 
 // The cinematic sound layer, mounted once in the layout. Off by default; it
 // wakes only after the visitor turns it on (SoundToggle) and only inside a
@@ -40,6 +41,7 @@ export function SoundDirector() {
     let wasRunning = false;
     let introPoll = 0;
     let lastWhoosh = 0;
+    let introAtGesture = false;
     const machines = new Map<MachineSource, Pick>();
     let playing: string | null = null;
 
@@ -87,8 +89,7 @@ export function SoundDirector() {
       applyMachine(true);
       // Sound came on while the opening titles are up: the brass hit for the
       // partner card, and a whoosh as the camera dives in.
-      const intro = document.getElementById('intro');
-      if (intro && !intro.hidden && !wasRunning) {
+      if (introAtGesture && !wasRunning) {
         void engine.cue('boom');
         window.clearInterval(introPoll);
         introPoll = window.setInterval(() => {
@@ -116,6 +117,9 @@ export function SoundDirector() {
         }
       }
       const context = ctx;
+      // The tap that wakes the sound also skips the opening titles, so look now.
+      const intro = document.getElementById('intro');
+      introAtGesture = !!intro && !intro.hidden;
       // iOS unlocks audio only for a sound started inside the gesture.
       try {
         const silent = context.createBufferSource();
@@ -187,8 +191,8 @@ export function SoundDirector() {
     const onVisibility = () => {
       if (!engine) return;
       if (document.visibilityState === 'hidden') {
+        engine.hush();
         engine.suspend();
-        void import('@/lib/soundEngine').then((m) => m.cancelSpeech());
       } else if (soundEnabled()) {
         void engine.resume().then((ok) => {
           if (ok) onRunning();
@@ -254,8 +258,14 @@ export function SoundDirector() {
       applyMachine(true);
     };
     const onDialog = (event: Event) => {
-      const detail = (event as CustomEvent<{ speaker?: string; text?: string }>).detail;
-      if (live() && detail) void engine!.dialog(String(detail.text ?? ''));
+      const detail = (event as CustomEvent<{ speaker?: string; text?: string; kind?: string }>)
+        .detail;
+      if (!live() || !detail?.text) return;
+      engine!.dialog({
+        speaker: asSpeaker(detail.speaker),
+        text: String(detail.text),
+        kind: detail.kind === 'business' || detail.kind === 'radio' ? detail.kind : 'joke',
+      });
     };
 
     document.addEventListener('visibilitychange', onVisibility);
