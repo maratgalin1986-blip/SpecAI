@@ -180,6 +180,11 @@ const SERVICE_LANDING: Record<string, string> = {
   Автокраны: 'avtokran',
   'Фронтальные погрузчики': 'frontalnyj-pogruzchik',
   Тракторы: 'traktor',
+  'Гусеничные экскаваторы': 'gusenichnyj-ekskavator',
+  'Колёсный экскаватор с гидромолотом': 'kolyosnyj-ekskavator-gidromolot',
+  'Манипулятор КМУ 7 т': 'manipulyator-kmu',
+  'Автовышка АГП': 'avtovyshka-agp',
+  Виброкаток: 'vibrokatok',
 };
 
 const HOME_FAQ = [
