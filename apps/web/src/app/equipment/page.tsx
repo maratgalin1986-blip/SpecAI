@@ -191,7 +191,7 @@ export default async function EquipmentCatalogPage({
   );
 
   const field =
-    'w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none transition placeholder:text-slate-400 focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20';
+    'w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none transition placeholder:text-slate-400 focus:border-amber-700 focus:ring-2 focus:ring-amber-700';
 
   return (
     <div className="flex flex-col gap-8">

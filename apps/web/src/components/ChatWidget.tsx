@@ -307,7 +307,7 @@ export function ChatWidget() {
               maxLength={4000}
               placeholder="Напишите сообщение…"
               disabled={isSending}
-              className="ym-hide-content flex-1 resize-none rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none disabled:bg-slate-100"
+              className="ym-hide-content flex-1 resize-none rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-700 disabled:bg-slate-100"
             />
             <button
               type="submit"

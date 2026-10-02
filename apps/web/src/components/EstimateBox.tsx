@@ -190,7 +190,7 @@ export function EstimateBox({
                 max={LIMITS[mode].max}
                 value={qty}
                 onChange={(e) => setQty(Number(e.target.value))}
-                className="w-full bg-transparent text-center font-mono text-3xl font-bold tabular-nums outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"
+                className="w-full rounded-lg bg-transparent text-center font-mono text-3xl font-bold tabular-nums outline-none [appearance:textfield] focus-visible:ring-2 focus-visible:ring-amber-700 focus-visible:ring-offset-2 [&::-webkit-inner-spin-button]:appearance-none"
               />
               <span className="eyebrow text-[0.6rem] text-slate-500">
                 {mode === 'hours' ? 'часов работы' : `${unitLabel(mode, qty)} по 8 ч`}
@@ -257,7 +257,7 @@ export function EstimateBox({
             autoComplete="tel"
             inputMode="tel"
             aria-label="Телефон"
-            className="w-full rounded-xl border border-slate-300 bg-white px-3.5 py-3 text-sm outline-none transition placeholder:text-slate-400 focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20"
+            className="w-full rounded-xl border border-slate-300 bg-white px-3.5 py-3 text-sm outline-none transition placeholder:text-slate-400 focus:border-amber-700 focus:ring-2 focus:ring-amber-700"
           />
           <input
             tabIndex={-1}
