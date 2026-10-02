@@ -23,6 +23,8 @@ import { loadCompanyStats } from '@/lib/companyStats';
 import { EMPTY_STATS, reliability } from '@/lib/reliability';
 import { providerPath } from '@/lib/providerSeo';
 import { pluralizeRu } from '@/lib/pluralize';
+import { EraseOrderButton, RevealPhoneButton } from '@/components/ChatOrderContact';
+import { maskPhone } from '@/lib/chatOrders';
 
 export const dynamic = 'force-dynamic';
 
@@ -157,7 +159,20 @@ export default async function OrderDetailPage({ params }: { params: { id: string
                 <p className="mt-1 whitespace-pre-line text-slate-600">«{order.rawText}»</p>
               )}
             </div>
+          ) : viewerIsProvider && order.contactPhone ? (
+            <div className="mt-2">
+              <RevealPhoneButton orderId={order.id} maskedPhone={maskPhone(order.contactPhone)} />
+            </div>
           ) : null}
+          <p className="mt-2 text-xs text-slate-500">
+            Найдена в открытом чате, куда бот добавлен администраторами чата. Автор может попросить
+            удалить заявку.
+          </p>
+          {isAdmin && (
+            <div className="mt-2">
+              <EraseOrderButton orderId={order.id} />
+            </div>
+          )}
         </Card>
       )}
 

@@ -5,10 +5,13 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Loader } from '@/components/ui';
 import { AuthProvider, useAuth } from '@/lib/auth';
+import { usePushRegistration } from '@/lib/push';
 import { colors } from '@/lib/theme';
 
 function RootNavigator() {
   const { token, isLoading } = useAuth();
+  // Push: registers this device after sign-in, forgets it on sign-out.
+  usePushRegistration(token);
 
   if (isLoading) {
     return <Loader />;

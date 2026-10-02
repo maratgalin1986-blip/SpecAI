@@ -6,6 +6,7 @@ import { LeadOutcome } from '@/components/LeadOutcome';
 import { LeadStatusSelect } from '@/components/LeadStatusSelect';
 import { LinkOwnerForm } from '@/components/LinkOwnerForm';
 import { CommentModerationButtons } from '@/components/Comments';
+import { EraseOrderButton } from '@/components/ChatOrderContact';
 import { ModerationButtons, CopyField, TelegramSetupButton } from '@/components/AdminIntegrations';
 import { headers } from 'next/headers';
 import { inboundApiToken, telegramWebhookSecret, whatsappWebhookToken } from '@/lib/integrations';
@@ -229,7 +230,10 @@ export default async function AdminPage() {
                 {order.contactPhone ? ` · ${order.contactPhone}` : ''}
               </p>
             </div>
-            <ModerationButtons orderId={order.id} />
+            <div className="flex flex-col items-start gap-2">
+              <ModerationButtons orderId={order.id} />
+              <EraseOrderButton orderId={order.id} />
+            </div>
           </div>
         ))}
       </Card>

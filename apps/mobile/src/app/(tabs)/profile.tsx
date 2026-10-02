@@ -3,6 +3,7 @@ import React, { useCallback, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { ContactActions } from '@/components/ContactActions';
 import { ModeSwitchCard, ProfileShortcuts } from '@/components/ProfileShortcuts';
+import { NotificationSettingsCard } from '@/components/NotificationSettingsCard';
 import { Badge, Button, Card } from '@/components/ui';
 import { API_URL, ApiError, sendVerificationEmail, type UserRole } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
@@ -113,6 +114,8 @@ export default function ProfileScreen() {
           )}
         </Card>
       ) : null}
+
+      <NotificationSettingsCard />
 
       <Card style={styles.card}>
         <Text style={styles.companyTitle}>{SITE.name}</Text>

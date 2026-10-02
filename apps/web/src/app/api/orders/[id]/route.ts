@@ -3,6 +3,7 @@ import { prisma } from '@specai/database';
 import { getRequestUser } from '@/lib/requestUser';
 import { isProvider, isHouseManager } from '@/lib/fleet';
 import { customerShortName } from '@/lib/customerPrivacy';
+import { maskPhone } from '@/lib/chatOrders';
 import { updateOrderSchema } from '@specai/shared';
 import { INVALID_JSON_MESSAGE, readJson, zodErrorMessage } from '@/lib/apiInput';
 
@@ -67,6 +68,12 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
   const contact = isHouseManager(currentUser)
     ? { contactName, contactPhone, rawText, sourceUrl }
     : {};
+  // Other providers see a chat order's phone masked and open it with
+  // POST /api/orders/[id]/phone (logged, limited per day).
+  const chatContact =
+    rest.source !== 'SITE' && isManager && !isHouseManager(currentUser) && contactPhone
+      ? { maskedPhone: maskPhone(contactPhone), canReveal: true }
+      : undefined;
   void externalId;
   void fingerprint;
   const bids = isOwner
@@ -77,6 +84,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       ...rest,
       ...(isOwner ? { customerId } : {}),
       ...contact,
+      ...(chatContact ? { chatContact } : {}),
       customer: isOwner ? rest.customer : { name: customerShortName(rest.customer.name) },
       bids,
       bidCount: rest.bids.length,

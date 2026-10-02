@@ -24,6 +24,7 @@ import { orderTimeline } from '@/lib/orderTimeline';
 import { ensureReferralCode, invitedCounts } from '@/lib/referralStore';
 import { referralLink } from '@/lib/referral';
 import { siteUrl } from '@/lib/siteUrl';
+import { NotificationSettings } from '@/components/NotificationSettings';
 
 export const metadata: Metadata = { title: 'Личный кабинет', robots: { index: false } };
 
@@ -360,6 +361,7 @@ export default async function DashboardPage({
           invited={invited}
         />
       )}
+      {session && <NotificationSettings />}
     </div>
   );
 }

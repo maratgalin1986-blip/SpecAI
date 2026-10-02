@@ -39,6 +39,7 @@ import { siteUrl } from '@/lib/siteUrl';
 import { providerPath } from '@/lib/providerSeo';
 import { customerShortName } from '@/lib/customerPrivacy';
 import { pluralizeRu } from '@/lib/pluralize';
+import { NotificationSettings } from '@/components/NotificationSettings';
 
 export const dynamic = 'force-dynamic';
 export const metadata: Metadata = {
@@ -516,6 +517,7 @@ export default async function ProviderPage({
           invited={invited}
         />
       )}
+      {session && <NotificationSettings />}
     </div>
   );
 }

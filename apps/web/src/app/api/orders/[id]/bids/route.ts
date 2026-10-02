@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { prisma } from '@specai/database';
 import { getRequestUser } from '@/lib/requestUser';
-import { sendEmail } from '@/lib/email';
 import { newBidReceived } from '@/lib/emailTemplates';
 import { notifyTelegram } from '@/lib/notify';
 import { formatMoney } from '@/lib/money';
@@ -11,6 +10,7 @@ import { INVALID_JSON_MESSAGE, readJson, zodErrorMessage } from '@/lib/apiInput'
 import { BLOCKING_BOOKING_STATUSES, unavailableEquipmentMessage } from '@/lib/bookingRules';
 import { findOverlappingBooking } from '@/lib/bookingConflicts';
 import { isProvider } from '@/lib/fleet';
+import { notifyUser } from '@/lib/notifications/notifyUser';
 
 const requestSchema = z.object({
   // Not a cuid: the owner's own fleet uses readable ids like "sp16-jcb-4cx".
@@ -123,7 +123,22 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       currency: bid.currency,
       message: bid.message,
     });
-    await sendEmail({ to: order.customer.email, ...template });
+    // The customer's chosen channels; the e-mail is the newBidReceived letter.
+    const company = await prisma.company.findUnique({
+      where: { id: equipment.companyId },
+      select: { name: true },
+    });
+    await notifyUser(
+      order.customerId,
+      {
+        type: 'bid.new',
+        orderId: order.id,
+        equipmentName: equipment.name,
+        price: formatMoney(bid.price, bid.currency),
+        companyName: company?.name,
+      },
+      { email: template },
+    );
     if (order.source !== 'SITE') {
       // Imported orders have no real customer account — tell the site owner instead.
       await notifyTelegram(
@@ -132,7 +147,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       );
     }
   } catch (error) {
-    console.error('[email] newBidReceived failed', error);
+    console.error('[notify] newBidReceived failed', error);
   }
 
   return NextResponse.json({ bid, message: 'Предложение отправлено' }, { status: 201 });
