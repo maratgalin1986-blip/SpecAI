@@ -12,6 +12,8 @@ import { inboundApiToken, telegramWebhookSecret, whatsappWebhookToken } from '@/
 import { isAdminConfigured, isAdminRequest } from '@/lib/admin';
 import { SITE } from '@/lib/site';
 import { formLabel, splitSource } from '@/lib/marketing';
+import { AdminVerifyToggle } from '@/components/AdminVerifyToggle';
+import { providerPath } from '@/lib/providerSeo';
 
 export const dynamic = 'force-dynamic';
 export const metadata: Metadata = { title: 'Заявки на звонок', robots: { index: false } };
@@ -86,6 +88,22 @@ export default async function AdminPage() {
     },
     orderBy: { createdAt: 'asc' },
     take: 100,
+  });
+  // «Исполнители»: provider companies with the «Проверен» switch, unchecked first.
+  const providers = await prisma.company.findMany({
+    where: { isProvider: true },
+    select: {
+      id: true,
+      name: true,
+      taxId: true,
+      phone: true,
+      verified: true,
+      baseAddress: true,
+      createdAt: true,
+      _count: { select: { equipment: { where: { status: { not: 'RETIRED' } } } } },
+    },
+    orderBy: [{ verified: 'asc' }, { createdAt: 'desc' }],
+    take: 200,
   });
   const origin = siteOrigin();
   const tgSecretReady = Boolean(telegramWebhookSecret());
@@ -272,6 +290,48 @@ export default async function AdminPage() {
             <CommentModerationButtons commentId={comment.id} />
           </div>
         ))}
+      </Card>
+
+      <Card className="flex flex-col gap-3" id="providers">
+        <div>
+          <h2 className="font-semibold">
+            Исполнители · {providers.length} · проверено{' '}
+            {providers.filter((company) => company.verified).length}
+          </h2>
+          <p className="text-sm text-slate-600">
+            Отметка «Проверен» видна заказчикам в предложениях и на странице исполнителя. Ставьте её
+            после звонка и проверки ИНН и документов на технику.
+          </p>
+        </div>
+        {providers.length === 0 ? (
+          <p className="text-sm text-slate-500">Исполнителей пока нет.</p>
+        ) : (
+          <ul className="flex flex-col divide-y divide-slate-100">
+            {providers.map((company) => (
+              <li
+                key={company.id}
+                className="flex flex-col gap-2 py-2 text-sm sm:flex-row sm:items-center sm:justify-between"
+              >
+                <div className="min-w-0">
+                  <a
+                    href={providerPath(company.id)}
+                    className="break-words font-medium hover:text-amber-700"
+                  >
+                    {company.name}
+                  </a>
+                  <p className="text-xs text-slate-500">
+                    Техники: {company._count.equipment}
+                    {company.taxId ? ` · ИНН ${company.taxId}` : ''}
+                    {company.phone ? ` · ${company.phone}` : ''}
+                    {company.baseAddress ? ` · ${company.baseAddress}` : ''} · с{' '}
+                    {company.createdAt.toLocaleDateString('ru-RU')}
+                  </p>
+                </div>
+                <AdminVerifyToggle companyId={company.id} initial={company.verified} />
+              </li>
+            ))}
+          </ul>
+        )}
       </Card>
 
       <Card className="flex flex-col gap-4">
