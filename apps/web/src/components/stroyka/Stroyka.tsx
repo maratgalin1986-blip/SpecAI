@@ -46,12 +46,13 @@ import {
   atMskTime,
   conditionsLine,
   dayPhase,
-  liftingStop,
   nearestPoint,
+  overrideLiftStop,
   parseOverrides,
   PHASE_LABEL,
   sunPosition,
   weatherScene,
+  type LiftStop,
   type SceneOverrides,
   type WeatherPoint,
 } from '@/lib/stroykaSky';
@@ -60,7 +61,7 @@ import { isOnShift } from '@/lib/site';
 import { leadAcceptedText } from '@/lib/dispatcher';
 import { submitLead } from '@/lib/submitLead';
 import type { Quick } from '@/lib/stroyka/brain';
-import { smetaHref } from '@/lib/stroyka/brain';
+import { smetaHref } from '@/lib/stroyka/smetaLink';
 import { SoundToggle } from '@/components/SoundToggle';
 import type { Mode, SharedInput, Telemetry, View } from './engine';
 import type { StroykaEngine } from './StroykaWorld';
@@ -197,7 +198,12 @@ export function Stroyka() {
   }, [engine]);
 
   const weather = useMemo(() => weatherScene(point), [point]);
-  const lift = useMemo(() => liftingStop(point), [point]);
+  const [serverLift, setServerLift] = useState<LiftStop | null>(null);
+  const lift = useMemo<LiftStop>(
+    () =>
+      overrides.weather ? overrideLiftStop(point) : (serverLift ?? { stop: false, reason: null }),
+    [overrides.weather, point, serverLift],
+  );
   const hour = (now.getUTCHours() + 3) % 24;
   const sun = useMemo(() => sunPosition(now), [now]);
 
@@ -258,9 +264,13 @@ export function Stroyka() {
         const cached = JSON.parse(sessionStorage.getItem(WEATHER_KEY) ?? 'null') as {
           at: number;
           point: WeatherPoint | null;
+          lift?: LiftStop | null;
         } | null;
         if (cached && Date.now() - cached.at < 30 * 60_000) {
-          if (!cancelled) setPoint(cached.point);
+          if (!cancelled) {
+            setPoint(cached.point);
+            setServerLift(cached.lift ?? null);
+          }
           return;
         }
       } catch {
@@ -271,12 +281,19 @@ export function Stroyka() {
         if (!response.ok) throw new Error(String(response.status));
         const json = (await response.json()) as {
           now?: WeatherPoint | null;
+          nowLift?: LiftStop | null;
           weather?: { points?: (WeatherPoint & { time: string })[] } | null;
         };
         const p = json.now ?? nearestPoint(json.weather?.points ?? [], Date.now());
-        if (!cancelled) setPoint(p);
+        if (!cancelled) {
+          setPoint(p);
+          setServerLift(json.nowLift ?? null);
+        }
         try {
-          sessionStorage.setItem(WEATHER_KEY, JSON.stringify({ at: Date.now(), point: p }));
+          sessionStorage.setItem(
+            WEATHER_KEY,
+            JSON.stringify({ at: Date.now(), point: p, lift: json.nowLift ?? null }),
+          );
         } catch {
           // ignore
         }
@@ -332,8 +349,8 @@ export function Stroyka() {
 
   // ------------------------------------------------------------ engine sync
   useEffect(() => {
-    engine?.setEnvironment(now, point);
-  }, [engine, now, point]);
+    engine?.setEnvironment(now, point, lift);
+  }, [engine, now, point, lift]);
   useEffect(() => {
     if (engine && progressReady) engine.setProgress(progress, timelapse);
   }, [engine, progress, progressReady, timelapse]);

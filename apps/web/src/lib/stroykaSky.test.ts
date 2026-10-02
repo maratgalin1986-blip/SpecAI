@@ -7,6 +7,7 @@ import {
   liftingStop,
   moonPhase,
   nearestPoint,
+  overrideLiftStop,
   parseOverrides,
   skyPalette,
   sunPosition,
@@ -101,6 +102,13 @@ describe('weather → scene', () => {
     expect(dialogueNode('montazh', liftingStop(WEATHER_PRESETS.clear))?.text).not.toContain(
       'Ветер',
     );
+  });
+
+  it('dev overrides agree with assessWork on wind and thunder', () => {
+    for (const preset of ['clear', 'wind', 'thunder', 'rain', 'snow'] as const)
+      expect(overrideLiftStop(WEATHER_PRESETS[preset])).toEqual(
+        liftingStop(WEATHER_PRESETS[preset]),
+      );
   });
 
   it('picks the forecast hour nearest to now', () => {

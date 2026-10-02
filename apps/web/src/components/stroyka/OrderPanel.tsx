@@ -7,7 +7,7 @@ import { MACHINE_WORKS } from '@/lib/machineWorks';
 import { SITE } from '@/lib/site';
 import { hourlyRate, orderHref, PRICES, rub, SHIFT_HOURS } from '@/lib/stroyka';
 import { orderSummary, type OrderContext } from '@/lib/stroyka/context';
-import { smetaHref } from '@/lib/stroyka/brain';
+import { smetaHref } from '@/lib/stroyka/smetaLink';
 
 const MACHINES = Object.keys(MACHINE_WORKS) as MachineType[];
 

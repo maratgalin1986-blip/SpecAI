@@ -17,12 +17,12 @@ import {
   type ZoneId,
 } from '@/lib/stroyka';
 import {
-  liftingStop,
   moonPhase,
   moonPosition,
   skyPalette,
   sunPosition,
   weatherScene,
+  type LiftStop,
   type WeatherPoint,
   type WeatherScene,
 } from '@/lib/stroykaSky';
@@ -238,7 +238,7 @@ export class StroykaEngine {
     fog_: 0,
   };
   private weather: WeatherScene = weatherScene(null);
-  private lift = liftingStop(null);
+  private lift: LiftStop = { stop: false, reason: null };
   private hour = 12;
   private ground: 'dry' | 'wet' | 'snow' | null = null;
   private flashUntil = 0;
@@ -327,7 +327,7 @@ export class StroykaEngine {
     this.lookTarget.set(3, 1.6, 50);
     // Opening shot: an aerial fly-over of the district, landing at the gate.
     this.introPose(0);
-    this.setEnvironment(new Date(), null, true);
+    this.setEnvironment(new Date(), null, undefined, true);
     this.opts.onProgress(0.9);
     await nextFrame();
 
@@ -762,7 +762,12 @@ export class StroykaEngine {
 
   /** Real (or overridden) time and the forecast point. */
   private externalEnv = false;
-  setEnvironment(date: Date, point: WeatherPoint | null, immediate = false) {
+  setEnvironment(
+    date: Date,
+    point: WeatherPoint | null,
+    lift: LiftStop = { stop: false, reason: null },
+    immediate = false,
+  ) {
     // The first real setting (visitor's time, overrides) applies at once; later ones blend.
     if (!immediate && !this.externalEnv) {
       this.externalEnv = true;
@@ -772,7 +777,7 @@ export class StroykaEngine {
     const moon = moonPosition(date);
     const palette = skyPalette(sun.elevation);
     this.weather = weatherScene(point);
-    this.lift = liftingStop(point);
+    this.lift = lift;
     this.hour = (date.getUTCHours() + 3) % 24;
     const w = this.weather;
     const grey = new THREE.Color(0x8d939b);

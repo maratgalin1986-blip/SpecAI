@@ -244,6 +244,18 @@ export function liftingStop(point: WeatherPoint | null | undefined): LiftStop {
   return { stop: true, reason: 'other' };
 }
 
+/**
+ * Dev overrides only (`?weather=wind`): the two lifting rules that matter for
+ * the demo, without loading the forecast rules into the page. The live scene
+ * gets the verdict from /api/weather (`nowLift`, computed with assessWork).
+ */
+export function overrideLiftStop(point: WeatherPoint | null | undefined): LiftStop {
+  if (!point) return { stop: false, reason: null };
+  if (point.symbol.includes('thunder')) return { stop: true, reason: 'thunder' };
+  if (point.wind >= 10) return { stop: true, reason: 'wind' };
+  return { stop: false, reason: null };
+}
+
 /** The forecast point closest to `now`. */
 export function nearestPoint<T extends { time: string }>(points: T[], now: number): T | null {
   let best: T | null = null;
