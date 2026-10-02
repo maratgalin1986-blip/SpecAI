@@ -90,7 +90,7 @@ export default function OrdersScreen() {
             <View style={styles.header}>
               <ErrorBanner message={error} onRetry={() => void load()} />
             </View>
-          ) : undefined
+          ) : null
         }
         ListEmptyComponent={
           !error ? (
@@ -98,7 +98,7 @@ export default function OrdersScreen() {
               title="Заявок пока нет"
               description="Опишите, какая техника нужна и на какие даты — поставщики предложат варианты и цену."
             />
-          ) : undefined
+          ) : null
         }
       />
       <Link href="/orders/new" asChild>

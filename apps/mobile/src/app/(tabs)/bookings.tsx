@@ -228,7 +228,7 @@ export default function BookingsScreen() {
           <View style={styles.header}>
             <ErrorBanner message={error} onRetry={() => void load()} />
           </View>
-        ) : undefined
+        ) : null
       }
       ListEmptyComponent={
         !error ? (
@@ -236,7 +236,7 @@ export default function BookingsScreen() {
             title="Бронирований пока нет"
             description="Выберите технику в каталоге и нажмите «Забронировать»."
           />
-        ) : undefined
+        ) : null
       }
     />
   );

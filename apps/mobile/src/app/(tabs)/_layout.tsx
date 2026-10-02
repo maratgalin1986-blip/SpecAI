@@ -10,7 +10,7 @@ type IconName = React.ComponentProps<typeof Ionicons>['name'];
 
 function tabIcon(name: IconName) {
   return ({ color, size }: { color: ColorValue; size: number }) => (
-    <Ionicons name={name} color={typeof color === 'string' ? color : undefined} size={size} />
+    <Ionicons name={name} color={color} size={size} />
   );
 }
 

@@ -57,7 +57,7 @@ small so merges stay conflict-free.
 - The mobile app is on Expo: project `@maratgalin1986s-team/specai`, EAS Update
   branch `preview` for Expo Go; steps in `apps/mobile/README.md`.
 - pnpm 10 workspaces, Node 20 in CI. Packages: `apps/web` (Next.js 14),
-  `apps/mobile` (Expo SDK 58), `packages/{database,shared,ui,ai-service}`.
+  `apps/mobile` (Expo SDK 57), `packages/{database,shared,ui,ai-service}`.
 - Checks: `pnpm lint`, `pnpm typecheck`, `pnpm format:check`, `pnpm test`
   (vitest 4 — vitest 5 needs Node 22 and breaks CI), and for the app
   `cd apps/mobile && npx expo export --platform android`.

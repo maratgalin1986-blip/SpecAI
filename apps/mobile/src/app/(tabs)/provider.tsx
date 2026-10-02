@@ -288,7 +288,7 @@ export default function ProviderScreen() {
               title="Техники пока нет"
               description="Нажмите «Добавить технику», чтобы разместить первое объявление."
             />
-          ) : undefined
+          ) : null
         }
       />
     );
@@ -315,7 +315,7 @@ export default function ProviderScreen() {
             title="Бронирований пока нет"
             description="Здесь появятся заявки клиентов на вашу технику."
           />
-        ) : undefined
+        ) : null
       }
     />
   );

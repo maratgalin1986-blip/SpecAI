@@ -157,14 +157,14 @@ export default function ChatScreen() {
               title="Чем помочь?"
               description="Спросите, какая техника подойдёт под задачу, или уточните статус ваших бронирований."
             />
-          ) : undefined
+          ) : null
         }
         ListHeaderComponent={
           messages.length > 0 ? (
             <Pressable onPress={startNewConversation} style={styles.newChat}>
               <Text style={styles.newChatText}>Начать новый диалог</Text>
             </Pressable>
-          ) : undefined
+          ) : null
         }
         keyboardShouldPersistTaps="handled"
       />

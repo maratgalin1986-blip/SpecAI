@@ -170,14 +170,14 @@ export default function CatalogScreen() {
                 title="Техника не найдена"
                 description="Попробуйте изменить поисковый запрос."
               />
-            ) : undefined
+            ) : null
           }
           ListFooterComponent={
             loadingMore ? (
               <ActivityIndicator style={styles.footerLoader} color={colors.primary} />
             ) : error && items.length > 0 ? (
               <ErrorBanner message={error} onRetry={() => void load(page + 1, 'more')} />
-            ) : undefined
+            ) : null
           }
           keyboardShouldPersistTaps="handled"
         />
