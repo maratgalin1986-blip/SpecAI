@@ -31,6 +31,7 @@ describe('POST /api/leads', () => {
     expect(response.status).toBe(201);
     expect(create).toHaveBeenCalledOnce();
     expect(notifyTelegram.mock.calls[0]?.[0]).toContain('+79270000000');
+    expect(notifyTelegram.mock.calls[0]?.[0]).toContain('Имя: Иван');
   });
 
   it('still delivers the lead to Telegram when the database is down', async () => {
@@ -38,8 +39,11 @@ describe('POST /api/leads', () => {
     notifyTelegram.mockResolvedValue(true);
     const response = await POST(request());
     expect(response.status).toBe(202);
-    expect(notifyTelegram.mock.calls[0]?.[0]).toContain('БАЗА НЕДОСТУПНА');
-    expect(notifyTelegram.mock.calls[0]?.[0]).toContain('+79270000000');
+    const text = notifyTelegram.mock.calls[0]?.[0] as string;
+    expect(text).toContain('база недоступна');
+    expect(text).toContain('+79270000000');
+    // Localisation: without the database the name stays off the messenger.
+    expect(text).not.toContain('Иван');
   });
 
   it('tells the client to call when neither the database nor Telegram works', async () => {
