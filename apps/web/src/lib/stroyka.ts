@@ -4,8 +4,8 @@
 
 import { MACHINE_LABELS, type MachineType } from '@/lib/machinePhotos';
 import { SITE } from '@/lib/site';
-import { HAMMER_RATE, MACHINE_WORKS } from '@/lib/machineWorks';
-import { CRANE_HEAVY_RATE } from '@/lib/smeta';
+import { MACHINE_WORKS } from '@/lib/machineWorks';
+import { CRANE_HEAVY_RATE, HAMMER_RATE, RATES, SHIFT_HOURS } from '@/lib/prices';
 import type { LiftStop } from '@/lib/stroykaSky';
 import type { ContextSet } from '@/lib/stroyka/context';
 
@@ -31,19 +31,19 @@ export const SPEAKERS: Record<SpeakerId, { name: string; role: string }> = {
 };
 
 /**
- * The owner's hourly rates with an operator, ₽/h, read from the site's price
- * sources (MACHINE_WORKS, HAMMER_RATE, CRANE_HEAVY_RATE). A shift is 8 hours.
+ * The owner's hourly rates with an operator, ₽/h, from lib/prices.ts.
+ * A shift is SHIFT_HOURS (8) hours.
  */
 export const PRICES = {
-  truck: MACHINE_WORKS.truck!.rate,
-  agp: MACHINE_WORKS.agp!.rate,
-  tractor: MACHINE_WORKS.tractor!.rate,
-  crane: MACHINE_WORKS.crane!.rate,
+  truck: RATES.truck,
+  agp: RATES.agp,
+  tractor: RATES.tractor,
+  crane: RATES.crane,
   crane32: CRANE_HEAVY_RATE,
   hammer: HAMMER_RATE,
-  other: MACHINE_WORKS.backhoe!.rate,
+  other: RATES.backhoe,
 };
-export const SHIFT_HOURS = 8;
+export { SHIFT_HOURS };
 
 /** Hourly rate of a machine type (the 25 t crane for `crane`). */
 export function hourlyRate(type: MachineType): number {

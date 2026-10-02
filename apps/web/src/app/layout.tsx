@@ -21,6 +21,7 @@ import { SoundDirector } from '@/components/SoundDirector';
 import { SITE } from '@/lib/site';
 import { siteUrl } from '@/lib/siteUrl';
 import './globals.css';
+import { fromPrice, MIN_RATE } from '@/lib/prices';
 
 // Cyrillic-capable fonts: Manrope for text and headings, a mono for labels and figures.
 const sans = Manrope({ subsets: ['latin', 'cyrillic'], variable: '--font-sans', display: 'swap' });
@@ -91,7 +92,7 @@ const ORGANIZATION_JSON_LD = {
   areaServed: SITE.region,
   // Shown by Yandex and Google in the business card of the search results.
   image: `${siteUrl()}/opengraph-image.png`,
-  priceRange: 'от 3 300 ₽/ч',
+  priceRange: fromPrice(MIN_RATE),
   openingHoursSpecification: {
     '@type': 'OpeningHoursSpecification',
     dayOfWeek: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'],

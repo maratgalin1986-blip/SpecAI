@@ -1,5 +1,9 @@
+import { CRANE_HEAVY_RATE, fromPrice, HAMMER_RATE, SHIFT_HOURS } from '@/lib/prices';
+
 // SEO landing pages "аренда <техники> в Набережных Челнах" (/arenda/<slug>).
-// Each maps to a catalog category; prices come from the live catalog.
+// Each maps to a catalog category; prices in the FAQ come from lib/prices.ts.
+
+const cap = (text: string) => `${text[0]!.toUpperCase()}${text.slice(1)}`;
 
 export interface Landing {
   slug: string;
@@ -32,7 +36,7 @@ export const LANDINGS: Landing[] = [
     faq: [
       {
         q: 'Сколько стоит час работы экскаватора-погрузчика?',
-        a: 'От 4 000 ₽/ч с машинистом, с гидромолотом — от 4 500 ₽/ч. Смена — 8 часов. Точную цену с подачей назовёт менеджер.',
+        a: `${cap(fromPrice('backhoe'))} с машинистом, с гидромолотом — ${fromPrice(HAMMER_RATE)}. Смена — ${SHIFT_HOURS} часов. Точную цену с подачей назовёт диспетчер.`,
       },
       {
         q: 'Какие модели есть в парке?',
@@ -61,7 +65,7 @@ export const LANDINGS: Landing[] = [
     faq: [
       {
         q: 'Сколько стоит аренда автокрана?',
-        a: 'От 4 500 ₽/ч, автокран 32 т — от 5 500 ₽/ч с машинистом. Смена — 8 часов.',
+        a: `${cap(fromPrice('crane'))}, автокран 32 т — ${fromPrice(CRANE_HEAVY_RATE)} с машинистом. Смена — ${SHIFT_HOURS} часов.`,
       },
       {
         q: 'Нужен ли стропальщик?',
@@ -89,7 +93,7 @@ export const LANDINGS: Landing[] = [
     faq: [
       {
         q: 'Сколько стоит час работы фронтального погрузчика?',
-        a: 'От 4 000 ₽/ч с машинистом. Смена — 8 часов.',
+        a: `${cap(fromPrice('loader'))} с машинистом. Смена — ${SHIFT_HOURS} часов.`,
       },
       {
         q: 'Можно заказать на уборку снега?',
@@ -107,7 +111,7 @@ export const LANDINGS: Landing[] = [
     faq: [
       {
         q: 'Сколько стоит аренда трактора?',
-        a: 'От 3 500 ₽/ч с оператором. Смена — 8 часов.',
+        a: `${cap(fromPrice('tractor'))} с оператором. Смена — ${SHIFT_HOURS} часов.`,
       },
     ],
   },

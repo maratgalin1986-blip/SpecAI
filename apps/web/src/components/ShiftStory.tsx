@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { MachinePhoto } from '@/components/MachinePhoto';
+import { RATES } from '@/lib/prices';
 
 // A cinematic, scroll-scrubbed "one shift" story: the section is several
 // screens tall, the scene stays pinned, and scrolling plays it like a video.
@@ -12,7 +13,7 @@ import { MachinePhoto } from '@/components/MachinePhoto';
 // of the screen that widens to full screen as the section scrolls up, so the
 // visitor dives into the scene before the story starts.
 
-const RATE = 4000; // ₽ per machine-hour, backhoe loader with an operator
+const RATE = RATES.backhoe; // ₽ per machine-hour, backhoe loader with an operator (lib/prices.ts)
 const SHIFT_HOURS = 8;
 
 const CHAPTERS = [

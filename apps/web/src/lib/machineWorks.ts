@@ -1,7 +1,8 @@
 import { MACHINE_LABELS, type MachineType } from '@/lib/machinePhotos';
+import { HAMMER_RATE, RATES } from '@/lib/prices';
 
 // What each machine is ordered for: the «Наряд» buttons open the wizard with
-// these jobs instead of the general list, with the owner's hourly rate.
+// these jobs instead of the general list, with the owner's hourly rate (lib/prices.ts).
 
 export interface MachineWorks {
   /** «краном-манипулятором» — for «Что нужно сделать …?» */
@@ -13,8 +14,8 @@ export interface MachineWorks {
   works: string[];
 }
 
-/** The owner's price for work with the hydraulic hammer, ₽/h. */
-export const HAMMER_RATE = 4500;
+// The owner's price for work with the hydraulic hammer, ₽/h (lib/prices.ts).
+export { HAMMER_RATE };
 
 // Jobs that need the hammer: breaking concrete, demolishing foundations, frozen ground.
 const HAMMER_JOB = /гидромолот|мёрзл|демонтаж фундамент/i;
@@ -27,7 +28,7 @@ export function workRate(works: MachineWorks, job: string): number {
 export const MACHINE_WORKS: Partial<Record<MachineType, MachineWorks>> = {
   backhoe: {
     instrumental: 'экскаватором-погрузчиком',
-    rate: 4000,
+    rate: RATES.backhoe,
     hammerRate: HAMMER_RATE,
     landing: 'ekskavator-pogruzchik',
     works: [
@@ -41,7 +42,7 @@ export const MACHINE_WORKS: Partial<Record<MachineType, MachineWorks>> = {
   },
   excavator: {
     instrumental: 'гусеничным экскаватором',
-    rate: 4000,
+    rate: RATES.excavator,
     landing: 'gusenichnyj-ekskavator',
     works: [
       'Котлован под фундамент',
@@ -53,7 +54,7 @@ export const MACHINE_WORKS: Partial<Record<MachineType, MachineWorks>> = {
   },
   'wheeled-excavator': {
     instrumental: 'колёсным экскаватором',
-    rate: 4000,
+    rate: RATES['wheeled-excavator'],
     hammerRate: HAMMER_RATE,
     landing: 'kolyosnyj-ekskavator-gidromolot',
     works: [
@@ -66,7 +67,7 @@ export const MACHINE_WORKS: Partial<Record<MachineType, MachineWorks>> = {
   },
   kmu: {
     instrumental: 'краном-манипулятором (КМУ 7 т)',
-    rate: 4000,
+    rate: RATES.kmu,
     landing: 'manipulyator-kmu',
     works: [
       'Перевезти груз до 7 т',
@@ -78,7 +79,7 @@ export const MACHINE_WORKS: Partial<Record<MachineType, MachineWorks>> = {
   },
   agp: {
     instrumental: 'автовышкой',
-    rate: 3500,
+    rate: RATES.agp,
     landing: 'avtovyshka-agp',
     works: [
       'Фасадные работы',
@@ -90,7 +91,7 @@ export const MACHINE_WORKS: Partial<Record<MachineType, MachineWorks>> = {
   },
   crane: {
     instrumental: 'автокраном',
-    rate: 4500,
+    rate: RATES.crane,
     landing: 'avtokran',
     works: [
       'Монтаж конструкций и плит',
@@ -101,7 +102,7 @@ export const MACHINE_WORKS: Partial<Record<MachineType, MachineWorks>> = {
   },
   loader: {
     instrumental: 'фронтальным погрузчиком',
-    rate: 4000,
+    rate: RATES.loader,
     landing: 'frontalnyj-pogruzchik',
     works: [
       'Погрузка песка, щебня, грунта',
@@ -112,19 +113,19 @@ export const MACHINE_WORKS: Partial<Record<MachineType, MachineWorks>> = {
   },
   roller: {
     instrumental: 'виброкатком',
-    rate: 4000,
+    rate: RATES.roller,
     landing: 'vibrokatok',
     works: ['Уплотнение грунта', 'Уплотнение щебня и песка', 'Укатка асфальта'],
   },
   truck: {
     instrumental: 'самосвалом',
-    rate: 3300,
+    rate: RATES.truck,
     landing: 'samosval',
     works: ['Вывезти грунт', 'Вывезти строительный мусор', 'Привезти песок, щебень или ПГС'],
   },
   dozer: {
     instrumental: 'бульдозером',
-    rate: 4000,
+    rate: RATES.dozer,
     landing: 'buldozer',
     works: [
       'Спланировать участок',
@@ -135,7 +136,7 @@ export const MACHINE_WORKS: Partial<Record<MachineType, MachineWorks>> = {
   },
   tractor: {
     instrumental: 'трактором',
-    rate: 3500,
+    rate: RATES.tractor,
     landing: 'traktor',
     works: [
       'Уборка снега',

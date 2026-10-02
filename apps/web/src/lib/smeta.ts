@@ -1,5 +1,6 @@
 import type { MachineType } from '@/lib/machinePhotos';
 import { HAMMER_RATE, MACHINE_WORKS } from '@/lib/machineWorks';
+import { CRANE_HEAVY_RATE, DEFAULT_RATE, rub } from '@/lib/prices';
 
 // «Рассчитать примерную смету»: the visitor picks a job and its size, and we
 // work out which СпецПласт16 machines it needs and for how long, from typical
@@ -15,8 +16,8 @@ const TRUCK_M3 = 10;
 const TRUCK_TRIP_H = 1.2;
 /** Dug soil takes about a quarter more room in the truck. */
 const SWELL = 1.25;
-/** Crane rate for heavy lifts (the 32 t crane). */
-export const CRANE_HEAVY_RATE = 5500;
+/** Crane rate for heavy lifts (the 32 t crane), from lib/prices.ts. */
+export { CRANE_HEAVY_RATE };
 
 export type FieldId =
   | 'length'
@@ -193,7 +194,7 @@ const NAMES: Partial<Record<MachineType, string>> = {
 };
 
 export function rateOf(machine: MachineType): number {
-  return MACHINE_WORKS[machine]?.rate ?? 4000;
+  return MACHINE_WORKS[machine]?.rate ?? DEFAULT_RATE;
 }
 
 /** Whole hours, at least the minimum booking. */
@@ -310,7 +311,7 @@ export function buildSmeta(jobId: string, input: SmetaInput = {}): Smeta | null 
       );
       notes.push(
         heavy
-          ? 'Тяжёлый груз — в расчёте автокран 32 т (5 500 ₽/ч).'
+          ? `Тяжёлый груз — в расчёте автокран 32 т (${rub(CRANE_HEAVY_RATE)} ₽/ч).`
           : 'Около 12 минут на подъём и час на установку крана.',
       );
       notes.push('Грузоподъёмность на нужном вылете стрелы уточнит диспетчер.');
