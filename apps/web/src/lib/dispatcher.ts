@@ -5,7 +5,37 @@ import { SHIFT, SITE } from '@/lib/site';
 // questions with facts the site already states, and turns a phone number
 // typed into the chat into a callback request. Pure functions, no I/O.
 
-/** A Russian phone number in the text, normalised to +7XXXXXXXXXX, or null. */
+// A national Russian number without the trunk prefix: mobile (9XX) or a
+// landline with a geographic code (3XX, 4XX, 8XX). 80X codes are toll-free
+// and paid service lines, never a visitor's own number.
+const NATIONAL = /^(?:9\d{9}|[34]\d{9}|8[1-9]\d{8})$/;
+// Digits with spaces, dashes and brackets; dots are left out so dates such as
+// 12.10.2026 never match.
+const LANDLINE_RUN = /(?<![\d+])(?:\+\s*)?\(?\d[\d\s()-]{8,16}\d(?!\d)/g;
+
+function nationalNumber(digits: string): string | null {
+  if (digits.length === 10 && NATIONAL.test(digits)) return digits;
+  if (digits.length === 11 && /^[78]/.test(digits) && NATIONAL.test(digits.slice(1))) {
+    return digits.slice(1);
+  }
+  return null;
+}
+
+// Plain numbers written with spaces: sums in thousands (4 500 000 000) and
+// lists of round sizes (400 300 4500) are not phones.
+function looksLikeAmounts(run: string): boolean {
+  if (/[+()-]/.test(run)) return false;
+  const groups = run.trim().split(/\s+/);
+  if (groups.length < 2) return false;
+  if (groups.slice(1).every((g) => g.length === 3)) return true;
+  return groups.every((g) => g.length >= 3 && g.endsWith('0'));
+}
+
+/**
+ * A Russian phone number in the text, normalised to +7XXXXXXXXXX, or null.
+ * Mobiles in any common spelling, and landlines such as «8 (8552) 12-34-56»
+ * or «+7 843 123 45 67».
+ */
 export function findPhone(text: string): string | null {
   for (const match of text.matchAll(
     /(?:\+?[78])?[\s(-]*\d{3}[\s)-]*\d{3}[\s-]*\d{2}[\s-]*\d{2}/g,
@@ -13,6 +43,11 @@ export function findPhone(text: string): string | null {
     const digits = match[0].replace(/\D/g, '');
     if (digits.length === 10 && digits.startsWith('9')) return `+7${digits}`;
     if (digits.length === 11 && /^[78]9/.test(digits)) return `+7${digits.slice(1)}`;
+  }
+  for (const match of text.matchAll(LANDLINE_RUN)) {
+    if (looksLikeAmounts(match[0])) continue;
+    const national = nationalNumber(match[0].replace(/\D/g, ''));
+    if (national) return `+7${national}`;
   }
   return null;
 }
