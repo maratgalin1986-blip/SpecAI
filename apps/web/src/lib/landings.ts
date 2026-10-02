@@ -1,3 +1,4 @@
+import type { MachineType } from '@/lib/machinePhotos';
 import { CRANE_HEAVY_RATE, fromPrice, HAMMER_RATE, SHIFT_HOURS } from '@/lib/prices';
 
 // SEO landing pages "аренда <техники> в Набережных Челнах" (/arenda/<slug>).
@@ -8,6 +9,8 @@ const cap = (text: string) => `${text[0]!.toUpperCase()}${text.slice(1)}`;
 export interface Landing {
   slug: string;
   categorySlug: string;
+  /** The machine whose price (lib/prices.ts) the landing shows as «от …». */
+  machine: MachineType;
   /** Genitive/accusative forms for headings: "аренда экскаватора-погрузчика". */
   title: string;
   short: string;
@@ -20,6 +23,7 @@ export const LANDINGS: Landing[] = [
   {
     slug: 'ekskavator-pogruzchik',
     categorySlug: 'backhoe-loaders',
+    machine: 'backhoe',
     title: 'экскаватора-погрузчика',
     short: 'Экскаваторы-погрузчики',
     intro:
@@ -51,6 +55,7 @@ export const LANDINGS: Landing[] = [
   {
     slug: 'avtokran',
     categorySlug: 'cranes',
+    machine: 'crane',
     title: 'автокрана',
     short: 'Автокраны',
     intro:
@@ -80,6 +85,7 @@ export const LANDINGS: Landing[] = [
   {
     slug: 'frontalnyj-pogruzchik',
     categorySlug: 'loaders',
+    machine: 'loader',
     title: 'фронтального погрузчика',
     short: 'Фронтальные погрузчики',
     intro:
@@ -104,6 +110,7 @@ export const LANDINGS: Landing[] = [
   {
     slug: 'traktor',
     categorySlug: 'tractors',
+    machine: 'tractor',
     title: 'трактора',
     short: 'Тракторы',
     intro: 'Трактор МТЗ «Беларус» 82.1 с оператором для вспомогательных и коммунальных работ.',
@@ -118,6 +125,7 @@ export const LANDINGS: Landing[] = [
   {
     slug: 'gusenichnyj-ekskavator',
     categorySlug: 'excavators',
+    machine: 'excavator',
     title: 'гусеничного экскаватора',
     short: 'Гусеничные экскаваторы',
     intro:
@@ -152,6 +160,7 @@ export const LANDINGS: Landing[] = [
   {
     slug: 'kolyosnyj-ekskavator-gidromolot',
     categorySlug: 'excavators',
+    machine: 'wheeled-excavator',
     title: 'колёсного экскаватора с гидромолотом',
     short: 'Колёсные экскаваторы с гидромолотом',
     intro:
@@ -185,6 +194,7 @@ export const LANDINGS: Landing[] = [
   {
     slug: 'manipulyator-kmu',
     categorySlug: 'crane-trucks',
+    machine: 'kmu',
     title: 'манипулятора КМУ 7 т',
     short: 'Манипуляторы КМУ 7 т',
     intro:
@@ -218,6 +228,7 @@ export const LANDINGS: Landing[] = [
   {
     slug: 'avtovyshka-agp',
     categorySlug: 'aerial-platforms',
+    machine: 'agp',
     title: 'автовышки АГП',
     short: 'Автовышки АГП',
     intro:
@@ -251,6 +262,7 @@ export const LANDINGS: Landing[] = [
   {
     slug: 'vibrokatok',
     categorySlug: 'rollers',
+    machine: 'roller',
     title: 'виброкатка',
     short: 'Виброкатки',
     intro:
@@ -284,6 +296,7 @@ export const LANDINGS: Landing[] = [
   {
     slug: 'samosval',
     categorySlug: 'dump-trucks',
+    machine: 'truck',
     title: 'самосвала',
     short: 'Самосвалы',
     intro:
@@ -317,6 +330,7 @@ export const LANDINGS: Landing[] = [
   {
     slug: 'buldozer',
     categorySlug: 'bulldozers',
+    machine: 'dozer',
     title: 'бульдозера',
     short: 'Бульдозеры',
     intro:

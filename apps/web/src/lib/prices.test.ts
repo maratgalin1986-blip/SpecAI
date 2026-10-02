@@ -61,6 +61,13 @@ describe('prices', () => {
     }
   });
 
+  it('gives every landing the price of its own machine', () => {
+    for (const landing of LANDINGS) {
+      expect(MACHINE_WORKS[landing.machine]?.landing, landing.slug).toBe(landing.slug);
+      expect(fromPrice(landing.machine)).toBe(`от ${rub(RATES[landing.machine])} ₽/ч`);
+    }
+  });
+
   it('feeds the machine works (wizard, estimate, /stroyka)', () => {
     for (const [type, works] of Object.entries(MACHINE_WORKS)) {
       expect(works!.rate, type).toBe(RATES[type as keyof typeof RATES]);

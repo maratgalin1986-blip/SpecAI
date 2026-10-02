@@ -6,12 +6,12 @@ import { CallbackForm } from '@/components/CallbackForm';
 import { Faq } from '@/components/Faq';
 import { TrustBadges } from '@/components/TrustBadges';
 import { LANDINGS, landingBySlug } from '@/lib/landings';
-import { formatMoney, formatRate } from '@/lib/money';
+import { formatRate } from '@/lib/money';
 import { SITE } from '@/lib/site';
 import { siteUrl } from '@/lib/siteUrl';
 import { CinemaBand } from '@/components/CinemaBand';
 import { CinemaLayer } from '@/components/CinemaHero';
-import type { MachineType } from '@/lib/machinePhotos';
+import { fromPrice, rateOf, rub } from '@/lib/prices';
 import { PUBLIC_FLEET } from '@/lib/fleet';
 import { MachineAmbience } from '@/components/MachineAmbience';
 
@@ -28,21 +28,6 @@ const LANDING_CLIPS: Record<string, string[]> = {
   vibrokatok: ['site-aerial', 'workers'],
   samosval: ['excavator-truck', 'site-aerial'],
   buldozer: ['site-aerial', 'excavator-truck'],
-};
-
-// Machine shown in the cinema bands of each landing (and put into «Наряд»).
-const LANDING_MACHINE: Record<string, MachineType> = {
-  'ekskavator-pogruzchik': 'backhoe',
-  avtokran: 'crane',
-  'frontalnyj-pogruzchik': 'loader',
-  traktor: 'tractor',
-  'gusenichnyj-ekskavator': 'excavator',
-  'kolyosnyj-ekskavator-gidromolot': 'wheeled-excavator',
-  'manipulyator-kmu': 'kmu',
-  'avtovyshka-agp': 'agp',
-  vibrokatok: 'roller',
-  samosval: 'truck',
-  buldozer: 'dozer',
 };
 
 export const revalidate = 300;
@@ -64,11 +49,6 @@ async function loadEquipment(categorySlug: string) {
   }
 }
 
-function minHourly(items: { hourlyRate: { toString(): string } | null }[]) {
-  const rates = items.map((i) => (i.hourlyRate ? Number(i.hourlyRate) : NaN)).filter((n) => n > 0);
-  return rates.length ? Math.min(...rates) : null;
-}
-
 export async function generateMetadata({
   params,
 }: {
@@ -76,8 +56,8 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const landing = landingBySlug(params.slug);
   if (!landing) return { title: 'Страница не найдена' };
-  const from = minHourly(await loadEquipment(landing.categorySlug));
-  const title = `Аренда ${landing.title} в Набережных Челнах${from ? ` — от ${formatMoney(from)}/ч` : ''}`;
+  // The price comes from lib/prices.ts, never from the database.
+  const title = `Аренда ${landing.title} в Набережных Челнах — ${fromPrice(landing.machine)}`;
   return {
     title,
     description: `${landing.intro} ${SITE.city} и ${SITE.region}. ${SITE.phone}`,
@@ -90,8 +70,9 @@ export default async function LandingPage({ params }: { params: { slug: string }
   const landing = landingBySlug(params.slug);
   if (!landing) notFound();
   const items = await loadEquipment(landing.categorySlug);
-  const from = minHourly(items);
-  const machine = LANDING_MACHINE[landing.slug] ?? 'backhoe';
+  const machine = landing.machine;
+  // «от …» in the title, header and structured data: lib/prices.ts only.
+  const from = rateOf(machine);
 
   const jsonLd = {
     '@context': 'https://schema.org',
@@ -100,20 +81,16 @@ export default async function LandingPage({ params }: { params: { slug: string }
     areaServed: [SITE.city, SITE.region],
     provider: { '@type': 'Organization', name: SITE.legalName || SITE.name, telephone: SITE.phone },
     url: `${siteUrl()}/arenda/${landing.slug}`,
-    ...(from
-      ? {
-          offers: {
-            '@type': 'Offer',
-            priceCurrency: 'RUB',
-            priceSpecification: {
-              '@type': 'UnitPriceSpecification',
-              price: from,
-              priceCurrency: 'RUB',
-              unitText: 'час',
-            },
-          },
-        }
-      : {}),
+    offers: {
+      '@type': 'Offer',
+      priceCurrency: 'RUB',
+      priceSpecification: {
+        '@type': 'UnitPriceSpecification',
+        price: from,
+        priceCurrency: 'RUB',
+        unitText: 'час',
+      },
+    },
   };
 
   return (
@@ -133,12 +110,10 @@ export default async function LandingPage({ params }: { params: { slug: string }
               Аренда {landing.title} в Набережных Челнах
             </h1>
             <p className="mt-4 text-slate-300">{landing.intro}</p>
-            {from && (
-              <p className="mt-5 text-3xl font-bold text-amber-400">
-                от {formatMoney(from)}
-                <span className="text-base font-normal text-slate-300">/ч с машинистом</span>
-              </p>
-            )}
+            <p className="mt-5 text-3xl font-bold text-amber-400" data-testid="landing-price">
+              от {rub(from)} ₽
+              <span className="text-base font-normal text-slate-300">/ч с машинистом</span>
+            </p>
             <div className="mt-6 flex flex-wrap gap-3">
               <a
                 href={SITE.phoneHref}
