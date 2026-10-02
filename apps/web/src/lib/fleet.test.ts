@@ -22,3 +22,19 @@ describe('aggregator roles', () => {
     expect(isHouseManager({ role: 'PROVIDER_ADMIN', companyId: 'other-co' })).toBe(false);
   });
 });
+
+describe('houseFirst', () => {
+  it('puts СпецПласт16 first and keeps the rest in order', async () => {
+    const { houseFirst, HOUSE_COMPANY_ID } = await import('./fleet');
+    const items = [
+      { id: 1, c: 'cabc' },
+      { id: 2, c: HOUSE_COMPANY_ID },
+      { id: 3, c: 'cxyz' },
+    ];
+    expect(houseFirst(items, (i) => i.c).map((i) => i.id)).toEqual([2, 1, 3]);
+  });
+  it('sorts the house id after cuids in descending order', async () => {
+    const { HOUSE_COMPANY_ID } = await import('./fleet');
+    expect([HOUSE_COMPANY_ID, 'ckz0abc', 'cm1xyz'].sort().reverse()[0]).toBe(HOUSE_COMPANY_ID);
+  });
+});

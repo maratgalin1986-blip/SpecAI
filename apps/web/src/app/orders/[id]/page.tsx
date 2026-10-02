@@ -10,7 +10,7 @@ import { AcceptBidButton } from '@/components/AcceptBidButton';
 import { formatMoney } from '@/lib/money';
 import { isAdminRequest } from '@/lib/admin';
 import { SiteConditions } from '@/components/SiteConditions';
-import { isProvider, isHouseManager } from '@/lib/fleet';
+import { houseFirst, isProvider, isHouseManager } from '@/lib/fleet';
 import { isSafeHttpUrl } from '@/lib/privacy';
 import { approvedComments } from '@/lib/commentAccess';
 import { CommentForm, CommentList } from '@/components/Comments';
@@ -50,9 +50,12 @@ export default async function OrderDetailPage({ params }: { params: { id: string
   if (!isOwner && !isAdmin && !isProvider(session?.user)) {
     notFound();
   }
-  const visibleBids = seesAllBids
-    ? order.bids
-    : order.bids.filter((bid) => bid.equipment.companyId === session?.user.companyId);
+  const visibleBids = houseFirst(
+    seesAllBids
+      ? order.bids
+      : order.bids.filter((bid) => bid.equipment.companyId === session?.user.companyId),
+    (bid) => bid.equipment.companyId,
+  );
 
   // A provider sees what other providers wrote about this customer (no name).
   const viewerIsProvider = !isOwner && isProvider(session?.user);

@@ -87,7 +87,7 @@ const ORGANIZATION_JSON_LD = {
   areaServed: SITE.region,
   // Shown by Yandex and Google in the business card of the search results.
   image: `${siteUrl()}/opengraph-image.png`,
-  priceRange: 'от 2 300 ₽/ч',
+  priceRange: 'от 3 300 ₽/ч',
   openingHoursSpecification: {
     '@type': 'OpeningHoursSpecification',
     dayOfWeek: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'],

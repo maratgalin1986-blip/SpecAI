@@ -16,7 +16,7 @@ const TRUCK_TRIP_H = 1.2;
 /** Dug soil takes about a quarter more room in the truck. */
 const SWELL = 1.25;
 /** Crane rate for heavy lifts (the 32 t crane). */
-export const CRANE_HEAVY_RATE = 4500;
+export const CRANE_HEAVY_RATE = 5500;
 
 export type FieldId =
   | 'length'
@@ -193,7 +193,7 @@ const NAMES: Partial<Record<MachineType, string>> = {
 };
 
 export function rateOf(machine: MachineType): number {
-  return MACHINE_WORKS[machine]?.rate ?? 3000;
+  return MACHINE_WORKS[machine]?.rate ?? 4000;
 }
 
 /** Whole hours, at least the minimum booking. */
@@ -310,7 +310,7 @@ export function buildSmeta(jobId: string, input: SmetaInput = {}): Smeta | null 
       );
       notes.push(
         heavy
-          ? 'Тяжёлый груз — в расчёте автокран 32 т (4 500 ₽/ч).'
+          ? 'Тяжёлый груз — в расчёте автокран 32 т (5 500 ₽/ч).'
           : 'Около 12 минут на подъём и час на установку крана.',
       );
       notes.push('Грузоподъёмность на нужном вылете стрелы уточнит диспетчер.');
