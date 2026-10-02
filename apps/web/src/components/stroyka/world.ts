@@ -6,6 +6,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import type { MachineType } from '@/lib/machinePhotos';
 import { BUILDING, FENCE, GATE_HALF, PIT, PRICES, rub } from '@/lib/stroyka';
 import { STAGES, type WorldProgress } from '@/lib/stroyka/progress';
+import { SITE } from '@/lib/site';
 import { dotTexture, node, pixelTexture, Rig, Voxels, type Materials } from './kit';
 import { palletBuilder } from './machines';
 
@@ -114,9 +115,9 @@ export function brandTexture() {
     ctx.fillText('16', 22, 66);
     ctx.fillStyle = '#111827';
     ctx.font = 'bold 50px Arial, sans-serif';
-    ctx.fillText('СпецПласт16', 128, 46);
+    ctx.fillText(SITE.name, 128, 46);
     ctx.font = 'bold 28px Arial, sans-serif';
-    ctx.fillText('+7 927 242-80-88', 130, 98);
+    ctx.fillText(SITE.phone, 130, 98);
   }).texture;
 }
 
@@ -139,9 +140,9 @@ function bannerTexture() {
   for (let i = 0; i < 4; i++) ctx.fillRect(14 + i * 22, 22, 12, 84);
   ctx.font = 'bold 54px Arial, sans-serif';
   ctx.textBaseline = 'middle';
-  ctx.fillText('СпецПласт16', 116, 52);
+  ctx.fillText(SITE.name, 116, 52);
   ctx.font = 'bold 22px Arial, sans-serif';
-  ctx.fillText('аренда спецтехники · +7 927 242-80-88', 118, 96);
+  ctx.fillText(`аренда спецтехники · ${SITE.phone}`, 118, 96);
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
   texture.anisotropy = 4;
@@ -598,8 +599,8 @@ export function buildWorld(M: Materials, mobile: boolean): World {
       ctx.font = 'bold 34px Arial, sans-serif';
       ctx.fillText(p.projectName, 20, 104);
       ctx.font = '22px Arial, sans-serif';
-      ctx.fillText('Генподрядчик и техника: СпецПласт16', 20, 148);
-      ctx.fillText(`Квартал СпецПласт16 · объект № ${p.projectIndex + 1}`, 20, 180);
+      ctx.fillText(`Генподрядчик и техника: ${SITE.name}`, 20, 148);
+      ctx.fillText(`Квартал ${SITE.name} · объект № ${p.projectIndex + 1}`, 20, 180);
       ctx.fillText('Старт квартала: 01.10.2026', 20, 212);
       ctx.fillText(`Сейчас: ${p.stageName} · ${p.totalPercent}%`, 20, 252);
       const step = 472 / STAGES.length;
@@ -615,7 +616,7 @@ export function buildWorld(M: Materials, mobile: boolean): World {
       ctx.lineTo(mx + 10, 336);
       ctx.fill();
       ctx.font = '18px Arial, sans-serif';
-      ctx.fillText('+7 927 242-80-88', 20, 362);
+      ctx.fillText(SITE.phone, 20, 362);
     });
   // Gate sign over the entrance.
   signs.box(signNode, [GATE_HALF * 2 + 3, 1.3, 0.3], 'dark', [0, 4.6, FENCE.maxZ]);
@@ -626,7 +627,7 @@ export function buildWorld(M: Materials, mobile: boolean): World {
     ctx.font = 'bold 46px Arial, sans-serif';
     ctx.textBaseline = 'middle';
     ctx.textAlign = 'center';
-    ctx.fillText('Генподрядчик / техника: СпецПласт16', 512, 50);
+    ctx.fillText(`${SITE.platform} · генподрядчик и техника: ${SITE.name}`, 512, 50);
   });
   signMesh(gateSign.texture, GATE_HALF * 2 + 2.6, 1.1, 0, 4.6, FENCE.maxZ + 0.17, 0, true);
   // Neon on the site cabin.
@@ -639,7 +640,7 @@ export function buildWorld(M: Materials, mobile: boolean): World {
     ctx.font = 'bold 64px Arial, sans-serif';
     ctx.textBaseline = 'middle';
     ctx.textAlign = 'center';
-    ctx.fillText('СпецПласт16', 256, 50);
+    ctx.fillText(SITE.name, 256, 50);
   });
   const neon = signMesh(neonTex.texture, 4, 0.75, 18.5, 3.2, 50.75, 0, true);
   // Neon over the estimates office.
@@ -650,7 +651,7 @@ export function buildWorld(M: Materials, mobile: boolean): World {
     ctx.font = 'bold 54px Arial, sans-serif';
     ctx.textBaseline = 'middle';
     ctx.textAlign = 'center';
-    ctx.fillText('Сметный отдел СпецПласт16', 384, 66);
+    ctx.fillText(`Сметный отдел ${SITE.name}`, 384, 66);
   });
   const smetaSign = signMesh(smetaTex.texture, 5.6, 0.95, -20, 3.25, 48.74, 0, true);
   (smetaSign.material as THREE.MeshBasicMaterial).transparent = true;
@@ -715,7 +716,7 @@ export function buildWorld(M: Materials, mobile: boolean): World {
     ctx.fillText(ad.sub, 28, 200);
     ctx.fillStyle = '#111827';
     ctx.font = 'bold 50px Arial, sans-serif';
-    ctx.fillText('+7 927 242-80-88 · СпецПласт16', 28, 344);
+    ctx.fillText(`${SITE.phone} · ${SITE.name}`, 28, 344);
   };
   const updateAds = (time: number, night: number) => {
     const slot = Math.floor(time / 9);

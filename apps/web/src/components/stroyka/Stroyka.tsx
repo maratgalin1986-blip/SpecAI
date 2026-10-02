@@ -869,7 +869,7 @@ export function Stroyka() {
       {/* ---------------- mission card (left) and map (right) */}
       {phase !== 'boot' && (
         <div className="pointer-events-none absolute inset-x-0 top-[calc(3.5rem+env(safe-area-inset-top))] z-10 flex items-start justify-between gap-2 px-3 sm:px-4">
-          <div className="pointer-events-auto flex max-w-[62vw] flex-col gap-1.5 sm:max-w-sm">
+          <div className="pointer-events-auto flex max-w-[calc(100vw-8.75rem)] flex-col gap-1.5 sm:max-w-sm">
             <div className="rounded-xl bg-slate-950/70 px-3 py-2 backdrop-blur">
               <div
                 data-testid="zone-title"
@@ -885,12 +885,12 @@ export function Stroyka() {
               <div className="truncate text-xs text-slate-200" data-testid="progress-line">
                 {progressLine(progress)}
               </div>
-              <div className="mt-1.5 flex items-center gap-2">
+              <div className="mt-1.5 flex flex-wrap items-center gap-2">
                 <button
                   type="button"
                   data-testid="order-btn"
                   onClick={orderInWorld}
-                  className="rounded-full bg-amber-500 px-3 py-1 text-xs font-bold text-slate-950 hover:bg-amber-400"
+                  className="whitespace-nowrap rounded-full bg-amber-500 px-3 py-1 text-xs font-bold text-slate-950 hover:bg-amber-400"
                 >
                   Оформить наряд
                 </button>
@@ -900,9 +900,10 @@ export function Stroyka() {
                     ctx.machine ?? (zone ? zoneById(zone).order : undefined),
                   )}
                   data-testid="smeta-btn"
-                  className="rounded-full bg-white/10 px-3 py-1 text-xs font-semibold hover:bg-white/20"
+                  className="whitespace-nowrap rounded-full bg-white/10 px-3 py-1 text-xs font-semibold hover:bg-white/20"
                 >
-                  🧮 Рассчитать смету
+                  <span className="sm:hidden">🧮 Смета</span>
+                  <span className="hidden sm:inline">🧮 Рассчитать смету</span>
                 </a>
                 <button
                   type="button"
@@ -1093,7 +1094,7 @@ export function Stroyka() {
           <div className="font-mono text-xs uppercase tracking-[0.4em] text-amber-400">
             {SITE.name} представляет
           </div>
-          <h1 className="mt-3 text-3xl font-extrabold sm:text-5xl">Стройка</h1>
+          <h1 className="mt-3 text-3xl font-extrabold sm:text-5xl">{SITE.platform}</h1>
           <p className="mt-2 text-sm text-slate-400">Пройдись по объекту · {chip}</p>
           <div className="mt-6 h-1.5 w-64 overflow-hidden rounded-full bg-white/10">
             <div className="h-full bg-amber-500 transition-all" style={{ width: `${loadPct}%` }} />

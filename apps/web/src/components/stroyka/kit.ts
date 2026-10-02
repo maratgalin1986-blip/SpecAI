@@ -2,6 +2,7 @@
 // Every rigid part of a machine is one mesh per material, so a whole machine
 // costs a dozen draw calls instead of a hundred.
 import * as THREE from 'three';
+import { SITE } from '@/lib/site';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 
 const lambert = (color: number, extra: THREE.MeshLambertMaterialParameters = {}) =>
@@ -22,7 +23,7 @@ function vestLogo() {
   ctx.font = 'bold 34px Arial, sans-serif';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillText('СпецПласт16', 128, 33);
+  ctx.fillText(SITE.name, 128, 33);
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
   return texture;

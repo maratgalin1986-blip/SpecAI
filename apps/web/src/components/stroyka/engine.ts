@@ -1128,7 +1128,7 @@ export class StroykaEngine {
       const pos = this.curve.getPoint(this.tourT % 1, this.tmpA);
       this.player.set(pos.x, 0, pos.z);
       const ahead = this.curve.getPoint((this.tourT + 0.004) % 1, this.tmpB);
-      const forward = ahead.sub(pos).setY(0).normalize();
+      const forward = ahead.sub(pos).setY(0).normalize().clone();
       // Look ahead while walking, turn to the machine near a stop.
       const cur = this.stops[this.tourStopIdx]!;
       const prev = this.stops[(this.tourStopIdx + this.stops.length - 1) % this.stops.length]!;
@@ -1140,12 +1140,17 @@ export class StroykaEngine {
       const wPrev = this.tourPhase === 'move' ? 1 - smooth(0, 5, dPrev) : 0;
       const focusZone = wNext >= wPrev ? zoneNext : zonePrev;
       const w = Math.max(wNext, wPrev);
-      const fwdLook = this.tmpB.set(pos.x + forward.x * 10, 1.5, pos.z + forward.z * 10);
+      const fwdLook = new THREE.Vector3(pos.x + forward.x * 10, 1.5, pos.z + forward.z * 10);
       const focus = new THREE.Vector3(...focusZone.focus);
       const want = fwdLook.lerp(focus, w);
       this.lookTarget.lerp(want, damp(2.2, dt));
       heading = Math.atan2(this.lookTarget.x - pos.x, this.lookTarget.z - pos.z);
-      if (moving) heading = Math.atan2(forward.x, forward.z) * (1 - w) + heading * w;
+      if (moving) {
+        // Blend the walking direction toward the machine along the shortest turn.
+        const walkDir = Math.atan2(forward.x, forward.z);
+        const turn = Math.atan2(Math.sin(heading - walkDir), Math.cos(heading - walkDir));
+        heading = walkDir + turn * w;
+      }
       this.lookOffset *= 1 - damp(0.6, dt);
       const tpWanted = zoneNext.view === 'tp' && dNext < 26 ? 1 : 0;
       this.tp += (tpWanted - this.tp) * damp(1.4, dt);
