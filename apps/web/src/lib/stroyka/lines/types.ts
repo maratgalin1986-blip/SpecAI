@@ -9,9 +9,9 @@ export interface Template {
 
 /** A two-voice radio exchange. */
 export interface RadioPair {
-  a: 'mihalych' | 'rinat' | 'sveta' | 'ildar' | 'worker';
+  a: 'mihalych' | 'rinat' | 'sveta' | 'ildar' | 'alsu' | 'worker';
   aText: string;
-  b: 'mihalych' | 'rinat' | 'sveta' | 'ildar' | 'worker';
+  b: 'mihalych' | 'rinat' | 'sveta' | 'ildar' | 'alsu' | 'worker';
   bText: string;
   tags: string;
 }

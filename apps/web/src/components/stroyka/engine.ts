@@ -65,6 +65,7 @@ import {
   buildWorld,
   MASTS,
   MAST_HEIGHT,
+  type AdTarget,
   type World,
 } from './world';
 
@@ -99,8 +100,8 @@ export interface EngineOptions {
   onZone(zone: ZoneId | null): void;
   onProgress(p: number): void;
   onWantFree(): void;
-  /** A billboard, branded truck or the cabin was tapped. */
-  onAdClick(machine: MachineType): void;
+  /** A billboard, branded truck or a cabin was tapped. */
+  onAdClick(target: AdTarget): void;
 }
 
 interface Character {
@@ -122,6 +123,7 @@ const HELMETS: Record<SpeakerId, MatKey> = {
   rinat: 'vest',
   sveta: 'red',
   ildar: 'yellow',
+  alsu: 'cabin',
 };
 
 const nextFrame = () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
@@ -590,7 +592,7 @@ export class StroykaEngine {
         z,
         yaw,
         { zone: zone.id },
-        zone.speaker === 'sveta' ? 'yellow' : 'vest',
+        zone.speaker === 'sveta' || zone.speaker === 'alsu' ? 'yellow' : 'vest',
       );
     }
     add('worker-pit', 'worker', 'white', -31, 28.2, 0.4, { sitter: true });
@@ -969,8 +971,8 @@ export class StroykaEngine {
         return visible && o.visible;
       });
       const hit = raycaster.intersectObjects(targets, false)[0];
-      const machine = hit?.object.userData.machine as MachineType | undefined;
-      if (machine) this.opts.onAdClick(machine);
+      const target = hit?.object.userData.machine as AdTarget | undefined;
+      if (target) this.opts.onAdClick(target);
     };
     canvas.addEventListener('pointerdown', down);
     canvas.addEventListener('pointermove', move);

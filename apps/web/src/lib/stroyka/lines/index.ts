@@ -7,6 +7,7 @@
 
 import type { BanterSpeaker } from '@/lib/stroykaJokes';
 import { ShuffleBag } from '@/lib/stroyka/shuffleBag';
+import { ALSU, ALSU_TEMPLATES } from './alsu';
 import { ILDAR, ILDAR_TEMPLATES } from './ildar';
 import { MIHALYCH, MIHALYCH_TEMPLATES } from './mihalych';
 import { RINAT, RINAT_TEMPLATES } from './rinat';
@@ -46,11 +47,33 @@ export const LINES: Record<BanterSpeaker, Line[]> = {
   rinat: build('rinat', RINAT, RINAT_TEMPLATES),
   sveta: build('sveta', SVETA, SVETA_TEMPLATES),
   ildar: build('ildar', ILDAR, ILDAR_TEMPLATES),
+  alsu: build('alsu', ALSU, ALSU_TEMPLATES),
   worker: build('worker', WORKER, WORKER_TEMPLATES),
 };
 
 /** Radio chatter between characters (shown in the «Рация» log). */
 export const RADIO_PAIRS: RadioPair[] = [
+  {
+    a: 'alsu',
+    aText: 'Света, приём! Песок на завтра — два рейса, щебень — один. Поставишь самосвалы?',
+    b: 'sveta',
+    bText: 'Приняла, Алсу. Самосвалы на восемь и на десять, накладные тебе.',
+    tags: 'any',
+  },
+  {
+    a: 'mihalych',
+    aText: 'Алсу, приём! Блоков хватит на третий этаж?',
+    b: 'alsu',
+    bText: 'Михалыч, хватит, ещё и поддон в запасе. Смету скинула в вагончик.',
+    tags: 'any',
+  },
+  {
+    a: 'alsu',
+    aText: 'Михалыч, приём! Цемент приехал, куда ставить?',
+    b: 'mihalych',
+    bText: 'Принял, Алсу. Под навес, на поддоны. И плёнкой накрыть.',
+    tags: 'rain',
+  },
   {
     a: 'rinat',
     aText: 'Ильдар, приём! Плиты подать сможешь после обеда?',

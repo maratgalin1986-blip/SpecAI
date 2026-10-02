@@ -10,15 +10,24 @@ import type { LiftStop } from '@/lib/stroykaSky';
 import type { ContextSet } from '@/lib/stroyka/context';
 
 export type ZoneId =
-  'gate' | 'kotlovan' | 'planirovka' | 'doroga' | 'sklad' | 'korpus' | 'montazh' | 'office';
+  | 'gate'
+  | 'kotlovan'
+  | 'planirovka'
+  | 'doroga'
+  | 'sklad'
+  | 'korpus'
+  | 'montazh'
+  | 'office'
+  | 'smeta';
 
-export type SpeakerId = 'mihalych' | 'rinat' | 'sveta' | 'ildar';
+export type SpeakerId = 'mihalych' | 'rinat' | 'sveta' | 'ildar' | 'alsu';
 
 export const SPEAKERS: Record<SpeakerId, { name: string; role: string }> = {
   mihalych: { name: 'Прораб Михалыч', role: 'прораб' },
   rinat: { name: 'Машинист Ринат', role: 'машинист' },
   sveta: { name: 'Логист Света', role: 'логист' },
   ildar: { name: 'Крановщик Ильдар', role: 'крановщик' },
+  alsu: { name: 'Снабженец Алсу', role: 'снабженец' },
 };
 
 /**
@@ -181,6 +190,19 @@ export const ZONES: Zone[] = [
     npc: [14, 49.5],
     stand: [10, 45],
     focus: [14, 1.5, 49.5],
+    view: 'fp',
+  },
+  {
+    id: 'smeta',
+    name: 'Сметный отдел',
+    speaker: 'alsu',
+    root: 'smeta',
+    center: [-15, 44],
+    radius: 6.5,
+    machines: [],
+    npc: [-15.5, 46.6],
+    stand: [-11.5, 41.5],
+    focus: [-17, 1.6, 48.5],
     view: 'fp',
   },
 ];
@@ -360,7 +382,7 @@ export const DIALOGUE: Record<string, DialogNode> = {
   'gate-next': {
     id: 'gate-next',
     speaker: 'mihalych',
-    text: 'Значит так: {facts}. Покажу машину в работе — или сразу передам Свете, она оформит.',
+    text: 'Значит так: {facts}. У СпецПласт16 такая машина есть — покажу её в работе или сразу передам Свете, она оформит.',
     replies: [
       { label: 'Показать технику', action: { kind: 'show' } },
       { label: 'Передать Свете', action: { kind: 'form' }, primary: true },
@@ -412,6 +434,21 @@ export const DIALOGUE: Record<string, DialogNode> = {
     speaker: 'ildar',
     text: `Плиту на место — аккуратно, без рывков. Автокран 25 т — от ${P(PRICES.crane)}, 32 т — ${P(PRICES.crane32)}. Гидромолот, если надо, — ${P(PRICES.hammer)}.`,
     replies: [order('crane', 'Оформить наряд на кран'), CALL, NEXT, TO_SVETA],
+  },
+  smeta: {
+    id: 'smeta',
+    speaker: 'alsu',
+    text: 'Я Алсу, снабжение. Песок привезём самосвалом СпецПласт16, щебень — туда же, считаю рейсы. Список материалов с ценами магазинов — в смете для снабженца.',
+    replies: [
+      {
+        label: '📦 Смета для снабженца',
+        action: { kind: 'link', href: '/smeta?mode=snab' },
+        primary: true,
+      },
+      { label: '🧮 Смета для прораба', action: { kind: 'link', href: '/smeta' } },
+      { label: 'Доставка — передать Свете', action: { kind: 'form' }, set: { machine: 'truck' } },
+      NEXT,
+    ],
   },
   sveta: {
     id: 'sveta',
@@ -535,8 +572,9 @@ export const STATIC_OBSTACLES: Box[] = [
   wall(-14.5, -9.5, -60, -45),
   // Aerial platform behind the building.
   wall(20, 31, -45, -38),
-  // Site cabin.
+  // Site cabin and the estimates office.
   wall(15, 22, 50.6, 53.6),
+  wall(-23.3, -16.7, 48.6, 51.4),
   // Tower crane base by the plot.
   wall(36.8, 39.2, -31.2, -28.8),
 ];
@@ -614,7 +652,7 @@ export function resolveCollision(
  */
 export const TOUR_PATH: { p: Vec2; stop?: ZoneId }[] = [
   { p: [0, 58], stop: 'gate' },
-  { p: [-5, 44] },
+  { p: [-11.5, 41.5], stop: 'smeta' },
   { p: [-12, 30] },
   { p: [-15, 16], stop: 'kotlovan' },
   { p: [-13, 4] },

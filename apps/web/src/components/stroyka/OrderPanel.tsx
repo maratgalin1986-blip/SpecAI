@@ -55,7 +55,10 @@ export function OrderPanel({
             <div className="font-mono text-[11px] uppercase tracking-widest text-amber-400">
               Наряд на технику
             </div>
-            <div className="text-lg font-bold">Что нужно на объект?</div>
+            <div className="text-lg font-bold">Техника СпецПласт16 — что нужно?</div>
+            <div className="text-xs text-slate-400">
+              Свой парк и свои машинисты, подача обычно в день заявки
+            </div>
           </div>
           <button
             type="button"
@@ -137,6 +140,13 @@ export function OrderPanel({
           className="mx-4 mb-2 mt-1 rounded-full border border-amber-400/60 px-4 py-2 text-center text-sm font-bold text-amber-300 hover:bg-amber-400/10"
         >
           🧮 Рассчитать смету — примерно, за минуту
+        </a>
+        <a
+          href="/smeta?mode=snab"
+          data-testid="order-snab"
+          className="mx-4 mb-2 rounded-full border border-sky-400/60 px-4 py-2 text-center text-sm font-bold text-sky-200 hover:bg-sky-400/10"
+        >
+          📦 Смета для снабженца — материалы и доставка
         </a>
         <div className="border-t border-white/10 px-4 py-2 text-center text-xs text-slate-400">
           Цены с машинистом, смена — {SHIFT_HOURS} ч. Диспетчер: {SITE.phone}

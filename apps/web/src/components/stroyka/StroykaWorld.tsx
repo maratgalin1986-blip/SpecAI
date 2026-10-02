@@ -3,9 +3,9 @@
 // The 3D canvas. Loaded only on /stroyka through next/dynamic (ssr: false),
 // so three.js never reaches the rest of the site.
 import { useEffect, useRef } from 'react';
-import type { MachineType } from '@/lib/machinePhotos';
 import type { ZoneId } from '@/lib/stroyka';
 import { StroykaEngine, type SharedInput, type Telemetry } from './engine';
+import type { AdTarget } from './world';
 
 export type { StroykaEngine };
 
@@ -27,7 +27,7 @@ export default function StroykaWorld({
   onZone: (zone: ZoneId | null) => void;
   onProgress: (p: number) => void;
   onWantFree: () => void;
-  onAdClick: (machine: MachineType) => void;
+  onAdClick: (target: AdTarget) => void;
   onError: (error: unknown) => void;
 }) {
   const canvas = useRef<HTMLCanvasElement>(null);

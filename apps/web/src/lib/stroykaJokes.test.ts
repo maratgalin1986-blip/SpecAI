@@ -11,7 +11,8 @@ describe('banter', () => {
   });
 
   it('keeps Света, Ринат and the business lines free of «swearing»', () => {
-    for (const line of [...JOKES.sveta, ...JOKES.rinat]) expect(line).not.toMatch(CENSOR);
+    for (const line of [...JOKES.sveta, ...JOKES.rinat, ...JOKES.alsu])
+      expect(line).not.toMatch(CENSOR);
     for (const node of Object.values(DIALOGUE)) {
       expect(node.text).not.toMatch(CENSOR);
       for (const reply of node.replies) expect(reply.label).not.toMatch(CENSOR);

@@ -50,7 +50,8 @@ describe('voice lines', () => {
   });
 
   it('keeps Света and Ринат clean, comic swearing only as symbols', () => {
-    for (const line of [...LINES.sveta, ...LINES.rinat]) expect(line.text).not.toMatch(CENSOR);
+    for (const line of [...LINES.sveta, ...LINES.rinat, ...LINES.alsu])
+      expect(line.text).not.toMatch(CENSOR);
     for (const pool of Object.values(LINES))
       for (const line of pool) expect(line.text).not.toMatch(/СП16|SP16|сп16/i);
   });

@@ -56,6 +56,7 @@ const CALL_NAME: Record<SpeakerId, string> = {
   rinat: 'Ринат',
   sveta: 'Света',
   ildar: 'Ильдар',
+  alsu: 'Алсу',
 };
 
 /** «котлован под фундамент, нужен JCB на завтра, адрес: Тукаевский район». */
@@ -105,6 +106,7 @@ export function radioHandoff(from: SpeakerId, to: SpeakerId, ctx: OrderContext):
           : gaps.includes('when')
             ? 'На какой день ставим? И телефон оставьте.'
             : 'Оставьте телефон — перезвоню и подтвержу.';
+    const brand = ctx.machine ? ' Машину СпецПласт16 поставлю в график.' : '';
     const known = [
       ctx.task,
       ctx.machine && MACHINE_SLANG[ctx.machine],
@@ -112,7 +114,9 @@ export function radioHandoff(from: SpeakerId, to: SpeakerId, ctx: OrderContext):
     ]
       .filter(Boolean)
       .join(', ');
-    answer = `Приняла, ${CALL_NAME[from]}. Здравствуйте!${known ? ` ${capital(known)} — записала.` : ''} ${ask}`;
+    answer = `Приняла, ${CALL_NAME[from]}. Здравствуйте!${known ? ` ${capital(known)} — записала.` : ''}${brand} ${ask}`;
+  } else if (to === 'alsu') {
+    answer = `Приняла, ${CALL_NAME[from]}. Материалы посчитаю, доставку самосвалом поставим со Светой.`;
   } else if (to === 'ildar') {
     answer = `Принял, ${CALL_NAME[from]}. Покажу кран в работе${ctx.when ? `, по ${ctx.when.replace(/^на /, '')} посмотрю ветер` : ''}.`;
   } else {

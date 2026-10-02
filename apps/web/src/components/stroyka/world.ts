@@ -52,8 +52,17 @@ export interface World {
   procCity: THREE.Object3D;
 }
 
-/** Ads on billboards: text, the machine a tap preselects. */
-export const AD_MESSAGES: { title: string; sub: string; machine: MachineType }[] = [
+/** What a tap on an ad opens: the order panel with a machine, or an estimate. */
+export type AdTarget = MachineType | 'smeta' | 'snab';
+
+/** Ads on billboards: text, what a tap opens. */
+export const AD_MESSAGES: { title: string; sub: string; machine: AdTarget }[] = [
+  {
+    title: 'Смета для прораба и снабженца',
+    sub: 'бесплатно на сайте СпецПласт16',
+    machine: 'smeta',
+  },
+  { title: 'Посчитай стройку за минуту', sub: 'техника, часы, материалы — смета', machine: 'snab' },
   { title: 'СпецПласт16', sub: 'аренда спецтехники с машинистом', machine: 'backhoe' },
   {
     title: 'Экскаватор-погрузчик',
@@ -325,7 +334,11 @@ export function buildWorld(M: Materials, mobile: boolean): World {
     ]);
   // Portable toilet and a container near the gate.
   props.box(propsNode, [1.2, 2.3, 1.2], 'cabin', [-14, 1.15, 56]);
+  // «Сметный отдел»: the estimates office cabin (tap opens /smeta).
   props.box(propsNode, [6, 2.6, 2.4], 'amber', [-20, 1.3, 50]);
+  props.box(propsNode, [6.2, 0.15, 2.6], 'white', [-20, 2.68, 50]);
+  props.box(propsNode, [1.6, 0.9, 0.06], 'glass', [-21.5, 1.6, 48.78]);
+  props.box(propsNode, [0.9, 2, 0.06], 'dark', [-18.3, 1.05, 48.78]);
   // Floodlight masts with lamp heads.
   const lampHeads: THREE.Vector3[] = [];
   for (const mast of MASTS) {
@@ -447,6 +460,9 @@ export function buildWorld(M: Materials, mobile: boolean): World {
   const cabinPane = new THREE.PlaneGeometry(1.5, 0.8);
   cabinPane.translate(16.5, 1.7, 50.74);
   paneGeos.push(cabinPane);
+  const smetaPane = new THREE.PlaneGeometry(1.5, 0.8);
+  smetaPane.translate(-21.5, 1.6, 48.74);
+  paneGeos.push(smetaPane);
   const paneMat = new THREE.MeshBasicMaterial({
     color: 0xffc46b,
     side: THREE.DoubleSide,
@@ -626,6 +642,28 @@ export function buildWorld(M: Materials, mobile: boolean): World {
     ctx.fillText('СпецПласт16', 256, 50);
   });
   const neon = signMesh(neonTex.texture, 4, 0.75, 18.5, 3.2, 50.75, 0, true);
+  // Neon over the estimates office.
+  const smetaTex = canvasTexture(768, 128, (ctx) => {
+    ctx.shadowColor = '#38bdf8';
+    ctx.shadowBlur = 18;
+    ctx.fillStyle = '#bae6fd';
+    ctx.font = 'bold 54px Arial, sans-serif';
+    ctx.textBaseline = 'middle';
+    ctx.textAlign = 'center';
+    ctx.fillText('Сметный отдел СпецПласт16', 384, 66);
+  });
+  const smetaSign = signMesh(smetaTex.texture, 5.6, 0.95, -20, 3.25, 48.74, 0, true);
+  (smetaSign.material as THREE.MeshBasicMaterial).transparent = true;
+  smetaSign.userData.machine = 'smeta';
+  clickables.push(smetaSign);
+  const smetaDoor = new THREE.Mesh(
+    new THREE.PlaneGeometry(6, 2.6),
+    new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false }),
+  );
+  smetaDoor.position.set(-20, 1.3, 48.7);
+  smetaDoor.userData.machine = 'smeta';
+  group.add(smetaDoor);
+  clickables.push(smetaDoor);
   (neon.material as THREE.MeshBasicMaterial).transparent = true;
   neon.userData.machine = 'backhoe';
   clickables.push(neon);
@@ -691,6 +729,7 @@ export function buildWorld(M: Materials, mobile: boolean): World {
       (board.mesh.material as THREE.MeshLambertMaterial).emissiveIntensity = 0.9 * night;
     }
     (neon.material as THREE.MeshBasicMaterial).color.setScalar(0.45 + 0.55 * night);
+    (smetaSign.material as THREE.MeshBasicMaterial).color.setScalar(0.45 + 0.55 * night);
   };
   updateAds(0, 0);
   signs.bake({ cast: true, receive: true });

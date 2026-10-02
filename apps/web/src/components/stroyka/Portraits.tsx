@@ -8,7 +8,7 @@ const LOOK: Record<
     vest: string;
     skin: string;
     hair: string;
-    extra: 'mustache' | 'beard' | 'headset' | 'glasses' | 'none';
+    extra: 'mustache' | 'beard' | 'headset' | 'glasses' | 'pencil' | 'none';
   }
 > = {
   mihalych: {
@@ -21,6 +21,7 @@ const LOOK: Record<
   rinat: { helmet: '#f97316', vest: '#f97316', skin: '#c98d68', hair: '#1f2937', extra: 'beard' },
   sveta: { helmet: '#dc2626', vest: '#facc15', skin: '#e6b08c', hair: '#7c4a2a', extra: 'headset' },
   ildar: { helmet: '#f59e0b', vest: '#f97316', skin: '#c48a62', hair: '#374151', extra: 'glasses' },
+  alsu: { helmet: '#38bdf8', vest: '#facc15', skin: '#e2a982', hair: '#2b1d14', extra: 'pencil' },
   worker: { helmet: '#f1f5f9', vest: '#f97316', skin: '#cf9670', hair: '#4b5563', extra: 'none' },
 };
 
@@ -38,7 +39,9 @@ export function Portrait({
       <rect x="0" y="40" width="64" height="24" fill={l.vest} />
       <rect x="0" y="50" width="64" height="4" fill="#f8fafc" opacity="0.85" />
       <rect x="18" y="18" width="28" height="26" fill={l.skin} />
-      {speaker === 'sveta' && <rect x="44" y="22" width="8" height="18" fill={l.hair} />}
+      {(speaker === 'sveta' || speaker === 'alsu') && (
+        <rect x={speaker === 'alsu' ? 12 : 44} y="22" width="8" height="18" fill={l.hair} />
+      )}
       <rect x="18" y="18" width="28" height="4" fill={l.hair} />
       <rect x="14" y="10" width="36" height="10" fill={l.helmet} />
       <rect x="12" y="18" width="40" height="3" fill={l.helmet} />
@@ -61,6 +64,7 @@ export function Portrait({
           <rect x="18" y="36" width="10" height="2" fill="#111827" />
         </>
       )}
+      {l.extra === 'pencil' && <rect x="44" y="16" width="3" height="12" fill="#f59e0b" />}
       <rect x="28" y="38" width="8" height="2" fill="#7f1d1d" opacity="0.6" />
     </svg>
   );

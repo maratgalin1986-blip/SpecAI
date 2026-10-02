@@ -130,6 +130,8 @@ export type Intent =
   | 'bye'
   | 'smalltalk'
   | 'faq'
+  | 'smeta'
+  | 'materials'
   | 'offtopic'
   | 'unknown';
 
@@ -327,6 +329,9 @@ export function understand(text: string, now: Date): Understanding {
   if (/(^|\s)(пока|до свидан|всего добр|до встречи)/.test(n)) intents.push('bye');
   if (/как дела|как жизнь|как работа|чем занят|устал|как настроени/.test(n))
     intents.push('smalltalk');
+  if (/смет|посчита|калькул|прикин/.test(n)) intents.push('smeta');
+  if (/материал|цемент|кирпич|снабж|поставк|доставк|сколько (песка|щебня)/.test(n))
+    intents.push('materials');
   if (/политик|выбор|президент|футбол|хоккей|крипт|биткоин|казино|ставк|гороскоп/.test(n))
     intents.push('offtopic');
   const faq = faqAnswers(n);
@@ -339,7 +344,7 @@ export interface Quick {
   label: string;
   /** Text sent as if the visitor typed it, or a special action. */
   say?: string;
-  action?: 'call' | 'form' | 'order-anyway' | 'other-day' | 'smeta';
+  action?: 'call' | 'form' | 'order-anyway' | 'other-day' | 'smeta' | 'snab';
 }
 
 export interface BrainReply {
@@ -379,6 +384,10 @@ const FALLBACK: Record<SpeakerId, string[]> = {
     'Сверху не слышно — ветер. Что поднимаем и куда?',
     'Не понял. Груз какой, вес примерно, на какую высоту?',
   ],
+  alsu: [
+    'Не расслышала — самосвал сдаёт задом. Какие материалы и сколько?',
+    'Я в таблице заблудилась. Напишите: что привезти, куда и когда?',
+  ],
 };
 
 const WHO: Record<SpeakerId, string> = {
@@ -388,6 +397,7 @@ const WHO: Record<SpeakerId, string> = {
     'Ринат, машинист экскаватора-погрузчика. Персонаж, но копаю по-честному: подскажу, что за машина нужна.',
   sveta: 'Света, логист. Я персонаж этой стройки, но заявка от меня уходит настоящему диспетчеру.',
   ildar: 'Ильдар, крановщик. Персонаж, сверху всё вижу. Про краны и подъём — это ко мне.',
+  alsu: 'Алсу, снабженец. Персонаж, но материалы и рейсы самосвалов считаю по-настоящему.',
 };
 
 const GREET: Record<SpeakerId, string> = {
@@ -395,6 +405,7 @@ const GREET: Record<SpeakerId, string> = {
   rinat: 'Привет! Что копаем?',
   sveta: 'Здравствуйте! Рассказывайте: что, где и когда.',
   ildar: 'Привет снизу! Что поднимаем?',
+  alsu: 'Здравствуйте! Что привезти — песок, щебень, блоки?',
 };
 
 const pick = <T>(list: T[], seed: number) => list[Math.abs(seed) % list.length]!;
@@ -408,9 +419,9 @@ function priceText(machine?: MachineType): string {
         : machine === 'backhoe' || machine === 'wheeled-excavator'
           ? `, с гидромолотом — ${rub(PRICES.hammer)} ₽/ч`
           : '';
-    return `${MACHINE_LABELS[machine]} — от ${rub(rate)} ₽/ч с машинистом${extra}. Смена 8 часов — ${rub(rate * 8)} ₽.`;
+    return `${MACHINE_LABELS[machine]} СпецПласт16 — от ${rub(rate)} ₽/ч с машинистом${extra}. Смена 8 часов — ${rub(rate * 8)} ₽.`;
   }
-  return `Самосвал — ${rub(PRICES.truck)} ₽/ч, автовышка и трактор — ${rub(PRICES.agp)}, автокран — ${rub(PRICES.crane)} (32 т — ${rub(PRICES.crane32)}), остальное — от ${rub(PRICES.other)} ₽/ч. Смена — 8 часов.`;
+  return `У СпецПласт16: самосвал — ${rub(PRICES.truck)} ₽/ч, автовышка и трактор — ${rub(PRICES.agp)}, автокран — ${rub(PRICES.crane)} (32 т — ${rub(PRICES.crane32)}), остальное — от ${rub(PRICES.other)} ₽/ч. Смена — 8 часов.`;
 }
 
 /** The character's answer to free text. */
@@ -454,10 +465,36 @@ export function respond(
       phone: null,
     };
   }
+  if (has('smeta') && !u.set.machine) {
+    return {
+      speaker,
+      text: 'Смету прикинем — у нас сметный отдел прямо тут, в вагончике. Скажите размеры — посчитаю примерно, а для материалов есть смета для снабженца.',
+      quick: [
+        { label: '🧮 Смета для прораба', action: 'smeta' },
+        { label: '📦 Смета для снабженца', action: 'snab' },
+        { label: 'Оставить телефон', action: 'form' },
+      ],
+      set: u.set,
+      phone: null,
+    };
+  }
+  if (has('materials') && !u.set.machine) {
+    return {
+      speaker: 'alsu',
+      text: 'Материалы — это ко мне, Алсу. Песок привезём самосвалом СпецПласт16, щебень — туда же, считаю рейсы. Список с ценами магазинов — в смете для снабженца.',
+      quick: [
+        { label: '📦 Смета для снабженца', action: 'snab' },
+        { label: 'Доставка — к Свете', action: 'form' },
+      ],
+      set: u.set,
+      phone: null,
+      handoff: speaker === 'alsu' ? undefined : 'alsu',
+    };
+  }
   if (has('machine') || has('order') || has('when') || has('place')) {
     if (u.set.machine) {
       parts.push(
-        `${MACHINE_LABELS[u.set.machine]} — ${matchTask(text)?.why ?? 'подойдёт'}. От ${rub(hourlyRate(u.set.machine))} ₽/ч.`,
+        `У СпецПласт16 есть ${MACHINE_LABELS[u.set.machine].toLowerCase()} — ${matchTask(text)?.why ?? 'подойдёт под задачу'}, подача обычно в день заявки. От ${rub(hourlyRate(u.set.machine))} ₽/ч с машинистом.`,
       );
     } else if (has('price')) parts.push(priceText(merged.machine));
     if (u.set.when) parts.push(`На ${u.set.when.replace(/^(в|на) /, '')} — записал.`);

@@ -809,7 +809,11 @@ export function Stroyka() {
           onZone={setZone}
           onProgress={setLoadReal}
           onWantFree={() => setMode('free')}
-          onAdClick={(machine) => setOrder({ open: true, machine })}
+          onAdClick={(target) => {
+            if (target === 'smeta') window.location.href = '/smeta';
+            else if (target === 'snab') window.location.href = '/smeta?mode=snab';
+            else setOrder({ open: true, machine: target });
+          }}
           onError={() => setPhase('fallback')}
         />
       )}

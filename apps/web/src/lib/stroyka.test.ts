@@ -45,7 +45,10 @@ describe('dialogue graph', () => {
         if (action.kind === 'link') {
           const wizard = /^\/\?m=([a-z-]+)#podbor$/.exec(action.href);
           if (wizard) expect(MACHINE_WORKS[wizard[1] as never]).toBeDefined();
-          else expect(['tel:+79272428088', '/#podbor']).toContain(action.href);
+          else
+            expect(['tel:+79272428088', '/#podbor', '/smeta', '/smeta?mode=snab']).toContain(
+              action.href,
+            );
         }
       }
     }

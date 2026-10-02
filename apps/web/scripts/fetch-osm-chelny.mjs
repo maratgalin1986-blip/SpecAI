@@ -43,7 +43,24 @@ function query(category, s, w, n, e) {
   return `[out:json][timeout:90];${CATEGORIES[category](`(${s},${w},${n},${e})`)}out geom;`;
 }
 
+// OSM_CACHE=<dir> keeps raw answers, so re-running after a change needs no network.
+const CACHE = process.env.OSM_CACHE;
+
 async function fetchTile(q, expectData = false) {
+  if (CACHE) {
+    const { createHash } = await import('node:crypto');
+    const { existsSync, readFileSync } = await import('node:fs');
+    const file = join(CACHE, `${createHash('sha1').update(q).digest('hex')}.json`);
+    if (existsSync(file)) return JSON.parse(readFileSync(file, 'utf8'));
+    const json = await fetchFromMirrors(q, expectData);
+    mkdirSync(CACHE, { recursive: true });
+    writeFileSync(file, JSON.stringify(json));
+    return json;
+  }
+  return fetchFromMirrors(q, expectData);
+}
+
+async function fetchFromMirrors(q, expectData) {
   for (let attempt = 0; attempt < 12; attempt++) {
     const url = MIRRORS[attempt % 3 === 2 ? 1 + (attempt % 2) : 0];
     try {
@@ -82,8 +99,12 @@ function simplify(points, tolerance) {
   let max = 0;
   for (let i = 1; i < points.length - 1; i++) {
     const [px, pz] = points[i];
-    const len = Math.hypot(bx - ax, bz - az) || 1;
-    const d = Math.abs((bx - ax) * (az - pz) - (ax - px) * (bz - az)) / len;
+    const len = Math.hypot(bx - ax, bz - az);
+    // A closed ring starts and ends at the same point: measure from that point.
+    const d =
+      len < 1e-6
+        ? Math.hypot(px - ax, pz - az)
+        : Math.abs((bx - ax) * (az - pz) - (ax - px) * (bz - az)) / len;
     if (d > max) {
       max = d;
       index = i;
