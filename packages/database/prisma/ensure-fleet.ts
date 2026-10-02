@@ -7,7 +7,13 @@ import { createPrismaClient } from '../src';
 const prisma = createPrismaClient();
 
 const COMPANY_ID = 'specplast16-house';
+// The fleet's hourly rates below mirror apps/web/src/lib/prices.ts (the site's
+// single price source; a different package, so they are kept in step by hand).
 const PRICE_RAISE = 1000;
+// The +1000 raise of 2026-10-02 is a one-time migration with no marker in the
+// schema: it runs only on deploys before this date, then never again, so a
+// price the owner lowers by hand later is not raised back on the next deploy.
+const PRICE_RAISE_UNTIL = Date.parse('2026-10-31');
 
 /** A Telegram message to the owner, if the bot is configured; never throws. */
 async function alertOwner(text: string) {
@@ -274,10 +280,11 @@ async function main() {
   }
   console.log(`Парк СпецПласт16: добавлено ${created}, всего позиций ${FLEET.length}.`);
 
-  // 2026-10: the owner raised every customer price by 1000 ₽/h. Production
-  // only (previews share the database), and only rows still at the old price,
-  // so prices edited by hand in the cabinet are left alone.
-  if (process.env.VERCEL_ENV === 'production') {
+  // 2026-10-02: the owner raised every customer price by 1000 ₽/h. Production
+  // only (previews share the database), only rows still at the old price (so
+  // prices edited by hand in the cabinet are left alone), and only until
+  // PRICE_RAISE_UNTIL, which makes it one-time without a schema change.
+  if (process.env.VERCEL_ENV === 'production' && Date.now() < PRICE_RAISE_UNTIL) {
     try {
       let repriced = 0;
       for (const item of FLEET) {
