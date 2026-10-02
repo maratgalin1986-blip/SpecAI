@@ -55,6 +55,7 @@ describe('nextSteps: customer', () => {
     });
     expect(guide.next.id).toBe('choose');
     expect(guide.next.action?.href).toBe('/orders/o2');
+    expect(guide.steps.find((s) => s.id === 'choose')?.done).toBe(false);
   });
 
   it('after booking waits for confirmation, then for the work', () => {

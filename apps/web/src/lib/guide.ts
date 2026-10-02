@@ -149,7 +149,8 @@ function customerSteps(s: GuideState): GuideStep[] {
       id: 'choose',
       title: 'Выберите исполнителя',
       hint: 'Сравните цены и нажмите «Принять» — бронь создастся сама.',
-      done: chose,
+      // Offers waiting on an open order reopen the step.
+      done: chose && n(s.ordersWithBids) === 0,
       action: s.choiceOrderId
         ? {
             label: 'Выбрать предложение',

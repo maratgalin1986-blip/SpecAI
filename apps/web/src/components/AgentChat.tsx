@@ -182,7 +182,7 @@ export function AgentChat({
           type="button"
           onClick={() => send('Что дальше?')}
           disabled={isSending}
-          className="rounded-full bg-amber-500 px-3 py-1 text-xs font-semibold text-slate-950 hover:bg-amber-400 disabled:opacity-50"
+          className="shrink-0 whitespace-nowrap rounded-full bg-amber-500 px-3 py-1 text-xs font-semibold text-slate-950 hover:bg-amber-400 disabled:opacity-50"
         >
           Что дальше?
         </button>
