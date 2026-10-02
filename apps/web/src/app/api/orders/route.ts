@@ -54,6 +54,7 @@ export async function GET(request: NextRequest) {
       category: { select: { id: true, name: true } },
       customer: { select: { id: true, name: true } },
       bids: { include: { equipment: { select: { companyId: true } } } },
+      location: { select: { addressLine: true, city: true, latitude: true, longitude: true } },
     },
     orderBy: { createdAt: 'desc' },
     take: 50,

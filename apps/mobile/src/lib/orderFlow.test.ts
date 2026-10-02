@@ -54,17 +54,17 @@ describe('orderStage', () => {
 });
 
 describe('quick order', () => {
-  it('builds a description with the address line and reads it back', () => {
+  it('keeps the address out of the description and reads old address lines', () => {
     const text = quickOrderDescription({
       categoryName: 'Автокран',
       address: 'Набережные Челны, пр. Мира 10',
       urgent: true,
       days: 1,
     });
-    expect(text).toBe(
-      'Нужна техника: автокран — сегодня, как можно скорее, на 1 смену.\nАдрес: Набережные Челны, пр. Мира 10',
+    expect(text).toBe('Нужна техника: автокран — сегодня, как можно скорее, на 1 смену.');
+    expect(addressFromDescription('Нужен кран\nАдрес: Набережные Челны, пр. Мира 10')).toBe(
+      'Набережные Челны, пр. Мира 10',
     );
-    expect(addressFromDescription(text)).toBe('Набережные Челны, пр. Мира 10');
     expect(addressFromDescription('Просто текст')).toBeNull();
   });
 

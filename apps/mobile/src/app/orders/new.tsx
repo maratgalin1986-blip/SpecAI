@@ -67,11 +67,8 @@ export default function NewOrderScreen() {
     }
     setSubmitting(true);
     try {
-      const place = address.trim();
-      const text = description.trim();
       const { order } = await createOrder({
-        // Адрес дублируется в описании: исполнители видят его в ленте приложения.
-        description: place && !text.includes(place) ? `${text}\nАдрес: ${place}` : text,
+        description: description.trim(),
         desiredStartDate: toIsoDate(startDate),
         desiredEndDate: toIsoDate(endDate),
         categoryId: categoryId ?? undefined,

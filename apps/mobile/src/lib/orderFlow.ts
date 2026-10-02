@@ -71,7 +71,7 @@ export function stageHeadline(input: StageInput): string {
   return 'Заказ выполнен';
 }
 
-/** Строка «Адрес: …», которую быстрый заказ добавляет в описание. */
+/** Строка «Адрес: …» в описании старых заявок (новые хранят адрес в location). */
 const ADDRESS_LINE = /(?:^|\n)\s*(?:Адрес|Место|Где)\s*:\s*(.+)/i;
 
 export function addressFromDescription(description: string): string | null {
@@ -98,8 +98,6 @@ export function quickOrderDescription(input: QuickOrderInput): string {
   const lines = [`${head}, ${length}.`];
   const note = input.note?.trim();
   if (note) lines.push(note);
-  const address = input.address?.trim();
-  if (address) lines.push(`Адрес: ${address}`);
   return lines.join('\n');
 }
 

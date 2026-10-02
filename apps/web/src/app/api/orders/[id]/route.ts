@@ -25,6 +25,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     include: {
       category: { select: { id: true, name: true } },
       customer: { select: { id: true, name: true } },
+      location: { select: { addressLine: true, city: true, latitude: true, longitude: true } },
       bids: {
         include: {
           equipment: {
