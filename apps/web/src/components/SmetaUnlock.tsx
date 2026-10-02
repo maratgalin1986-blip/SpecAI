@@ -65,13 +65,13 @@ export function SmetaUnlock({ text, onUnlocked }: { text: string; onUnlocked: ()
     <form
       id="smeta-unlock"
       onSubmit={submit}
-      className="flex scroll-mt-24 flex-col gap-3 rounded-2xl border-2 border-amber-400 bg-amber-50 p-4 sm:p-5"
+      className="ym-hide-content flex scroll-mt-24 flex-col gap-3 rounded-2xl border-2 border-amber-400 bg-amber-50 p-4 sm:p-5"
     >
       <p className="font-mono text-[0.65rem] font-bold uppercase tracking-[0.2em] text-amber-700">
         Ранний доступ
       </p>
       <h3 className="text-lg font-bold text-slate-950">
-        Полная смета с этапами и 3D-моделью — в приложении {SITE.name}
+        Полная смета с этапами и 3D-моделью — откроем сразу здесь, приложение {SITE.name} скоро
       </h3>
       <p className="text-sm text-slate-700">
         Приложение готовится к выпуску: оставьте телефон — откроем полную смету прямо сейчас, а
@@ -109,7 +109,11 @@ export function SmetaUnlock({ text, onUnlocked }: { text: string; onUnlocked: ()
           className="mt-0.5"
         />
         <span>
-          Согласен(на) на обработку персональных данных в соответствии с{' '}
+          Согласен(на) на обработку персональных данных (
+          <a href="/soglasie" className="underline" target="_blank">
+            согласие
+          </a>
+          ) в соответствии с{' '}
           <a href="/privacy" className="underline" target="_blank">
             политикой конфиденциальности
           </a>

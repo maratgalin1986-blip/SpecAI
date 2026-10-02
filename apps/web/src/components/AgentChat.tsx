@@ -200,6 +200,7 @@ export function AgentChat({
           onChange={(e) => setInput(e.target.value)}
           maxLength={4000}
           placeholder="Напишите сообщение…"
+          aria-label="Сообщение"
           className="min-w-0 flex-1 rounded-md border border-slate-300 px-3 py-2 text-sm"
         />
         <button

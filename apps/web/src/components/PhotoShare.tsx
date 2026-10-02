@@ -27,9 +27,11 @@ async function shrink(file: File): Promise<Blob> {
     const blob = await new Promise<Blob | null>((resolve) =>
       canvas.toBlob(resolve, 'image/jpeg', 0.85),
     );
-    return blob ?? file;
+    if (!blob) throw new Error('shrink');
+    return blob;
   } catch {
-    return file;
+    // The original may carry GPS in EXIF: refuse rather than send it.
+    throw new Error('Не удалось обработать фото — попробуйте другое (JPEG или PNG).');
   }
 }
 
@@ -83,7 +85,13 @@ export function PhotoShare({
     setState('sending');
     setError('');
     const form = new FormData();
-    for (const file of files) form.append('files', await shrink(file), 'site.jpg');
+    try {
+      for (const file of files) form.append('files', await shrink(file), 'site.jpg');
+    } catch (problem) {
+      setError((problem as Error).message);
+      setState('error');
+      return;
+    }
     form.append('role', role);
     form.append('stage', stage);
     form.append('consent', consent ? '1' : '0');
@@ -104,7 +112,7 @@ export function PhotoShare({
   }
 
   return (
-    <form onSubmit={submit} className="flex flex-col gap-3">
+    <form onSubmit={submit} className="ym-hide-content flex flex-col gap-3">
       {role === 'executor' && (
         <div className="flex gap-2 text-sm" role="radiogroup" aria-label="Когда снято">
           {(['before', 'after'] as const).map((value) => (

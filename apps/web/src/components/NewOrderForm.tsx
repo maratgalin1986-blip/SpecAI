@@ -93,7 +93,7 @@ export function NewOrderForm({ provider }: { provider?: { name: string } | null 
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+    <form onSubmit={handleSubmit} className="ym-hide-content flex flex-col gap-3">
       <label className="flex flex-col gap-1 text-sm">
         Что нужно
         <textarea

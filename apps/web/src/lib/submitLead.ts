@@ -59,6 +59,8 @@ async function post(payload: LeadPayload) {
       ...payload,
       source: withChannel(payload.source, currentChannel()),
       name: payload.name?.trim() || ANONYMOUS_LEAD_NAME,
+      // The API takes up to 1000 characters; a long estimate must not fail the lead.
+      message: payload.message ? payload.message.slice(0, 1000) : payload.message,
       website: payload.website ?? '',
       ymClientId: readYmClientId(),
     }),

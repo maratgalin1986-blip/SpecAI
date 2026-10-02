@@ -259,7 +259,7 @@ export function ChatWidget() {
             {historyLoaded && messages.length === 0 && (
               <div className="rounded-lg bg-white p-3 text-sm text-slate-600 shadow-sm">
                 Здравствуйте! Помогу подобрать спецтехнику под вашу задачу или расскажу о ваших
-                бронированиях. Например: «Нужен экскаватор в Москве до 20 000 ₽ в сутки».
+                бронированиях. Например: «Нужен экскаватор в Набережных Челнах на завтра».
               </div>
             )}
             {messages.map((message) => (

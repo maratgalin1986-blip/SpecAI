@@ -389,7 +389,7 @@ export function TaskWizard() {
                 {estimate && (
                   <div className="mt-4 rounded-2xl bg-slate-950 p-4 text-white">
                     <div className="eyebrow text-[0.65rem] text-slate-400">
-                      Ориентир, без доставки
+                      Примерно, без доставки
                     </div>
                     <div className="mt-1 font-mono text-2xl font-bold text-amber-400">
                       {estimate}

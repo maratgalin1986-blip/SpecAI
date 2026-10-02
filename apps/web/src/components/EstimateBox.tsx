@@ -223,7 +223,7 @@ export function EstimateBox({
 
           <div className="rounded-2xl bg-slate-950 p-4 text-white">
             <div className="flex items-baseline justify-between gap-3">
-              <span className="eyebrow text-[0.6rem] text-slate-400">Итого</span>
+              <span className="eyebrow text-[0.6rem] text-slate-400">Итого примерно</span>
               <span className="font-mono text-xs text-slate-400">{breakdown}</span>
             </div>
             <div
@@ -245,7 +245,7 @@ export function EstimateBox({
           summary={`${equipmentName}${total !== null ? `, расчёт ${rub(total)}` : ''}`}
         />
       ) : (
-        <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+        <form onSubmit={handleSubmit} className="ym-hide-content flex flex-col gap-3">
           <input
             required
             type="tel"

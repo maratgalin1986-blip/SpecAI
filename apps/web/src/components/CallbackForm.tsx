@@ -65,7 +65,7 @@ export function CallbackForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+    <form onSubmit={handleSubmit} className="ym-hide-content flex flex-col gap-3">
       <div>
         <h2 className={`text-lg font-semibold ${dark ? 'text-white' : ''}`}>{title}</h2>
         <p className={`mt-1 text-sm ${dark ? 'text-slate-300' : 'text-slate-600'}`}>{subtitle}</p>
@@ -142,7 +142,11 @@ export function CallbackForm({
           className="mt-0.5"
         />
         <span>
-          Согласен(на) на обработку персональных данных в соответствии с{' '}
+          Согласен(на) на обработку персональных данных (
+          <a href="/soglasie" className="underline" target="_blank">
+            согласие
+          </a>
+          ) в соответствии с{' '}
           <a href="/privacy" className="underline" target="_blank">
             политикой конфиденциальности
           </a>

@@ -37,34 +37,22 @@ export default function CreditsPage() {
               className="h-[68px] w-[120px] shrink-0 rounded-md object-cover"
             />
             <div className="min-w-0 text-sm">
-              <a href={credit.url} target="_blank" rel="noopener" className="font-medium underline">
-                {credit.title}
-              </a>
+              <span className="font-medium">{credit.title}</span>
               <div className="text-slate-500">
                 Автор: {credit.author} · {credit.license}
               </div>
+              <div className="break-all text-xs text-slate-400">{credit.url}</div>
             </div>
           </li>
         ))}
       </ul>
       <p className="text-sm text-slate-600">
         3D-стройка (/stroyka) нарисована процедурно, в кубическом стиле, без сторонних моделей.
-        Карта города под ней — данные{' '}
-        <a
-          href="https://www.openstreetmap.org/copyright"
-          target="_blank"
-          rel="noopener"
-          className="underline"
-        >
-          © участники OpenStreetMap
-        </a>{' '}
-        (лицензия ODbL). Погода — MET Norway (CC BY 4.0).
+        Карта города под ней — данные <span>© участники OpenStreetMap</span> (лицензия ODbL). Погода
+        — MET Norway (CC BY 4.0).
       </p>
       <p className="text-sm text-slate-500">
-        Mixkit:{' '}
-        <a href="https://mixkit.co/license/" target="_blank" rel="noopener" className="underline">
-          mixkit.co/license
-        </a>
+        Mixkit: <span>mixkit.co/license</span>
       </p>
 
       <h2 className="mt-4 text-xl font-bold">Звук</h2>
@@ -76,26 +64,16 @@ export default function CreditsPage() {
       <ul className="flex flex-col gap-3">
         {SOUND_CREDITS.map((credit) => (
           <li key={credit.name} className="rounded-xl border border-slate-200 p-3 text-sm">
-            <a href={credit.url} target="_blank" rel="noopener" className="font-medium underline">
-              {credit.title}
-            </a>
+            <span className="font-medium">{credit.title}</span>
             <div className="text-slate-500">
               Автор: {credit.author} · {credit.license} · {credit.use}
             </div>
+            <div className="break-all text-xs text-slate-400">{credit.url}</div>
           </li>
         ))}
       </ul>
       <p className="text-sm text-slate-500">
-        Лицензия:{' '}
-        <a
-          href="https://creativecommons.org/publicdomain/zero/1.0/deed.ru"
-          target="_blank"
-          rel="noopener"
-          className="underline"
-        >
-          CC0
-        </a>
-        . Изменения: фрагмент, моно, сжатие.
+        Лицензия: <span>CC0</span>. Изменения: фрагмент, моно, сжатие.
       </p>
     </div>
   );

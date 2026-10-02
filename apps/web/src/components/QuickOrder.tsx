@@ -95,7 +95,7 @@ export function QuickOrder({
         <form
           id={formId}
           onSubmit={handleSubmit}
-          className="flex flex-col gap-2.5 rounded-2xl border border-slate-200 bg-slate-50 p-3"
+          className="ym-hide-content flex flex-col gap-2.5 rounded-2xl border border-slate-200 bg-slate-50 p-3"
         >
           <p className="text-xs text-slate-600">{SITE.callbackPromise}.</p>
           <input

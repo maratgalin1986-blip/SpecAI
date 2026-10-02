@@ -8,6 +8,22 @@ const prisma = createPrismaClient();
 
 const COMPANY_ID = 'specplast16-house';
 const PRICE_RAISE = 1000;
+
+/** A Telegram message to the owner, if the bot is configured; never throws. */
+async function alertOwner(text: string) {
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  const chatId = process.env.TELEGRAM_CHAT_ID;
+  if (!token || !chatId) return;
+  try {
+    await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: chatId, text }),
+    });
+  } catch {
+    // Nothing else to do from a build step.
+  }
+}
 const LOCATION_ID = 'specplast16-location';
 
 interface FleetItem {
@@ -262,15 +278,23 @@ async function main() {
   // only (previews share the database), and only rows still at the old price,
   // so prices edited by hand in the cabinet are left alone.
   if (process.env.VERCEL_ENV === 'production') {
-    let repriced = 0;
-    for (const item of FLEET) {
-      const result = await prisma.equipment.updateMany({
-        where: { id: item.id, hourlyRate: item.hourlyRate - PRICE_RAISE },
-        data: { hourlyRate: item.hourlyRate, dailyRate: item.hourlyRate * 8, specs: item.specs },
-      });
-      repriced += result.count;
+    try {
+      let repriced = 0;
+      for (const item of FLEET) {
+        const result = await prisma.equipment.updateMany({
+          where: { id: item.id, hourlyRate: item.hourlyRate - PRICE_RAISE },
+          data: { hourlyRate: item.hourlyRate, dailyRate: item.hourlyRate * 8, specs: item.specs },
+        });
+        repriced += result.count;
+      }
+      console.log(`Парк СпецПласт16: новые цены у ${repriced} позиций.`);
+    } catch (error) {
+      // The deploy goes on, but the owner must know the catalog kept old prices.
+      console.error('repricing failed', error);
+      await alertOwner(
+        '⚠️ Сайт: не удалось обновить цены техники в каталоге — проверьте /arenda/samosval',
+      );
     }
-    console.log(`Парк СпецПласт16: новые цены у ${repriced} позиций.`);
   }
 }
 
