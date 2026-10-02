@@ -28,6 +28,11 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { approvedComments, commentAccessError } from '@/lib/commentAccess';
 import { CommentForm, CommentList } from '@/components/Comments';
+import { ShareButtons } from '@/components/ShareButtons';
+import { ReliabilityBadges } from '@/components/ReliabilityBadges';
+import { companyReliability } from '@/lib/companyStats';
+import { providerPath } from '@/lib/providerSeo';
+import { siteUrl } from '@/lib/siteUrl';
 
 export const dynamic = 'force-dynamic';
 
@@ -40,12 +45,43 @@ const STATUS_NOTE: Record<string, string> = {
 export async function generateMetadata({ params }: { params: { id: string } }): Promise<Metadata> {
   const item = await prisma.equipment.findUnique({
     where: { id: params.id },
-    select: { name: true, description: true, dailyRate: true, hourlyRate: true, currency: true },
+    select: {
+      name: true,
+      description: true,
+      dailyRate: true,
+      hourlyRate: true,
+      currency: true,
+      imageUrls: true,
+      category: { select: { name: true } },
+      company: { select: { name: true } },
+    },
   });
   if (!item) return { title: 'Техника не найдена' };
+  const title = `${item.name} — аренда ${formatRate(item).price}${formatRate(item).unit}`;
+  const description = maskContactsAndLinks(
+    item.description ?? `Аренда: ${item.name}, ${item.category.name.toLowerCase()} с машинистом`,
+  ).slice(0, 200);
+  const photo = item.imageUrls.find(isDisplayableImage);
+  const url = `/equipment/${params.id}`;
   return {
-    title: `${item.name} — аренда ${formatRate(item).price}${formatRate(item).unit}`,
-    description: item.description ?? `Аренда: ${item.name}`,
+    title,
+    description,
+    alternates: { canonical: url },
+    openGraph: {
+      type: 'website',
+      locale: 'ru_RU',
+      siteName: SITE.name,
+      url,
+      title,
+      description: `${description} · исполнитель: ${item.company.name}`.slice(0, 300),
+      ...(photo ? { images: [{ url: photo, alt: item.name }] } : {}),
+    },
+    twitter: {
+      card: photo ? 'summary_large_image' : 'summary',
+      title,
+      description,
+      ...(photo ? { images: [photo] } : {}),
+    },
   };
 }
 
@@ -69,9 +105,10 @@ export default async function EquipmentDetailPage({ params }: { params: { id: st
 
   const session = await getServerSession(authOptions);
   const commentTarget = { targetCompanyId: item.companyId };
-  const [comments, commentDenied] = await Promise.all([
+  const [comments, commentDenied, trust] = await Promise.all([
     approvedComments(commentTarget),
     session?.user ? commentAccessError(session.user, commentTarget) : Promise.resolve(null),
+    companyReliability(item.companyId),
   ]);
   const canComment = Boolean(session?.user) && commentDenied === null;
 
@@ -254,6 +291,16 @@ export default async function EquipmentDetailPage({ params }: { params: { id: st
               showVatNote={ownFleet}
               statusNote={STATUS_NOTE[item.status]}
             />
+            <div className="cab-card flex flex-col gap-2">
+              <p className="text-xs text-graphite-500">Исполнитель</p>
+              <a
+                href={providerPath(item.companyId)}
+                className="break-words font-bold text-graphite-950 hover:text-signal-700 hover:underline"
+              >
+                {executor}
+              </a>
+              <ReliabilityBadges value={trust} />
+            </div>
             {item.status === 'AVAILABLE' && (
               <details className="group rounded-3xl border border-slate-200 bg-white px-5 py-4">
                 <summary className="flex cursor-pointer list-none items-center justify-between gap-2 text-sm font-semibold [&::-webkit-details-marker]:hidden">
@@ -322,6 +369,12 @@ export default async function EquipmentDetailPage({ params }: { params: { id: st
               </div>
             </section>
           )}
+
+          <ShareButtons
+            url={`${siteUrl()}/equipment/${item.id}`}
+            text={`${item.name} — аренда с машинистом`}
+            label="Поделиться техникой"
+          />
 
           <section id="comments" className="scroll-mt-24">
             <div className="eyebrow text-amber-700">Комментарии заказчиков</div>

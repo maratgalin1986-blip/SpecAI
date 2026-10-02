@@ -5,6 +5,7 @@ import { ConditionsPreview } from '@/components/ConditionsPreview';
 import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { Button } from '@specai/ui';
+import type { OrderPrefill } from '@/lib/quickOrder';
 
 /** Today's date in Moscow as YYYY-MM-DD, the earliest allowed order date. */
 function todayInMoscow() {
@@ -16,18 +17,25 @@ interface Category {
   name: string;
 }
 
-export function NewOrderForm({ provider }: { provider?: { name: string } | null } = {}) {
+export function NewOrderForm({
+  provider,
+  initial,
+}: {
+  provider?: { name: string } | null;
+  /** From the cabinet's quick-order panel (lib/quickOrder.ts). */
+  initial?: OrderPrefill;
+} = {}) {
   const router = useRouter();
   const { status } = useSession();
   const [categories, setCategories] = useState<Category[]>([]);
-  const [categoryId, setCategoryId] = useState('');
+  const [categoryId, setCategoryId] = useState(initial?.categoryId ?? '');
   // From the map's «Оставить заявку»: the order names the chosen provider.
   const [description, setDescription] = useState(
-    provider ? `Для исполнителя «${provider.name}». ` : '',
+    (provider ? `Для исполнителя «${provider.name}». ` : '') + (initial?.description ?? ''),
   );
-  const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate] = useState('');
-  const [address, setAddress] = useState('');
+  const [startDate, setStartDate] = useState(initial?.startDate ?? '');
+  const [endDate, setEndDate] = useState(initial?.endDate ?? '');
+  const [address, setAddress] = useState(initial?.address ?? '');
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 

@@ -18,6 +18,12 @@ import { redirect } from 'next/navigation';
 import { GuideCard } from '@/components/GuideCard';
 import { CommentForm } from '@/components/Comments';
 import { guideFor } from '@/lib/guideState';
+import { CabinetQuickOrder } from '@/components/CabinetQuickOrder';
+import { ReferralCard } from '@/components/ReferralCard';
+import { orderTimeline } from '@/lib/orderTimeline';
+import { ensureReferralCode, invitedCounts } from '@/lib/referralStore';
+import { referralLink } from '@/lib/referral';
+import { siteUrl } from '@/lib/siteUrl';
 
 export const metadata: Metadata = { title: 'Личный кабинет', robots: { index: false } };
 
@@ -57,7 +63,17 @@ export default async function DashboardPage({
   const paymentNotice = searchParams?.payment ? PAYMENT_NOTICE[searchParams.payment] : undefined;
   const paymentsEnabled = isOnlinePaymentEnabled();
 
-  const [guide, equipmentCount, activeBookings, myBookings, myOrders, me] = await Promise.all([
+  const [
+    guide,
+    equipmentCount,
+    activeBookings,
+    myBookings,
+    myOrders,
+    me,
+    categories,
+    referralCode,
+    invited,
+  ] = await Promise.all([
     guideFor(session?.user),
     prisma.equipment.count({ where: PUBLISHED_FLEET }),
     session
@@ -80,7 +96,7 @@ export default async function DashboardPage({
     session
       ? prisma.order.findMany({
           where: { customerId: session.user.id },
-          include: { bids: true },
+          include: { bids: { select: { id: true } }, booking: { select: { status: true } } },
           orderBy: { createdAt: 'desc' },
           take: 20,
         })
@@ -91,6 +107,24 @@ export default async function DashboardPage({
           select: { emailVerified: true },
         })
       : Promise.resolve(null),
+    // Quick-order tiles: the machine types with the most published machinery first.
+    prisma.equipmentCategory
+      .findMany({
+        select: {
+          id: true,
+          name: true,
+          _count: { select: { equipment: { where: PUBLISHED_FLEET } } },
+        },
+      })
+      .then((rows) =>
+        rows
+          .sort((a, b) => b._count.equipment - a._count.equipment || a.name.localeCompare(b.name))
+          .map(({ id, name }) => ({ id, name })),
+      ),
+    session ? ensureReferralCode(session.user.id).catch(() => null) : Promise.resolve(null),
+    session
+      ? invitedCounts(session.user.id).catch(() => ({ total: 0, providers: 0 }))
+      : Promise.resolve({ total: 0, providers: 0 }),
   ]);
 
   const stats = [
@@ -99,8 +133,14 @@ export default async function DashboardPage({
   ];
 
   return (
-    <div className="flex flex-col gap-6">
-      <h1 className="text-2xl font-bold">Личный кабинет</h1>
+    <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
+      <div className="flex items-baseline justify-between gap-3">
+        <h1 className="text-2xl font-extrabold tracking-tight text-graphite-950">Личный кабинет</h1>
+        <a href="#invite" className="text-sm font-semibold text-signal-700 hover:underline">
+          Пригласить коллегу
+        </a>
+      </div>
+      <CabinetQuickOrder categories={categories} />
       <GuideCard guide={guide} />
       {searchParams?.verified === '1' && (
         <p className="rounded-md border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
@@ -120,12 +160,12 @@ export default async function DashboardPage({
           {paymentNotice.text}
         </p>
       )}
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid grid-cols-2 gap-3">
         {stats.map((stat) => (
-          <Card key={stat.label}>
-            <p className="text-sm text-slate-500">{stat.label}</p>
-            <p className="mt-1 text-3xl font-bold">{stat.value}</p>
-          </Card>
+          <div key={stat.label} className="cab-card">
+            <p className="text-xs text-graphite-500 sm:text-sm">{stat.label}</p>
+            <p className="mt-1 font-mono text-3xl font-bold text-graphite-950">{stat.value}</p>
+          </div>
         ))}
       </div>
 
@@ -133,31 +173,61 @@ export default async function DashboardPage({
         <h2 className="mb-3 text-lg font-semibold">Мои заявки</h2>
         {myOrders.length === 0 ? (
           <p className="text-sm text-slate-600">
-            Заявок пока нет.{' '}
-            <a href="/orders" className="font-medium text-amber-700">
-              Опубликовать
+            Заявок пока нет — выберите технику в «Быстром заказе» выше или{' '}
+            <a href="/orders#new" className="font-medium text-signal-700">
+              опишите задачу
             </a>
             .
           </p>
         ) : (
           <div className="flex flex-col gap-3">
-            {myOrders.map((order) => (
-              <a key={order.id} href={`/orders/${order.id}`}>
-                <Card className="flex flex-col gap-3 hover:border-amber-400 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
-                  <div className="min-w-0">
-                    <p className="break-words font-medium">{order.description}</p>
-                    <p className="text-sm text-slate-500">
+            {myOrders.map((order) => {
+              const timeline = orderTimeline({
+                orderStatus: order.status,
+                bidCount: order.bids.length,
+                bookingStatus: order.booking?.status ?? null,
+              });
+              const current =
+                timeline.steps.find((step) => step.state === 'current') ??
+                timeline.steps.filter((step) => step.state === 'done').pop();
+              return (
+                <a key={order.id} href={`/orders/${order.id}`} className="group">
+                  <div className="cab-card flex flex-col gap-3 transition group-hover:border-signal-400">
+                    <div className="flex items-start justify-between gap-3">
+                      <p className="min-w-0 break-words font-semibold text-graphite-950">
+                        {order.description}
+                      </p>
+                      <span className="w-fit shrink-0 rounded-full bg-graphite-100 px-2.5 py-0.5 text-xs font-semibold text-graphite-700">
+                        {timeline.cancelled
+                          ? ORDER_STATUS_LABELS[order.status]
+                          : (current?.title ?? ORDER_STATUS_LABELS[order.status])}
+                      </span>
+                    </div>
+                    <div className="flex gap-1" aria-hidden>
+                      {timeline.steps.map((step) => (
+                        <span
+                          key={step.id}
+                          className={`h-1.5 flex-1 rounded-full ${
+                            timeline.cancelled
+                              ? 'bg-graphite-200'
+                              : step.state === 'done'
+                                ? 'bg-signal-500'
+                                : step.state === 'current'
+                                  ? 'bg-signal-200'
+                                  : 'bg-graphite-100'
+                          }`}
+                        />
+                      ))}
+                    </div>
+                    <p className="text-sm text-graphite-600">
                       {order.desiredStartDate.toLocaleDateString('ru-RU')} –{' '}
                       {order.desiredEndDate.toLocaleDateString('ru-RU')} · Предложений:{' '}
                       {order.bids.length}
                     </p>
                   </div>
-                  <span className="w-fit shrink-0 rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-700">
-                    {ORDER_STATUS_LABELS[order.status]}
-                  </span>
-                </Card>
-              </a>
-            ))}
+                </a>
+              );
+            })}
           </div>
         )}
       </div>
@@ -282,6 +352,14 @@ export default async function DashboardPage({
           </div>
         )}
       </div>
+
+      {referralCode && (
+        <ReferralCard
+          link={referralLink(siteUrl(), referralCode)}
+          role="CUSTOMER"
+          invited={invited}
+        />
+      )}
     </div>
   );
 }

@@ -7,6 +7,8 @@ import { sendVerificationEmail } from '@/lib/verificationEmail';
 import { zodErrorMessage } from '@/lib/apiInput';
 import { resolveProviderBase, type ProviderBase } from '@/lib/providerBase';
 import { checkRateLimit } from '@/lib/rateLimit';
+import { REFERRAL_COOKIE } from '@/lib/referral';
+import { findReferrer, freeReferralCode } from '@/lib/referralStore';
 
 export async function POST(request: NextRequest) {
   const body = (await request.json().catch(() => null)) as {
@@ -14,6 +16,7 @@ export async function POST(request: NextRequest) {
     baseAddress?: unknown;
     baseLat?: unknown;
     baseLon?: unknown;
+    ref?: unknown;
   } | null;
   // 152-ФЗ: без явного согласия на обработку персональных данных аккаунт не создаётся.
   if (body?.consent !== true) {
@@ -53,6 +56,13 @@ export async function POST(request: NextRequest) {
 
   const passwordHash = await bcrypt.hash(parsed.data.password, 10);
 
+  // «Пригласи коллегу»: the code from the form (?ref=) or the cookie set by /r/<code>.
+  const referrer = await findReferrer(body?.ref ?? request.cookies.get(REFERRAL_COOKIE)?.value);
+  const referral = {
+    referralCode: await freeReferralCode(),
+    ...(referrer ? { referredById: referrer.id } : {}),
+  };
+
   // Aggregator: a provider signs up together with its company, which then
   // publishes its fleet and answers customers' orders.
   const data = parsed.data;
@@ -69,6 +79,7 @@ export async function POST(request: NextRequest) {
           passwordHash,
           role: 'PROVIDER_ADMIN',
           companyId: company.id,
+          ...referral,
         },
       });
     }
@@ -79,6 +90,7 @@ export async function POST(request: NextRequest) {
         phone: data.phone,
         passwordHash,
         role: 'CUSTOMER',
+        ...referral,
       },
     });
   });
@@ -90,5 +102,7 @@ export async function POST(request: NextRequest) {
     console.error('[auth] failed to send verification email', error);
   }
 
-  return NextResponse.json({ id: user.id, email: user.email }, { status: 201 });
+  const response = NextResponse.json({ id: user.id, email: user.email }, { status: 201 });
+  if (referrer) response.cookies.delete(REFERRAL_COOKIE);
+  return response;
 }
