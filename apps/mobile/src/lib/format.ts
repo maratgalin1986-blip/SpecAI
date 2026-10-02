@@ -156,7 +156,7 @@ export function formatSpecValue(value: unknown): string {
 
 export const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
   OPEN: 'Открыта',
-  MATCHED: 'Техника выбрана',
+  MATCHED: 'Исполнитель выбран',
   CANCELLED: 'Отменена',
 };
 

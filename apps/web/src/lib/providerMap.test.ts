@@ -15,6 +15,7 @@ import {
   pinPhotoChoices,
   sanitizePinNote,
   siteMachinePhotos,
+  spreadOverlapping,
   toMapPins,
   type ProviderMapRow,
 } from './providerMap';
@@ -247,5 +248,20 @@ describe('baseAfterAddressEdit', () => {
       ...found,
       address: 'База у трассы',
     });
+  });
+});
+
+describe('spreadOverlapping', () => {
+  it('leaves distant markers alone and spreads the ones on top of each other', () => {
+    const shifts = spreadOverlapping([
+      { id: 'a', x: 100, y: 100 },
+      { id: 'b', x: 102, y: 101 },
+      { id: 'c', x: 400, y: 400 },
+    ]);
+    expect(shifts.get('c')).toEqual({ dx: 0, dy: 0 });
+    const a = shifts.get('a')!;
+    const b = shifts.get('b')!;
+    const distance = Math.hypot(100 + a.dx - (102 + b.dx), 100 + a.dy - (101 + b.dy));
+    expect(distance).toBeGreaterThanOrEqual(44);
   });
 });

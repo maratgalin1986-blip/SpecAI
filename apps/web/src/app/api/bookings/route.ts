@@ -11,7 +11,9 @@ import { findOverlappingBooking, lockEquipment } from '@/lib/bookingConflicts';
 import { INVALID_JSON_MESSAGE, prismaErrorCode, readJson, zodErrorMessage } from '@/lib/apiInput';
 import { isOnlinePaymentEnabled } from '@/lib/stripe';
 import { isProvider } from '@/lib/fleet';
-import { customerForProvider } from '@/lib/customerPrivacy';
+import { customerForProvider, providerForCustomer } from '@/lib/customerPrivacy';
+import { HOUSE_COMPANY_ID } from '@/lib/fleet';
+import { SITE } from '@/lib/site';
 
 export const dynamic = 'force-dynamic';
 
@@ -67,7 +69,15 @@ export async function GET(request: NextRequest) {
   const bookings = await prisma.booking.findMany({
     where: { customerId: currentUser.id },
     include: {
-      equipment: { select: { id: true, name: true, imageUrls: true, companyId: true } },
+      equipment: {
+        select: {
+          id: true,
+          name: true,
+          imageUrls: true,
+          companyId: true,
+          company: { select: { id: true, name: true, phone: true } },
+        },
+      },
       payment: { select: { status: true, refundRequired: true } },
       review: { select: { id: true, rating: true } },
     },
@@ -75,7 +85,15 @@ export async function GET(request: NextRequest) {
     take: 100,
   });
 
-  return NextResponse.json({ bookings, paymentsEnabled });
+  // The provider's name always, its phone once the booking is confirmed.
+  return NextResponse.json({
+    bookings: bookings.map(({ equipment: { company, ...equipment }, ...booking }) => ({
+      ...booking,
+      equipment,
+      provider: providerForCustomer(company, booking.status, HOUSE_COMPANY_ID, SITE.phone),
+    })),
+    paymentsEnabled,
+  });
 }
 
 export async function POST(request: NextRequest) {

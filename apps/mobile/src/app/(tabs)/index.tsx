@@ -15,20 +15,24 @@ import { ContactActions } from '@/components/ContactActions';
 import { NextStepCard } from '@/components/NextStepCard';
 import { useAuth } from '@/lib/auth';
 import { Badge, EmptyState, ErrorBanner, Input } from '@/components/ui';
-import { ApiError, fetchEquipment, type Equipment } from '@/lib/api';
+import { ApiError, fetchEquipment, type Equipment, imageUri } from '@/lib/api';
 import { EQUIPMENT_STATUS_LABELS, formatRate } from '@/lib/format';
 import { colors, radius, spacing } from '@/lib/theme';
 
 const PAGE_SIZE = 20;
 
 function EquipmentCard({ item }: { item: Equipment }) {
-  const image = item.imageUrls[0];
+  // Своё фото или пример по типу машины (сервер отдаёт photoUrl).
+  const image = imageUri(item.photoUrl ?? item.imageUrls[0]);
   const rate = formatRate(item);
   return (
     <Link href={{ pathname: '/equipment/[id]', params: { id: item.id } }} asChild>
       <Pressable style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}>
         {image ? (
-          <Image source={{ uri: image }} style={styles.image} resizeMode="cover" />
+          <View>
+            <Image source={{ uri: image }} style={styles.image} resizeMode="cover" />
+            {item.photoIsExample ? <Text style={styles.example}>Фото для примера</Text> : null}
+          </View>
         ) : (
           <View style={[styles.image, styles.imagePlaceholder]}>
             <Text style={styles.imagePlaceholderText}>Нет фото</Text>
@@ -210,6 +214,15 @@ export default function CatalogScreen() {
 }
 
 const styles = StyleSheet.create({
+  example: {
+    position: 'absolute',
+    right: 8,
+    bottom: 6,
+    fontSize: 11,
+    color: '#fff',
+    textShadowColor: 'rgba(0,0,0,0.6)',
+    textShadowRadius: 3,
+  },
   screen: { flex: 1, backgroundColor: colors.background },
   searchBar: {
     padding: spacing.lg,

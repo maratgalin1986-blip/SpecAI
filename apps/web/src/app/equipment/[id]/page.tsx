@@ -22,6 +22,8 @@ import { pluralizeRu } from '@/lib/pluralize';
 import { SITE } from '@/lib/site';
 import { PUBLISHED_FLEET, isHouseEquipment } from '@/lib/fleet';
 import { isDisplayableImage } from '@/lib/providerMap';
+import { shortAuthorName } from '@/lib/comments';
+import { maskContactsAndLinks } from '@/lib/privacy';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { approvedComments, commentAccessError } from '@/lib/commentAccess';
@@ -54,7 +56,10 @@ export default async function EquipmentDetailPage({ params }: { params: { id: st
       category: true,
       location: true,
       company: true,
-      reviews: { include: { author: true }, orderBy: { createdAt: 'desc' } },
+      reviews: {
+        include: { author: { select: { name: true } } },
+        orderBy: { createdAt: 'desc' },
+      },
     },
   });
 
@@ -305,9 +310,13 @@ export default async function EquipmentDetailPage({ params }: { params: { id: st
                         {'★'.repeat(review.rating)}
                         {'☆'.repeat(5 - review.rating)}
                       </span>{' '}
-                      <span className="font-normal text-slate-500">{review.author.name}</span>
+                      <span className="font-normal text-slate-500">
+                        {shortAuthorName(review.author.name)}
+                      </span>
                     </p>
-                    {review.comment && <p className="mt-1 text-slate-700">{review.comment}</p>}
+                    {review.comment && review.textStatus === 'APPROVED' && (
+                      <p className="mt-1 text-slate-700">{maskContactsAndLinks(review.comment)}</p>
+                    )}
                   </div>
                 ))}
               </div>

@@ -408,10 +408,14 @@ model Document {
 }
 
 model Review {
-  id        String   @id @default(cuid())
-  rating    Int
-  comment   String?
-  createdAt DateTime @default(now())
+  id         String   @id @default(cuid())
+  rating     Int
+  comment    String?
+  // The stars are shown at once; the text only after the owner approves it
+  // in /admin: "PENDING" | "APPROVED" | "REJECTED" (a string, not an enum —
+  // see CLAUDE.md, rule 2).
+  textStatus String   @default("PENDING")
+  createdAt  DateTime @default(now())
 
   author   User   @relation(fields: [authorId], references: [id])
   authorId String

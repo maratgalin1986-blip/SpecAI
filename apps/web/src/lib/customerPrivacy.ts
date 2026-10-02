@@ -45,3 +45,27 @@ export function customerForProvider(
     contactsVisible: visible,
   };
 }
+
+export interface CustomerProviderView {
+  name: string;
+  /** null until the provider confirms the booking. */
+  phone: string | null;
+}
+
+/**
+ * The provider of a booking as its customer sees it: the company name always,
+ * its phone from CONFIRMED on (the same moment the provider gets the
+ * customer's contacts). The own fleet falls back to the site's phone.
+ */
+export function providerForCustomer(
+  company: { id: string; name: string; phone?: string | null },
+  bookingStatus: string,
+  houseCompanyId: string,
+  sitePhone: string,
+): CustomerProviderView {
+  const phone = company.phone?.trim() || (company.id === houseCompanyId ? sitePhone : null);
+  return {
+    name: company.name,
+    phone: canSeeCustomerContacts(bookingStatus) ? phone : null,
+  };
+}

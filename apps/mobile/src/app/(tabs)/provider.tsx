@@ -25,6 +25,7 @@ import {
   ApiError,
   fetchMyEquipment,
   fetchProviderBookings,
+  imageUri,
   updateBookingStatus,
   updateEquipment,
   type BookingStatus,
@@ -101,7 +102,7 @@ function EquipmentRow({
   item: Equipment;
   onStatusChanged: (id: string, status: EquipmentStatus) => void;
 }) {
-  const image = item.imageUrls.find((url) => url.startsWith('https://'));
+  const image = imageUri(item.photoUrl ?? item.imageUrls[0]);
   const [saving, setSaving] = useState<EquipmentStatus | null>(null);
   const retired = item.status === 'RETIRED';
 

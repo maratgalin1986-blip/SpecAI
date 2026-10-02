@@ -3,6 +3,8 @@ import { prisma } from '@specai/database';
 import { getRequestUser } from '@/lib/requestUser';
 import { isProvider, isHouseManager } from '@/lib/fleet';
 import { customerShortName } from '@/lib/customerPrivacy';
+import { updateOrderSchema } from '@specai/shared';
+import { INVALID_JSON_MESSAGE, readJson, zodErrorMessage } from '@/lib/apiInput';
 
 export const dynamic = 'force-dynamic';
 
@@ -80,4 +82,55 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     },
     isOwner,
   });
+}
+
+/**
+ * Заказчик отменяет свою открытую заявку: { status: 'CANCELLED' }. Ожидающие
+ * предложения отклоняются. Заявку с выбранным исполнителем отменяют через бронь.
+ */
+export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
+  const currentUser = await getRequestUser(request);
+  if (!currentUser) {
+    return NextResponse.json({ error: 'Необходимо войти в аккаунт' }, { status: 401 });
+  }
+  const body = await readJson(request);
+  if (body === null) {
+    return NextResponse.json({ error: INVALID_JSON_MESSAGE }, { status: 400 });
+  }
+  const parsed = updateOrderSchema.safeParse(body);
+  if (!parsed.success) {
+    return NextResponse.json({ error: zodErrorMessage(parsed.error) }, { status: 400 });
+  }
+  const order = await prisma.order.findUnique({
+    where: { id: params.id },
+    select: { id: true, customerId: true, status: true },
+  });
+  if (!order || order.customerId !== currentUser.id) {
+    return NextResponse.json({ error: 'Заявка не найдена' }, { status: 404 });
+  }
+  const cancelled = await prisma.$transaction(async (tx) => {
+    const { count } = await tx.order.updateMany({
+      where: { id: order.id, status: 'OPEN' },
+      data: { status: 'CANCELLED' },
+    });
+    if (count > 0) {
+      await tx.bid.updateMany({
+        where: { orderId: order.id, status: 'PENDING' },
+        data: { status: 'REJECTED' },
+      });
+    }
+    return count > 0;
+  });
+  if (!cancelled) {
+    return NextResponse.json(
+      {
+        error:
+          order.status === 'MATCHED'
+            ? 'Исполнитель уже выбран — отмените бронь в личном кабинете'
+            : 'Заявка уже закрыта',
+      },
+      { status: 409 },
+    );
+  }
+  return NextResponse.json({ ok: true, message: 'Заявка отменена' });
 }

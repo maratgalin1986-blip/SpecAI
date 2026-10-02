@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { canSeeCustomerContacts, customerForProvider, customerShortName } from './customerPrivacy';
+import {
+  canSeeCustomerContacts,
+  customerForProvider,
+  customerShortName,
+  providerForCustomer,
+} from './customerPrivacy';
 
 const customer = {
   id: 'u1',
@@ -39,5 +44,25 @@ describe('customer privacy for providers', () => {
       contactsVisible: true,
     });
     expect(JSON.stringify(customerForProvider(customer, 'CANCELLED'))).not.toContain('Петрова');
+  });
+});
+
+describe('provider for the customer', () => {
+  const company = { id: 'p1', name: 'ИП Иванов', phone: '+7 927 111-22-33' };
+  it('shows the name always and the phone from CONFIRMED on', () => {
+    expect(providerForCustomer(company, 'PENDING', 'house', '+7 000')).toEqual({
+      name: 'ИП Иванов',
+      phone: null,
+    });
+    expect(providerForCustomer(company, 'CONFIRMED', 'house', '+7 000').phone).toBe(
+      '+7 927 111-22-33',
+    );
+  });
+  it('falls back to the site phone for the own fleet only', () => {
+    const house = { id: 'house', name: 'СпецПласт16', phone: null };
+    expect(providerForCustomer(house, 'ACTIVE', 'house', '+7 000').phone).toBe('+7 000');
+    expect(
+      providerForCustomer({ ...house, id: 'x' }, 'ACTIVE', 'house', '+7 000').phone,
+    ).toBeNull();
   });
 });

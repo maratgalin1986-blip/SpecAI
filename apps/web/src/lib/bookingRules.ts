@@ -34,6 +34,23 @@ export function toBookingDay(date: Date): Date {
   return new Date(`${moscowDateKey(date)}T00:00:00.000Z`);
 }
 
+/**
+ * A rental can start (ACTIVE) or be finished (COMPLETED) only from its first
+ * day in Moscow on. Returns the error text, or null when it is allowed.
+ */
+export function earlyStatusError(
+  status: string,
+  startDate: Date,
+  now: Date = new Date(),
+): string | null {
+  if (status !== 'ACTIVE' && status !== 'COMPLETED') return null;
+  if (moscowDateKey(now) >= moscowDateKey(startDate)) return null;
+  const day = startDate.toLocaleDateString('ru-RU', { timeZone: BOOKING_TIME_ZONE });
+  return status === 'ACTIVE'
+    ? `Начать аренду можно с ${day} — в день начала работ`
+    : `Завершить аренду можно не раньше ${day}`;
+}
+
 /** Number of rental days, both ends included: 1–1 March is 1 day, 1–3 March is 3. */
 export function bookingDays(start: Date, end: Date): number {
   return Math.round((toBookingDay(end).getTime() - toBookingDay(start).getTime()) / DAY_MS) + 1;

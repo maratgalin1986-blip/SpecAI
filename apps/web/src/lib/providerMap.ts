@@ -223,3 +223,42 @@ export function baseAfterAddressEdit<
 export function machineCountLabel(count: number): string {
   return `${pluralizeRu(count, ['единица', 'единицы', 'единиц'])} техники`;
 }
+
+/**
+ * Markers that would overlap on screen (closer than `minDistance` pixels) are
+ * spread on a small circle around their common centre, so every provider
+ * stays tappable («spiderfy» without a plugin). Takes screen positions in
+ * pixels and returns the shift for each id (0, 0 for markers left in place).
+ */
+export function spreadOverlapping(
+  points: readonly { id: string; x: number; y: number }[],
+  minDistance = 44,
+  radius = 34,
+): Map<string, { dx: number; dy: number }> {
+  const shifts = new Map<string, { dx: number; dy: number }>();
+  const groups: { id: string; x: number; y: number }[][] = [];
+  for (const point of points) {
+    const group = groups.find((members) =>
+      members.some((other) => Math.hypot(other.x - point.x, other.y - point.y) < minDistance),
+    );
+    if (group) group.push(point);
+    else groups.push([point]);
+  }
+  for (const group of groups) {
+    if (group.length === 1) {
+      shifts.set(group[0]!.id, { dx: 0, dy: 0 });
+      continue;
+    }
+    const cx = group.reduce((sum, point) => sum + point.x, 0) / group.length;
+    const cy = group.reduce((sum, point) => sum + point.y, 0) / group.length;
+    const ring = Math.max(radius, (group.length * minDistance) / (2 * Math.PI));
+    group.forEach((point, index) => {
+      const angle = -Math.PI / 2 + (2 * Math.PI * index) / group.length;
+      shifts.set(point.id, {
+        dx: Math.round(cx + ring * Math.cos(angle) - point.x),
+        dy: Math.round(cy + ring * Math.sin(angle) - point.y),
+      });
+    });
+  }
+  return shifts;
+}

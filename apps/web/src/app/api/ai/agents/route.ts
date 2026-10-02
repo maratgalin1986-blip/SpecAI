@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@specai/database';
-import { agentChatRequestSchema, createOrderSchema, type AgentId } from '@specai/shared';
+import {
+  ORDER_STATUS_LABELS,
+  agentChatRequestSchema,
+  createOrderSchema,
+  type AgentId,
+} from '@specai/shared';
 import { routeToAgent, runAgent, type AgentToolHandlers } from '@specai/ai-service';
 import { getRequestUser } from '@/lib/requestUser';
 import { formatRate } from '@/lib/money';
@@ -440,8 +445,6 @@ const BOOKING_STATUS_RU: Record<string, string> = {
   CANCELLED: 'отменено',
 };
 
-const ORDER_STATUS_RU: Record<string, string> = {
-  OPEN: 'открыта',
-  MATCHED: 'исполнитель выбран',
-  CANCELLED: 'отменена',
-};
+const ORDER_STATUS_RU: Record<string, string> = Object.fromEntries(
+  Object.entries(ORDER_STATUS_LABELS).map(([status, label]) => [status, label.toLowerCase()]),
+);

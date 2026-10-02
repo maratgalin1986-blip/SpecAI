@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import { getServerSession } from 'next-auth';
 import { prisma } from '@specai/database';
-import { orderStatusSchema, type OrderStatus } from '@specai/shared';
+import { ORDER_STATUS_LABELS, orderStatusSchema, type OrderStatus } from '@specai/shared';
 import { Card } from '@specai/ui';
 import { NewOrderForm } from '@/components/NewOrderForm';
 import { Pagination } from '@/components/Pagination';
@@ -37,15 +37,11 @@ const STATUS_HEADINGS: Record<OrderStatus | 'ALL', string> = {
   ALL: 'Все заявки',
 };
 
-const STATUS_LABELS: Record<OrderStatus, string> = {
-  OPEN: 'Открыта',
-  MATCHED: 'Закрыта',
-  CANCELLED: 'Отменена',
-};
-
 interface OrdersSearchParams {
   status?: string;
   page?: string;
+  /** From the map: the provider the order is meant for. */
+  provider?: string;
 }
 
 export default async function OrdersPage({ searchParams }: { searchParams: OrdersSearchParams }) {
@@ -61,6 +57,13 @@ export default async function OrdersPage({ searchParams }: { searchParams: Order
   const viewerIsProvider = isProvider(session?.user);
   const seesAll = viewerIsProvider || isAdminRequest();
   const viewerId = session?.user.id;
+  const forProvider =
+    searchParams.provider && /^[\w-]{1,64}$/.test(searchParams.provider)
+      ? await prisma.company.findFirst({
+          where: { id: searchParams.provider, isProvider: true },
+          select: { id: true, name: true },
+        })
+      : null;
   // Orders imported from messengers stay hidden until the admin publishes them.
   const where = {
     ...(status === 'ALL' ? { status: { not: 'PENDING_REVIEW' as const } } : { status }),
@@ -106,10 +109,17 @@ export default async function OrdersPage({ searchParams }: { searchParams: Order
 
       {!viewerIsProvider && (
         <section>
-          <h2 className="mb-3 text-lg font-semibold">Новая заявка</h2>
+          <h2 className="mb-3 text-lg font-semibold">
+            {forProvider ? `Заявка для «${forProvider.name}»` : 'Новая заявка'}
+          </h2>
+          {forProvider && (
+            <p className="mb-3 max-w-xl text-sm text-slate-600">
+              Заявку увидит «{forProvider.name}» и другие исполнители — сравните предложения.
+            </p>
+          )}
           {viewerId ? (
             <Card className="max-w-xl">
-              <NewOrderForm />
+              <NewOrderForm provider={forProvider} />
             </Card>
           ) : (
             <div className="grid gap-4 lg:grid-cols-2">
@@ -133,7 +143,10 @@ export default async function OrdersPage({ searchParams }: { searchParams: Order
                 </a>
                 <p className="text-xs text-slate-500">
                   Есть аккаунт?{' '}
-                  <a href="/login?callbackUrl=/orders" className="text-amber-700 underline">
+                  <a
+                    href={`/login?callbackUrl=${encodeURIComponent(forProvider ? `/orders?provider=${forProvider.id}` : '/orders')}`}
+                    className="text-amber-700 underline"
+                  >
                     Войдите
                   </a>{' '}
                   — заявка с адресом покажет прогноз и карту места работ.
@@ -199,7 +212,7 @@ export default async function OrdersPage({ searchParams }: { searchParams: Order
                       <p className="font-medium">{order.description}</p>
                       {status === 'ALL' && (
                         <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600">
-                          {STATUS_LABELS[order.status as OrderStatus]}
+                          {ORDER_STATUS_LABELS[order.status]}
                         </span>
                       )}
                     </div>

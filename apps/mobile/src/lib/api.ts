@@ -39,6 +39,19 @@ function extractError(body: unknown, fallback: string): string {
   return fallback;
 }
 
+/**
+ * Ссылка на картинку для <Image>: пути сайта («/images/…») — от API_URL,
+ * https — как есть; всё остальное (javascript:, data:, http) — null.
+ */
+export function imageUri(url: string | null | undefined): string | null {
+  if (!url) return null;
+  if (url.startsWith('/') && !url.startsWith('//')) return `${API_URL}${url}`;
+  if (/^https:\/\//i.test(url)) return url;
+  // Локальный сервер разработки отдаёт фото по http.
+  if (__DEV__ && url.startsWith(`${API_URL}/`)) return url;
+  return null;
+}
+
 export async function getToken(): Promise<string | null> {
   return getItem(STORAGE_KEYS.token);
 }
@@ -138,6 +151,10 @@ export interface Equipment {
   specs: Record<string, unknown> | null;
   description: string | null;
   imageUrls: string[];
+  /** Фото для карточки: своё или пример по типу машины (абсолютная ссылка). */
+  photoUrl?: string | null;
+  /** true — «Фото для примера», не эта машина. */
+  photoIsExample?: boolean;
   category: { id: string; name: string };
   company: { id: string; name: string };
   location: { city: string; address?: string | null } | null;
@@ -166,6 +183,8 @@ export interface Booking {
   notes: string | null;
   createdAt: string;
   equipment: { id: string; name: string; imageUrls?: string[]; companyId?: string };
+  /** Исполнитель: название всегда, телефон — после подтверждения брони. */
+  provider?: { name: string; phone: string | null };
   payment?: { status: PaymentStatus; refundRequired?: boolean } | null;
   review?: { id: string; rating: number } | null;
 }
@@ -393,6 +412,14 @@ export function createOrder(input: {
   return apiFetch<{ order: Order }>('/api/orders', { method: 'POST', body: input });
 }
 
+/** Заказчик отменяет свою открытую заявку. */
+export function cancelOrder(id: string) {
+  return apiFetch<{ ok: boolean; message?: string }>(`/api/orders/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    body: { status: 'CANCELLED' },
+  });
+}
+
 export function acceptBid(bidId: string) {
   return apiFetch<{ booking: Booking }>(`/api/bids/${encodeURIComponent(bidId)}/accept`, {
     method: 'POST',
@@ -414,6 +441,14 @@ export function fetchConversation(conversationId: string) {
   return apiFetch<{ conversationId: string; messages: ChatMessage[] }>(
     `/api/ai/chat?conversationId=${encodeURIComponent(conversationId)}`,
   );
+}
+
+/** Диспетчер сайта (как виджет чата на сайте): история диалога → ответ. */
+export function sendAgentMessage(messages: { role: 'user' | 'assistant'; content: string }[]) {
+  return apiFetch<{ agentId: string; reply: string; offline?: boolean }>('/api/ai/agents', {
+    method: 'POST',
+    body: { agentId: 'auto', messages },
+  });
 }
 
 // ---- Сторона поставщика (роль PROVIDER_ADMIN) ----

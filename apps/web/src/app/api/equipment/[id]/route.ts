@@ -4,11 +4,12 @@ import { updateEquipmentSchema } from '@specai/shared';
 import { getRequestUser } from '@/lib/requestUser';
 import { isProvider } from '@/lib/fleet';
 import { INVALID_JSON_MESSAGE, readJson, zodErrorMessage } from '@/lib/apiInput';
+import { listingPhoto } from '@/lib/equipmentPhoto';
 
 export const dynamic = 'force-dynamic';
 
 /** Публичная карточка техники (используется мобильным приложением). */
-export async function GET(_request: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
   const equipment = await prisma.equipment.findUnique({
     where: { id: params.id },
     include: {
@@ -22,7 +23,9 @@ export async function GET(_request: NextRequest, { params }: { params: { id: str
     return NextResponse.json({ error: 'Техника не найдена' }, { status: 404 });
   }
 
-  return NextResponse.json({ equipment });
+  return NextResponse.json({
+    equipment: { ...equipment, ...listingPhoto(equipment, request.nextUrl.origin) },
+  });
 }
 
 /**

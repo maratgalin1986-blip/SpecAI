@@ -2,13 +2,15 @@
 
 import { useEffect, useRef, useState } from 'react';
 import type { Map as LeafletMap, Marker } from 'leaflet';
-import { machineCountLabel, type ProviderMapPin } from '@/lib/providerMap';
+import { machineCountLabel, spreadOverlapping, type ProviderMapPin } from '@/lib/providerMap';
 import { createBaseMap, loadLeaflet, pinIcon } from '@/components/leaflet';
 
 // The customers' map of providers: a round marker per provider base (its
 // machinery photo or the machine icon, an amber ring for СпецПласт16's own
 // fleet); a tap opens a card at the bottom of the map with the note, how much
 // machinery there is and links to the provider's catalog and to an order.
+// Markers that overlap at the current zoom are spread on a small circle
+// (recomputed on every zoom); the own fleet is drawn above the others.
 
 export function ProviderMap({ pins, embed = false }: { pins: ProviderMapPin[]; embed?: boolean }) {
   const element = useRef<HTMLDivElement>(null);
@@ -37,9 +39,27 @@ export function ProviderMap({ pins, embed = false }: { pins: ProviderMapPin[]; e
           })
             .on('click', () => setSelectedId(pin.id))
             .addTo(map);
+          marker.setZIndexOffset(pin.isHouse ? 500 : 0);
           markerMap.set(pin.id, marker);
         }
         map.on('click', () => setSelectedId(null));
+        // Overlapping markers: spread them in screen space for this zoom.
+        const spread = () => {
+          const shifts = spreadOverlapping(
+            pins.map((pin) => {
+              const point = map.latLngToLayerPoint([pin.lat, pin.lon]);
+              return { id: pin.id, x: point.x, y: point.y };
+            }),
+          );
+          for (const pin of pins) {
+            const shift = shifts.get(pin.id) ?? { dx: 0, dy: 0 };
+            const point = map.latLngToLayerPoint([pin.lat, pin.lon]);
+            markerMap
+              .get(pin.id)
+              ?.setLatLng(map.layerPointToLatLng(L.point(point.x + shift.dx, point.y + shift.dy)));
+          }
+        };
+        map.on('zoomend', spread);
         if (pins.length > 1) {
           map.fitBounds(L.latLngBounds(pins.map((pin) => [pin.lat, pin.lon])), {
             padding: [48, 48],
@@ -48,6 +68,7 @@ export function ProviderMap({ pins, embed = false }: { pins: ProviderMapPin[]; e
         } else if (pins[0]) {
           map.setView([pins[0].lat, pins[0].lon], 11);
         }
+        spread();
       })
       .catch(() => setFailed(true));
     return () => {
@@ -68,7 +89,7 @@ export function ProviderMap({ pins, embed = false }: { pins: ProviderMapPin[]; e
         marker.setIcon(
           pinIcon(L, { ...pin, selected: isSelected }, window.innerWidth <= 640 ? 56 : 52),
         );
-        marker.setZIndexOffset(isSelected ? 1000 : 0);
+        marker.setZIndexOffset(isSelected ? 1000 : pin.isHouse ? 500 : 0);
       }
     });
   }, [selectedId, pins]);
@@ -102,7 +123,8 @@ export function ProviderMap({ pins, embed = false }: { pins: ProviderMapPin[]; e
           </p>
         )}
         {selected && (
-          <div className="absolute inset-x-3 bottom-3 z-[1000] sm:left-4 sm:right-auto sm:w-96">
+          // On a phone the card sits at the bottom of the screen, not of the map.
+          <div className="fixed inset-x-3 bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-[1000] sm:absolute sm:bottom-3 sm:left-4 sm:right-auto sm:w-96">
             <ProviderCard pin={selected} onClose={() => setSelectedId(null)} />
           </div>
         )}
@@ -114,7 +136,8 @@ export function ProviderMap({ pins, embed = false }: { pins: ProviderMapPin[]; e
         </h2>
         {pins.length === 0 ? (
           <p className="text-sm text-slate-600">
-            Пока никто не отметил свою базу. Поставщики появятся здесь после регистрации.
+            Пока на карте никого нет. Исполнители появятся здесь, когда отметят базу и опубликуют
+            технику.
           </p>
         ) : (
           <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -218,7 +241,7 @@ function ProviderCard({ pin, onClose }: { pin: ProviderMapPin; onClose: () => vo
           Техника этого поставщика
         </a>
         <a
-          href="/orders"
+          href={`/orders?provider=${encodeURIComponent(pin.id)}`}
           className="flex min-h-11 items-center justify-center rounded-xl bg-amber-500 px-3 py-2 text-center text-slate-950 hover:bg-amber-400"
         >
           Оставить заявку

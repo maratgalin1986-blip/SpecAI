@@ -5,6 +5,7 @@ import { getRequestUser } from '@/lib/requestUser';
 import { EQUIPMENT_ORDER_BY, totalPagesFor } from '@/lib/pagination';
 import { PUBLIC_FLEET, PUBLISHED_FLEET, isProvider } from '@/lib/fleet';
 import { INVALID_JSON_MESSAGE, readJson, zodErrorMessage } from '@/lib/apiInput';
+import { listingPhoto } from '@/lib/equipmentPhoto';
 
 export async function GET(request: NextRequest) {
   const { mine, ...params } = Object.fromEntries(request.nextUrl.searchParams.entries());
@@ -73,8 +74,10 @@ export async function GET(request: NextRequest) {
     }),
   ]);
 
+  // The app shows photoUrl: the machine's own photo or an example one.
+  const origin = request.nextUrl.origin;
   return NextResponse.json({
-    equipment,
+    equipment: equipment.map((item) => ({ ...item, ...listingPhoto(item, origin) })),
     total,
     page,
     pageSize,

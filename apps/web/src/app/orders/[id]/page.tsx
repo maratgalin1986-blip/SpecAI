@@ -2,6 +2,8 @@ import { notFound } from 'next/navigation';
 import { getServerSession } from 'next-auth';
 import { prisma } from '@specai/database';
 import { Card } from '@specai/ui';
+import { ORDER_STATUS_LABELS } from '@specai/shared';
+import { CancelOrderButton } from '@/components/CancelOrderButton';
 import { authOptions } from '@/lib/auth';
 import { BidForm } from '@/components/BidForm';
 import { AcceptBidButton } from '@/components/AcceptBidButton';
@@ -16,13 +18,6 @@ import { CommentForm, CommentList } from '@/components/Comments';
 import { customerShortName } from '@/lib/customerPrivacy';
 
 export const dynamic = 'force-dynamic';
-
-const ORDER_STATUS_LABEL: Record<string, string> = {
-  PENDING_REVIEW: 'На модерации',
-  OPEN: 'Открыта',
-  MATCHED: 'Закрыта — техника выбрана',
-  CANCELLED: 'Отменена',
-};
 
 export default async function OrderDetailPage({ params }: { params: { id: string } }) {
   const session = await getServerSession(authOptions);
@@ -86,9 +81,10 @@ export default async function OrderDetailPage({ params }: { params: { id: string
           </p>
         </div>
         <span className="w-fit shrink-0 rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-700">
-          {ORDER_STATUS_LABEL[order.status]}
+          {ORDER_STATUS_LABELS[order.status]}
         </span>
       </div>
+      {isOwner && order.status === 'OPEN' && <CancelOrderButton orderId={order.id} />}
 
       <Card>
         <h2 className="font-semibold">Описание</h2>
@@ -197,7 +193,7 @@ export default async function OrderDetailPage({ params }: { params: { id: string
                 {isOwner && order.status === 'OPEN' && bid.status === 'PENDING' && (
                   <AcceptBidButton bidId={bid.id} />
                 )}
-                {isOwner && (
+                {isOwner && bid.status === 'ACCEPTED' && (
                   <CommentForm
                     compact
                     targetCompanyId={bid.equipment.companyId}
