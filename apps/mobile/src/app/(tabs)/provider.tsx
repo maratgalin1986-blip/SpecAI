@@ -149,10 +149,6 @@ function BookingRow({
       </Text>
       <View style={styles.row}>
         <Text style={styles.price}>{formatMoney(booking.totalPrice, booking.currency)}</Text>
-        <Badge
-          text={booking.depositPaid ? 'Оплачено' : 'Не оплачено'}
-          tone={booking.depositPaid ? 'success' : 'neutral'}
-        />
       </View>
       {booking.notes ? <Text style={styles.notes}>{booking.notes}</Text> : null}
       {transitions.length > 0 ? (

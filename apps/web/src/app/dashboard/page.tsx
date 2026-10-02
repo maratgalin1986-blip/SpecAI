@@ -151,7 +151,8 @@ export default async function DashboardPage({
         <h2 className="mb-3 text-lg font-semibold">Мои бронирования</h2>
         {!paymentsEnabled && myBookings.length > 0 && (
           <p className="mb-3 text-sm text-slate-600">
-            Оплата — по счёту после подтверждения брони, менеджер свяжется с вами. Вопросы:{' '}
+            Бронирование бесплатное: без предоплаты и комиссий. Работа техники — по прайсу, расчёт с
+            СпецПласт16 после смены. Вопросы:{' '}
             <a href={SITE.phoneHref} className="font-medium text-amber-700">
               {SITE.phone}
             </a>

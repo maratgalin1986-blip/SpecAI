@@ -22,7 +22,9 @@ export default function AboutScreen() {
       <ScrollView contentContainerStyle={styles.container}>
         <View style={styles.hero}>
           <View style={styles.logo}>
-            <Text style={styles.logoText}>СП16</Text>
+            <Text style={styles.logoText} numberOfLines={1} adjustsFontSizeToFit>
+              СП16
+            </Text>
           </View>
           <Text style={styles.name}>{SITE.name}</Text>
           <Text style={styles.tagline}>{SITE.tagline}</Text>
@@ -83,6 +85,7 @@ export default function AboutScreen() {
           <LinkRow label="ИИ-агенты" onPress={() => void openSite('/agents')} />
           <LinkRow label="Поставщикам" onPress={() => void openSite('/provider')} />
           <LinkRow label="Контакты" onPress={() => void openSite('/contacts')} />
+          <LinkRow label="♥ Поддержать проект" onPress={() => void openSite('/support')} />
           <LinkRow label="Политика конфиденциальности" onPress={() => void openSite('/privacy')} />
         </Card>
 
@@ -146,7 +149,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginBottom: spacing.xs,
   },
-  logoText: { color: '#fff', fontSize: 24, fontWeight: '800' },
+  logoText: { color: '#fff', fontSize: 20, fontWeight: '800', paddingHorizontal: 4 },
   name: { fontSize: 24, fontWeight: '700', color: colors.text },
   tagline: { fontSize: 15, color: colors.textMuted, textAlign: 'center' },
   region: {

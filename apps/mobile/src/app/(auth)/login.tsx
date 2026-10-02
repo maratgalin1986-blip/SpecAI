@@ -52,7 +52,9 @@ export default function LoginScreen() {
         <Pressable style={styles.container} onPress={Keyboard.dismiss} accessible={false}>
           <View style={styles.header}>
             <View style={styles.logo}>
-              <Text style={styles.logoText}>СП16</Text>
+              <Text style={styles.logoText} numberOfLines={1} adjustsFontSizeToFit>
+                СП16
+              </Text>
             </View>
             <Text style={styles.title}>{SITE.name}</Text>
             <Text style={styles.subtitle}>{SITE.tagline}</Text>
@@ -121,7 +123,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  logoText: { color: '#fff', fontSize: 22, fontWeight: '800' },
+  logoText: { color: '#fff', fontSize: 18, fontWeight: '800', paddingHorizontal: 4 },
   title: { fontSize: 28, fontWeight: '700', color: colors.text },
   subtitle: { fontSize: 15, color: colors.textMuted, textAlign: 'center' },
   contacts: { gap: spacing.sm },

@@ -31,6 +31,9 @@ export function SiteFooter() {
           <a href="/privacy" className="hover:text-white">
             Политика конфиденциальности
           </a>
+          <a href="/support" className="font-semibold text-amber-400 hover:text-white">
+            ♥ Поддержать проект
+          </a>
           <a href="/credits" className="hover:text-white">
             Авторы фото и видео
           </a>
