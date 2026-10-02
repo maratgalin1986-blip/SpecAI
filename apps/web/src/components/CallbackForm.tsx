@@ -7,6 +7,7 @@ import { LeadSuccess } from '@/components/LeadSuccess';
 import { PointPicker } from '@/components/PointPicker';
 import { POINT_LINE_PREFIX, withPointLine, type MapPoint } from '@/lib/mapPoint';
 import { ConsentText } from '@/components/ConsentText';
+import { useHydrated } from '@/lib/useHydrated';
 
 // "Call me back" form. Works without an account and without the AI features.
 export function CallbackForm({
@@ -30,6 +31,7 @@ export function CallbackForm({
   const [website, setWebsite] = useState('');
   const [status, setStatus] = useState<'idle' | 'sending' | 'sent'>('idle');
   const [error, setError] = useState<string | null>(null);
+  const hydrated = useHydrated();
 
   // A lead that did not go through last time (bad connection) comes back.
   useEffect(() => {
@@ -66,7 +68,7 @@ export function CallbackForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="ym-hide-content flex flex-col gap-3">
+    <form method="post" onSubmit={handleSubmit} className="ym-hide-content flex flex-col gap-3">
       <div>
         <h2 className={`text-lg font-semibold ${dark ? 'text-white' : ''}`}>{title}</h2>
         <p className={`mt-1 text-sm ${dark ? 'text-slate-300' : 'text-slate-600'}`}>{subtitle}</p>
@@ -74,6 +76,7 @@ export function CallbackForm({
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <input
           required
+          name="name"
           value={name}
           onChange={(e) => setName(e.target.value)}
           maxLength={100}
@@ -85,6 +88,7 @@ export function CallbackForm({
         <input
           required
           type="tel"
+          name="phone"
           value={phone}
           onChange={(e) => setPhone(e.target.value)}
           maxLength={30}
@@ -98,6 +102,7 @@ export function CallbackForm({
         />
       </div>
       <textarea
+        name="message"
         value={message}
         onChange={(e) => setMessage(e.target.value)}
         maxLength={1000}
@@ -138,6 +143,7 @@ export function CallbackForm({
         <input
           type="checkbox"
           required
+          name="consent"
           checked={consent}
           onChange={(e) => setConsent(e.target.checked)}
           className="mt-0.5"
@@ -147,7 +153,7 @@ export function CallbackForm({
       {error && <p className="text-sm text-red-500">{error}</p>}
       <button
         type="submit"
-        disabled={status === 'sending'}
+        disabled={!hydrated || status === 'sending'}
         className="rounded-md bg-amber-500 px-5 py-2.5 text-sm font-semibold text-slate-950 shadow-lg shadow-amber-600/30 transition hover:bg-amber-400 disabled:opacity-60"
       >
         {status === 'sending' ? 'Отправляем…' : 'Жду звонка'}

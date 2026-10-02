@@ -6,6 +6,7 @@ import { Button, Card } from '@specai/ui';
 import { CinemaBackdrop } from '@/components/CinemaHero';
 import { BasePicker, type BaseValue } from '@/components/BasePicker';
 import { ConsentText } from '@/components/ConsentText';
+import { useHydrated } from '@/lib/useHydrated';
 
 type AccountType = 'CUSTOMER' | 'PROVIDER';
 
@@ -25,6 +26,7 @@ export default function RegisterPage() {
   const [base, setBase] = useState<BaseValue>({ address: '', lat: null, lon: null });
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const hydrated = useHydrated();
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -95,7 +97,7 @@ export default function RegisterPage() {
           ))}
         </div>
 
-        <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+        <form method="post" onSubmit={handleSubmit} className="flex flex-col gap-3">
           {accountType === 'PROVIDER' && (
             <label className="flex flex-col gap-1 text-sm">
               Название компании или ИП
@@ -172,7 +174,7 @@ export default function RegisterPage() {
             <ConsentText />
           </label>
           {error && <p className="text-sm text-red-600">{error}</p>}
-          <Button type="submit" disabled={isSubmitting}>
+          <Button type="submit" disabled={!hydrated || isSubmitting}>
             {isSubmitting ? 'Создание аккаунта…' : 'Создать аккаунт'}
           </Button>
         </form>

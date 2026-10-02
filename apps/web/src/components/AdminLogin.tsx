@@ -2,12 +2,14 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useHydrated } from '@/lib/useHydrated';
 
 export function AdminLogin() {
   const router = useRouter();
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const hydrated = useHydrated();
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -42,7 +44,7 @@ export function AdminLogin() {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+    <form method="post" onSubmit={handleSubmit} className="flex flex-col gap-3">
       <input
         type="password"
         required
@@ -55,7 +57,7 @@ export function AdminLogin() {
       {error && <p className="text-sm text-red-600">{error}</p>}
       <button
         type="submit"
-        disabled={isSubmitting}
+        disabled={!hydrated || isSubmitting}
         className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
       >
         Войти

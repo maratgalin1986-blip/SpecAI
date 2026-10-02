@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { SITE } from '@/lib/site';
 import { submitLead } from '@/lib/submitLead';
 import { ConsentText } from '@/components/ConsentText';
+import { useHydrated } from '@/lib/useHydrated';
 
 const UNLOCK_KEY = 'smeta-full-unlocked';
 
@@ -36,6 +37,7 @@ export function SmetaUnlock({ text, onUnlocked }: { text: string; onUnlocked: ()
   const [consent, setConsent] = useState(false);
   const [website, setWebsite] = useState('');
   const [status, setStatus] = useState<'idle' | 'sending'>('idle');
+  const hydrated = useHydrated();
   const [error, setError] = useState<string | null>(null);
 
   async function submit(event: React.FormEvent) {
@@ -64,6 +66,7 @@ export function SmetaUnlock({ text, onUnlocked }: { text: string; onUnlocked: ()
 
   return (
     <form
+      method="post"
       id="smeta-unlock"
       onSubmit={submit}
       className="ym-hide-content flex scroll-mt-24 flex-col gap-3 rounded-2xl border-2 border-amber-400 bg-amber-50 p-4 sm:p-5"
@@ -81,6 +84,7 @@ export function SmetaUnlock({ text, onUnlocked }: { text: string; onUnlocked: ()
       <input
         required
         type="tel"
+        name="phone"
         value={phone}
         onChange={(e) => setPhone(e.target.value)}
         maxLength={30}
@@ -105,6 +109,7 @@ export function SmetaUnlock({ text, onUnlocked }: { text: string; onUnlocked: ()
         <input
           type="checkbox"
           required
+          name="consent"
           checked={consent}
           onChange={(e) => setConsent(e.target.checked)}
           className="mt-0.5"
@@ -114,7 +119,7 @@ export function SmetaUnlock({ text, onUnlocked }: { text: string; onUnlocked: ()
       {error && <p className="text-sm text-red-600">{error}</p>}
       <button
         type="submit"
-        disabled={status === 'sending'}
+        disabled={!hydrated || status === 'sending'}
         className="min-h-12 rounded-full bg-slate-900 px-6 font-semibold text-white disabled:opacity-60"
       >
         {status === 'sending' ? 'Открываем…' : 'Открыть полную смету'}

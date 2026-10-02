@@ -4,6 +4,7 @@ import { Suspense, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Button, Card } from '@specai/ui';
 import { CinemaBackdrop } from '@/components/CinemaHero';
+import { useHydrated } from '@/lib/useHydrated';
 
 function ResetPasswordForm() {
   const searchParams = useSearchParams();
@@ -12,6 +13,7 @@ function ResetPasswordForm() {
   const [confirm, setConfirm] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const hydrated = useHydrated();
   const [isDone, setIsDone] = useState(false);
 
   async function handleSubmit(event: React.FormEvent) {
@@ -72,7 +74,7 @@ function ResetPasswordForm() {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+    <form method="post" onSubmit={handleSubmit} className="flex flex-col gap-3">
       <label className="flex flex-col gap-1 text-sm">
         Новый пароль
         <input
@@ -98,7 +100,7 @@ function ResetPasswordForm() {
         />
       </label>
       {error && <p className="text-sm text-red-600">{error}</p>}
-      <Button type="submit" disabled={isSubmitting}>
+      <Button type="submit" disabled={!hydrated || isSubmitting}>
         {isSubmitting ? 'Сохраняем…' : 'Сохранить пароль'}
       </Button>
     </form>

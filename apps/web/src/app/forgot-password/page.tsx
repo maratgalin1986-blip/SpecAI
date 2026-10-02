@@ -3,11 +3,13 @@
 import { useState } from 'react';
 import { Button, Card } from '@specai/ui';
 import { CinemaBackdrop } from '@/components/CinemaHero';
+import { useHydrated } from '@/lib/useHydrated';
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const hydrated = useHydrated();
   const [isSent, setIsSent] = useState(false);
 
   async function handleSubmit(event: React.FormEvent) {
@@ -45,7 +47,7 @@ export default function ForgotPasswordPage() {
             сброса пароля. Ссылка действует 1 час.
           </p>
         ) : (
-          <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+          <form method="post" onSubmit={handleSubmit} className="flex flex-col gap-3">
             <p className="text-sm text-slate-600">
               Укажите e-mail, на который зарегистрирован аккаунт, — мы отправим ссылку для сброса
               пароля.
@@ -61,7 +63,7 @@ export default function ForgotPasswordPage() {
               />
             </label>
             {error && <p className="text-sm text-red-600">{error}</p>}
-            <Button type="submit" disabled={isSubmitting}>
+            <Button type="submit" disabled={!hydrated || isSubmitting}>
               {isSubmitting ? 'Отправляем…' : 'Отправить ссылку'}
             </Button>
           </form>

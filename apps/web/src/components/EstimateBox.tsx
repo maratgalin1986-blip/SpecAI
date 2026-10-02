@@ -7,6 +7,7 @@ import { SITE } from '@/lib/site';
 import { submitLead } from '@/lib/submitLead';
 import { LeadSuccess } from '@/components/LeadSuccess';
 import { ConsentText } from '@/components/ConsentText';
+import { useHydrated } from '@/lib/useHydrated';
 
 type Mode = 'hours' | 'shifts';
 
@@ -60,6 +61,7 @@ export function EstimateBox({
   const [consent, setConsent] = useState(false);
   const [website, setWebsite] = useState('');
   const [status, setStatus] = useState<'idle' | 'sending' | 'sent'>('idle');
+  const hydrated = useHydrated();
   const [error, setError] = useState<string | null>(null);
 
   const qty = quantity[mode];
@@ -246,10 +248,11 @@ export function EstimateBox({
           summary={`${equipmentName}${total !== null ? `, расчёт ${rub(total)}` : ''}`}
         />
       ) : (
-        <form onSubmit={handleSubmit} className="ym-hide-content flex flex-col gap-3">
+        <form method="post" onSubmit={handleSubmit} className="ym-hide-content flex flex-col gap-3">
           <input
             required
             type="tel"
+            name="phone"
             value={phone}
             onChange={(e) => setPhone(e.target.value)}
             maxLength={30}
@@ -272,6 +275,7 @@ export function EstimateBox({
             <input
               type="checkbox"
               required
+              name="consent"
               checked={consent}
               onChange={(e) => setConsent(e.target.checked)}
               className="mt-0.5 accent-amber-600"
@@ -281,7 +285,7 @@ export function EstimateBox({
           {error && <p className="text-xs text-red-600">{error}</p>}
           <button
             type="submit"
-            disabled={status === 'sending'}
+            disabled={!hydrated || status === 'sending'}
             className="group inline-flex items-center justify-center gap-2 rounded-full bg-amber-500 px-5 py-3.5 text-base font-semibold text-slate-950 shadow-lg shadow-amber-500/30 transition hover:bg-amber-400 disabled:opacity-60"
           >
             {status === 'sending'
