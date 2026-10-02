@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { prisma } from '@specai/database';
 import { getRequestUser } from '@/lib/requestUser';
-import { sendEmail } from '@/lib/email';
+import { notifyCompany, notifyUser } from '@/lib/notifications/notifyUser';
 import { bookingStatusChanged } from '@/lib/emailTemplates';
 import { getStripe } from '@/lib/stripe';
 import { INVALID_JSON_MESSAGE, readJson } from '@/lib/apiInput';
@@ -207,16 +207,33 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
 
   if (updated.status !== booking.status) {
     try {
-      const template = bookingStatusChanged({
+      const event = {
+        type: 'booking.status',
         bookingId: updated.id,
         equipmentName: booking.equipment.name,
         status: updated.status,
         startDate: updated.startDate,
-        endDate: updated.endDate,
-      });
-      await sendEmail({ to: booking.customer.email, ...template });
+      } as const;
+      if (isOwningProvider) {
+        // The provider moved it: the customer hears over their channels.
+        const template = bookingStatusChanged({
+          bookingId: updated.id,
+          equipmentName: booking.equipment.name,
+          status: updated.status,
+          startDate: updated.startDate,
+          endDate: updated.endDate,
+        });
+        await notifyUser(
+          booking.customerId,
+          { ...event, audience: 'customer' },
+          { email: template },
+        );
+      } else {
+        // The customer cancelled: the provider's managers hear of it.
+        await notifyCompany(booking.equipment.companyId, { ...event, audience: 'provider' });
+      }
     } catch (error) {
-      console.error('[email] bookingStatusChanged failed', error);
+      console.error('[notify] booking status notification failed', error);
     }
   }
 

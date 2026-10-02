@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { prisma } from '@specai/database';
 import { isAdminRequest } from '@/lib/admin';
+import { notifyProvidersAboutOrder } from '@/lib/notifications/notifyUser';
 
 const schema = z.object({ status: z.enum(['OPEN', 'CANCELLED']) });
 
@@ -14,5 +15,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
     .update({ where: { id: params.id }, data: { status: parsed.data.status } })
     .catch(() => null);
   if (!order) return NextResponse.json({ error: 'Заявка не найдена' }, { status: 404 });
+  // Published from moderation: now providers hear about it.
+  if (order.status === 'OPEN') await notifyProvidersAboutOrder(order.id);
   return NextResponse.json({ ok: true });
 }

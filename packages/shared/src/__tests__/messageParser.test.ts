@@ -62,3 +62,55 @@ describe('extractPhone / requestFingerprint', () => {
     );
   });
 });
+
+describe('parseEquipmentRequest: more machine types from chats', () => {
+  it.each([
+    ['Нужен трал перевезти экскаватор 20 т из Челнов в Елабугу', 'lowboys'],
+    ['Требуется ямобур под сваи, 12 отверстий, завтра', 'augers'],
+    ['Ищу грейдер на 2 смены, планировка площадки, Нижнекамск', 'graders'],
+    ['Нужен каток 10 т на асфальт в субботу', 'rollers'],
+    ['Требуется манипулятор 5 т перевезти блоки, срочно', 'crane-trucks'],
+    ['Нужна автовышка 22 м на 4 часа', 'aerial-platforms'],
+    ['Ищем бульдозер на расчистку участка', 'bulldozers'],
+    ['Нужен фронтальный погрузчик чистить снег', 'loaders'],
+  ])('«%s» → %s', (text, slug) => {
+    const r = parseEquipmentRequest(text, NOW);
+    expect(r.isRequest).toBe(true);
+    expect(r.categorySlug).toBe(slug);
+  });
+
+  it('treats «арендую» / «арендовать» as a request', () => {
+    expect(parseEquipmentRequest('Арендую самосвал на неделю, Казань', NOW).isRequest).toBe(true);
+    expect(
+      parseEquipmentRequest('Хотим арендовать экскаватор с 5 по 7 октября', NOW).isRequest,
+    ).toBe(true);
+  });
+
+  it('still ignores offers of the new types', () => {
+    expect(
+      parseEquipmentRequest('Сдаю грейдер и каток, 2500 руб/час, работаем по Татарстану', NOW)
+        .isRequest,
+    ).toBe(false);
+    expect(parseEquipmentRequest('Услуги трала, недорого, в наличии', NOW).isRequest).toBe(false);
+  });
+
+  it('does not see a machine in «раскатка» and reads «бурильно-крановая» as a ямобур', () => {
+    expect(parseEquipmentRequest('Нужна раскатка теста, ищу пекаря', NOW).categorySlug).toBe(
+      undefined,
+    );
+    expect(
+      parseEquipmentRequest('Нужна бурильно-крановая машина на завтра', NOW).categorySlug,
+    ).toBe('augers');
+  });
+
+  it('extracts the phone that is later shown masked', () => {
+    const r = parseEquipmentRequest('Нужен самосвал песок 10 куб, +7 (917) 123-45-67', NOW);
+    expect(r.phone).toBe('+79171234567');
+  });
+
+  it('gives the same fingerprint to a repost with another phone', () => {
+    expect(requestFingerprint('Нужен трал завтра! 89171234567')).toBe(
+      requestFingerprint('нужен ТРАЛ завтра +7 927 000-11-22'),
+    );
+  });
+});

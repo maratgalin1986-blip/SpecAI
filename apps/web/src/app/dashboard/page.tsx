@@ -18,6 +18,7 @@ import { redirect } from 'next/navigation';
 import { GuideCard } from '@/components/GuideCard';
 import { CommentForm } from '@/components/Comments';
 import { guideFor } from '@/lib/guideState';
+import { NotificationSettings } from '@/components/NotificationSettings';
 
 export const metadata: Metadata = { title: 'Личный кабинет', robots: { index: false } };
 
@@ -282,6 +283,7 @@ export default async function DashboardPage({
           </div>
         )}
       </div>
+      {session && <NotificationSettings />}
     </div>
   );
 }

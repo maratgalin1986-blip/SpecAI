@@ -534,3 +534,54 @@ model Comment {
   @@index([targetCompanyId])
   @@index([targetUserId])
 }
+
+// ---------------------------------------------------------------------------
+// Notifications: channels each user picked, Telegram linking, app push tokens
+// ---------------------------------------------------------------------------
+
+// One row per user, created on the first change (no row = the defaults).
+// userId is a plain column, not a relation, so the User model stays untouched.
+model NotificationSettings {
+  id                    String    @id @default(cuid())
+  userId                String    @unique
+  telegram              Boolean   @default(true)
+  push                  Boolean   @default(true)
+  email                 Boolean   @default(true)
+  whatsapp              Boolean   @default(false)
+  sms                   Boolean   @default(false)
+  // Private chat with the bot, set by "/start <token>" (lib/notifications/telegramLink.ts).
+  telegramChatId        String?
+  // sha256 of the one-time token from the deep link, never the token itself.
+  telegramLinkHash      String?
+  telegramLinkExpiresAt DateTime?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@index([telegramLinkHash])
+  @@index([telegramChatId])
+}
+
+// Expo push token of a signed-in device (several per user).
+model PushToken {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String
+  platform  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+}
+
+// Log of «Показать телефон» on orders found in open chats: who saw the phone
+// and when. Also the per-provider daily limit (lib/chatOrders.ts).
+model ContactReveal {
+  id        String   @id @default(cuid())
+  orderId   String
+  userId    String
+  companyId String?
+  createdAt DateTime @default(now())
+
+  @@index([companyId, createdAt])
+  @@index([orderId])
+}

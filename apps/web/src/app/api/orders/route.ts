@@ -5,6 +5,7 @@ import { getRequestUser } from '@/lib/requestUser';
 import { isProvider } from '@/lib/fleet';
 import { geocodeAddress } from '@/lib/geo';
 import { notifyTelegram } from '@/lib/notify';
+import { notifyProvidersAboutOrder } from '@/lib/notifications/notifyUser';
 import { SITE } from '@/lib/site';
 import { machineTypeOf } from '@/lib/equipmentCatalog';
 import { INVALID_JSON_MESSAGE, readJson, zodErrorMessage } from '@/lib/apiInput';
@@ -127,6 +128,8 @@ export async function POST(request: NextRequest) {
   });
 
   await notifyTelegram(await orderMessage(order, place, request.nextUrl.origin));
+  // Providers with machinery of this category nearby (Telegram, push, e-mail…).
+  await notifyProvidersAboutOrder(order.id);
 
   return NextResponse.json({ order }, { status: 201 });
 }

@@ -20,6 +20,7 @@ import { toPublicComment } from '@/lib/comments';
 import { MyMapPin } from '@/components/MyMapPin';
 import { getBlobToken } from '@/lib/blob';
 import { pinPhotoChoices } from '@/lib/providerMap';
+import { NotificationSettings } from '@/components/NotificationSettings';
 
 export const dynamic = 'force-dynamic';
 export const metadata: Metadata = {
@@ -299,6 +300,7 @@ export default async function ProviderPage({
           searchParams={{ page: currentQuery.page }}
         />
       </section>
+      {session && <NotificationSettings />}
     </div>
   );
 }
