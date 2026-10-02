@@ -17,6 +17,7 @@ import { CinemaFx } from '@/components/CinemaFx';
 import { CinemaParticles } from '@/components/CinemaParticles';
 import { MessengerButtons } from '@/components/MessengerButtons';
 import { CookieNotice } from '@/components/CookieNotice';
+import { SoundDirector } from '@/components/SoundDirector';
 import { SITE } from '@/lib/site';
 import { siteUrl } from '@/lib/siteUrl';
 import './globals.css';
@@ -139,6 +140,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           <CinemaDolly />
           <CinemaFx />
           <CinemaParticles />
+          <SoundDirector />
         </Providers>
       </body>
     </html>

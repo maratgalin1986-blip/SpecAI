@@ -13,6 +13,7 @@ import { CinemaBand } from '@/components/CinemaBand';
 import { CinemaLayer } from '@/components/CinemaHero';
 import type { MachineType } from '@/lib/machinePhotos';
 import { PUBLIC_FLEET } from '@/lib/fleet';
+import { MachineAmbience } from '@/components/MachineAmbience';
 
 // Footage behind the landing header, by machine kind.
 const LANDING_CLIPS: Record<string, string[]> = {
@@ -117,6 +118,7 @@ export default async function LandingPage({ params }: { params: { slug: string }
 
   return (
     <div className="flex flex-col gap-12">
+      <MachineAmbience type={machine} />
       <section className="relative isolate overflow-hidden rounded-[2rem] bg-slate-950 px-6 py-10 text-white shadow-2xl sm:px-10 sm:py-14">
         <CinemaLayer clips={LANDING_CLIPS[landing.slug] ?? ['site-aerial']} />
         <div className="relative grid gap-8 lg:grid-cols-[1fr_380px]">
