@@ -13,7 +13,7 @@ import { maskContacts } from '@/lib/privacy';
 import { checkRateLimit } from '@/lib/rateLimit';
 import { PUBLIC_FLEET, isProvider } from '@/lib/fleet';
 import { notifyTelegram } from '@/lib/notify';
-import { unsavedLeadMessage } from '@/lib/leadIntake';
+import { acceptLead } from '@/lib/leadIntake';
 import { zodErrorMessage } from '@/lib/apiInput';
 import { asksWhatNext, guideReply } from '@/lib/guide';
 import { guideFor } from '@/lib/guideState';
@@ -102,15 +102,21 @@ export async function POST(request: NextRequest) {
       });
     }
     const lead = chatLeadRecord({ phone: leadStep.phone, userName: user?.name, userTexts });
-    const summary = [`Имя: ${lead.name}`, `Телефон: ${lead.phone}`, lead.message];
-    try {
-      await prisma.lead.create({ data: lead });
-      await notifyTelegram([`💬 Заявка из чата — ${SITE.name}`, ...summary].join('\n'));
-    } catch (error) {
-      // Database down: the owner still gets the phone, without the name and
-      // the conversation (lib/leadIntake.ts); the full lead stays in the log.
-      console.error('[agents] failed to save chat lead', error, JSON.stringify(lead));
-      await notifyTelegram(unsavedLeadMessage(lead.phone));
+    // The same intake as the site's forms (lib/leadIntake.ts): database first,
+    // then Telegram; with the database down Telegram gets only the phone.
+    const outcome = await acceptLead(lead, {
+      save: (data) => prisma.lead.create({ data }),
+      notify: notifyTelegram,
+      siteName: SITE.name,
+      onSaveError: (error, data) =>
+        console.error('[agents] failed to save chat lead', error, JSON.stringify(data)),
+    });
+    if (outcome === 'lost') {
+      return NextResponse.json({
+        agentId,
+        reply: `Не получилось передать номер диспетчеру. Позвоните, пожалуйста: ${SITE.phone}.`,
+        toolsUsed: [],
+      });
     }
     return NextResponse.json({
       agentId,
