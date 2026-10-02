@@ -58,8 +58,19 @@ describe('tileAllowed', () => {
     const { x, y } = tilePosition(55.7436, 52.3959, 17);
     expect(tileAllowed(17, Math.floor(x), Math.floor(y))).toBe(true);
   });
+  it('serves overview zooms of Tatarstan for the providers map', () => {
+    for (const zoom of [6, 7, 8, 10]) {
+      const { x, y } = tilePosition(55.7436, 52.3959, zoom);
+      expect(tileAllowed(zoom, Math.floor(x), Math.floor(y))).toBe(true);
+    }
+    // Kazan at z9 as well.
+    const { x, y } = tilePosition(55.7887, 49.1221, 9);
+    expect(tileAllowed(9, Math.floor(x), Math.floor(y))).toBe(true);
+  });
   it('refuses world-level zooms and tiles far away', () => {
     expect(tileAllowed(5, 20, 10)).toBe(false);
+    const moscow = tilePosition(55.7558, 37.6173, 8);
+    expect(tileAllowed(8, Math.floor(moscow.x), Math.floor(moscow.y))).toBe(false);
     const { x, y } = tilePosition(48.8566, 2.3522, 17); // Paris
     expect(tileAllowed(17, Math.floor(x), Math.floor(y))).toBe(false);
   });

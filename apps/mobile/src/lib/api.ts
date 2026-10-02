@@ -439,6 +439,33 @@ export async function uploadFile(file: { uri: string; name: string; type: string
   return data as UploadedFile;
 }
 
+// ---- Карта исполнителей ----
+
+/** Точка поставщика на карте (/map) — GET/PATCH /api/companies/me. */
+export interface CompanyPin {
+  id: string;
+  name: string;
+  baseLat: number | null;
+  baseLon: number | null;
+  baseAddress: string | null;
+  pinImageUrl: string | null;
+  pinNote: string | null;
+}
+
+export function fetchMyCompanyPin() {
+  return apiFetch<{ company: CompanyPin; photos: string[]; uploadsEnabled: boolean }>(
+    '/api/companies/me',
+  );
+}
+
+export function updateMyCompanyPin(input: {
+  baseAddress?: string;
+  pinImageUrl?: string | null;
+  pinNote?: string;
+}) {
+  return apiFetch<{ company: CompanyPin }>('/api/companies/me', { method: 'PATCH', body: input });
+}
+
 /** Открытые заявки клиентов (для предложений поставщика). */
 export function fetchOpenOrders() {
   return apiFetch<{ orders: Order[] }>('/api/orders?open=1');

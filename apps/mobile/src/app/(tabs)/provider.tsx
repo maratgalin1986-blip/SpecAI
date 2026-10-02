@@ -20,6 +20,7 @@ import {
   Loader,
   type BadgeTone,
 } from '@/components/ui';
+import { MyMapPinCard } from '@/components/MyMapPinCard';
 import {
   ApiError,
   fetchMyEquipment,
@@ -254,6 +255,7 @@ export default function ProviderScreen() {
     <View style={styles.header}>
       <Segmented value={section} onChange={setSection} />
       {error ? <ErrorBanner message={error} onRetry={() => void load()} /> : null}
+      {section === 'equipment' ? <MyMapPinCard /> : null}
       {section === 'equipment' ? (
         <View style={styles.headerButtons}>
           <View style={styles.headerButton}>

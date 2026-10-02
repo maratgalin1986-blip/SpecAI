@@ -43,10 +43,12 @@ export async function GET(request: NextRequest) {
     sort,
   } = parsed.data;
 
-  void companyId;
   const where: Prisma.EquipmentWhereInput = {
     categoryId,
     ...PUBLIC_FLEET,
+    // ?companyId= — one provider's machinery (the map's «Техника этого
+    // поставщика»); with ?mine=1 it is the signed-in provider's own company.
+    companyId,
     status,
     location: city ? { city: { equals: city, mode: 'insensitive' } } : undefined,
     dailyRate:

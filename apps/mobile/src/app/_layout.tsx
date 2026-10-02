@@ -38,6 +38,7 @@ function RootNavigator() {
       {/* Доступны и без входа: заявка на звонок и сведения о компании. */}
       <Stack.Screen name="callback" options={{ title: 'Заказать звонок', presentation: 'modal' }} />
       <Stack.Screen name="about" options={{ title: 'О компании' }} />
+      <Stack.Screen name="map" options={{ title: 'Карта исполнителей' }} />
     </Stack>
   );
 }

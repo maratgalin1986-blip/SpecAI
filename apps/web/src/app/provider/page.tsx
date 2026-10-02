@@ -11,6 +11,9 @@ import { SITE } from '@/lib/site';
 import { Pagination } from '@/components/Pagination';
 import { parsePage, totalPagesFor } from '@/lib/pagination';
 import { isProvider } from '@/lib/fleet';
+import { MyMapPin } from '@/components/MyMapPin';
+import { getBlobToken } from '@/lib/blob';
+import { isDisplayableImage } from '@/lib/providerMap';
 
 export const dynamic = 'force-dynamic';
 export const metadata: Metadata = {
@@ -57,7 +60,7 @@ export default async function ProviderPage({
   const bookingsTotalPages = totalPagesFor(bookingsTotal, PAGE_SIZE);
   const bookingsPage = Math.min(parsePage(searchParams.bookingsPage), bookingsTotalPages);
 
-  const [equipment, bookings] = await Promise.all([
+  const [equipment, bookings, pinCompany, photoRows] = await Promise.all([
     prisma.equipment.findMany({
       where: equipmentWhere,
       include: { category: true },
@@ -72,7 +75,26 @@ export default async function ProviderPage({
       skip: (bookingsPage - 1) * PAGE_SIZE,
       take: PAGE_SIZE,
     }),
+    prisma.company.findUnique({
+      where: { id: session.user.companyId },
+      select: {
+        baseLat: true,
+        baseLon: true,
+        baseAddress: true,
+        pinImageUrl: true,
+        pinNote: true,
+      },
+    }),
+    prisma.equipment.findMany({
+      where: equipmentWhere,
+      select: { imageUrls: true },
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+    }),
   ]);
+  const ownPhotos = [...new Set(photoRows.flatMap((row) => row.imageUrls))]
+    .filter(isDisplayableImage)
+    .slice(0, 40);
 
   // The two lists are paginated independently: `page` drives equipment,
   // `bookingsPage` drives bookings, and each keeps the other's value.
@@ -84,6 +106,26 @@ export default async function ProviderPage({
   return (
     <div className="flex flex-col gap-8">
       <h1 className="text-2xl font-bold">Кабинет парка СпецПласт16</h1>
+
+      {pinCompany && (
+        <section id="map-pin" className="flex flex-col gap-3">
+          <div className="flex flex-col gap-1">
+            <h2 className="text-lg font-semibold">Моя точка на карте</h2>
+            <p className="text-sm text-slate-600">
+              {pinCompany.baseLat === null
+                ? 'Вас пока нет на карте исполнителей — укажите, где стоит техника.'
+                : 'Так заказчики находят ближайшего исполнителя на карте.'}
+            </p>
+          </div>
+          <Card className="max-w-xl">
+            <MyMapPin
+              company={pinCompany}
+              photos={ownPhotos}
+              uploadsEnabled={Boolean(getBlobToken())}
+            />
+          </Card>
+        </section>
+      )}
 
       <section className="flex flex-col gap-3">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
