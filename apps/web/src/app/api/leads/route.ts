@@ -12,18 +12,18 @@ export const dynamic = 'force-dynamic';
 const LEAD_RATE_LIMIT = { limit: 5, windowMs: 10 * 60 * 1000 };
 
 export async function POST(request: NextRequest) {
-  const body = await request.json().catch(() => null);
+  const body = (await request.json().catch(() => null)) as { website?: unknown } | null;
+  // Bots that fill the honeypot get a fake success. Checked before the schema,
+  // which rejects a filled field with 400 and would tell the bot it was caught.
+  if (typeof body?.website === 'string' && body.website.trim() !== '') {
+    return NextResponse.json({ ok: true }, { status: 201 });
+  }
   const parsed = createLeadSchema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json(
       { error: 'Проверьте имя, телефон и согласие на обработку данных' },
       { status: 400 },
     );
-  }
-
-  // Bots that fill the honeypot get a fake success.
-  if (parsed.data.website) {
-    return NextResponse.json({ ok: true }, { status: 201 });
   }
 
   const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown';

@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { ingestMessage } from '@/lib/ingest';
+import { prisma } from '@specai/database';
+import { directMessageLead, needsLead } from '@/lib/botDirectMessage';
+import { ingestMessage, type IngestResult } from '@/lib/ingest';
+import { acceptLead } from '@/lib/leadIntake';
+import { notifyTelegram } from '@/lib/notify';
+import { SITE } from '@/lib/site';
 import { bearerToken, safeEqual, whatsappWebhookToken } from '@/lib/integrations';
 
 export const dynamic = 'force-dynamic';
@@ -37,13 +42,45 @@ export async function POST(request: NextRequest) {
   if (!text || !chatId || !body.idMessage) return NextResponse.json({ ok: true });
 
   const senderDigits = body.senderData?.sender?.replace(/\D/g, '');
-  const result = await ingestMessage({
-    source: 'WHATSAPP',
+  const senderPhone = senderDigits && senderDigits.length >= 10 ? `+${senderDigits}` : undefined;
+  const isGroup = chatId.endsWith('@g.us');
+  const incoming = {
+    source: 'WHATSAPP' as const,
     externalId: `whatsapp:${chatId}:${body.idMessage}`,
     text,
-    chatTitle: chatId.endsWith('@g.us') ? body.senderData?.chatName : 'Личное сообщение',
+    chatTitle: isGroup ? body.senderData?.chatName : 'Личное сообщение',
     authorName: body.senderData?.senderName,
-    authorPhone: senderDigits && senderDigits.length >= 10 ? `+${senderDigits}` : undefined,
-  });
-  return NextResponse.json({ ok: true, result: result.status });
+    authorPhone: senderPhone,
+  };
+  if (isGroup) {
+    const result = await ingestMessage(incoming);
+    return NextResponse.json({ ok: true, result: result.status });
+  }
+
+  // Private message: never lost — if it is not an equipment request or the
+  // database is down, it becomes a "call me back" lead with a Telegram alert.
+  let result: IngestResult | null = null;
+  try {
+    result = await ingestMessage(incoming);
+  } catch (error) {
+    console.error('[whatsapp] could not import a private message', error);
+  }
+  if (!needsLead(result)) return NextResponse.json({ ok: true, result: result?.status });
+
+  const outcome = await acceptLead(
+    directMessageLead({
+      channel: 'whatsapp',
+      text,
+      authorName: body.senderData?.senderName,
+      phone: senderPhone,
+      chatId,
+    }),
+    {
+      save: (data) => prisma.lead.create({ data }),
+      notify: notifyTelegram,
+      siteName: SITE.name,
+      onSaveError: (error) => console.error('[whatsapp] lead was not saved to the database', error),
+    },
+  );
+  return NextResponse.json({ ok: true, result: result?.status ?? 'error', lead: outcome });
 }

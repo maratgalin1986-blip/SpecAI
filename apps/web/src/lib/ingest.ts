@@ -2,6 +2,7 @@ import { prisma, type OrderSource } from '@specai/database';
 import { analyzeChatMessage } from '@specai/ai-service';
 import { parseEquipmentRequest, requestFingerprint } from '@specai/shared';
 import { notifyTelegram } from '@/lib/notify';
+import { isSafeHttpUrl, maskContacts } from '@/lib/privacy';
 import { SITE } from '@/lib/site';
 import { siteUrl } from '@/lib/siteUrl';
 
@@ -107,7 +108,9 @@ export async function ingestMessage(message: IncomingMessage): Promise<IngestRes
   const order = await prisma.order.create({
     data: {
       customerId: await importerUserId(),
-      description: (summary ?? text).slice(0, 2000),
+      // The public description never carries phones, e-mails or @usernames
+      // (152-ФЗ); the full text stays in rawText for admins and providers.
+      description: maskContacts(summary ?? text).slice(0, 2000),
       desiredStartDate: start,
       desiredEndDate: end,
       status: published ? 'OPEN' : 'PENDING_REVIEW',
@@ -117,7 +120,7 @@ export async function ingestMessage(message: IncomingMessage): Promise<IngestRes
       externalId: message.externalId,
       fingerprint,
       sourceChat: message.chatTitle?.slice(0, 200),
-      sourceUrl: message.url,
+      sourceUrl: isSafeHttpUrl(message.url) ? message.url : undefined,
       contactName: message.authorName?.slice(0, 200),
       contactPhone: phone,
       rawText: text.slice(0, 4000),

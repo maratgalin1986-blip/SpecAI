@@ -6,7 +6,14 @@ import { registerSchema } from '@specai/shared';
 import { sendVerificationEmail } from '@/lib/verificationEmail';
 
 export async function POST(request: NextRequest) {
-  const body = await request.json();
+  const body = (await request.json().catch(() => null)) as { consent?: unknown } | null;
+  // 152-ФЗ: без явного согласия на обработку персональных данных аккаунт не создаётся.
+  if (body?.consent !== true) {
+    return NextResponse.json(
+      { error: 'Нужно согласие на обработку персональных данных' },
+      { status: 400 },
+    );
+  }
   const parsed = registerSchema.safeParse(body);
 
   if (!parsed.success) {

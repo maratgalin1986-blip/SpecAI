@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { ingestMessage } from '@/lib/ingest';
+import { prisma } from '@specai/database';
+import { directMessageLead, leadReply, needsLead } from '@/lib/botDirectMessage';
+import { ingestMessage, type IngestResult } from '@/lib/ingest';
+import { acceptLead } from '@/lib/leadIntake';
+import { notifyTelegram } from '@/lib/notify';
 import { safeEqual, telegramWebhookSecret } from '@/lib/integrations';
 import { SITE } from '@/lib/site';
 import { siteUrl } from '@/lib/siteUrl';
@@ -64,8 +68,8 @@ export async function POST(request: NextRequest) {
 
   const author = [message.from?.first_name, message.from?.last_name].filter(Boolean).join(' ');
   const username = message.from?.username ? `@${message.from.username}` : '';
-  const result = await ingestMessage({
-    source: 'TELEGRAM',
+  const incoming = {
+    source: 'TELEGRAM' as const,
     externalId: `telegram:${message.chat.id}:${message.message_id}`,
     text,
     chatTitle: isPrivate ? 'Личное сообщение боту' : message.chat.title,
@@ -74,18 +78,47 @@ export async function POST(request: NextRequest) {
     url: message.chat.username
       ? `https://t.me/${message.chat.username}/${message.message_id}`
       : undefined,
-  });
+  };
 
-  // Only answer in private chats — never post into groups.
-  if (isPrivate) {
+  // Groups: a failure is retried by Telegram (non-200), nothing to answer.
+  if (!isPrivate) {
+    const result = await ingestMessage(incoming);
+    return NextResponse.json({ ok: true, result: result.status });
+  }
+
+  let result: IngestResult | null = null;
+  try {
+    result = await ingestMessage(incoming);
+  } catch (error) {
+    console.error('[telegram] could not import a private message', error);
+  }
+
+  if (result?.status === 'created') {
     await reply(
       message.chat.id,
-      result.status === 'created'
-        ? `Спасибо! Заявка принята${result.published ? `: ${siteUrl()}/orders/${result.orderId}` : ''}. ` +
-            `Мы свяжемся с вами. Срочно — ${SITE.phone}`
-        : `Не нашли в сообщении, какая техника нужна. Напишите, например: ` +
-            `«Нужен экскаватор-погрузчик завтра, Набережные Челны, траншея 20 м». Или звоните ${SITE.phone}`,
+      `Спасибо! Заявка принята${result.published ? `: ${siteUrl()}/orders/${result.orderId}` : ''}. ` +
+        `Мы свяжемся с вами. Срочно — ${SITE.phone}`,
     );
+    return NextResponse.json({ ok: true, result: result.status });
   }
-  return NextResponse.json({ ok: true, result: result.status });
+  if (!needsLead(result)) return NextResponse.json({ ok: true, result: result?.status });
+
+  // Not an equipment request, or the database is down: the person still wants
+  // to talk to us — save it as a "call me back" lead and tell the owner.
+  const lead = directMessageLead({
+    channel: 'telegram',
+    text,
+    authorName: author || undefined,
+    username: username || undefined,
+    phone: message.contact?.phone_number,
+    chatId: message.chat.id,
+  });
+  const outcome = await acceptLead(lead, {
+    save: (data) => prisma.lead.create({ data }),
+    notify: notifyTelegram,
+    siteName: SITE.name,
+    onSaveError: (error) => console.error('[telegram] lead was not saved to the database', error),
+  });
+  await reply(message.chat.id, leadReply(lead, SITE.phone, outcome !== 'lost'));
+  return NextResponse.json({ ok: true, result: result?.status ?? 'error', lead: outcome });
 }

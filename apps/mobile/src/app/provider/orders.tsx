@@ -192,7 +192,8 @@ export default function ProviderOrdersScreen() {
                 </Text>
                 <Text style={styles.meta}>
                   {item.customer?.name ? `Клиент: ${item.customer.name} · ` : ''}
-                  Предложений: {item.bids.length}
+                  {/* bids — только свои; общее число приходит в bidCount. */}
+                  Предложений: {(item as { bidCount?: number }).bidCount ?? item.bids.length}
                 </Text>
                 {submitted ? (
                   <Badge text="Предложение отправлено" tone="success" />
