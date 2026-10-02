@@ -1,3 +1,5 @@
+import { existsSync, statSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { MACHINE_TYPES } from './machinePhotos';
 import { MACHINE_VOICES } from './sound';
@@ -108,5 +110,15 @@ describe('sound map', () => {
     for (const s of SITE_SAMPLES) expect(credited.has(s.name)).toBe(true);
     for (const s of Object.values(MACHINE_SAMPLES)) expect(credited.has(s!.name)).toBe(true);
     for (const c of SOUND_CREDITS) expect(c.license).toMatch(/^(CC0|CC BY|Public domain)/);
+  });
+
+  it('ships every credited recording as small mono webm + mp3', () => {
+    for (const c of SOUND_CREDITS) {
+      for (const ext of ['webm', 'mp3']) {
+        const file = fileURLToPath(new URL(`../../public/audio/${c.name}.${ext}`, import.meta.url));
+        expect(existsSync(file)).toBe(true);
+        expect(statSync(file).size).toBeLessThan(400_000);
+      }
+    }
   });
 });

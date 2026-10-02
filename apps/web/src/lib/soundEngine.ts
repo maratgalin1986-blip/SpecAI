@@ -456,12 +456,10 @@ export class SoundEngine {
         this.play(await this.synth('boom', () => renderBoom(this.ctx)), this.fx, { gain: 0.65 });
         break;
       case 'start': {
-        // The real diesel start where it loaded, the synthesized one otherwise.
-        const recording = await this.sample('engine-start');
         const type = machine ?? 'backhoe';
-        const buffer =
-          recording ?? (await this.synth(`start:${type}`, () => renderStart(this.ctx, type)));
-        this.play(buffer, this.fx, { gain: recording ? 0.35 : 0.4 });
+        this.play(await this.synth(`start:${type}`, () => renderStart(this.ctx, type)), this.fx, {
+          gain: 0.4,
+        });
         break;
       }
     }

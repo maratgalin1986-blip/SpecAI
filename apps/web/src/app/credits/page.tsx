@@ -56,9 +56,9 @@ export default function CreditsPage() {
 
       <h2 className="mt-4 text-xl font-bold">Звук</h2>
       <p className="text-slate-600">
-        Звук на сайте выключен, пока посетитель сам не нажмёт «🔇». Музыка, двигатели, щелчки,
-        «удар» заставки и рация синтезируются прямо в браузере; голоса прорабов — синтез речи
-        браузера. Записи техники и стройки — с Wikimedia Commons, обрезаны и пережаты в моно:
+        Звук на сайте выключен, пока посетитель сам не нажмёт «🔇». Музыка, шум стройки, двигатели и
+        гидравлика, щелчки, «удар» заставки и рация синтезируются прямо в браузере; голоса прорабов
+        — синтез речи браузера. Запись дизеля — с Wikimedia Commons, фрагмент пережат в моно:
       </p>
       <ul className="flex flex-col gap-3">
         {SOUND_CREDITS.map((credit) => (
@@ -73,25 +73,7 @@ export default function CreditsPage() {
         ))}
       </ul>
       <p className="text-sm text-slate-500">
-        Лицензии:{' '}
-        <a
-          href="https://creativecommons.org/licenses/by/4.0/deed.ru"
-          target="_blank"
-          rel="noopener"
-          className="underline"
-        >
-          CC BY 4.0
-        </a>
-        ,{' '}
-        <a
-          href="https://creativecommons.org/licenses/by-sa/4.0/deed.ru"
-          target="_blank"
-          rel="noopener"
-          className="underline"
-        >
-          CC BY-SA
-        </a>
-        ,{' '}
+        Лицензия:{' '}
         <a
           href="https://creativecommons.org/publicdomain/zero/1.0/deed.ru"
           target="_blank"
