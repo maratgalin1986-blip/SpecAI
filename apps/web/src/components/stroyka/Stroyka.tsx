@@ -764,8 +764,7 @@ export function Stroyka() {
       // A programmatic navigation: the site-wide tel: click tracker never sees it.
       reachGoal('call');
       window.location.href = SITE.phoneHref;
-    }
-    else if (q.action === 'smeta')
+    } else if (q.action === 'smeta')
       window.location.href = smetaHref(ctxRef.current.task, ctxRef.current.machine);
     else if (q.action === 'form') onReply({ label: q.label, action: { kind: 'form' } }, speaker);
     else if (q.action === 'order-anyway') {
