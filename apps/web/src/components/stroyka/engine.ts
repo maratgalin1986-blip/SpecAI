@@ -1704,11 +1704,20 @@ export class StroykaEngine {
       const safeTop = w < 640 ? Math.min(290, h * 0.36) : 72;
       const x = Math.min(Math.max(((project.x + 1) / 2) * w, bw / 2 + 8), w - bw / 2 - 8);
       let y = Math.max(((1 - project.y) / 2) * h, safeTop + bh);
-      // Two bubbles never cover each other: a later one moves below.
+      // Two bubbles never cover each other: a later one moves below, and is
+      // hidden for now if that would push it down into the dialogue area.
+      let pushed = false;
       for (const r of this.bubbleRects) {
         const overlapX = Math.abs(r.x - x) < (r.w + bw) / 2;
         const overlapY = y > r.y - r.h && y - bh < r.y;
-        if (overlapX && overlapY) y = r.y + bh + 6;
+        if (overlapX && overlapY) {
+          y = r.y + bh + 6;
+          pushed = true;
+        }
+      }
+      if (pushed && y > h * (w < 640 ? 0.46 : 0.6)) {
+        el.style.opacity = '0';
+        return;
       }
       this.bubbleRects.push({ x, y, w: bw, h: bh });
       el.style.transform = `translate(${x}px, ${y}px) translate(-50%, -100%)`;

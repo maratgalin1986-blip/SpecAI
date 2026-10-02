@@ -1032,7 +1032,12 @@ export function Stroyka() {
 
       {/* ---------------- mission card (left) and map (right) */}
       {phase !== 'boot' && (
-        <div className="pointer-events-none absolute inset-x-0 top-[calc(3.5rem+env(safe-area-inset-top))] z-10 flex items-start justify-between gap-2 px-3 sm:px-4">
+        <div
+          className={`pointer-events-none absolute inset-x-0 top-[calc(3.5rem+env(safe-area-inset-top))] ${
+            // The open phone menu lies over the dialogue, like any menu.
+            hudOpen ? 'z-30' : 'z-10'
+          } flex items-start justify-between gap-2 px-3 sm:px-4`}
+        >
           <div className="pointer-events-auto flex max-w-[calc(100vw-8.75rem)] flex-col gap-1.5 sm:max-w-sm">
             <div className="rounded-xl bg-slate-950/70 px-3 py-2 backdrop-blur">
               <div
@@ -1106,7 +1111,7 @@ export function Stroyka() {
             </div>
           </div>
           {phase === '3d' && (
-            <div className="pointer-events-auto flex flex-col items-end gap-1.5">
+            <div className="pointer-events-auto relative flex flex-col items-end gap-1.5">
               <MiniMap telemetry={telemetry} active={zone} city={miniCity} />
               {/* On a phone the tools fold into one «⋯» button; from sm up they are always shown. */}
               <button
@@ -1122,12 +1127,17 @@ export function Stroyka() {
               </button>
               <div
                 id="stroyka-hud-tools"
-                className={`${hudOpen ? 'flex' : 'hidden'} flex-col items-end gap-1.5 sm:flex`}
+                className={`${
+                  hudOpen ? 'flex' : 'hidden'
+                } absolute right-0 top-full mt-1.5 flex-col items-end gap-1.5 rounded-2xl bg-slate-950/90 p-2 shadow-2xl backdrop-blur sm:static sm:mt-0 sm:flex sm:bg-transparent sm:p-0 sm:shadow-none sm:backdrop-blur-none`}
               >
                 <button
                   type="button"
                   data-testid="mode-toggle"
-                  onClick={() => setMode((m) => (m === 'tour' ? 'free' : 'tour'))}
+                  onClick={() => {
+                    setMode((m) => (m === 'tour' ? 'free' : 'tour'));
+                    setHudOpen(false);
+                  }}
                   className="rounded-full bg-slate-950/75 px-3 py-1.5 text-xs font-semibold backdrop-blur hover:bg-slate-800"
                 >
                   {mode === 'tour' ? 'Свободная прогулка' : 'Экскурсия'}
@@ -1136,7 +1146,10 @@ export function Stroyka() {
                   <button
                     type="button"
                     data-testid="view-toggle"
-                    onClick={() => setView((v) => (v === 'fp' ? 'tp' : 'fp'))}
+                    onClick={() => {
+                      setView((v) => (v === 'fp' ? 'tp' : 'fp'));
+                      setHudOpen(false);
+                    }}
                     className="rounded-full bg-slate-950/75 px-3 py-1.5 text-xs font-semibold backdrop-blur hover:bg-slate-800"
                   >
                     {view === 'fp' ? 'Вид: от 3-го лица' : 'Вид: от 1-го лица'}
