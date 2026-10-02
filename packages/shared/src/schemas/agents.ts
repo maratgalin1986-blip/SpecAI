@@ -81,5 +81,8 @@ export const agentChatRequestSchema = z.object({
     )
     .min(1)
     .max(30),
+  // The visitor ticked the personal-data consent box: a phone number in the
+  // latest message is saved as a callback request only when this is true.
+  consent: z.boolean().optional(),
 });
 export type AgentChatRequest = z.infer<typeof agentChatRequestSchema>;

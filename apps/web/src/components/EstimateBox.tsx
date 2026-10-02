@@ -6,6 +6,7 @@ import { rub, SHIFT_HOURS } from '@/lib/equipmentCatalog';
 import { SITE } from '@/lib/site';
 import { submitLead } from '@/lib/submitLead';
 import { LeadSuccess } from '@/components/LeadSuccess';
+import { ConsentText } from '@/components/ConsentText';
 
 type Mode = 'hours' | 'shifts';
 
@@ -275,12 +276,7 @@ export function EstimateBox({
               onChange={(e) => setConsent(e.target.checked)}
               className="mt-0.5 accent-amber-600"
             />
-            <span>
-              Согласен(на) на обработку персональных данных по{' '}
-              <a href="/privacy" className="underline" target="_blank">
-                политике конфиденциальности
-              </a>
-            </span>
+            <ConsentText />
           </label>
           {error && <p className="text-xs text-red-600">{error}</p>}
           <button

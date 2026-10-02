@@ -5,6 +5,7 @@ import { signIn } from 'next-auth/react';
 import { Button, Card } from '@specai/ui';
 import { CinemaBackdrop } from '@/components/CinemaHero';
 import { BasePicker, type BaseValue } from '@/components/BasePicker';
+import { ConsentText } from '@/components/ConsentText';
 
 type AccountType = 'CUSTOMER' | 'PROVIDER';
 
@@ -168,16 +169,7 @@ export default function RegisterPage() {
               onChange={(e) => setConsent(e.target.checked)}
               className="mt-0.5"
             />
-            <span>
-              Согласен(на) на обработку персональных данных (
-              <a href="/soglasie" className="underline" target="_blank">
-                согласие
-              </a>
-              ) в соответствии с{' '}
-              <a href="/privacy" target="_blank" className="text-amber-700 underline">
-                политикой конфиденциальности
-              </a>
-            </span>
+            <ConsentText />
           </label>
           {error && <p className="text-sm text-red-600">{error}</p>}
           <Button type="submit" disabled={isSubmitting}>

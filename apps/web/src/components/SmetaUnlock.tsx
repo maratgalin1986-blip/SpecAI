@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { SITE } from '@/lib/site';
 import { submitLead } from '@/lib/submitLead';
+import { ConsentText } from '@/components/ConsentText';
 
 const UNLOCK_KEY = 'smeta-full-unlocked';
 
@@ -108,16 +109,7 @@ export function SmetaUnlock({ text, onUnlocked }: { text: string; onUnlocked: ()
           onChange={(e) => setConsent(e.target.checked)}
           className="mt-0.5"
         />
-        <span>
-          Согласен(на) на обработку персональных данных (
-          <a href="/soglasie" className="underline" target="_blank">
-            согласие
-          </a>
-          ) в соответствии с{' '}
-          <a href="/privacy" className="underline" target="_blank">
-            политикой конфиденциальности
-          </a>
-        </span>
+        <ConsentText />
       </label>
       {error && <p className="text-sm text-red-600">{error}</p>}
       <button

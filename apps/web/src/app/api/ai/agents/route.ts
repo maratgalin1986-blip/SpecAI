@@ -13,14 +13,15 @@ import { maskContacts } from '@/lib/privacy';
 import { checkRateLimit } from '@/lib/rateLimit';
 import { PUBLIC_FLEET, isProvider } from '@/lib/fleet';
 import { notifyTelegram } from '@/lib/notify';
+import { unsavedLeadMessage } from '@/lib/leadIntake';
 import { zodErrorMessage } from '@/lib/apiInput';
 import { asksWhatNext, guideReply } from '@/lib/guide';
 import { guideFor } from '@/lib/guideState';
 import { isOnShift, SITE } from '@/lib/site';
+import { CHAT_CONSENT_NEEDED, chatLeadRecord, chatLeadStep } from '@/lib/chatLead';
 import {
   ASK_FOR_PHONE,
   faqAnswers,
-  findPhone,
   leadAcceptedText,
   matchTask,
   wantsPrice,
@@ -82,6 +83,41 @@ export async function POST(request: NextRequest) {
         { status: 429, headers: { 'Retry-After': String(rate.retryAfterSec) } },
       );
     }
+  }
+
+  // A phone number in the latest message is a callback request in every mode
+  // (with or without an AI key), caught before any AI call so no guest lead is
+  // lost. It is saved only with the visitor's consent (152-ФЗ).
+  const userTexts = messages.filter((m) => m.role === 'user').map((m) => m.content);
+  const leadStep = chatLeadStep(messages.at(-1)?.content ?? '', parsed.data.consent);
+  if (leadStep.kind !== 'none') {
+    const agentId: AgentId = parsed.data.agentId === 'auto' ? 'dispatcher' : parsed.data.agentId;
+    if (leadStep.kind === 'consent') {
+      return NextResponse.json({
+        agentId,
+        reply: CHAT_CONSENT_NEEDED,
+        toolsUsed: [],
+        needConsent: true,
+        phone: leadStep.phone,
+      });
+    }
+    const lead = chatLeadRecord({ phone: leadStep.phone, userName: user?.name, userTexts });
+    const summary = [`Имя: ${lead.name}`, `Телефон: ${lead.phone}`, lead.message];
+    try {
+      await prisma.lead.create({ data: lead });
+      await notifyTelegram([`💬 Заявка из чата — ${SITE.name}`, ...summary].join('\n'));
+    } catch (error) {
+      // Database down: the owner still gets the phone, without the name and
+      // the conversation (lib/leadIntake.ts); the full lead stays in the log.
+      console.error('[agents] failed to save chat lead', error, JSON.stringify(lead));
+      await notifyTelegram(unsavedLeadMessage(lead.phone));
+    }
+    return NextResponse.json({
+      agentId,
+      reply: leadAcceptedText(isOnShift()),
+      toolsUsed: [],
+      lead: true,
+    });
   }
 
   // «Что дальше?» — the assistant's checklist from the database, the same with
@@ -310,8 +346,8 @@ export async function POST(request: NextRequest) {
 
   // Without an API key (or if the AI service fails) the agents still help in
   // the rule-based dispatcher (lib/dispatcher.ts): the machine for the job,
-  // common questions, the user's bookings, and a phone number typed into the
-  // chat becomes a callback request for the owner.
+  // common questions and the user's bookings. A phone number typed into the
+  // chat is handled above, before any AI call.
   async function offlineReply(agentId: AgentId) {
     const text = (messages.at(-1)?.content ?? '').toLowerCase();
     const lines: string[] = [];
@@ -342,37 +378,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const userText = messages
-      .filter((m) => m.role === 'user')
-      .map((m) => m.content)
-      .join('\n');
-    const phone = findPhone(messages.at(-1)?.content ?? '');
-    if (phone) {
-      const lead = {
-        name: user?.name?.trim() || 'Имя не указано',
-        phone,
-        message: `Из чата на сайте:\n${userText}`.slice(0, 1000),
-        source: 'agents-chat',
-      };
-      const summary = [`Имя: ${lead.name}`, `Телефон: ${phone}`, lead.message];
-      try {
-        await prisma.lead.create({ data: lead });
-        await notifyTelegram([`💬 Заявка из чата — ${SITE.name}`, ...summary].join('\n'));
-      } catch (error) {
-        console.error('[agents] failed to save chat lead', error);
-        await notifyTelegram(
-          ['⚠️ Заявка из чата — БАЗА НЕДОСТУПНА, заявка только здесь', ...summary].join('\n'),
-        );
-      }
-      return {
-        agentId,
-        reply: leadAcceptedText(isOnShift()),
-        toolsUsed: [],
-        offline: true,
-        lead: true,
-      };
-    }
-
+    const userText = userTexts.join('\n');
     const faq = faqAnswers(text);
     // Earlier messages only help when this one is not a plain question,
     // otherwise «Работаете с НДС?» drags in the machine from the last answer.

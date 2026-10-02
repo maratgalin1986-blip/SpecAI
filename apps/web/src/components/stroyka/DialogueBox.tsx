@@ -8,6 +8,7 @@ import type { RadioLine } from '@/lib/stroyka/context';
 import { BANTER_NAMES, splitCensored, type BanterSpeaker } from '@/lib/stroykaJokes';
 import { moodLine, type Mood } from '@/lib/stroyka/mood';
 import { Portrait } from './Portraits';
+import { ConsentText } from '@/components/ConsentText';
 
 export function Censored({ text }: { text: string }) {
   return (
@@ -114,7 +115,7 @@ export function DialogueBox({
       data-testid="dialogue"
       aria-live="polite"
       aria-label={`Говорит: ${name}`}
-      className="pointer-events-auto mx-auto flex max-h-[52dvh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-amber-500/50 bg-slate-950/88 text-white shadow-2xl backdrop-blur-md"
+      className="ym-hide-content pointer-events-auto mx-auto flex max-h-[52dvh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-amber-500/50 bg-slate-950/88 text-white shadow-2xl backdrop-blur-md"
     >
       <div className="flex-1 overflow-y-auto overscroll-contain p-3 sm:p-4">
         {radio.length > 0 && (
@@ -210,16 +211,7 @@ export function DialogueBox({
                 onChange={(e) => setConsent(e.target.checked)}
                 className="mt-0.5"
               />
-              <span>
-                Согласен(на) на обработку персональных данных (
-                <a href="/soglasie" className="underline" target="_blank">
-                  согласие
-                </a>
-                ) в соответствии с{' '}
-                <a href="/privacy" className="underline" target="_blank">
-                  политикой конфиденциальности
-                </a>
-              </span>
+              <ConsentText />
             </label>
             <button
               type="button"

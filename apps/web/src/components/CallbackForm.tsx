@@ -6,6 +6,7 @@ import { readLeadDraft, submitLead } from '@/lib/submitLead';
 import { LeadSuccess } from '@/components/LeadSuccess';
 import { PointPicker } from '@/components/PointPicker';
 import { POINT_LINE_PREFIX, withPointLine, type MapPoint } from '@/lib/mapPoint';
+import { ConsentText } from '@/components/ConsentText';
 
 // "Call me back" form. Works without an account and without the AI features.
 export function CallbackForm({
@@ -141,16 +142,7 @@ export function CallbackForm({
           onChange={(e) => setConsent(e.target.checked)}
           className="mt-0.5"
         />
-        <span>
-          Согласен(на) на обработку персональных данных (
-          <a href="/soglasie" className="underline" target="_blank">
-            согласие
-          </a>
-          ) в соответствии с{' '}
-          <a href="/privacy" className="underline" target="_blank">
-            политикой конфиденциальности
-          </a>
-        </span>
+        <ConsentText />
       </label>
       {error && <p className="text-sm text-red-500">{error}</p>}
       <button

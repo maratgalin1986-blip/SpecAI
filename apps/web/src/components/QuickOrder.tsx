@@ -5,6 +5,7 @@ import { Icon } from '@/components/Icon';
 import { SITE } from '@/lib/site';
 import { submitLead } from '@/lib/submitLead';
 import { LeadSuccess } from '@/components/LeadSuccess';
+import { ConsentText } from '@/components/ConsentText';
 
 // Card actions: «Заказать» opens a short inline order form (phone, optional
 // name, consent) that sends a lead without leaving the catalog; «Подробнее»
@@ -137,12 +138,7 @@ export function QuickOrder({
               onChange={(e) => setConsent(e.target.checked)}
               className="mt-0.5 accent-amber-600"
             />
-            <span>
-              Согласен(на) на обработку персональных данных по{' '}
-              <a href="/privacy" className="underline" target="_blank">
-                политике конфиденциальности
-              </a>
-            </span>
+            <ConsentText />
           </label>
           {error && <p className="text-xs text-red-600">{error}</p>}
           <button
