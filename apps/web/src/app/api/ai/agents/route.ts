@@ -352,8 +352,10 @@ export async function POST(request: NextRequest) {
       };
     }
 
-    const task = matchTask(text) ?? matchTask(userText);
     const faq = faqAnswers(text);
+    // Earlier messages only help when this one is not a plain question,
+    // otherwise «Работаете с НДС?» drags in the machine from the last answer.
+    const task = matchTask(text) ?? (faq.length === 0 ? matchTask(userText) : null);
     if (lines.length === 0) {
       lines.push(...faq);
       const categories = (await handlers.list_categories({})) as { id: string; name: string }[];

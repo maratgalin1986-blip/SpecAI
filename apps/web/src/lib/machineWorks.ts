@@ -7,14 +7,28 @@ export interface MachineWorks {
   /** «краном-манипулятором» — for «Что нужно сделать …?» */
   instrumental: string;
   rate: number;
+  /** Rate for the jobs done with the hydraulic hammer, if the machine has one. */
+  hammerRate?: number;
   landing?: string;
   works: string[];
+}
+
+/** The owner's price for work with the hydraulic hammer, ₽/h. */
+export const HAMMER_RATE = 3500;
+
+// Jobs that need the hammer: breaking concrete, demolishing foundations, frozen ground.
+const HAMMER_JOB = /гидромолот|мёрзл|демонтаж фундамент/i;
+
+/** Hourly rate for one job of the machine: the hammer rate for hammer jobs. */
+export function workRate(works: MachineWorks, job: string): number {
+  return works.hammerRate && HAMMER_JOB.test(job) ? works.hammerRate : works.rate;
 }
 
 export const MACHINE_WORKS: Partial<Record<MachineType, MachineWorks>> = {
   backhoe: {
     instrumental: 'экскаватором-погрузчиком',
     rate: 3000,
+    hammerRate: HAMMER_RATE,
     landing: 'ekskavator-pogruzchik',
     works: [
       'Выкопать траншею под коммуникации',
@@ -40,6 +54,7 @@ export const MACHINE_WORKS: Partial<Record<MachineType, MachineWorks>> = {
   'wheeled-excavator': {
     instrumental: 'колёсным экскаватором',
     rate: 3000,
+    hammerRate: HAMMER_RATE,
     landing: 'kolyosnyj-ekskavator-gidromolot',
     works: [
       'Разбить бетон или асфальт гидромолотом',

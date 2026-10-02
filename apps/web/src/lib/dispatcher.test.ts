@@ -41,3 +41,11 @@ describe('faqAnswers and wantsPrice', () => {
     expect(wantsPrice('нужен кран')).toBe(false);
   });
 });
+
+describe('matchTask for lifting and removal jobs', () => {
+  it('sends lifting slabs to a crane and rubbish removal to a dump truck', () => {
+    expect(matchTask('Поднять плиты по 3 т на высоту 10 м')?.category).toBe('Краны');
+    expect(matchTask('Вывезти мусор после демонтажа, 20 кубов')?.category).toBe('Самосвалы');
+    expect(matchTask('Разбить бетон')?.category).toBe('Экскаваторы');
+  });
+});

@@ -21,6 +21,7 @@ import { formatMoney, formatRate } from '@/lib/money';
 import { pluralizeRu } from '@/lib/pluralize';
 import { SITE } from '@/lib/site';
 import { HOUSE_COMPANY_ID, OWN_FLEET } from '@/lib/fleet';
+import { HAMMER_RATE } from '@/lib/machineWorks';
 
 export const dynamic = 'force-dynamic';
 
@@ -61,7 +62,11 @@ export default async function EquipmentDetailPage({ params }: { params: { id: st
   const specRows = specEntries(specs);
   const chips = keySpecs(specs, 4).map(specChip);
   const { hour, shift } = headlinePrices(item);
-  const hammerRate = numericSpec(specs, /гидромолот.*₽/i) ?? undefined;
+  // Machines sold as «с гидромолотом» without a hammer price in their specs
+  // still get the owner's hammer rate.
+  const hammerRate =
+    numericSpec(specs, /гидромолот.*₽/i) ??
+    (/гидромолот/i.test(item.name) ? HAMMER_RATE : undefined);
   const illustration = machineTypeOf(item.category.name, item.name);
   const ownFleet = item.company.name === SITE.legalName;
   const averageRating = item.reviews.length

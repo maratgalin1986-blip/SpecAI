@@ -553,7 +553,7 @@ export default async function HomePage() {
               Своя техника и свои машинисты
             </h2>
             <p className="mt-3 text-slate-700">
-              {SITE.name} сам выполняет каждую заявку: никаких перекупщиков и «поставщиков». Цену
+              {SITE.name} сам выполняет каждую заявку: никаких перекупщиков и посредников. Цену
               называем один раз и отвечаем за результат.
             </p>
             <a href="/orders" className="mt-5 inline-block">

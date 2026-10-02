@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { MACHINE_WORKS, machineFromQuery, machineLabel } from '@/lib/machineWorks';
+import { MACHINE_WORKS, machineFromQuery, machineLabel, workRate } from '@/lib/machineWorks';
 import { CallbackForm } from '@/components/CallbackForm';
 import { Icon, type IconName } from '@/components/Icon';
 import { MachinePhoto } from '@/components/MachinePhoto';
@@ -169,8 +169,12 @@ export function TaskWizard() {
       .catch((error: Error) => {
         if (error.name !== 'AbortError') setForecastDone(true);
       });
-    // Never keep the form waiting for long.
-    const timer = window.setTimeout(() => setForecastDone(true), 2500);
+    // Never keep the form waiting for long. A forecast that comes later is
+    // dropped: it would change the form's key and wipe what the visitor typed.
+    const timer = window.setTimeout(() => {
+      controller.abort();
+      setForecastDone(true);
+    }, 2500);
     return () => {
       controller.abort();
       window.clearTimeout(timer);
@@ -260,8 +264,8 @@ export function TaskWizard() {
                         id: `${machine}-${index}`,
                         icon: 'helmet' as IconName,
                         label,
-                        machine: `${machineLabel(machine)} — ${label.toLowerCase()}`,
-                        rate: works.rate,
+                        machine: `${machineLabel(machine)} — ${label.charAt(0).toLowerCase()}${label.slice(1)}`,
+                        rate: workRate(works, label),
                         landing: works.landing,
                         photo: machine,
                       })),
