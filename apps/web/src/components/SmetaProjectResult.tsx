@@ -156,18 +156,9 @@ export function SmetaProjectResult({
               </p>
               {view.materials && view.materials.length > 0 && (
                 <div className="rounded-lg border border-cyan-900 p-2 text-xs text-cyan-200">
-                  <p className="font-semibold">Материалы — ориентир, примерно:</p>
-                  <ul className="mt-1">
-                    {view.materials.map((m) => (
-                      <li key={m.material}>
-                        {m.name}: ≈ {m.qty.toLocaleString('ru-RU')} {m.unit}
-                      </li>
-                    ))}
-                  </ul>
                   <p className="mt-1 text-cyan-400">
-                    Количество — по вашим размерам, без запаса. Материалы с запасом, ценой и
-                    доставкой
-                    {SITE.name} —{' '}
+                    Материалы для этого проекта — с запасом, ценой и доставкой техникой {SITE.name}{' '}
+                    —{' '}
                     <button type="button" onClick={onSnab} className="underline">
                       в смете для снабженца
                     </button>

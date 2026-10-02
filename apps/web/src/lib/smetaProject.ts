@@ -638,9 +638,10 @@ export function visibleStageCount(project: Project): number {
   return Math.min(project.stages.length, Math.max(2, Math.floor(project.stages.length / 2)));
 }
 
-/** Stages of the 3D film open before the lock: at most three. */
+/** Stages of the 3D film open before the lock: the same as the priced list. */
 export function visibleSceneCount(project: Project): number {
-  return Math.min(3, visibleStageCount(project));
+  // The film opens exactly as many stages as the list shows prices for.
+  return visibleStageCount(project);
 }
 
 export interface ProjectView {

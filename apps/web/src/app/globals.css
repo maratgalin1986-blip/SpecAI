@@ -1687,3 +1687,8 @@ html[data-vt-kind='fade']::view-transition-group(root) {
     animation: none;
   }
 }
+
+/* The install prompt steps aside while the visitor types in a form. */
+html[data-typing] [aria-label='Установить приложение'] {
+  display: none;
+}

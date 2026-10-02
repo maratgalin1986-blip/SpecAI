@@ -56,12 +56,12 @@ describe('projection', () => {
 });
 
 describe('scenes', () => {
-  it('opens the plot and three stages before the lock', () => {
+  it('opens the plot and as many stages as the priced list before the lock', () => {
     const p = buildProject({ object: 'house', floors: 2 });
     const locked = projectScene(p, false);
     expect(locked.stages[0]!.kind).toBe('plot');
     expect(locked.stages).toHaveLength(p.stages.length + 1);
-    expect(locked.lockAt).toBe(4);
+    expect(locked.lockAt).toBe(5);
     expect(projectScene(p, true).lockAt).toBe(locked.stages.length);
     expect(locked.stages.at(-1)!.cumulative).toBe(p.total);
   });

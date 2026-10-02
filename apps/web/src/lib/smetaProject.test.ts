@@ -139,7 +139,7 @@ describe('partial and full', () => {
   it('shows about half of the stages with prices and hides the rest', () => {
     const p = buildProject(house);
     expect(visibleStageCount(p)).toBe(4);
-    expect(visibleSceneCount(p)).toBe(3);
+    expect(visibleSceneCount(p)).toBe(4);
     const partial = projectView(p, false);
     expect(partial.open).toHaveLength(4);
     expect(partial.locked).toHaveLength(5);
