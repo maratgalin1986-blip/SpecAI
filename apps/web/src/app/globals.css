@@ -992,24 +992,37 @@ html:active-view-transition .cine-curtain::after {
 }
 
 /* Viewfinder corner brackets. */
+/* Longhands only: the `background` shorthand would also reset the element's
+   own background colour (the work order card is bg-slate-900). */
 .hud-corners {
-  background:
-    linear-gradient(to right, rgba(255, 255, 255, 0.35) 18px, transparent 18px) 0 0 / 100% 1px
-      no-repeat,
-    linear-gradient(to bottom, rgba(255, 255, 255, 0.35) 18px, transparent 18px) 0 0 / 1px 100%
-      no-repeat,
-    linear-gradient(to left, rgba(255, 255, 255, 0.35) 18px, transparent 18px) 100% 0 / 100% 1px
-      no-repeat,
-    linear-gradient(to bottom, rgba(255, 255, 255, 0.35) 18px, transparent 18px) 100% 0 / 1px 100%
-      no-repeat,
-    linear-gradient(to right, rgba(255, 255, 255, 0.35) 18px, transparent 18px) 0 100% / 100% 1px
-      no-repeat,
-    linear-gradient(to top, rgba(255, 255, 255, 0.35) 18px, transparent 18px) 0 100% / 1px 100%
-      no-repeat,
-    linear-gradient(to left, rgba(255, 255, 255, 0.35) 18px, transparent 18px) 100% 100% / 100% 1px
-      no-repeat,
-    linear-gradient(to top, rgba(255, 255, 255, 0.35) 18px, transparent 18px) 100% 100% / 1px 100%
-      no-repeat;
+  background-image:
+    linear-gradient(to right, rgba(255, 255, 255, 0.35) 18px, transparent 18px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.35) 18px, transparent 18px),
+    linear-gradient(to left, rgba(255, 255, 255, 0.35) 18px, transparent 18px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.35) 18px, transparent 18px),
+    linear-gradient(to right, rgba(255, 255, 255, 0.35) 18px, transparent 18px),
+    linear-gradient(to top, rgba(255, 255, 255, 0.35) 18px, transparent 18px),
+    linear-gradient(to left, rgba(255, 255, 255, 0.35) 18px, transparent 18px),
+    linear-gradient(to top, rgba(255, 255, 255, 0.35) 18px, transparent 18px);
+  background-position:
+    0 0,
+    0 0,
+    100% 0,
+    100% 0,
+    0 100%,
+    0 100%,
+    100% 100%,
+    100% 100%;
+  background-size:
+    100% 1px,
+    1px 100%,
+    100% 1px,
+    1px 100%,
+    100% 1px,
+    1px 100%,
+    100% 1px,
+    1px 100%;
+  background-repeat: no-repeat;
 }
 
 /* The map descends like a drone onto the site, then holds. */
@@ -1628,5 +1641,33 @@ html[data-vt-kind='fade']::view-transition-group(root) {
     transform: translateY(120%);
     opacity: 0;
     pointer-events: none;
+  }
+}
+
+/* Soft mode («Уменьшение движения»): opacity-only fades, nothing moves. */
+@keyframes soft-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hero-short h1,
+  .cine-eyebrow,
+  .cine-title,
+  .cine-sub,
+  .stamp,
+  .work-order .stamp,
+  .work-order-value {
+    animation: soft-fade 0.7s ease-out both;
+  }
+  .cine-sub {
+    animation-delay: 0.15s;
+  }
+  .stamp,
+  .work-order .stamp {
+    animation-delay: 0.1s;
   }
 }

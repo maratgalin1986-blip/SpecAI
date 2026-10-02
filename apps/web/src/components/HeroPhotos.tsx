@@ -26,6 +26,7 @@ const SLIDES: { type: MachineType; href: string }[] = [
 
 const SLIDE_MS = 6500;
 const VIDEO_MS = 12000;
+const SOFT_SLIDE_MS = 9000;
 // Real construction footage of the visit's project (see siteObjects.ts); the
 // hero opens on it (index -1), then cycles through the machine photos and
 // comes back to the footage.
@@ -49,10 +50,17 @@ export function HeroPhotos() {
   }, []);
 
   useEffect(() => {
-    if (paused || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    if (paused) return;
+    // Soft mode («Уменьшение движения»): no footage and no push-in, the
+    // machine photos only cross-fade, slower.
+    const soft = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (soft && current === -1) {
+      setCurrent(0);
+      return;
+    }
     const timer = window.setTimeout(
-      () => setCurrent((i) => (i + 1 >= SLIDES.length ? -1 : i + 1)),
-      current === -1 ? VIDEO_MS : SLIDE_MS,
+      () => setCurrent((i) => (i + 1 >= SLIDES.length ? (soft ? 0 : -1) : i + 1)),
+      soft ? SOFT_SLIDE_MS : current === -1 ? VIDEO_MS : SLIDE_MS,
     );
     return () => window.clearTimeout(timer);
   }, [current, paused]);

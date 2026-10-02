@@ -240,7 +240,7 @@ export function TaskWizard() {
           </ol>
         </div>
 
-        <div className="p-6 sm:p-10 lg:col-span-8">
+        <div className="min-w-0 p-6 sm:p-10 lg:col-span-8">
           {step === 0 && (
             <div>
               <h3 className="text-xl font-bold">
@@ -345,8 +345,8 @@ export function TaskWizard() {
           )}
 
           {step === 3 && task && (
-            <div className="grid gap-6 xl:grid-cols-2">
-              <div>
+            <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+              <div className="min-w-0">
                 {task.photo && (
                   <div className="wizard-photo relative mb-5 aspect-[16/9] overflow-hidden rounded-2xl bg-slate-950">
                     <MachinePhoto
@@ -404,7 +404,7 @@ export function TaskWizard() {
                   </button>
                 </div>
               </div>
-              <div className="flex flex-col gap-4">
+              <div className="flex min-w-0 flex-col gap-4">
                 <WorkOrderPreview
                   machine={task.machine}
                   when={when}
