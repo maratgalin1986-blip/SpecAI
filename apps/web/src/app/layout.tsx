@@ -9,15 +9,10 @@ import { SiteFooter } from '@/components/SiteFooter';
 import { AgentChatWidget } from '@/components/AgentChatWidget';
 import { YandexMetrika } from '@/components/YandexMetrika';
 import { MarketingTracker } from '@/components/MarketingTracker';
-import { CinemaClicks } from '@/components/CinemaClicks';
 import { VtMorph } from '@/components/VtMorph';
-import { Cinema3D } from '@/components/Cinema3D';
-import { CinemaDolly } from '@/components/CinemaDolly';
-import { CinemaFx } from '@/components/CinemaFx';
-import { CinemaParticles } from '@/components/CinemaParticles';
+import { CinemaLayer } from '@/components/CinemaLayer';
 import { MessengerButtons } from '@/components/MessengerButtons';
 import { CookieNotice } from '@/components/CookieNotice';
-import { SoundDirector } from '@/components/SoundDirector';
 import { SITE } from '@/lib/site';
 import { siteUrl } from '@/lib/siteUrl';
 import './globals.css';
@@ -139,13 +134,10 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           <CookieNotice />
           <YandexMetrika />
           <MarketingTracker />
-          <CinemaClicks />
+          {/* Cross-document view transitions must listen from the first render. */}
           <VtMorph />
-          <Cinema3D />
-          <CinemaDolly />
-          <CinemaFx />
-          <CinemaParticles />
-          <SoundDirector />
+          {/* The other cinema effects load lazily (components/CinemaLayer.tsx). */}
+          <CinemaLayer />
         </Providers>
       </body>
     </html>
