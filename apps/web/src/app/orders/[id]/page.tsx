@@ -15,6 +15,14 @@ import { isSafeHttpUrl } from '@/lib/privacy';
 import { approvedComments } from '@/lib/commentAccess';
 import { CommentForm, CommentList } from '@/components/Comments';
 import { customerShortName } from '@/lib/customerPrivacy';
+import { OrderTimeline } from '@/components/OrderTimeline';
+import { ReliabilityBadges } from '@/components/ReliabilityBadges';
+import { orderTimeline } from '@/lib/orderTimeline';
+import { offerBreakdown } from '@/lib/offerBreakdown';
+import { loadCompanyStats } from '@/lib/companyStats';
+import { EMPTY_STATS, reliability } from '@/lib/reliability';
+import { providerPath } from '@/lib/providerSeo';
+import { pluralizeRu } from '@/lib/pluralize';
 
 export const dynamic = 'force-dynamic';
 
@@ -27,6 +35,7 @@ export default async function OrderDetailPage({ params }: { params: { id: string
       category: true,
       customer: true,
       location: true,
+      booking: { select: { status: true } },
       bids: {
         include: { equipment: { include: { company: true } } },
         orderBy: { price: 'asc' },
@@ -60,6 +69,19 @@ export default async function OrderDetailPage({ params }: { params: { id: string
     ? await approvedComments({ targetUserId: order.customerId }, 10)
     : [];
   const providerHasBid = viewerIsProvider && visibleBids.length > 0;
+  // The customer compares offers by trust signals as well as price.
+  const trust = seesAllBids
+    ? await loadCompanyStats(order.bids.map((bid) => bid.equipment.companyId))
+    : new Map();
+  const timeline = orderTimeline(
+    {
+      orderStatus: order.status,
+      bidCount: order.bids.length,
+      bookingStatus: order.booking?.status ?? null,
+    },
+    order.id,
+  );
+  const cheapest = visibleBids.length > 1 ? Number(visibleBids[0]!.price) : null;
   // One bid per company: a repeat updates the pending one.
   const ownPendingBid = viewerIsProvider
     ? visibleBids.find((bid) => bid.status === 'PENDING')
@@ -83,6 +105,7 @@ export default async function OrderDetailPage({ params }: { params: { id: string
           {ORDER_STATUS_LABELS[order.status]}
         </span>
       </div>
+      {(isOwner || isAdmin) && <OrderTimeline timeline={timeline} />}
       {isOwner && order.status === 'OPEN' && <CancelOrderButton orderId={order.id} />}
       {isOwner && order.status === 'MATCHED' && (
         <p className="rounded-md border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
@@ -139,7 +162,7 @@ export default async function OrderDetailPage({ params }: { params: { id: string
       )}
 
       {order.status === 'OPEN' && !isOwner && (
-        <section>
+        <section id="bid" className="scroll-mt-24">
           <h2 className="mb-3 text-lg font-semibold">Ваше предложение</h2>
           <Card className="max-w-xl">
             <BidForm
@@ -173,7 +196,7 @@ export default async function OrderDetailPage({ params }: { params: { id: string
         </section>
       )}
 
-      <section>
+      <section id="offers" className="scroll-mt-24">
         <h2 className="mb-3 text-lg font-semibold">
           {seesAllBids
             ? `Предложения исполнителей · ${order.bids.length}`
@@ -188,15 +211,17 @@ export default async function OrderDetailPage({ params }: { params: { id: string
                 key={bid.id}
                 className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4"
               >
-                <div className="min-w-0">
-                  <p className="break-words font-medium">
-                    {bid.equipment.name} · {bid.equipment.company.name}
-                  </p>
-                  <p className="text-sm text-slate-500">
-                    {formatMoney(bid.price, bid.currency)}
-                    {bid.message && <> · {bid.message}</>}
-                  </p>
-                </div>
+                <OfferBody
+                  bid={bid}
+                  start={order.desiredStartDate}
+                  end={order.desiredEndDate}
+                  trust={
+                    seesAllBids
+                      ? reliability(trust.get(bid.equipment.companyId) ?? EMPTY_STATS)
+                      : null
+                  }
+                  cheapest={cheapest !== null && Number(bid.price) === cheapest}
+                />
                 {isOwner && order.status === 'OPEN' && bid.status === 'PENDING' && (
                   <AcceptBidButton bidId={bid.id} />
                 )}
@@ -222,6 +247,96 @@ export default async function OrderDetailPage({ params }: { params: { id: string
           </div>
         )}
       </section>
+    </div>
+  );
+}
+
+/** One offer: company and trust signals, machine, total and the price breakdown. */
+function OfferBody({
+  bid,
+  start,
+  end,
+  trust,
+  cheapest,
+}: {
+  bid: {
+    price: unknown;
+    currency: string;
+    message: string | null;
+    equipment: {
+      id: string;
+      name: string;
+      hourlyRate: unknown;
+      dailyRate: unknown;
+      companyId: string;
+      company: { name: string };
+    };
+  };
+  start: Date;
+  end: Date;
+  trust: ReturnType<typeof reliability> | null;
+  cheapest: boolean;
+}) {
+  const parts = offerBreakdown(bid.price, start, end, bid.equipment);
+  return (
+    <div className="flex min-w-0 flex-col gap-2">
+      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+        <a
+          href={providerPath(bid.equipment.companyId)}
+          className="break-words text-base font-bold text-graphite-950 hover:text-signal-700 hover:underline"
+        >
+          {bid.equipment.company.name}
+        </a>
+        {cheapest && (
+          <span className="rounded-full bg-signal-500 px-2 py-0.5 text-xs font-bold text-graphite-950">
+            Лучшая цена
+          </span>
+        )}
+      </div>
+      {trust && <ReliabilityBadges value={trust} />}
+      <a
+        href={`/equipment/${bid.equipment.id}`}
+        className="break-words text-sm text-graphite-700 hover:underline"
+      >
+        {bid.equipment.name}
+      </a>
+      <p className="font-mono text-2xl font-bold text-graphite-950">
+        {formatMoney(parts.total, bid.currency)}
+        <span className="ml-2 font-sans text-xs font-medium text-graphite-500">
+          за {pluralizeRu(parts.days, ['день', 'дня', 'дней'])}
+        </span>
+      </p>
+      <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-graphite-600 sm:grid-cols-3">
+        {parts.days > 1 && (
+          <div>
+            <dt className="inline">В день: </dt>
+            <dd className="inline font-semibold text-graphite-800">
+              {formatMoney(parts.perDay, bid.currency)}
+            </dd>
+          </div>
+        )}
+        {parts.cardHour !== null && (
+          <div>
+            <dt className="inline">По карточке: </dt>
+            <dd className="inline font-semibold text-graphite-800">
+              {formatMoney(parts.cardHour, bid.currency)}/ч
+            </dd>
+          </div>
+        )}
+        {parts.cardShift !== null && (
+          <div>
+            <dt className="inline">Смена: </dt>
+            <dd className="inline font-semibold text-graphite-800">
+              {formatMoney(parts.cardShift, bid.currency)}
+            </dd>
+          </div>
+        )}
+      </dl>
+      {bid.message && (
+        <p className="whitespace-pre-line rounded-xl bg-graphite-50 px-3 py-2 text-sm text-graphite-700">
+          {bid.message}
+        </p>
+      )}
     </div>
   );
 }

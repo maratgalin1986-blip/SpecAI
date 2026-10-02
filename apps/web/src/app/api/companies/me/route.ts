@@ -21,6 +21,8 @@ const PIN_SELECT = {
   baseAddress: true,
   pinImageUrl: true,
   pinNote: true,
+  description: true,
+  phone: true,
 } as const;
 
 /**
@@ -72,7 +74,34 @@ export async function PATCH(request: NextRequest) {
     baseAddress?: string | null;
     pinImageUrl?: string | null;
     pinNote?: string | null;
+    description?: string | null;
+    phone?: string | null;
   } = {};
+
+  // Profile (the cabinet's «Профиль компании»): a few lines for the public
+  // page /providers/[id] and the phone a customer gets after confirmation.
+  if ('description' in input) {
+    const value = input.description;
+    if (value !== null && typeof value !== 'string') {
+      return NextResponse.json({ error: 'Описание — это текст' }, { status: 400 });
+    }
+    const text = value?.trim() ?? '';
+    if (text.length > 1000) {
+      return NextResponse.json({ error: 'Описание — не длиннее 1000 символов' }, { status: 400 });
+    }
+    data.description = text || null;
+  }
+  if ('phone' in input) {
+    const value = input.phone;
+    const text = typeof value === 'string' ? value.trim() : '';
+    if (value !== null && typeof value !== 'string') {
+      return NextResponse.json({ error: 'Телефон — это текст' }, { status: 400 });
+    }
+    if (text && !/^\+?[\d\s()-]{6,30}$/.test(text)) {
+      return NextResponse.json({ error: 'Проверьте номер телефона' }, { status: 400 });
+    }
+    data.phone = text || null;
+  }
 
   // The base: a new point or a new address replaces the old one; it cannot be
   // removed, a provider always has a place on the map. A point sent without

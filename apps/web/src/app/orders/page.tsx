@@ -12,6 +12,7 @@ import { isAdminRequest } from '@/lib/admin';
 import { isProvider } from '@/lib/fleet';
 import { SITE } from '@/lib/site';
 import { CallbackForm } from '@/components/CallbackForm';
+import { orderPrefill } from '@/lib/quickOrder';
 
 export const metadata: Metadata = {
   title: 'Заявка на технику',
@@ -42,6 +43,11 @@ interface OrdersSearchParams {
   page?: string;
   /** From the map: the provider the order is meant for. */
   provider?: string;
+  /** From the cabinet's quick-order panel (lib/quickOrder.ts). */
+  category?: string;
+  start?: string;
+  now?: string;
+  address?: string;
 }
 
 export default async function OrdersPage({ searchParams }: { searchParams: OrdersSearchParams }) {
@@ -108,7 +114,7 @@ export default async function OrdersPage({ searchParams }: { searchParams: Order
       </CinemaHero>
 
       {!viewerIsProvider && (
-        <section>
+        <section id="new" className="scroll-mt-24">
           <h2 className="mb-3 text-lg font-semibold">
             {forProvider ? `Заявка для «${forProvider.name}»` : 'Новая заявка'}
           </h2>
@@ -119,7 +125,7 @@ export default async function OrdersPage({ searchParams }: { searchParams: Order
           )}
           {viewerId ? (
             <Card className="max-w-xl">
-              <NewOrderForm provider={forProvider} />
+              <NewOrderForm provider={forProvider} initial={orderPrefill(searchParams)} />
             </Card>
           ) : (
             <div className="grid gap-4 lg:grid-cols-2">
