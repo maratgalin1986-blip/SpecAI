@@ -2,6 +2,7 @@ import { Link, useFocusEffect } from 'expo-router';
 import React, { useCallback, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { ContactActions } from '@/components/ContactActions';
+import { ModeSwitchCard, ProfileShortcuts } from '@/components/ProfileShortcuts';
 import { Badge, Button, Card } from '@/components/ui';
 import { API_URL, ApiError, sendVerificationEmail, type UserRole } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
@@ -10,7 +11,7 @@ import { colors, spacing } from '@/lib/theme';
 
 const ROLE_LABELS: Record<UserRole, string> = {
   CUSTOMER: 'Клиент',
-  PROVIDER_ADMIN: 'Поставщик',
+  PROVIDER_ADMIN: 'Исполнитель',
   ADMIN: 'Администратор',
 };
 
@@ -90,6 +91,9 @@ export default function ProfileScreen() {
         {__DEV__ ? <Row label="Сервер" value={API_URL} /> : null}
       </Card>
 
+      <ModeSwitchCard />
+      <ProfileShortcuts />
+
       {user && user.emailVerified === null ? (
         <Card style={styles.card}>
           <Text style={styles.verifyTitle}>Подтвердите e-mail</Text>
@@ -138,17 +142,22 @@ function Row({ label, value }: { label: string; value: string }) {
 }
 
 const styles = StyleSheet.create({
-  container: { padding: spacing.xl, alignItems: 'stretch', gap: spacing.md },
+  container: {
+    padding: spacing.lg,
+    paddingBottom: spacing.xl,
+    alignItems: 'stretch',
+    gap: spacing.md,
+  },
   avatar: {
     alignSelf: 'center',
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: colors.primaryLight,
+    backgroundColor: colors.dark,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  avatarText: { fontSize: 28, fontWeight: '700', color: colors.primaryDark },
+  avatarText: { fontSize: 28, fontWeight: '800', color: colors.primary },
   name: { fontSize: 22, fontWeight: '700', color: colors.text, textAlign: 'center' },
   email: { fontSize: 15, color: colors.textMuted, textAlign: 'center', marginBottom: spacing.md },
   card: { gap: spacing.md },

@@ -174,6 +174,8 @@ export type PaymentStatus = 'PENDING' | 'PAID' | 'FAILED' | 'REFUNDED' | string;
 
 export interface Booking {
   id: string;
+  /** Заявка, по которой создана бронь (если бронь из предложения). */
+  orderId?: string | null;
   status: BookingStatus;
   startDate: string;
   endDate: string;
@@ -210,7 +212,8 @@ export interface Bid {
     id: string;
     name: string;
     imageUrls?: string[];
-    company: { id: string; name: string };
+    /** rating и verified — если сервер начнёт их отдавать; сейчас их нет. */
+    company: { id: string; name: string; rating?: number | null; verified?: boolean };
   };
 }
 
@@ -227,6 +230,14 @@ export interface Order {
   /** Исполнитель видит заказчика как «Анна П.». */
   customer?: { id?: string; name: string } | null;
   bids: Bid[];
+  /** Сколько всего предложений (исполнитель видит в bids только свои). */
+  bidCount?: number;
+  /** Место работ, если сервер его отдаёт (пока не отдаёт — тогда «Адрес:» из описания). */
+  location?: {
+    addressLine?: string | null;
+    latitude?: number | null;
+    longitude?: number | null;
+  } | null;
 }
 
 /**
@@ -408,6 +419,8 @@ export function createOrder(input: {
   desiredStartDate: string;
   desiredEndDate: string;
   categoryId?: string;
+  /** Адрес объекта: сервер геокодирует его для погоды и карты. */
+  address?: string;
 }) {
   return apiFetch<{ order: Order }>('/api/orders', { method: 'POST', body: input });
 }

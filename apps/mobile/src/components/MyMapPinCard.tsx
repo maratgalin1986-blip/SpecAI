@@ -257,7 +257,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   photoImage: { width: '100%', height: '100%' },
-  standard: { backgroundColor: '#1e293b' },
+  standard: { backgroundColor: colors.dark },
   add: { borderStyle: 'dashed', backgroundColor: colors.card },
   selected: { borderColor: colors.primary, borderWidth: 3 },
   examples: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },

@@ -1,11 +1,42 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { Link, useFocusEffect } from 'expo-router';
-import React, { useCallback, useState } from 'react';
+import { Link, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import React, { useCallback, useEffect, useState } from 'react';
 import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
-import { Badge, EmptyState, ErrorBanner, Loader, type BadgeTone } from '@/components/ui';
+import { Badge, EmptyState, ErrorBanner, Loader, Segmented, type BadgeTone } from '@/components/ui';
 import { ApiError, fetchMyOrders, type Order, type OrderStatus } from '@/lib/api';
 import { ORDER_STATUS_LABELS, formatDate, pluralizeRu } from '@/lib/format';
-import { colors, radius, spacing } from '@/lib/theme';
+import { categoryIcon } from '@/lib/orderFlow';
+import { colors, radius, shadow, spacing } from '@/theme';
+import BookingsScreen from './bookings';
+
+type OrdersView = 'orders' | 'bookings';
+
+const VIEWS = [
+  { value: 'orders', label: 'Заявки' },
+  { value: 'bookings', label: 'Брони' },
+] as const;
+
+/**
+ * Вкладка «Заказы» заказчика: заявки (как история поездок) и брони.
+ * `?view=bookings` открывает брони сразу (ссылки «К бронированиям»).
+ */
+export default function OrdersTab() {
+  const params = useLocalSearchParams<{ view?: string }>();
+  const [view, setView] = useState<OrdersView>(params.view === 'bookings' ? 'bookings' : 'orders');
+
+  useEffect(() => {
+    if (params.view === 'bookings' || params.view === 'orders') setView(params.view);
+  }, [params.view]);
+
+  return (
+    <View style={styles.flex}>
+      <View style={styles.switcher}>
+        <Segmented options={VIEWS} value={view} onChange={setView} />
+      </View>
+      {view === 'orders' ? <OrdersScreen /> : <BookingsScreen />}
+    </View>
+  );
+}
 
 const STATUS_TONES: Record<OrderStatus, BadgeTone> = {
   OPEN: 'info',
@@ -19,6 +50,7 @@ function OrderCard({ order }: { order: Order }) {
     <Link href={{ pathname: '/orders/[id]', params: { id: order.id } }} asChild>
       <Pressable style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}>
         <View style={styles.cardHeader}>
+          <Text style={styles.cardIcon}>{categoryIcon(order.category?.name)}</Text>
           <Text style={styles.cardTitle} numberOfLines={3}>
             {order.description}
           </Text>
@@ -39,7 +71,7 @@ function OrderCard({ order }: { order: Order }) {
   );
 }
 
-export default function OrdersScreen() {
+function OrdersScreen() {
   const [orders, setOrders] = useState<Order[] | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -117,6 +149,8 @@ export default function OrdersScreen() {
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
+  switcher: { paddingHorizontal: spacing.lg, paddingTop: spacing.md },
+  cardIcon: { fontSize: 22 },
   list: { padding: spacing.lg, paddingBottom: spacing.xl * 4, flexGrow: 1 },
   header: { marginBottom: spacing.md },
   card: {
@@ -126,6 +160,7 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     padding: spacing.lg,
     gap: spacing.sm,
+    ...shadow.card,
   },
   cardPressed: { opacity: 0.85 },
   cardHeader: {
@@ -149,11 +184,8 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.lg,
-    shadowColor: '#000',
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 4,
+    minHeight: 52,
+    ...shadow.card,
   },
   fabPressed: { opacity: 0.85 },
   fabText: { color: '#fff', fontSize: 15, fontWeight: '600' },
