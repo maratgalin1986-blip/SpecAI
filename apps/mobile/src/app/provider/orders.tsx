@@ -228,7 +228,7 @@ export default function ProviderOrdersScreen() {
               <View style={styles.header}>
                 <ErrorBanner message={error} onRetry={() => void load()} />
               </View>
-            ) : null
+            ) : undefined
           }
           ListEmptyComponent={
             !error ? (
@@ -236,7 +236,7 @@ export default function ProviderOrdersScreen() {
                 title="Открытых заявок нет"
                 description="Когда клиенты опубликуют заявки, они появятся здесь."
               />
-            ) : null
+            ) : undefined
           }
         />
       </KeyboardAvoidingView>
