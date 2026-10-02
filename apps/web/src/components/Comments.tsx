@@ -115,14 +115,21 @@ export function CommentForm({
 }
 
 /** Admin: publish or reject a pending comment. */
-export function CommentModerationButtons({ commentId }: { commentId: string }) {
+export function CommentModerationButtons({
+  commentId,
+  kind = 'comments',
+}: {
+  commentId: string;
+  /** Comments or the text of a review (/api/admin/reviews). */
+  kind?: 'comments' | 'reviews';
+}) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const act = async (status: 'APPROVED' | 'REJECTED') => {
     setBusy(true);
     setError(null);
-    const response = await fetch(`/api/admin/comments/${commentId}`, {
+    const response = await fetch(`/api/admin/${kind}/${commentId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ status }),

@@ -45,7 +45,9 @@ export async function POST(request: NextRequest) {
       );
     }
     const resolved = await resolveProviderBase(body ?? {});
-    if (!resolved.ok) return NextResponse.json({ error: resolved.error }, { status: 400 });
+    if (!resolved.ok) {
+      return NextResponse.json({ error: resolved.error }, { status: resolved.status ?? 400 });
+    }
     base = resolved.value;
   }
 

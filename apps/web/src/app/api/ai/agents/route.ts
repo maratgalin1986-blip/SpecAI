@@ -1,14 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
 import { prisma } from '@specai/database';
-import { agentChatRequestSchema, createOrderSchema, type AgentId } from '@specai/shared';
+import {
+  ORDER_STATUS_LABELS,
+  agentChatRequestSchema,
+  createOrderSchema,
+  type AgentId,
+} from '@specai/shared';
 import { routeToAgent, runAgent, type AgentToolHandlers } from '@specai/ai-service';
-import { authOptions } from '@/lib/auth';
+import { getRequestUser } from '@/lib/requestUser';
 import { formatRate } from '@/lib/money';
 import { maskContacts } from '@/lib/privacy';
 import { checkRateLimit } from '@/lib/rateLimit';
 import { PUBLIC_FLEET, isProvider } from '@/lib/fleet';
 import { notifyTelegram } from '@/lib/notify';
+import { zodErrorMessage } from '@/lib/apiInput';
 import { asksWhatNext, guideReply } from '@/lib/guide';
 import { guideFor } from '@/lib/guideState';
 import { isOnShift, SITE } from '@/lib/site';
@@ -52,7 +57,7 @@ export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => null);
   const parsed = agentChatRequestSchema.safeParse(body);
   if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
+    return NextResponse.json({ error: zodErrorMessage(parsed.error) }, { status: 400 });
   }
 
   const { messages } = parsed.data;
@@ -63,8 +68,8 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const session = await getServerSession(authOptions);
-  const user = session?.user;
+  // Web session or the app's Bearer token: the app's chat is the same dispatcher.
+  const user = await getRequestUser(request);
 
   // Guests can chat too, so limit by user or IP to keep AI costs bounded.
   const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown';
@@ -281,7 +286,7 @@ export async function POST(request: NextRequest) {
     async get_my_fleet() {
       const currentUser = requireUser();
       if (!isProvider(currentUser) || !currentUser.companyId) {
-        throw new ToolError('Парк техники доступен только владельцу СпецПласт16.');
+        throw new ToolError('Парк техники доступен только аккаунту исполнителя.');
       }
       const fleet = await prisma.equipment.findMany({
         where: { companyId: currentUser.companyId },
@@ -440,8 +445,6 @@ const BOOKING_STATUS_RU: Record<string, string> = {
   CANCELLED: 'отменено',
 };
 
-const ORDER_STATUS_RU: Record<string, string> = {
-  OPEN: 'открыта',
-  MATCHED: 'исполнитель выбран',
-  CANCELLED: 'отменена',
-};
+const ORDER_STATUS_RU: Record<string, string> = Object.fromEntries(
+  Object.entries(ORDER_STATUS_LABELS).map(([status, label]) => [status, label.toLowerCase()]),
+);

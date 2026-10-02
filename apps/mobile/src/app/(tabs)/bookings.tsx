@@ -1,7 +1,7 @@
 import { Link, useFocusEffect, useRouter } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import React, { useCallback, useState } from 'react';
-import { Alert, FlatList, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import { Alert, FlatList, Linking, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import {
   Badge,
   Button,
@@ -77,6 +77,24 @@ function BookingCard({
       <Text style={styles.dates}>
         {formatDate(booking.startDate)} – {formatDate(booking.endDate)}
       </Text>
+      {booking.provider ? (
+        <Text style={styles.notes}>
+          Исполнитель: {booking.provider.name}
+          {booking.provider.phone ? (
+            <Text
+              style={styles.phone}
+              onPress={() =>
+                void Linking.openURL(`tel:${booking.provider?.phone?.replace(/[^\d+]/g, '')}`)
+              }
+            >
+              {' · '}
+              {booking.provider.phone}
+            </Text>
+          ) : booking.status === 'PENDING' ? (
+            ' · телефон появится после подтверждения'
+          ) : null}
+        </Text>
+      ) : null}
       <View style={styles.row}>
         <Text style={styles.price}>{formatMoney(booking.totalPrice, booking.currency)}</Text>
         {refundRequired ? (
@@ -95,11 +113,15 @@ function BookingCard({
       {canReview ? (
         <Button title="Оставить отзыв" variant="secondary" onPress={() => onReview(booking)} />
       ) : null}
-      {booking.status !== 'CANCELLED' && booking.equipment.companyId ? (
+      {['CONFIRMED', 'ACTIVE', 'COMPLETED'].includes(booking.status) &&
+      booking.equipment.companyId ? (
         <Link
           href={{
             pathname: '/comments',
-            params: { companyId: booking.equipment.companyId, name: booking.equipment.name },
+            params: {
+              companyId: booking.equipment.companyId,
+              name: booking.provider?.name ?? booking.equipment.name,
+            },
           }}
           asChild
         >
@@ -267,6 +289,7 @@ const styles = StyleSheet.create({
   dates: { fontSize: 14, color: colors.textMuted },
   row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   price: { fontSize: 17, fontWeight: '700', color: colors.primaryDark },
+  phone: { color: colors.primaryDark, fontWeight: '600' },
   notes: { fontSize: 13, color: colors.textMuted },
   reviewed: { fontSize: 13, color: colors.primaryDark, fontWeight: '600' },
 });

@@ -3,14 +3,17 @@ import { Prisma, prisma } from '@specai/database';
 import { createEquipmentSchema, equipmentSearchQuerySchema } from '@specai/shared';
 import { getRequestUser } from '@/lib/requestUser';
 import { EQUIPMENT_ORDER_BY, totalPagesFor } from '@/lib/pagination';
-import { PUBLIC_FLEET, isProvider } from '@/lib/fleet';
+import { PUBLIC_FLEET, PUBLISHED_FLEET, isProvider } from '@/lib/fleet';
+import { INVALID_JSON_MESSAGE, readJson, zodErrorMessage } from '@/lib/apiInput';
+import { listingPhoto } from '@/lib/equipmentPhoto';
 
 export async function GET(request: NextRequest) {
   const { mine, ...params } = Object.fromEntries(request.nextUrl.searchParams.entries());
+  const ownFleet = mine === '1' || mine === 'true';
 
   // ?mine=1 — техника компании текущего поставщика (для мобильного кабинета).
   // Заменяет companyId из строки запроса значением из аккаунта.
-  if (mine === '1' || mine === 'true') {
+  if (ownFleet) {
     const currentUser = await getRequestUser(request);
     if (!isProvider(currentUser)) {
       return NextResponse.json({ error: 'Требуется аккаунт поставщика' }, { status: 403 });
@@ -27,7 +30,7 @@ export async function GET(request: NextRequest) {
   });
 
   if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
+    return NextResponse.json({ error: zodErrorMessage(parsed.error) }, { status: 400 });
   }
 
   const {
@@ -45,11 +48,13 @@ export async function GET(request: NextRequest) {
 
   const where: Prisma.EquipmentWhereInput = {
     categoryId,
-    ...PUBLIC_FLEET,
+    // The provider's own list shows everything, including listings taken off
+    // the site; public lists never show RETIRED.
+    ...(ownFleet ? PUBLIC_FLEET : PUBLISHED_FLEET),
     // ?companyId= — one provider's machinery (the map's «Техника этого
     // поставщика»); with ?mine=1 it is the signed-in provider's own company.
     companyId,
-    status,
+    ...(status ? { status: ownFleet || status !== 'RETIRED' ? status : { in: [] } } : {}),
     location: city ? { city: { equals: city, mode: 'insensitive' } } : undefined,
     dailyRate:
       minDailyRate !== undefined || maxDailyRate !== undefined
@@ -69,8 +74,10 @@ export async function GET(request: NextRequest) {
     }),
   ]);
 
+  // The app shows photoUrl: the machine's own photo or an example one.
+  const origin = request.nextUrl.origin;
   return NextResponse.json({
-    equipment,
+    equipment: equipment.map((item) => ({ ...item, ...listingPhoto(item, origin) })),
     total,
     page,
     pageSize,
@@ -84,12 +91,22 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Требуется аккаунт поставщика' }, { status: 403 });
   }
 
-  const body = await request.json();
+  const body = await readJson(request);
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    return NextResponse.json({ error: INVALID_JSON_MESSAGE }, { status: 400 });
+  }
   // companyId is always derived from the authenticated provider, never trusted from the client.
   const parsed = createEquipmentSchema.safeParse({ ...body, companyId: currentUser.companyId });
 
   if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
+    return NextResponse.json({ error: zodErrorMessage(parsed.error) }, { status: 400 });
+  }
+  const category = await prisma.equipmentCategory.findUnique({
+    where: { id: parsed.data.categoryId },
+    select: { id: true },
+  });
+  if (!category) {
+    return NextResponse.json({ error: 'Выберите категорию из списка' }, { status: 400 });
   }
 
   const equipment = await prisma.equipment.create({

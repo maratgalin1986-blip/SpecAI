@@ -7,6 +7,7 @@ import { HOUSE_COMPANY_ID } from './fleet';
 import { inServiceArea } from './geo';
 import { maskContacts } from './privacy';
 import { pluralizeRu } from './pluralize';
+import { MACHINE_TYPES, photosOf } from './machinePhotos';
 
 export const PIN_NOTE_MAX = 120;
 
@@ -98,10 +99,24 @@ function isOwnUpload(url: URL, companyId: string) {
   );
 }
 
+/** The site's own machine photos (/images/machines/…): СпецПласт16 may use them as its marker. */
+export function siteMachinePhotos(): string[] {
+  return [...new Set(MACHINE_TYPES.flatMap((type) => photosOf(type)))];
+}
+
+/** Pictures a company can pick for its marker: its machinery's photos, plus the site's for the own fleet. */
+export function pinPhotoChoices(companyId: string, ownImageUrls: readonly string[]): string[] {
+  const own = [...new Set(ownImageUrls)].filter(isDisplayableImage).slice(0, 40);
+  return companyId === HOUSE_COMPANY_ID
+    ? [...own, ...siteMachinePhotos().filter((src) => !own.includes(src))]
+    : own;
+}
+
 /**
  * The marker picture a provider may choose: a photo of its own machinery
- * (one of its equipment's imageUrls) or a file it uploaded itself. Anything
- * else (someone else's photo, an arbitrary site) is refused.
+ * (one of its equipment's imageUrls) or a file it uploaded itself; the own
+ * fleet (СпецПласт16) may also use the site's machine photos. Anything else
+ * (someone else's photo, an arbitrary site) is refused.
  */
 export function isAllowedPinImage(
   value: string,
@@ -109,6 +124,7 @@ export function isAllowedPinImage(
 ): boolean {
   if (!value || value.length > 1000) return false;
   if (owner.ownImageUrls.includes(value)) return isDisplayableImage(value);
+  if (owner.companyId === HOUSE_COMPANY_ID && siteMachinePhotos().includes(value)) return true;
   try {
     return isOwnUpload(new URL(value), owner.companyId);
   } catch {
@@ -155,13 +171,16 @@ export interface ProviderMapPin {
 /**
  * The public map's markers. Fields are copied one by one, so a phone, an
  * e-mail, an address or a user that a query happens to include never reaches
- * the response. Companies without a base (or outside the area) are skipped;
+ * the response. Companies without published machinery, without a base (or
+ * outside the area) are skipped;
  * coordinates are rounded to four decimals (~10 m).
  */
 export function toMapPins(rows: readonly ProviderMapRow[]): ProviderMapPin[] {
   const pins: ProviderMapPin[] = [];
   for (const row of rows) {
     if (row.isProvider === false) continue;
+    // Nothing published (no machinery, or all of it taken off the site): not on the map.
+    if (row.equipmentCount < 1) continue;
     if (row.baseLat === null || row.baseLon === null) continue;
     if (!inServiceArea(row.baseLat, row.baseLon)) continue;
     const note = sanitizePinNote(row.pinNote);
@@ -186,7 +205,60 @@ export function toMapPins(rows: readonly ProviderMapRow[]): ProviderMapPin[] {
   );
 }
 
+/**
+ * The base picker after the address field changed: a point that was found for
+ * another address (`foundFor`) is dropped, so the old point is never saved
+ * with a new address; a point placed by hand (`foundFor` null) stays.
+ */
+export function baseAfterAddressEdit<
+  T extends { address: string; lat: number | null; lon: number | null },
+>(value: T, address: string, foundFor: string | null): T {
+  if (foundFor !== null && address.trim() !== foundFor) {
+    return { ...value, address, lat: null, lon: null };
+  }
+  return { ...value, address };
+}
+
 /** «3 единицы техники». */
 export function machineCountLabel(count: number): string {
   return `${pluralizeRu(count, ['единица', 'единицы', 'единиц'])} техники`;
+}
+
+/**
+ * Markers that would overlap on screen (closer than `minDistance` pixels) are
+ * spread on a small circle around their common centre, so every provider
+ * stays tappable («spiderfy» without a plugin). Takes screen positions in
+ * pixels and returns the shift for each id (0, 0 for markers left in place).
+ */
+export function spreadOverlapping(
+  points: readonly { id: string; x: number; y: number }[],
+  minDistance = 44,
+  radius = 34,
+): Map<string, { dx: number; dy: number }> {
+  const shifts = new Map<string, { dx: number; dy: number }>();
+  const groups: { id: string; x: number; y: number }[][] = [];
+  for (const point of points) {
+    const group = groups.find((members) =>
+      members.some((other) => Math.hypot(other.x - point.x, other.y - point.y) < minDistance),
+    );
+    if (group) group.push(point);
+    else groups.push([point]);
+  }
+  for (const group of groups) {
+    if (group.length === 1) {
+      shifts.set(group[0]!.id, { dx: 0, dy: 0 });
+      continue;
+    }
+    const cx = group.reduce((sum, point) => sum + point.x, 0) / group.length;
+    const cy = group.reduce((sum, point) => sum + point.y, 0) / group.length;
+    const ring = Math.max(radius, (group.length * minDistance) / (2 * Math.PI));
+    group.forEach((point, index) => {
+      const angle = -Math.PI / 2 + (2 * Math.PI * index) / group.length;
+      shifts.set(point.id, {
+        dx: Math.round(cx + ring * Math.cos(angle) - point.x),
+        dy: Math.round(cy + ring * Math.sin(angle) - point.y),
+      });
+    });
+  }
+  return shifts;
 }

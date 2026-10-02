@@ -1,3 +1,4 @@
+import { isDisplayableImage } from '@/lib/providerMap';
 import { isHouseEquipment } from '@/lib/fleet';
 import type { EquipmentStatus } from '@specai/ui';
 import { AvailabilityChip } from '@/components/AvailabilityChip';
@@ -50,7 +51,9 @@ export function EquipmentCard({ item }: { item: EquipmentCardItem }) {
   const href = `/equipment/${item.id}`;
   const { hour, shift } = headlinePrices(item);
   const chips = keySpecs(item.specs, 3).map(specChip);
-  const illustration = item.imageUrls[0] ? null : machineTypeOf(item.category.name, item.name);
+  // Only https photos or the site's own paths (never javascript: or data:).
+  const photo = item.imageUrls.find(isDisplayableImage);
+  const illustration = photo ? null : machineTypeOf(item.category.name, item.name);
   const priceSummary = [hour !== null && `${rub(hour)}/ч`, shift !== null && `${rub(shift)}/смена`]
     .filter(Boolean)
     .join(', ');
@@ -64,9 +67,9 @@ export function EquipmentCard({ item }: { item: EquipmentCardItem }) {
           data-vt-part="photo"
           tabIndex={-1}
         >
-          {item.imageUrls[0] ? (
+          {photo ? (
             <img
-              src={item.imageUrls[0]}
+              src={photo}
               alt={item.name}
               loading="lazy"
               className="tilt-zoom h-full w-full object-cover"

@@ -11,6 +11,7 @@ import {
   checkBookingDates,
 } from '@/lib/bookingRules';
 import { findOverlappingBooking, lockEquipment } from '@/lib/bookingConflicts';
+import { customerShortName } from '@/lib/customerPrivacy';
 
 /** Thrown inside the transaction to roll it back when the order was taken meanwhile. */
 class AlreadyClosedError extends Error {}
@@ -137,7 +138,8 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         currency: booking.currency,
         startDate: booking.startDate,
         endDate: booking.endDate,
-        customerName: bid.order.customer.name,
+        // Providers see the customer as «Анна П.» (owner's decision).
+        customerName: customerShortName(bid.order.customer.name),
       });
       await sendEmail({ to: providerEmails, ...template });
     }
@@ -145,5 +147,5 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     console.error('[email] bidAccepted failed', error);
   }
 
-  return NextResponse.json({ booking }, { status: 201 });
+  return NextResponse.json({ booking, message: 'Бронь создана' }, { status: 201 });
 }

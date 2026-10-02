@@ -16,12 +16,15 @@ interface Category {
   name: string;
 }
 
-export function NewOrderForm() {
+export function NewOrderForm({ provider }: { provider?: { name: string } | null } = {}) {
   const router = useRouter();
   const { status } = useSession();
   const [categories, setCategories] = useState<Category[]>([]);
   const [categoryId, setCategoryId] = useState('');
-  const [description, setDescription] = useState('');
+  // From the map's «Оставить заявку»: the order names the chosen provider.
+  const [description, setDescription] = useState(
+    provider ? `Для исполнителя «${provider.name}». ` : '',
+  );
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [address, setAddress] = useState('');

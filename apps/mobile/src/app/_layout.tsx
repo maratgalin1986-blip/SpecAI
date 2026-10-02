@@ -30,13 +30,14 @@ function RootNavigator() {
       </Stack.Protected>
       <Stack.Protected guard={isSignedIn}>
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="equipment/[id]" options={{ title: 'Техника' }} />
         <Stack.Screen name="orders/new" options={{ title: 'Новая заявка' }} />
         <Stack.Screen name="orders/[id]" options={{ title: 'Заявка' }} />
         <Stack.Screen name="bookings/[id]/review" options={{ title: 'Отзыв' }} />
         <Stack.Screen name="comments" options={{ title: 'Комментарии' }} />
       </Stack.Protected>
-      {/* Доступны и без входа: заявка на звонок и сведения о компании. */}
+      {/* Доступны и без входа: каталог, карточка техники, карта, звонок, о компании. */}
+      <Stack.Screen name="catalog" options={{ title: 'Каталог техники' }} />
+      <Stack.Screen name="equipment/[id]" options={{ title: 'Техника' }} />
       <Stack.Screen name="callback" options={{ title: 'Заказать звонок', presentation: 'modal' }} />
       <Stack.Screen name="about" options={{ title: 'О компании' }} />
       <Stack.Screen name="map" options={{ title: 'Карта исполнителей' }} />

@@ -101,6 +101,15 @@ export default function LoginScreen() {
             </Link>
           </View>
 
+          <View style={styles.guestLinks}>
+            <Link href="/catalog" style={styles.guestLink}>
+              Каталог техники
+            </Link>
+            <Link href="/map" style={styles.guestLink}>
+              Карта исполнителей
+            </Link>
+          </View>
+
           <View style={styles.contacts}>
             <ContactActions source="mobile:login" compact />
             <Link href="/about" style={styles.link}>
@@ -116,6 +125,13 @@ export default function LoginScreen() {
 }
 
 const styles = StyleSheet.create({
+  guestLinks: { flexDirection: 'row', justifyContent: 'center', gap: spacing.lg },
+  guestLink: {
+    color: colors.primaryDark,
+    fontSize: 15,
+    fontWeight: '600',
+    paddingVertical: spacing.sm,
+  },
   safe: { flex: 1, backgroundColor: colors.background },
   flex: { flex: 1 },
   container: { flexGrow: 1, padding: spacing.xl, justifyContent: 'center', gap: spacing.xl },

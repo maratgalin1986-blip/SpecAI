@@ -39,6 +39,19 @@ function extractError(body: unknown, fallback: string): string {
   return fallback;
 }
 
+/**
+ * Ссылка на картинку для <Image>: пути сайта («/images/…») — от API_URL,
+ * https — как есть; всё остальное (javascript:, data:, http) — null.
+ */
+export function imageUri(url: string | null | undefined): string | null {
+  if (!url) return null;
+  if (url.startsWith('/') && !url.startsWith('//')) return `${API_URL}${url}`;
+  if (/^https:\/\//i.test(url)) return url;
+  // Локальный сервер разработки отдаёт фото по http.
+  if (__DEV__ && url.startsWith(`${API_URL}/`)) return url;
+  return null;
+}
+
 export async function getToken(): Promise<string | null> {
   return getItem(STORAGE_KEYS.token);
 }
@@ -138,6 +151,10 @@ export interface Equipment {
   specs: Record<string, unknown> | null;
   description: string | null;
   imageUrls: string[];
+  /** Фото для карточки: своё или пример по типу машины (абсолютная ссылка). */
+  photoUrl?: string | null;
+  /** true — «Фото для примера», не эта машина. */
+  photoIsExample?: boolean;
   category: { id: string; name: string };
   company: { id: string; name: string };
   location: { city: string; address?: string | null } | null;
@@ -166,6 +183,8 @@ export interface Booking {
   notes: string | null;
   createdAt: string;
   equipment: { id: string; name: string; imageUrls?: string[]; companyId?: string };
+  /** Исполнитель: название всегда, телефон — после подтверждения брони. */
+  provider?: { name: string; phone: string | null };
   payment?: { status: PaymentStatus; refundRequired?: boolean } | null;
   review?: { id: string; rating: number } | null;
 }
@@ -202,15 +221,26 @@ export interface Order {
   desiredEndDate: string;
   status: OrderStatus;
   createdAt: string;
-  customerId: string;
+  /** Только у автора заявки: исполнителю id заказчика не отдаётся. */
+  customerId?: string;
   category: Category | null;
-  customer?: { id: string; name: string };
+  /** Исполнитель видит заказчика как «Анна П.». */
+  customer?: { id?: string; name: string } | null;
   bids: Bid[];
 }
 
-/** Бронирование техники поставщика (GET /api/bookings?as=provider). */
+/**
+ * Бронирование техники поставщика (GET /api/bookings?as=provider): заказчик как
+ * «Анна П.»; телефон и e-mail — только после подтверждения брони.
+ */
 export interface ProviderBooking extends Booking {
-  customer: { id: string; name: string; email: string };
+  customer: {
+    id: string;
+    name: string;
+    email: string | null;
+    phone?: string | null;
+    contactsVisible?: boolean;
+  };
 }
 
 export interface UploadedFile {
@@ -239,6 +269,22 @@ export interface CreateEquipmentInput {
   description?: string;
   specs?: Record<string, unknown>;
   imageUrls: string[];
+  status?: EquipmentStatus;
+}
+
+/** PATCH /api/equipment/[id]: null очищает необязательное поле. */
+export interface UpdateEquipmentInput {
+  name?: string;
+  categoryId?: string;
+  make?: string | null;
+  model?: string | null;
+  year?: number | null;
+  status?: EquipmentStatus;
+  dailyRate?: number;
+  hourlyRate?: number | null;
+  description?: string | null;
+  specs?: Record<string, unknown> | null;
+  imageUrls?: string[];
 }
 
 /** Заявка на обратный звонок (POST /api/leads, как форма CallbackForm на сайте). */
@@ -302,10 +348,22 @@ export function createLead(input: CreateLeadInput) {
   });
 }
 
-export function register(input: { name: string; email: string; password: string; phone?: string }) {
+export type RegisterInput = {
+  name: string;
+  email: string;
+  password: string;
+  phone?: string;
+  consent: true;
+} & (
+  | { accountType: 'CUSTOMER' }
+  | { accountType: 'PROVIDER'; companyName: string; baseAddress: string }
+);
+
+/** Регистрация заказчика или исполнителя (с компанией и адресом базы). */
+export function register(input: RegisterInput) {
   return apiFetch<{ id: string; email: string }>('/api/auth/register', {
     method: 'POST',
-    body: { accountType: 'CUSTOMER', ...input },
+    body: input,
     anonymous: true,
   });
 }
@@ -354,6 +412,14 @@ export function createOrder(input: {
   return apiFetch<{ order: Order }>('/api/orders', { method: 'POST', body: input });
 }
 
+/** Заказчик отменяет свою открытую заявку. */
+export function cancelOrder(id: string) {
+  return apiFetch<{ ok: boolean; message?: string }>(`/api/orders/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    body: { status: 'CANCELLED' },
+  });
+}
+
 export function acceptBid(bidId: string) {
   return apiFetch<{ booking: Booking }>(`/api/bids/${encodeURIComponent(bidId)}/accept`, {
     method: 'POST',
@@ -375,6 +441,14 @@ export function fetchConversation(conversationId: string) {
   return apiFetch<{ conversationId: string; messages: ChatMessage[] }>(
     `/api/ai/chat?conversationId=${encodeURIComponent(conversationId)}`,
   );
+}
+
+/** Диспетчер сайта (как виджет чата на сайте): история диалога → ответ. */
+export function sendAgentMessage(messages: { role: 'user' | 'assistant'; content: string }[]) {
+  return apiFetch<{ agentId: string; reply: string; offline?: boolean }>('/api/ai/agents', {
+    method: 'POST',
+    body: { agentId: 'auto', messages },
+  });
 }
 
 // ---- Сторона поставщика (роль PROVIDER_ADMIN) ----
@@ -400,6 +474,13 @@ export function updateBookingStatus(id: string, status: BookingStatus) {
 
 export function createEquipment(input: CreateEquipmentInput) {
   return apiFetch<{ equipment: Equipment }>('/api/equipment', { method: 'POST', body: input });
+}
+
+export function updateEquipment(id: string, input: UpdateEquipmentInput) {
+  return apiFetch<{ equipment: Equipment; message?: string }>(
+    `/api/equipment/${encodeURIComponent(id)}`,
+    { method: 'PATCH', body: input },
+  );
 }
 
 export function extractSpecsFromFile(fileUrl: string) {
@@ -475,10 +556,14 @@ export function createBid(
   orderId: string,
   input: { equipmentId: string; price: number; message?: string },
 ) {
-  return apiFetch<{ bid: Bid }>(`/api/orders/${encodeURIComponent(orderId)}/bids`, {
-    method: 'POST',
-    body: input,
-  });
+  // 201 — новое предложение, 200 — обновлено прежнее (одно предложение от компании).
+  return apiFetch<{ bid: Bid; message?: string }>(
+    `/api/orders/${encodeURIComponent(orderId)}/bids`,
+    {
+      method: 'POST',
+      body: input,
+    },
+  );
 }
 
 // ---- Комментарии (с модерацией) и помощник «Что дальше?» ----

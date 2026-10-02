@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { ORDER_STATUS_LABELS } from '@specai/shared';
 import { getServerSession } from 'next-auth';
 import { prisma } from '@specai/database';
 import { BookingStatusBadge, Card } from '@specai/ui';
@@ -10,7 +11,9 @@ import { BookingActionButtons } from '@/components/BookingActionButtons';
 import { isOnlinePaymentEnabled } from '@/lib/stripe';
 import { SITE } from '@/lib/site';
 import { VerifyEmailBanner } from '@/components/VerifyEmailBanner';
-import { PUBLIC_FLEET, isProvider } from '@/lib/fleet';
+import { isEmailConfigured } from '@/lib/email';
+import { HOUSE_COMPANY_ID, PUBLISHED_FLEET, isProvider } from '@/lib/fleet';
+import { providerForCustomer } from '@/lib/customerPrivacy';
 import { redirect } from 'next/navigation';
 import { GuideCard } from '@/components/GuideCard';
 import { CommentForm } from '@/components/Comments';
@@ -19,12 +22,6 @@ import { guideFor } from '@/lib/guideState';
 export const metadata: Metadata = { title: 'Личный кабинет', robots: { index: false } };
 
 export const dynamic = 'force-dynamic';
-
-const ORDER_STATUS_LABEL: Record<string, string> = {
-  OPEN: 'Открыта',
-  MATCHED: 'Закрыта — техника выбрана',
-  CANCELLED: 'Отменена',
-};
 
 const PAYMENT_NOTICE: Record<string, { text: string; className: string }> = {
   success: {
@@ -62,7 +59,7 @@ export default async function DashboardPage({
 
   const [guide, equipmentCount, activeBookings, myBookings, myOrders, me] = await Promise.all([
     guideFor(session?.user),
-    prisma.equipment.count({ where: { ...PUBLIC_FLEET, status: { not: 'RETIRED' } } }),
+    prisma.equipment.count({ where: PUBLISHED_FLEET }),
     session
       ? prisma.booking.count({
           where: { customerId: session.user.id, status: { in: ['CONFIRMED', 'ACTIVE'] } },
@@ -71,7 +68,11 @@ export default async function DashboardPage({
     session
       ? prisma.booking.findMany({
           where: { customerId: session.user.id },
-          include: { equipment: true, review: true, payment: true },
+          include: {
+            equipment: { include: { company: { select: { id: true, name: true, phone: true } } } },
+            review: true,
+            payment: true,
+          },
           orderBy: { createdAt: 'desc' },
           take: 20,
         })
@@ -93,7 +94,7 @@ export default async function DashboardPage({
   ]);
 
   const stats = [
-    { label: 'Машин в парке СпецПласт16', value: equipmentCount },
+    { label: 'Техники в каталоге', value: equipmentCount },
     { label: 'Активных бронирований', value: activeBookings },
   ];
 
@@ -111,7 +112,9 @@ export default async function DashboardPage({
           Ссылка подтверждения недействительна или устарела. Запросите новое письмо.
         </p>
       )}
-      {session && me && !me.emailVerified && <VerifyEmailBanner />}
+      {session && me && !me.emailVerified && (
+        <VerifyEmailBanner emailEnabled={isEmailConfigured()} />
+      )}
       {paymentNotice && (
         <p className={`rounded-md border px-4 py-3 text-sm ${paymentNotice.className}`}>
           {paymentNotice.text}
@@ -126,7 +129,7 @@ export default async function DashboardPage({
         ))}
       </div>
 
-      <div>
+      <div id="orders" className="scroll-mt-24">
         <h2 className="mb-3 text-lg font-semibold">Мои заявки</h2>
         {myOrders.length === 0 ? (
           <p className="text-sm text-slate-600">
@@ -150,7 +153,7 @@ export default async function DashboardPage({
                     </p>
                   </div>
                   <span className="w-fit shrink-0 rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-700">
-                    {ORDER_STATUS_LABEL[order.status]}
+                    {ORDER_STATUS_LABELS[order.status]}
                   </span>
                 </Card>
               </a>
@@ -159,12 +162,12 @@ export default async function DashboardPage({
         )}
       </div>
 
-      <div>
+      <div id="bookings" className="scroll-mt-24">
         <h2 className="mb-3 text-lg font-semibold">Мои бронирования</h2>
         {!paymentsEnabled && myBookings.length > 0 && (
           <p className="mb-3 text-sm text-slate-600">
-            Бронирование бесплатное: без предоплаты и комиссий. Работа техники — по прайсу, расчёт
-            со СпецПласт16 после смены. Вопросы:{' '}
+            Бронирование бесплатное: без предоплаты и комиссий. Работа техники — по цене
+            исполнителя, расчёт с исполнителем напрямую после смены. Вопросы по сервису:{' '}
             <a href={SITE.phoneHref} className="font-medium text-amber-700">
               {SITE.phone}
             </a>
@@ -174,72 +177,108 @@ export default async function DashboardPage({
           <p className="text-sm text-slate-600">Бронирований пока нет.</p>
         ) : (
           <div className="flex flex-col gap-3">
-            {myBookings.map((booking) => (
-              <Card
-                key={booking.id}
-                className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4"
-              >
-                <div className="min-w-0">
-                  <a
-                    href={`/equipment/${booking.equipmentId}`}
-                    className="font-medium hover:text-amber-700"
-                  >
-                    {booking.equipment.name}
-                  </a>
-                  <p className="text-sm text-slate-500">
-                    {booking.startDate.toLocaleDateString('ru-RU')} –{' '}
-                    {booking.endDate.toLocaleDateString('ru-RU')} ·{' '}
-                    {formatMoney(booking.totalPrice, booking.currency)}
-                  </p>
-                  {booking.payment?.refundRequired ? (
-                    <div className="mt-2">
-                      <span className="inline-block rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-semibold text-red-800">
-                        Требуется возврат
-                      </span>
-                    </div>
-                  ) : (
-                    booking.status !== 'CANCELLED' &&
-                    (paymentsEnabled ||
-                      booking.depositPaid ||
-                      booking.payment?.status === 'PAID') && (
+            {myBookings.map((booking) => {
+              const provider = providerForCustomer(
+                booking.equipment.company,
+                booking.status,
+                HOUSE_COMPANY_ID,
+                SITE.phone,
+              );
+              return (
+                <Card
+                  key={booking.id}
+                  className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4"
+                >
+                  <div className="min-w-0">
+                    <a
+                      href={`/equipment/${booking.equipmentId}`}
+                      className="font-medium hover:text-amber-700"
+                    >
+                      {booking.equipment.name}
+                    </a>
+                    <p className="text-sm text-slate-500">
+                      {booking.startDate.toLocaleDateString('ru-RU')} –{' '}
+                      {booking.endDate.toLocaleDateString('ru-RU')} ·{' '}
+                      {formatMoney(booking.totalPrice, booking.currency)}
+                    </p>
+                    <p className="text-sm text-slate-600">
+                      Исполнитель: {provider.name}
+                      {provider.phone ? (
+                        <>
+                          {' · '}
+                          <a
+                            href={`tel:${provider.phone.replace(/[^\d+]/g, '')}`}
+                            className="font-semibold text-amber-700"
+                          >
+                            {provider.phone}
+                          </a>
+                        </>
+                      ) : (
+                        booking.status === 'PENDING' && (
+                          <span className="text-xs text-slate-500">
+                            {' '}
+                            · телефон появится после подтверждения
+                          </span>
+                        )
+                      )}
+                    </p>
+                    {!paymentsEnabled && booking.status !== 'CANCELLED' && (
+                      <p className="text-xs text-slate-500">
+                        Расчёт с исполнителем «{provider.name}» после смены.
+                      </p>
+                    )}
+                    {booking.payment?.refundRequired ? (
                       <div className="mt-2">
-                        <PaymentStatusLabel
-                          paid={booking.depositPaid || booking.payment?.status === 'PAID'}
+                        <span className="inline-block rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-semibold text-red-800">
+                          Требуется возврат
+                        </span>
+                      </div>
+                    ) : (
+                      booking.status !== 'CANCELLED' &&
+                      (paymentsEnabled ||
+                        booking.depositPaid ||
+                        booking.payment?.status === 'PAID') && (
+                        <div className="mt-2">
+                          <PaymentStatusLabel
+                            paid={booking.depositPaid || booking.payment?.status === 'PAID'}
+                          />
+                        </div>
+                      )
+                    )}
+                    {booking.status === 'COMPLETED' && !booking.review && (
+                      <div className="mt-2">
+                        <ReviewForm bookingId={booking.id} />
+                      </div>
+                    )}
+                    {['CONFIRMED', 'ACTIVE', 'COMPLETED'].includes(booking.status) && (
+                      <div className="mt-2">
+                        <CommentForm
+                          compact
+                          targetCompanyId={booking.equipment.companyId}
+                          label="Комментарий об исполнителе"
                         />
                       </div>
-                    )
-                  )}
-                  {booking.status === 'COMPLETED' && !booking.review && (
-                    <div className="mt-2">
-                      <ReviewForm bookingId={booking.id} />
-                    </div>
-                  )}
-                  {booking.status !== 'CANCELLED' && (
-                    <div className="mt-2">
-                      <CommentForm
-                        compact
-                        targetCompanyId={booking.equipment.companyId}
-                        label="Комментарий об исполнителе"
+                    )}
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2 sm:flex-col sm:items-end">
+                    <BookingStatusBadge status={booking.status} />
+                    {paymentsEnabled &&
+                      (booking.status === 'PENDING' || booking.status === 'CONFIRMED') &&
+                      !booking.depositPaid &&
+                      booking.payment?.status !== 'PAID' &&
+                      !booking.payment?.refundRequired && (
+                        <PayBookingButton bookingId={booking.id} />
+                      )}
+                    {(booking.status === 'PENDING' || booking.status === 'CONFIRMED') && (
+                      <BookingActionButtons
+                        bookingId={booking.id}
+                        availableTransitions={['CANCELLED']}
                       />
-                    </div>
-                  )}
-                </div>
-                <div className="flex flex-wrap items-center gap-2 sm:flex-col sm:items-end">
-                  <BookingStatusBadge status={booking.status} />
-                  {paymentsEnabled &&
-                    (booking.status === 'PENDING' || booking.status === 'CONFIRMED') &&
-                    !booking.depositPaid &&
-                    booking.payment?.status !== 'PAID' &&
-                    !booking.payment?.refundRequired && <PayBookingButton bookingId={booking.id} />}
-                  {(booking.status === 'PENDING' || booking.status === 'CONFIRMED') && (
-                    <BookingActionButtons
-                      bookingId={booking.id}
-                      availableTransitions={['CANCELLED']}
-                    />
-                  )}
-                </div>
-              </Card>
-            ))}
+                    )}
+                  </div>
+                </Card>
+              );
+            })}
           </div>
         )}
       </div>

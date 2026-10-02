@@ -84,6 +84,26 @@ describe('nextSteps: customer', () => {
   });
 });
 
+describe('nextSteps: customer waiting', () => {
+  it('names the waiting steps and links to the dashboard anchors', () => {
+    const pending = nextSteps(customer, { orders: 1, bookingsTotal: 1, bookingsPending: 1 });
+    expect(pending.next.title).toBe('Дождитесь подтверждения брони');
+    expect(pending.next.action?.href).toBe('/dashboard#bookings');
+    const confirmed = nextSteps(customer, { orders: 1, bookingsTotal: 1, bookingsConfirmed: 1 });
+    expect(confirmed.next.title).toBe('Дождитесь окончания работ');
+  });
+
+  it('does not put a dot after a question', () => {
+    const finished = nextSteps(customer, {
+      orders: 1,
+      bookingsTotal: 1,
+      bookingsCompleted: 1,
+      commentsWritten: 1,
+    });
+    expect(guideReply(finished, 'plain')).toContain('Ваш следующий шаг: Нужна ещё техника?\n');
+  });
+});
+
 describe('nextSteps: provider', () => {
   it('a new provider starts with the point on the map', () => {
     const guide = nextSteps(provider, {});
@@ -104,8 +124,24 @@ describe('nextSteps: provider', () => {
     expect(bids.next.action?.app).toBe('/provider/orders');
   });
 
-  it('a point without a note is not enough', () => {
-    expect(nextSteps(provider, { hasBase: true }).next.id).toBe('base');
+  it('a point without a note asks for the note as a separate step', () => {
+    const guide = nextSteps(provider, { hasBase: true });
+    expect(guide.next.id).toBe('pin-note');
+    expect(guide.next.title).toBe('Добавьте подпись к значку');
+    expect(nextSteps(provider, {}).steps.some((step) => step.id === 'pin-note')).toBe(false);
+  });
+
+  it('a confirmed booking asks to press «Начать аренду»', () => {
+    const guide = nextSteps(provider, {
+      hasBase: true,
+      hasPinNote: true,
+      equipmentCount: 1,
+      bidsSent: 1,
+      bookingsConfirmed: 1,
+      bookingsTotal: 1,
+    });
+    expect(guide.next.id).toBe('start');
+    expect(guide.next.hint).toContain('«Начать аренду»');
   });
 
   it('pending bookings come first, then active ones', () => {
@@ -136,7 +172,7 @@ describe('nextSteps: provider', () => {
     const finished = nextSteps(provider, { ...base, commentsWritten: 1, newOrders: 1 });
     expect(finished.next.id).toBe('repeat');
     expect(finished.next.hint).toContain('1 новая заявка');
-    expect(finished.progress).toEqual({ done: 7, total: 7 });
+    expect(finished.progress).toEqual({ done: 9, total: 9 });
   });
 });
 

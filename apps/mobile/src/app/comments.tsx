@@ -27,9 +27,11 @@ export default function CommentsScreen() {
   const aboutCompany = Boolean(companyId);
   return (
     <>
-      <Stack.Screen options={{ title: aboutCompany ? 'Об исполнителе' : 'О заказчике' }} />
+      <Stack.Screen
+        options={{ title: aboutCompany ? (name ?? 'Об исполнителе') : 'О заказчике' }}
+      />
       <ScrollView contentContainerStyle={styles.container}>
-        {name ? <Text style={styles.name}>{name}</Text> : null}
+        {name && !aboutCompany ? <Text style={styles.name}>{name}</Text> : null}
         <CommentsSection
           target={companyId ? { companyId } : { userId: userId as string }}
           title={aboutCompany ? 'Комментарии заказчиков' : 'Комментарии исполнителей'}

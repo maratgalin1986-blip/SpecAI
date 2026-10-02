@@ -11,6 +11,12 @@ export const OWN_FLEET = { companyId: HOUSE_COMPANY_ID } as const;
 /** Prisma `where` fragment for public equipment queries: every provider's fleet. */
 export const PUBLIC_FLEET = { company: { isProvider: true } } as const;
 
+/**
+ * The catalog, the map and «Похожая техника»: every provider's machinery
+ * except what its owner took off the site (RETIRED, «Снять с публикации»).
+ */
+export const PUBLISHED_FLEET = { ...PUBLIC_FLEET, status: { not: 'RETIRED' as const } };
+
 type MaybeUser = { role?: string | null; companyId?: string | null } | null | undefined;
 
 /** Any provider account with a company: manages its fleet, bookings and bids. */

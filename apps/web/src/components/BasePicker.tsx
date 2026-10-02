@@ -4,10 +4,14 @@ import { useEffect, useRef, useState } from 'react';
 import type { Map as LeafletMap, Marker } from 'leaflet';
 import { CHELNY, createBaseMap, loadLeaflet, pinIcon } from '@/components/leaflet';
 import { formatCoords, inServiceArea } from '@/lib/geo';
+import { baseAfterAddressEdit } from '@/lib/providerMap';
 
 // Where the provider's machinery stands: type the address and press «Найти»
 // (the site's geocoder), or tap the map / drag the marker. The parent keeps
 // the value and sends it with the form; the server checks it again.
+// A point found by «Найти» (or the saved one) belongs to its address: when the
+// address is edited afterwards the point is dropped, so the server geocodes
+// the new address instead of keeping the old point.
 
 export type BaseValue = { address: string; lat: number | null; lon: number | null };
 
@@ -29,6 +33,11 @@ export function BasePicker({
   onChangeRef.current = onChange;
   const [status, setStatus] = useState<string | null>(null);
   const [searching, setSearching] = useState(false);
+  // The address the current point was found for; null once the point was
+  // placed by hand (then the address is only a label).
+  const foundFor = useRef<string | null>(
+    value.lat !== null && value.address.trim() ? value.address.trim() : null,
+  );
 
   // The map, once.
   useEffect(() => {
@@ -51,6 +60,7 @@ export function BasePicker({
           return;
         }
         setStatus(null);
+        foundFor.current = null;
         onChangeRef.current({ ...valueRef.current, lat, lon: lng });
       });
     });
@@ -82,6 +92,7 @@ export function BasePicker({
               setStatus('Точка должна быть в Татарстане или соседних регионах');
               return;
             }
+            foundFor.current = null;
             onChangeRef.current({ ...valueRef.current, lat: point.lat, lon: point.lng });
           })
           .addTo(map);
@@ -108,9 +119,12 @@ export function BasePicker({
       } | null;
       if (!response.ok || !body?.place) {
         setStatus(
-          body?.error === 'Адрес не найден'
+          response.status === 404
             ? 'Адрес не найден — уточните его или поставьте точку на карте'
-            : (body?.error ?? 'Не удалось найти адрес'),
+            : response.status === 503
+              ? (body?.error ??
+                'Сервис поиска адресов не ответил — попробуйте позже или поставьте точку на карте')
+              : (body?.error ?? 'Не удалось найти адрес'),
         );
         return;
       }
@@ -119,6 +133,7 @@ export function BasePicker({
         setStatus('Адрес вне Татарстана и соседних регионов — проверьте его');
         return;
       }
+      foundFor.current = query;
       onChange({ ...value, lat, lon });
       setStatus(`Найдено: ${label}. Если точка неточная — передвиньте значок.`);
       mapRef.current?.setView([lat, lon], 15);
@@ -134,7 +149,14 @@ export function BasePicker({
       <div className="flex gap-2">
         <input
           value={value.address}
-          onChange={(event) => onChange({ ...value, address: event.target.value })}
+          onChange={(event) => {
+            const next = baseAfterAddressEdit(value, event.target.value, foundFor.current);
+            if (next.lat === null && value.lat !== null) {
+              foundFor.current = null;
+              setStatus('Адрес изменён — нажмите «Найти» или поставьте точку на карте заново');
+            }
+            onChange(next);
+          }}
           onKeyDown={(event) => {
             if (event.key === 'Enter') {
               event.preventDefault();

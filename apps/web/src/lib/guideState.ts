@@ -11,7 +11,11 @@ function bookingCounts(groups: { status: string; _count: { _all: number } }[]) {
     bookingsConfirmed: counts.CONFIRMED ?? 0,
     bookingsActive: counts.ACTIVE ?? 0,
     bookingsCompleted: counts.COMPLETED ?? 0,
-    bookingsTotal: Object.values(counts).reduce<number>((sum, value) => sum + (value ?? 0), 0),
+    // Cancelled bookings do not count as a choice made (the order is open again).
+    bookingsTotal: Object.entries(counts).reduce<number>(
+      (sum, [status, value]) => (status === 'CANCELLED' ? sum : sum + (value ?? 0)),
+      0,
+    ),
   };
 }
 

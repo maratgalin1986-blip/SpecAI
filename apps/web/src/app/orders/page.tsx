@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import { getServerSession } from 'next-auth';
 import { prisma } from '@specai/database';
-import { orderStatusSchema, type OrderStatus } from '@specai/shared';
+import { ORDER_STATUS_LABELS, orderStatusSchema, type OrderStatus } from '@specai/shared';
 import { Card } from '@specai/ui';
 import { NewOrderForm } from '@/components/NewOrderForm';
 import { Pagination } from '@/components/Pagination';
@@ -16,7 +16,7 @@ import { CallbackForm } from '@/components/CallbackForm';
 export const metadata: Metadata = {
   title: 'Заявка на технику',
   description:
-    'Опишите задачу — СпецПласт16 подберёт свою технику с машинистом и ответит ценой. Без посредников.',
+    'Опишите задачу — исполнители со своей техникой и машинистами, включая парк СпецПласт16, пришлют предложения с ценой.',
 };
 
 export const dynamic = 'force-dynamic';
@@ -37,15 +37,11 @@ const STATUS_HEADINGS: Record<OrderStatus | 'ALL', string> = {
   ALL: 'Все заявки',
 };
 
-const STATUS_LABELS: Record<OrderStatus, string> = {
-  OPEN: 'Открыта',
-  MATCHED: 'Закрыта',
-  CANCELLED: 'Отменена',
-};
-
 interface OrdersSearchParams {
   status?: string;
   page?: string;
+  /** From the map: the provider the order is meant for. */
+  provider?: string;
 }
 
 export default async function OrdersPage({ searchParams }: { searchParams: OrdersSearchParams }) {
@@ -58,8 +54,16 @@ export default async function OrdersPage({ searchParams }: { searchParams: Order
   // Aggregator: providers and the admin see every order (an open board), a
   // customer only their own, a guest only the form.
   const session = await getServerSession(authOptions);
-  const seesAll = isProvider(session?.user) || isAdminRequest();
+  const viewerIsProvider = isProvider(session?.user);
+  const seesAll = viewerIsProvider || isAdminRequest();
   const viewerId = session?.user.id;
+  const forProvider =
+    searchParams.provider && /^[\w-]{1,64}$/.test(searchParams.provider)
+      ? await prisma.company.findFirst({
+          where: { id: searchParams.provider, isProvider: true },
+          select: { id: true, name: true },
+        })
+      : null;
   // Orders imported from messengers stay hidden until the admin publishes them.
   const where = {
     ...(status === 'ALL' ? { status: { not: 'PENDING_REVIEW' as const } } : { status }),
@@ -84,63 +88,84 @@ export default async function OrdersPage({ searchParams }: { searchParams: Order
   return (
     <div className="flex flex-col gap-8">
       <CinemaHero
-        eyebrow="Своя техника · свои машинисты"
-        title="Заявка на технику"
+        eyebrow={viewerIsProvider ? 'Кабинет исполнителя' : 'Техника с машинистом'}
+        title={viewerIsProvider ? 'Лента заявок заказчиков' : 'Заявка на технику'}
         clips={['workers', 'house-frame']}
         camera={4}
         compact
       >
-        <p>
-          Опишите задачу — {SITE.name} подберёт технику с машинистом и ответит ценой. Без
-          посредников: заявка приходит напрямую владельцу.
-        </p>
+        {viewerIsProvider ? (
+          <p>
+            Открытые заявки заказчиков: откройте заявку и предложите свою технику и цену. Другие
+            исполнители ваших цен не видят.
+          </p>
+        ) : (
+          <p>
+            Опишите задачу — исполнители со своей техникой и машинистами, включая парк {SITE.name},
+            пришлют предложения с ценой. Вы выбираете лучшее, сервис бесплатный.
+          </p>
+        )}
       </CinemaHero>
 
-      <section>
-        <h2 className="mb-3 text-lg font-semibold">Новая заявка</h2>
-        {viewerId ? (
-          <Card className="max-w-xl">
-            <NewOrderForm />
-          </Card>
-        ) : (
-          <div className="grid gap-4 lg:grid-cols-2">
-            <Card>
-              <CallbackForm
-                source="orders"
-                title="Заявка без регистрации"
-                subtitle="Оставьте телефон и коротко опишите задачу — перезвоним и назовём цену."
-              />
+      {!viewerIsProvider && (
+        <section>
+          <h2 className="mb-3 text-lg font-semibold">
+            {forProvider ? `Заявка для «${forProvider.name}»` : 'Новая заявка'}
+          </h2>
+          {forProvider && (
+            <p className="mb-3 max-w-xl text-sm text-slate-600">
+              Заявку увидит «{forProvider.name}» и другие исполнители — сравните предложения.
+            </p>
+          )}
+          {viewerId ? (
+            <Card className="max-w-xl">
+              <NewOrderForm provider={forProvider} />
             </Card>
-            <Card className="flex flex-col justify-center gap-3">
-              <p className="font-semibold">Не знаете, какая техника нужна?</p>
-              <p className="text-sm text-slate-600">
-                Ответьте на 3 вопроса — подберём машину, покажем цену и погоду на день работ.
-              </p>
-              <a
-                href="/#podbor"
-                className="w-fit rounded-full bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white hover:bg-slate-800"
-              >
-                Подобрать технику за 30 секунд
-              </a>
-              <p className="text-xs text-slate-500">
-                Есть аккаунт?{' '}
-                <a href="/login?callbackUrl=/orders" className="text-amber-700 underline">
-                  Войдите
-                </a>{' '}
-                — заявка с адресом покажет прогноз и карту места работ.
-              </p>
-            </Card>
-          </div>
-        )}
-      </section>
+          ) : (
+            <div className="grid gap-4 lg:grid-cols-2">
+              <Card>
+                <CallbackForm
+                  source="orders"
+                  title="Заявка без регистрации"
+                  subtitle="Оставьте телефон и коротко опишите задачу — перезвоним и назовём цену."
+                />
+              </Card>
+              <Card className="flex flex-col justify-center gap-3">
+                <p className="font-semibold">Не знаете, какая техника нужна?</p>
+                <p className="text-sm text-slate-600">
+                  Ответьте на 3 вопроса — подберём машину, покажем цену и погоду на день работ.
+                </p>
+                <a
+                  href="/#podbor"
+                  className="w-fit rounded-full bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white hover:bg-slate-800"
+                >
+                  Подобрать технику за 30 секунд
+                </a>
+                <p className="text-xs text-slate-500">
+                  Есть аккаунт?{' '}
+                  <a
+                    href={`/login?callbackUrl=${encodeURIComponent(forProvider ? `/orders?provider=${forProvider.id}` : '/orders')}`}
+                    className="text-amber-700 underline"
+                  >
+                    Войдите
+                  </a>{' '}
+                  — заявка с адресом покажет прогноз и карту места работ.
+                </p>
+              </Card>
+            </div>
+          )}
+        </section>
+      )}
 
       {(seesAll || viewerId) && (
         <section className="flex flex-col gap-3">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 className="text-lg font-semibold">
-              {seesAll
-                ? STATUS_HEADINGS[status]
-                : `Мои заявки · ${STATUS_HEADINGS[status].toLowerCase()}`}
+              {viewerIsProvider && status === 'OPEN'
+                ? 'Лента заявок заказчиков'
+                : seesAll
+                  ? STATUS_HEADINGS[status]
+                  : `Мои заявки · ${STATUS_HEADINGS[status].toLowerCase()}`}
             </h2>
             <nav aria-label="Фильтр по статусу" className="flex flex-wrap gap-2">
               {STATUS_FILTERS.map((filter) => (
@@ -187,7 +212,7 @@ export default async function OrdersPage({ searchParams }: { searchParams: Order
                       <p className="font-medium">{order.description}</p>
                       {status === 'ALL' && (
                         <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600">
-                          {STATUS_LABELS[order.status as OrderStatus]}
+                          {ORDER_STATUS_LABELS[order.status]}
                         </span>
                       )}
                     </div>

@@ -8,6 +8,7 @@ export function AcceptBidButton({ bidId }: { bidId: string }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [created, setCreated] = useState(false);
 
   async function handleAccept() {
     setError(null);
@@ -23,7 +24,20 @@ export function AcceptBidButton({ bidId }: { bidId: string }) {
       return;
     }
 
+    setCreated(true);
     router.refresh();
+  }
+
+  if (created) {
+    return (
+      <p className="text-sm text-green-700">
+        Бронь создана —{' '}
+        <a href="/dashboard#bookings" className="font-semibold underline">
+          мои брони
+        </a>
+        . Исполнитель подтвердит её и свяжется с вами.
+      </p>
+    );
   }
 
   return (

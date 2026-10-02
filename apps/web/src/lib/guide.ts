@@ -26,6 +26,7 @@ export interface GuideState {
   bookingsConfirmed?: number;
   bookingsActive?: number;
   bookingsCompleted?: number;
+  /** Bookings that were not cancelled. */
   bookingsTotal?: number;
   reviewsWritten?: number;
   commentsWritten?: number;
@@ -143,7 +144,7 @@ function customerSteps(s: GuideState): GuideStep[] {
             href: `/orders/${s.waitingOrderId}`,
             app: `/orders/${s.waitingOrderId}`,
           }
-        : { label: 'Мои заявки', href: '/dashboard', app: '/(tabs)/orders' },
+        : { label: 'Мои заявки', href: '/dashboard#orders', app: '/(tabs)/orders' },
     },
     {
       id: 'choose',
@@ -157,43 +158,56 @@ function customerSteps(s: GuideState): GuideStep[] {
             href: `/orders/${s.choiceOrderId}`,
             app: `/orders/${s.choiceOrderId}`,
           }
-        : { label: 'Мои заявки', href: '/dashboard', app: '/(tabs)/orders' },
+        : { label: 'Мои заявки', href: '/dashboard#orders', app: '/(tabs)/orders' },
     },
     {
       id: 'confirmed',
-      title: 'Бронь подтверждена',
-      hint: 'Исполнитель подтверждает бронь и связывается с вами.',
+      title: confirmedOrLater > 0 ? 'Бронь подтверждена' : 'Дождитесь подтверждения брони',
+      hint: 'Исполнитель подтверждает бронь — после этого вы увидите его телефон.',
       done: confirmedOrLater > 0,
-      action: { label: 'Мои брони', href: '/dashboard', app: '/(tabs)/bookings' },
+      action: { label: 'Мои брони', href: '/dashboard#bookings', app: '/(tabs)/bookings' },
     },
     {
       id: 'work',
-      title: 'Работа выполнена',
+      title: n(s.bookingsCompleted) > 0 ? 'Работа выполнена' : 'Дождитесь окончания работ',
       hint: 'Когда техника отработает, исполнитель завершит бронь.',
       done: n(s.bookingsCompleted) > 0,
-      action: { label: 'Мои брони', href: '/dashboard', app: '/(tabs)/bookings' },
+      action: { label: 'Мои брони', href: '/dashboard#bookings', app: '/(tabs)/bookings' },
     },
     {
       id: 'feedback',
       title: 'Оставьте отзыв или комментарий',
       hint: 'Расскажите, как прошла работа: это помогает другим заказчикам выбрать исполнителя.',
       done: n(s.commentsWritten) > 0 || n(s.reviewsWritten) > 0,
-      action: { label: 'Мои брони', href: '/dashboard', app: '/(tabs)/bookings' },
+      action: { label: 'Мои брони', href: '/dashboard#bookings', app: '/(tabs)/bookings' },
     },
   ];
 }
 
 function providerSteps(s: GuideState): GuideStep[] {
   const handled = n(s.bookingsConfirmed) + n(s.bookingsActive) + n(s.bookingsCompleted);
+  const started = n(s.bookingsActive) + n(s.bookingsCompleted);
   return [
     { id: 'register', title: 'Регистрация', hint: 'Аккаунт исполнителя создан.', done: true },
     {
       id: 'base',
-      title: 'Поставьте точку на карте и подпись',
-      hint: 'Заказчики видят вас на карте рядом с объектом. Подпись — цена и условия коротко.',
-      done: Boolean(s.hasBase) && Boolean(s.hasPinNote),
+      title: 'Поставьте точку на карте',
+      hint: 'Заказчики видят вас на карте рядом с объектом.',
+      done: Boolean(s.hasBase),
       action: { label: 'Указать базу', href: '/provider#base', app: '/(tabs)/provider' },
     },
+    // Only once the point is there: the note is what customers read under it.
+    ...(s.hasBase
+      ? [
+          {
+            id: 'pin-note',
+            title: 'Добавьте подпись к значку',
+            hint: 'Коротко о цене и условиях, например «от 2 500 ₽/ч, подача за 2 часа».',
+            done: Boolean(s.hasPinNote),
+            action: { label: 'Добавить подпись', href: '/provider#base', app: '/(tabs)/provider' },
+          },
+        ]
+      : []),
     {
       id: 'equipment',
       title: 'Добавьте технику с ценой',
@@ -226,6 +240,16 @@ function providerSteps(s: GuideState): GuideStep[] {
       action: { label: 'Брони', href: '/provider#bookings', app: '/(tabs)/provider' },
     },
     {
+      id: 'start',
+      title: 'Начните аренду',
+      hint:
+        n(s.bookingsConfirmed) > 0
+          ? `Подтверждено: ${plural(n(s.bookingsConfirmed), ['бронь', 'брони', 'броней'])}. В день работ нажмите «Начать аренду».`
+          : 'В день работ нажмите «Начать аренду» у подтверждённой брони.',
+      done: started > 0 && n(s.bookingsConfirmed) === 0,
+      action: { label: 'Брони', href: '/provider#bookings', app: '/(tabs)/provider' },
+    },
+    {
       id: 'complete',
       title: 'Завершайте работу',
       hint:
@@ -251,6 +275,7 @@ function urgentStep(role: GuideRole, steps: GuideStep[], s: GuideState): GuideSt
   if (role === 'PROVIDER') {
     if (n(s.bookingsPending) > 0) return byId('confirm');
     if (n(s.bookingsActive) > 0) return byId('complete');
+    if (n(s.bookingsConfirmed) > 0) return byId('start');
   }
   if (role === 'CUSTOMER' && n(s.ordersWithBids) > 0) return byId('choose');
   return null;
@@ -315,7 +340,8 @@ export function guideReply(result: GuideResult, links: 'markdown' | 'plain' = 'm
   const link = (action?: GuideLink) =>
     action ? (links === 'markdown' ? ` → [${action.label}](${action.href})` : '') : '';
   const lines = [
-    `Ваш следующий шаг: ${result.next.title}.`,
+    // «Нужна ещё техника?» keeps its question mark without a dot after it.
+    `Ваш следующий шаг: ${result.next.title}${/[.!?…]$/.test(result.next.title) ? '' : '.'}`,
     `${result.next.hint}${link(result.next.action)}`,
     '',
     `${result.title} (${result.progress.done} из ${result.progress.total}):`,

@@ -13,16 +13,24 @@ interface EquipmentOption {
   dailyRate: string;
 }
 
-export function BidForm({ orderId }: { orderId: string }) {
+/** The company's pending bid on this order: one bid per company, a repeat updates it. */
+export interface ExistingBid {
+  price: number;
+  currency: string;
+  message: string | null;
+  equipmentId: string;
+}
+
+export function BidForm({ orderId, existing }: { orderId: string; existing?: ExistingBid }) {
   const router = useRouter();
   const { data: session, status } = useSession();
   const [equipmentOptions, setEquipmentOptions] = useState<EquipmentOption[]>([]);
-  const [equipmentId, setEquipmentId] = useState('');
-  const [price, setPrice] = useState('');
-  const [message, setMessage] = useState('');
+  const [equipmentId, setEquipmentId] = useState(existing?.equipmentId ?? '');
+  const [price, setPrice] = useState(existing ? String(existing.price) : '');
+  const [message, setMessage] = useState(existing?.message ?? '');
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [submitted, setSubmitted] = useState(false);
+  const [submitted, setSubmitted] = useState<string | null>(null);
 
   useEffect(() => {
     if (!session?.user.companyId) return;
@@ -55,18 +63,35 @@ export function BidForm({ orderId }: { orderId: string }) {
 
     setIsSubmitting(false);
 
+    const body = await response.json().catch(() => null);
     if (!response.ok) {
-      const body = await response.json().catch(() => null);
       setError(typeof body?.error === 'string' ? body.error : 'Не удалось отправить предложение');
       return;
     }
 
-    setSubmitted(true);
+    setSubmitted(
+      typeof body?.message === 'string'
+        ? body.message
+        : response.status === 200
+          ? 'Предложение обновлено'
+          : 'Предложение отправлено',
+    );
     router.refresh();
   }
 
   if (submitted) {
-    return <p className="text-sm text-green-700">Предложение отправлено.</p>;
+    return (
+      <div className="flex flex-col items-start gap-2 text-sm">
+        <p className="text-green-700">{submitted}.</p>
+        <button
+          type="button"
+          onClick={() => setSubmitted(null)}
+          className="font-medium text-amber-700 hover:underline"
+        >
+          Изменить предложение
+        </button>
+      </div>
+    );
   }
 
   if (equipmentOptions.length === 0) {
@@ -83,6 +108,12 @@ export function BidForm({ orderId }: { orderId: string }) {
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+      {existing && (
+        <p className="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-900">
+          Вы уже предложили {formatMoney(existing.price, existing.currency)} — можно изменить цену,
+          машину или сообщение.
+        </p>
+      )}
       <label className="flex flex-col gap-1 text-sm">
         Ваша техника
         <select
@@ -96,7 +127,7 @@ export function BidForm({ orderId }: { orderId: string }) {
           </option>
           {equipmentOptions.map((item) => (
             <option key={item.id} value={item.id}>
-              {item.name} ({formatMoney(item.dailyRate)}/сутки)
+              {item.name} ({formatMoney(item.dailyRate)}/смена)
             </option>
           ))}
         </select>
@@ -124,7 +155,7 @@ export function BidForm({ orderId }: { orderId: string }) {
       </label>
       {error && <p className="text-sm text-red-600">{error}</p>}
       <Button type="submit" disabled={isSubmitting}>
-        {isSubmitting ? 'Отправка…' : 'Предложить'}
+        {isSubmitting ? 'Отправка…' : existing ? 'Обновить предложение' : 'Предложить'}
       </Button>
     </form>
   );
