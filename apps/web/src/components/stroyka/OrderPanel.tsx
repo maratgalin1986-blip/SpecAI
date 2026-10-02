@@ -34,9 +34,13 @@ export function OrderPanel({
 }) {
   const [formFor, setFormFor] = useState<MachineType | null>(null);
   const first = useRef<HTMLLIElement>(null);
+  const openedAt = useRef(0);
   useEffect(() => {
     if (!open) setFormFor(null);
-    else first.current?.scrollIntoView({ block: 'nearest' });
+    else {
+      openedAt.current = Date.now();
+      first.current?.scrollIntoView({ block: 'nearest' });
+    }
   }, [open, machine]);
   if (!open) return null;
   const list = machine ? [machine, ...MACHINES.filter((m) => m !== machine)] : MACHINES;
@@ -47,7 +51,11 @@ export function OrderPanel({
       aria-label="Заказ техники"
       data-testid="order-panel"
       className="pointer-events-auto fixed inset-0 z-[95] flex items-end justify-center bg-slate-950/70 backdrop-blur-sm sm:items-center"
-      onClick={(e) => e.target === e.currentTarget && onClose()}
+      // iOS fires the tap's click again on whatever lands under the finger:
+      // ignore backdrop clicks right after opening.
+      onClick={(e) =>
+        e.target === e.currentTarget && Date.now() - openedAt.current > 500 && onClose()
+      }
     >
       <div className="flex max-h-[92dvh] w-full max-w-xl flex-col overflow-hidden rounded-t-2xl border border-amber-500/40 bg-slate-900 text-white shadow-2xl sm:rounded-2xl">
         <div className="flex items-center justify-between gap-3 border-b border-white/10 px-4 py-3">

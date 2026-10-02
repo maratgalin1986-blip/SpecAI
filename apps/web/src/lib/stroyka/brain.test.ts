@@ -11,7 +11,7 @@ import {
   understand,
   weatherStory,
 } from '@/lib/stroyka/brain';
-import { emptyContext } from '@/lib/stroyka/context';
+import { emptyContext, radioHandoff, whenPhrase } from '@/lib/stroyka/context';
 import { STORIES } from '@/lib/stroyka/lines/stories';
 import { CENSOR } from '@/lib/stroykaJokes';
 
@@ -173,5 +173,34 @@ describe('brain: rough estimate (lib/smeta)', () => {
     expect(smetaHref('траншея под коммуникации', 'backhoe')).toBe('/smeta?job=trench');
     expect(smetaHref(null, 'crane')).toBe('/smeta?job=lift');
     expect(smetaHref(null, null)).toBe('/smeta');
+  });
+});
+
+describe('QA fixes: generic excavator, date phrasing', () => {
+  it('«нужен экскаватор на субботу» means the backhoe, with the crawler as an option', () => {
+    const reply = respond('нужен экскаватор на субботу', 'mihalych', emptyContext(), NOW);
+    expect(reply.set?.machine).toBe('backhoe');
+    expect(reply.text).not.toMatch(/Гусеничный экскаватор —/);
+    expect(reply.text).toMatch(/экскаватор-погрузчик/i);
+    expect(reply.quick.some((q) => /гусенич/i.test(q.label))).toBe(true);
+    expect(machineFor('экскаватор нужен')).toBe('backhoe');
+    // A named type still wins.
+    expect(machineFor('нужен гусеничный экскаватор')).toBe('excavator');
+    expect(machineFor('экскаватор с гидромолотом разбить бетон')).not.toBe('backhoe');
+  });
+
+  it('never «на в субботу» in the reply or on the radio', () => {
+    const reply = respond('нужен экскаватор на субботу', 'mihalych', emptyContext(), NOW);
+    expect(reply.text).not.toMatch(/на в /i);
+    const ctx = { ...emptyContext(), machine: 'backhoe' as const, when: 'в субботу' };
+    const radio = radioHandoff('mihalych', 'sveta', ctx);
+    for (const line of radio) expect(line.text).not.toMatch(/на в |по в /i);
+    expect(radio.map((l) => l.text).join(' ')).toMatch(/в субботу/);
+    const ildar = radioHandoff('mihalych', 'ildar', ctx).map((l) => l.text);
+    expect(ildar.join(' ')).not.toMatch(/по в |на в /);
+    expect(whenPhrase('в субботу')).toBe('в субботу');
+    expect(whenPhrase('завтра')).toBe('на завтра');
+    expect(whenPhrase('15 октября')).toBe('на 15 октября');
+    expect(whenPhrase('на выходных')).toBe('на выходных');
   });
 });

@@ -59,6 +59,17 @@ const CALL_NAME: Record<SpeakerId, string> = {
   alsu: 'Алсу',
 };
 
+/**
+ * A «when» label as it goes into a sentence: «в субботу», «на выходных»,
+ * «через 3 дн.» stay as they are, the rest gets «на» («на завтра», «на 15
+ * октября»). Never «на в субботу».
+ */
+export function whenPhrase(when: string): string {
+  const w = when.trim();
+  if (/^(в|во|на|через|до|к|с|по) /i.test(w)) return w;
+  return `на ${w}`;
+}
+
 /** «котлован под фундамент, нужен JCB на завтра, адрес: Тукаевский район». */
 export function contextFacts(ctx: OrderContext): string {
   const parts: string[] = [];
@@ -66,8 +77,8 @@ export function contextFacts(ctx: OrderContext): string {
   if (ctx.machine) {
     const slang = MACHINE_SLANG[ctx.machine];
     const need = /а$/.test(slang) ? 'нужна' : 'нужен';
-    parts.push(`${need} ${slang}${ctx.when ? ` на ${ctx.when.replace(/^на /, '')}` : ''}`);
-  } else if (ctx.when) parts.push(`на ${ctx.when.replace(/^на /, '')}`);
+    parts.push(`${need} ${slang}${ctx.when ? ` ${whenPhrase(ctx.when)}` : ''}`);
+  } else if (ctx.when) parts.push(whenPhrase(ctx.when));
   if (ctx.address) parts.push(`адрес: ${ctx.address}`);
   return parts.join(', ');
 }
@@ -110,7 +121,7 @@ export function radioHandoff(from: SpeakerId, to: SpeakerId, ctx: OrderContext):
     const known = [
       ctx.task,
       ctx.machine && MACHINE_SLANG[ctx.machine],
-      ctx.when && `на ${ctx.when}`,
+      ctx.when && whenPhrase(ctx.when),
     ]
       .filter(Boolean)
       .join(', ');
@@ -118,7 +129,7 @@ export function radioHandoff(from: SpeakerId, to: SpeakerId, ctx: OrderContext):
   } else if (to === 'alsu') {
     answer = `Приняла, ${CALL_NAME[from]}. Материалы посчитаю, доставку самосвалом поставим со Светой.`;
   } else if (to === 'ildar') {
-    answer = `Принял, ${CALL_NAME[from]}. Покажу кран в работе${ctx.when ? `, по ${ctx.when.replace(/^на /, '')} посмотрю ветер` : ''}.`;
+    answer = `Принял, ${CALL_NAME[from]}. Покажу кран в работе${ctx.when ? `, ${whenPhrase(ctx.when)} посмотрю ветер` : ''}.`;
   } else {
     answer = `Принял, ${CALL_NAME[from]}. Жду, покажу машину в работе.`;
   }
@@ -134,7 +145,7 @@ export function contextIntro(ctx: OrderContext, speaker: SpeakerId): string {
   return `${by}: ${facts}.`;
 }
 
-function capital(text: string) {
+export function capital(text: string) {
   return text.charAt(0).toUpperCase() + text.slice(1);
 }
 

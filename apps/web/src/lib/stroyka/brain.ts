@@ -7,7 +7,13 @@
 import { faqAnswers, findPhone, matchTask, wantsPrice } from '@/lib/dispatcher';
 import { MACHINE_LABELS, type MachineType } from '@/lib/machinePhotos';
 import { hourlyRate, PRICES, rub, type SpeakerId } from '@/lib/stroyka';
-import { contextFacts, type ContextSet, type OrderContext } from '@/lib/stroyka/context';
+import {
+  capital,
+  contextFacts,
+  whenPhrase,
+  type ContextSet,
+  type OrderContext,
+} from '@/lib/stroyka/context';
 import { SAFE_ADVICE, STORIES, type Hazard } from '@/lib/stroyka/lines/stories';
 import type { WorkNote } from '@/lib/weather';
 import { buildSmeta, type SmetaInput } from '@/lib/smeta';
@@ -122,7 +128,22 @@ const CATEGORY_MACHINE: Record<string, MachineType> = {
 };
 
 /** The machine for the job in the text, via the dispatcher's rules. */
+/**
+ * «экскаватор» with no type named: the backhoe (экскаватор-погрузчик), the
+ * one most jobs need, with the crawler offered as an option.
+ */
+export function genericExcavator(text: string): boolean {
+  const n = normalize(text);
+  return (
+    /экскаватор/.test(n) &&
+    !/гусенич|гусениц|колесн|полноповорот|погрузчик|jcb|молот|демонтаж|разбить|бетон|асфальт/.test(
+      n,
+    )
+  );
+}
+
 export function machineFor(text: string): MachineType | null {
+  if (genericExcavator(text)) return 'backhoe';
   const match = matchTask(text);
   if (!match) return null;
   const machine = CATEGORY_MACHINE[match.category] ?? null;
@@ -461,7 +482,11 @@ export function respond(
         `У СпецПласт16 есть ${MACHINE_LABELS[u.set.machine].toLowerCase()} — ${matchTask(text)?.why ?? 'подойдёт под задачу'}, подача обычно в день заявки. От ${rub(hourlyRate(u.set.machine))} ₽/ч с машинистом.`,
       );
     } else if (has('price')) parts.push(priceText(merged.machine));
-    if (u.set.when) parts.push(`На ${u.set.when.replace(/^(в|на) /, '')} — записал.`);
+    if (u.set.machine === 'backhoe' && genericExcavator(text))
+      parts.push(
+        'Обычно берут экскаватор-погрузчик: и копает, и грузит. Нужен гусеничный — скажите.',
+      );
+    if (u.set.when) parts.push(`${capital(whenPhrase(u.set.when))} — записал.`);
     if (u.set.address) parts.push(`${u.set.address} — знаем, ездим.`);
     const facts = contextFacts(merged);
     if (merged.machine && u.date) checkWeather = { machine: merged.machine, date: u.date };
@@ -487,6 +512,11 @@ export function respond(
       );
       quick = QUICK_START;
     }
+    if (u.set.machine === 'backhoe' && genericExcavator(text))
+      quick = [
+        { label: 'Гусеничный экскаватор', say: 'нужен гусеничный экскаватор' },
+        ...quick,
+      ].slice(0, 4);
   } else if (has('price')) {
     parts.push(priceText(merged.machine));
     quick = [
