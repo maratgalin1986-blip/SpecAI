@@ -37,3 +37,23 @@ export function isHouseManager<T extends MaybeUser>(
 export function isHouseEquipment(item: { companyId?: string | null }): boolean {
   return item.companyId === HOUSE_COMPANY_ID;
 }
+
+/**
+ * СпецПласт16 always comes first (the owner's rule): its own machinery and
+ * bids lead every list, the rest keep their order.
+ */
+export function houseFirst<T>(
+  items: T[],
+  companyIdOf: (item: T) => string | null | undefined,
+): T[] {
+  return [...items].sort(
+    (a, b) =>
+      Number(companyIdOf(b) === HOUSE_COMPANY_ID) - Number(companyIdOf(a) === HOUSE_COMPANY_ID),
+  );
+}
+
+/**
+ * Prisma ordering that puts the house fleet first. Company ids are cuids
+ * (they start with «c»), so descending order puts «specplast16-house» ahead.
+ */
+export const HOUSE_FIRST_ORDER = { companyId: 'desc' } as const;
