@@ -164,6 +164,13 @@ export function SiteHeader() {
           >
             🧮 Рассчитать смету
           </a>
+          <a
+            href="/smeta?mode=snab"
+            onClick={() => setIsMenuOpen(false)}
+            className="rounded-md bg-amber-50 px-2 py-2 font-semibold text-amber-800"
+          >
+            📦 Смета для снабженца
+          </a>
           <div className="px-2 py-2">
             <AuthStatus />
           </div>
