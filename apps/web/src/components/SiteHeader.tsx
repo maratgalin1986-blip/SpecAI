@@ -10,6 +10,7 @@ const NAV_LINKS = [
   { href: '/equipment', label: 'Техника' },
   { href: '/map', label: 'Карта' },
   { href: '/stroyka', label: 'Стройка' },
+  { href: '/dizain', label: 'Дизайн' },
   { href: '/orders', label: 'Заявка' },
   { href: '/agents', label: 'ИИ-агенты' },
   { href: '/contacts', label: 'Контакты' },

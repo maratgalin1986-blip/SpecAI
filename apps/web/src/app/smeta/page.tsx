@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { CinemaHero } from '@/components/CinemaHero';
 import { SmetaCalculator } from '@/components/SmetaCalculator';
 import { SITE } from '@/lib/site';
+import { OBJECTS, type ObjectType } from '@/lib/smetaProject';
 
 export const metadata: Metadata = {
   title: 'Рассчитать смету на спецтехнику',
@@ -11,9 +12,27 @@ export const metadata: Metadata = {
 export default function SmetaPage({
   searchParams,
 }: {
-  searchParams: { job?: string; mode?: string };
+  searchParams: {
+    job?: string;
+    mode?: string;
+    object?: string;
+    length?: string;
+    width?: string;
+    floors?: string;
+  };
 }) {
   const snab = searchParams.mode === 'snab';
+  // Sizes from the design project (/dizain): ?object=house&length=10&width=8&floors=2.
+  const num = (v?: string) => (v && Number.isFinite(Number(v)) ? Number(v) : undefined);
+  const initialProject =
+    searchParams.object && searchParams.object in OBJECTS
+      ? {
+          object: searchParams.object as ObjectType,
+          length: num(searchParams.length),
+          width: num(searchParams.width),
+          floors: num(searchParams.floors),
+        }
+      : undefined;
   return (
     <div className="flex min-w-0 flex-col gap-6">
       <CinemaHero
@@ -36,7 +55,11 @@ export default function SmetaPage({
           📦 Смета для снабженца
         </a>
       )}
-      <SmetaCalculator initialJob={searchParams.job} initialAudience={snab ? 'snab' : 'foreman'} />
+      <SmetaCalculator
+        initialJob={searchParams.job}
+        initialAudience={snab ? 'snab' : 'foreman'}
+        initialProject={initialProject}
+      />
     </div>
   );
 }
