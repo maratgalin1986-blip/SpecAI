@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { AgentChat } from '@/components/AgentChat';
 import { useJourneyInView } from '@/components/useJourneyInView';
@@ -25,6 +25,22 @@ export function AgentChatWidget() {
   }, []);
   const show = isOpen || (pastTop && !inJourney);
 
+  const toggleRef = useRef<HTMLButtonElement>(null);
+  const wasOpen = useRef(false);
+  // Focus goes back to the toggle when the window closes (Esc, close or toggle).
+  useEffect(() => {
+    if (wasOpen.current && !isOpen) toggleRef.current?.focus();
+    wasOpen.current = isOpen;
+  }, [isOpen]);
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setIsOpen(false);
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [isOpen]);
+
   if (pathname === '/agents') {
     return null;
   }
@@ -32,10 +48,18 @@ export function AgentChatWidget() {
   return (
     <>
       {isOpen && (
-        <div className="fixed inset-x-2 bottom-40 z-50 sm:bottom-20 flex h-[70vh] flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl sm:inset-x-auto sm:right-6 sm:w-[400px]">
+        <div
+          id="agent-chat-dialog"
+          role="dialog"
+          aria-modal="false"
+          aria-labelledby="agent-chat-title"
+          className="fixed inset-x-2 bottom-40 z-50 sm:bottom-20 flex h-[70vh] flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl sm:inset-x-auto sm:right-6 sm:w-[400px]"
+        >
           <div className="flex items-center justify-between bg-slate-900 px-4 py-3 text-white">
             <div>
-              <div className="text-sm font-semibold">ИИ-агенты СпецПласт16</div>
+              <div id="agent-chat-title" className="text-sm font-semibold">
+                ИИ-агенты СпецПласт16
+              </div>
               <div className="text-xs text-slate-300">Отвечают круглосуточно</div>
             </div>
             <button
@@ -55,14 +79,17 @@ export function AgentChatWidget() {
               </svg>
             </button>
           </div>
-          <AgentChat compact />
+          <AgentChat compact autoFocus />
         </div>
       )}
 
       <button
+        ref={toggleRef}
         type="button"
         onClick={() => setIsOpen((open) => !open)}
-        aria-label="Открыть чат с ИИ-агентами"
+        aria-label={isOpen ? 'Свернуть чат с ИИ-агентами' : 'Открыть чат с ИИ-агентами'}
+        aria-expanded={isOpen}
+        aria-controls={isOpen ? 'agent-chat-dialog' : undefined}
         tabIndex={show ? undefined : -1}
         aria-hidden={show ? undefined : true}
         className={`chat-fab fixed right-4 z-50 flex items-center gap-2 rounded-full bg-amber-500 p-3.5 text-sm font-semibold text-slate-950 shadow-lg hover:bg-amber-400 sm:right-6 sm:px-5 sm:py-3 motion-safe:transition-opacity motion-safe:duration-300 ${

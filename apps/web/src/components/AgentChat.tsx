@@ -55,9 +55,12 @@ function renderContent(text: string) {
 export function AgentChat({
   initialAgent = 'auto',
   compact = false,
+  autoFocus = false,
 }: {
   initialAgent?: Selection;
   compact?: boolean;
+  /** Focus the message input on mount (the floating chat window). */
+  autoFocus?: boolean;
 }) {
   const [selection, setSelection] = useState<Selection>(initialAgent);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -69,6 +72,11 @@ export function AgentChat({
   const [pendingPhone, setPendingPhone] = useState<string | null>(null);
   const typedPhone = findPhone(input);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (autoFocus) inputRef.current?.focus();
+  }, [autoFocus]);
 
   const profile = AGENT_PROFILES.find((p) => p.id === selection);
   const greeting = profile?.greeting ?? AUTO_GREETING;
@@ -149,7 +157,11 @@ export function AgentChat({
         ))}
       </div>
 
-      <div ref={scrollRef} className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-4">
+      <div
+        ref={scrollRef}
+        aria-live="polite"
+        className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-4"
+      >
         <Bubble role="assistant" label={profile?.name ?? 'Ассистент'}>
           {greeting}
         </Bubble>
@@ -172,7 +184,9 @@ export function AgentChat({
           </div>
         )}
         {error && (
-          <div className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>
+          <div role="alert" className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
+            {error}
+          </div>
         )}
 
         {messages.length === 0 && (
@@ -233,9 +247,10 @@ export function AgentChat({
           event.preventDefault();
           send(input);
         }}
-        className="flex gap-2 p-3"
+        className="ym-hide-content flex gap-2 px-3 pt-3"
       >
         <input
+          ref={inputRef}
           value={input}
           onChange={(e) => setInput(e.target.value)}
           maxLength={4000}
@@ -251,6 +266,12 @@ export function AgentChat({
           Отправить
         </button>
       </form>
+      <p className="px-3 pb-2 pt-1 text-[11px] leading-snug text-slate-500">
+        Сообщения обрабатывает ИИ-сервис (США); телефон и e-mail мы скрываем. Подробнее —{' '}
+        <a href="/soglasie" className="underline hover:text-slate-700">
+          согласие
+        </a>
+      </p>
     </div>
   );
 }
