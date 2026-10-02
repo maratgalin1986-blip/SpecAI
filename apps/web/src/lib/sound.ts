@@ -31,9 +31,20 @@ export function playCue(cue: SoundCue, machine?: MachineType | null): void {
   window.dispatchEvent(new CustomEvent<CueDetail>(CUE_EVENT, { detail: { cue, machine } }));
 }
 
+// The latest announcement per source: a page may announce before the
+// director's listener exists (child effects run first).
+const announced = new Map<MachineSource, MachineType>();
+
+/** What each source currently shows. */
+export function announcedMachines(): ReadonlyMap<MachineSource, MachineType> {
+  return announced;
+}
+
 /** Says which machine a part of the page shows now (`null`: nothing). */
 export function announceMachine(source: MachineSource, type: MachineType | null): void {
   if (typeof window === 'undefined') return;
+  if (type) announced.set(source, type);
+  else announced.delete(source);
   window.dispatchEvent(new CustomEvent<MachineDetail>(MACHINE_EVENT, { detail: { source, type } }));
 }
 

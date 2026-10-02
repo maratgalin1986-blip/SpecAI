@@ -3,6 +3,7 @@
 import { useEffect } from 'react';
 import type { MachineType } from '@/lib/machinePhotos';
 import {
+  announcedMachines,
   onCue,
   onMachine,
   setSoundEnabled,
@@ -43,6 +44,7 @@ export function SoundDirector() {
     let lastWhoosh = 0;
     let introAtGesture = false;
     const machines = new Map<MachineSource, Pick>();
+    announcedMachines().forEach((type, source) => machines.set(source, { source, type, at: 0 }));
     let playing: string | null = null;
 
     const current = (): Pick | null => {
@@ -183,8 +185,9 @@ export function SoundDirector() {
     // A saved «on» resumes on the first tap/scroll/key of this page. Never
     // under reduced motion: there sound starts only from the switch itself.
     if (!reduced && storedSoundChoice()) {
-      setSoundEnabled(true, false);
+      // Before the store changes, so the switch listener does not wake now.
       wasOn = true;
+      setSoundEnabled(true, false);
       addGestures();
     }
 
