@@ -357,7 +357,7 @@ export function EquipmentForm({
         </select>
       </label>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 [&>*]:min-w-0">
         <label className="flex flex-col gap-1 text-sm">
           Марка
           <input

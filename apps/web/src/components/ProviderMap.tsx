@@ -50,6 +50,9 @@ export function ProviderMap({ pins, embed = false }: { pins: ProviderMapPin[]; e
               const point = map.latLngToLayerPoint([pin.lat, pin.lon]);
               return { id: pin.id, x: point.x, y: point.y };
             }),
+            // A marker is `big` px wide: keep neighbours at least that far apart.
+            big + 6,
+            big * 0.85,
           );
           for (const pin of pins) {
             const shift = shifts.get(pin.id) ?? { dx: 0, dy: 0 };

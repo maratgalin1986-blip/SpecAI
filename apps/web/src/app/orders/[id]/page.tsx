@@ -7,7 +7,6 @@ import { CancelOrderButton } from '@/components/CancelOrderButton';
 import { authOptions } from '@/lib/auth';
 import { BidForm } from '@/components/BidForm';
 import { AcceptBidButton } from '@/components/AcceptBidButton';
-import { pluralizeRu } from '@/lib/pluralize';
 import { formatMoney } from '@/lib/money';
 import { isAdminRequest } from '@/lib/admin';
 import { SiteConditions } from '@/components/SiteConditions';
@@ -85,6 +84,14 @@ export default async function OrderDetailPage({ params }: { params: { id: string
         </span>
       </div>
       {isOwner && order.status === 'OPEN' && <CancelOrderButton orderId={order.id} />}
+      {isOwner && order.status === 'MATCHED' && (
+        <p className="rounded-md border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
+          Бронь создана — исполнитель подтвердит её и свяжется с вами.{' '}
+          <a href="/dashboard#bookings" className="font-semibold underline">
+            Мои брони
+          </a>
+        </p>
+      )}
 
       <Card>
         <h2 className="font-semibold">Описание</h2>
@@ -170,7 +177,7 @@ export default async function OrderDetailPage({ params }: { params: { id: string
         <h2 className="mb-3 text-lg font-semibold">
           {seesAllBids
             ? `Предложения исполнителей · ${order.bids.length}`
-            : `Ваши предложения · всего по заявке ${pluralizeRu(order.bids.length, ['предложение', 'предложения', 'предложений'])}`}
+            : `Ваши предложения (всего по заявке: ${order.bids.length})`}
         </h2>
         {visibleBids.length === 0 ? (
           <p className="text-sm text-slate-600">Пока никто не предложил технику.</p>

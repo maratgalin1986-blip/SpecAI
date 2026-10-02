@@ -64,7 +64,7 @@ export function ProviderEquipmentCard({
 
   if (editing) {
     return (
-      <Card className="sm:col-span-2">
+      <Card className="min-w-0 sm:col-span-2">
         <p className="mb-3 font-semibold">Изменить: {item.name}</p>
         <EquipmentForm initial={{ ...item, status }} onDone={() => setEditing(false)} />
       </Card>
@@ -72,7 +72,7 @@ export function ProviderEquipmentCard({
   }
 
   return (
-    <Card className={`flex flex-col gap-3 ${isPublished(status) ? '' : 'opacity-75'}`}>
+    <Card className={`flex min-w-0 flex-col gap-3 ${isPublished(status) ? '' : 'opacity-75'}`}>
       <a href={`/equipment/${item.id}`} className="group flex min-w-0 items-start gap-3">
         {photo ? (
           <img
