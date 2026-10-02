@@ -126,7 +126,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           </main>
           <SiteFooter />
           {/* Multi-agent assistant (works for guests too). The streaming single
-              assistant in ChatWidget stays available to API/mobile clients. */}
+              assistant (/api/ai/chat) stays available to API/mobile clients. */}
           <AgentChatWidget />
           <MessengerButtons />
           <InstallPrompt />

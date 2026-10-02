@@ -5,7 +5,7 @@
 import { MACHINE_LABELS, type MachineType } from '@/lib/machinePhotos';
 import { SITE } from '@/lib/site';
 import { MACHINE_WORKS } from '@/lib/machineWorks';
-import { CRANE_HEAVY_RATE, HAMMER_RATE, RATES, SHIFT_HOURS } from '@/lib/prices';
+import { CRANE_HEAVY_RATE, HAMMER_RATE, RATES, rub, SHIFT_HOURS } from '@/lib/prices';
 import type { LiftStop } from '@/lib/stroykaSky';
 import type { ContextSet } from '@/lib/stroyka/context';
 
@@ -50,10 +50,8 @@ export function hourlyRate(type: MachineType): number {
   return MACHINE_WORKS[type]?.rate ?? PRICES.other;
 }
 
-/** 3000 → «3 000», formatted the Russian way (toLocaleString). */
-export function rub(value: number): string {
-  return value.toLocaleString('ru-RU');
-}
+/** 3000 → «3 000»: the site's shared formatter (lib/prices.ts). */
+export { rub };
 
 export type Vec2 = [number, number];
 export type Vec3 = [number, number, number];
