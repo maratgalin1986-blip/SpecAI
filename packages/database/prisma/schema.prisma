@@ -44,6 +44,12 @@ model User {
   company   Company? @relation(fields: [companyId], references: [id])
   companyId String?
 
+  // «Пригласи коллегу»: the user's own code (/r/<code>) and who invited them.
+  // No @unique: adding a unique constraint makes the build-time `db push`
+  // stop for confirmation; codes are random and checked in lib/referralStore.ts.
+  referralCode String?
+  referredById String?
+
   bookings           Booking[]           @relation("BookingCustomer")
   orders             Order[]             @relation("OrderCustomer")
   reviews            Review[]
@@ -53,6 +59,8 @@ model User {
   commentsReceived   Comment[]           @relation("CommentTarget")
 
   @@index([companyId])
+  @@index([referralCode])
+  @@index([referredById])
 }
 
 enum VerificationTokenType {
@@ -100,6 +108,8 @@ model Company {
   baseAddress String?
   pinImageUrl String?
   pinNote     String?
+  // «Проверен»: the admin checked the company (ИНН, documents, a call).
+  verified    Boolean @default(false)
 
   users     User[]
   equipment Equipment[]

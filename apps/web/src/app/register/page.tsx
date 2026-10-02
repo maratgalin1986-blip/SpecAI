@@ -5,6 +5,7 @@ import { signIn } from 'next-auth/react';
 import { Button, Card } from '@specai/ui';
 import { CinemaBackdrop } from '@/components/CinemaHero';
 import { BasePicker, type BaseValue } from '@/components/BasePicker';
+import { normalizeReferralCode } from '@/lib/referral';
 
 type AccountType = 'CUSTOMER' | 'PROVIDER';
 
@@ -12,10 +13,14 @@ export default function RegisterPage() {
   // /register?type=provider opens the provider form directly.
   // Read after mounting, so the server and the first client render match.
   const [accountType, setAccountType] = useState<AccountType>('CUSTOMER');
+  // «Пригласи коллегу»: the inviter's code from /r/<code> or ?ref=.
+  const [referralCode, setReferralCode] = useState<string | null>(null);
   useEffect(() => {
-    if (new URLSearchParams(window.location.search).get('type') === 'provider') {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('type') === 'provider') {
       setAccountType('PROVIDER');
     }
+    setReferralCode(normalizeReferralCode(params.get('ref')));
   }, []);
   const [companyName, setCompanyName] = useState('');
   const [name, setName] = useState('');
@@ -54,6 +59,7 @@ export default function RegisterPage() {
         email,
         password,
         ...(phone ? { phone } : {}),
+        ...(referralCode ? { ref: referralCode } : {}),
         consent,
       }),
     });
@@ -78,6 +84,11 @@ export default function RegisterPage() {
       <CinemaBackdrop clip="frame-sunset" />
       <Card className="cine-sub shadow-2xl">
         <h1 className="cine-title mb-4 text-xl font-bold">Создать аккаунт</h1>
+        {referralCode && (
+          <p className="mb-4 rounded-md bg-signal-50 px-3 py-2 text-sm text-graphite-800">
+            Вас пригласил коллега — регистрация, заявки и предложения бесплатны.
+          </p>
+        )}
 
         <div className="mb-4 flex flex-col gap-2 text-sm sm:flex-row">
           {(
