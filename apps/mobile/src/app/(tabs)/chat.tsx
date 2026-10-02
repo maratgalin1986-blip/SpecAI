@@ -1,5 +1,5 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import {
   FlatList,
   KeyboardAvoidingView,
@@ -12,9 +12,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { EmptyState } from '@/components/ui';
-import { ApiError, fetchConversation } from '@/lib/api';
-import { streamChat } from '@/lib/sse';
-import { STORAGE_KEYS, getItem, removeItem, setItem } from '@/lib/storage';
+import { ApiError, fetchGuide, sendAgentMessage } from '@/lib/api';
 import { colors, radius, spacing } from '@/lib/theme';
 
 interface UiMessage {
@@ -28,58 +26,63 @@ interface UiMessage {
 let localId = 0;
 const nextId = () => `local-${Date.now()}-${localId++}`;
 
+/** «Что дальше?» отвечает помощник по данным с сервера — без ИИ-ключа и без истории диалога. */
+const WHAT_NEXT =
+  /что\s+(?:мне\s+)?(?:дальше|делать)|следующ\p{L}*\s+шаг|с\s+чего\s+начать|^\s*дальше\s*\??\s*$/iu;
+
+/** Ответ диспетчера с сайта: ссылки [текст](/путь) показываем просто текстом. */
+function plainText(reply: string): string {
+  return reply.replace(/\[([^\]]+)\]\((?:[^)\s]+)\)/g, '$1');
+}
+
+/**
+ * Чат — тот же диспетчер, что на сайте (POST /api/ai/agents): с ИИ-ключом
+ * отвечают ИИ-агенты, без ключа — правиловые ответы и приём заявки по
+ * телефону. История диалога живёт на экране и уходит с каждым сообщением.
+ */
 export default function ChatScreen() {
   const insets = useSafeAreaInsets();
   const [messages, setMessages] = useState<UiMessage[]>([]);
   const [input, setInput] = useState('');
   const [streaming, setStreaming] = useState(false);
-  const [ready, setReady] = useState(false);
-  const conversationId = useRef<string | undefined>(undefined);
-  const cancelStream = useRef<(() => void) | null>(null);
+  const ready = true;
   const listRef = useRef<FlatList<UiMessage>>(null);
-
-  // Восстанавливаем диалог из SecureStore и подгружаем историю с сервера.
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      const stored = await getItem(STORAGE_KEYS.conversationId);
-      if (cancelled) return;
-      if (stored) {
-        conversationId.current = stored;
-        try {
-          const data = await fetchConversation(stored);
-          if (cancelled) return;
-          setMessages(
-            data.messages.map((m) => ({
-              id: m.id,
-              role: m.role === 'USER' ? 'user' : 'assistant',
-              content: m.content,
-            })),
-          );
-        } catch (caught) {
-          // Диалог удалён или не принадлежит пользователю — начинаем новый.
-          if (caught instanceof ApiError && (caught.status === 404 || caught.status === 400)) {
-            conversationId.current = undefined;
-            await removeItem(STORAGE_KEYS.conversationId);
-          }
-        }
-      }
-      if (!cancelled) setReady(true);
-    })();
-    return () => {
-      cancelled = true;
-      cancelStream.current?.();
-    };
-  }, []);
 
   const scrollToEnd = useCallback(() => {
     requestAnimationFrame(() => listRef.current?.scrollToEnd({ animated: true }));
   }, []);
 
+  const askWhatNext = (text = 'Что дальше?') => {
+    if (streaming) return;
+    const assistantId = nextId();
+    setMessages((prev) => [
+      ...prev,
+      { id: nextId(), role: 'user', content: text },
+      { id: assistantId, role: 'assistant', content: '', pending: true },
+    ]);
+    scrollToEnd();
+    fetchGuide()
+      .then((guide) => ({ content: guide.reply, error: false }))
+      .catch((caught: unknown) => ({
+        content: caught instanceof ApiError ? caught.message : 'Помощник сейчас недоступен',
+        error: true,
+      }))
+      .then(({ content, error }) => {
+        setMessages((prev) =>
+          prev.map((m) => (m.id === assistantId ? { ...m, content, error, pending: false } : m)),
+        );
+        scrollToEnd();
+      });
+  };
+
   const send = () => {
     const text = input.trim();
     if (!text || streaming) return;
     setInput('');
+    if (WHAT_NEXT.test(text)) {
+      askWhatNext(text);
+      return;
+    }
 
     const userMessage: UiMessage = { id: nextId(), role: 'user', content: text };
     const assistantId = nextId();
@@ -91,49 +94,32 @@ export default function ChatScreen() {
     setStreaming(true);
     scrollToEnd();
 
-    const patchAssistant = (patch: Partial<UiMessage> | ((m: UiMessage) => Partial<UiMessage>)) =>
-      setMessages((prev) =>
-        prev.map((m) =>
-          m.id === assistantId ? { ...m, ...(typeof patch === 'function' ? patch(m) : patch) } : m,
-        ),
-      );
+    const patchAssistant = (patch: Partial<UiMessage>) =>
+      setMessages((prev) => prev.map((m) => (m.id === assistantId ? { ...m, ...patch } : m)));
 
-    cancelStream.current = streamChat(
-      { message: text, conversationId: conversationId.current },
-      {
-        onEvent: (event) => {
-          if (event.conversationId && event.conversationId !== conversationId.current) {
-            conversationId.current = event.conversationId;
-            void setItem(STORAGE_KEYS.conversationId, event.conversationId);
-          }
-          if (event.delta) {
-            patchAssistant((m) => ({ content: m.content + event.delta, pending: false }));
-            scrollToEnd();
-          }
-          if (event.error) {
-            patchAssistant((m) => ({
-              content: m.content || event.error || 'Ошибка ассистента',
-              pending: false,
-              error: !m.content,
-            }));
-          }
-        },
-        onError: (message) => {
-          patchAssistant({ content: message, pending: false, error: true });
-        },
-        onClose: () => {
-          cancelStream.current = null;
-          setStreaming(false);
-          patchAssistant((m) => (m.pending ? { content: m.content || '…', pending: false } : {}));
-        },
-      },
-    );
+    const history = [
+      ...messages.filter((m) => !m.error && !m.pending && m.content.trim()),
+      userMessage,
+    ]
+      .slice(-20)
+      .map((m) => ({ role: m.role, content: m.content.slice(0, 4000) }));
+
+    sendAgentMessage(history)
+      .then((result) => patchAssistant({ content: plainText(result.reply), pending: false }))
+      .catch((caught: unknown) =>
+        patchAssistant({
+          content: caught instanceof ApiError ? caught.message : 'Ассистент сейчас недоступен',
+          pending: false,
+          error: true,
+        }),
+      )
+      .finally(() => {
+        setStreaming(false);
+        scrollToEnd();
+      });
   };
 
-  const startNewConversation = async () => {
-    cancelStream.current?.();
-    conversationId.current = undefined;
-    await removeItem(STORAGE_KEYS.conversationId);
+  const startNewConversation = () => {
     setMessages([]);
     setStreaming(false);
   };
@@ -168,6 +154,17 @@ export default function ChatScreen() {
         }
         keyboardShouldPersistTaps="handled"
       />
+      <View style={styles.quickRow}>
+        <Pressable
+          onPress={() => askWhatNext()}
+          disabled={streaming}
+          accessibilityRole="button"
+          style={({ pressed }) => [styles.quick, pressed && { opacity: 0.85 }]}
+        >
+          <Text style={styles.quickText}>Что дальше?</Text>
+        </Pressable>
+        <Text style={styles.quickHint}>Помощник подскажет следующий шаг</Text>
+      </View>
       <View style={styles.composer}>
         <TextInput
           style={styles.input}
@@ -252,8 +249,6 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     padding: spacing.md,
     backgroundColor: colors.card,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
   },
   input: {
     flex: 1,
@@ -277,4 +272,22 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   sendButtonDisabled: { opacity: 0.4 },
+  quickRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.sm,
+    backgroundColor: colors.card,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  quick: {
+    backgroundColor: colors.primaryLight,
+    borderRadius: radius.lg,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs + 2,
+  },
+  quickText: { color: colors.primaryDark, fontWeight: '700', fontSize: 13 },
+  quickHint: { flex: 1, color: colors.textMuted, fontSize: 12 },
 });

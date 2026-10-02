@@ -6,17 +6,25 @@ import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { Button } from '@specai/ui';
 
+/** Today's date in Moscow as YYYY-MM-DD, the earliest allowed order date. */
+function todayInMoscow() {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Moscow' }).format(new Date());
+}
+
 interface Category {
   id: string;
   name: string;
 }
 
-export function NewOrderForm() {
+export function NewOrderForm({ provider }: { provider?: { name: string } | null } = {}) {
   const router = useRouter();
   const { status } = useSession();
   const [categories, setCategories] = useState<Category[]>([]);
   const [categoryId, setCategoryId] = useState('');
-  const [description, setDescription] = useState('');
+  // From the map's «Оставить заявку»: the order names the chosen provider.
+  const [description, setDescription] = useState(
+    provider ? `Для исполнителя «${provider.name}». ` : '',
+  );
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [address, setAddress] = useState('');
@@ -45,17 +53,24 @@ export function NewOrderForm() {
     setError(null);
     setIsSubmitting(true);
 
-    const response = await fetch('/api/orders', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        description,
-        desiredStartDate: startDate,
-        desiredEndDate: endDate,
-        categoryId: categoryId || undefined,
-        address: address.trim() || undefined,
-      }),
-    });
+    let response: Response;
+    try {
+      response = await fetch('/api/orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          description,
+          desiredStartDate: startDate,
+          desiredEndDate: endDate,
+          categoryId: categoryId || undefined,
+          address: address.trim() || undefined,
+        }),
+      });
+    } catch {
+      setIsSubmitting(false);
+      setError('Нет соединения с сервером. Проверьте интернет и попробуйте ещё раз.');
+      return;
+    }
 
     setIsSubmitting(false);
 
@@ -109,6 +124,7 @@ export function NewOrderForm() {
           <input
             type="date"
             required
+            min={todayInMoscow()}
             value={startDate}
             onChange={(e) => setStartDate(e.target.value)}
             className="rounded-md border border-slate-300 px-3 py-2"
@@ -119,6 +135,7 @@ export function NewOrderForm() {
           <input
             type="date"
             required
+            min={startDate || todayInMoscow()}
             value={endDate}
             onChange={(e) => setEndDate(e.target.value)}
             className="rounded-md border border-slate-300 px-3 py-2"

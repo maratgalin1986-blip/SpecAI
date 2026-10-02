@@ -1,4 +1,4 @@
-import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import { Link, Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
 import { Alert, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Badge, Button, Card, ErrorBanner, Loader, type BadgeTone } from '@/components/ui';
@@ -10,6 +10,7 @@ import {
   type BidStatus,
   type Order,
   type OrderStatus,
+  cancelOrder,
 } from '@/lib/api';
 import {
   BID_STATUS_LABELS,
@@ -37,9 +38,11 @@ function BidCard({
   canAccept,
   accepting,
   onAccept,
+  showComment = false,
 }: {
   bid: Bid;
   canAccept: boolean;
+  showComment?: boolean;
   accepting: boolean;
   onAccept: (bid: Bid) => void;
 }) {
@@ -58,6 +61,17 @@ function BidCard({
       {bid.message ? <Text style={styles.bidMessage}>{bid.message}</Text> : null}
       {canAccept && bid.status === 'PENDING' ? (
         <Button title="Принять предложение" loading={accepting} onPress={() => onAccept(bid)} />
+      ) : null}
+      {showComment && bid.status === 'ACCEPTED' && bid.equipment?.company ? (
+        <Link
+          href={{
+            pathname: '/comments',
+            params: { companyId: bid.equipment.company.id, name: bid.equipment.company.name },
+          }}
+          asChild
+        >
+          <Button title="Комментарий об исполнителе" variant="secondary" />
+        </Link>
       ) : null}
     </Card>
   );
@@ -110,7 +124,7 @@ export default function OrderDetailScreen() {
             try {
               await acceptBid(bid.id);
               await load('refresh');
-              Alert.alert('Готово', 'Бронирование создано и ожидает подтверждения поставщика.', [
+              Alert.alert('Бронь создана', 'Исполнитель подтвердит её и свяжется с вами.', [
                 { text: 'К бронированиям', onPress: () => router.replace('/(tabs)/bookings') },
                 { text: 'Ок' },
               ]);
@@ -140,6 +154,27 @@ export default function OrderDetailScreen() {
 
   const canAccept = isOwner && order.status === 'OPEN';
 
+  const handleCancelOrder = () => {
+    Alert.alert('Отменить заявку?', 'Исполнители больше не смогут присылать предложения.', [
+      { text: 'Нет', style: 'cancel' },
+      {
+        text: 'Отменить заявку',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await cancelOrder(order.id);
+            await load('refresh');
+          } catch (caught) {
+            Alert.alert(
+              'Ошибка',
+              caught instanceof ApiError ? caught.message : 'Не удалось отменить заявку',
+            );
+          }
+        },
+      },
+    ]);
+  };
+
   return (
     <>
       <Stack.Screen options={{ title: 'Заявка' }} />
@@ -164,18 +199,27 @@ export default function OrderDetailScreen() {
           </View>
           <Text style={styles.description}>{order.description}</Text>
           <Text style={styles.created}>Создана {formatDate(order.createdAt)}</Text>
+          {canAccept ? (
+            <Button title="Отменить заявку" variant="danger" onPress={handleCancelOrder} />
+          ) : null}
         </Card>
 
         <Text style={styles.sectionTitle}>
-          {order.bids.length === 0
-            ? 'Предложения'
-            : pluralizeRu(order.bids.length, ['предложение', 'предложения', 'предложений'])}
+          {isOwner
+            ? `Предложения исполнителей${order.bids.length > 0 ? ` · ${order.bids.length}` : ''}`
+            : order.bids.length === 0
+              ? 'Ваше предложение'
+              : pluralizeRu(order.bids.length, [
+                  'ваше предложение',
+                  'ваших предложения',
+                  'ваших предложений',
+                ])}
         </Text>
         {order.bids.length === 0 ? (
           <Card>
             <Text style={styles.empty}>
-              Пока никто не предложил технику. Поставщики получают уведомления о новых заявках —
-              загляните позже.
+              Пока никто не предложил технику. Исполнители видят заявку в своей ленте — загляните
+              позже.
             </Text>
           </Card>
         ) : (
@@ -184,6 +228,7 @@ export default function OrderDetailScreen() {
               key={bid.id}
               bid={bid}
               canAccept={canAccept}
+              showComment={isOwner}
               accepting={acceptingId === bid.id}
               onAccept={handleAccept}
             />

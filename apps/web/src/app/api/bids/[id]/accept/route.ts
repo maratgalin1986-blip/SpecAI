@@ -8,8 +8,10 @@ import {
   BLOCKING_BOOKING_STATUSES,
   toBookingDay,
   unavailableEquipmentMessage,
+  checkBookingDates,
 } from '@/lib/bookingRules';
 import { findOverlappingBooking, lockEquipment } from '@/lib/bookingConflicts';
+import { customerShortName } from '@/lib/customerPrivacy';
 
 /** Thrown inside the transaction to roll it back when the order was taken meanwhile. */
 class AlreadyClosedError extends Error {}
@@ -43,6 +45,11 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     return NextResponse.json({ error: 'Заявка уже закрыта' }, { status: 409 });
   }
 
+  // An order whose dates have passed cannot turn into a booking.
+  const dates = checkBookingDates(bid.order.desiredStartDate, bid.order.desiredEndDate);
+  if (!dates.ok) {
+    return NextResponse.json({ error: dates.error }, { status: 400 });
+  }
   const startDate = toBookingDay(bid.order.desiredStartDate);
   const endDate = toBookingDay(bid.order.desiredEndDate);
 
@@ -131,7 +138,8 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         currency: booking.currency,
         startDate: booking.startDate,
         endDate: booking.endDate,
-        customerName: bid.order.customer.name,
+        // Providers see the customer as «Анна П.» (owner's decision).
+        customerName: customerShortName(bid.order.customer.name),
       });
       await sendEmail({ to: providerEmails, ...template });
     }
@@ -139,5 +147,5 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     console.error('[email] bidAccepted failed', error);
   }
 
-  return NextResponse.json({ booking }, { status: 201 });
+  return NextResponse.json({ booking, message: 'Бронь создана' }, { status: 201 });
 }

@@ -1,6 +1,7 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   addressLabel,
+  lookupAddress,
   tileAllowed,
   formatCoords,
   shortLabel,
@@ -58,9 +59,49 @@ describe('tileAllowed', () => {
     const { x, y } = tilePosition(55.7436, 52.3959, 17);
     expect(tileAllowed(17, Math.floor(x), Math.floor(y))).toBe(true);
   });
+  it('serves overview zooms of Tatarstan for the providers map', () => {
+    for (const zoom of [6, 7, 8, 10]) {
+      const { x, y } = tilePosition(55.7436, 52.3959, zoom);
+      expect(tileAllowed(zoom, Math.floor(x), Math.floor(y))).toBe(true);
+    }
+    // Kazan at z9 as well.
+    const { x, y } = tilePosition(55.7887, 49.1221, 9);
+    expect(tileAllowed(9, Math.floor(x), Math.floor(y))).toBe(true);
+  });
   it('refuses world-level zooms and tiles far away', () => {
     expect(tileAllowed(5, 20, 10)).toBe(false);
+    const moscow = tilePosition(55.7558, 37.6173, 8);
+    expect(tileAllowed(8, Math.floor(moscow.x), Math.floor(moscow.y))).toBe(false);
     const { x, y } = tilePosition(48.8566, 2.3522, 17); // Paris
     expect(tileAllowed(17, Math.floor(x), Math.floor(y))).toBe(false);
+  });
+});
+
+describe('lookupAddress', () => {
+  afterEach(() => vi.unstubAllGlobals());
+  const reply = (body: unknown, ok = true) =>
+    vi.fn(async () => ({ ok, json: async () => body }) as unknown as Response);
+
+  it('tells a found address from a missing one and from a silent service', async () => {
+    vi.stubGlobal(
+      'fetch',
+      reply([{ lat: '55.74', lon: '52.39', display_name: 'Мира, 49, Набережные Челны' }]),
+    );
+    const found = await lookupAddress('Челны, Мира 49');
+    expect(found.status).toBe('found');
+
+    vi.stubGlobal('fetch', reply([]));
+    expect(await lookupAddress('Нет такой улицы 999')).toEqual({ status: 'not_found' });
+
+    vi.stubGlobal('fetch', reply(null, false));
+    expect(await lookupAddress('Челны, Мира 49')).toEqual({ status: 'unavailable' });
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        throw new Error('timeout');
+      }),
+    );
+    expect(await lookupAddress('Челны, Мира 49')).toEqual({ status: 'unavailable' });
   });
 });

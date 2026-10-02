@@ -20,7 +20,7 @@ import {
   type Equipment,
   type Order,
 } from '@/lib/api';
-import { formatDate } from '@/lib/format';
+import { formatDate, formatMoney } from '@/lib/format';
 import { colors, spacing } from '@/lib/theme';
 
 function BidForm({
@@ -34,9 +34,15 @@ function BidForm({
   onSubmitted: (orderId: string) => void;
   onCancel: () => void;
 }) {
-  const [equipmentId, setEquipmentId] = useState(equipment[0]?.id ?? '');
-  const [price, setPrice] = useState('');
-  const [message, setMessage] = useState('');
+  // Одно предложение от компании на заявку: повтор обновляет ожидающее.
+  const existing = order.bids.find((bid) => bid.status === 'PENDING');
+  const [equipmentId, setEquipmentId] = useState(
+    existing && equipment.some((item) => item.id === existing.equipmentId)
+      ? existing.equipmentId
+      : (equipment[0]?.id ?? ''),
+  );
+  const [price, setPrice] = useState(existing ? String(Number(existing.price)) : '');
+  const [message, setMessage] = useState(existing?.message ?? '');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -51,12 +57,17 @@ function BidForm({
     }
     setSubmitting(true);
     try {
-      await createBid(order.id, {
+      const result = await createBid(order.id, {
         equipmentId,
         price: amount,
         message: message.trim() || undefined,
       });
-      Alert.alert('Предложение отправлено', 'Клиент получит уведомление на e-mail.');
+      Alert.alert(
+        result.message ?? 'Предложение отправлено',
+        existing
+          ? 'Заказчик увидит новую цену в заявке.'
+          : 'Заказчик получит уведомление на e-mail.',
+      );
       onSubmitted(order.id);
     } catch (caught) {
       setError(caught instanceof ApiError ? caught.message : 'Не удалось отправить предложение');
@@ -67,6 +78,11 @@ function BidForm({
 
   return (
     <View style={styles.bidForm}>
+      {existing ? (
+        <Text style={styles.notice}>
+          Вы уже предложили {formatMoney(existing.price, existing.currency)} — можно изменить.
+        </Text>
+      ) : null}
       <Text style={styles.label}>Техника</Text>
       {equipment.length === 0 ? (
         <Text style={styles.hint}>
@@ -115,7 +131,7 @@ function BidForm({
         </View>
         <View style={styles.flex}>
           <Button
-            title="Отправить"
+            title={existing ? 'Обновить' : 'Отправить'}
             loading={submitting}
             disabled={equipment.length === 0}
             onPress={() => void handleSubmit()}
@@ -138,12 +154,19 @@ export default function ProviderOrdersScreen() {
     if (mode === 'refresh') setRefreshing(true);
     setError(null);
     try {
-      const [ordersData, equipmentData] = await Promise.all([
+      const [ordersResult, equipmentResult] = await Promise.allSettled([
         fetchOpenOrders(),
         fetchMyEquipment(),
       ]);
-      setOrders(ordersData.orders.filter((order) => order.status === 'OPEN'));
-      setEquipment(equipmentData.equipment);
+      if (ordersResult.status === 'fulfilled') {
+        setOrders(ordersResult.value.orders.filter((order) => order.status === 'OPEN'));
+      }
+      if (equipmentResult.status === 'fulfilled') {
+        // Предложить можно только свободную технику (как проверяет сервер).
+        setEquipment(equipmentResult.value.equipment.filter((item) => item.status === 'AVAILABLE'));
+      }
+      const failed = [ordersResult, equipmentResult].find((r) => r.status === 'rejected');
+      if (failed) throw failed.reason;
     } catch (caught) {
       setError(caught instanceof ApiError ? caught.message : 'Не удалось загрузить заявки');
       setOrders((prev) => prev ?? []);
@@ -159,7 +182,7 @@ export default function ProviderOrdersScreen() {
   if (orders === null) {
     return (
       <>
-        <Stack.Screen options={{ title: 'Заявки клиентов' }} />
+        <Stack.Screen options={{ title: 'Лента заявок заказчиков' }} />
         <Loader />
       </>
     );
@@ -167,7 +190,7 @@ export default function ProviderOrdersScreen() {
 
   return (
     <>
-      <Stack.Screen options={{ title: 'Заявки клиентов' }} />
+      <Stack.Screen options={{ title: 'Лента заявок заказчиков' }} />
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -179,6 +202,7 @@ export default function ProviderOrdersScreen() {
           renderItem={({ item }) => {
             const submitted = submittedIds.has(item.id);
             const isOpen = openBidFor === item.id;
+            const ownBid = item.bids.find((bid) => bid.status === 'PENDING');
             return (
               <Card style={styles.card}>
                 <View style={styles.cardHeader}>
@@ -191,12 +215,23 @@ export default function ProviderOrdersScreen() {
                   {formatDate(item.desiredStartDate)} – {formatDate(item.desiredEndDate)}
                 </Text>
                 <Text style={styles.meta}>
-                  {item.customer?.name ? `Клиент: ${item.customer.name} · ` : ''}
+                  {item.customer?.name ? `Заказчик: ${item.customer.name} · ` : ''}
                   {/* bids — только свои; общее число приходит в bidCount. */}
                   Предложений: {(item as { bidCount?: number }).bidCount ?? item.bids.length}
                 </Text>
                 {submitted ? (
                   <Badge text="Предложение отправлено" tone="success" />
+                ) : !isOpen && ownBid ? (
+                  <>
+                    <Text style={styles.notice}>
+                      Ваше предложение: {formatMoney(ownBid.price, ownBid.currency)}
+                    </Text>
+                    <Button
+                      title="Изменить предложение"
+                      variant="secondary"
+                      onPress={() => setOpenBidFor(item.id)}
+                    />
+                  </>
                 ) : isOpen ? (
                   <BidForm
                     order={item}
@@ -234,7 +269,7 @@ export default function ProviderOrdersScreen() {
             !error ? (
               <EmptyState
                 title="Открытых заявок нет"
-                description="Когда клиенты опубликуют заявки, они появятся здесь."
+                description="Когда заказчики опубликуют заявки, они появятся здесь."
               />
             ) : null
           }
@@ -249,6 +284,7 @@ const styles = StyleSheet.create({
   list: { padding: spacing.lg, paddingBottom: spacing.xl * 2, flexGrow: 1 },
   header: { marginBottom: spacing.md },
   card: { gap: spacing.sm },
+  notice: { fontSize: 14, color: colors.primaryDark, fontWeight: '600' },
   cardHeader: {
     flexDirection: 'row',
     alignItems: 'flex-start',

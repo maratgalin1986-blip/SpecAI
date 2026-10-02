@@ -215,6 +215,11 @@ async function main() {
       locationId: LOCATION_ID,
     },
   });
+  // A point on the providers map (/map) until the owner moves it in the cabinet.
+  await prisma.company.updateMany({
+    where: { id: COMPANY_ID, baseLat: null },
+    data: { baseLat: 55.7436, baseLon: 52.3959, baseAddress: 'Набережные Челны' },
+  });
 
   const categories = await prisma.equipmentCategory.findMany({
     where: { slug: { in: [...new Set(FLEET.map((item) => item.categorySlug))] } },

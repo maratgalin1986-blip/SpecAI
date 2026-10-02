@@ -2,24 +2,21 @@ import { notFound } from 'next/navigation';
 import { getServerSession } from 'next-auth';
 import { prisma } from '@specai/database';
 import { Card } from '@specai/ui';
+import { ORDER_STATUS_LABELS } from '@specai/shared';
+import { CancelOrderButton } from '@/components/CancelOrderButton';
 import { authOptions } from '@/lib/auth';
 import { BidForm } from '@/components/BidForm';
 import { AcceptBidButton } from '@/components/AcceptBidButton';
-import { pluralizeRu } from '@/lib/pluralize';
 import { formatMoney } from '@/lib/money';
 import { isAdminRequest } from '@/lib/admin';
 import { SiteConditions } from '@/components/SiteConditions';
-import { isFleetManager } from '@/lib/fleet';
+import { isProvider, isHouseManager } from '@/lib/fleet';
 import { isSafeHttpUrl } from '@/lib/privacy';
+import { approvedComments } from '@/lib/commentAccess';
+import { CommentForm, CommentList } from '@/components/Comments';
+import { customerShortName } from '@/lib/customerPrivacy';
 
 export const dynamic = 'force-dynamic';
-
-const ORDER_STATUS_LABEL: Record<string, string> = {
-  PENDING_REVIEW: 'На модерации',
-  OPEN: 'Открыта',
-  MATCHED: 'Закрыта — техника выбрана',
-  CANCELLED: 'Отменена',
-};
 
 export default async function OrderDetailPage({ params }: { params: { id: string } }) {
   const session = await getServerSession(authOptions);
@@ -44,12 +41,29 @@ export default async function OrderDetailPage({ params }: { params: { id: string
 
   const isOwner = session?.user.id === order.customerId;
   const isImported = order.source !== 'SITE';
-  // СпецПласт16 is the only executor: an order is seen by its author and the
-  // company owner, not published to anyone else.
-  const canSeeContact = isFleetManager(session?.user) || isAdminRequest();
-  if (!isOwner && !canSeeContact) {
+  // Aggregator: an order is seen by its author, every provider and the admin.
+  // Chat contacts are for СпецПласт16 and the admin; a provider sees only its
+  // own bids and not the customer's name (competitors' prices stay private).
+  const isAdmin = isAdminRequest();
+  const canSeeContact = isHouseManager(session?.user) || isAdmin;
+  const seesAllBids = isOwner || isAdmin;
+  if (!isOwner && !isAdmin && !isProvider(session?.user)) {
     notFound();
   }
+  const visibleBids = seesAllBids
+    ? order.bids
+    : order.bids.filter((bid) => bid.equipment.companyId === session?.user.companyId);
+
+  // A provider sees what other providers wrote about this customer (no name).
+  const viewerIsProvider = !isOwner && isProvider(session?.user);
+  const customerComments = viewerIsProvider
+    ? await approvedComments({ targetUserId: order.customerId }, 10)
+    : [];
+  const providerHasBid = viewerIsProvider && visibleBids.length > 0;
+  // One bid per company: a repeat updates the pending one.
+  const ownPendingBid = viewerIsProvider
+    ? visibleBids.find((bid) => bid.status === 'PENDING')
+    : undefined;
 
   return (
     <div className="flex flex-col gap-6">
@@ -62,24 +76,35 @@ export default async function OrderDetailPage({ params }: { params: { id: string
             {order.desiredEndDate.toLocaleDateString('ru-RU')} ·{' '}
             {isImported
               ? `из ${order.source === 'WHATSAPP' ? 'WhatsApp' : 'Telegram'}${order.sourceChat ? ` (${order.sourceChat})` : ''}`
-              : `от ${order.customer.name}`}
+              : `от ${seesAllBids ? order.customer.name : customerShortName(order.customer.name)}`}
           </p>
         </div>
         <span className="w-fit shrink-0 rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-700">
-          {ORDER_STATUS_LABEL[order.status]}
+          {ORDER_STATUS_LABELS[order.status]}
         </span>
       </div>
+      {isOwner && order.status === 'OPEN' && <CancelOrderButton orderId={order.id} />}
+      {isOwner && order.status === 'MATCHED' && (
+        <p className="rounded-md border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
+          Бронь создана — исполнитель подтвердит её и свяжется с вами.{' '}
+          <a href="/dashboard#bookings" className="font-semibold underline">
+            Мои брони
+          </a>
+        </p>
+      )}
 
       <Card>
         <h2 className="font-semibold">Описание</h2>
         <p className="mt-2 whitespace-pre-line text-sm text-slate-600">{order.description}</p>
       </Card>
 
-      <SiteConditions
-        date={order.desiredStartDate}
-        location={order.location}
-        categoryName={order.category?.name}
-      />
+      {/* An async server component, awaited directly so the JSX types do not
+          depend on the @types/react version the build happens to resolve. */}
+      {await SiteConditions({
+        date: order.desiredStartDate,
+        location: order.location,
+        categoryName: order.category?.name,
+      })}
 
       {isImported && (
         <Card className="border-sky-200 bg-sky-50">
@@ -115,22 +140,50 @@ export default async function OrderDetailPage({ params }: { params: { id: string
 
       {order.status === 'OPEN' && !isOwner && (
         <section>
-          <h2 className="mb-3 text-lg font-semibold">Предложение СпецПласт16</h2>
+          <h2 className="mb-3 text-lg font-semibold">Ваше предложение</h2>
           <Card className="max-w-xl">
-            <BidForm orderId={order.id} />
+            <BidForm
+              orderId={order.id}
+              existing={
+                ownPendingBid
+                  ? {
+                      price: Number(ownPendingBid.price),
+                      currency: ownPendingBid.currency,
+                      message: ownPendingBid.message,
+                      equipmentId: ownPendingBid.equipmentId,
+                    }
+                  : undefined
+              }
+            />
           </Card>
+        </section>
+      )}
+
+      {viewerIsProvider && order.source === 'SITE' && (
+        <section className="flex flex-col gap-3">
+          <h2 className="text-lg font-semibold">Комментарии исполнителей о заказчике</h2>
+          <CommentList comments={customerComments} empty="Комментариев пока нет." />
+          {providerHasBid && (
+            <CommentForm
+              compact
+              targetUserId={order.customerId}
+              label="Оставить комментарий о заказчике"
+            />
+          )}
         </section>
       )}
 
       <section>
         <h2 className="mb-3 text-lg font-semibold">
-          {pluralizeRu(order.bids.length, ['предложение', 'предложения', 'предложений'])}
+          {seesAllBids
+            ? `Предложения исполнителей · ${order.bids.length}`
+            : `Ваши предложения (всего по заявке: ${order.bids.length})`}
         </h2>
-        {order.bids.length === 0 ? (
+        {visibleBids.length === 0 ? (
           <p className="text-sm text-slate-600">Пока никто не предложил технику.</p>
         ) : (
           <div className="flex flex-col gap-3">
-            {order.bids.map((bid) => (
+            {visibleBids.map((bid) => (
               <Card
                 key={bid.id}
                 className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4"
@@ -146,6 +199,13 @@ export default async function OrderDetailPage({ params }: { params: { id: string
                 </div>
                 {isOwner && order.status === 'OPEN' && bid.status === 'PENDING' && (
                   <AcceptBidButton bidId={bid.id} />
+                )}
+                {isOwner && bid.status === 'ACCEPTED' && (
+                  <CommentForm
+                    compact
+                    targetCompanyId={bid.equipment.companyId}
+                    label="Комментарий об исполнителе"
+                  />
                 )}
                 {bid.status === 'ACCEPTED' && (
                   <span className="w-fit shrink-0 rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-semibold text-green-800">

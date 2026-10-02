@@ -29,7 +29,7 @@ export async function GET(
   }
   if (!tileAllowed(z, x, y)) return new NextResponse('Outside the service area', { status: 404 });
   const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown';
-  if (!checkRateLimit(`tiles:${ip}`, { limit: 240, windowMs: 60_000 }).ok) {
+  if (!checkRateLimit(`tiles:${ip}`, { limit: 480, windowMs: 60_000 }).ok) {
     return new NextResponse('Too many requests', { status: 429 });
   }
   try {

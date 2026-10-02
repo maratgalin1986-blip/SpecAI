@@ -2,9 +2,13 @@ import Stripe from 'stripe';
 
 let client: Stripe | null = null;
 
-/** Online card payment is offered only when Stripe is configured. */
+/**
+ * Online payment is switched off: the service is free for everyone (owner's
+ * decision, 2026-10). The Stripe code stays for a future commission model;
+ * to bring it back, set ONLINE_PAYMENTS=on together with STRIPE_SECRET_KEY.
+ */
 export function isOnlinePaymentEnabled(): boolean {
-  return Boolean(process.env.STRIPE_SECRET_KEY);
+  return process.env.ONLINE_PAYMENTS === 'on' && Boolean(process.env.STRIPE_SECRET_KEY);
 }
 
 // Stripe keys are read lazily so `next build` (which imports route modules)

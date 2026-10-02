@@ -6,9 +6,14 @@ import { sendEmail } from '@/lib/email';
 import { bookingStatusChanged } from '@/lib/emailTemplates';
 import { getStripe } from '@/lib/stripe';
 import { INVALID_JSON_MESSAGE, readJson } from '@/lib/apiInput';
-import { BOOKING_TIME_ZONE, CONFIRMED_BOOKING_STATUSES } from '@/lib/bookingRules';
+import {
+  BOOKING_TIME_ZONE,
+  CONFIRMED_BOOKING_STATUSES,
+  earlyStatusError,
+} from '@/lib/bookingRules';
 import { findOverlappingBooking, lockEquipment } from '@/lib/bookingConflicts';
-import { isFleetManager } from '@/lib/fleet';
+import { isProvider } from '@/lib/fleet';
+import { BOOKING_STATUS_LABELS } from '@/lib/emailTemplates';
 
 const updateSchema = z.object({
   status: z.enum(['CONFIRMED', 'ACTIVE', 'COMPLETED', 'CANCELLED']),
@@ -104,7 +109,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
   }
 
   const isOwningProvider =
-    isFleetManager(currentUser) && currentUser.companyId === booking.equipment.companyId;
+    isProvider(currentUser) && currentUser.companyId === booking.equipment.companyId;
   const isCustomer = booking.customerId === currentUser.id;
 
   if (isOwningProvider) {
@@ -112,11 +117,13 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
     if (!allowed.includes(parsed.data.status)) {
       return NextResponse.json(
         {
-          error: `Нельзя перевести бронирование из статуса «${booking.status}» в «${parsed.data.status}»`,
+          error: `Нельзя перевести бронирование из статуса «${BOOKING_STATUS_LABELS[booking.status] ?? booking.status}» в «${BOOKING_STATUS_LABELS[parsed.data.status] ?? parsed.data.status}»`,
         },
         { status: 409 },
       );
     }
+    const early = earlyStatusError(parsed.data.status, booking.startDate);
+    if (early) return NextResponse.json({ error: early }, { status: 409 });
   } else if (isCustomer) {
     if (parsed.data.status !== 'CANCELLED' || !['PENDING', 'CONFIRMED'].includes(booking.status)) {
       return NextResponse.json(
@@ -164,6 +171,27 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
     });
     if (count === 0) {
       return { error: 'Статус бронирования уже изменён — обновите страницу' } as const;
+    }
+    // A booking made by accepting a bid: cancelling it reopens the order for
+    // the customer — the accepted bid is rejected, the bids that were turned
+    // down automatically wait again, and the order may be booked anew.
+    if (nextStatus === 'CANCELLED' && booking.orderId) {
+      const reopened = await tx.order.updateMany({
+        where: { id: booking.orderId, status: 'MATCHED' },
+        data: { status: 'OPEN' },
+      });
+      if (reopened.count > 0) {
+        // First the automatically rejected bids, then the accepted one.
+        await tx.bid.updateMany({
+          where: { orderId: booking.orderId, status: 'REJECTED' },
+          data: { status: 'PENDING' },
+        });
+        await tx.bid.updateMany({
+          where: { orderId: booking.orderId, status: 'ACCEPTED' },
+          data: { status: 'REJECTED' },
+        });
+      }
+      await tx.booking.update({ where: { id: booking.id }, data: { orderId: null } });
     }
     return { updated: await tx.booking.findUniqueOrThrow({ where: { id: booking.id } }) } as const;
   });

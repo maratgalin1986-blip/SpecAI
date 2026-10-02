@@ -1,10 +1,11 @@
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Alert, Image, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { CommentsSection } from '@/components/CommentsSection';
 import { ContactActions } from '@/components/ContactActions';
 import { DateField } from '@/components/DateField';
 import { Badge, Button, Card, ErrorBanner, Loader } from '@/components/ui';
-import { ApiError, createBooking, fetchEquipmentById, type Equipment } from '@/lib/api';
+import { ApiError, createBooking, fetchEquipmentById, type Equipment, imageUri } from '@/lib/api';
 import {
   EQUIPMENT_STATUS_LABELS,
   SPEC_LABELS,
@@ -18,10 +19,13 @@ import {
   toIsoDate,
 } from '@/lib/format';
 import { colors, radius, spacing } from '@/lib/theme';
+import { useAuth } from '@/lib/auth';
 
 export default function EquipmentDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
+  // Гость видит карточку; бронирование — после входа.
+  const { token } = useAuth();
   const [item, setItem] = useState<Equipment | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -97,6 +101,8 @@ export default function EquipmentDetailScreen() {
   }
 
   const specs = Object.entries(item.specs ?? {});
+  const photos = item.imageUrls.map(imageUri).filter((url): url is string => Boolean(url));
+  const example = photos.length === 0 && item.photoIsExample ? imageUri(item.photoUrl) : null;
   const isAvailable = item.status === 'AVAILABLE';
   const rate = formatRate(item);
   const hasHourly = rate.note !== null;
@@ -105,17 +111,22 @@ export default function EquipmentDetailScreen() {
     <>
       <Stack.Screen options={{ title: item.name }} />
       <ScrollView contentContainerStyle={styles.container}>
-        {item.imageUrls.length > 0 ? (
+        {photos.length > 0 ? (
           <ScrollView
             horizontal
             pagingEnabled
             showsHorizontalScrollIndicator={false}
             style={styles.gallery}
           >
-            {item.imageUrls.map((url) => (
+            {photos.map((url) => (
               <Image key={url} source={{ uri: url }} style={styles.image} resizeMode="cover" />
             ))}
           </ScrollView>
+        ) : example ? (
+          <View>
+            <Image source={{ uri: example }} style={styles.image} resizeMode="cover" />
+            <Text style={styles.example}>Фото для примера — не эта машина</Text>
+          </View>
         ) : (
           <View style={[styles.image, styles.imagePlaceholder]}>
             <Text style={styles.imagePlaceholderText}>Фото отсутствует</Text>
@@ -125,7 +136,7 @@ export default function EquipmentDetailScreen() {
         <View style={styles.header}>
           <Text style={styles.title}>{item.name}</Text>
           <Text style={styles.meta}>
-            {item.category.name} · Поставщик: {item.company.name}
+            {item.category.name} · Исполнитель: {item.company.name}
             {item.location?.city ? ` · ${item.location.city}` : ''}
           </Text>
           <Badge
@@ -209,18 +220,25 @@ export default function EquipmentDetailScreen() {
               </View>
               <Text style={styles.estimateHint}>
                 {hasHourly
-                  ? 'Предварительно: дни × стоимость смены 8 ч. Точную сумму по машино-часам уточнит менеджер; оплата — после создания бронирования.'
-                  : 'Итоговая стоимость рассчитывается по суточной ставке; оплата — после создания бронирования.'}
+                  ? 'Предварительно: дни × стоимость смены 8 ч. Точную сумму по машино-часам уточнит менеджер. Бронирование бесплатное, без предоплаты.'
+                  : 'Итоговая стоимость рассчитывается по суточной ставке. Бронирование бесплатное, без предоплаты.'}
               </Text>
             </View>
           ) : null}
           {formError ? <Text style={styles.formError}>{formError}</Text> : null}
-          <Button
-            title={isAvailable ? 'Забронировать' : 'Техника недоступна'}
-            onPress={handleBook}
-            disabled={!isAvailable}
-            loading={submitting}
-          />
+          {token ? (
+            <Button
+              title={isAvailable ? 'Забронировать' : 'Техника недоступна'}
+              onPress={handleBook}
+              disabled={!isAvailable}
+              loading={submitting}
+            />
+          ) : (
+            <Button
+              title="Войти, чтобы забронировать"
+              onPress={() => router.push('/(auth)/login')}
+            />
+          )}
         </Card>
 
         <Card style={styles.section}>
@@ -231,6 +249,14 @@ export default function EquipmentDetailScreen() {
             message={`Интересует: ${item.name}`}
           />
         </Card>
+
+        <View style={styles.comments}>
+          <CommentsSection
+            target={{ companyId: item.company.id }}
+            title={`Комментарии об исполнителе «${item.company.name}»`}
+            formLabel="Комментарий об исполнителе"
+          />
+        </View>
       </ScrollView>
     </>
   );
@@ -246,7 +272,9 @@ function PriceRow({ label, value, primary }: { label: string; value: string; pri
 }
 
 const styles = StyleSheet.create({
+  example: { fontSize: 12, color: colors.textMuted, marginTop: 4 },
   padded: { padding: spacing.lg },
+  comments: { marginHorizontal: spacing.lg },
   container: { paddingBottom: spacing.xl * 2, gap: spacing.lg },
   gallery: { height: 240 },
   image: { width: 400, maxWidth: '100%', height: 240, backgroundColor: colors.border },

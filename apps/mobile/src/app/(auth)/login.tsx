@@ -6,6 +6,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -49,10 +50,16 @@ export default function LoginScreen() {
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        <Pressable style={styles.container} onPress={Keyboard.dismiss} accessible={false}>
+        <ScrollView
+          contentContainerStyle={styles.container}
+          keyboardShouldPersistTaps="handled"
+          onScrollBeginDrag={Keyboard.dismiss}
+        >
           <View style={styles.header}>
             <View style={styles.logo}>
-              <Text style={styles.logoText}>СП16</Text>
+              <Text style={styles.logoText} numberOfLines={1} adjustsFontSizeToFit>
+                СП16
+              </Text>
             </View>
             <Text style={styles.title}>{SITE.name}</Text>
             <Text style={styles.subtitle}>{SITE.tagline}</Text>
@@ -94,6 +101,15 @@ export default function LoginScreen() {
             </Link>
           </View>
 
+          <View style={styles.guestLinks}>
+            <Link href="/catalog" style={styles.guestLink}>
+              Каталог техники
+            </Link>
+            <Link href="/map" style={styles.guestLink}>
+              Карта исполнителей
+            </Link>
+          </View>
+
           <View style={styles.contacts}>
             <ContactActions source="mobile:login" compact />
             <Link href="/about" style={styles.link}>
@@ -101,17 +117,24 @@ export default function LoginScreen() {
             </Link>
           </View>
 
-          <Text style={styles.footer}>Сервер: {API_URL}</Text>
-        </Pressable>
+          {__DEV__ ? <Text style={styles.footer}>Сервер: {API_URL}</Text> : null}
+        </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
+  guestLinks: { flexDirection: 'row', justifyContent: 'center', gap: spacing.lg },
+  guestLink: {
+    color: colors.primaryDark,
+    fontSize: 15,
+    fontWeight: '600',
+    paddingVertical: spacing.sm,
+  },
   safe: { flex: 1, backgroundColor: colors.background },
   flex: { flex: 1 },
-  container: { flex: 1, padding: spacing.xl, justifyContent: 'center', gap: spacing.xl },
+  container: { flexGrow: 1, padding: spacing.xl, justifyContent: 'center', gap: spacing.xl },
   header: { alignItems: 'center', gap: spacing.sm },
   logo: {
     width: 64,
@@ -121,7 +144,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  logoText: { color: '#fff', fontSize: 22, fontWeight: '800' },
+  logoText: { color: '#fff', fontSize: 18, fontWeight: '800', paddingHorizontal: 4 },
   title: { fontSize: 28, fontWeight: '700', color: colors.text },
   subtitle: { fontSize: 15, color: colors.textMuted, textAlign: 'center' },
   contacts: { gap: spacing.sm },

@@ -177,12 +177,23 @@ export function AgentChat({
         )}
       </div>
 
+      <div className="flex items-center gap-2 border-t border-slate-200 px-3 pt-2">
+        <button
+          type="button"
+          onClick={() => send('Что дальше?')}
+          disabled={isSending}
+          className="shrink-0 whitespace-nowrap rounded-full bg-amber-500 px-3 py-1 text-xs font-semibold text-slate-950 hover:bg-amber-400 disabled:opacity-50"
+        >
+          Что дальше?
+        </button>
+        <span className="text-xs text-slate-500">Помощник подскажет ваш следующий шаг</span>
+      </div>
       <form
         onSubmit={(event) => {
           event.preventDefault();
           send(input);
         }}
-        className="flex gap-2 border-t border-slate-200 p-3"
+        className="flex gap-2 p-3"
       >
         <input
           value={input}
