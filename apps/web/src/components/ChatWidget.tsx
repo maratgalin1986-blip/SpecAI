@@ -252,7 +252,10 @@ export function ChatWidget() {
             </div>
           </header>
 
-          <div ref={listRef} className="flex-1 space-y-3 overflow-y-auto bg-slate-50 px-4 py-3">
+          <div
+            ref={listRef}
+            className="ym-hide-content flex-1 space-y-3 overflow-y-auto bg-slate-50 px-4 py-3"
+          >
             {!historyLoaded && (
               <p className="text-center text-xs text-slate-400">Загружаем историю…</p>
             )}
@@ -304,7 +307,7 @@ export function ChatWidget() {
               maxLength={4000}
               placeholder="Напишите сообщение…"
               disabled={isSending}
-              className="flex-1 resize-none rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none disabled:bg-slate-100"
+              className="ym-hide-content flex-1 resize-none rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none disabled:bg-slate-100"
             />
             <button
               type="submit"

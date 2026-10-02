@@ -125,7 +125,10 @@ export function OrderPanel({
                   </button>
                 </div>
                 {formFor === type && (
-                  <div className="mt-3 rounded-xl bg-slate-950/60 p-3" onSubmit={() => onSent?.()}>
+                  <div
+                    className="ym-hide-content mt-3 rounded-xl bg-slate-950/60 p-3"
+                    onSubmit={() => onSent?.()}
+                  >
                     <CallbackForm
                       source="stroyka"
                       dark
