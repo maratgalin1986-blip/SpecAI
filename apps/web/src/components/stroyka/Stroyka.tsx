@@ -1,0 +1,1100 @@
+'use client';
+
+import dynamic from 'next/dynamic';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { MachineType } from '@/lib/machinePhotos';
+import { emitDialog, emitScene } from '@/lib/sceneEvents';
+import { SITE } from '@/lib/site';
+import {
+  DIALOGUE,
+  dialogueNode,
+  FORM_NODE,
+  MACHINE_ZONE,
+  SPEAKERS,
+  ZONES,
+  zoneById,
+  type DialogNode,
+  type Reply,
+  type SpeakerId,
+  type ZoneId,
+} from '@/lib/stroyka';
+import { awayMessage, snapshot, type VisitSnapshot } from '@/lib/stroyka/away';
+import {
+  applyReply,
+  contextFacts,
+  contextIntro,
+  emptyContext,
+  missing,
+  orderProgress,
+  orderSummary,
+  radioHandoff,
+  renderLine,
+  type OrderContext,
+  type RadioLine,
+} from '@/lib/stroyka/context';
+import type { LineConditions, LinePicker } from '@/lib/stroyka/lines';
+import {
+  progressFromUnits,
+  progressLine,
+  worldProgress,
+  type WorldProgress,
+} from '@/lib/stroyka/progress';
+import { loadUsed, saveUsed } from '@/lib/stroyka/shuffleBag';
+import { stageNode } from '@/lib/stroyka/stage';
+import { BANTER_NAMES, type BanterSpeaker } from '@/lib/stroykaJokes';
+import {
+  atMskTime,
+  conditionsLine,
+  dayPhase,
+  liftingStop,
+  nearestPoint,
+  parseOverrides,
+  PHASE_LABEL,
+  sunPosition,
+  weatherScene,
+  type SceneOverrides,
+  type WeatherPoint,
+} from '@/lib/stroykaSky';
+import { mskToday, type WorkNote } from '@/lib/weather';
+import { isOnShift } from '@/lib/site';
+import { leadAcceptedText } from '@/lib/dispatcher';
+import { submitLead } from '@/lib/submitLead';
+import type { Quick } from '@/lib/stroyka/brain';
+import type { Mode, SharedInput, Telemetry, View } from './engine';
+import type { StroykaEngine } from './StroykaWorld';
+import { Censored, DialogueBox } from './DialogueBox';
+import { FallbackMap, Passport } from './FallbackMap';
+import { Joystick } from './Joystick';
+import { MiniMap, type MiniCity } from './MiniMap';
+import { placeSite, points as cityPoints, type CityData } from '@/lib/stroyka/city';
+import { OrderPanel } from './OrderPanel';
+
+const StroykaWorld = dynamic(() => import('./StroykaWorld'), { ssr: false });
+
+type Phase = 'boot' | '3d' | 'fallback';
+
+interface DialogState {
+  nodeId: string;
+  radio: RadioLine[];
+  /** The visitor is busy with it (answered, form open): the tour waits, zones do not replace it. */
+  engaged: boolean;
+  key: number;
+}
+
+const BUBBLE_CSS = `.stroyka-bubble{position:absolute;left:0;top:0;max-width:min(240px,60vw);padding:6px 10px;border-radius:12px;background:rgba(255,255,255,.96);color:#0f172a;font-size:13px;line-height:1.25;font-weight:600;box-shadow:0 6px 18px rgba(0,0,0,.35);transition:opacity .35s;opacity:0;will-change:transform}
+        .stroyka-bubble::after{content:'';position:absolute;left:50%;bottom:-6px;margin-left:-6px;border:6px solid transparent;border-top-color:rgba(255,255,255,.96);border-bottom:0}
+        .stroyka-censor{color:#dc2626;font-weight:900}`;
+
+const VISIT_KEY = 'stroyka.visit.v1';
+const WEATHER_KEY = 'stroyka.weather.v1';
+
+function hasWebGL() {
+  try {
+    const canvas = document.createElement('canvas');
+    return !!(canvas.getContext('webgl2') || canvas.getContext('webgl'));
+  } catch {
+    return false;
+  }
+}
+
+const uniq = <T,>(list: T[]) => [...new Set(list)];
+
+export function Stroyka() {
+  const [phase, setPhase] = useState<Phase>('boot');
+  const [reduced, setReduced] = useState(false);
+  const [mobile, setMobile] = useState(false);
+  const [overrides, setOverrides] = useState<SceneOverrides>({});
+  const [loadReal, setLoadReal] = useState(0);
+  const [loadSim, setLoadSim] = useState(0.04);
+  const [engine, setEngine] = useState<StroykaEngine | null>(null);
+  const input = useMemo<SharedInput>(() => ({ joyX: 0, joyY: 0 }), []);
+  const telemetry = useMemo<Telemetry>(
+    () => ({
+      x: 0,
+      z: 66,
+      yaw: Math.PI,
+      fps: 0,
+      mode: 'tour',
+      zone: null,
+      tourStop: null,
+      ready: false,
+      drawCalls: 0,
+      pixelRatio: 1,
+    }),
+    [],
+  );
+  const [mode, setMode] = useState<Mode>('tour');
+  const [view, setView] = useState<View>('fp');
+  const [zone, setZone] = useState<ZoneId | null>(null);
+  const [dialog, setDialog] = useState<DialogState | null>(null);
+  const dialogRef = useRef<DialogState | null>(null);
+  dialogRef.current = dialog;
+  const [ctx, setCtx] = useState<OrderContext>(emptyContext);
+  const ctxRef = useRef(ctx);
+  ctxRef.current = ctx;
+  const [radioLog, setRadioLog] = useState<{ speaker: BanterSpeaker; text: string; id: number }[]>(
+    [],
+  );
+  const [logOpen, setLogOpen] = useState(false);
+  const [order, setOrder] = useState<{ open: boolean; machine?: MachineType | null }>({
+    open: false,
+  });
+  const [skipTyping, setSkipTyping] = useState(0);
+  const [now, setNow] = useState(() => new Date());
+  const [point, setPoint] = useState<WeatherPoint | null>(null);
+  const [progress, setProgress] = useState<WorldProgress>(() => worldProgress(Date.now(), null));
+  const [progressReady, setProgressReady] = useState(false);
+  const [timelapse, setTimelapse] = useState(false);
+  const [away, setAway] = useState<string | null>(null);
+  const awayShown = useRef(false);
+  const [toast, setToast] = useState<string | null>(null);
+  const [extra, setExtra] = useState<{ speaker: BanterSpeaker; text: string } | null>(null);
+  const [cardOpen, setCardOpen] = useState(false);
+  const pendingRadio = useRef<RadioLine[]>([]);
+  const visited = useRef(new Set<ZoneId>());
+  const picker = useRef<LinePicker | null>(null);
+  const linesMod = useRef<typeof import('@/lib/stroyka/lines') | null>(null);
+  const keyRef = useRef(0);
+  const prevZone = useRef<ZoneId | null>(null);
+  const [chat, setChat] = useState<{ speaker: SpeakerId; text: string; quick: Quick[] } | null>(
+    null,
+  );
+  const [pendingPhone, setPendingPhone] = useState<string | null>(null);
+  const [phoneSending, setPhoneSending] = useState(false);
+  const brain = useRef<typeof import('@/lib/stroyka/brain') | null>(null);
+  const [miniCity, setMiniCity] = useState<MiniCity | null>(null);
+
+  // The mini-map shows the same OSM city as the world (buildings and roads around the site).
+  useEffect(() => {
+    if (!engine) return;
+    let cancelled = false;
+    fetch('/stroyka/chelny-osm.json')
+      .then((r) => (r.ok ? (r.json() as Promise<CityData>) : Promise.reject()))
+      .then((data) => {
+        if (cancelled || !data.b || data.b.length < 20) return;
+        const [ox, oz] = placeSite(data);
+        const near = (pts: [number, number][]) =>
+          pts.some(([x, z]) => Math.abs(x + ox) < 90 && Math.abs(z + oz) < 100);
+        const toSvg = (pts: [number, number][]) =>
+          pts.map(([x, z]) => `${(x + ox).toFixed(1)},${(z + oz).toFixed(1)}`).join(' ');
+        const polys = data.b
+          .map((b) => cityPoints(b))
+          .filter(near)
+          .map(toSvg);
+        const roads = data.r
+          .filter((r) => Number(r[0]) >= 1)
+          .map((r) => cityPoints(r))
+          .filter(near)
+          .map(toSvg);
+        setMiniCity({ polys, roads });
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [engine]);
+
+  const weather = useMemo(() => weatherScene(point), [point]);
+  const lift = useMemo(() => liftingStop(point), [point]);
+  const hour = (now.getUTCHours() + 3) % 24;
+  const sun = useMemo(() => sunPosition(now), [now]);
+
+  // ------------------------------------------------------------ boot
+  useEffect(() => {
+    const ov = parseOverrides(window.location.search);
+    setOverrides(ov);
+    const params = new URLSearchParams(window.location.search);
+    const prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    setReduced(prefersReduced);
+    setMobile(window.matchMedia('(pointer: coarse)').matches || window.innerWidth < 768);
+    const force2d = params.get('2d') === '1';
+    const force3d = params.get('3d') === '1';
+    setPhase(force2d || !hasWebGL() || (prefersReduced && !force3d) ? 'fallback' : '3d');
+    if (ov.time) setNow(atMskTime(new Date(), ov.time.h, ov.time.m));
+    // Full-screen page: the site chrome stays behind, the page does not scroll.
+    const html = document.documentElement;
+    const prev = html.style.overflow;
+    html.style.overflow = 'hidden';
+    document.body.style.overflow = 'hidden';
+    import('@/lib/stroyka/lines').then((mod) => {
+      linesMod.current = mod;
+      picker.current = new mod.LinePicker(loadUsed());
+    });
+    return () => {
+      html.style.overflow = prev;
+      document.body.style.overflow = '';
+    };
+  }, []);
+
+  // Fake progress while the 3D chunk downloads, real progress after.
+  useEffect(() => {
+    if (phase !== '3d' || loadReal >= 1) return;
+    const timer = window.setInterval(() => setLoadSim((p) => Math.min(0.35, p + 0.015)), 120);
+    return () => window.clearInterval(timer);
+  }, [phase, loadReal]);
+
+  // ------------------------------------------------------------ time and weather
+  useEffect(() => {
+    const tick = () =>
+      setNow(
+        overrides.time ? atMskTime(new Date(), overrides.time.h, overrides.time.m) : new Date(),
+      );
+    tick();
+    const timer = window.setInterval(tick, 60_000);
+    return () => window.clearInterval(timer);
+  }, [overrides]);
+
+  useEffect(() => {
+    if (phase === 'boot') return;
+    if (overrides.weather) {
+      setPoint(overrides.weather);
+      return;
+    }
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const cached = JSON.parse(sessionStorage.getItem(WEATHER_KEY) ?? 'null') as {
+          at: number;
+          point: WeatherPoint | null;
+        } | null;
+        if (cached && Date.now() - cached.at < 30 * 60_000) {
+          if (!cancelled) setPoint(cached.point);
+          return;
+        }
+      } catch {
+        // No storage: just fetch.
+      }
+      try {
+        const response = await fetch(`/api/weather?date=${mskToday()}`);
+        if (!response.ok) throw new Error(String(response.status));
+        const json = (await response.json()) as {
+          now?: WeatherPoint | null;
+          weather?: { points?: (WeatherPoint & { time: string })[] } | null;
+        };
+        const p = json.now ?? nearestPoint(json.weather?.points ?? [], Date.now());
+        if (!cancelled) setPoint(p);
+        try {
+          sessionStorage.setItem(WEATHER_KEY, JSON.stringify({ at: Date.now(), point: p }));
+        } catch {
+          // ignore
+        }
+      } catch {
+        // The API failed: clear weather with the real time.
+        if (!cancelled) setPoint(null);
+      }
+    };
+    load();
+    const timer = window.setInterval(load, 30 * 60_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [phase, overrides]);
+
+  // ------------------------------------------------------------ district progress
+  useEffect(() => {
+    if (phase === 'boot') return;
+    const params = new URLSearchParams(window.location.search);
+    const forced = Number(params.get('progress'));
+    const apply = (p: WorldProgress, remember: boolean) => {
+      setProgress(p);
+      setProgressReady(true);
+      if (!remember) return;
+      try {
+        const prev = JSON.parse(localStorage.getItem(VISIT_KEY) ?? 'null') as VisitSnapshot | null;
+        const message = awayMessage(prev, p, Date.now());
+        if (message) {
+          setAway(message);
+          setToast(message);
+        }
+        if (
+          prev &&
+          prev.projectIndex === p.projectIndex &&
+          (prev.stage !== p.stage || prev.floorsBuilt !== p.floorsBuilt)
+        )
+          setTimelapse(true);
+        localStorage.setItem(VISIT_KEY, JSON.stringify(snapshot(p, Date.now())));
+      } catch {
+        // Storage blocked: no «пока вас не было».
+      }
+    };
+    if (params.has('progress') && Number.isFinite(forced) && forced >= 0) {
+      apply(progressFromUnits(forced, false), false);
+      return;
+    }
+    fetch('/api/world')
+      .then((r) => (r.ok ? (r.json() as Promise<WorldProgress>) : Promise.reject()))
+      .then((p) => apply(p, true))
+      .catch(() => apply(worldProgress(Date.now(), null), true));
+  }, [phase]);
+
+  // ------------------------------------------------------------ engine sync
+  useEffect(() => {
+    engine?.setEnvironment(now, point);
+  }, [engine, now, point]);
+  useEffect(() => {
+    if (engine && progressReady) engine.setProgress(progress, timelapse);
+  }, [engine, progress, progressReady, timelapse]);
+  useEffect(() => {
+    engine?.setMode(mode);
+  }, [engine, mode]);
+  useEffect(() => {
+    engine?.setView(view);
+  }, [engine, view]);
+  useEffect(() => {
+    engine?.setHold(!!dialog?.engaged || order.open);
+  }, [engine, dialog?.engaged, order.open]);
+  useEffect(() => {
+    if (!engine) return;
+    if (new URLSearchParams(window.location.search).get('nointro') === '1') engine.skipIntro();
+    const w = window as unknown as { __stroyka?: unknown };
+    w.__stroyka = {
+      telemetry,
+      goTo: (z: ZoneId) => engine.goToZone(z),
+      skipIntro: () => engine.skipIntro(),
+      state: () => engine.state,
+    };
+  }, [engine, telemetry]);
+
+  // ------------------------------------------------------------ dialogue
+  const nodeFor = useCallback(
+    (nodeId: string, c: OrderContext): DialogNode | null => {
+      let node: DialogNode | null;
+      if (nodeId === 'korpus') {
+        node =
+          lift.stop || progress.stageKey === 'facade'
+            ? dialogueNode('korpus', lift)
+            : stageNode(progress);
+      } else node = dialogueNode(nodeId, lift);
+      if (!node) return null;
+      let text = renderLine(node.text, c);
+      const zoneRoot =
+        ZONES.some((z) => z.root === node!.id) && node.id !== 'gate' && node.id !== FORM_NODE;
+      if (zoneRoot && contextFacts(c) && c.heardBy.includes(node.speaker))
+        text = `${contextIntro(c, node.speaker)} ${text}`;
+      if (node.id === FORM_NODE && contextFacts(c)) {
+        const gaps = missing(c);
+        text = `Записала: ${contextFacts(c)}. ${
+          gaps.includes('address')
+            ? 'Адрес подскажете — и телефон, я перезвоню и подтвержу.'
+            : 'Оставьте телефон — перезвоню и подтвержу.'
+        }`;
+      }
+      return { ...node, text };
+    },
+    [lift, progress],
+  );
+
+  const logRadio = useCallback((lines: { speaker: BanterSpeaker; text: string }[]) => {
+    if (!lines.length) return;
+    for (const line of lines) emitDialog(line.speaker, line.text, 'radio');
+    setRadioLog((log) => [...log, ...lines.map((l) => ({ ...l, id: ++keyRef.current }))].slice(-8));
+  }, []);
+
+  const openNode = useCallback(
+    (nodeId: string, radio: RadioLine[], engaged: boolean, c: OrderContext = ctxRef.current) => {
+      const node = nodeFor(nodeId, c);
+      if (!node) return;
+      let text = node.text;
+      if (node.id === 'gate' && away && !awayShown.current) {
+        awayShown.current = true;
+        text = `${away} ${text}`;
+      }
+      emitDialog(node.speaker, text, 'business');
+      setExtra(null);
+      setChat(null);
+      setPendingPhone(null);
+      setDialog({ nodeId, radio, engaged, key: ++keyRef.current });
+    },
+    [nodeFor, away],
+  );
+
+  const openZoneDialog = useCallback(
+    (z: ZoneId) => {
+      const zn = zoneById(z);
+      const radio = pendingRadio.current;
+      pendingRadio.current = [];
+      openNode(zn.root, radio, false);
+      // The NPC reacts: a greeting the first time, «вернулся» after.
+      const line = picker.current?.pick(
+        zn.speaker,
+        [visited.current.has(z) ? 'return' : 'greet'],
+        false,
+      );
+      visited.current.add(z);
+      if (line && engine) {
+        engine.say(`npc-${z}`, line.text, 4.5);
+        emitDialog(zn.speaker, line.text, 'joke');
+      }
+    },
+    [openNode, engine],
+  );
+
+  // Zone changes: sound events, the zone's dialogue unless the visitor is busy.
+  useEffect(() => {
+    const before = prevZone.current;
+    prevZone.current = zone;
+    if (before) for (const m of zoneById(before).machines) emitScene(m, false);
+    if (zone) for (const m of zoneById(zone).machines) emitScene(m, true);
+    engine?.setActiveZone(zone);
+    if (dialogRef.current?.engaged) return;
+    if (!zone) {
+      setDialog(null);
+      return;
+    }
+    openZoneDialog(zone);
+    // Only when the zone itself changes.
+  }, [zone]);
+
+  const handoffToZone = useCallback(
+    (z: ZoneId, next: OrderContext, from: SpeakerId) => {
+      const target = zoneById(z).speaker;
+      let c = next;
+      if (contextFacts(next) && target !== from) {
+        const radio = radioHandoff(from, target, next);
+        logRadio(radio);
+        pendingRadio.current = radio;
+        c = { ...next, heardBy: uniq([...next.heardBy, from, target]) };
+      }
+      setCtx(c);
+      ctxRef.current = c;
+      setDialog(null);
+      dialogRef.current = null;
+      if (phase === '3d' && engine) engine.goToZone(z);
+      if (phase === 'fallback' || zone === z) {
+        setZone(z);
+        openZoneDialog(z);
+      }
+    },
+    [engine, logRadio, openZoneDialog, phase, zone],
+  );
+
+  const onReply = useCallback(
+    (reply: Reply, speakerOverride?: SpeakerId) => {
+      const current = dialogRef.current ? nodeFor(dialogRef.current.nodeId, ctxRef.current) : null;
+      const speaker = speakerOverride ?? current?.speaker ?? 'mihalych';
+      let next = applyReply(ctxRef.current, reply.label, reply.set);
+      const action = reply.action;
+      switch (action.kind) {
+        case 'link':
+          setCtx(next);
+          return;
+        case 'goto':
+          setCtx(next);
+          ctxRef.current = next;
+          openNode(action.node, [], true, next);
+          return;
+        case 'zone':
+          handoffToZone(action.zone, next, speaker);
+          return;
+        case 'show': {
+          const z = next.machine ? MACHINE_ZONE[next.machine] : undefined;
+          if (z) handoffToZone(z, next, speaker);
+          return;
+        }
+        case 'next':
+          setCtx(next);
+          setDialog(null);
+          if (mode === 'tour') engine?.next();
+          return;
+        case 'form': {
+          const radio = speaker !== 'sveta' ? radioHandoff(speaker, 'sveta', next) : [];
+          next = { ...next, heardBy: uniq([...next.heardBy, speaker, 'sveta' as const]) };
+          setCtx(next);
+          ctxRef.current = next;
+          logRadio(radio);
+          openNode(FORM_NODE, radio, true, next);
+          return;
+        }
+      }
+    },
+    [engine, handoffToZone, logRadio, mode, nodeFor, openNode],
+  );
+
+  const closeDialog = () => {
+    setDialog(null);
+    setChat(null);
+  };
+
+  // ------------------------------------------------------------ free-text chat (rule-based, free)
+  const sayAs = useCallback(
+    (speaker: SpeakerId, text: string, quick: Quick[], kind: 'business' | 'joke' = 'business') => {
+      setChat({ speaker, text, quick });
+      emitDialog(speaker, text, kind);
+    },
+    [],
+  );
+
+  const weatherStory = useCallback(
+    async (machine: MachineType, date: string, speaker: SpeakerId) => {
+      const mod = brain.current;
+      if (!mod) return;
+      const forced = new URLSearchParams(window.location.search).get('forecast');
+      const notesFor = async (day: string): Promise<Pick<WorkNote, 'level' | 'title'>[]> => {
+        if (forced) {
+          const titles: Record<string, string> = {
+            wind: 'Ветер 13 м/с',
+            rain: 'Дождь',
+            frost: 'Мороз −27 °C',
+            fog: 'Туман',
+            heat: 'Жара 34 °C',
+          };
+          return day === date && titles[forced]
+            ? [{ level: 'stop', title: titles[forced]! }]
+            : [{ level: 'ok', title: 'Погода не мешает работе' }];
+        }
+        const response = await fetch(`/api/weather?date=${day}&kind=${machine}`);
+        if (!response.ok) return [];
+        const json = (await response.json()) as { notes?: WorkNote[] };
+        return json.notes ?? [];
+      };
+      try {
+        const hazard = mod.hazardOf(await notesFor(date));
+        if (!hazard) return;
+        // The nearest good day from the forecast (up to 9 days ahead), asked one by one.
+        let okLabel: string | null = null;
+        const base = Date.parse(`${date}T12:00:00Z`);
+        for (let i = 1; i <= 9 && !okLabel; i++) {
+          const day = new Date(base + i * 86_400_000).toISOString().slice(0, 10);
+          const ahead = (Date.parse(day) - Date.parse(mskToday())) / 86_400_000;
+          if (ahead > 9) break;
+          const notes = await notesFor(day);
+          if (notes.length && !mod.hazardOf(notes)) {
+            const d = new Date(Date.parse(`${day}T12:00:00Z`));
+            okLabel = `${d.getUTCDate()}.${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
+          }
+        }
+        const story = mod.weatherStory(hazard, machine, okLabel, Date.now());
+        sayAs(speaker === 'sveta' ? 'mihalych' : speaker, story.text, story.quick, 'joke');
+      } catch {
+        // No forecast: the order goes on as usual.
+      }
+    },
+    [sayAs],
+  );
+
+  const onChatSend = useCallback(
+    async (text: string) => {
+      const mod = brain.current ?? (await import('@/lib/stroyka/brain'));
+      brain.current = mod;
+      const current = dialogRef.current ? nodeFor(dialogRef.current.nodeId, ctxRef.current) : null;
+      const speaker: SpeakerId = chat?.speaker ?? current?.speaker ?? 'mihalych';
+      const jokes =
+        linesMod.current?.LINES[speaker]
+          .filter((l) => l.tags.includes('joke'))
+          .map((l) => l.text) ?? [];
+      const reply = mod.respond(text, speaker, ctxRef.current, new Date(), jokes);
+      let next = applyReply(ctxRef.current, text.slice(0, 60), reply.set);
+      let radio: RadioLine[] = [];
+      if (reply.handoff && reply.handoff !== speaker) {
+        radio = radioHandoff(speaker, reply.handoff, next);
+        logRadio(radio);
+        next = { ...next, heardBy: uniq([...next.heardBy, speaker, reply.handoff]) };
+      }
+      setCtx(next);
+      ctxRef.current = next;
+      setDialog((d) =>
+        d
+          ? { ...d, radio: radio.length ? radio : d.radio, engaged: true }
+          : {
+              nodeId: zone ? zoneById(zone).root : 'gate',
+              radio,
+              engaged: true,
+              key: ++keyRef.current,
+            },
+      );
+      sayAs(reply.handoff ?? reply.speaker, reply.text, reply.quick);
+      if (reply.phone) setPendingPhone(reply.phone);
+      if (reply.checkWeather)
+        void weatherStory(reply.checkWeather.machine, reply.checkWeather.date, speaker);
+    },
+    [chat, logRadio, nodeFor, sayAs, weatherStory, zone],
+  );
+
+  const onChatQuick = (q: Quick) => {
+    if (q.say) {
+      void onChatSend(q.say);
+      return;
+    }
+    const speaker = chat?.speaker ?? 'mihalych';
+    if (q.action === 'call') window.location.href = SITE.phoneHref;
+    else if (q.action === 'form') onReply({ label: q.label, action: { kind: 'form' } }, speaker);
+    else if (q.action === 'order-anyway') {
+      const task = ctxRef.current.task
+        ? `${ctxRef.current.task} (диспетчер решит на месте)`
+        : 'по погоде решит диспетчер';
+      onReply({ label: q.label, action: { kind: 'form' }, set: { task } }, speaker);
+    } else if (q.action === 'other-day')
+      sayAs(speaker, 'На какой день ставим?', [
+        { label: 'Завтра', say: 'завтра' },
+        { label: 'Послезавтра', say: 'послезавтра' },
+        { label: 'На выходных', say: 'на выходных' },
+        { label: 'Через 3 дня', say: 'через 3 дня' },
+      ]);
+  };
+
+  const onSendPhone = async () => {
+    if (!pendingPhone) return;
+    setPhoneSending(true);
+    try {
+      await submitLead({
+        phone: pendingPhone,
+        message: orderSummary(ctxRef.current) || 'Заявка со стройки на сайте',
+        source: 'stroyka',
+        consent: true,
+      });
+      setPendingPhone(null);
+      setCtx((c) => ({ ...c, sent: true }));
+      sayAs('sveta', leadAcceptedText(isOnShift()), []);
+    } catch (error) {
+      sayAs(
+        'sveta',
+        `Не ушло: ${error instanceof Error ? error.message : 'нет связи'}. Позвоните, пожалуйста: ${SITE.phone}.`,
+        [{ label: 'Позвонить', action: 'call' }],
+      );
+    } finally {
+      setPhoneSending(false);
+    }
+  };
+
+  // A visitor who lingers gets a word from the character (under the business line).
+  useEffect(() => {
+    if (!dialog) return;
+    const timer = window.setTimeout(() => {
+      const node = nodeFor(dialog.nodeId, ctxRef.current);
+      if (!node || !picker.current) return;
+      const line = picker.current.pick(node.speaker, ['idle', 'joke']);
+      if (!line) return;
+      setExtra({ speaker: node.speaker, text: line.text });
+      emitDialog(node.speaker, line.text, 'joke');
+    }, 14_000);
+    return () => window.clearTimeout(timer);
+  }, [dialog, nodeFor]);
+
+  // ------------------------------------------------------------ ambient banter, site events, radio
+  const conditions = useMemo<LineConditions>(
+    () => ({
+      hour,
+      rain: weather.rain > 0.05,
+      snow: weather.snow > 0.05,
+      fog: weather.fog > 0.4,
+      wind: weather.wind >= 7,
+      cold: weather.temp <= -10,
+      heat: weather.temp >= 28,
+      liftStop: lift.stop,
+    }),
+    [hour, weather, lift],
+  );
+
+  useEffect(() => {
+    if (phase !== '3d' || !engine) return;
+    let timer = 0;
+    const tick = () => {
+      timer = window.setTimeout(tick, 7000 + Math.random() * 5000);
+      if (document.hidden || order.open || !picker.current || !linesMod.current) return;
+      const near = engine
+        .nearby(32)
+        .filter((c) => !(dialogRef.current && c.zone && c.zone === zone))
+        .slice(0, 4);
+      if (!near.length) return;
+      const who = near[Math.floor(Math.random() * near.length)]!;
+      const tags = linesMod.current.conditionTags(conditions);
+      const events: string[] = [];
+      if (conditions.hour === 12) events.push('event:lunch');
+      if (conditions.rain) events.push('event:mud');
+      if (conditions.snow) events.push('event:snowclear');
+      if (conditions.hour >= 22 || conditions.hour < 6) events.push('event:guard');
+      if (conditions.wind) events.push('event:windcheck');
+      events.push(
+        ['event:smoke', 'event:search', 'event:concrete'][Math.floor(Math.random() * 3)]!,
+      );
+      const r = Math.random();
+      const want = r < 0.3 ? events : r < 0.6 ? tags : [];
+      const line = picker.current.pick(who.speaker, want);
+      if (!line) return;
+      engine.say(who.id, line.text, 5.5);
+      emitDialog(who.speaker, line.text, line.tags.includes('business') ? 'business' : 'joke');
+      saveUsed(picker.current.used);
+    };
+    timer = window.setTimeout(tick, 4000);
+    // Radio chatter now and then.
+    const radioTimer = window.setInterval(() => {
+      if (document.hidden || !picker.current) return;
+      const pair = picker.current.radio(conditions);
+      logRadio([
+        { speaker: pair.a, text: pair.aText },
+        { speaker: pair.b, text: pair.bText },
+      ]);
+    }, 38_000);
+    return () => {
+      window.clearTimeout(timer);
+      window.clearInterval(radioTimer);
+    };
+  }, [phase, engine, order.open, zone, conditions, logRadio]);
+
+  useEffect(() => {
+    if (!toast) return;
+    const timer = window.setTimeout(() => setToast(null), 7000);
+    return () => window.clearTimeout(timer);
+  }, [toast]);
+
+  // ------------------------------------------------------------ actions
+  const skipToOrder = () => {
+    setSkipTyping((n) => n + 1);
+    engine?.skipIntro();
+    if (mode === 'tour') setMode('free');
+    const zoneMachine = zone ? zoneById(zone).order : undefined;
+    setOrder({ open: true, machine: ctx.machine ?? zoneMachine ?? null });
+  };
+  const orderInWorld = () => {
+    const current = dialog ? nodeFor(dialog.nodeId, ctx) : null;
+    const zoneMachine = zone ? zoneById(zone).order : undefined;
+    onReply(
+      {
+        label: 'Оформить наряд',
+        action: { kind: 'form' },
+        set: !ctx.machine && zoneMachine ? { machine: zoneMachine } : undefined,
+      },
+      current?.speaker ?? (zone ? zoneById(zone).speaker : 'mihalych'),
+    );
+  };
+  const onFallbackZone = (z: ZoneId) => {
+    setZone(z);
+    if (zone === z) openZoneDialog(z);
+  };
+
+  const node = dialog ? nodeFor(dialog.nodeId, ctx) : null;
+  const gateAway = node?.id === 'gate' && away && awayShown.current ? `${away} ` : '';
+  const loading = phase === '3d' && !engine;
+  const loadPct = Math.round(Math.max(loadSim, loadReal * 0.95 + 0.05) * 100);
+  const steps = orderProgress(ctx);
+  const zoneName = zone ? zoneById(zone).name : null;
+  // Time and weather only after mount: the server does not know the visitor's clock.
+  const chip =
+    phase === 'boot' ? 'Челны' : conditionsLine(now, point || overrides.weather ? weather : null);
+  const phaseLabel = PHASE_LABEL[dayPhase(sun.elevation, sun.azimuth)];
+
+  return (
+    <div
+      className="fixed inset-0 z-[80] overflow-hidden bg-slate-950 text-white"
+      data-testid="stroyka"
+    >
+      <style dangerouslySetInnerHTML={{ __html: BUBBLE_CSS }} />
+
+      {phase === '3d' && (
+        <StroykaWorld
+          mobile={mobile}
+          input={input}
+          telemetry={telemetry}
+          onEngine={setEngine}
+          onZone={setZone}
+          onProgress={setLoadReal}
+          onWantFree={() => setMode('free')}
+          onAdClick={(machine) => setOrder({ open: true, machine })}
+          onError={() => setPhase('fallback')}
+        />
+      )}
+      {phase === 'fallback' && (
+        <FallbackMap
+          active={zone}
+          progress={progress}
+          onZone={onFallbackZone}
+          reducedMotion={reduced}
+          onForce3d={hasWebGL() ? () => setPhase('3d') : undefined}
+        />
+      )}
+
+      {/* ---------------- top bar */}
+      <header className="pointer-events-none absolute inset-x-0 top-0 z-20 flex items-center gap-2 bg-gradient-to-b from-slate-950/90 to-transparent px-3 pb-6 pt-[max(0.5rem,env(safe-area-inset-top))] sm:px-4">
+        <a
+          href="/"
+          className="pointer-events-auto flex shrink-0 items-center gap-2 font-extrabold"
+          aria-label={`${SITE.name} — на главную`}
+        >
+          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-500 font-mono text-sm text-slate-950">
+            16
+          </span>
+          <span className="hidden sm:inline">{SITE.name}</span>
+        </a>
+        <span
+          data-testid="conditions"
+          className="pointer-events-auto hidden truncate rounded-full bg-slate-900/70 px-3 py-1 font-mono text-xs text-slate-200 md:inline"
+          title={phase === 'boot' ? undefined : phaseLabel}
+        >
+          {chip}
+        </span>
+        <div className="ml-auto flex shrink-0 items-center gap-2">
+          <a
+            href={SITE.phoneHref}
+            data-testid="call-btn"
+            className="pointer-events-auto rounded-full bg-white/10 px-3 py-2 text-sm font-semibold backdrop-blur hover:bg-white/20"
+          >
+            Позвонить
+          </a>
+          <button
+            type="button"
+            data-testid="skip-to-order"
+            onClick={skipToOrder}
+            className="pointer-events-auto rounded-full bg-amber-500 px-3 py-2 text-sm font-bold text-slate-950 shadow-lg shadow-amber-600/30 hover:bg-amber-400"
+          >
+            Пропустить → к заказу
+          </button>
+        </div>
+      </header>
+
+      {/* ---------------- mission card (left) and map (right) */}
+      {phase !== 'boot' && (
+        <div className="pointer-events-none absolute inset-x-0 top-[calc(3.5rem+env(safe-area-inset-top))] z-10 flex items-start justify-between gap-2 px-3 sm:px-4">
+          <div className="pointer-events-auto flex max-w-[62vw] flex-col gap-1.5 sm:max-w-sm">
+            <div className="rounded-xl bg-slate-950/70 px-3 py-2 backdrop-blur">
+              <div
+                data-testid="zone-title"
+                className="font-mono text-xs uppercase tracking-widest text-amber-400"
+              >
+                {zoneName
+                  ? `Зона: ${zoneName}`
+                  : mode === 'tour'
+                    ? 'Экскурсия по объекту'
+                    : 'Свободная прогулка'}
+              </div>
+              <div className="truncate text-xs text-slate-300 md:hidden">{chip}</div>
+              <div className="truncate text-xs text-slate-200" data-testid="progress-line">
+                {progressLine(progress)}
+              </div>
+              <div className="mt-1.5 flex items-center gap-2">
+                <button
+                  type="button"
+                  data-testid="order-btn"
+                  onClick={orderInWorld}
+                  className="rounded-full bg-amber-500 px-3 py-1 text-xs font-bold text-slate-950 hover:bg-amber-400"
+                >
+                  Оформить наряд
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCardOpen((v) => !v)}
+                  aria-expanded={cardOpen}
+                  className="flex items-center gap-1 text-[11px] text-slate-300"
+                  data-testid="order-card-toggle"
+                >
+                  Наряд
+                  <span className="flex gap-0.5" aria-hidden>
+                    {steps.steps.map((s) => (
+                      <span
+                        key={s.key}
+                        className={`h-2 w-2 rounded-sm ${s.done ? 'bg-emerald-400' : 'bg-slate-600'}`}
+                      />
+                    ))}
+                  </span>
+                  {steps.done}/5
+                </button>
+              </div>
+              {cardOpen && (
+                <dl
+                  className="mt-2 grid grid-cols-[auto,1fr] gap-x-2 gap-y-0.5 text-[11px]"
+                  data-testid="order-card"
+                >
+                  {steps.steps.map((s) => (
+                    <div key={s.key} className="contents">
+                      <dt className="text-slate-400">{s.label}</dt>
+                      <dd className={s.done ? 'text-emerald-300' : 'text-slate-500'}>
+                        {s.value ?? '—'}
+                      </dd>
+                    </div>
+                  ))}
+                </dl>
+              )}
+            </div>
+          </div>
+          {phase === '3d' && (
+            <div className="pointer-events-auto flex flex-col items-end gap-1.5">
+              <MiniMap telemetry={telemetry} active={zone} city={miniCity} />
+              <button
+                type="button"
+                data-testid="mode-toggle"
+                onClick={() => setMode((m) => (m === 'tour' ? 'free' : 'tour'))}
+                className="rounded-full bg-slate-950/75 px-3 py-1.5 text-xs font-semibold backdrop-blur hover:bg-slate-800"
+              >
+                {mode === 'tour' ? 'Свободная прогулка' : 'Экскурсия'}
+              </button>
+              {mode === 'free' && (
+                <button
+                  type="button"
+                  data-testid="view-toggle"
+                  onClick={() => setView((v) => (v === 'fp' ? 'tp' : 'fp'))}
+                  className="rounded-full bg-slate-950/75 px-3 py-1.5 text-xs font-semibold backdrop-blur hover:bg-slate-800"
+                >
+                  {view === 'fp' ? 'Вид: от 3-го лица' : 'Вид: от 1-го лица'}
+                </button>
+              )}
+              <button
+                type="button"
+                data-testid="radio-toggle"
+                onClick={() => setLogOpen((v) => !v)}
+                aria-expanded={logOpen}
+                className="rounded-full bg-emerald-900/70 px-3 py-1.5 text-xs font-semibold text-emerald-100 backdrop-blur"
+              >
+                Рация{radioLog.length ? ` · ${radioLog.length}` : ''}
+              </button>
+              {logOpen && (
+                <div
+                  data-testid="radio-log"
+                  className="w-64 max-w-[70vw] rounded-xl border border-emerald-400/30 bg-slate-950/85 p-2 font-mono text-[11px] text-emerald-100 backdrop-blur"
+                >
+                  {radioLog.length === 0 && (
+                    <p className="text-emerald-300/60">Эфир пока тихий… кшш</p>
+                  )}
+                  {radioLog.slice(-6).map((line) => (
+                    <p key={line.id}>
+                      <b>
+                        {line.speaker === 'worker'
+                          ? 'Сторож'
+                          : SPEAKERS[line.speaker as SpeakerId].name.split(' ').pop()}
+                        :
+                      </b>{' '}
+                      <Censored text={line.text} />
+                    </p>
+                  ))}
+                </div>
+              )}
+              <span className="text-right text-[10px] leading-tight text-white/60">
+                <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">
+                  © участники OpenStreetMap
+                </a>
+                <br />
+                Погода: MET Norway
+              </span>
+            </div>
+          )}
+        </div>
+      )}
+
+      {toast && (
+        <div
+          data-testid="toast"
+          className="pointer-events-none absolute left-1/2 top-[38%] z-30 w-[min(90vw,30rem)] -translate-x-1/2 rounded-xl bg-slate-950/85 px-4 py-3 text-center text-sm shadow-xl backdrop-blur"
+        >
+          {toast}
+        </div>
+      )}
+
+      {/* ---------------- bottom: dialogue, joystick, talk */}
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 flex flex-col gap-2 px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:px-4">
+        {phase === '3d' && mode === 'free' && !(dialog && mobile) && !order.open && (
+          <div className="flex items-end justify-between">
+            <Joystick input={input} />
+            {!dialog && zone && (
+              <button
+                type="button"
+                data-testid="talk-btn"
+                onClick={() => openZoneDialog(zone)}
+                className="pointer-events-auto mb-2 rounded-full bg-amber-500 px-4 py-2 text-sm font-bold text-slate-950"
+              >
+                Поговорить: {BANTER_NAMES[zoneById(zone).speaker]}
+              </button>
+            )}
+          </div>
+        )}
+        {phase !== '3d' || mode !== 'free'
+          ? !dialog &&
+            zone && (
+              <button
+                type="button"
+                data-testid="talk-btn"
+                onClick={() => openZoneDialog(zone)}
+                className="pointer-events-auto mx-auto mb-1 rounded-full bg-amber-500 px-4 py-2 text-sm font-bold text-slate-950"
+              >
+                Поговорить: {BANTER_NAMES[zoneById(zone).speaker]}
+              </button>
+            )
+          : null}
+        {dialog && node && (
+          <DialogueBox
+            key={dialog.key}
+            speaker={chat?.speaker ?? node.speaker}
+            text={chat ? chat.text : `${gateAway}${node.text}`}
+            chat={{
+              placeholder:
+                (chat?.speaker ?? node.speaker) === 'sveta'
+                  ? 'Напишите Свете…'
+                  : (chat?.speaker ?? node.speaker) === 'mihalych'
+                    ? 'Напишите прорабу…'
+                    : 'Напишите машинисту…',
+              quick: chat?.quick ?? [],
+              onSend: (text) => void onChatSend(text),
+              onQuick: (i) => chat?.quick[i] && onChatQuick(chat.quick[i]!),
+              phone: pendingPhone,
+              sending: phoneSending,
+              onSendPhone: () => void onSendPhone(),
+            }}
+            replies={node.replies}
+            radio={dialog.radio}
+            extra={extra}
+            instant={reduced}
+            skipTyping={skipTyping}
+            onReply={(reply) => onReply(reply)}
+            onClose={closeDialog}
+            form={
+              node.form && !chat
+                ? {
+                    message: orderSummary(ctx),
+                    needAddress: !ctx.address,
+                    onAddress: (address) => {
+                      const next = applyReply(ctxRef.current, 'Адрес', { address });
+                      setCtx(next);
+                    },
+                    onSubmit: () => setCtx((c) => ({ ...c, sent: true })),
+                  }
+                : null
+            }
+          />
+        )}
+      </div>
+
+      {/* ---------------- loading screen */}
+      {(loading || phase === 'boot') && (
+        <div
+          data-testid="loading"
+          className="absolute inset-0 z-40 flex flex-col items-center justify-center bg-black px-6 text-center"
+        >
+          <div className="absolute inset-x-0 top-0 h-[12vh] bg-black" />
+          <div className="font-mono text-xs uppercase tracking-[0.4em] text-amber-400">
+            {SITE.name} представляет
+          </div>
+          <h1 className="mt-3 text-3xl font-extrabold sm:text-5xl">Стройка</h1>
+          <p className="mt-2 text-sm text-slate-400">Пройдись по объекту · {chip}</p>
+          <div className="mt-6 h-1.5 w-64 overflow-hidden rounded-full bg-white/10">
+            <div className="h-full bg-amber-500 transition-all" style={{ width: `${loadPct}%` }} />
+          </div>
+          <div className="mt-2 font-mono text-xs text-slate-400" data-testid="loading-pct">
+            Заезжаем на объект… {loadPct}%
+          </div>
+          <button
+            type="button"
+            data-testid="loading-skip"
+            onClick={skipToOrder}
+            className="mt-8 rounded-full bg-amber-500 px-5 py-2.5 text-sm font-bold text-slate-950 hover:bg-amber-400"
+          >
+            Пропустить → к заказу
+          </button>
+        </div>
+      )}
+
+      <OrderPanel
+        open={order.open}
+        machine={order.machine}
+        ctx={ctx}
+        onClose={() => setOrder({ open: false })}
+        onSent={() => setCtx((c) => ({ ...c, sent: true }))}
+      />
+
+      {phase === 'fallback' && <div className="sr-only">{ZONES.map((z) => z.name).join(', ')}</div>}
+      {progressReady && phase === 'fallback' && (
+        <div className="hidden">
+          <Passport progress={progress} compact />
+        </div>
+      )}
+      {DIALOGUE.gate ? null : null}
+    </div>
+  );
+}

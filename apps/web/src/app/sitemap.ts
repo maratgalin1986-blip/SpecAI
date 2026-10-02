@@ -13,6 +13,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     ...LANDINGS.map((landing) => `/arenda/${landing.slug}`),
     '/equipment',
     '/map',
+    '/stroyka',
     '/agents',
     '/contacts',
     '/privacy',

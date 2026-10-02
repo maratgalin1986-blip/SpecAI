@@ -46,6 +46,19 @@ export default function CreditsPage() {
           </li>
         ))}
       </ul>
+      <p className="text-sm text-slate-600">
+        3D-стройка (/stroyka) нарисована процедурно, в кубическом стиле, без сторонних моделей.
+        Карта города под ней — данные{' '}
+        <a
+          href="https://www.openstreetmap.org/copyright"
+          target="_blank"
+          rel="noopener"
+          className="underline"
+        >
+          © участники OpenStreetMap
+        </a>{' '}
+        (лицензия ODbL). Погода — MET Norway (CC BY 4.0).
+      </p>
       <p className="text-sm text-slate-500">
         Mixkit:{' '}
         <a href="https://mixkit.co/license/" target="_blank" rel="noopener" className="underline">

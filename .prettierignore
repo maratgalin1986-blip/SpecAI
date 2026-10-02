@@ -9,3 +9,4 @@ apps/web/public/swe-worker-*.js
 apps/mobile/.expo
 apps/mobile/expo-env.d.ts
 apps/mobile/dist
+apps/web/public/stroyka/*.json

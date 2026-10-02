@@ -278,6 +278,12 @@ export default async function HomePage() {
               >
                 Подобрать технику
               </a>
+              <a
+                href="/stroyka"
+                className="inline-flex items-center gap-2 rounded-full px-6 py-3.5 text-base font-semibold text-amber-300 ring-1 ring-amber-400/40 backdrop-blur transition hover:bg-amber-400/10"
+              >
+                Войти на стройку ▶
+              </a>
             </div>
             <p className="float-in mt-5 text-sm text-slate-400" style={{ animationDelay: '480ms' }}>
               Свой парк · Свои машинисты · Без посредников · Работаем с НДС и ЭДО
