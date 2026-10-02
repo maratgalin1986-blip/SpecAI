@@ -36,6 +36,8 @@ import {
   type Speaker,
 } from '@/lib/soundVoices';
 
+const ARRIVAL_GAP_S = 20;
+
 const LEVEL = {
   master: 0.85,
   fx: 0.7,
@@ -65,6 +67,7 @@ export class SoundEngine {
   private bedsOn = false;
   private voice: Voice | null = null;
   private machineToken = 0;
+  private lastArrival = -Infinity;
   private voiceTimer = 0;
   private ducked = false;
   private speechToken = 0;
@@ -379,6 +382,10 @@ export class SoundEngine {
    */
   async setMachine(type: MachineType | null, { arrive = false, quiet = false } = {}) {
     const token = ++this.machineToken;
+    // The arrival cue (a rev, a winch…) at most every 20 s: the hero changes
+    // machines every few seconds and a rev each time gets tiring.
+    if (arrive && this.ctx.currentTime - this.lastArrival < ARRIVAL_GAP_S) arrive = false;
+    if (arrive) this.lastArrival = this.ctx.currentTime;
     const old = this.voice;
     if (old && old.type === type) {
       old.gain.gain.setTargetAtTime(this.machineLevel(type, quiet), this.ctx.currentTime, 0.4);
