@@ -6,6 +6,7 @@ import {
   isHttpsUrl,
   isSafeHttpUrl,
   maskContacts,
+  maskMessagesForAi,
   orderDescriptionFor,
   visibleBids,
 } from './privacy';
@@ -45,6 +46,30 @@ describe('maskContacts', () => {
       'Нужен экскаватор-погрузчик завтра, Набережные Челны, траншея 20 м, тел 89170001122';
     expect(maskContacts(text)).not.toContain('89170001122');
     expect(maskContacts(text)).toContain('траншея 20 м');
+  });
+});
+
+describe('maskMessagesForAi', () => {
+  it('hides phones and e-mails in every message before the AI provider', () => {
+    const masked = maskMessagesForAi([
+      { role: 'user' as const, content: 'Экскаватор на завтра, мой номер +7 900 000-00-00' },
+      { role: 'assistant' as const, content: 'Принял. Оставьте телефон.' },
+      { role: 'user' as const, content: 'Городской 8 (8552) 12-34-56, почта Ivan.Petrov@mail.ru' },
+      { role: 'user' as const, content: '+7 843 123 45 67, 89000000000' },
+    ]);
+    expect(masked.map((m) => m.role)).toEqual(['user', 'assistant', 'user', 'user']);
+    const text = masked.map((m) => m.content).join(' ');
+    expect(text).not.toMatch(/\d{3}[\s-]?\d{2}[\s-]?\d{2}/);
+    expect(text).not.toContain('@');
+    expect(masked[0]?.content).toBe(`Экскаватор на завтра, мой номер ${HIDDEN_CONTACT}`);
+  });
+
+  it('keeps dates, sums and sizes and does not mutate the input', () => {
+    const input = [
+      { role: 'user' as const, content: 'С 01.06.2028, 8 часов, 3500 ₽, яма 10x20 м' },
+    ];
+    expect(maskMessagesForAi(input)[0]?.content).toBe(input[0]?.content);
+    expect(maskMessagesForAi(input)[0]).not.toBe(input[0]);
   });
 });
 

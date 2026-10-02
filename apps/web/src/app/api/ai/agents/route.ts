@@ -9,8 +9,8 @@ import {
 import { routeToAgent, runAgent, type AgentToolHandlers } from '@specai/ai-service';
 import { getRequestUser } from '@/lib/requestUser';
 import { formatRate } from '@/lib/money';
-import { maskContacts } from '@/lib/privacy';
-import { checkRateLimit } from '@/lib/rateLimit';
+import { maskContacts, maskMessagesForAi } from '@/lib/privacy';
+import { LEAD_RATE_LIMIT, checkRateLimit } from '@/lib/rateLimit';
 import { PUBLIC_FLEET, isProvider } from '@/lib/fleet';
 import { notifyTelegram } from '@/lib/notify';
 import { acceptLead } from '@/lib/leadIntake';
@@ -100,6 +100,13 @@ export async function POST(request: NextRequest) {
         needConsent: true,
         phone: leadStep.phone,
       });
+    }
+    // The same per-IP lead limit as the site's forms (/api/leads).
+    if (!checkRateLimit(`leads:${ip}`, LEAD_RATE_LIMIT).ok) {
+      return NextResponse.json(
+        { agentId, reply: `Слишком много заявок. Позвоните нам: ${SITE.phone}.`, toolsUsed: [] },
+        { status: 429 },
+      );
     }
     const lead = chatLeadRecord({ phone: leadStep.phone, userName: user?.name, userTexts });
     // The same intake as the site's forms (lib/leadIntake.ts): database first,
@@ -435,10 +442,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(await offlineReply(fallbackAgent));
   }
 
+  // Phones and e-mails never reach the external AI provider (152-ФЗ): the
+  // callback lead above already used the raw number.
+  const aiMessages = maskMessagesForAi(messages);
   try {
     const agentId =
-      parsed.data.agentId === 'auto' ? await routeToAgent(messages) : parsed.data.agentId;
-    const result = await runAgent(agentId, messages, handlers, {
+      parsed.data.agentId === 'auto' ? await routeToAgent(aiMessages) : parsed.data.agentId;
+    const result = await runAgent(agentId, aiMessages, handlers, {
       today: new Date().toISOString().slice(0, 10),
       userDescription: user
         ? `${user.name ?? user.email} (role ${user.role})`

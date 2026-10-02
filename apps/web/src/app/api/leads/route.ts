@@ -5,13 +5,10 @@ import { notifyTelegram } from '@/lib/notify';
 import { acceptLead } from '@/lib/leadIntake';
 import { siteUrl } from '@/lib/siteUrl';
 import { PHOTO_AFTER_PATH } from '@/lib/photoShare';
-import { checkRateLimit } from '@/lib/rateLimit';
+import { LEAD_RATE_LIMIT, checkRateLimit } from '@/lib/rateLimit';
 import { SITE } from '@/lib/site';
 
 export const dynamic = 'force-dynamic';
-
-// Best-effort flood protection (per server instance).
-const LEAD_RATE_LIMIT = { limit: 5, windowMs: 10 * 60 * 1000 };
 
 export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => null);
