@@ -9,6 +9,7 @@ import {
   photoSubmissionError,
   photoTelegramText,
   type PhotoRole,
+  type PhotoStage,
 } from '@/lib/photoShare';
 
 // POST /api/photos (multipart): photos from a job site for the owner to
@@ -38,7 +39,9 @@ export async function POST(request: NextRequest) {
   const role = String(form.get('role') ?? '') as PhotoRole;
   const note = String(form.get('note') ?? '').trim() || undefined;
   const page = String(form.get('page') ?? '').slice(0, 200) || undefined;
+  const stage = (String(form.get('stage') ?? '') || undefined) as PhotoStage | undefined;
   const submission = {
+    stage,
     role,
     consent: form.get('consent') === '1',
     note,
@@ -63,7 +66,7 @@ export async function POST(request: NextRequest) {
   try {
     const urls = await Promise.all(
       files.map(async (file) => {
-        const blob = await put(`photos/pending/${role}/site.jpg`, file, {
+        const blob = await put(`photos/pending/${role}/${stage ?? 'any'}/site.jpg`, file, {
           access: 'public',
           addRandomSuffix: true,
           contentType: file.type,

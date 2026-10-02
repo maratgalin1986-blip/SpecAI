@@ -1,7 +1,13 @@
 'use client';
 
 import { useState } from 'react';
-import { PHOTO_MAX_FILES, PHOTO_NOTE_MAX, type PhotoRole } from '@/lib/photoShare';
+import {
+  PHOTO_MAX_FILES,
+  PHOTO_NOTE_MAX,
+  PHOTO_PROMPTS,
+  type PhotoRole,
+  type PhotoStage,
+} from '@/lib/photoShare';
 
 // A quiet, optional offer to share photos from the job site. Collapsed to one
 // line until the visitor opens it. Photos are shrunk in the browser (which
@@ -27,8 +33,20 @@ async function shrink(file: File): Promise<Blob> {
   }
 }
 
-export function PhotoShare({ role, dark = false }: { role: PhotoRole; dark?: boolean }) {
-  const [open, setOpen] = useState(false);
+export function PhotoShare({
+  role,
+  stage: initialStage = 'before',
+  dark = false,
+  startOpen = false,
+}: {
+  role: PhotoRole;
+  stage?: PhotoStage;
+  dark?: boolean;
+  startOpen?: boolean;
+}) {
+  const [open, setOpen] = useState(startOpen);
+  const [stage, setStage] = useState<PhotoStage>(initialStage);
+  const prompt = PHOTO_PROMPTS[role][stage];
   const [files, setFiles] = useState<File[]>([]);
   const [note, setNote] = useState('');
   const [consent, setConsent] = useState(false);
@@ -55,9 +73,7 @@ export function PhotoShare({ role, dark = false }: { role: PhotoRole; dark?: boo
         onClick={() => setOpen(true)}
         className={`text-left text-sm underline decoration-dotted underline-offset-4 ${muted} hover:text-amber-500`}
       >
-        {role === 'client'
-          ? '📷 Есть фото объекта? Поделитесь — по желанию'
-          : '📷 Поделиться фото с объекта'}
+        {prompt.link}
       </button>
     );
   }
@@ -69,6 +85,7 @@ export function PhotoShare({ role, dark = false }: { role: PhotoRole; dark?: boo
     const form = new FormData();
     for (const file of files) form.append('files', await shrink(file), 'site.jpg');
     form.append('role', role);
+    form.append('stage', stage);
     form.append('consent', consent ? '1' : '0');
     if (role === 'client' && note.trim()) form.append('note', note.trim());
     form.append('page', window.location.pathname);
@@ -88,12 +105,25 @@ export function PhotoShare({ role, dark = false }: { role: PhotoRole; dark?: boo
 
   return (
     <form onSubmit={submit} className="flex flex-col gap-3">
-      <p className={`text-sm ${muted}`}>
-        {role === 'client'
-          ? 'Будем рады фото вашего объекта — до или после работы. С вашего согласия покажем его на сайте, без имён и телефонов.'
-          : 'Фото техники в работе на объекте. Покажем на сайте после проверки.'}{' '}
-        Лучше без лиц и номеров машин.
-      </p>
+      {role === 'executor' && (
+        <div className="flex gap-2 text-sm" role="radiogroup" aria-label="Когда снято">
+          {(['before', 'after'] as const).map((value) => (
+            <button
+              key={value}
+              type="button"
+              role="radio"
+              aria-checked={stage === value}
+              onClick={() => setStage(value)}
+              className={`rounded-full px-3 py-1 ${
+                stage === value ? 'bg-amber-500 text-slate-950' : `ring-1 ring-slate-300 ${muted}`
+              }`}
+            >
+              {value === 'before' ? 'До работ' : 'После работ'}
+            </button>
+          ))}
+        </div>
+      )}
+      <p className={`text-sm ${muted}`}>{prompt.text} Лучше без лиц и номеров машин.</p>
       <input
         type="file"
         accept="image/jpeg,image/png,image/webp"
