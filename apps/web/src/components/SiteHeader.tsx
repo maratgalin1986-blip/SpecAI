@@ -73,9 +73,14 @@ export function SiteHeader() {
           className="flex shrink-0 items-center gap-2 text-lg font-extrabold tracking-tight text-slate-900"
         >
           <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-500 font-mono text-sm text-slate-950">
-            16
+            ИИ
           </span>
-          {SITE.name}
+          <span className="flex flex-col leading-none">
+            {SITE.platform}
+            <span className="mt-0.5 text-[0.65rem] font-semibold tracking-normal text-amber-700">
+              от {SITE.name}
+            </span>
+          </span>
         </a>
 
         <nav className="hidden items-center gap-5 text-sm font-medium text-slate-600 lg:flex">
@@ -164,6 +169,13 @@ export function SiteHeader() {
             className="rounded-md bg-amber-100 px-2 py-2 font-semibold text-amber-800"
           >
             🧮 Рассчитать смету
+          </a>
+          <a
+            href="/smeta?mode=snab"
+            onClick={() => setIsMenuOpen(false)}
+            className="rounded-md bg-amber-50 px-2 py-2 font-semibold text-amber-800"
+          >
+            📦 Смета для снабженца
           </a>
           <div className="px-2 py-2">
             <AuthStatus />
