@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import { ConditionsPreview } from '@/components/ConditionsPreview';
+import { PointPicker } from '@/components/PointPicker';
+import { pointAddress, type MapPoint } from '@/lib/mapPoint';
 import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { Button } from '@specai/ui';
@@ -28,6 +30,7 @@ export function NewOrderForm({ provider }: { provider?: { name: string } | null 
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [address, setAddress] = useState('');
+  const [point, setPoint] = useState<MapPoint | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -85,6 +88,7 @@ export function NewOrderForm({ provider }: { provider?: { name: string } | null 
     setStartDate('');
     setEndDate('');
     setAddress('');
+    setPoint(null);
     router.refresh();
   }
 
@@ -157,6 +161,19 @@ export function NewOrderForm({ provider }: { provider?: { name: string } | null 
           По адресу покажем погоду на день работ и вид места сверху.
         </span>
       </label>
+      <PointPicker
+        value={point}
+        onPick={(next) => {
+          setPoint(next);
+          // The street part stays as a label; the point is what gets located.
+          const street = (address.split(' · Точка на карте:')[0] ?? '')
+            .replace(/^Точка на карте:.*$/, '')
+            .trim();
+          setAddress(
+            next ? (street ? `${street} · ${pointAddress(next)}` : pointAddress(next)) : street,
+          );
+        }}
+      />
 
       <ConditionsPreview
         date={startDate}
