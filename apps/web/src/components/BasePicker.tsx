@@ -162,7 +162,7 @@ export function BasePicker({
       />
       <p className="text-xs text-slate-500">
         {value.lat !== null && value.lon !== null
-          ? `Точка: ${formatCoords(value.lat, value.lon)}. Значок можно перетащить.`
+          ? `Точка: ${formatCoords(value.lat, value.lon)} — значок можно перетащить.`
           : 'Нажмите «Найти» или просто нажмите на карту там, где стоит техника.'}
       </p>
       {status && <p className="text-xs text-amber-800">{status}</p>}

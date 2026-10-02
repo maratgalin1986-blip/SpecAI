@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { signIn } from 'next-auth/react';
 import { Button, Card } from '@specai/ui';
 import { CinemaBackdrop } from '@/components/CinemaHero';
@@ -10,12 +10,13 @@ type AccountType = 'CUSTOMER' | 'PROVIDER';
 
 export default function RegisterPage() {
   // /register?type=provider opens the provider form directly.
-  const [accountType, setAccountType] = useState<AccountType>(() =>
-    typeof window !== 'undefined' &&
-    new URLSearchParams(window.location.search).get('type') === 'provider'
-      ? 'PROVIDER'
-      : 'CUSTOMER',
-  );
+  // Read after mounting, so the server and the first client render match.
+  const [accountType, setAccountType] = useState<AccountType>('CUSTOMER');
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get('type') === 'provider') {
+      setAccountType('PROVIDER');
+    }
+  }, []);
   const [companyName, setCompanyName] = useState('');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');

@@ -10,7 +10,7 @@ import { formatMoney, formatRate } from '@/lib/money';
 import { SITE } from '@/lib/site';
 import { Pagination } from '@/components/Pagination';
 import { parsePage, totalPagesFor } from '@/lib/pagination';
-import { isProvider } from '@/lib/fleet';
+import { isHouseManager, isProvider } from '@/lib/fleet';
 import { MyMapPin } from '@/components/MyMapPin';
 import { getBlobToken } from '@/lib/blob';
 import { isDisplayableImage } from '@/lib/providerMap';
@@ -105,7 +105,9 @@ export default async function ProviderPage({
 
   return (
     <div className="flex flex-col gap-8">
-      <h1 className="text-2xl font-bold">Кабинет парка СпецПласт16</h1>
+      <h1 className="text-2xl font-bold">
+        {isHouseManager(session.user) ? 'Кабинет парка СпецПласт16' : 'Кабинет поставщика'}
+      </h1>
 
       {pinCompany && (
         <section id="map-pin" className="flex flex-col gap-3">

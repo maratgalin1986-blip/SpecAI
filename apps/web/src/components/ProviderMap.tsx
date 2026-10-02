@@ -108,7 +108,7 @@ export function ProviderMap({ pins, embed = false }: { pins: ProviderMapPin[]; e
         )}
       </div>
 
-      <section className="flex flex-col gap-3">
+      <section className={`flex flex-col gap-3 ${embed ? 'px-4' : ''}`}>
         <h2 className="text-lg font-semibold">
           Исполнители на карте <span className="text-slate-400">· {pins.length}</span>
         </h2>
