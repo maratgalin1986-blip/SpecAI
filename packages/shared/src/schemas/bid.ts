@@ -4,7 +4,7 @@ export const bidStatusSchema = z.enum(['PENDING', 'ACCEPTED', 'REJECTED']);
 export type BidStatus = z.infer<typeof bidStatusSchema>;
 
 export const createBidSchema = z.object({
-  orderId: z.string().cuid(),
+  orderId: z.string().min(1).max(64),
   // Equipment ids are not always cuids: the owner's fleet uses "sp16-*".
   equipmentId: z.string().min(1).max(64),
   price: z.number().positive(),

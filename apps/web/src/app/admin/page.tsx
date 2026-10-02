@@ -5,6 +5,7 @@ import { AdminLogin, AdminLogout } from '@/components/AdminLogin';
 import { LeadOutcome } from '@/components/LeadOutcome';
 import { LeadStatusSelect } from '@/components/LeadStatusSelect';
 import { LinkOwnerForm } from '@/components/LinkOwnerForm';
+import { CommentModerationButtons } from '@/components/Comments';
 import { ModerationButtons, CopyField, TelegramSetupButton } from '@/components/AdminIntegrations';
 import { headers } from 'next/headers';
 import { inboundApiToken, telegramWebhookSecret, whatsappWebhookToken } from '@/lib/integrations';
@@ -66,6 +67,26 @@ export default async function AdminPage() {
       _count: true,
     }),
   ]);
+  const pendingComments = await prisma.comment.findMany({
+    where: { status: 'PENDING' },
+    include: {
+      author: { select: { name: true, email: true } },
+      targetCompany: { select: { name: true } },
+      targetUser: { select: { name: true } },
+    },
+    orderBy: { createdAt: 'asc' },
+    take: 100,
+  });
+  const pendingReviews = await prisma.review.findMany({
+    where: { textStatus: 'PENDING', comment: { not: null } },
+    include: {
+      author: { select: { name: true, email: true } },
+      company: { select: { name: true } },
+      equipment: { select: { name: true } },
+    },
+    orderBy: { createdAt: 'asc' },
+    take: 100,
+  });
   const origin = siteOrigin();
   const tgSecretReady = Boolean(telegramWebhookSecret());
   const whatsappToken = whatsappWebhookToken();
@@ -191,6 +212,64 @@ export default async function AdminPage() {
               </p>
             </div>
             <ModerationButtons orderId={order.id} />
+          </div>
+        ))}
+      </Card>
+
+      <Card className="flex flex-col gap-3" id="comments">
+        <div>
+          <h2 className="font-semibold">
+            Комментарии и отзывы на модерации{' '}
+            <span className="text-amber-700">
+              ({pendingComments.length + pendingReviews.length})
+            </span>
+          </h2>
+          <p className="text-sm text-slate-600">
+            Заказчики пишут об исполнителях, исполнители — о заказчиках. На сайте и в приложении
+            видны только опубликованные; телефоны, e-mail и ссылки скрыты автоматически. У отзывов
+            звёзды видны сразу, текст — после публикации.
+          </p>
+        </div>
+        {pendingComments.length === 0 && pendingReviews.length === 0 && (
+          <p className="text-sm text-slate-500">Новых комментариев и отзывов нет.</p>
+        )}
+        {pendingReviews.map((review) => (
+          <div
+            key={review.id}
+            className="flex flex-col gap-2 border-t border-slate-100 pt-3 sm:flex-row sm:justify-between"
+          >
+            <div className="min-w-0 text-sm">
+              <p className="text-amber-500">
+                {'★'.repeat(review.rating)}
+                {'☆'.repeat(5 - review.rating)}{' '}
+                <span className="text-xs font-semibold text-slate-600">Отзыв</span>
+              </p>
+              <p className="whitespace-pre-wrap break-words">{review.comment}</p>
+              <p className="mt-1 text-xs text-slate-500">
+                {review.author.name} ({review.author.email}) → «{review.company.name}»
+                {review.equipment ? `, ${review.equipment.name}` : ''} ·{' '}
+                {review.createdAt.toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' })}
+              </p>
+            </div>
+            <CommentModerationButtons commentId={review.id} kind="reviews" />
+          </div>
+        ))}
+        {pendingComments.map((comment) => (
+          <div
+            key={comment.id}
+            className="flex flex-col gap-2 border-t border-slate-100 pt-3 sm:flex-row sm:justify-between"
+          >
+            <div className="min-w-0 text-sm">
+              <p className="whitespace-pre-wrap break-words">{comment.text}</p>
+              <p className="mt-1 text-xs text-slate-500">
+                {comment.author.name} ({comment.author.email}) →{' '}
+                {comment.targetCompany
+                  ? `исполнитель «${comment.targetCompany.name}»`
+                  : `заказчик ${comment.targetUser?.name ?? ''}`}{' '}
+                · {comment.createdAt.toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' })}
+              </p>
+            </div>
+            <CommentModerationButtons commentId={comment.id} />
           </div>
         ))}
       </Card>

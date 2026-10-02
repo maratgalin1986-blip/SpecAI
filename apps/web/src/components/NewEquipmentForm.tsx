@@ -4,6 +4,14 @@ import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@specai/ui';
 import { suggestShiftRate } from '@/lib/shiftRate';
+import {
+  EQUIPMENT_STATUS_OPTIONS,
+  parsePrice,
+  rowsFromSpecs,
+  specsFromRows,
+  type EquipmentStatusValue,
+  type SpecRow,
+} from '@/lib/equipmentEdit';
 
 interface Category {
   id: string;
@@ -30,20 +38,60 @@ function formatSize(bytes: number) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} МБ`;
 }
 
+/** A listing being edited (PATCH /api/equipment/[id]); without it the form adds a new one. */
+export interface EditableEquipment {
+  id: string;
+  name: string;
+  categoryId: string;
+  make: string | null;
+  model: string | null;
+  year: number | null;
+  status: EquipmentStatusValue;
+  dailyRate: string;
+  hourlyRate: string | null;
+  description: string | null;
+  specs: unknown;
+  imageUrls: string[];
+}
+
 export function NewEquipmentForm() {
+  return <EquipmentForm />;
+}
+
+export function EquipmentForm({
+  initial,
+  onDone,
+}: {
+  initial?: EditableEquipment;
+  onDone?: () => void;
+}) {
   const router = useRouter();
+  const editing = Boolean(initial);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [categories, setCategories] = useState<Category[]>([]);
-  const [name, setName] = useState('');
-  const [categoryId, setCategoryId] = useState('');
-  const [dailyRate, setDailyRate] = useState('');
-  const [hourlyRate, setHourlyRate] = useState('');
+  const [name, setName] = useState(initial?.name ?? '');
+  const [categoryId, setCategoryId] = useState(initial?.categoryId ?? '');
+  const [make, setMake] = useState(initial?.make ?? '');
+  const [model, setModel] = useState(initial?.model ?? '');
+  const [year, setYear] = useState(initial?.year ? String(initial.year) : '');
+  const [status, setStatus] = useState<EquipmentStatusValue>(initial?.status ?? 'AVAILABLE');
+  const [dailyRate, setDailyRate] = useState(initial ? String(Number(initial.dailyRate)) : '');
+  const [hourlyRate, setHourlyRate] = useState(
+    initial?.hourlyRate ? String(Number(initial.hourlyRate)) : '',
+  );
   // True once the user typed a shift price themselves; stops the hourly × 8 suggestion.
-  const [dailyTouched, setDailyTouched] = useState(false);
-  const [description, setDescription] = useState('');
+  const [dailyTouched, setDailyTouched] = useState(editing);
+  const [description, setDescription] = useState(initial?.description ?? '');
   const [specSheetText, setSpecSheetText] = useState('');
-  const [specs, setSpecs] = useState<Record<string, unknown> | null>(null);
-  const [files, setFiles] = useState<UploadedFile[]>([]);
+  const [specRows, setSpecRows] = useState<SpecRow[]>(() => rowsFromSpecs(initial?.specs));
+  const [files, setFiles] = useState<UploadedFile[]>(() =>
+    (initial?.imageUrls ?? []).map((url, index) => ({
+      url,
+      contentType: 'image/jpeg',
+      size: 0,
+      name: `Фото ${index + 1}`,
+    })),
+  );
   const [selectedFileUrl, setSelectedFileUrl] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [isExtracting, setIsExtracting] = useState(false);
@@ -63,10 +111,26 @@ export function NewEquipmentForm() {
     year?: number;
     specs?: Record<string, unknown>;
   }) {
-    setSpecs(data.specs ?? null);
+    const extracted = rowsFromSpecs(data.specs);
+    if (extracted.length > 0) {
+      // Keep what the user typed by hand; replace values of the same parameter.
+      setSpecRows((prev) => [
+        ...prev.filter(
+          (row) => row.key.trim() && !extracted.some((item) => item.key === row.key.trim()),
+        ),
+        ...extracted,
+      ]);
+    }
+    if (data.make && !make.trim()) setMake(data.make);
+    if (data.model && !model.trim()) setModel(data.model);
+    if (data.year && !year.trim()) setYear(String(data.year));
     if (!name.trim() && (data.make || data.model)) {
       setName([data.make, data.model].filter(Boolean).join(' '));
     }
+  }
+
+  function updateSpecRow(index: number, patch: Partial<SpecRow>) {
+    setSpecRows((prev) => prev.map((row, i) => (i === index ? { ...row, ...patch } : row)));
   }
 
   async function requestExtraction(body: Record<string, string>) {
@@ -169,40 +233,90 @@ export function NewEquipmentForm() {
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
     setError(null);
+    const shift = parsePrice(dailyRate);
+    const hourly = parsePrice(hourlyRate);
+    if (shift === null || Number.isNaN(shift)) {
+      setError('Укажите цену за смену 8 ч — число больше нуля');
+      return;
+    }
+    if (Number.isNaN(hourly)) {
+      setError('Цена за час должна быть числом больше нуля');
+      return;
+    }
+    const yearNumber = year.trim() ? Number(year) : null;
+    if (yearNumber !== null && (!Number.isInteger(yearNumber) || yearNumber < 1950)) {
+      setError('Год выпуска — целое число не меньше 1950');
+      return;
+    }
+    const specs = specsFromRows(specRows);
+    const imageUrls = files.filter(isImage).map((file) => file.url);
     setIsSubmitting(true);
 
     try {
-      const response = await fetch('/api/equipment', {
-        method: 'POST',
+      const response = await fetch(initial ? `/api/equipment/${initial.id}` : '/api/equipment', {
+        method: initial ? 'PATCH' : 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name,
-          categoryId,
-          dailyRate: Number(dailyRate),
-          hourlyRate: hourlyRate ? Number(hourlyRate) : undefined,
-          description: description || undefined,
-          specs: specs ?? undefined,
-          imageUrls: files.filter(isImage).map((file) => file.url),
-        }),
+        body: JSON.stringify(
+          initial
+            ? {
+                name,
+                categoryId,
+                status,
+                make: make.trim() || null,
+                model: model.trim() || null,
+                year: yearNumber,
+                dailyRate: shift,
+                hourlyRate: hourly,
+                description: description.trim() || null,
+                specs: specs ?? null,
+                imageUrls,
+              }
+            : {
+                name,
+                categoryId,
+                status,
+                make: make.trim() || undefined,
+                model: model.trim() || undefined,
+                year: yearNumber ?? undefined,
+                dailyRate: shift,
+                hourlyRate: hourly ?? undefined,
+                description: description.trim() || undefined,
+                specs,
+                imageUrls,
+              },
+        ),
       });
 
       if (!response.ok) {
         const body = await response.json().catch(() => null);
-        setError(typeof body?.error === 'string' ? body.error : 'Не удалось добавить технику');
+        setError(
+          typeof body?.error === 'string'
+            ? body.error
+            : initial
+              ? 'Не удалось сохранить изменения'
+              : 'Не удалось добавить технику',
+        );
         return;
       }
 
-      setName('');
-      setCategoryId('');
-      setDailyRate('');
-      setHourlyRate('');
-      setDailyTouched(false);
-      setDescription('');
-      setSpecSheetText('');
-      setSpecs(null);
-      setFiles([]);
-      setSelectedFileUrl(null);
+      if (!initial) {
+        setName('');
+        setCategoryId('');
+        setMake('');
+        setModel('');
+        setYear('');
+        setStatus('AVAILABLE');
+        setDailyRate('');
+        setHourlyRate('');
+        setDailyTouched(false);
+        setDescription('');
+        setSpecSheetText('');
+        setSpecRows([]);
+        setFiles([]);
+        setSelectedFileUrl(null);
+      }
       router.refresh();
+      onDone?.();
     } catch {
       setError('Не удалось связаться с сервером. Проверьте соединение и попробуйте ещё раз');
     } finally {
@@ -243,6 +357,42 @@ export function NewEquipmentForm() {
         </select>
       </label>
 
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 [&>*]:min-w-0">
+        <label className="flex flex-col gap-1 text-sm">
+          Марка
+          <input
+            value={make}
+            onChange={(e) => setMake(e.target.value)}
+            maxLength={100}
+            placeholder="Caterpillar"
+            className="min-w-0 rounded-md border border-slate-300 px-3 py-2"
+          />
+        </label>
+        <label className="flex flex-col gap-1 text-sm">
+          Модель
+          <input
+            value={model}
+            onChange={(e) => setModel(e.target.value)}
+            maxLength={100}
+            placeholder="320"
+            className="min-w-0 rounded-md border border-slate-300 px-3 py-2"
+          />
+        </label>
+        <label className="flex flex-col gap-1 text-sm">
+          Год выпуска
+          <input
+            type="number"
+            inputMode="numeric"
+            min={1950}
+            max={new Date().getFullYear() + 1}
+            value={year}
+            onChange={(e) => setYear(e.target.value)}
+            placeholder="2020"
+            className="min-w-0 rounded-md border border-slate-300 px-3 py-2"
+          />
+        </label>
+      </div>
+
       <label className="flex flex-col gap-1 text-sm">
         Цена за час, ₽ <span className="text-slate-400">(необязательно)</span>
         <input
@@ -261,7 +411,7 @@ export function NewEquipmentForm() {
       </label>
 
       <label className="flex flex-col gap-1 text-sm">
-        Цена за смену / сутки, ₽
+        Цена за смену 8 ч, ₽
         <input
           type="number"
           required
@@ -285,6 +435,26 @@ export function NewEquipmentForm() {
           onChange={(e) => setDescription(e.target.value)}
           className="rounded-md border border-slate-300 px-3 py-2"
         />
+      </label>
+
+      <label className="flex flex-col gap-1 text-sm">
+        Статус
+        <select
+          value={status}
+          onChange={(e) => setStatus(e.target.value as EquipmentStatusValue)}
+          className="rounded-md border border-slate-300 px-3 py-2"
+        >
+          {EQUIPMENT_STATUS_OPTIONS.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+        {status === 'RETIRED' && (
+          <span className="text-xs text-slate-500">
+            Машина не видна в каталоге и на карте, пока вы не вернёте другой статус.
+          </span>
+        )}
       </label>
 
       <div className="rounded-md border border-dashed border-slate-300 p-3">
@@ -333,7 +503,7 @@ export function NewEquipmentForm() {
                   <span className="truncate" title={file.name}>
                     {file.name}
                   </span>
-                  <span className="text-slate-500">{formatSize(file.size)}</span>
+                  {file.size > 0 && <span className="text-slate-500">{formatSize(file.size)}</span>}
                 </label>
                 <button
                   type="button"
@@ -384,22 +554,69 @@ export function NewEquipmentForm() {
         >
           {isExtracting ? 'Извлекаем…' : 'Извлечь характеристики через ИИ'}
         </Button>
-        {specs && (
-          <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
-            {Object.entries(specs).map(([key, value]) => (
-              <div key={key} className="contents">
-                <dt className="text-slate-500">{key}</dt>
-                <dd>{String(value)}</dd>
-              </div>
-            ))}
-          </dl>
-        )}
       </div>
 
+      <fieldset className="flex flex-col gap-2 rounded-md border border-slate-200 p-3">
+        <legend className="px-1 text-sm font-medium">Характеристики</legend>
+        {specRows.length === 0 && (
+          <p className="text-xs text-slate-500">
+            Заполните вручную или извлеките из фото, PDF или текста — список можно править.
+          </p>
+        )}
+        {specRows.map((row, index) => (
+          <div key={index} className="flex items-center gap-2">
+            <input
+              value={row.key}
+              onChange={(e) => updateSpecRow(index, { key: e.target.value })}
+              placeholder="Параметр"
+              aria-label="Параметр"
+              maxLength={100}
+              className="min-w-0 flex-1 rounded-md border border-slate-300 px-3 py-2 text-sm"
+            />
+            <input
+              value={row.value}
+              onChange={(e) => updateSpecRow(index, { value: e.target.value })}
+              placeholder="Значение"
+              aria-label="Значение"
+              maxLength={300}
+              className="min-w-0 flex-1 rounded-md border border-slate-300 px-3 py-2 text-sm"
+            />
+            <button
+              type="button"
+              onClick={() => setSpecRows((prev) => prev.filter((_, i) => i !== index))}
+              aria-label="Удалить характеристику"
+              className="shrink-0 px-2 text-xl leading-none text-slate-400 hover:text-red-600"
+            >
+              ×
+            </button>
+          </div>
+        ))}
+        <button
+          type="button"
+          onClick={() => setSpecRows((prev) => [...prev, { key: '', value: '' }])}
+          className="self-start text-sm font-medium text-amber-700 hover:underline"
+        >
+          + Добавить характеристику
+        </button>
+      </fieldset>
+
       {error && <p className="text-sm text-red-600">{error}</p>}
-      <Button type="submit" disabled={isSubmitting || isUploading}>
-        {isSubmitting ? 'Добавление…' : 'Добавить технику'}
-      </Button>
+      <div className="flex flex-wrap gap-2">
+        <Button type="submit" disabled={isSubmitting || isUploading}>
+          {editing
+            ? isSubmitting
+              ? 'Сохраняем…'
+              : 'Сохранить'
+            : isSubmitting
+              ? 'Добавление…'
+              : 'Добавить технику'}
+        </Button>
+        {editing && onDone && (
+          <Button type="button" variant="secondary" onClick={onDone}>
+            Отмена
+          </Button>
+        )}
+      </div>
     </form>
   );
 }

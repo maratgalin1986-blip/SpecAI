@@ -39,6 +39,19 @@ function extractError(body: unknown, fallback: string): string {
   return fallback;
 }
 
+/**
+ * Ссылка на картинку для <Image>: пути сайта («/images/…») — от API_URL,
+ * https — как есть; всё остальное (javascript:, data:, http) — null.
+ */
+export function imageUri(url: string | null | undefined): string | null {
+  if (!url) return null;
+  if (url.startsWith('/') && !url.startsWith('//')) return `${API_URL}${url}`;
+  if (/^https:\/\//i.test(url)) return url;
+  // Локальный сервер разработки отдаёт фото по http.
+  if (__DEV__ && url.startsWith(`${API_URL}/`)) return url;
+  return null;
+}
+
 export async function getToken(): Promise<string | null> {
   return getItem(STORAGE_KEYS.token);
 }
@@ -55,6 +68,8 @@ interface RequestOptions {
   anonymous?: boolean;
 }
 
+const REQUEST_TIMEOUT_MS = 20_000;
+
 /** fetch к API с JSON-телом и Bearer-токеном из SecureStore. */
 export async function apiFetch<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const headers: Record<string, string> = { Accept: 'application/json' };
@@ -62,14 +77,25 @@ export async function apiFetch<T>(path: string, options: RequestOptions = {}): P
   if (!options.anonymous) Object.assign(headers, await authHeaders());
 
   let response: Response;
+  // Without a timeout a hung network leaves the screen loading forever.
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
   try {
     response = await fetch(`${API_URL}${path}`, {
       method: options.method ?? 'GET',
       headers,
       body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
+      signal: controller.signal,
     });
   } catch {
-    throw new ApiError(0, 'Нет соединения с сервером');
+    throw new ApiError(
+      0,
+      controller.signal.aborted
+        ? 'Сервер долго не отвечает, попробуйте ещё раз'
+        : 'Нет соединения с сервером',
+    );
+  } finally {
+    clearTimeout(timer);
   }
 
   const text = await response.text();
@@ -125,6 +151,10 @@ export interface Equipment {
   specs: Record<string, unknown> | null;
   description: string | null;
   imageUrls: string[];
+  /** Фото для карточки: своё или пример по типу машины (абсолютная ссылка). */
+  photoUrl?: string | null;
+  /** true — «Фото для примера», не эта машина. */
+  photoIsExample?: boolean;
   category: { id: string; name: string };
   company: { id: string; name: string };
   location: { city: string; address?: string | null } | null;
@@ -152,7 +182,9 @@ export interface Booking {
   depositPaid: boolean;
   notes: string | null;
   createdAt: string;
-  equipment: { id: string; name: string; imageUrls?: string[] };
+  equipment: { id: string; name: string; imageUrls?: string[]; companyId?: string };
+  /** Исполнитель: название всегда, телефон — после подтверждения брони. */
+  provider?: { name: string; phone: string | null };
   payment?: { status: PaymentStatus; refundRequired?: boolean } | null;
   review?: { id: string; rating: number } | null;
 }
@@ -189,15 +221,26 @@ export interface Order {
   desiredEndDate: string;
   status: OrderStatus;
   createdAt: string;
-  customerId: string;
+  /** Только у автора заявки: исполнителю id заказчика не отдаётся. */
+  customerId?: string;
   category: Category | null;
-  customer?: { id: string; name: string };
+  /** Исполнитель видит заказчика как «Анна П.». */
+  customer?: { id?: string; name: string } | null;
   bids: Bid[];
 }
 
-/** Бронирование техники поставщика (GET /api/bookings?as=provider). */
+/**
+ * Бронирование техники поставщика (GET /api/bookings?as=provider): заказчик как
+ * «Анна П.»; телефон и e-mail — только после подтверждения брони.
+ */
 export interface ProviderBooking extends Booking {
-  customer: { id: string; name: string; email: string };
+  customer: {
+    id: string;
+    name: string;
+    email: string | null;
+    phone?: string | null;
+    contactsVisible?: boolean;
+  };
 }
 
 export interface UploadedFile {
@@ -226,6 +269,22 @@ export interface CreateEquipmentInput {
   description?: string;
   specs?: Record<string, unknown>;
   imageUrls: string[];
+  status?: EquipmentStatus;
+}
+
+/** PATCH /api/equipment/[id]: null очищает необязательное поле. */
+export interface UpdateEquipmentInput {
+  name?: string;
+  categoryId?: string;
+  make?: string | null;
+  model?: string | null;
+  year?: number | null;
+  status?: EquipmentStatus;
+  dailyRate?: number;
+  hourlyRate?: number | null;
+  description?: string | null;
+  specs?: Record<string, unknown> | null;
+  imageUrls?: string[];
 }
 
 /** Заявка на обратный звонок (POST /api/leads, как форма CallbackForm на сайте). */
@@ -289,10 +348,22 @@ export function createLead(input: CreateLeadInput) {
   });
 }
 
-export function register(input: { name: string; email: string; password: string; phone?: string }) {
+export type RegisterInput = {
+  name: string;
+  email: string;
+  password: string;
+  phone?: string;
+  consent: true;
+} & (
+  | { accountType: 'CUSTOMER' }
+  | { accountType: 'PROVIDER'; companyName: string; baseAddress: string }
+);
+
+/** Регистрация заказчика или исполнителя (с компанией и адресом базы). */
+export function register(input: RegisterInput) {
   return apiFetch<{ id: string; email: string }>('/api/auth/register', {
     method: 'POST',
-    body: { accountType: 'CUSTOMER', ...input },
+    body: input,
     anonymous: true,
   });
 }
@@ -341,6 +412,14 @@ export function createOrder(input: {
   return apiFetch<{ order: Order }>('/api/orders', { method: 'POST', body: input });
 }
 
+/** Заказчик отменяет свою открытую заявку. */
+export function cancelOrder(id: string) {
+  return apiFetch<{ ok: boolean; message?: string }>(`/api/orders/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    body: { status: 'CANCELLED' },
+  });
+}
+
 export function acceptBid(bidId: string) {
   return apiFetch<{ booking: Booking }>(`/api/bids/${encodeURIComponent(bidId)}/accept`, {
     method: 'POST',
@@ -362,6 +441,14 @@ export function fetchConversation(conversationId: string) {
   return apiFetch<{ conversationId: string; messages: ChatMessage[] }>(
     `/api/ai/chat?conversationId=${encodeURIComponent(conversationId)}`,
   );
+}
+
+/** Диспетчер сайта (как виджет чата на сайте): история диалога → ответ. */
+export function sendAgentMessage(messages: { role: 'user' | 'assistant'; content: string }[]) {
+  return apiFetch<{ agentId: string; reply: string; offline?: boolean }>('/api/ai/agents', {
+    method: 'POST',
+    body: { agentId: 'auto', messages },
+  });
 }
 
 // ---- Сторона поставщика (роль PROVIDER_ADMIN) ----
@@ -387,6 +474,13 @@ export function updateBookingStatus(id: string, status: BookingStatus) {
 
 export function createEquipment(input: CreateEquipmentInput) {
   return apiFetch<{ equipment: Equipment }>('/api/equipment', { method: 'POST', body: input });
+}
+
+export function updateEquipment(id: string, input: UpdateEquipmentInput) {
+  return apiFetch<{ equipment: Equipment; message?: string }>(
+    `/api/equipment/${encodeURIComponent(id)}`,
+    { method: 'PATCH', body: input },
+  );
 }
 
 export function extractSpecsFromFile(fileUrl: string) {
@@ -426,6 +520,33 @@ export async function uploadFile(file: { uri: string; name: string; type: string
   return data as UploadedFile;
 }
 
+// ---- Карта исполнителей ----
+
+/** Точка поставщика на карте (/map) — GET/PATCH /api/companies/me. */
+export interface CompanyPin {
+  id: string;
+  name: string;
+  baseLat: number | null;
+  baseLon: number | null;
+  baseAddress: string | null;
+  pinImageUrl: string | null;
+  pinNote: string | null;
+}
+
+export function fetchMyCompanyPin() {
+  return apiFetch<{ company: CompanyPin; photos: string[]; uploadsEnabled: boolean }>(
+    '/api/companies/me',
+  );
+}
+
+export function updateMyCompanyPin(input: {
+  baseAddress?: string;
+  pinImageUrl?: string | null;
+  pinNote?: string;
+}) {
+  return apiFetch<{ company: CompanyPin }>('/api/companies/me', { method: 'PATCH', body: input });
+}
+
 /** Открытые заявки клиентов (для предложений поставщика). */
 export function fetchOpenOrders() {
   return apiFetch<{ orders: Order[] }>('/api/orders?open=1');
@@ -435,8 +556,75 @@ export function createBid(
   orderId: string,
   input: { equipmentId: string; price: number; message?: string },
 ) {
-  return apiFetch<{ bid: Bid }>(`/api/orders/${encodeURIComponent(orderId)}/bids`, {
+  // 201 — новое предложение, 200 — обновлено прежнее (одно предложение от компании).
+  return apiFetch<{ bid: Bid; message?: string }>(
+    `/api/orders/${encodeURIComponent(orderId)}/bids`,
+    {
+      method: 'POST',
+      body: input,
+    },
+  );
+}
+
+// ---- Комментарии (с модерацией) и помощник «Что дальше?» ----
+
+/** Опубликованный комментарий: без контактов, имя автора сокращено («Иван П.»). */
+export interface PublicComment {
+  id: string;
+  text: string;
+  createdAt: string;
+  authorName: string;
+  authorCompany: string | null;
+}
+
+export type CommentTarget = { companyId: string } | { userId: string };
+
+export function fetchComments(target: CommentTarget) {
+  const query =
+    'companyId' in target
+      ? `companyId=${encodeURIComponent(target.companyId)}`
+      : `userId=${encodeURIComponent(target.userId)}`;
+  return apiFetch<{ comments: PublicComment[]; canComment: boolean }>(`/api/comments?${query}`);
+}
+
+/** Комментарий уходит на модерацию; в ответе — текст «Комментарий отправлен на проверку». */
+export function createComment(target: CommentTarget, text: string) {
+  return apiFetch<{ comment: { id: string; status: string }; message: string }>('/api/comments', {
     method: 'POST',
-    body: input,
+    body: {
+      text,
+      ...('companyId' in target
+        ? { targetCompanyId: target.companyId }
+        : { targetUserId: target.userId }),
+    },
   });
+}
+
+export interface GuideLink {
+  label: string;
+  href: string;
+  /** Маршрут приложения (expo-router). */
+  app?: string;
+}
+
+export interface GuideStep {
+  id: string;
+  title: string;
+  hint: string;
+  done: boolean;
+  action?: GuideLink;
+}
+
+export interface Guide {
+  role: 'GUEST' | 'CUSTOMER' | 'PROVIDER';
+  title: string;
+  steps: GuideStep[];
+  next: GuideStep;
+  progress: { done: number; total: number };
+  /** Ответ на «Что дальше?» текстом для чата. */
+  reply: string;
+}
+
+export function fetchGuide() {
+  return apiFetch<Guide>('/api/guide?links=plain');
 }

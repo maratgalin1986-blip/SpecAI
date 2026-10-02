@@ -32,7 +32,10 @@ export function BookingForm({
   if (status === 'unauthenticated') {
     return (
       <p className="text-sm text-slate-600">
-        <a href="/login" className="font-medium text-amber-700">
+        <a
+          href={`/login?callbackUrl=${encodeURIComponent(`/equipment/${equipmentId}`)}`}
+          className="font-medium text-amber-700"
+        >
           Войдите
         </a>
         , чтобы отправить заявку на бронирование.
@@ -53,11 +56,18 @@ export function BookingForm({
     setError(null);
     setIsSubmitting(true);
 
-    const response = await fetch('/api/bookings', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ equipmentId, startDate, endDate }),
-    });
+    let response: Response;
+    try {
+      response = await fetch('/api/bookings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ equipmentId, startDate, endDate }),
+      });
+    } catch {
+      setIsSubmitting(false);
+      setError('Нет соединения с сервером. Проверьте интернет и попробуйте ещё раз.');
+      return;
+    }
 
     setIsSubmitting(false);
 

@@ -3,6 +3,7 @@ import { prisma } from '@specai/database';
 import { getRequestUser } from '@/lib/requestUser';
 import { checkRateLimit } from '@/lib/rateLimit';
 import { sendVerificationEmail } from '@/lib/verificationEmail';
+import { SITE } from '@/lib/site';
 
 const RATE_LIMIT = { limit: 5, windowMs: 60 * 60_000 };
 
@@ -32,7 +33,14 @@ export async function POST(request: NextRequest) {
   }
 
   const result = await sendVerificationEmail(user);
-  if (!result.skipped && !result.ok) {
+  if (result.skipped) {
+    // E-mail is not configured: say so instead of pretending the letter went out.
+    return NextResponse.json(
+      { error: `Отправка писем временно недоступна. Позвоните нам: ${SITE.phone}` },
+      { status: 503 },
+    );
+  }
+  if (!result.ok) {
     return NextResponse.json({ error: 'Не удалось отправить письмо' }, { status: 502 });
   }
 

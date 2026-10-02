@@ -4,7 +4,7 @@ import { prisma } from '@specai/database';
 import { recommendEquipment } from '@specai/ai-service';
 import { getRequestUser } from '@/lib/requestUser';
 import { checkRateLimit } from '@/lib/rateLimit';
-import { OWN_FLEET } from '@/lib/fleet';
+import { PUBLIC_FLEET } from '@/lib/fleet';
 import { matchTask } from '@/lib/dispatcher';
 
 const requestSchema = z.object({
@@ -40,7 +40,7 @@ export async function POST(request: NextRequest) {
   }
 
   const available = await prisma.equipment.findMany({
-    where: { ...OWN_FLEET, status: 'AVAILABLE' },
+    where: { ...PUBLIC_FLEET, status: 'AVAILABLE' },
     include: { category: true },
     take: 50,
   });

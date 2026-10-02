@@ -125,16 +125,22 @@ const ADVANTAGES = [
     text: 'Опытный оператор на каждой машине — вам не нужно искать своего.',
   },
   { title: 'Цена видна сразу', text: 'Почасовая ставка без скрытых доплат, смена — 8 часов.' },
-  { title: 'Работаем с НДС', text: 'Договор, безнал, закрывающие документы и ЭДО для юрлиц.' },
+  {
+    title: 'Несколько предложений',
+    text: 'Исполнители отвечают на заявку ценой — вы выбираете, сервис бесплатный.',
+  },
   { title: 'Круглосуточно', text: 'ИИ-агенты подберут технику и примут заявку даже ночью.' },
 ];
 
 const STEPS = [
   { title: 'Опишите задачу', text: 'Своими словами — в чате ИИ-агенту или в форме заявки.' },
-  { title: 'Получите варианты', text: 'Агент подберёт технику из каталога и посчитает стоимость.' },
+  {
+    title: 'Получите варианты',
+    text: 'Исполнители пришлют цены, агент подберёт технику из каталога и посчитает стоимость.',
+  },
   {
     title: 'Забронируйте',
-    text: 'Подтвердите бронь — СпецПласт16 закрепит за вами машину и машиниста.',
+    text: 'Примите предложение — исполнитель подтвердит бронь и закрепит машину и машиниста.',
   },
   { title: 'Работайте', text: 'Следите за статусом в личном кабинете, оставьте отзыв.' },
 ];
@@ -247,9 +253,9 @@ export default async function HomePage() {
               className="float-in mt-6 max-w-xl text-lg leading-relaxed text-slate-300"
               style={{ animationDelay: '240ms' }}
             >
-              Своя техника и свои машинисты: экскаваторы-погрузчики, автокраны и погрузчики в
-              Набережных Челнах и по Татарстану — от 2 300 ₽/ч, без посредников. ИИ-агенты
-              круглосуточно подберут технику и посчитают стоимость.
+              Экскаваторы-погрузчики, автокраны и погрузчики с машинистами в Набережных Челнах и по
+              Татарстану — от 2 300 ₽/ч. Оставьте заявку: исполнители со своей техникой, включая
+              парк {SITE.name}, пришлют цены, вы выберете лучшее. Сервис бесплатный.
             </p>
             <div className="float-in mt-8 flex flex-wrap gap-3" style={{ animationDelay: '360ms' }}>
               <a
@@ -327,6 +333,13 @@ export default async function HomePage() {
               className="group inline-flex items-center gap-2 rounded-full border border-slate-300 px-5 py-2.5 text-sm font-semibold transition hover:border-slate-900"
             >
               Весь каталог
+              <Icon name="arrow" className="h-4 w-4 transition group-hover:translate-x-1" />
+            </a>
+            <a
+              href="/map"
+              className="group inline-flex items-center gap-2 rounded-full border border-slate-300 px-5 py-2.5 text-sm font-semibold transition hover:border-slate-900"
+            >
+              Исполнители на карте
               <Icon name="arrow" className="h-4 w-4 transition group-hover:translate-x-1" />
             </a>
           </div>
@@ -420,11 +433,12 @@ export default async function HomePage() {
           <Reveal>
             <div className="eyebrow text-amber-700">Почему мы</div>
             <h2 className="mt-3 text-4xl font-extrabold tracking-[-0.03em] sm:text-5xl">
-              Своя техника и свои машинисты
+              Исполнители с техникой и машинистами
             </h2>
             <p className="mt-4 text-slate-600">
-              {SITE.legalName || SITE.name} — парк в {SITE.city}. Подберём машину под задачу и
-              назовём точную цену с подачей.
+              {SITE.name} — сервис заказа спецтехники в{' '}
+              {SITE.city === 'Набережные Челны' ? 'Набережных Челнах' : SITE.city}: собственный парк
+              и проверенные исполнители. Подберём машину под задачу и покажем цены с подачей.
             </p>
           </Reveal>
         </div>
@@ -553,13 +567,14 @@ export default async function HomePage() {
       <Reveal>
         <section className="grid gap-6 rounded-[2rem] border border-amber-200 bg-gradient-to-br from-amber-50 to-orange-100 p-6 sm:grid-cols-2 sm:p-10">
           <div>
-            <div className="eyebrow text-amber-700">Без посредников</div>
+            <div className="eyebrow text-amber-700">Как «такси» для спецтехники</div>
             <h2 className="mt-3 text-3xl font-extrabold tracking-tight">
-              Своя техника и свои машинисты
+              Одна заявка — несколько предложений
             </h2>
             <p className="mt-3 text-slate-700">
-              {SITE.name} сам выполняет каждую заявку: никаких перекупщиков и посредников. Цену
-              называем один раз и отвечаем за результат.
+              Опишите задачу — её увидят исполнители со своей техникой и машинистами, включая парк{' '}
+              {SITE.name}. Сравните цены, выберите предложение и договоритесь напрямую. Сервис
+              бесплатный, без комиссий.
             </p>
             <a href="/orders" className="mt-5 inline-block">
               <Button>Оставить заявку</Button>

@@ -10,7 +10,10 @@ import {
 import { findOverlappingBooking, lockEquipment } from '@/lib/bookingConflicts';
 import { INVALID_JSON_MESSAGE, prismaErrorCode, readJson, zodErrorMessage } from '@/lib/apiInput';
 import { isOnlinePaymentEnabled } from '@/lib/stripe';
-import { isFleetManager } from '@/lib/fleet';
+import { isProvider } from '@/lib/fleet';
+import { customerForProvider, providerForCustomer } from '@/lib/customerPrivacy';
+import { HOUSE_COMPANY_ID } from '@/lib/fleet';
+import { SITE } from '@/lib/site';
 
 export const dynamic = 'force-dynamic';
 
@@ -28,7 +31,8 @@ const createBookingRequestSchema = z.object({
 
 /**
  * Бронирования текущего пользователя (клиента), новые сверху.
- * `?as=provider` — бронирования техники компании поставщика (с данными клиента).
+ * `?as=provider` — бронирования техники компании поставщика: заказчик как «Анна П.»,
+ * телефон и e-mail — только после подтверждения брони (CONFIRMED/ACTIVE/COMPLETED).
  * `paymentsEnabled` — подключена ли онлайн-оплата (иначе кнопку «Оплатить» не показывать).
  */
 export async function GET(request: NextRequest) {
@@ -39,7 +43,7 @@ export async function GET(request: NextRequest) {
   const paymentsEnabled = isOnlinePaymentEnabled();
 
   if (request.nextUrl.searchParams.get('as') === 'provider') {
-    if (!isFleetManager(currentUser)) {
+    if (!isProvider(currentUser)) {
       return NextResponse.json({ error: 'Требуется аккаунт поставщика' }, { status: 403 });
     }
 
@@ -47,19 +51,33 @@ export async function GET(request: NextRequest) {
       where: { equipment: { companyId: currentUser.companyId } },
       include: {
         equipment: { select: { id: true, name: true, imageUrls: true } },
-        customer: { select: { id: true, name: true, email: true } },
+        customer: { select: { id: true, name: true, email: true, phone: true } },
       },
       orderBy: { createdAt: 'desc' },
       take: 100,
     });
 
-    return NextResponse.json({ bookings, paymentsEnabled });
+    return NextResponse.json({
+      bookings: bookings.map((booking) => ({
+        ...booking,
+        customer: customerForProvider(booking.customer, booking.status),
+      })),
+      paymentsEnabled,
+    });
   }
 
   const bookings = await prisma.booking.findMany({
     where: { customerId: currentUser.id },
     include: {
-      equipment: { select: { id: true, name: true, imageUrls: true } },
+      equipment: {
+        select: {
+          id: true,
+          name: true,
+          imageUrls: true,
+          companyId: true,
+          company: { select: { id: true, name: true, phone: true } },
+        },
+      },
       payment: { select: { status: true, refundRequired: true } },
       review: { select: { id: true, rating: true } },
     },
@@ -67,7 +85,15 @@ export async function GET(request: NextRequest) {
     take: 100,
   });
 
-  return NextResponse.json({ bookings, paymentsEnabled });
+  // The provider's name always, its phone once the booking is confirmed.
+  return NextResponse.json({
+    bookings: bookings.map(({ equipment: { company, ...equipment }, ...booking }) => ({
+      ...booking,
+      equipment,
+      provider: providerForCustomer(company, booking.status, HOUSE_COMPANY_ID, SITE.phone),
+    })),
+    paymentsEnabled,
+  });
 }
 
 export async function POST(request: NextRequest) {

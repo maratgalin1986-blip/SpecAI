@@ -2,8 +2,9 @@ import { Redirect } from 'expo-router';
 import React from 'react';
 import { useAuth } from '@/lib/auth';
 
-/** Точка входа: ведём на вход или в каталог в зависимости от сессии. */
+/** Точка входа: вход, кабинет поставщика (PROVIDER_ADMIN) или каталог. */
 export default function Index() {
-  const { token } = useAuth();
-  return <Redirect href={token ? '/(tabs)' : '/(auth)/login'} />;
+  const { token, user } = useAuth();
+  if (!token) return <Redirect href="/(auth)/login" />;
+  return <Redirect href={user?.role === 'PROVIDER_ADMIN' ? '/(tabs)/provider' : '/(tabs)'} />;
 }
