@@ -14,6 +14,10 @@ const PRICE_RAISE = 1000;
 // schema: it runs only on deploys before this date, then never again, so a
 // price the owner lowers by hand later is not raised back on the next deploy.
 const PRICE_RAISE_UNTIL = Date.parse('2026-10-31');
+// Rows edited after the decision day (end of 2026-10-02, Moscow time) are never
+// raised: a price set by hand in the cabinet, even one equal to the old price,
+// stays as the owner left it.
+const PRICE_RAISE_EDITED_AFTER = new Date('2026-10-03T00:00:00+03:00');
 
 /** A Telegram message to the owner, if the bot is configured; never throws. */
 async function alertOwner(text: string) {
@@ -281,15 +285,20 @@ async function main() {
   console.log(`Парк СпецПласт16: добавлено ${created}, всего позиций ${FLEET.length}.`);
 
   // 2026-10-02: the owner raised every customer price by 1000 ₽/h. Production
-  // only (previews share the database), only rows still at the old price (so
-  // prices edited by hand in the cabinet are left alone), and only until
+  // only (previews share the database), only rows still at the old price and
+  // not edited since 2026-10-02 (so prices edited by hand in the cabinet are
+  // left alone), and only until
   // PRICE_RAISE_UNTIL, which makes it one-time without a schema change.
   if (process.env.VERCEL_ENV === 'production' && Date.now() < PRICE_RAISE_UNTIL) {
     try {
       let repriced = 0;
       for (const item of FLEET) {
         const result = await prisma.equipment.updateMany({
-          where: { id: item.id, hourlyRate: item.hourlyRate - PRICE_RAISE },
+          where: {
+            id: item.id,
+            hourlyRate: item.hourlyRate - PRICE_RAISE,
+            updatedAt: { lt: PRICE_RAISE_EDITED_AFTER },
+          },
           data: { hourlyRate: item.hourlyRate, dailyRate: item.hourlyRate * 8, specs: item.specs },
         });
         repriced += result.count;
