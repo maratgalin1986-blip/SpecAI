@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@specai/database';
 import { createLeadSchema } from '@specai/shared';
 import { notifyTelegram } from '@/lib/notify';
+import { siteUrl } from '@/lib/siteUrl';
+import { PHOTO_AFTER_PATH } from '@/lib/photoShare';
 import { checkRateLimit } from '@/lib/rateLimit';
 import { SITE } from '@/lib/site';
 
@@ -64,7 +66,13 @@ export async function POST(request: NextRequest) {
   }
 
   await notifyTelegram(
-    [`📞 Новая заявка на звонок — ${SITE.name}`, ...lines].filter(Boolean).join('\n'),
+    [
+      `📞 Новая заявка на звонок — ${SITE.name}`,
+      ...lines,
+      `📷 После работ можно попросить фото: ${siteUrl()}${PHOTO_AFTER_PATH}`,
+    ]
+      .filter(Boolean)
+      .join('\n'),
   );
 
   return NextResponse.json({ ok: true }, { status: 201 });

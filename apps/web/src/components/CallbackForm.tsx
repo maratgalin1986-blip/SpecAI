@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react';
 import { SITE } from '@/lib/site';
 import { readLeadDraft, submitLead } from '@/lib/submitLead';
 import { LeadSuccess } from '@/components/LeadSuccess';
+import { PointPicker } from '@/components/PointPicker';
+import { POINT_LINE_PREFIX, withPointLine, type MapPoint } from '@/lib/mapPoint';
 
 // "Call me back" form. Works without an account and without the AI features.
 export function CallbackForm({
@@ -22,6 +24,7 @@ export function CallbackForm({
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [message, setMessage] = useState(defaultMessage);
+  const [point, setPoint] = useState<MapPoint | null>(null);
   const [consent, setConsent] = useState(false);
   const [website, setWebsite] = useState('');
   const [status, setStatus] = useState<'idle' | 'sending' | 'sent'>('idle');
@@ -101,6 +104,22 @@ export function CallbackForm({
         placeholder="Что нужно сделать? Например: траншея под водопровод, Набережные Челны, на следующей неделе"
         aria-label="Комментарий"
         className={input}
+      />
+      <PointPicker
+        value={point}
+        dark={dark}
+        label="📍 Объекта нет на карте? Отметьте место точкой"
+        onPick={(next) => {
+          setPoint(next);
+          setMessage((current) =>
+            next
+              ? withPointLine(current, next)
+              : current
+                  .split('\n')
+                  .filter((line) => !line.startsWith(POINT_LINE_PREFIX))
+                  .join('\n'),
+          );
+        }}
       />
       {/* Honeypot for bots — hidden from people and screen readers. */}
       <input

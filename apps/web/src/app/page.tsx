@@ -7,6 +7,7 @@ import { CallbackIris } from '@/components/CallbackIris';
 import { CinemaBand } from '@/components/CinemaBand';
 import { CountUp } from '@/components/CountUp';
 import { Faq } from '@/components/Faq';
+import { ObjectPhotos } from '@/components/ObjectPhotos';
 import { HeroPhotos } from '@/components/HeroPhotos';
 import { Icon, type IconName } from '@/components/Icon';
 import { IntroSplash } from '@/components/IntroSplash';
@@ -279,8 +280,14 @@ export default async function HomePage() {
                 Подобрать технику
               </a>
               <a
+                href="/smeta"
+                className="inline-flex items-center gap-2 rounded-full px-6 py-3.5 text-base font-semibold text-amber-300 ring-2 ring-amber-400 backdrop-blur transition hover:bg-amber-400 hover:text-slate-950"
+              >
+                🧮 Рассчитать смету
+              </a>
+              <a
                 href="/stroyka"
-                className="inline-flex items-center gap-2 rounded-full px-6 py-3.5 text-base font-semibold text-amber-300 ring-1 ring-amber-400/40 backdrop-blur transition hover:bg-amber-400/10"
+                className="inline-flex items-center gap-2 rounded-full px-6 py-3.5 text-base font-semibold text-white/90 ring-1 ring-white/25 backdrop-blur transition hover:bg-white/10"
               >
                 Войти на стройку ▶
               </a>
@@ -537,6 +544,8 @@ export default async function HomePage() {
         eyebrow="Подача сегодня"
         phrase="Техника уже едет. Осталось сказать куда"
       />
+
+      <ObjectPhotos />
 
       <div className="depth">
         <Faq items={HOME_FAQ} />

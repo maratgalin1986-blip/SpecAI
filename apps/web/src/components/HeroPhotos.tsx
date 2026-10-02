@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { CinemaVideo } from '@/components/CinemaVideo';
 import { MachinePhoto } from '@/components/MachinePhoto';
+import { useMachineSound } from '@/components/useMachineSound';
 import { MACHINE_LABELS, type MachineType } from '@/lib/machinePhotos';
 import { currentSiteObject, SITE_OBJECTS } from '@/lib/siteObjects';
 
@@ -105,6 +106,20 @@ export function HeroPhotos() {
       cancelAnimationFrame(frame);
     };
   }, []);
+
+  // Sound (only when the visitor turned it on): the machine on screen revs
+  // in as its slide comes up, while the hero is in view.
+  const [inView, setInView] = useState(true);
+  useEffect(() => {
+    const el = rootRef.current;
+    if (!el || typeof IntersectionObserver === 'undefined') return;
+    const observer = new IntersectionObserver(([entry]) => setInView(!!entry?.isIntersecting), {
+      threshold: 0.35,
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+  useMachineSound('hero', current === -1 ? null : SLIDES[current]?.type, inView);
 
   const slide = SLIDES[Math.max(0, current)]!;
 

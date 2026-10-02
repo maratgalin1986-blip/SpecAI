@@ -8,6 +8,7 @@ import { MachinePhoto } from '@/components/MachinePhoto';
 import type { MachineType } from '@/lib/machinePhotos';
 import { WorkOrderPreview } from '@/components/WorkOrderPreview';
 import { WeatherHud } from '@/components/WeatherHud';
+import { playCue } from '@/lib/sound';
 import {
   machineGroup,
   mskToday,
@@ -181,6 +182,13 @@ export function TaskWizard() {
     };
   }, [step, task, workDate]);
 
+  // Sound (when on): the «Готов» stamp lands on the finished work order.
+  useEffect(() => {
+    if (step !== 3) return;
+    const timer = window.setTimeout(() => playCue('stamp'), 260);
+    return () => window.clearTimeout(timer);
+  }, [step]);
+
   const estimate =
     task?.rate && volume?.hours
       ? volume.hours[0] === volume.hours[1]
@@ -290,6 +298,8 @@ export function TaskWizard() {
                     onClick={() => {
                       setTask(item);
                       setStep(1);
+                      // The chosen machine starts its engine (when sound is on).
+                      playCue('start', item.photo ?? null);
                     }}
                   >
                     <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-900 text-amber-400">

@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Icon } from '@/components/Icon';
 import { WhatsAppIcon } from '@/components/MessengerButtons';
+import { PhotoShare } from '@/components/PhotoShare';
 import { isOnShift, SHIFT, SITE } from '@/lib/site';
 
 // «Принято»: the screen after a lead is sent. A stamp lands once, the text
@@ -53,6 +54,9 @@ export function LeadSuccess({ dark = false, summary }: { dark?: boolean; summary
         >
           <WhatsAppIcon className="h-4 w-4" /> WhatsApp
         </a>
+      </div>
+      <div className="mt-5 border-t border-white/10 pt-4">
+        <PhotoShare role="client" dark />
       </div>
     </div>
   );

@@ -8,6 +8,7 @@ import { EstimateBox } from '@/components/EstimateBox';
 import { Icon } from '@/components/Icon';
 import { MachineGallery } from '@/components/MachineGallery';
 import { MachinePhoto } from '@/components/MachinePhoto';
+import { MachineAmbience } from '@/components/MachineAmbience';
 import {
   headlinePrices,
   keySpecs,
@@ -144,6 +145,7 @@ export default async function EquipmentDetailPage({ params }: { params: { id: st
 
   return (
     <div className="flex flex-col gap-16">
+      {illustration && <MachineAmbience type={illustration} />}
       <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_400px] lg:gap-10">
         {/* Title, chips and gallery */}
         <div className="flex min-w-0 flex-col gap-6">
