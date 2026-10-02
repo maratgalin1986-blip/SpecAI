@@ -991,12 +991,14 @@ export function Stroyka() {
         <a
           href="/"
           className="pointer-events-auto flex shrink-0 items-center gap-2 font-extrabold"
-          aria-label={`${SITE.name} — на главную`}
+          aria-label={`${SITE.platform} от ${SITE.name} — на главную`}
         >
           <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-500 font-mono text-sm text-slate-950">
-            16
+            ИИ
           </span>
-          <span className="hidden sm:inline">{SITE.name}</span>
+          <span className="hidden sm:inline">
+            {SITE.platform} <span className="text-amber-400">от {SITE.name}</span>
+          </span>
         </a>
         <span
           data-testid="conditions"
