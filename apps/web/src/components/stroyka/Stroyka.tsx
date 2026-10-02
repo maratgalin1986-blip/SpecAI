@@ -70,6 +70,7 @@ import { mskToday, type WorkNote } from '@/lib/weather';
 import { isOnShift } from '@/lib/site';
 import { leadAcceptedText } from '@/lib/dispatcher';
 import { submitLead } from '@/lib/submitLead';
+import { reachGoal } from '@/lib/marketing';
 import type { Quick } from '@/lib/stroyka/brain';
 import { smetaHref } from '@/lib/stroyka/smetaLink';
 import { SoundToggle } from '@/components/SoundToggle';
@@ -759,7 +760,11 @@ export function Stroyka() {
       return;
     }
     const speaker = chat?.speaker ?? 'mihalych';
-    if (q.action === 'call') window.location.href = SITE.phoneHref;
+    if (q.action === 'call') {
+      // A programmatic navigation: the site-wide tel: click tracker never sees it.
+      reachGoal('call');
+      window.location.href = SITE.phoneHref;
+    }
     else if (q.action === 'smeta')
       window.location.href = smetaHref(ctxRef.current.task, ctxRef.current.machine);
     else if (q.action === 'form') onReply({ label: q.label, action: { kind: 'form' } }, speaker);
@@ -1329,7 +1334,7 @@ export function Stroyka() {
           <div className="font-mono text-xs uppercase tracking-[0.4em] text-amber-400">
             {SITE.name} представляет
           </div>
-          <h1 className="mt-3 text-3xl font-extrabold sm:text-5xl">{SITE.platform}</h1>
+          <p className="mt-3 text-3xl font-extrabold sm:text-5xl">{SITE.platform}</p>
           <p className="mt-2 text-sm text-slate-400">Пройдись по объекту · {chip}</p>
           <div className="mt-6 h-1.5 w-64 overflow-hidden rounded-full bg-white/10">
             <div className="h-full bg-amber-500 transition-all" style={{ width: `${loadPct}%` }} />

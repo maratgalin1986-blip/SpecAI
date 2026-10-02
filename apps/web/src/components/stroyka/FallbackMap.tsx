@@ -70,7 +70,7 @@ export function FallbackMap({
       className="absolute inset-0 overflow-y-auto bg-[radial-gradient(ellipse_at_top,#334155,#0b1220)] px-4 pb-72 pt-16 text-white"
     >
       <div className="mx-auto flex max-w-2xl flex-col gap-3">
-        <h1 className="text-xl font-extrabold">Стройка — пройдись по объекту</h1>
+        <h2 className="text-xl font-extrabold">Стройка — пройдись по объекту</h2>
         <p className="text-sm text-slate-300">
           Карта площадки: нажмите на зону — там работает техника и ждёт машинист.
           {reducedMotion &&
