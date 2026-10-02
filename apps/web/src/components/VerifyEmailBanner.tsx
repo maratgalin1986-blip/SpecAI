@@ -5,7 +5,8 @@ import { Button } from '@specai/ui';
 
 type Status = 'idle' | 'sending' | 'sent' | 'error';
 
-export function VerifyEmailBanner() {
+/** `emailEnabled` — whether the site can send letters at all (Resend configured). */
+export function VerifyEmailBanner({ emailEnabled = true }: { emailEnabled?: boolean }) {
   const [status, setStatus] = useState<Status>('idle');
   const [error, setError] = useState<string | null>(null);
 
@@ -34,11 +35,13 @@ export function VerifyEmailBanner() {
         <p className="text-amber-800">
           {status === 'sent'
             ? 'Письмо отправлено. Проверьте почту и перейдите по ссылке из письма.'
-            : 'Мы отправили ссылку для подтверждения на ваш e-mail. Не пришло? Отправим ещё раз.'}
+            : emailEnabled
+              ? 'Ссылка для подтверждения уходит на ваш e-mail при регистрации. Не пришло? Отправим ещё раз.'
+              : 'Отправка писем пока не настроена — подтвердить e-mail можно будет позже.'}
         </p>
         {error && <p className="mt-1 text-red-700">{error}</p>}
       </div>
-      {status !== 'sent' && (
+      {status !== 'sent' && emailEnabled && (
         <Button onClick={handleSend} disabled={status === 'sending'}>
           {status === 'sending' ? 'Отправляем…' : 'Отправить письмо'}
         </Button>

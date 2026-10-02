@@ -7,7 +7,7 @@ export const createCompanySchema = z.object({
   phone: z.string().max(30).optional(),
   website: z.string().url().optional(),
   description: z.string().max(2000).optional(),
-  locationId: z.string().cuid().optional(),
+  locationId: z.string().min(1).max(64).optional(),
 });
 export type CreateCompanyInput = z.infer<typeof createCompanySchema>;
 

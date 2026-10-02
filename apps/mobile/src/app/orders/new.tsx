@@ -13,7 +13,7 @@ import {
 import { DateField } from '@/components/DateField';
 import { Button, Card, Input } from '@/components/ui';
 import { ApiError, createOrder, fetchCategories, type Category } from '@/lib/api';
-import { addDays, pluralizeRu, rentalDays, startOfDay, toIsoDate } from '@/lib/format';
+import { addDays, bookingDays, pluralizeRu, startOfDay, toIsoDate } from '@/lib/format';
 import { colors, spacing } from '@/lib/theme';
 
 export default function NewOrderScreen() {
@@ -44,10 +44,11 @@ export default function NewOrderScreen() {
   const handleStartChange = (date: Date) => {
     const next = startOfDay(date);
     setStartDate(next);
-    if (endDate <= next) setEndDate(addDays(next, 1));
+    if (endDate < next) setEndDate(next);
   };
 
-  const days = rentalDays(startDate, endDate);
+  // Days are counted inclusively, as for bookings: a one-day order is allowed.
+  const days = bookingDays(startDate, endDate);
 
   const handleSubmit = async () => {
     Keyboard.dismiss();
@@ -57,7 +58,7 @@ export default function NewOrderScreen() {
       return;
     }
     if (!days) {
-      setError('Дата окончания должна быть позже даты начала');
+      setError('Дата окончания не может быть раньше даты начала');
       return;
     }
     setSubmitting(true);
@@ -91,6 +92,7 @@ export default function NewOrderScreen() {
             placeholder="Например: нужен экскаватор для траншеи 50 м, мягкий грунт"
             multiline
             numberOfLines={4}
+            maxLength={2000}
             style={styles.textarea}
             textAlignVertical="top"
           />
@@ -130,7 +132,7 @@ export default function NewOrderScreen() {
               <DateField
                 label="Окончание"
                 value={endDate}
-                minimumDate={addDays(startDate, 1)}
+                minimumDate={startDate}
                 onChange={(date) => setEndDate(startOfDay(date))}
               />
             </View>

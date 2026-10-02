@@ -1,18 +1,39 @@
-// СпецПласт16 is the only executor on its site: the catalogue shows only the
-// company's own fleet and only its fleet manager can act as the "provider".
-// Old rows of other companies stay in the database but are never shown.
-// Kept free of Prisma imports so client components can use it; a test
-// checks the id against @specai/database.
-
+// The site is an aggregator ("a taxi for heavy machinery"): any provider
+// company publishes its fleet and answers customers' orders, and the owner's
+// own company, СпецПласт16, takes part alongside them. Kept free of Prisma
+// imports so client components can use it; a test checks the id against
+// @specai/database.
 export const HOUSE_COMPANY_ID = 'specplast16-house';
 
-/** Prisma `where` fragment for public equipment queries. */
+/** СпецПласт16's own fleet (house badge, owner-only views). */
 export const OWN_FLEET = { companyId: HOUSE_COMPANY_ID } as const;
+
+/** Prisma `where` fragment for public equipment queries: every provider's fleet. */
+export const PUBLIC_FLEET = { company: { isProvider: true } } as const;
+
+/**
+ * The catalog, the map and «Похожая техника»: every provider's machinery
+ * except what its owner took off the site (RETIRED, «Снять с публикации»).
+ */
+export const PUBLISHED_FLEET = { ...PUBLIC_FLEET, status: { not: 'RETIRED' as const } };
 
 type MaybeUser = { role?: string | null; companyId?: string | null } | null | undefined;
 
-export function isFleetManager<T extends MaybeUser>(
+/** Any provider account with a company: manages its fleet, bookings and bids. */
+export function isProvider<T extends MaybeUser>(
   user: T,
 ): user is NonNullable<T> & { companyId: string } {
-  return user?.role === 'PROVIDER_ADMIN' && user.companyId === HOUSE_COMPANY_ID;
+  return user?.role === 'PROVIDER_ADMIN' && Boolean(user.companyId);
+}
+
+/** The owner's own fleet account (СпецПласт16). */
+export function isHouseManager<T extends MaybeUser>(
+  user: T,
+): user is NonNullable<T> & { companyId: string } {
+  return isProvider(user) && user.companyId === HOUSE_COMPANY_ID;
+}
+
+/** Whether a piece of equipment belongs to СпецПласт16 (for the «Парк СпецПласт16» badge). */
+export function isHouseEquipment(item: { companyId?: string | null }): boolean {
+  return item.companyId === HOUSE_COMPANY_ID;
 }

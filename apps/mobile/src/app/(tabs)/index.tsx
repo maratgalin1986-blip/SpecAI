@@ -1,3 +1,4 @@
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { Link } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
@@ -11,21 +12,27 @@ import {
   View,
 } from 'react-native';
 import { ContactActions } from '@/components/ContactActions';
+import { NextStepCard } from '@/components/NextStepCard';
+import { useAuth } from '@/lib/auth';
 import { Badge, EmptyState, ErrorBanner, Input } from '@/components/ui';
-import { ApiError, fetchEquipment, type Equipment } from '@/lib/api';
+import { ApiError, fetchEquipment, type Equipment, imageUri } from '@/lib/api';
 import { EQUIPMENT_STATUS_LABELS, formatRate } from '@/lib/format';
 import { colors, radius, spacing } from '@/lib/theme';
 
 const PAGE_SIZE = 20;
 
 function EquipmentCard({ item }: { item: Equipment }) {
-  const image = item.imageUrls[0];
+  // Своё фото или пример по типу машины (сервер отдаёт photoUrl).
+  const image = imageUri(item.photoUrl ?? item.imageUrls[0]);
   const rate = formatRate(item);
   return (
     <Link href={{ pathname: '/equipment/[id]', params: { id: item.id } }} asChild>
       <Pressable style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}>
         {image ? (
-          <Image source={{ uri: image }} style={styles.image} resizeMode="cover" />
+          <View>
+            <Image source={{ uri: image }} style={styles.image} resizeMode="cover" />
+            {item.photoIsExample ? <Text style={styles.example}>Фото для примера</Text> : null}
+          </View>
         ) : (
           <View style={[styles.image, styles.imagePlaceholder]}>
             <Text style={styles.imagePlaceholderText}>Нет фото</Text>
@@ -59,6 +66,9 @@ function EquipmentCard({ item }: { item: Equipment }) {
 }
 
 export default function CatalogScreen() {
+  const { user } = useAuth();
+  // Исполнителю следующий шаг показывается в «Кабинете».
+  const showGuide = user?.role !== 'PROVIDER_ADMIN';
   const [query, setQuery] = useState('');
   const [appliedQuery, setAppliedQuery] = useState('');
   const [items, setItems] = useState<Equipment[]>([]);
@@ -129,6 +139,16 @@ export default function CatalogScreen() {
           clearButtonMode="while-editing"
           onSubmitEditing={() => setAppliedQuery(query.trim())}
         />
+        <Link href="/map" asChild>
+          <Pressable
+            accessibilityRole="button"
+            style={({ pressed }) => [styles.mapButton, pressed && styles.cardPressed]}
+          >
+            <Ionicons name="map-outline" size={20} color={colors.primaryDark} />
+            <Text style={styles.mapButtonText}>Исполнители на карте</Text>
+            <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+          </Pressable>
+        </Link>
         {!loading && !error ? (
           <Text style={styles.count}>{total > 0 ? `Найдено: ${total}` : 'Ничего не найдено'}</Text>
         ) : null}
@@ -153,6 +173,13 @@ export default function CatalogScreen() {
           keyExtractor={(item) => item.id}
           renderItem={({ item }) => <EquipmentCard item={item} />}
           contentContainerStyle={styles.list}
+          ListHeaderComponent={
+            showGuide ? (
+              <View style={styles.guide}>
+                <NextStepCard />
+              </View>
+            ) : null
+          }
           ItemSeparatorComponent={() => <View style={{ height: spacing.md }} />}
           refreshControl={
             <RefreshControl
@@ -187,6 +214,15 @@ export default function CatalogScreen() {
 }
 
 const styles = StyleSheet.create({
+  example: {
+    position: 'absolute',
+    right: 8,
+    bottom: 6,
+    fontSize: 11,
+    color: '#fff',
+    textShadowColor: 'rgba(0,0,0,0.6)',
+    textShadowRadius: 3,
+  },
   screen: { flex: 1, backgroundColor: colors.background },
   searchBar: {
     padding: spacing.lg,
@@ -197,10 +233,23 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.border,
   },
   count: { fontSize: 13, color: colors.textMuted },
+  mapButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    minHeight: 44,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.background,
+  },
+  mapButtonText: { flex: 1, fontSize: 15, fontWeight: '600', color: colors.text },
   padded: { padding: spacing.lg },
   loader: { marginTop: spacing.xl },
   footerLoader: { marginVertical: spacing.lg },
   list: { padding: spacing.lg, paddingBottom: spacing.xl },
+  guide: { marginBottom: spacing.md },
   card: {
     backgroundColor: colors.card,
     borderRadius: radius.lg,

@@ -2,11 +2,14 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@specai/database';
 import { createOrderSchema } from '@specai/shared';
 import { getRequestUser } from '@/lib/requestUser';
-import { isFleetManager } from '@/lib/fleet';
+import { isProvider } from '@/lib/fleet';
 import { geocodeAddress } from '@/lib/geo';
 import { notifyTelegram } from '@/lib/notify';
 import { SITE } from '@/lib/site';
 import { machineTypeOf } from '@/lib/equipmentCatalog';
+import { INVALID_JSON_MESSAGE, readJson, zodErrorMessage } from '@/lib/apiInput';
+import { checkBookingDates } from '@/lib/bookingRules';
+import { customerShortName } from '@/lib/customerPrivacy';
 import {
   assessWork,
   CHELNY,
@@ -21,7 +24,7 @@ export const dynamic = 'force-dynamic';
 
 /**
  * Список заявок.
- * - `?open=1` — открытые заявки всех клиентов, только для владельца СпецПласт16.
+ * - `?open=1` — открытые заявки всех заказчиков (лента для любого исполнителя).
  * - без параметра — все заявки текущего пользователя (любого статуса), требует входа;
  *   используется вкладкой «Заявки» мобильного приложения.
  * Формат ответа один и тот же: `{ orders }` с category, customer (id, name) и bids.
@@ -37,8 +40,8 @@ export async function GET(request: NextRequest) {
   }
   let where: { status?: 'OPEN'; categoryId?: string; customerId?: string };
   if (openFeed) {
-    if (!isFleetManager(currentUser)) {
-      return NextResponse.json({ error: 'Доступно только владельцу' }, { status: 403 });
+    if (!isProvider(currentUser)) {
+      return NextResponse.json({ error: 'Доступно только поставщикам' }, { status: 403 });
     }
     where = { status: 'OPEN', categoryId };
   } else {
@@ -50,17 +53,28 @@ export async function GET(request: NextRequest) {
     include: {
       category: { select: { id: true, name: true } },
       customer: { select: { id: true, name: true } },
-      bids: true,
+      bids: { include: { equipment: { select: { companyId: true } } } },
     },
     orderBy: { createdAt: 'desc' },
     take: 50,
   });
 
   // Never expose contacts of people whose requests were imported from chats.
+  // In the open feed a provider sees only its own bids (and how many there
+  // are), the customer only as «Анна П.» and without the account id:
+  // competitors' prices and the customer's identity stay private.
   const safeOrders = orders.map(
     ({ contactName, contactPhone, rawText, sourceUrl, externalId, fingerprint, ...order }) => {
       void [contactName, contactPhone, rawText, sourceUrl, externalId, fingerprint];
-      return order;
+      if (order.customerId === currentUser.id) return { ...order, bidCount: order.bids.length };
+      const { customerId, customer, ...rest } = order;
+      void customerId;
+      return {
+        ...rest,
+        customer: { name: customerShortName(customer.name) },
+        bids: order.bids.filter((bid) => bid.equipment.companyId === currentUser.companyId),
+        bidCount: order.bids.length,
+      };
     },
   );
   return NextResponse.json({ orders: safeOrders });
@@ -72,10 +86,17 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Необходимо войти в аккаунт' }, { status: 401 });
   }
 
-  const body = await request.json();
+  const body = await readJson(request);
+  if (body === null) {
+    return NextResponse.json({ error: INVALID_JSON_MESSAGE }, { status: 400 });
+  }
   const parsed = createOrderSchema.safeParse(body);
   if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
+    return NextResponse.json({ error: zodErrorMessage(parsed.error) }, { status: 400 });
+  }
+  const dates = checkBookingDates(parsed.data.desiredStartDate, parsed.data.desiredEndDate);
+  if (!dates.ok) {
+    return NextResponse.json({ error: dates.error }, { status: 400 });
   }
 
   // The work site: geocoded once here, used for the weather and the map.

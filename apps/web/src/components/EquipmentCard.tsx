@@ -1,3 +1,5 @@
+import { isDisplayableImage } from '@/lib/providerMap';
+import { isHouseEquipment } from '@/lib/fleet';
 import type { EquipmentStatus } from '@specai/ui';
 import { AvailabilityChip } from '@/components/AvailabilityChip';
 import { Icon, type IconName } from '@/components/Icon';
@@ -25,6 +27,9 @@ export interface EquipmentCardItem {
   imageUrls: string[];
   category: { name: string };
   location: { city: string } | null;
+  /** Owner of the machine; the house fleet gets a «Парк СпецПласт16» badge. */
+  companyId?: string;
+  company?: { name: string } | null;
 }
 
 const GROUP_ICON: Record<ReturnType<typeof taskGroupOf>, IconName> = {
@@ -46,7 +51,9 @@ export function EquipmentCard({ item }: { item: EquipmentCardItem }) {
   const href = `/equipment/${item.id}`;
   const { hour, shift } = headlinePrices(item);
   const chips = keySpecs(item.specs, 3).map(specChip);
-  const illustration = item.imageUrls[0] ? null : machineTypeOf(item.category.name, item.name);
+  // Only https photos or the site's own paths (never javascript: or data:).
+  const photo = item.imageUrls.find(isDisplayableImage);
+  const illustration = photo ? null : machineTypeOf(item.category.name, item.name);
   const priceSummary = [hour !== null && `${rub(hour)}/ч`, shift !== null && `${rub(shift)}/смена`]
     .filter(Boolean)
     .join(', ');
@@ -60,9 +67,9 @@ export function EquipmentCard({ item }: { item: EquipmentCardItem }) {
           data-vt-part="photo"
           tabIndex={-1}
         >
-          {item.imageUrls[0] ? (
+          {photo ? (
             <img
-              src={item.imageUrls[0]}
+              src={photo}
               alt={item.name}
               loading="lazy"
               className="tilt-zoom h-full w-full object-cover"
@@ -107,6 +114,17 @@ export function EquipmentCard({ item }: { item: EquipmentCardItem }) {
                 {item.name}
               </a>
             </h2>
+            {item.companyId && (
+              <p className="mt-1 text-xs font-medium text-slate-500">
+                {isHouseEquipment(item) ? (
+                  <span className="rounded-full bg-amber-100 px-2 py-0.5 text-amber-800">
+                    Парк СпецПласт16
+                  </span>
+                ) : (
+                  item.company?.name
+                )}
+              </p>
+            )}
           </div>
 
           {chips.length > 0 && (

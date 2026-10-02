@@ -6,6 +6,7 @@ import {
   Image,
   Pressable,
   RefreshControl,
+  Linking,
   StyleSheet,
   Text,
   View,
@@ -19,23 +20,27 @@ import {
   Loader,
   type BadgeTone,
 } from '@/components/ui';
+import { MyMapPinCard } from '@/components/MyMapPinCard';
 import {
   ApiError,
   fetchMyEquipment,
   fetchProviderBookings,
+  imageUri,
   updateBookingStatus,
+  updateEquipment,
   type BookingStatus,
   type Equipment,
+  type EquipmentStatus,
   type ProviderBooking,
 } from '@/lib/api';
 import {
   BOOKING_STATUS_LABELS,
-  EQUIPMENT_STATUS_LABELS,
+  EQUIPMENT_STATUS_OPTIONS,
   formatDate,
   formatMoney,
-  formatRate,
 } from '@/lib/format';
 import { colors, radius, spacing } from '@/lib/theme';
+import { NextStepCard } from '@/components/NextStepCard';
 
 type Section = 'equipment' | 'bookings';
 
@@ -90,38 +95,82 @@ function Segmented({ value, onChange }: { value: Section; onChange: (next: Secti
   );
 }
 
-function EquipmentRow({ item }: { item: Equipment }) {
-  const image = item.imageUrls[0];
+function EquipmentRow({
+  item,
+  onStatusChanged,
+}: {
+  item: Equipment;
+  onStatusChanged: (id: string, status: EquipmentStatus) => void;
+}) {
+  const image = imageUri(item.photoUrl ?? item.imageUrls[0]);
+  const [saving, setSaving] = useState<EquipmentStatus | null>(null);
+  const retired = item.status === 'RETIRED';
+
+  const changeStatus = async (status: EquipmentStatus) => {
+    if (status === item.status) return;
+    setSaving(status);
+    try {
+      await updateEquipment(item.id, { status });
+      onStatusChanged(item.id, status);
+    } catch (caught) {
+      Alert.alert(
+        'Ошибка',
+        caught instanceof ApiError ? caught.message : 'Не удалось изменить статус',
+      );
+    } finally {
+      setSaving(null);
+    }
+  };
+
   return (
-    <Link href={{ pathname: '/equipment/[id]', params: { id: item.id } }} asChild>
-      <Pressable style={({ pressed }) => [styles.equipmentRow, pressed && styles.pressed]}>
-        {image ? (
-          <Image source={{ uri: image }} style={styles.thumb} resizeMode="cover" />
-        ) : (
-          <View style={[styles.thumb, styles.thumbPlaceholder]}>
-            <Text style={styles.thumbText}>Нет фото</Text>
-          </View>
-        )}
-        <View style={styles.equipmentBody}>
-          <Text style={styles.cardTitle} numberOfLines={2}>
-            {item.name}
-          </Text>
-          <Text style={styles.meta} numberOfLines={1}>
-            {item.category.name}
-          </Text>
-          <View style={styles.row}>
-            <Text style={styles.price}>
-              {formatRate(item).price}
-              <Text style={styles.priceUnit}>{formatRate(item).unit}</Text>
+    <View style={[styles.equipmentCard, retired && styles.retired]}>
+      <Link href={{ pathname: '/equipment/[id]', params: { id: item.id } }} asChild>
+        <Pressable style={({ pressed }) => [styles.equipmentRow, pressed && styles.pressed]}>
+          {image ? (
+            <Image source={{ uri: image }} style={styles.thumb} resizeMode="cover" />
+          ) : (
+            <View style={[styles.thumb, styles.thumbPlaceholder]}>
+              <Text style={styles.thumbText}>Нет фото</Text>
+            </View>
+          )}
+          <View style={styles.equipmentBody}>
+            <Text style={styles.cardTitle} numberOfLines={2}>
+              {item.name}
             </Text>
-            <Badge
-              text={EQUIPMENT_STATUS_LABELS[item.status] ?? item.status}
-              tone={item.status === 'AVAILABLE' ? 'success' : 'neutral'}
-            />
+            <Text style={styles.meta} numberOfLines={1}>
+              {item.category.name}
+            </Text>
+            <Text style={styles.price}>
+              {item.hourlyRate ? `${formatMoney(item.hourlyRate, item.currency)}/ч · ` : ''}
+              {formatMoney(item.dailyRate, item.currency)}
+              <Text style={styles.priceUnit}>/смена</Text>
+            </Text>
           </View>
-        </View>
-      </Pressable>
-    </Link>
+        </Pressable>
+      </Link>
+      <View style={styles.statusChips}>
+        {EQUIPMENT_STATUS_OPTIONS.map((option) => {
+          const active = option.value === item.status;
+          return (
+            <Pressable
+              key={option.value}
+              accessibilityRole="button"
+              accessibilityState={{ selected: active, busy: saving === option.value }}
+              disabled={saving !== null}
+              onPress={() => void changeStatus(option.value)}
+              style={[styles.statusChip, active && styles.statusChipActive]}
+            >
+              <Text style={[styles.statusChipText, active && styles.statusChipTextActive]}>
+                {saving === option.value ? '…' : option.label}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
+      <Link href={{ pathname: '/provider/equipment/edit/[id]', params: { id: item.id } }} asChild>
+        <Button title="Изменить" variant="secondary" />
+      </Link>
+    </View>
   );
 }
 
@@ -143,18 +192,46 @@ function BookingRow({
         </Text>
         <Badge text={BOOKING_STATUS_LABELS[booking.status]} tone={STATUS_TONES[booking.status]} />
       </View>
-      <Text style={styles.meta}>Клиент: {booking.customer.name}</Text>
+      <Text style={styles.meta}>Заказчик: {booking.customer.name}</Text>
+      {booking.customer.phone ? (
+        <Text
+          style={styles.contact}
+          onPress={() => void Linking.openURL(`tel:${booking.customer.phone}`)}
+        >
+          {booking.customer.phone}
+        </Text>
+      ) : null}
+      {booking.customer.email ? (
+        <Text
+          style={styles.contact}
+          onPress={() => void Linking.openURL(`mailto:${booking.customer.email}`)}
+        >
+          {booking.customer.email}
+        </Text>
+      ) : null}
+      {booking.status === 'PENDING' ? (
+        <Text style={styles.notes}>
+          Телефон и e-mail заказчика появятся после того, как вы подтвердите бронь.
+        </Text>
+      ) : null}
       <Text style={styles.meta}>
         {formatDate(booking.startDate)} – {formatDate(booking.endDate)}
       </Text>
       <View style={styles.row}>
         <Text style={styles.price}>{formatMoney(booking.totalPrice, booking.currency)}</Text>
-        <Badge
-          text={booking.depositPaid ? 'Оплачено' : 'Не оплачено'}
-          tone={booking.depositPaid ? 'success' : 'neutral'}
-        />
       </View>
       {booking.notes ? <Text style={styles.notes}>{booking.notes}</Text> : null}
+      {booking.status !== 'CANCELLED' ? (
+        <Link
+          href={{
+            pathname: '/comments',
+            params: { userId: booking.customer.id, name: booking.customer.name },
+          }}
+          asChild
+        >
+          <Button title="Комментарий о заказчике" variant="secondary" />
+        </Link>
+      ) : null}
       {transitions.length > 0 ? (
         <View style={styles.actions}>
           {transitions.map((status) => (
@@ -186,12 +263,15 @@ export default function ProviderScreen() {
     if (mode === 'refresh') setRefreshing(true);
     setError(null);
     try {
-      const [equipmentData, bookingsData] = await Promise.all([
+      // Load both lists independently: one failing request must not empty the other.
+      const [equipmentResult, bookingsResult] = await Promise.allSettled([
         fetchMyEquipment(),
         fetchProviderBookings(),
       ]);
-      setEquipment(equipmentData.equipment);
-      setBookings(bookingsData.bookings);
+      if (equipmentResult.status === 'fulfilled') setEquipment(equipmentResult.value.equipment);
+      if (bookingsResult.status === 'fulfilled') setBookings(bookingsResult.value.bookings);
+      const failed = [equipmentResult, bookingsResult].find((r) => r.status === 'rejected');
+      if (failed) throw failed.reason;
     } catch (caught) {
       setError(caught instanceof ApiError ? caught.message : 'Не удалось загрузить данные');
       setEquipment((prev) => prev ?? []);
@@ -244,8 +324,10 @@ export default function ProviderScreen() {
 
   const header = (
     <View style={styles.header}>
+      <NextStepCard />
       <Segmented value={section} onChange={setSection} />
       {error ? <ErrorBanner message={error} onRetry={() => void load()} /> : null}
+      {section === 'equipment' ? <MyMapPinCard /> : null}
       {section === 'equipment' ? (
         <View style={styles.headerButtons}>
           <View style={styles.headerButton}>
@@ -255,7 +337,7 @@ export default function ProviderScreen() {
           </View>
           <View style={styles.headerButton}>
             <Link href="/provider/orders" asChild>
-              <Button title="Заявки клиентов" variant="secondary" />
+              <Button title="Лента заявок" variant="secondary" />
             </Link>
           </View>
         </View>
@@ -277,7 +359,16 @@ export default function ProviderScreen() {
       <FlatList
         data={equipment}
         keyExtractor={(item) => item.id}
-        renderItem={({ item }) => <EquipmentRow item={item} />}
+        renderItem={({ item }) => (
+          <EquipmentRow
+            item={item}
+            onStatusChanged={(id, status) =>
+              setEquipment((prev) =>
+                (prev ?? []).map((row) => (row.id === id ? { ...row, status } : row)),
+              )
+            }
+          />
+        )}
         contentContainerStyle={styles.list}
         ItemSeparatorComponent={() => <View style={{ height: spacing.md }} />}
         refreshControl={refreshControl}
@@ -341,15 +432,27 @@ const styles = StyleSheet.create({
   segmentActive: { backgroundColor: colors.card },
   segmentText: { fontSize: 14, fontWeight: '500', color: colors.textMuted },
   segmentTextActive: { color: colors.text, fontWeight: '600' },
-  equipmentRow: {
-    flexDirection: 'row',
-    gap: spacing.md,
+  equipmentCard: {
+    gap: spacing.sm,
     backgroundColor: colors.card,
     borderRadius: radius.lg,
     borderWidth: 1,
     borderColor: colors.border,
     padding: spacing.md,
   },
+  retired: { opacity: 0.75 },
+  equipmentRow: { flexDirection: 'row', gap: spacing.md },
+  statusChips: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
+  statusChip: {
+    paddingHorizontal: spacing.sm + 2,
+    paddingVertical: spacing.xs + 2,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  statusChipActive: { borderColor: colors.primary, backgroundColor: colors.primaryLight },
+  statusChipText: { fontSize: 13, color: colors.textMuted },
+  statusChipTextActive: { color: colors.primaryDark, fontWeight: '600' },
   pressed: { opacity: 0.9 },
   thumb: { width: 84, height: 84, borderRadius: radius.md, backgroundColor: colors.border },
   thumbPlaceholder: { alignItems: 'center', justifyContent: 'center' },
@@ -364,6 +467,7 @@ const styles = StyleSheet.create({
   },
   cardTitle: { flex: 1, fontSize: 16, fontWeight: '600', color: colors.text },
   meta: { fontSize: 14, color: colors.textMuted },
+  contact: { fontSize: 14, color: colors.primaryDark, fontWeight: '600' },
   row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   price: { fontSize: 16, fontWeight: '700', color: colors.primaryDark },
   priceUnit: { fontSize: 13, fontWeight: '400', color: colors.textMuted },

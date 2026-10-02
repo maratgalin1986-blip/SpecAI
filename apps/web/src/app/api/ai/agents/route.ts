@@ -1,14 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
 import { prisma } from '@specai/database';
-import { agentChatRequestSchema, createOrderSchema, type AgentId } from '@specai/shared';
+import {
+  ORDER_STATUS_LABELS,
+  agentChatRequestSchema,
+  createOrderSchema,
+  type AgentId,
+} from '@specai/shared';
 import { routeToAgent, runAgent, type AgentToolHandlers } from '@specai/ai-service';
-import { authOptions } from '@/lib/auth';
+import { getRequestUser } from '@/lib/requestUser';
 import { formatRate } from '@/lib/money';
 import { maskContacts } from '@/lib/privacy';
 import { checkRateLimit } from '@/lib/rateLimit';
-import { isFleetManager, OWN_FLEET } from '@/lib/fleet';
+import { PUBLIC_FLEET, isProvider } from '@/lib/fleet';
 import { notifyTelegram } from '@/lib/notify';
+import { zodErrorMessage } from '@/lib/apiInput';
+import { asksWhatNext, guideReply } from '@/lib/guide';
+import { guideFor } from '@/lib/guideState';
 import { isOnShift, SITE } from '@/lib/site';
 import {
   ASK_FOR_PHONE,
@@ -50,7 +57,7 @@ export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => null);
   const parsed = agentChatRequestSchema.safeParse(body);
   if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
+    return NextResponse.json({ error: zodErrorMessage(parsed.error) }, { status: 400 });
   }
 
   const { messages } = parsed.data;
@@ -61,8 +68,8 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const session = await getServerSession(authOptions);
-  const user = session?.user;
+  // Web session or the app's Bearer token: the app's chat is the same dispatcher.
+  const user = await getRequestUser(request);
 
   // Guests can chat too, so limit by user or IP to keep AI costs bounded.
   const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown';
@@ -75,6 +82,19 @@ export async function POST(request: NextRequest) {
         { status: 429, headers: { 'Retry-After': String(rate.retryAfterSec) } },
       );
     }
+  }
+
+  // «Что дальше?» — the assistant's checklist from the database, the same with
+  // or without an AI key, so the answer is exact and free.
+  if (asksWhatNext(messages.at(-1)?.content ?? '')) {
+    const agentId: AgentId = parsed.data.agentId === 'auto' ? 'support' : parsed.data.agentId;
+    return NextResponse.json({
+      agentId,
+      reply: guideReply(await guideFor(user)),
+      toolsUsed: [],
+      offline: true,
+      guide: true,
+    });
   }
 
   function requireUser() {
@@ -98,7 +118,7 @@ export async function POST(request: NextRequest) {
       const maxDailyRate = typeof input.maxDailyRate === 'number' ? input.maxDailyRate : undefined;
       const items = await prisma.equipment.findMany({
         where: {
-          ...OWN_FLEET,
+          ...PUBLIC_FLEET,
           status: input.onlyAvailable === false ? { not: 'RETIRED' } : 'AVAILABLE',
           categoryId: optionalString(input, 'categoryId'),
           dailyRate: maxDailyRate !== undefined ? { lte: maxDailyRate } : undefined,
@@ -131,9 +151,9 @@ export async function POST(request: NextRequest) {
     async get_equipment_details(input) {
       const item = await prisma.equipment.findUnique({
         where: { id: requireString(input, 'equipmentId') },
-        include: { category: true, location: true, reviews: true },
+        include: { category: true, location: true, reviews: true, company: true },
       });
-      if (!item || item.companyId !== OWN_FLEET.companyId) {
+      if (!item || !item.company?.isProvider) {
         throw new ToolError('Техника не найдена');
       }
       const ratings = item.reviews.map((r) => r.rating);
@@ -167,8 +187,9 @@ export async function POST(request: NextRequest) {
       }
       const item = await prisma.equipment.findUnique({
         where: { id: requireString(input, 'equipmentId') },
+        include: { company: true },
       });
-      if (!item || item.companyId !== OWN_FLEET.companyId) {
+      if (!item || !item.company?.isProvider) {
         throw new ToolError('Техника не найдена');
       }
       const daily = Number(item.dailyRate);
@@ -264,8 +285,8 @@ export async function POST(request: NextRequest) {
 
     async get_my_fleet() {
       const currentUser = requireUser();
-      if (!isFleetManager(currentUser) || !currentUser.companyId) {
-        throw new ToolError('Парк техники доступен только владельцу СпецПласт16.');
+      if (!isProvider(currentUser) || !currentUser.companyId) {
+        throw new ToolError('Парк техники доступен только аккаунту исполнителя.');
       }
       const fleet = await prisma.equipment.findMany({
         where: { companyId: currentUser.companyId },
@@ -424,8 +445,6 @@ const BOOKING_STATUS_RU: Record<string, string> = {
   CANCELLED: 'отменено',
 };
 
-const ORDER_STATUS_RU: Record<string, string> = {
-  OPEN: 'открыта',
-  MATCHED: 'исполнитель выбран',
-  CANCELLED: 'отменена',
-};
+const ORDER_STATUS_RU: Record<string, string> = Object.fromEntries(
+  Object.entries(ORDER_STATUS_LABELS).map(([status, label]) => [status, label.toLowerCase()]),
+);

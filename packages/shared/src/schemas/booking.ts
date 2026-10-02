@@ -13,7 +13,7 @@ export const createBookingSchema = z
   .object({
     // Equipment ids are not always cuids: the owner's fleet uses "sp16-*".
     equipmentId: z.string().min(1).max(64),
-    customerId: z.string().cuid(),
+    customerId: z.string().min(1).max(64),
     startDate: z.coerce.date(),
     endDate: z.coerce.date(),
     deliveryLocationId: z.string().min(1).max(64).optional(),
@@ -27,7 +27,7 @@ export const createBookingSchema = z
 export type CreateBookingInput = z.infer<typeof createBookingSchema>;
 
 export const updateBookingStatusSchema = z.object({
-  bookingId: z.string().cuid(),
+  bookingId: z.string().min(1).max(64),
   status: bookingStatusSchema,
 });
 export type UpdateBookingStatusInput = z.infer<typeof updateBookingStatusSchema>;

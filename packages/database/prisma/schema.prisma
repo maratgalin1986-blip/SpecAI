@@ -1,7 +1,7 @@
 // SpecAI domain schema: heavy equipment rental & construction services platform.
 generator client {
-  provider = "prisma-client-js"
-  output   = "../generated/client"
+  provider      = "prisma-client-js"
+  output        = "../generated/client"
   // Vercel functions run on Amazon Linux 2023; ship that engine whatever the build host is.
   binaryTargets = ["native", "rhel-openssl-3.0.x"]
 }
@@ -29,26 +29,28 @@ enum UserRole {
 }
 
 model User {
-  id            String    @id @default(cuid())
-  email         String    @unique
-  name          String
-  phone         String?
-  role          UserRole  @default(CUSTOMER)
-  passwordHash  String?
+  id                String    @id @default(cuid())
+  email             String    @unique
+  name              String
+  phone             String?
+  role              UserRole  @default(CUSTOMER)
+  passwordHash      String?
   /// Момент последней смены пароля: JWT, выданные раньше, считаются недействительными.
   passwordChangedAt DateTime?
-  emailVerified DateTime?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  emailVerified     DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
 
   company   Company? @relation(fields: [companyId], references: [id])
   companyId String?
 
-  bookings      Booking[]        @relation("BookingCustomer")
-  orders        Order[]          @relation("OrderCustomer")
-  reviews       Review[]
-  aiConversations AiConversation[]
+  bookings           Booking[]           @relation("BookingCustomer")
+  orders             Order[]             @relation("OrderCustomer")
+  reviews            Review[]
+  aiConversations    AiConversation[]
   verificationTokens VerificationToken[]
+  commentsWritten    Comment[]           @relation("CommentAuthor")
+  commentsReceived   Comment[]           @relation("CommentTarget")
 
   @@index([companyId])
 }
@@ -90,15 +92,25 @@ model Company {
   location   Location? @relation(fields: [locationId], references: [id])
   locationId String?
 
+  // Aggregator map: where the provider's fleet is based, the marker picture
+  // (a photo of its machinery; empty = the default icon) and a short note
+  // customers see on the map ("от 2 500 ₽/ч, скидка 10% на неделю").
+  baseLat     Float?
+  baseLon     Float?
+  baseAddress String?
+  pinImageUrl String?
+  pinNote     String?
+
   users     User[]
   equipment Equipment[]
   reviews   Review[]
+  comments  Comment[]
 
   @@index([locationId])
 }
 
 model Location {
-  id         String   @id @default(cuid())
+  id          String   @id @default(cuid())
   addressLine String
   city        String
   region      String?
@@ -119,9 +131,9 @@ model Location {
 // ---------------------------------------------------------------------------
 
 model EquipmentCategory {
-  id          String   @id @default(cuid())
-  name        String   @unique
-  slug        String   @unique
+  id          String  @id @default(cuid())
+  name        String  @unique
+  slug        String  @unique
   description String?
 
   parent   EquipmentCategory?  @relation("CategoryHierarchy", fields: [parentId], references: [id])
@@ -211,16 +223,16 @@ enum BookingStatus {
 }
 
 model Booking {
-  id           String        @id @default(cuid())
-  status       BookingStatus @default(PENDING)
-  startDate    DateTime
-  endDate      DateTime
-  totalPrice   Decimal       @db.Decimal(10, 2)
-  currency     String        @default("RUB")
-  depositPaid  Boolean       @default(false)
-  notes        String?
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
+  id          String        @id @default(cuid())
+  status      BookingStatus @default(PENDING)
+  startDate   DateTime
+  endDate     DateTime
+  totalPrice  Decimal       @db.Decimal(10, 2)
+  currency    String        @default("RUB")
+  depositPaid Boolean       @default(false)
+  notes       String?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
 
   equipment   Equipment @relation(fields: [equipmentId], references: [id])
   equipmentId String
@@ -295,13 +307,13 @@ enum OrderStatus {
 // posted without picking a specific listing up front — the taxi-style
 // counterpart to browsing the catalog and booking directly.
 model Order {
-  id                String      @id @default(cuid())
-  description       String
-  desiredStartDate  DateTime
-  desiredEndDate    DateTime
-  status            OrderStatus @default(OPEN)
-  createdAt         DateTime    @default(now())
-  updatedAt         DateTime    @updatedAt
+  id               String      @id @default(cuid())
+  description      String
+  desiredStartDate DateTime
+  desiredEndDate   DateTime
+  status           OrderStatus @default(OPEN)
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
 
   customer   User   @relation("OrderCustomer", fields: [customerId], references: [id])
   customerId String
@@ -396,10 +408,14 @@ model Document {
 }
 
 model Review {
-  id        String   @id @default(cuid())
-  rating    Int
-  comment   String?
-  createdAt DateTime @default(now())
+  id         String   @id @default(cuid())
+  rating     Int
+  comment    String?
+  // The stars are shown at once; the text only after the owner approves it
+  // in /admin: "PENDING" | "APPROVED" | "REJECTED" (a string, not an enum —
+  // see CLAUDE.md, rule 2).
+  textStatus String   @default("PENDING")
+  createdAt  DateTime @default(now())
 
   author   User   @relation(fields: [authorId], references: [id])
   authorId String
@@ -428,9 +444,9 @@ enum AiConversationPurpose {
 }
 
 model AiConversation {
-  id        String                 @id @default(cuid())
-  purpose   AiConversationPurpose  @default(GENERAL_SUPPORT)
-  createdAt DateTime               @default(now())
+  id        String                @id @default(cuid())
+  purpose   AiConversationPurpose @default(GENERAL_SUPPORT)
+  createdAt DateTime              @default(now())
 
   user   User   @relation(fields: [userId], references: [id])
   userId String
@@ -473,23 +489,48 @@ enum LeadStatus {
 // A visitor asking the company to call them back. Works without an account
 // and without the AI features, so the site always captures enquiries.
 model Lead {
-  id        String     @id @default(cuid())
-  name      String
-  phone     String
-  message   String?
+  id         String     @id @default(cuid())
+  name       String
+  phone      String
+  message    String?
   // Where the form was sent from (e.g. "home", "equipment:<id>", "agents").
-  source    String?
-  status    LeadStatus @default(NEW)
+  source     String?
+  status     LeadStatus @default(NEW)
   // Owner's result: 'deal' | 'no_deal' | 'no_answer'. String, not an enum
   // (a new enum value breaks the deploy).
-  outcome   String?
+  outcome    String?
   // Deal amount, rubles.
-  amount    Int?
+  amount     Int?
   // Yandex Metrika ClientID (_ym_uid).
   ymClientId String?
-  createdAt DateTime   @default(now())
-  updatedAt DateTime   @updatedAt
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
 
   @@index([status])
   @@index([createdAt])
+}
+
+// Comments about a provider (company) or a customer (user), published only
+// after the owner approves them in /admin. status is a plain string
+// ("PENDING" | "APPROVED" | "REJECTED") rather than an enum, so the schema
+// can grow without ALTER TYPE (see CLAUDE.md, rule 2).
+model Comment {
+  id          String    @id @default(cuid())
+  text        String
+  status      String    @default("PENDING")
+  createdAt   DateTime  @default(now())
+  moderatedAt DateTime?
+
+  author   User   @relation("CommentAuthor", fields: [authorId], references: [id])
+  authorId String
+
+  targetCompany   Company? @relation(fields: [targetCompanyId], references: [id])
+  targetCompanyId String?
+
+  targetUser   User?   @relation("CommentTarget", fields: [targetUserId], references: [id])
+  targetUserId String?
+
+  @@index([status])
+  @@index([targetCompanyId])
+  @@index([targetUserId])
 }

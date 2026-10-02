@@ -8,6 +8,7 @@ import {
   rangesOverlap,
   toBookingDay,
   unavailableEquipmentMessage,
+  earlyStatusError,
 } from './bookingRules';
 import { prismaErrorCode, readJson, zodErrorMessage } from './apiInput';
 
@@ -139,5 +140,21 @@ describe('apiInput helpers', () => {
     if (!russian.success) expect(zodErrorMessage(russian.error)).toBe('Заполните поле');
     const english = schema.safeParse({ a: 'ok', b: 'x' });
     if (!english.success) expect(zodErrorMessage(english.error, 'Ошибка')).toBe('Ошибка');
+  });
+});
+
+describe('earlyStatusError', () => {
+  const start = new Date('2028-03-10T00:00:00.000Z');
+  it('refuses to start or finish a rental before its first day in Moscow', () => {
+    // 9 March, 23:30 in Moscow.
+    const eve = new Date('2028-03-09T20:30:00.000Z');
+    expect(earlyStatusError('ACTIVE', start, eve)).toContain('10.03.2028');
+    expect(earlyStatusError('COMPLETED', start, eve)).toContain('Завершить');
+    expect(earlyStatusError('CONFIRMED', start, eve)).toBeNull();
+    expect(earlyStatusError('CANCELLED', start, eve)).toBeNull();
+  });
+  it('allows it from the first day on', () => {
+    // 10 March, 00:30 in Moscow.
+    expect(earlyStatusError('ACTIVE', start, new Date('2028-03-09T21:30:00.000Z'))).toBeNull();
   });
 });

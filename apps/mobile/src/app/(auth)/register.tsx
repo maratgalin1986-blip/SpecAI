@@ -19,9 +19,23 @@ import { useAuth } from '@/lib/auth';
 import { SITE } from '@/lib/site';
 import { colors, spacing } from '@/lib/theme';
 
-/** Регистрация клиента (поля как у веб-формы, accountType = CUSTOMER) с автологином. */
+type AccountType = 'CUSTOMER' | 'PROVIDER';
+
+const ACCOUNT_TYPES: { value: AccountType; label: string; hint: string }[] = [
+  { value: 'CUSTOMER', label: 'Арендую технику', hint: 'Заявки, брони, отзывы' },
+  { value: 'PROVIDER', label: 'Сдаю технику', hint: 'Своя техника и заявки заказчиков' },
+];
+
+/**
+ * Регистрация (поля как у веб-формы) с автологином: заказчик или исполнитель.
+ * Исполнитель указывает компанию и адрес базы — сервер найдёт его на карте и
+ * проверит регион (как на сайте).
+ */
 export default function RegisterScreen() {
   const { login } = useAuth();
+  const [accountType, setAccountType] = useState<AccountType>('CUSTOMER');
+  const [companyName, setCompanyName] = useState('');
+  const [baseAddress, setBaseAddress] = useState('');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
@@ -35,6 +49,14 @@ export default function RegisterScreen() {
     setError(null);
     if (!name.trim() || !email.trim() || !password) {
       setError('Заполните имя, e-mail и пароль');
+      return;
+    }
+    if (accountType === 'PROVIDER' && !companyName.trim()) {
+      setError('Укажите название компании');
+      return;
+    }
+    if (accountType === 'PROVIDER' && baseAddress.trim().length < 3) {
+      setError('Укажите адрес базы: город, улица, дом — по нему вас найдут на карте');
       return;
     }
     if (password.length < 8) {
@@ -55,7 +77,16 @@ export default function RegisterScreen() {
         phone: phone.trim() || undefined,
         consent: true as const,
       };
-      await register(payload);
+      await register(
+        accountType === 'PROVIDER'
+          ? {
+              ...payload,
+              accountType,
+              companyName: companyName.trim(),
+              baseAddress: baseAddress.trim(),
+            }
+          : { ...payload, accountType },
+      );
       // Аккаунт создан — сразу входим; навигацию выполнит Stack.Protected.
       await login(email, password);
     } catch (caught) {
@@ -80,10 +111,53 @@ export default function RegisterScreen() {
             <View style={styles.header}>
               <Text style={styles.title}>Регистрация в {SITE.name}</Text>
               <Text style={styles.subtitle}>
-                Аккаунт клиента: бронируйте технику и размещайте заявки. Поставщики регистрируются
-                на сайте. Без аккаунта можно позвонить {SITE.phone} или заказать звонок.
+                Заказчик размещает заявки и бронирует технику, исполнитель публикует свою технику и
+                отвечает на заявки. Бесплатно. Без аккаунта можно позвонить {SITE.phone}.
               </Text>
             </View>
+
+            <View style={styles.types} accessibilityRole="radiogroup">
+              {ACCOUNT_TYPES.map((type) => {
+                const active = type.value === accountType;
+                return (
+                  <Pressable
+                    key={type.value}
+                    accessibilityRole="radio"
+                    accessibilityState={{ selected: active }}
+                    onPress={() => setAccountType(type.value)}
+                    style={[styles.type, active && styles.typeActive]}
+                  >
+                    <Text style={[styles.typeLabel, active && styles.typeLabelActive]}>
+                      {type.label}
+                    </Text>
+                    <Text style={styles.typeHint}>{type.hint}</Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+
+            {accountType === 'PROVIDER' ? (
+              <>
+                <Input
+                  label="Название компании"
+                  value={companyName}
+                  onChangeText={setCompanyName}
+                  placeholder="ООО «Техника+» или ИП Иванов"
+                  returnKeyType="next"
+                />
+                <Input
+                  label="Адрес базы (где стоит техника)"
+                  value={baseAddress}
+                  onChangeText={setBaseAddress}
+                  placeholder="Набережные Челны, Мензелинский тракт, 24"
+                  returnKeyType="next"
+                />
+                <Text style={styles.typeHint}>
+                  По адресу вас покажут на карте исполнителей. Точку можно поправить потом в
+                  «Кабинете».
+                </Text>
+              </>
+            ) : null}
 
             <Input
               label="Имя"
@@ -168,6 +242,20 @@ const styles = StyleSheet.create({
   header: { gap: spacing.sm, marginBottom: spacing.sm },
   title: { fontSize: 26, fontWeight: '700', color: colors.text },
   subtitle: { fontSize: 14, color: colors.textMuted, lineHeight: 20 },
+  types: { flexDirection: 'row', gap: spacing.sm },
+  type: {
+    flex: 1,
+    gap: 2,
+    padding: spacing.md,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.card,
+  },
+  typeActive: { borderColor: colors.primary, backgroundColor: colors.primaryLight },
+  typeLabel: { fontSize: 15, fontWeight: '600', color: colors.text },
+  typeLabelActive: { color: colors.primaryDark },
+  typeHint: { fontSize: 12, color: colors.textMuted, lineHeight: 16 },
   consentRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   consentText: { flex: 1, fontSize: 13, color: colors.textMuted, lineHeight: 18 },
   consentLink: { color: colors.primaryDark, textDecorationLine: 'underline' },

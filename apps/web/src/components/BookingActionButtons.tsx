@@ -32,11 +32,18 @@ export function BookingActionButtons({
     setPending(status);
     setError(null);
 
-    const response = await fetch(`/api/bookings/${bookingId}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status }),
-    });
+    let response: Response;
+    try {
+      response = await fetch(`/api/bookings/${bookingId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status }),
+      });
+    } catch {
+      setPending(null);
+      setError('Нет соединения с сервером. Проверьте интернет и попробуйте ещё раз.');
+      return;
+    }
 
     setPending(null);
 

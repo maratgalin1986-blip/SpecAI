@@ -7,8 +7,8 @@ import { z } from 'zod';
 export const emailSchema = z
   .string()
   .trim()
-  .email()
-  .max(254)
+  .email('Проверьте e-mail: нужен адрес вида name@example.ru')
+  .max(254, 'Слишком длинный e-mail')
   .transform((value) => value.toLowerCase());
 
 export function normalizeEmail(value: string): string {
@@ -16,10 +16,13 @@ export function normalizeEmail(value: string): string {
 }
 
 const baseRegistration = {
-  name: z.string().min(1).max(200),
+  name: z.string().trim().min(1, 'Укажите имя').max(200, 'Слишком длинное имя'),
   email: emailSchema,
-  password: z.string().min(8).max(100),
-  phone: z.string().max(30).optional(),
+  password: z
+    .string()
+    .min(8, 'Пароль — не короче 8 символов')
+    .max(100, 'Пароль — не длиннее 100 символов'),
+  phone: z.string().max(30, 'Слишком длинный телефон').optional(),
   /** Согласие на обработку персональных данных (152-ФЗ): без него аккаунт не создаётся. */
   consent: z.literal(true),
 };
@@ -33,7 +36,11 @@ export type RegisterCustomerInput = z.infer<typeof registerCustomerSchema>;
 export const registerProviderSchema = z.object({
   accountType: z.literal('PROVIDER'),
   ...baseRegistration,
-  companyName: z.string().min(1).max(200),
+  companyName: z
+    .string()
+    .trim()
+    .min(1, 'Укажите название компании')
+    .max(200, 'Слишком длинное название компании'),
 });
 export type RegisterProviderInput = z.infer<typeof registerProviderSchema>;
 
