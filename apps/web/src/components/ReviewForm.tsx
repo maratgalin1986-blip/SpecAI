@@ -43,7 +43,7 @@ export function ReviewForm({ bookingId }: { bookingId: string }) {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-2 text-xs">
+    <form onSubmit={handleSubmit} className="ym-hide-content flex flex-col gap-2 text-xs">
       <label className="flex items-center gap-2">
         Оценка
         <select

@@ -85,7 +85,7 @@ export default function LoginPage() {
         <Suspense fallback={null}>
           <VerifiedNotice />
         </Suspense>
-        <form method="post" onSubmit={handleSubmit} className="flex flex-col gap-3">
+        <form method="post" onSubmit={handleSubmit} className="ym-hide-content flex flex-col gap-3">
           <label className="flex flex-col gap-1 text-sm">
             E-mail
             <input

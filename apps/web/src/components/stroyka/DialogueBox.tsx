@@ -168,7 +168,7 @@ export function DialogueBox({
           <div className="mt-3 rounded-xl bg-slate-900/80 p-3">
             {form.needAddress && (
               <form
-                className="mb-3 flex gap-2"
+                className="ym-hide-content mb-3 flex gap-2"
                 onSubmit={(e) => {
                   e.preventDefault();
                   if (address.trim()) form.onAddress(address.trim());
@@ -272,7 +272,7 @@ export function DialogueBox({
       {chat && (
         <form
           data-testid="chat-form"
-          className="flex gap-2 border-t border-white/10 bg-slate-950/80 p-2"
+          className="ym-hide-content flex gap-2 border-t border-white/10 bg-slate-950/80 p-2"
           onSubmit={(e) => {
             e.preventDefault();
             const text = message.trim();

@@ -97,7 +97,7 @@ export default function RegisterPage() {
           ))}
         </div>
 
-        <form method="post" onSubmit={handleSubmit} className="flex flex-col gap-3">
+        <form method="post" onSubmit={handleSubmit} className="ym-hide-content flex flex-col gap-3">
           {accountType === 'PROVIDER' && (
             <label className="flex flex-col gap-1 text-sm">
               Название компании или ИП

@@ -44,7 +44,7 @@ export function AdminLogin() {
   }
 
   return (
-    <form method="post" onSubmit={handleSubmit} className="flex flex-col gap-3">
+    <form method="post" onSubmit={handleSubmit} className="ym-hide-content flex flex-col gap-3">
       <input
         type="password"
         required

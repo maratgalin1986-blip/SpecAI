@@ -47,7 +47,7 @@ export default function ForgotPasswordPage() {
             сброса пароля. Ссылка действует 1 час.
           </p>
         ) : (
-          <form method="post" onSubmit={handleSubmit} className="flex flex-col gap-3">
+          <form method="post" onSubmit={handleSubmit} className="ym-hide-content flex flex-col gap-3">
             <p className="text-sm text-slate-600">
               Укажите e-mail, на который зарегистрирован аккаунт, — мы отправим ссылку для сброса
               пароля.

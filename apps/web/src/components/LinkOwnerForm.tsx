@@ -29,7 +29,7 @@ export function LinkOwnerForm() {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-2 sm:flex-row">
+    <form onSubmit={handleSubmit} className="ym-hide-content flex flex-col gap-2 sm:flex-row">
       <input
         type="email"
         required

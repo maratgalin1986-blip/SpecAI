@@ -74,7 +74,7 @@ function ResetPasswordForm() {
   }
 
   return (
-    <form method="post" onSubmit={handleSubmit} className="flex flex-col gap-3">
+    <form method="post" onSubmit={handleSubmit} className="ym-hide-content flex flex-col gap-3">
       <label className="flex flex-col gap-1 text-sm">
         Новый пароль
         <input
