@@ -261,7 +261,7 @@ export class Debris {
 }
 
 /** A tiny procedural pixel texture (grey noise) so cube faces read as blocks. */
-export function pixelTexture(size = 8, seed = 7) {
+export function pixelTexture(size = 16, seed = 7) {
   const canvas = document.createElement('canvas');
   canvas.width = canvas.height = size;
   const ctx = canvas.getContext('2d')!;
@@ -270,7 +270,8 @@ export function pixelTexture(size = 8, seed = 7) {
   for (let y = 0; y < size; y++)
     for (let x = 0; x < size; x++) {
       const edge = x === 0 || y === 0 || x === size - 1 || y === size - 1;
-      const v = Math.round((edge ? 196 : 222) + rand() * 33);
+      // Finer and softer grain: small specks instead of chunky pixels.
+      const v = Math.round((edge ? 206 : 224) + rand() * 24);
       ctx.fillStyle = `rgb(${v},${v},${v})`;
       ctx.fillRect(x, y, 1, 1);
     }

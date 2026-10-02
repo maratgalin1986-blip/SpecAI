@@ -31,7 +31,7 @@ export function buildCity(data: CityData, offset: Pt, voxelMat: THREE.Material, 
   const blocks = new Voxels();
   const lit = new Voxels();
   const flat = new Voxels();
-  const cell = mobile ? 4 : 3;
+  const cell = mobile ? 3 : 2;
   const maxDist = mobile ? 520 : 820;
   const budget = mobile ? 4500 : 11000;
   let seed = 7;

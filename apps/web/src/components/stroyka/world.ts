@@ -10,7 +10,8 @@ import { SITE } from '@/lib/site';
 import { dotTexture, node, pixelTexture, Rig, Voxels, type Materials } from './kit';
 import { palletBuilder } from './machines';
 
-export const GROUND_CELL = 2;
+// 1 m blocks: finer than the first 2 m version, still one instanced draw.
+export const GROUND_CELL = 1;
 
 /** Top of the terrain at (x, z): 0 except the pit (stepped down). */
 export function groundTop(x: number, z: number) {

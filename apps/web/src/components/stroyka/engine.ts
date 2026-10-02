@@ -1062,8 +1062,9 @@ export class StroykaEngine {
     // Adaptive resolution: step down when slow for a few seconds.
     if (fps < 26) this.slowWindows++;
     else this.slowWindows = 0;
-    if (this.slowWindows >= 3 && this.pixelRatio > 0.75) {
-      this.pixelRatio = Math.max(0.75, this.pixelRatio - 0.25);
+    // Never below 1: lower made the blocks look blurry and coarse.
+    if (this.slowWindows >= 3 && this.pixelRatio > 1) {
+      this.pixelRatio = Math.max(1, this.pixelRatio - 0.25);
       this.renderer.setPixelRatio(this.pixelRatio);
       this.resize();
       this.slowWindows = 0;
