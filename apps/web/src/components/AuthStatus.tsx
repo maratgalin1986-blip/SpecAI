@@ -19,7 +19,10 @@ export function AuthStatus() {
 
   return (
     <div className="flex min-w-0 items-center gap-3 text-sm">
-      <span className="min-w-0 truncate text-slate-600" title={session.user.email ?? undefined}>
+      <span
+        className="auth-email min-w-0 truncate text-slate-600"
+        title={session.user.email ?? undefined}
+      >
         {session.user.email}
       </span>
       <button

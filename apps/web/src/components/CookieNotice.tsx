@@ -82,6 +82,7 @@ export function CookieNotice() {
     <div
       role="region"
       aria-label="Уведомление о cookie"
+      data-bottom-bar
       className={`fixed inset-x-0 bottom-[calc(4rem+env(safe-area-inset-bottom))] z-[45] flex h-10 items-center gap-2 border-t border-slate-200 bg-white/95 px-3 text-xs text-slate-700 shadow-md backdrop-blur motion-safe:transition motion-safe:duration-300 sm:inset-x-auto sm:bottom-4 sm:left-4 sm:h-auto sm:rounded-full sm:border sm:py-1.5 sm:pl-4 sm:pr-2 ${
         shown ? 'translate-y-0 opacity-100' : 'translate-y-4 opacity-0 motion-reduce:translate-y-0'
       }`}

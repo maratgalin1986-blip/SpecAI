@@ -1609,3 +1609,24 @@ html[data-vt-kind='fade']::view-transition-group(root) {
     transform: perspective(1200px) translateZ(0);
   }
 }
+
+/* Leftovers from the order test: e-mail on the dark header, and the mobile
+   bottom bars (contact bar, cookie strip) that covered the end of a form. */
+.site-header-vt[data-dark='true'] .auth-email {
+  color: rgb(226 232 240);
+}
+@media (max-width: 639px) {
+  html {
+    scroll-padding-bottom: 8.5rem;
+  }
+  [data-bottom-bar] {
+    transition:
+      transform 0.2s ease,
+      opacity 0.2s ease;
+  }
+  html[data-typing] [data-bottom-bar] {
+    transform: translateY(120%);
+    opacity: 0;
+    pointer-events: none;
+  }
+}

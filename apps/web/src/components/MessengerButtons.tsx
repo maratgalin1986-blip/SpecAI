@@ -26,12 +26,38 @@ export function MessengerButtons() {
     const timer = window.setInterval(update, 60_000);
     return () => window.clearInterval(timer);
   }, []);
+  // While a text field has focus the bottom bars step aside (see globals.css),
+  // so they never cover the form or float above the keyboard.
+  useEffect(() => {
+    const root = document.documentElement;
+    const isField = (el: Element | null) =>
+      el instanceof HTMLTextAreaElement ||
+      el instanceof HTMLSelectElement ||
+      (el instanceof HTMLInputElement &&
+        !['checkbox', 'radio', 'button', 'submit'].includes(el.type));
+    const onFocusIn = (event: FocusEvent) => {
+      if (isField(event.target as Element)) root.setAttribute('data-typing', '');
+    };
+    const onFocusOut = () => {
+      window.setTimeout(() => {
+        if (!isField(document.activeElement)) root.removeAttribute('data-typing');
+      }, 0);
+    };
+    document.addEventListener('focusin', onFocusIn);
+    document.addEventListener('focusout', onFocusOut);
+    return () => {
+      document.removeEventListener('focusin', onFocusIn);
+      document.removeEventListener('focusout', onFocusOut);
+      root.removeAttribute('data-typing');
+    };
+  }, []);
   const inJourney = useJourneyInView(pathname);
   if (pathname?.startsWith('/admin')) return null;
   return (
     <>
       <nav
         aria-label="Быстрая связь"
+        data-bottom-bar
         className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-2 gap-2 border-t border-slate-200 bg-white/95 p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] backdrop-blur sm:hidden"
       >
         <a

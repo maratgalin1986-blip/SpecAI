@@ -39,8 +39,22 @@ export function SiteHeader() {
       observer.observe(el);
     };
     attach();
+    // The strip depends on the window height: rebuild it after a rotation.
+    let resizeTimer = 0;
+    const onResize = () => {
+      window.clearTimeout(resizeTimer);
+      resizeTimer = window.setTimeout(() => {
+        observer?.disconnect();
+        observer = null;
+        tries = 0;
+        attach();
+      }, 200);
+    };
+    window.addEventListener('resize', onResize);
     return () => {
       window.clearTimeout(timer);
+      window.clearTimeout(resizeTimer);
+      window.removeEventListener('resize', onResize);
       observer?.disconnect();
     };
   }, []);
