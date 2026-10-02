@@ -6,6 +6,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -49,7 +50,11 @@ export default function LoginScreen() {
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        <Pressable style={styles.container} onPress={Keyboard.dismiss} accessible={false}>
+        <ScrollView
+          contentContainerStyle={styles.container}
+          keyboardShouldPersistTaps="handled"
+          onScrollBeginDrag={Keyboard.dismiss}
+        >
           <View style={styles.header}>
             <View style={styles.logo}>
               <Text style={styles.logoText} numberOfLines={1} adjustsFontSizeToFit>
@@ -103,8 +108,8 @@ export default function LoginScreen() {
             </Link>
           </View>
 
-          <Text style={styles.footer}>Сервер: {API_URL}</Text>
-        </Pressable>
+          {__DEV__ ? <Text style={styles.footer}>Сервер: {API_URL}</Text> : null}
+        </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -113,7 +118,7 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.background },
   flex: { flex: 1 },
-  container: { flex: 1, padding: spacing.xl, justifyContent: 'center', gap: spacing.xl },
+  container: { flexGrow: 1, padding: spacing.xl, justifyContent: 'center', gap: spacing.xl },
   header: { alignItems: 'center', gap: spacing.sm },
   logo: {
     width: 64,

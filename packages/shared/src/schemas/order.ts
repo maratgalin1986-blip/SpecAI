@@ -5,7 +5,11 @@ export type OrderStatus = z.infer<typeof orderStatusSchema>;
 
 export const createOrderSchema = z
   .object({
-    description: z.string().min(1).max(2000),
+    description: z
+      .string()
+      .trim()
+      .min(1, 'Опишите, какая техника нужна')
+      .max(2000, 'Описание слишком длинное (до 2000 знаков)'),
     desiredStartDate: z.coerce.date(),
     desiredEndDate: z.coerce.date(),
     categoryId: z.string().min(1).max(64).optional(),

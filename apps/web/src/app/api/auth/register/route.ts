@@ -4,6 +4,7 @@ import { prisma } from '@specai/database';
 import { findUserByEmail } from '@/lib/findUserByEmail';
 import { registerSchema } from '@specai/shared';
 import { sendVerificationEmail } from '@/lib/verificationEmail';
+import { zodErrorMessage } from '@/lib/apiInput';
 
 export async function POST(request: NextRequest) {
   const body = (await request.json().catch(() => null)) as { consent?: unknown } | null;
@@ -17,7 +18,7 @@ export async function POST(request: NextRequest) {
   const parsed = registerSchema.safeParse(body);
 
   if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
+    return NextResponse.json({ error: zodErrorMessage(parsed.error) }, { status: 400 });
   }
 
   // СпецПласт16 is the only executor on its site: no sign-up for outside

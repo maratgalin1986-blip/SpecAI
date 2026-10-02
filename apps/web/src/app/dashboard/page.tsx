@@ -59,7 +59,11 @@ export default async function DashboardPage({
 
   const [equipmentCount, activeBookings, myBookings, myOrders, me] = await Promise.all([
     prisma.equipment.count({ where: { ...OWN_FLEET, status: { not: 'RETIRED' } } }),
-    prisma.booking.count({ where: { status: { in: ['CONFIRMED', 'ACTIVE'] } } }),
+    session
+      ? prisma.booking.count({
+          where: { customerId: session.user.id, status: { in: ['CONFIRMED', 'ACTIVE'] } },
+        })
+      : Promise.resolve(0),
     session
       ? prisma.booking.findMany({
           where: { customerId: session.user.id },
@@ -154,8 +158,8 @@ export default async function DashboardPage({
         <h2 className="mb-3 text-lg font-semibold">Мои бронирования</h2>
         {!paymentsEnabled && myBookings.length > 0 && (
           <p className="mb-3 text-sm text-slate-600">
-            Бронирование бесплатное: без предоплаты и комиссий. Работа техники — по прайсу, расчёт с
-            СпецПласт16 после смены. Вопросы:{' '}
+            Бронирование бесплатное: без предоплаты и комиссий. Работа техники — по прайсу, расчёт
+            со СпецПласт16 после смены. Вопросы:{' '}
             <a href={SITE.phoneHref} className="font-medium text-amber-700">
               {SITE.phone}
             </a>

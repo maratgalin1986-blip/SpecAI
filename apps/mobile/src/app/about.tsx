@@ -36,7 +36,7 @@ export default function AboutScreen() {
         <Card style={styles.section}>
           <Text style={styles.description}>{SITE.description}</Text>
           <Text style={styles.description}>
-            Экскаваторы-погрузчики, автокраны и погрузчики с опытными операторами — от 2 500 ₽/ч.
+            Экскаваторы-погрузчики, автокраны и погрузчики с опытными операторами — от 2 300 ₽/ч.
             ИИ-агенты круглосуточно подберут технику, посчитают стоимость и оформят заявку.
           </Text>
         </Card>

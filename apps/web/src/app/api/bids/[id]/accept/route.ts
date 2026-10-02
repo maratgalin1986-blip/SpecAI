@@ -8,6 +8,7 @@ import {
   BLOCKING_BOOKING_STATUSES,
   toBookingDay,
   unavailableEquipmentMessage,
+  checkBookingDates,
 } from '@/lib/bookingRules';
 import { findOverlappingBooking, lockEquipment } from '@/lib/bookingConflicts';
 
@@ -43,6 +44,11 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     return NextResponse.json({ error: 'Заявка уже закрыта' }, { status: 409 });
   }
 
+  // An order whose dates have passed cannot turn into a booking.
+  const dates = checkBookingDates(bid.order.desiredStartDate, bid.order.desiredEndDate);
+  if (!dates.ok) {
+    return NextResponse.json({ error: dates.error }, { status: 400 });
+  }
   const startDate = toBookingDay(bid.order.desiredStartDate);
   const endDate = toBookingDay(bid.order.desiredEndDate);
 

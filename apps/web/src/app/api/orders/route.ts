@@ -7,6 +7,8 @@ import { geocodeAddress } from '@/lib/geo';
 import { notifyTelegram } from '@/lib/notify';
 import { SITE } from '@/lib/site';
 import { machineTypeOf } from '@/lib/equipmentCatalog';
+import { INVALID_JSON_MESSAGE, readJson, zodErrorMessage } from '@/lib/apiInput';
+import { checkBookingDates } from '@/lib/bookingRules';
 import {
   assessWork,
   CHELNY,
@@ -72,10 +74,17 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Необходимо войти в аккаунт' }, { status: 401 });
   }
 
-  const body = await request.json();
+  const body = await readJson(request);
+  if (body === null) {
+    return NextResponse.json({ error: INVALID_JSON_MESSAGE }, { status: 400 });
+  }
   const parsed = createOrderSchema.safeParse(body);
   if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
+    return NextResponse.json({ error: zodErrorMessage(parsed.error) }, { status: 400 });
+  }
+  const dates = checkBookingDates(parsed.data.desiredStartDate, parsed.data.desiredEndDate);
+  if (!dates.ok) {
+    return NextResponse.json({ error: dates.error }, { status: 400 });
   }
 
   // The work site: geocoded once here, used for the weather and the map.

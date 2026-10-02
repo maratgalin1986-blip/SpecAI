@@ -87,7 +87,7 @@ export default function ProfileScreen() {
             <Badge text="Не подтверждён" tone="warning" />
           )}
         </View>
-        <Row label="Сервер" value={API_URL} />
+        {__DEV__ ? <Row label="Сервер" value={API_URL} /> : null}
       </Card>
 
       {user && user.emailVerified === null ? (
