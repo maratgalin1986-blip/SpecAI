@@ -14,7 +14,7 @@ export interface Preset {
 export const PRESETS: Preset[] = [
   {
     id: 'scandi-8x10',
-    title: 'Скандинавский дом 8×10',
+    title: 'Скандинавский дом 10×8',
     hint: 'Одноэтажный, 2 спальни, кухня-гостиная на юг',
     params: {
       object: 'house',

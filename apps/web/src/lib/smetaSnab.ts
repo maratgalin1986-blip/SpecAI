@@ -235,7 +235,7 @@ function services(rows: SnabRow[], baseArea: number) {
       const up = Math.ceil(qtyOf(rows, after) / (after === 'blocks' ? 1.8 : 40));
       machinery.push({
         after,
-        title: `Подъём ${what} на этажи автокраном СпецПласт16`,
+        title: `Подъём ${what} автокраном СпецПласт16`,
         row: machineRow(
           'crane',
           `${up} подъём(ов) поддонов`,
@@ -311,10 +311,15 @@ export const visibleSnabRows = (list: SnabList) =>
 const rub = (n: number) => `${n.toLocaleString('ru-RU')} ₽`;
 const num = (n: number) => String(Math.round(n * 10) / 10).replace('.', ',');
 
-/** «Материалы + доставка + разгрузка ≈ X ₽», plus the rows still to confirm. */
+/**
+ * «Материалы + доставка + разгрузка ≈ X ₽», plus the rows still to confirm.
+ * With no material priced the sum is only delivery, and it says so.
+ */
 export function totalLine(list: SnabList): string {
-  const tail = list.unpriced ? ` + ${list.unpriced} поз. — ${UNPRICED}` : '';
-  return `Материалы + доставка + разгрузка ≈ ${rub(list.total)}${tail}`;
+  const tail = list.unpriced ? ` + материалы, ${list.unpriced} поз. — ${UNPRICED}` : '';
+  const what =
+    list.materialsTotal > 0 ? 'Материалы + доставка + разгрузка' : 'Доставка и разгрузка';
+  return `${what} ≈ ${rub(list.total)}${tail}`;
 }
 
 /** One CSV field for Excel: quoted when it holds a separator, a quote or a newline. */
@@ -354,13 +359,20 @@ export function snabCsv(list: SnabList): string {
 }
 
 /** The order text for the lead or WhatsApp; at most 1000 characters (lead API). */
-export function snabText(list: SnabList): string {
+/**
+ * The order text. `openRows` limits it to the rows the visitor has unlocked:
+ * the partial estimate must not leak the hidden quantities through the
+ * WhatsApp link or the order form.
+ */
+export function snabText(list: SnabList, openRows = list.rows.length): string {
+  const hidden = list.rows.length - openRows;
   const row = (r: SnabRow) =>
     `• ${r.name}: ${r.qty.toLocaleString('ru-RU')} ${r.unit} (запас ${r.reserve}%)` +
     (r.price !== null ? ` × ${rub(r.price)} = ${rub(r.cost!)}` : ` — ${UNPRICED}`);
   return [
     `Заказ материалов у СпецПласт16: ${list.title}.`,
-    ...list.rows.map(row),
+    ...list.rows.slice(0, openRows).map(row),
+    ...(hidden > 0 ? [`• Ещё ${hidden} поз. — посчитаем в полной смете.`] : []),
     ...list.delivery.map((d) => `• ${d.title}: ${d.row.hours} ч = ${rub(d.row.sum)}`),
     `${totalLine(list)}.`,
     ...(list.machinery.length ? [`Комплект под ключ с техникой ≈ ${rub(list.kitTotal)}.`] : []),

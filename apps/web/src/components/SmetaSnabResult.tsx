@@ -56,7 +56,8 @@ export function SmetaSnabResult({ list, onEdit }: { list: SnabList; onEdit: () =
   const [ordering, setOrdering] = useState(false);
   const orderBox = useRef<HTMLDivElement>(null);
   const open = unlocked ? list.rows.length : visibleSnabRows(list);
-  const text = snabText(list);
+  // What the visitor sees and sends: only the unlocked rows.
+  const text = snabText(list, open);
   const pill = 'inline-flex min-h-12 items-center justify-center rounded-full px-6 font-semibold';
   const small = 'inline-flex min-h-9 items-center rounded-full px-3 text-xs font-semibold';
 
@@ -117,13 +118,16 @@ export function SmetaSnabResult({ list, onEdit }: { list: SnabList; onEdit: () =
         {list.rows.length > 0 && (
           <div className="rounded-xl bg-slate-900 p-3 text-white">
             <p className="text-xs uppercase tracking-wider text-amber-300">Комплект под ключ</p>
-            <p className="text-sm">Материалы, доставка и техника {SITE.name} одним заказом</p>
+            <p className="text-sm">
+              {list.materialsTotal > 0 ? 'Материалы, доставка и техника' : 'Доставка и техника'}{' '}
+              {SITE.name} одним заказом
+            </p>
             <p className="mt-1 text-2xl font-extrabold text-amber-400">
               {list.kitTotal > 0 ? `≈ ${rub(list.kitTotal)}` : UNPRICED}
             </p>
             {list.unpriced > 0 && list.kitTotal > 0 && (
-              <p className="text-xs text-slate-300">
-                + {list.unpriced} поз. — {UNPRICED}
+              <p className="mt-1 text-sm font-semibold text-white">
+                + материалы, {list.unpriced} поз. — {UNPRICED}
               </p>
             )}
           </div>
@@ -162,7 +166,7 @@ export function SmetaSnabResult({ list, onEdit }: { list: SnabList; onEdit: () =
                     className={`shrink-0 text-lg font-extrabold ${locked ? 'select-none blur-sm' : ''}`}
                     aria-hidden={locked}
                   >
-                    {locked ? '00 м³' : `${num(r.qty)} ${r.unit}`}
+                    {locked ? `00 ${r.unit}` : `${num(r.qty)} ${r.unit}`}
                   </span>
                 </div>
                 {locked ? (
@@ -237,7 +241,13 @@ export function SmetaSnabResult({ list, onEdit }: { list: SnabList; onEdit: () =
         </div>
       )}
 
-      {!unlocked && list.rows.length > open && <SmetaUnlock text={text} onUnlocked={unlock} />}
+      {!unlocked && list.rows.length > open && (
+        <SmetaUnlock
+          text={snabText(list)}
+          onUnlocked={unlock}
+          title="Полная смета со всеми позициями и количеством — откроем сразу здесь"
+        />
+      )}
 
       <div className="rounded-2xl bg-slate-900 p-4">
         <SmetaDisclaimer />

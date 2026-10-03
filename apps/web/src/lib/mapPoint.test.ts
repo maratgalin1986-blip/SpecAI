@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { pointAddress, withPointLine, yandexMapsLink } from './mapPoint';
+import { pointAddress, pointMessageLine, withPointLine, yandexMapsLink } from './mapPoint';
 
 const point = { lat: 55.743123, lon: 52.398111 };
 
@@ -29,5 +29,12 @@ describe('parseCoordinates', () => {
     });
     expect(parseCoordinates('55.743123, 52.398111')).toEqual({ lat: 55.743123, lon: 52.398111 });
     expect(parseCoordinates('Набережные Челны, проспект Мира, 49')).toBeNull();
+  });
+
+  it('shortens a long message, never the point line', () => {
+    const point = { lat: 55.74, lon: 52.4 };
+    const text = withPointLine('а'.repeat(1200), point);
+    expect(text.length).toBeLessThanOrEqual(1000);
+    expect(text.endsWith(pointMessageLine(point))).toBe(true);
   });
 });
