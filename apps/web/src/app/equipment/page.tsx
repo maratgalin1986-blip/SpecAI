@@ -37,10 +37,9 @@ interface EquipmentSearchParams {
   sort?: string;
   page?: string;
   /** One provider's machinery (link «Техника этого поставщика» on /map). */
-  company?: string;
 }
 
-const FILTER_KEYS = ['q', 'city', 'minPrice', 'maxPrice', 'sort', 'company'] as const;
+const FILTER_KEYS = ['q', 'city', 'minPrice', 'maxPrice', 'sort'] as const;
 
 /** Catalog link that keeps the search filters and replaces the category/group. */
 function catalogHref(
@@ -106,17 +105,8 @@ export default async function EquipmentCatalogPage({
   const requestedPage = parsePage(searchParams.page);
 
   // Filters other than the category: the tab counts are computed against these.
-  const companyFilter =
-    searchParams.company && /^[\w-]{1,64}$/.test(searchParams.company)
-      ? await prisma.company.findFirst({
-          where: { id: searchParams.company, isProvider: true },
-          select: { id: true, name: true },
-        })
-      : null;
-
+  // Only the house fleet; PUBLISHED_FLEET goes last so no filter can override it.
   const baseWhere = {
-    ...PUBLISHED_FLEET,
-    companyId: companyFilter?.id,
     location: searchParams.city
       ? { city: { equals: searchParams.city, mode: 'insensitive' as const } }
       : undefined,
@@ -125,6 +115,7 @@ export default async function EquipmentCatalogPage({
         ? { gte: minPrice, lte: maxPrice }
         : undefined,
     name: searchParams.q ? { contains: searchParams.q, mode: 'insensitive' as const } : undefined,
+    ...PUBLISHED_FLEET,
   };
 
   const [categories, countsByCategory] = await Promise.all([
@@ -220,25 +211,6 @@ export default async function EquipmentCatalogPage({
         </a>
       </CinemaHero>
 
-      {companyFilter && (
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm">
-          <span>
-            Техника базы <strong className="break-words">{companyFilter.name}</strong>
-          </span>
-          <span className="flex gap-3 font-semibold">
-            <a href="/map" className="text-amber-800 underline">
-              На карте
-            </a>
-            <a
-              href={catalogHref({ ...searchParams, company: undefined }, {})}
-              className="text-amber-800 underline"
-            >
-              Вся техника
-            </a>
-          </span>
-        </div>
-      )}
-
       <nav aria-label="Категории техники" className="flex flex-col gap-3">
         <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0">
           <Pill
@@ -285,7 +257,6 @@ export default async function EquipmentCatalogPage({
         {searchParams.category && (
           <input type="hidden" name="category" value={searchParams.category} />
         )}
-        {companyFilter && <input type="hidden" name="company" value={companyFilter.id} />}
         {!searchParams.category && activeGroup && (
           <input type="hidden" name="group" value={activeGroup} />
         )}

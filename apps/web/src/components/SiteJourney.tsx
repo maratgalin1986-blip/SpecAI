@@ -229,9 +229,12 @@ export function SiteJourney() {
             className="overflow-hidden rounded-3xl border border-slate-200 bg-white"
           >
             <a href={scene.href} className="block">
-              <img
-                src={photos[scenes.indexOf(scene)]}
+              <Image
+                src={photos[scenes.indexOf(scene)] ?? defaultPhotoOf(scene.type)}
                 alt=""
+                width={640}
+                height={360}
+                sizes="(min-width: 768px) 33vw, 100vw"
                 className="aspect-video w-full object-cover"
               />
               <div className="p-5">
