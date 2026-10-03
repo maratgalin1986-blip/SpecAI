@@ -32,6 +32,7 @@ import type { WorldProgress } from '@/lib/stroyka/progress';
 import { createMaterials, Debris, node, pixelTexture, Rig, smooth } from './kit';
 import { Cinema } from './cinema';
 import { loadProps } from './props3d';
+import { LedScreen } from './ledScreen';
 import { buildDistrict, buildProject, buildTowerCrane, type ProjectBuild } from './project';
 import { buildCity } from './cityMesh';
 import { placeSite, type CityData } from '@/lib/stroyka/city';
@@ -190,6 +191,7 @@ function skyDir(azimuth: number, elevation: number, out = new THREE.Vector3()) {
 export class StroykaEngine {
   private renderer!: THREE.WebGLRenderer;
   private cinema: Cinema | null = null;
+  private led: LedScreen | null = null;
   private flarePoint = new THREE.Vector3();
   private scene = new THREE.Scene();
   private camera!: THREE.PerspectiveCamera;
@@ -240,7 +242,7 @@ export class StroykaEngine {
   private progress: WorldProgress | null = null;
   private agpRoot: THREE.Object3D | null = null;
   private reveal: { from: number; t: number; dur: number } | null = null;
-  private intro = { t: 0, dur: 9, active: true };
+  private intro = { t: 0, dur: 9, active: true, held: false };
   private brandMat = new THREE.MeshLambertMaterial({ map: brandTexture() });
   private clickables: THREE.Object3D[] = [];
   private fireworks: Debris | null = null;
@@ -411,6 +413,9 @@ export class StroykaEngine {
     this.bindInput();
     void this.loadCity();
     void loadProps(this.scene, this.opts.mobile, () => this.disposed);
+    // The film screen by the gate, facing the entrance.
+    this.led = new LedScreen(this.M, this.opts.mobile);
+    this.place(this.led.group, -24, 36, 0.83);
     this.opts.onProgress(1);
     this.opts.telemetry.ready = true;
     this.running = true;
@@ -981,6 +986,12 @@ export class StroykaEngine {
     if (event.snow) this.setEnvironment(this.lastDate, this.lastPoint, this.lift, true);
   }
 
+  /** Holds the opening fly-over at its first shot (while the film plays). */
+  holdIntro(hold: boolean) {
+    this.intro.held = hold;
+    if (!hold) this.led?.start();
+  }
+
   /** Debug: post effects (AO, lens) on or off, for before/after shots. */
   setFx(on: boolean) {
     this.cinema?.setFx(on);
@@ -1236,6 +1247,7 @@ export class StroykaEngine {
       if (light.isLight && light.shadow) light.shadow.dispose();
     });
     this.cinema?.dispose();
+    this.led?.dispose();
     this.renderer.renderLists.dispose();
     this.renderer.forceContextLoss();
     this.renderer.dispose();
@@ -1456,7 +1468,7 @@ export class StroykaEngine {
   private updateCamera(dt: number) {
     const t = this.opts.telemetry;
     if (this.intro.active) {
-      this.intro.t += dt;
+      if (!this.intro.held) this.intro.t += dt;
       this.introPose(this.intro.t / this.intro.dur);
       if (this.intro.t >= this.intro.dur) this.skipIntro();
       return;
