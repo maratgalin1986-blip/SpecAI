@@ -1,4 +1,4 @@
-// Voxel people (and the site dog) for /stroyka, built from small blocks of
+// People (and the site dog) for /stroyka, built from small rounded parts of
 // about 0.03–0.15 m. Each person is six merged meshes, one per animated group
 // (body, head, two arms, two legs), with the colours in the vertices and one
 // shared material, so a detailed worker costs 6 draw calls instead of ~15.
@@ -7,6 +7,7 @@
 // plane moved onto their head.
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { SITE } from '@/lib/site';
 import { MOODS, type Mood } from '@/lib/stroyka/mood';
 
@@ -28,12 +29,12 @@ function atlasTexture() {
   ctx.fillRect(0, 0, 256, 256);
   let s = 11;
   const rand = () => (s = (s * 16807) % 2147483647) / 2147483647;
-  for (let y = 0; y < 16; y++)
-    for (let x = 0; x < 16; x++) {
-      const edge = x === 0 || y === 0 || x === 15 || y === 15;
-      const v = Math.round((edge ? 212 : 230) + rand() * 22);
+  // Soft fabric grain (no block edges).
+  for (let y = 0; y < 64; y++)
+    for (let x = 0; x < 64; x++) {
+      const v = Math.round(228 + rand() * 20);
       ctx.fillStyle = `rgb(${v},${v},${v})`;
-      ctx.fillRect(x * 8, y * 8, 8, 8);
+      ctx.fillRect(x * 2, y * 2, 2, 2);
     }
   // The vest print: 256×64 at y 176.
   ctx.fillStyle = '#111827';
@@ -169,14 +170,18 @@ function faceTexture() {
   return texture;
 }
 
-let SHARED: { body: THREE.MeshLambertMaterial; face: THREE.MeshLambertMaterial } | null = null;
+let SHARED: { body: THREE.MeshStandardMaterial; face: THREE.MeshStandardMaterial } | null = null;
 
 /** The shared materials (created on first use, in the browser). */
 export function peopleMaterials() {
   if (!SHARED) {
     SHARED = {
-      body: new THREE.MeshLambertMaterial({ vertexColors: true, map: atlasTexture() }),
-      face: new THREE.MeshLambertMaterial({ map: faceTexture() }),
+      body: new THREE.MeshStandardMaterial({
+        vertexColors: true,
+        map: atlasTexture(),
+        roughness: 0.8,
+      }),
+      face: new THREE.MeshStandardMaterial({ map: faceTexture(), roughness: 0.7 }),
     };
   }
   return SHARED;
@@ -189,7 +194,9 @@ export function resetPeopleMaterials() {
 
 // ---------------------------------------------------------------- geometry
 
-const UNIT_BOX = new THREE.BoxGeometry(1, 1, 1);
+// Strongly rounded boxes: limbs read as rounded forms, the head as an
+// egg — a figure, not a stack of cubes (film look, 2026-10-03).
+const UNIT_BOX = new RoundedBoxGeometry(1, 1, 1, 3, 0.32);
 const UNIT_PLANE = new THREE.PlaneGeometry(1, 1);
 const tmpM = new THREE.Matrix4();
 const tmpQ = new THREE.Quaternion();
@@ -208,7 +215,8 @@ class Blocks {
     rot: V3,
     uv: typeof NOISE_UV,
   ) {
-    const g = base.clone();
+    // Rounded boxes are non-indexed, planes indexed: merge as non-indexed.
+    const g = base.index ? base.toNonIndexed() : base.clone();
     tmpQ.setFromEuler(tmpE.set(rot[0], rot[1], rot[2]));
     g.applyMatrix4(
       tmpM.compose(new THREE.Vector3(...pos), tmpQ, new THREE.Vector3(size[0], size[1], size[2])),
@@ -618,7 +626,7 @@ export function animatePerson(p: Person, pose: Pose) {
 /** One textured face plane, moved onto whoever is speaking. */
 export class MoodFace {
   readonly mesh: THREE.Mesh;
-  private mat: THREE.MeshLambertMaterial;
+  private mat: THREE.MeshStandardMaterial;
   private owner: Person | null = null;
   constructor() {
     this.mat = peopleMaterials().face;

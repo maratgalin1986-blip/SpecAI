@@ -25,6 +25,8 @@ import {
   renderStart,
   renderThunk,
   renderWhoosh,
+  renderSiteEvent,
+  SITE_EVENTS,
 } from '@/lib/soundSynth';
 import {
   isFemaleVoice,
@@ -36,6 +38,7 @@ import {
   type Line,
   type Speaker,
 } from '@/lib/soundVoices';
+import { clipsFor } from '@/lib/stroyka/voice';
 
 const ARRIVAL_GAP_S = 20;
 
@@ -44,7 +47,7 @@ const LEVEL = {
   fx: 0.7,
   music: 0.07, // ≈ -20 dB under fx
   site: 0.22,
-  machine: 0.42,
+  machine: 0.28, // owner: machines a little quieter under the voices
   reverb: 0.35,
 };
 
@@ -69,6 +72,7 @@ export class SoundEngine {
   private voice: Voice | null = null;
   private machineToken = 0;
   private lastArrival = -Infinity;
+  private eventTimer = 0;
   private voiceTimer = 0;
   private ducked = false;
   private speechToken = 0;
@@ -223,11 +227,36 @@ export class SoundEngine {
       loop(buffer, this.site, SITE_SAMPLES[i]!.gain, SITE_SAMPLES[i]!.pan),
     );
     this.scheduleVoice();
+    this.scheduleSiteEvent();
+  }
+
+  /** Hammer, grinder, back-up alarm, clank or horn somewhere on the site. */
+  private scheduleSiteEvent() {
+    window.clearTimeout(this.eventTimer);
+    this.eventTimer = window.setTimeout(
+      async () => {
+        if (!this.bedsOn || this.disposed) return;
+        if (this.running && document.visibilityState === 'visible') {
+          const kind = SITE_EVENTS[Math.floor(Math.random() * SITE_EVENTS.length)]!;
+          const buffer = await this.synth(`event:${kind}`, () => renderSiteEvent(this.ctx, kind));
+          if (this.bedsOn) {
+            this.play(buffer, this.site, {
+              gain: (this.ducked ? 0.25 : 0.55) * (kind === 'reverse' ? 0.5 : 1),
+              pan: (Math.random() - 0.5) * 1.6,
+              rate: 0.92 + Math.random() * 0.16,
+            });
+          }
+        }
+        this.scheduleSiteEvent();
+      },
+      5000 + Math.random() * 7000,
+    );
   }
 
   stopBeds(): void {
     this.bedsOn = false;
     window.clearTimeout(this.voiceTimer);
+    window.clearTimeout(this.eventTimer);
     const now = this.ctx.currentTime;
     this.music.gain.setTargetAtTime(0, now, 0.3);
     this.site.gain.setTargetAtTime(0, now, 0.3);
@@ -253,6 +282,43 @@ export class SoundEngine {
   }
 
   private sayLine() {
+    if (this.speaking) return;
+    // Workers talking somewhere on the site, in the recorded neural voices.
+    void this.sayRecordedLine().then((said) => {
+      if (said || this.speaking) return;
+      this.saySynthLine();
+    });
+  }
+
+  /** A random recorded line far back in the mix; false when there are none. */
+  private async sayRecordedLine(): Promise<boolean> {
+    const { VOICE_CLIPS } = await import('@/lib/stroyka/voiceClips').catch(() => ({
+      VOICE_CLIPS: {} as Record<string, string[]>,
+    }));
+    const pool = Object.values(VOICE_CLIPS);
+    if (!pool.length) return false;
+    const keys = pool[Math.floor(Math.random() * pool.length)]!;
+    const buffers = await Promise.all(
+      keys.map((key) => {
+        const url = `/audio/stroyka/${key}.mp3`;
+        return this.cached(`clip:${url}`, () => this.fetchClip(url));
+      }),
+    );
+    if (!buffers.every(Boolean) || this.speaking || !this.speakable()) return false;
+    this.speaking = true;
+    const radio = Math.random() < 0.4;
+    await this.playClips(
+      buffers as AudioBuffer[],
+      radio,
+      0.09,
+      (Math.random() - 0.5) * 1.4,
+      this.site,
+    );
+    this.speaking = false;
+    return true;
+  }
+
+  private saySynthLine() {
     // No Russian voice in this browser, or someone is talking: stay quiet.
     if (!russianVoices().length || this.speaking) return;
     const line = SITE_LINES[Math.floor(Math.random() * SITE_LINES.length)]!;
@@ -319,6 +385,19 @@ export class SoundEngine {
     const alive = () => token === this.speechToken && this.speakable();
     if (!alive()) return;
     if (radio) this.play(squelch, this.fx, { gain: 0.07, pan });
+    // A recorded neural voice when the line has one (lib/stroyka/voice.ts).
+    const clips = await clipsFor(line.text);
+    if (clips && alive()) {
+      const buffers = await Promise.all(
+        clips.map((url) => this.cached(`clip:${url}`, () => this.fetchClip(url))),
+      );
+      if (!alive()) return;
+      if (buffers.every(Boolean)) {
+        await this.playClips(buffers as AudioBuffer[], line.kind === 'radio', volume, pan);
+        if (radio && alive()) this.play(squelch, this.fx, { gain: 0.05, pan });
+        return;
+      }
+    }
     if (!voice) return;
     // speechSynthesis cannot go through Web Audio, so the «walkie-talkie» is
     // the static around the words and a faint band-limited hiss under them.
@@ -372,6 +451,71 @@ export class SoundEngine {
         }
       };
       window.setTimeout(() => next(0), radio ? 220 : 0);
+    });
+  }
+
+  private async fetchClip(url: string): Promise<AudioBuffer | null> {
+    try {
+      const res = await fetch(url);
+      if (!res.ok) return null;
+      return await this.ctx.decodeAudioData(await res.arrayBuffer());
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Plays recorded clips back to back through the effects bus; a radio line
+   * is band-limited like a walkie-talkie. Resolves at the end or when cut.
+   */
+  private playClips(
+    buffers: AudioBuffer[],
+    radio: boolean,
+    volume: number,
+    pan: number,
+    bus: AudioNode = this.fx,
+  ) {
+    return new Promise<void>((resolve) => {
+      const out = this.ctx.createGain();
+      out.gain.value = Math.min(1, volume * 3);
+      let tail: AudioNode = out;
+      if (radio) {
+        const band = this.ctx.createBiquadFilter();
+        band.type = 'bandpass';
+        band.frequency.value = 1700;
+        band.Q.value = 0.7;
+        out.connect(band);
+        tail = band;
+      }
+      if (pan && typeof this.ctx.createStereoPanner === 'function') {
+        const p = this.ctx.createStereoPanner();
+        p.pan.value = pan * 0.5;
+        tail.connect(p);
+        tail = p;
+      }
+      tail.connect(bus);
+      const sources: AudioBufferSourceNode[] = [];
+      let at = this.ctx.currentTime + 0.05;
+      for (const buffer of buffers) {
+        const src = this.ctx.createBufferSource();
+        src.buffer = buffer;
+        src.connect(out);
+        src.start(at);
+        at += buffer.duration + 0.08;
+        sources.push(src);
+      }
+      let done = false;
+      const finish = () => {
+        if (done) return;
+        done = true;
+        window.clearTimeout(timer);
+        this.finishLine = null;
+        for (const src of sources) stopSafely(src);
+        window.setTimeout(() => tail.disconnect(), 100);
+        resolve();
+      };
+      const timer = window.setTimeout(finish, (at - this.ctx.currentTime) * 1000 + 50);
+      this.finishLine = finish;
     });
   }
 

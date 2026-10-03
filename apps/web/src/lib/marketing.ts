@@ -68,6 +68,7 @@ const FORM_LABELS: Record<string, string> = {
   'catalog-card': 'Заказ из каталога',
   'catalog-empty': 'Каталог, ничего не нашли',
   landing: 'Страница вида техники',
+  job: 'Страница работы',
   contacts: 'Контакты',
   orders: 'Страница заявки',
   'agents-chat': 'Чат с ИИ-агентами',
@@ -91,14 +92,37 @@ export function splitSource(source: string | null | undefined) {
   return { form: form || '—', channel: rest.join(' · ') || DIRECT };
 }
 
+const YCLID_KEY = 'sp16_yclid';
+
 /** Call once per page load in the browser. */
 export function rememberVisit() {
   try {
     const channel = channelFrom(location.href, document.referrer, location.hostname);
     if (channel) localStorage.setItem(STORAGE_KEY, JSON.stringify({ channel, at: Date.now() }));
+    // The Direct click id, so a lead can be matched to the ad click (30 days).
+    const yclid = new URLSearchParams(location.search).get('yclid')?.replace(/\D/g, '');
+    if (yclid)
+      localStorage.setItem(
+        YCLID_KEY,
+        JSON.stringify({ yclid: yclid.slice(0, 24), at: Date.now() }),
+      );
   } catch {
     // Storage blocked: the lead just says "direct".
   }
+}
+
+/** The remembered yclid of the last Direct click, if still fresh. */
+export function currentYclid(): string {
+  try {
+    const saved = JSON.parse(localStorage.getItem(YCLID_KEY) ?? 'null') as {
+      yclid?: string;
+      at?: number;
+    } | null;
+    if (saved?.yclid && saved.at && Date.now() - saved.at < TTL_MS) return saved.yclid;
+  } catch {
+    // Fall through.
+  }
+  return '';
 }
 
 export function currentChannel(): string {
@@ -133,7 +157,11 @@ export type Goal =
   | 'geo_fail'
   | 'window_book'
   | 'lead_retry'
-  | 'lead_offline_call';
+  | 'lead_offline_call'
+  // Telegram funnel (2026-10-03): deep link taps, the Mini App, the calculator.
+  | 'telegram_click'
+  | 'miniapp_open'
+  | 'calc_done';
 
 /** The visitor pressed «Отказаться» in the cookie notice. */
 export const COOKIE_CONSENT_KEY = 'cookie-consent';

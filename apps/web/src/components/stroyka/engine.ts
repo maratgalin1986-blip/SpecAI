@@ -29,7 +29,8 @@ import {
 import { splitCensored, type BanterSpeaker } from '@/lib/stroykaJokes';
 import { Atmosphere } from './atmosphere';
 import type { WorldProgress } from '@/lib/stroyka/progress';
-import { createMaterials, Debris, node, pixelTexture, retint, Rig, smooth } from './kit';
+import { createMaterials, Debris, node, pixelTexture, Rig, smooth } from './kit';
+import { Cinema } from './cinema';
 import { buildDistrict, buildProject, buildTowerCrane, type ProjectBuild } from './project';
 import { buildCity } from './cityMesh';
 import { placeSite, type CityData } from '@/lib/stroyka/city';
@@ -115,6 +116,8 @@ export interface EngineOptions {
   onAdClick(target: AdTarget): void;
   /** The site dog was tapped. */
   onDog?(): void;
+  /** The opening fly-over (the «game cinematic») ended or was skipped. */
+  onIntroEnd?(): void;
 }
 
 interface Character {
@@ -185,6 +188,8 @@ function skyDir(azimuth: number, elevation: number, out = new THREE.Vector3()) {
 
 export class StroykaEngine {
   private renderer!: THREE.WebGLRenderer;
+  private cinema: Cinema | null = null;
+  private flarePoint = new THREE.Vector3();
   private scene = new THREE.Scene();
   private camera!: THREE.PerspectiveCamera;
   private clock = new THREE.Clock();
@@ -227,7 +232,7 @@ export class StroykaEngine {
   private guardBeam!: THREE.Mesh;
   private time = 0;
   private obstacles = obstaclesFor(false);
-  private voxelMat = new THREE.MeshLambertMaterial({ map: pixelTexture() });
+  private voxelMat = new THREE.MeshStandardMaterial({ map: pixelTexture(), roughness: 0.85 });
   private project: ProjectBuild | null = null;
   private district: { group: THREE.Group; lit: THREE.InstancedMesh } | null = null;
   private tower: ReturnType<typeof buildTowerCrane> | null = null;
@@ -380,6 +385,13 @@ export class StroykaEngine {
 
     this.atmosphere = new Atmosphere(mobile);
     this.scene.add(this.atmosphere.group);
+    this.cinema = new Cinema(
+      this.renderer,
+      this.scene,
+      this.camera,
+      this.atmosphere.skyUniforms as unknown as Record<string, THREE.IUniform>,
+      !mobile,
+    );
     this.curve = new THREE.CatmullRomCurve3(
       TOUR_PATH.map((p) => new THREE.Vector3(p.p[0], 0, p.p[1])),
       true,
@@ -390,6 +402,7 @@ export class StroykaEngine {
     // Opening shot: an aerial fly-over of the district, landing at the gate.
     this.introPose(0);
     this.setEnvironment(new Date(), null, undefined, true);
+    this.cinema.updateEnvironment(0, true);
     this.opts.onProgress(0.9);
     await nextFrame();
 
@@ -971,6 +984,10 @@ export class StroykaEngine {
     if (!this.intro.active) return;
     this.intro.active = false;
     this.startBlend(1.2);
+    this.cinema?.setIntro(0);
+    this.camera.fov = this.camera.aspect < 1 ? 72 : 58;
+    this.camera.updateProjectionMatrix();
+    this.opts.onIntroEnd?.();
   }
 
   private introPose(k: number) {
@@ -982,6 +999,14 @@ export class StroykaEngine {
     this.camera.position.set(Math.cos(a) * r, h, Math.sin(a) * r + 10);
     const look = new THREE.Vector3(0, 0, -10).lerp(new THREE.Vector3(0, 2, 52), e * e);
     this.camera.lookAt(look);
+    // A slow banking roll and a narrower lens, like a game's opening shot.
+    this.camera.rotateZ(Math.sin(k * Math.PI) * 0.06);
+    const fov = (this.camera.aspect < 1 ? 66 : 48) + 8 * e;
+    if (Math.abs(this.camera.fov - fov) > 0.05) {
+      this.camera.fov = fov;
+      this.camera.updateProjectionMatrix();
+    }
+    this.cinema?.setIntro(1 - smooth(0.85, 1, k));
   }
 
   /** Real (or overridden) time and the forecast point. */
@@ -1141,7 +1166,7 @@ export class StroykaEngine {
 
   /** The current frame as a PNG data URL (rendered and read in the same tick). */
   snapshot(): { url: string; width: number; height: number } {
-    this.renderer.render(this.scene, this.camera);
+    this.cinema!.render(this.time);
     const canvas = this.renderer.domElement;
     return { url: canvas.toDataURL('image/png'), width: canvas.width, height: canvas.height };
   }
@@ -1203,6 +1228,7 @@ export class StroykaEngine {
       const light = obj as THREE.DirectionalLight;
       if (light.isLight && light.shadow) light.shadow.dispose();
     });
+    this.cinema?.dispose();
     this.renderer.renderLists.dispose();
     this.renderer.forceContextLoss();
     this.renderer.dispose();
@@ -1335,6 +1361,7 @@ export class StroykaEngine {
     const w = canvas.clientWidth || window.innerWidth;
     const h = canvas.clientHeight || window.innerHeight;
     this.renderer.setSize(w, h, false);
+    this.cinema?.resize(w, h, this.pixelRatio);
     this.camera.aspect = w / h;
     this.camera.fov = w < h ? 72 : 58;
     this.camera.updateProjectionMatrix();
@@ -1364,7 +1391,7 @@ export class StroykaEngine {
     const dt = Math.min(raw, 0.05);
     this.time += dt;
     this.tick(dt, Math.min(raw, 0.5));
-    this.renderer.render(this.scene, this.camera);
+    this.cinema!.render(this.time);
     this.measure();
   };
 
@@ -1881,22 +1908,7 @@ export class StroykaEngine {
     const ground = w.snowGround ? 'snow' : w.wet ? 'wet' : 'dry';
     if (ground !== this.ground) {
       this.ground = ground;
-      const white = new THREE.Color(0xf4f7fb);
-      const t = this.world.terrain;
-      const hp = this.world.heaps;
-      if (ground === 'snow') {
-        retint(t.mesh, t.colors, white, 0.88);
-        retint(hp.mesh, hp.colors, white, 0.6);
-        (this.world.farGround.material as THREE.MeshLambertMaterial).color.setHex(0xe8eef4);
-      } else if (ground === 'wet') {
-        retint(t.mesh, t.colors, new THREE.Color(0x3a3f48), 0.2, 0.62);
-        retint(hp.mesh, hp.colors, white, 0, 0.7);
-        (this.world.farGround.material as THREE.MeshLambertMaterial).color.setHex(0x3f5528);
-      } else {
-        retint(t.mesh, t.colors, white, 0);
-        retint(hp.mesh, hp.colors, white, 0);
-        (this.world.farGround.material as THREE.MeshLambertMaterial).color.setHex(0x5a7434);
-      }
+      this.world.setGround(ground);
       this.world.puddles.visible = ground === 'wet';
     }
 
@@ -1961,6 +1973,17 @@ export class StroykaEngine {
     }
 
     this.atmosphere.setSky(E.zenith, E.horizon, E.sun, E.sunDir);
+    this.cinema?.updateEnvironment(this.time);
+    this.cinema?.setNight(nightK);
+    // Lens flare when the sun is in the frame on a clear day.
+    if (this.cinema) {
+      const p = this.flarePoint.copy(E.sunDir).multiplyScalar(300).add(this.camera.position);
+      p.project(this.camera);
+      const inFrame = p.z < 1 && Math.abs(p.x) < 1.1 && Math.abs(p.y) < 1.1;
+      const strength =
+        inFrame && E.sunDir.y > 0 ? (1 - E.clouds * 0.9) * (1 - nightK) * (1 - w.fog) : 0;
+      this.cinema.setSun((p.x + 1) / 2, (p.y + 1) / 2, strength, this.camera.aspect);
+    }
     this.atmosphere.skyUniforms.glow.value = (1 - E.clouds * 0.8) * (1 - nightK);
     this.atmosphere.skyUniforms.flash.value = flash * 0.5;
     this.atmosphere.setBodies(

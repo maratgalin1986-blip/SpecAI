@@ -331,6 +331,20 @@ export function symbolLabel(symbol: string) {
   return 'без данных';
 }
 
+/** A weather icon for a Met Norway symbol; clear and fair skies get a moon at night. */
+export function symbolIcon(symbol: string, night = false) {
+  if (symbol.includes('thunder')) return '⛈️';
+  if (symbol.includes('snow')) return '🌨️';
+  if (symbol.includes('sleet')) return '🌨️';
+  if (symbol.includes('rain')) return '🌧️';
+  if (symbol.includes('fog')) return '🌫️';
+  if (symbol.includes('partlycloudy')) return night ? '☁️' : '⛅';
+  if (symbol.includes('cloudy')) return '☁️';
+  if (symbol.includes('fair')) return night ? '🌙' : '🌤️';
+  if (symbol.includes('clearsky')) return night ? '🌙' : '☀️';
+  return '🌡️';
+}
+
 /** Compass point of a «wind from» direction. */
 export function windFrom(degrees: number) {
   const points = ['С', 'СВ', 'В', 'ЮВ', 'Ю', 'ЮЗ', 'З', 'СЗ'];

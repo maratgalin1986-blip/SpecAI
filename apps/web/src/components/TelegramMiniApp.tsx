@@ -8,6 +8,8 @@ import { useEffect } from 'react';
 export function TelegramMiniApp() {
   useEffect(() => {
     if (!window.location.hash.includes('tgWebApp')) return;
+    // /tg loads the script itself and sets its own colours.
+    if (/^\/tg(\/|$)/.test(window.location.pathname)) return;
     const script = document.createElement('script');
     script.src = 'https://telegram.org/js/telegram-web-app.js';
     script.async = true;

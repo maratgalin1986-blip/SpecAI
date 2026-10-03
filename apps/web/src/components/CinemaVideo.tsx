@@ -8,10 +8,11 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 // Only the clip actually shown is downloaded (the page may pick another one
 // after hydration), and there is no video at all with reduced motion, with
 // data saver on or on a 2G connection — the poster frame stays. Phones and 3G
-// get the light cut (<clip>-sm.mp4: 360p, ~0.3–0.45 Mbit/s, about 2.3 times
-// lighter than the full clip); desktops get <clip>-md.webm/.mp4 (540p, ~0.5 Mbit/s,
-// long GOP: a looping background never seeks, so it needs few keyframes).
-// The scroll-scrubbed journey keeps the 1-keyframe-a-second cuts.
+// get the light cut (<clip>-sm.mp4: 720p, ~1–1.5 Mbit/s); desktops get
+// <clip>-md.mp4 (1080p from the original Mixkit masters, ≤3.5 Mbit/s). The
+// scroll-scrubbed journey uses <clip>.mp4 (720p, a keyframe every second).
+// H.264 only: every browser plays it, and a second webm copy of each clip
+// doubled the weight for little gain.
 //
 // The poster stays the page's LCP element: the video element is created only
 // after the page has loaded and gone idle, with preload="none", and starts
@@ -36,9 +37,6 @@ export function lightFootage() {
   );
 }
 
-/** Clips whose full webm is already lighter than a re-encode: no -md.webm. */
-const WEBM_ALREADY_LIGHT = new Set(['steel-frame', 'frame-sunset', 'welder-height', 'workers']);
-
 /**
  * The <source> list of a clip: the light mp4 alone, the desktop background
  * cut alone, or (for scrubbing) webm with an mp4 fallback.
@@ -46,18 +44,9 @@ const WEBM_ALREADY_LIGHT = new Set(['steel-frame', 'frame-sunset', 'welder-heigh
 export function clipSources(clip: string, light: boolean, background = false): ReactNode {
   if (light) return <source src={`/video/${clip}-sm.mp4`} type="video/mp4" />;
   return background ? (
-    <>
-      <source
-        src={`/video/${clip}${WEBM_ALREADY_LIGHT.has(clip) ? '' : '-md'}.webm`}
-        type="video/webm"
-      />
-      <source src={`/video/${clip}-md.mp4`} type="video/mp4" />
-    </>
+    <source src={`/video/${clip}-md.mp4`} type="video/mp4" />
   ) : (
-    <>
-      <source src={`/video/${clip}.webm`} type="video/webm" />
-      <source src={`/video/${clip}.mp4`} type="video/mp4" />
-    </>
+    <source src={`/video/${clip}.mp4`} type="video/mp4" />
   );
 }
 
@@ -67,7 +56,7 @@ export function CinemaVideo({
   className = '',
   priority = false,
 }: {
-  /** Name in public/video (…/<clip>.webp|.webm|.mp4). */
+  /** Name in public/video (…/<clip>.webp|.mp4). */
   clip: string;
   /**
    * Clip whose frame the server renders. Keep it the same on the server and

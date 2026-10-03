@@ -654,3 +654,81 @@ export function renderImpulse(ctx: BaseAudioContext): AudioBuffer {
   }
   return buffer;
 }
+
+/** Sparse one-shots of a busy site, played at random far back in the mix. */
+export type SiteEvent = 'hammer' | 'grinder' | 'reverse' | 'clank' | 'horn';
+export const SITE_EVENTS: SiteEvent[] = ['hammer', 'grinder', 'reverse', 'clank', 'horn'];
+
+export function renderSiteEvent(ctx: BaseAudioContext, kind: SiteEvent): AudioBuffer {
+  const rand = rng(kind.length * 31 + 7);
+  if (kind === 'hammer') {
+    // Three or four blows on steel: a ringing ping over a dull thud.
+    return renderShot(ctx, 2.2, 1, (data, length, rate) => {
+      const out = data[0]!;
+      const blows = [0, 0.55, 1.1, 1.6];
+      for (const at of blows) {
+        const start = Math.round(at * rate);
+        for (let i = start; i < length; i++) {
+          const t = (i - start) / rate;
+          if (t > 0.5) break;
+          const ping =
+            (Math.sin(TAU * 2350 * t) + 0.6 * Math.sin(TAU * 3720 * t)) * Math.exp(-t * 18);
+          const thud = Math.sin(TAU * (90 + 60 * Math.exp(-t * 40)) * t) * Math.exp(-t * 30);
+          out[i] = out[i]! + 0.45 * ping + 0.7 * thud + (rand() - 0.5) * Math.exp(-t * 120);
+        }
+      }
+    });
+  }
+  if (kind === 'grinder') {
+    // An angle grinder: a whining band of noise that bites in and lets go.
+    return renderShot(ctx, 2.6, 1, (data, length, rate) => {
+      const out = data[0]!;
+      const bp = svf(3000, 6, rate);
+      let phase = 0;
+      for (let i = 0; i < length; i++) {
+        const p = i / length;
+        const env = Math.min(1, p * 8) * Math.min(1, (1 - p) * 5);
+        const bite = 1 - 0.25 * Math.sin(Math.PI * Math.min(1, Math.max(0, (p - 0.3) / 0.4)));
+        const [, band] = bp.run(rand() - 0.5, bp.set(3200 * bite));
+        phase += (5200 * bite) / rate;
+        out[i] = (band * 1.6 + 0.12 * Math.sin(TAU * phase)) * env;
+      }
+    });
+  }
+  if (kind === 'reverse') {
+    // A truck reversing: five beeps of the back-up alarm.
+    return renderShot(ctx, 4.8, 1, (data, length, rate) => {
+      const out = data[0]!;
+      for (let i = 0; i < length; i++) {
+        const t = i / rate;
+        const on = t % 0.95 < 0.48 && t < 4.75;
+        out[i] = on ? Math.sin(TAU * 1100 * t) * 0.5 : 0;
+      }
+    });
+  }
+  if (kind === 'clank') {
+    // Rebar or a sling hook dropped on steel: inharmonic partials.
+    return renderShot(ctx, 1.6, 1, (data, length, rate) => {
+      const out = data[0]!;
+      const partials = [523, 1187, 1973, 2741, 3911];
+      for (let i = 0; i < length; i++) {
+        const t = i / rate;
+        let v = 0;
+        partials.forEach((f, k) => (v += Math.sin(TAU * f * t) * Math.exp(-t * (4 + k * 3))));
+        out[i] = v * 0.3 + (rand() - 0.5) * Math.exp(-t * 80);
+      }
+    });
+  }
+  // A distant truck horn, two short blasts.
+  return renderShot(ctx, 1.4, 1, (data, length, rate) => {
+    const out = data[0]!;
+    const lp = svf(900, 0.8, rate);
+    for (let i = 0; i < length; i++) {
+      const t = i / rate;
+      const on = t < 0.35 || (t > 0.55 && t < 1.2) ? 1 : 0;
+      const saw = ((t * 233) % 1) * 2 - 1 + (((t * 311) % 1) * 2 - 1) * 0.7;
+      const [low] = lp.run(saw * on);
+      out[i] = low;
+    }
+  });
+}

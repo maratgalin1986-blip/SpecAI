@@ -2,7 +2,13 @@
 // catalog quick order and the estimate box on the machine page. The visitor's
 // marketing channel is appended to the source (see marketing.ts).
 
-import { currentChannel, reachGoal, withChannel, analyticsRefused } from '@/lib/marketing';
+import {
+  analyticsRefused,
+  currentChannel,
+  currentYclid,
+  reachGoal,
+  withChannel,
+} from '@/lib/marketing';
 
 export interface LeadPayload {
   name?: string;
@@ -53,6 +59,14 @@ function readYmClientId(): string | undefined {
   }
 }
 
+/** The message with the Direct click id appended («yclid: …»), within 1000 chars. */
+export function messageWithYclid(message: string | undefined | null, yclid: string) {
+  if (!yclid) return message ? message.slice(0, 1000) : message;
+  const tail = `yclid: ${yclid}`;
+  const base = (message ?? '').slice(0, 1000 - tail.length - 1);
+  return base ? `${base}\n${tail}` : tail;
+}
+
 async function post(payload: LeadPayload) {
   return fetch('/api/leads', {
     method: 'POST',
@@ -62,7 +76,7 @@ async function post(payload: LeadPayload) {
       source: withChannel(payload.source, currentChannel()),
       name: payload.name?.trim() || ANONYMOUS_LEAD_NAME,
       // The API takes up to 1000 characters; a long estimate must not fail the lead.
-      message: payload.message ? payload.message.slice(0, 1000) : payload.message,
+      message: messageWithYclid(payload.message, analyticsRefused() ? '' : currentYclid()),
       website: payload.website ?? '',
       ymClientId: readYmClientId(),
     }),

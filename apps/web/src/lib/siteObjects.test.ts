@@ -1,4 +1,4 @@
-import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { nextDeck, SITE_OBJECTS } from './siteObjects';
@@ -9,31 +9,25 @@ describe('SITE_OBJECTS', () => {
   it('only uses clips that exist in every format', () => {
     for (const item of SITE_OBJECTS) {
       for (const clip of [item.hero, ...Object.values(item.clips)]) {
-        for (const ext of ['webm', 'mp4', 'webp']) {
+        for (const ext of ['mp4', 'webp']) {
           expect(existsSync(join(VIDEO_DIR, `${clip}.${ext}`)), `${clip}.${ext}`).toBe(true);
         }
       }
     }
   });
 
-  it('has the light and desktop background cuts of every clip (CinemaVideo)', () => {
+  it('has the light, desktop and scrub cuts of every clip (CinemaVideo)', () => {
     const clips = readdirSync(VIDEO_DIR)
       .filter((f) => f.endsWith('.webp'))
       .map((f) => f.slice(0, -5));
     expect(clips.length).toBeGreaterThan(0);
-    const component = readFileSync(join(__dirname, '../components/CinemaVideo.tsx'), 'utf8');
-    const keepFull = component.match(/WEBM_ALREADY_LIGHT = new Set\(\[([^\]]*)\]/)?.[1] ?? '';
     for (const clip of clips) {
-      for (const cut of ['-sm.mp4', '-md.mp4']) {
+      for (const cut of ['-sm.mp4', '-md.mp4', '.mp4']) {
         expect(existsSync(join(VIDEO_DIR, `${clip}${cut}`)), `${clip}${cut}`).toBe(true);
       }
-      const hasMd = existsSync(join(VIDEO_DIR, `${clip}-md.webm`));
-      // Without its own -md.webm a clip must be listed to fall back to the full webm.
-      expect(hasMd || keepFull.includes(`'${clip}'`), `${clip}-md.webm`).toBe(true);
-      const webm = hasMd ? `${clip}-md.webm` : `${clip}.webm`;
-      // The desktop cut is never heavier than the full clip it replaces.
-      expect(statSync(join(VIDEO_DIR, webm)).size).toBeLessThanOrEqual(
-        statSync(join(VIDEO_DIR, `${clip}.webm`)).size,
+      // The phone cut stays lighter than the desktop one.
+      expect(statSync(join(VIDEO_DIR, `${clip}-sm.mp4`)).size).toBeLessThan(
+        statSync(join(VIDEO_DIR, `${clip}-md.mp4`)).size,
       );
     }
   });

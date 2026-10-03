@@ -12,6 +12,7 @@ import { MarketingTracker } from '@/components/MarketingTracker';
 import { VtMorph } from '@/components/VtMorph';
 import { CinemaLayer } from '@/components/CinemaLayer';
 import { MessengerButtons } from '@/components/MessengerButtons';
+import { TelegramChip } from '@/components/TelegramChip';
 import { CookieNotice } from '@/components/CookieNotice';
 import { SITE } from '@/lib/site';
 import { siteUrl } from '@/lib/siteUrl';
@@ -141,6 +142,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
               assistant (/api/ai/chat) stays available to API/mobile clients. */}
           <AgentChatWidget />
           <MessengerButtons />
+          <TelegramChip />
           <InstallPrompt />
           <TelegramMiniApp />
           <CookieNotice />

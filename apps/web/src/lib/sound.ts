@@ -89,12 +89,16 @@ export function setSoundEnabled(value: boolean, persist = true): void {
   listeners.forEach((listener) => listener());
 }
 
-/** The saved choice; sound is off unless the visitor turned it on. */
+/**
+ * The saved choice; sound is on unless the visitor turned it off (owner's
+ * request, 2026-10-03). Browsers still start audio only at the first tap,
+ * key or click of the page.
+ */
 export function storedSoundChoice(): boolean {
   try {
-    return localStorage.getItem(SOUND_STORAGE_KEY) === 'on';
+    return localStorage.getItem(SOUND_STORAGE_KEY) !== 'off';
   } catch {
-    return false;
+    return true;
   }
 }
 

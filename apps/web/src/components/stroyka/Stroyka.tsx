@@ -124,6 +124,8 @@ const uniq = <T,>(list: T[]) => [...new Set(list)];
 
 export function Stroyka() {
   const [phase, setPhase] = useState<Phase>('boot');
+  // The opening cinematic, until the engine says the fly-over ended.
+  const [introOn, setIntroOn] = useState(true);
   const [reduced, setReduced] = useState(false);
   const [mobile, setMobile] = useState(false);
   const [overrides, setOverrides] = useState<SceneOverrides>({});
@@ -977,8 +979,36 @@ export function Stroyka() {
             else setOrder({ open: true, machine: target });
           }}
           onDog={onDog}
+          onIntroEnd={() => setIntroOn(false)}
           onError={() => setPhase('fallback')}
         />
+      )}
+      {/* The opening fly-over as a game cinematic: letterbox bars and titles. */}
+      {phase === '3d' && engine && introOn && (
+        <button
+          type="button"
+          data-testid="stroyka-cinematic"
+          onClick={() => engine.skipIntro()}
+          aria-label="Пропустить вступление"
+          className="stroyka-cine absolute inset-0 z-[70] block cursor-pointer text-white"
+        >
+          <span className="stroyka-cine-bar absolute inset-x-0 top-0 h-[11vh] bg-black" />
+          <span className="stroyka-cine-bar absolute inset-x-0 bottom-0 h-[11vh] bg-black" />
+          <span className="absolute inset-0 flex flex-col items-center justify-center px-6 text-center">
+            <span className="stroyka-cine-t1 font-mono text-xs uppercase tracking-[0.45em] text-amber-300 sm:text-sm">
+              {SITE.name} представляет
+            </span>
+            <span className="stroyka-cine-t2 mt-3 text-5xl font-black tracking-[-0.04em] sm:text-7xl">
+              ИИСтройка
+            </span>
+            <span className="stroyka-cine-t3 mt-3 font-mono text-xs uppercase tracking-[0.3em] text-white/80 sm:text-sm">
+              {chip}
+            </span>
+          </span>
+          <span className="absolute bottom-[3vh] right-5 z-10 text-xs text-white/60">
+            Коснитесь, чтобы пропустить
+          </span>
+        </button>
       )}
       {phase === 'fallback' && (
         <FallbackMap
@@ -1038,7 +1068,10 @@ export function Stroyka() {
           className={`pointer-events-none absolute inset-x-0 top-[calc(3.5rem+env(safe-area-inset-top))] ${
             // The open phone menu lies over the dialogue, like any menu.
             hudOpen ? 'z-30' : 'z-10'
-          } flex items-start justify-between gap-2 px-3 sm:px-4`}
+          } ${
+            // On a phone the conversation takes the screen: the card and map step aside.
+            dialog && mobile && !hudOpen ? 'hidden' : 'flex'
+          } items-start justify-between gap-2 px-3 sm:px-4`}
         >
           <div className="pointer-events-auto flex max-w-[calc(100vw-8.75rem)] flex-col gap-1.5 sm:max-w-sm">
             <div className="rounded-xl bg-slate-950/70 px-3 py-2 backdrop-blur">
@@ -1242,7 +1275,13 @@ export function Stroyka() {
       )}
 
       {/* ---------------- bottom: dialogue, joystick, talk */}
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 flex flex-col gap-2 px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:px-4">
+      {/* An open conversation is the main thing on screen: above the header,
+          the mission card, the map, the bubbles and the toasts. */}
+      <div
+        className={`pointer-events-none absolute inset-x-0 bottom-0 ${
+          dialog ? 'z-[60]' : 'z-20'
+        } flex flex-col gap-2 px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:px-4`}
+      >
         {phase === '3d' && mode === 'free' && !(dialog && mobile) && !order.open && (
           <div className="flex items-end justify-between">
             <Joystick input={input} />

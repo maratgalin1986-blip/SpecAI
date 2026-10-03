@@ -15,6 +15,7 @@ import {
 import { pluralizeRu } from '@/lib/pluralize';
 import { SITE } from '@/lib/site';
 import { CinemaHero } from '@/components/CinemaHero';
+import { TelegramButton } from '@/components/TelegramButton';
 import { PUBLISHED_FLEET } from '@/lib/fleet';
 import {
   cleanSearchParams,
@@ -202,6 +203,12 @@ export default async function EquipmentCatalogPage({
         >
           Наша техника на карте
         </a>
+        <div className="mt-3 flex flex-wrap items-center gap-3">
+          <TelegramButton page="equipment" />
+          <a href="/privacy" className="text-xs text-white/60 underline">
+            Политика конфиденциальности
+          </a>
+        </div>
       </CinemaHero>
 
       <nav aria-label="Категории техники" className="flex flex-col gap-3">

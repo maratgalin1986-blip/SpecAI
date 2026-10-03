@@ -1,4 +1,4 @@
-// The static site in a blocky (voxel) style: terrain, fence with banners,
+// The static site, in a film-like style: textured ground, fence with banners,
 // heaps, stacks, floodlight masts, flags, the city
 // around. Repeated blocks are InstancedMesh; one-off props are merged.
 import * as THREE from 'three';
@@ -7,7 +7,16 @@ import type { MachineType } from '@/lib/machinePhotos';
 import { BUILDING, FENCE, GATE_HALF, PIT, PRICES, rub } from '@/lib/stroyka';
 import { STAGES, type WorldProgress } from '@/lib/stroyka/progress';
 import { SITE } from '@/lib/site';
-import { dotTexture, node, pixelTexture, Rig, Voxels, type Materials } from './kit';
+import {
+  dotTexture,
+  moundGeometry,
+  node,
+  pixelTexture,
+  Rig,
+  surfaceMaterial,
+  Voxels,
+  type Materials,
+} from './kit';
 import { palletBuilder } from './machines';
 
 // 1 m blocks: finer than the first 2 m version, still one instanced draw.
@@ -34,8 +43,8 @@ export const MAST_HEIGHT = 11;
 
 export interface World {
   group: THREE.Group;
-  terrain: { mesh: THREE.InstancedMesh; colors: THREE.Color[] };
-  heaps: { mesh: THREE.InstancedMesh; colors: THREE.Color[] };
+  /** Dry, wet or snowy ground and heaps. */
+  setGround(mode: 'dry' | 'wet' | 'snow'): void;
   farGround: THREE.Mesh;
   /** Things shown only at night (beams, light pools, lit windows). */
   night: THREE.Object3D[];
@@ -153,49 +162,79 @@ function bannerTexture() {
 export function buildWorld(M: Materials, mobile: boolean): World {
   const group = new THREE.Group();
   const pixels = pixelTexture();
-  const voxelMat = new THREE.MeshLambertMaterial({ map: pixels });
+  const voxelMat = new THREE.MeshStandardMaterial({ map: pixels, roughness: 0.85 });
 
   // ------------------------------------------------------------ terrain
-  const terrain = new Voxels();
+  // One smooth ground mesh (1 m grid, the pit sloping down) with the mud
+  // photo texture; vertex colours tint zones (roads, grass outside, wet or
+  // snowy ground). The plot is drawn by the project (pit, foundation).
   const tmp = new THREE.Color();
   const tint = (hex: number, spread = 0.08) => {
     tmp.setHex(hex);
     const k = 1 + (rand() - 0.5) * 2 * spread;
     return tmp.clone().multiplyScalar(k);
   };
-  const half = GROUND_CELL / 2;
-  for (let x = -76; x < 76; x += GROUND_CELL) {
-    for (let z = -80; z < 80; z += GROUND_CELL) {
-      const cx = x + half;
-      const cz = z + half;
-      const top = groundTop(cx, cz);
-      const outside = cx < FENCE.minX || cx > FENCE.maxX || cz < FENCE.minZ || cz > FENCE.maxZ;
-      let color = 0x9a7a52;
-      if (outside) color = rand() < 0.15 ? 0x6f8a3c : 0x5f7d36;
-      if (Math.abs(cx) < 5 && cz > -16) color = 0x7d7a74; // haul road from the gate
-      if (cz > -19 && cz < -9 && cx < 5 && cx > -80) color = 0x7d7a74; // west road
-      if (
-        cx > BUILDING.minX - 3 &&
-        cx < BUILDING.maxX + 3 &&
-        cz > BUILDING.minZ - 3 &&
-        cz < BUILDING.maxZ + 3
-      )
-        color = 0xa8a39a;
-      if (top < 0) color = top < -1 ? 0x5e4129 : 0x6e4d30;
-      // The plot is drawn by the project (pit, foundation, building).
+  const T = { minX: -76, maxX: 76, minZ: -80, maxZ: 80 };
+  const nx = T.maxX - T.minX + 1;
+  const nz = T.maxZ - T.minZ + 1;
+  const positions = new Float32Array(nx * nz * 3);
+  const uvs = new Float32Array(nx * nz * 2);
+  const baseColors = new Float32Array(nx * nz * 3);
+  const zoneColor = (x: number, z: number, top: number) => {
+    const outside = x < FENCE.minX || x > FENCE.maxX || z < FENCE.minZ || z > FENCE.maxZ;
+    if (top < 0) return top < -1 ? 0x8a6c55 : 0x9a7b62; // pit walls: darker, damp
+    if (outside) return rand() < 0.15 ? 0x7f9a52 : 0x6f8c46; // grass over mud
+    if (Math.abs(x) < 5 && z > -16) return 0xa8a6a2; // haul road from the gate
+    if (z > -19 && z < -9 && x < 5) return 0xa8a6a2; // west road
+    if (
+      x > BUILDING.minX - 3 &&
+      x < BUILDING.maxX + 3 &&
+      z > BUILDING.minZ - 3 &&
+      z < BUILDING.maxZ + 3
+    )
+      return 0xc9c3ba;
+    return 0xe6d6c4;
+  };
+  for (let j = 0; j < nz; j++)
+    for (let i = 0; i < nx; i++) {
+      const x = T.minX + i;
+      const z = T.minZ + j;
+      const k = j * nx + i;
+      const top = groundTop(x, z);
+      positions.set([x, top + (top === 0 ? (rand() - 0.5) * 0.06 : 0), z], k * 3);
+      uvs.set([x / 4, z / 4], k * 2);
+      const c = tint(zoneColor(x, z, top), 0.06);
+      baseColors.set([c.r, c.g, c.b], k * 3);
+    }
+  const index: number[] = [];
+  for (let j = 0; j < nz - 1; j++)
+    for (let i = 0; i < nx - 1; i++) {
+      const cx = T.minX + i + 0.5;
+      const cz = T.minZ + j + 0.5;
       const plot =
         cx > BUILDING.minX && cx < BUILDING.maxX && cz > BUILDING.minZ && cz < BUILDING.maxZ;
       if (plot) continue;
-      terrain.add(cx, top - half, cz, tint(color), GROUND_CELL);
+      const a0 = j * nx + i;
+      const b0 = a0 + 1;
+      const c0 = a0 + nx;
+      const d0 = c0 + 1;
+      index.push(a0, c0, b0, b0, c0, d0);
     }
-  }
-  const terrainBuilt = terrain.build(voxelMat, { receive: true });
-  group.add(terrainBuilt.mesh);
+  const groundGeo = new THREE.BufferGeometry();
+  groundGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  groundGeo.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
+  const groundColors = new THREE.BufferAttribute(baseColors.slice(), 3);
+  groundGeo.setAttribute('color', groundColors);
+  groundGeo.setIndex(index);
+  groundGeo.computeVertexNormals();
+  const groundMat = surfaceMaterial('brown_mud_02', 1, { vertexColors: true });
+  const terrainMesh = new THREE.Mesh(groundGeo, groundMat);
+  terrainMesh.receiveShadow = true;
+  group.add(terrainMesh);
 
-  // Ground beyond the block terrain: a frame around it, so it never covers the pits.
+  // Ground beyond the site: a frame around it, so it never covers the pits.
   const frame: THREE.BufferGeometry[] = [];
   const R = 700;
-  const T = { minX: -76, maxX: 76, minZ: -80, maxZ: 80 };
   for (const [x0, x1, z0, z1] of [
     [-R, R, -R, T.minZ],
     [-R, R, T.maxZ, R],
@@ -204,54 +243,103 @@ export function buildWorld(M: Materials, mobile: boolean): World {
   ] as [number, number, number, number][]) {
     const g = new THREE.PlaneGeometry(x1 - x0, z1 - z0);
     g.rotateX(-Math.PI / 2);
+    const uv = g.attributes.uv!;
+    for (let q = 0; q < uv.count; q++)
+      uv.setXY(q, (uv.getX(q) * (x1 - x0)) / 4, (uv.getY(q) * (z1 - z0)) / 4);
     g.translate((x0 + x1) / 2, -0.05, (z0 + z1) / 2);
     frame.push(g);
   }
   const farGround = new THREE.Mesh(
     mergeGeometries(frame)!,
-    new THREE.MeshLambertMaterial({ color: 0x5a7434 }),
+    surfaceMaterial('brown_mud_02', 1, { color: 0x6f8c46 }),
   );
   farGround.receiveShadow = false;
   group.add(farGround);
 
-  // ------------------------------------------------------------ heaps, stacks (1 m blocks)
-  const heaps = new Voxels();
-  const heap = (cx: number, cz: number, r: number, h: number, color: number) => {
-    for (let y = 0; y < h; y++) {
-      const rr = r * (1 - y / h);
-      for (let x = -Math.floor(rr); x <= Math.floor(rr); x++)
-        for (let z = -Math.floor(rr); z <= Math.floor(rr); z++) {
-          if (x * x + z * z > rr * rr + 0.5) continue;
-          heaps.add(cx + x, y + 0.5, cz + z, tint(color, 0.1));
-        }
-    }
+  // ------------------------------------------------------------ heaps, stacks
+  // Smooth mounds with their own photo textures: spoil, gravel, sand.
+  const moundGeos: Record<'dirt' | 'gravel' | 'sand', THREE.BufferGeometry[]> = {
+    dirt: [],
+    gravel: [],
+    sand: [],
   };
-  heap(-36, 32, 4.2, 4, 0x7a5434); // spoil from the pit
-  heap(-47, 30, 3.2, 3, 0x7a5434);
-  heap(-35, -16.5, 2.4, 2, 0x8f8c86); // gravel the truck tips
-  heap(-12, -60, 3, 3, 0xd8b36a); // sand at the yard
-  heap(9, 30, 2.6, 3, 0xd8b36a);
-  heap(26, 6, 2.5, 2, 0x7a5434); // the dozer's spoil
-  // Block stacks in the yard (pallets of aerated blocks).
+  const heap = (cx: number, cz: number, r: number, h: number, kind: 'dirt' | 'gravel' | 'sand') => {
+    const g = moundGeometry().clone();
+    g.scale(r * 1.15, h * 0.85, r * (0.9 + rand() * 0.2));
+    g.rotateY(rand() * Math.PI);
+    const uv = g.attributes.uv!;
+    const p = g.attributes.position!;
+    for (let q = 0; q < uv.count; q++) uv.setXY(q, p.getX(q) / 3, (p.getY(q) + p.getZ(q)) / 3);
+    g.translate(cx, -0.05, cz);
+    moundGeos[kind].push(g);
+  };
+  heap(-36, 32, 4.2, 4, 'dirt'); // spoil from the pit
+  heap(-47, 30, 3.2, 3, 'dirt');
+  heap(-35, -16.5, 2.4, 2, 'gravel'); // gravel the truck tips
+  heap(-12, -60, 3, 3, 'sand'); // sand at the yard
+  heap(9, 30, 2.6, 3, 'sand');
+  heap(26, 6, 2.5, 2, 'dirt'); // the dozer's spoil
+  const heapMats = {
+    dirt: surfaceMaterial('brown_mud_02', 1),
+    gravel: surfaceMaterial('bicolour_gravel', 1),
+    sand: surfaceMaterial('coast_sand_01', 1),
+  };
+  const heapBase = new Map<THREE.MeshStandardMaterial, THREE.Color>();
+  for (const kind of ['dirt', 'gravel', 'sand'] as const) {
+    const mesh = new THREE.Mesh(mergeGeometries(moundGeos[kind])!, heapMats[kind]);
+    mesh.castShadow = mesh.receiveShadow = true;
+    group.add(mesh);
+    heapBase.set(heapMats[kind], heapMats[kind].color.clone());
+  }
+  // Block stacks in the yard (pallets of aerated blocks) and road cones.
+  const heaps = new Voxels();
   for (let i = 0; i < 4; i++)
     for (let j = 0; j < 2; j++)
       for (let y = 0; y < 2; y++)
         heaps.add(-31 + i * 1.6, y + 0.5, -51.5 + j * 1.6, tint(0xe2ddd3, 0.04));
-  // Cones along the haul road.
-  for (const [x, z] of [
+  group.add(heaps.build(voxelMat, { cast: true, receive: true }).mesh);
+  const coneGeo = new THREE.ConeGeometry(0.22, 0.75, 16);
+  const cones = new THREE.InstancedMesh(
+    coneGeo,
+    new THREE.MeshStandardMaterial({ color: 0xf97316, roughness: 0.5 }),
+    6,
+  );
+  [
     [5.5, 40],
     [5.5, 30],
     [5.5, 20],
     [-5.5, 10],
     [5.5, -6],
     [-20, -19.6],
-  ] as [number, number][]) {
-    heaps.add(x, 0.2, z, 0xf97316, 0.4);
-    heaps.add(x, 0.55, z, 0xf1f5f9, 0.3);
-    heaps.add(x, 0.8, z, 0xf97316, 0.2);
-  }
-  const heapsBuilt = heaps.build(voxelMat, { cast: true, receive: true });
-  group.add(heapsBuilt.mesh);
+  ].forEach(([x, z], n) => {
+    cones.setMatrixAt(n, new THREE.Matrix4().makeTranslation(x!, 0.37, z!));
+  });
+  cones.castShadow = true;
+  group.add(cones);
+
+  /** Dry, wet (darker) or snowy ground: tints the ground and the heaps. */
+  const setGround = (mode: 'dry' | 'wet' | 'snow') => {
+    const white = new THREE.Color(0xf4f7fb);
+    const c = new THREE.Color();
+    for (let q = 0; q < groundColors.count; q++) {
+      c.setRGB(baseColors[q * 3]!, baseColors[q * 3 + 1]!, baseColors[q * 3 + 2]!);
+      if (mode === 'snow') c.lerp(white, 0.85);
+      if (mode === 'wet') c.multiplyScalar(0.62);
+      groundColors.setXYZ(q, c.r, c.g, c.b);
+    }
+    groundColors.needsUpdate = true;
+    // Wet ground and heaps shine a little.
+    groundMat.roughness = mode === 'wet' ? 0.8 : 1;
+    for (const [mat, base] of heapBase) {
+      mat.color.copy(base);
+      if (mode === 'snow') mat.color.lerp(white, 0.6);
+      if (mode === 'wet') mat.color.multiplyScalar(0.7);
+      mat.roughness = mode === 'wet' ? 0.85 : 1;
+    }
+    (farGround.material as THREE.MeshStandardMaterial).color.setHex(
+      mode === 'snow' ? 0xe8eef4 : mode === 'wet' ? 0x4f6a34 : 0x6f8c46,
+    );
+  };
 
   // ------------------------------------------------------------ fence (1 m blocks)
   const fence = new Voxels();
@@ -376,7 +464,19 @@ export function buildWorld(M: Materials, mobile: boolean): World {
   }
   const cityBuilt = city.build(voxelMat, { receive: false });
   group.add(cityBuilt.mesh);
-  const trees = new Voxels();
+  // Trees: a trunk and a lumpy crown of a few blobs, instanced.
+  const trunkGeo = new THREE.CylinderGeometry(0.12, 0.2, 1, 7);
+  const crownGeo = new THREE.IcosahedronGeometry(1, 2);
+  {
+    const cp = crownGeo.attributes.position!;
+    for (let q = 0; q < cp.count; q++) {
+      const v = new THREE.Vector3().fromBufferAttribute(cp, q);
+      const n = 1 + 0.18 * Math.sin(v.x * 5 + v.y * 3) * Math.cos(v.z * 4 - v.y * 2);
+      cp.setXYZ(q, v.x * n, v.y * n, v.z * n);
+    }
+    crownGeo.computeVertexNormals();
+  }
+  const treeSpots: [number, number, number][] = [];
   for (let k = 0; k < (mobile ? 45 : 90); k++) {
     let x = 0;
     let z = 0;
@@ -386,14 +486,40 @@ export function buildWorld(M: Materials, mobile: boolean): World {
     } while (Math.abs(x) < 68 && Math.abs(z - 2) < 72);
     if (Math.abs(x) < 9 && z > 64) continue;
     const h = 2 + Math.floor(rand() * 3);
-    for (let y = 0; y < h; y++) trees.add(x, y + 0.5, z, 0x5b3d22);
-    for (let dx = -1; dx <= 1; dx++)
-      for (let dz = -1; dz <= 1; dz++)
-        for (let dy = 0; dy < 2; dy++)
-          if (dy === 0 || (dx === 0 && dz === 0) || rand() > 0.5)
-            trees.add(x + dx, h + dy + 0.5, z + dz, tint(0x3f6a2a, 0.12));
+    treeSpots.push([x, z, h]);
   }
-  group.add(trees.build(voxelMat, { cast: false, receive: false }).mesh);
+  const trunks = new THREE.InstancedMesh(
+    trunkGeo,
+    new THREE.MeshStandardMaterial({ color: 0x5b3d22, roughness: 0.95 }),
+    treeSpots.length,
+  );
+  const crowns = new THREE.InstancedMesh(
+    crownGeo,
+    new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9 }),
+    treeSpots.length * 3,
+  );
+  const tm = new THREE.Matrix4();
+  treeSpots.forEach(([x, z, h], n) => {
+    trunks.setMatrixAt(
+      n,
+      tm.compose(
+        new THREE.Vector3(x, h / 2, z),
+        new THREE.Quaternion(),
+        new THREE.Vector3(1, h, 1),
+      ),
+    );
+    for (let c = 0; c < 3; c++) {
+      const r = 1.1 + rand() * 0.6;
+      tm.compose(
+        new THREE.Vector3(x + (rand() - 0.5) * 1.2, h + 0.6 + c * 0.55, z + (rand() - 0.5) * 1.2),
+        new THREE.Quaternion(),
+        new THREE.Vector3(r, r * 0.85, r),
+      );
+      crowns.setMatrixAt(n * 3 + c, tm);
+      crowns.setColorAt(n * 3 + c, tint(0x3f6a2a, 0.15));
+    }
+  });
+  group.add(trunks, crowns);
   // A couple of tower cranes on neighbouring sites.
   for (const [x, z, rot] of [
     [-120, -90, 0.6],
@@ -738,8 +864,7 @@ export function buildWorld(M: Materials, mobile: boolean): World {
 
   return {
     group,
-    terrain: { mesh: terrainBuilt.mesh, colors: terrainBuilt.colors },
-    heaps: { mesh: heapsBuilt.mesh, colors: heapsBuilt.colors },
+    setGround,
     farGround,
     night,
     nightMaterials: [beamMat, poolMat, paneMat],

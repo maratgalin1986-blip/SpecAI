@@ -1,12 +1,75 @@
 // Shared materials and a builder that merges primitives into few meshes.
 // Every rigid part of a machine is one mesh per material, so a whole machine
 // costs a dozen draw calls instead of a hundred.
+//
+// Film look (owner's request, 2026-10-03, replaces the blocky style):
+// physically based materials (glossy paint, metal, rubber, glass that reflect
+// the sky), bevelled boxes, real cylinders and tyres, smooth heaps, and
+// photo textures (Poly Haven, CC0) for dirt, gravel, sand and concrete.
 import * as THREE from 'three';
 import { SITE } from '@/lib/site';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 
-const lambert = (color: number, extra: THREE.MeshLambertMaterialParameters = {}) =>
-  new THREE.MeshLambertMaterial({ color, ...extra });
+/** A physically based material: colour, roughness, metalness. */
+const pbr = (
+  color: number,
+  roughness: number,
+  metalness = 0,
+  extra: THREE.MeshStandardMaterialParameters = {},
+) => new THREE.MeshStandardMaterial({ color, roughness, metalness, ...extra });
+
+const textureLoader = typeof window === 'undefined' ? null : new THREE.TextureLoader();
+const textureCache = new Map<string, THREE.Texture>();
+
+function loadTex(url: string, color: boolean, repeat: number) {
+  const key = `${url}@${repeat}`;
+  const hit = textureCache.get(key);
+  if (hit) return hit;
+  const t = textureLoader!.load(url);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.repeat.set(repeat, repeat);
+  t.anisotropy = 4;
+  if (color) t.colorSpace = THREE.SRGBColorSpace;
+  textureCache.set(key, t);
+  return t;
+}
+
+/** Photo textures (public/stroyka/tex, Poly Haven CC0, 1k): colour, normal, rough. */
+export type Surface =
+  | 'brown_mud_02'
+  | 'bicolour_gravel'
+  | 'concrete_slab_wall'
+  | 'concrete_floor_worn_001'
+  | 'coast_sand_01';
+
+export function surfaceMaps(name: Surface, repeat = 1) {
+  if (!textureLoader) return {};
+  const base = `/stroyka/tex/${name}`;
+  const arm = loadTex(`${base}_arm.jpg`, false, repeat);
+  return {
+    map: loadTex(`${base}_diff.jpg`, true, repeat),
+    normalMap: loadTex(`${base}_nor.jpg`, false, repeat),
+    roughnessMap: arm,
+    aoMap: arm,
+    aoMapIntensity: 0.6,
+  };
+}
+
+/** A textured ground material; vertex or instance colours tint the photo. */
+export function surfaceMaterial(
+  name: Surface,
+  repeat = 1,
+  extra: THREE.MeshStandardMaterialParameters = {},
+) {
+  return new THREE.MeshStandardMaterial({
+    color: 0xffffff,
+    roughness: 1,
+    metalness: 0,
+    ...surfaceMaps(name, repeat),
+    ...extra,
+  });
+}
 
 /** «СпецПласт16» printed on the back of the workers' vests. */
 function vestLogo() {
@@ -31,26 +94,27 @@ function vestLogo() {
 
 export function createMaterials() {
   return {
-    vestLogo: lambert(0xffffff, { map: vestLogo() }),
-    yellow: lambert(0xf59e0b),
-    amber: lambert(0xd97706),
-    dark: lambert(0x1f2937),
-    black: lambert(0x141414),
-    steel: lambert(0x8b929c),
-    glass: lambert(0x2b3a4a, { emissive: 0x3a2412 }),
-    concrete: lambert(0xb8b2aa),
-    concreteDark: lambert(0x8a837b),
-    block: lambert(0xe2ddd3),
-    dirt: lambert(0x8a6240),
-    gravel: lambert(0x9b968f),
-    fence: lambert(0x2f3d4f),
-    vest: lambert(0xf97316),
-    white: lambert(0xf1f5f9),
-    skin: lambert(0xc98d68),
-    pants: lambert(0x334155),
-    red: lambert(0xdc2626),
-    wood: lambert(0x9a6a33),
-    cabin: lambert(0x3b6e8f),
+    vestLogo: pbr(0xffffff, 0.75, 0, { map: vestLogo() }),
+    // Machine paint: glossy clear coat that catches the sky.
+    yellow: pbr(0xf0a20b, 0.38, 0.05),
+    amber: pbr(0xc9700a, 0.45, 0.05),
+    dark: pbr(0x1f2937, 0.55, 0.3),
+    black: pbr(0x161616, 0.85, 0), // rubber, plastics
+    steel: pbr(0x9aa1ab, 0.32, 0.9),
+    glass: pbr(0x1d2a36, 0.06, 0.6, { emissive: 0x3a2412, envMapIntensity: 1.6 }),
+    concrete: surfaceMaterial('concrete_slab_wall', 1, { color: 0xd6d0c8 }),
+    concreteDark: surfaceMaterial('concrete_floor_worn_001', 1, { color: 0xa39c93 }),
+    block: pbr(0xe8e3d9, 0.9, 0),
+    dirt: surfaceMaterial('brown_mud_02', 1),
+    gravel: surfaceMaterial('bicolour_gravel', 1),
+    fence: pbr(0x2f3d4f, 0.5, 0.4),
+    vest: pbr(0xf97316, 0.7, 0),
+    white: pbr(0xf1f5f9, 0.45, 0.05),
+    skin: pbr(0xc98d68, 0.65, 0),
+    pants: pbr(0x334155, 0.85, 0),
+    red: pbr(0xc81e1e, 0.4, 0.05),
+    wood: pbr(0x9a6a33, 0.85, 0),
+    cabin: pbr(0x3b6e8f, 0.4, 0.1),
     lamp: new THREE.MeshBasicMaterial({ color: 0xfff2c4 }),
     tail: new THREE.MeshBasicMaterial({ color: 0xff3b2f }),
     beacon: new THREE.MeshBasicMaterial({ color: 0xffa21a }),
@@ -59,7 +123,12 @@ export function createMaterials() {
 export type Materials = ReturnType<typeof createMaterials>;
 export type MatKey = keyof Materials;
 
-const UNIT_BOX = new THREE.BoxGeometry(1, 1, 1);
+/** A unit box with softly bevelled edges: no toy-like sharp cubes. */
+const UNIT_BOX = new RoundedBoxGeometry(1, 1, 1, 2, 0.06);
+const UNIT_CYL = new THREE.CylinderGeometry(0.5, 0.5, 1, 20);
+// A tyre: a thick ring around the axle (Z after rotation), and the rim inside.
+const TYRE = new THREE.TorusGeometry(0.72, 0.28, 10, 28);
+const RIM = new THREE.CylinderGeometry(0.5, 0.5, 1, 18).rotateX(Math.PI / 2);
 
 type V3 = [number, number, number];
 const tmpMatrix = new THREE.Matrix4();
@@ -84,7 +153,9 @@ export class Rig {
     rot: V3 = [0, 0, 0],
     scale: V3 = [1, 1, 1],
   ) {
-    const geo = geometry.clone().applyMatrix4(compose(pos, rot, scale));
+    // Rounded boxes are non-indexed, cylinders and tyres indexed: merge as non-indexed.
+    const base = geometry.index ? geometry.toNonIndexed() : geometry.clone();
+    const geo = base.applyMatrix4(compose(pos, rot, scale));
     let byMat = this.parts.get(node);
     if (!byMat) this.parts.set(node, (byMat = new Map()));
     const list = byMat.get(mat);
@@ -98,32 +169,22 @@ export class Rig {
     return this.add(node, UNIT_BOX, mat, pos, rot, size);
   }
 
-  /**
-   * A square post along Y (rotate it for axles): the blocky style has no
-   * cylinders, so a «cylinder» of radius r is a 2r × h × 2r box.
-   */
+  /** A round post along Y of radius r and height h (rotate it for axles). */
   cyl(node: THREE.Object3D, radius: number, h: number, mat: MatKey, pos: V3, rot: V3 = [0, 0, 0]) {
-    return this.add(node, UNIT_BOX, mat, pos, rot, [radius * 2, h, radius * 2]);
+    return this.add(node, UNIT_CYL, mat, pos, rot, [radius * 2, h, radius * 2]);
   }
 
-  /** A block wheel whose axle runs along Z, with a steel hub. */
+  /** A wheel whose axle runs along Z: rubber tyre of radius r, steel rim. */
   wheel(node: THREE.Object3D, pos: V3, r: number, w: number) {
-    this.box(node, [r * 1.9, r * 1.9, w], 'black', pos);
-    this.box(node, [r * 0.9, r * 0.9, w + 0.04], 'steel', pos);
+    this.add(node, TYRE, 'black', pos, [0, 0, 0], [r, r, w / 0.56]);
+    this.add(node, RIM, 'steel', pos, [0, 0, 0], [r * 1.05, r * 1.05, w * 0.9]);
+    this.add(node, RIM, 'dark', pos, [0, 0, 0], [r * 0.45, r * 0.45, w + 0.02]);
     return this;
   }
 
-  /** A stepped heap of blocks (dirt, sand) of base radius r and height h. */
-  heap(node: THREE.Object3D, r: number, h: number, mat: MatKey, pos: V3 = [0, 0, 0], steps = 3) {
-    for (let i = 0; i < steps; i++) {
-      const k = 1 - i / steps;
-      this.box(node, [r * 2 * k, h / steps, r * 2 * k * 0.9], mat, [
-        pos[0],
-        pos[1] + (h / steps) * (i + 0.5),
-        pos[2],
-      ]);
-    }
-    return this;
+  /** A smooth mound (dirt, sand) of base radius r and height h. */
+  heap(node: THREE.Object3D, r: number, h: number, mat: MatKey, pos: V3 = [0, 0, 0]) {
+    return this.add(node, moundGeometry(), mat, pos, [0, 0, 0], [r, h, r * 0.9]);
   }
 
   /** Merges everything added so far into one mesh per node and material. */
@@ -143,6 +204,32 @@ export class Rig {
     }
     this.parts.clear();
   }
+}
+
+let mound: THREE.BufferGeometry | null = null;
+/** A unit mound: a soft cone with a lumpy surface, base radius 1, height 1. */
+export function moundGeometry() {
+  if (mound) return mound;
+  const profile: THREE.Vector2[] = [];
+  for (let i = 0; i <= 12; i++) {
+    const t = i / 12;
+    // Angle-of-repose cone with a rounded top and a flared foot.
+    profile.push(
+      new THREE.Vector2(Math.max(0.001, 1 - t) ** 0.9, Math.sin((t * Math.PI) / 2) ** 1.4),
+    );
+  }
+  const g = new THREE.LatheGeometry(profile.reverse(), 24);
+  const pos = g.attributes.position!;
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i);
+    const z = pos.getZ(i);
+    const y = pos.getY(i);
+    const n = 1 + 0.07 * Math.sin(x * 9 + z * 5) * Math.cos(z * 7 - x * 3) * (1 - y);
+    pos.setXYZ(i, x * n, y, z * n);
+  }
+  g.computeVertexNormals();
+  mound = g;
+  return g;
 }
 
 /** A group node at a position, optionally added to a parent. */
@@ -260,25 +347,28 @@ export class Debris {
   }
 }
 
-/** A tiny procedural pixel texture (grey noise) so cube faces read as blocks. */
-export function pixelTexture(size = 16, seed = 7) {
+/**
+ * A soft concrete-like grain for panels (fence, building shell, city): fine
+ * smooth noise with linear filtering, no block edges.
+ */
+export function pixelTexture(size = 128, seed = 7) {
   const canvas = document.createElement('canvas');
   canvas.width = canvas.height = size;
   const ctx = canvas.getContext('2d')!;
   let s = seed;
   const rand = () => (s = (s * 16807) % 2147483647) / 2147483647;
-  for (let y = 0; y < size; y++)
-    for (let x = 0; x < size; x++) {
-      const edge = x === 0 || y === 0 || x === size - 1 || y === size - 1;
-      // Finer and softer grain: small specks instead of chunky pixels.
-      const v = Math.round((edge ? 206 : 224) + rand() * 24);
-      ctx.fillStyle = `rgb(${v},${v},${v})`;
-      ctx.fillRect(x, y, 1, 1);
-    }
+  const img = ctx.createImageData(size, size);
+  for (let i = 0; i < size * size; i++) {
+    const v = Math.round(222 + rand() * 22 - (rand() < 0.02 ? 30 : 0));
+    img.data.set([v, v, v, 255], i * 4);
+  }
+  ctx.putImageData(img, 0, 0);
+  // Two blurred passes give pores and stains instead of pixels.
+  ctx.filter = 'blur(1px)';
+  ctx.drawImage(canvas, 0, 0);
   const texture = new THREE.CanvasTexture(canvas);
-  texture.magFilter = THREE.NearestFilter;
-  texture.minFilter = THREE.NearestFilter;
-  texture.generateMipmaps = false;
+  texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+  texture.anisotropy = 4;
   texture.colorSpace = THREE.SRGBColorSpace;
   return texture;
 }

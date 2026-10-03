@@ -87,13 +87,18 @@ export function SoundDirector() {
     const onRunning = () => {
       if (!engine || !live()) return;
       removeGestures();
+      // Hides the «коснитесь — включится звук» hint of the opening titles.
+      document.documentElement.setAttribute('data-sound-live', '');
       void engine.startBeds();
       playing = null;
       applyMachine(true);
       // Sound came on while the opening titles are up: the brass hit for the
       // partner card, and a whoosh as the camera dives in.
       if (introAtGesture && !wasRunning) {
-        void engine.cue('boom');
+        // The brass hit lands with the logo (1.75 s into the titles, which
+        // start with the page); a later tap gets it at once.
+        const hit = Math.max(0, 1750 - performance.now());
+        window.setTimeout(() => void engine?.cue('boom'), hit);
         window.clearInterval(introPoll);
         introPoll = window.setInterval(() => {
           const el = document.getElementById('intro');
