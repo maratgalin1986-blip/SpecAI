@@ -7,6 +7,7 @@ import { EquipmentCard, categoryIcon } from '@/components/EquipmentCard';
 import { EstimateBox } from '@/components/EstimateBox';
 import { Icon } from '@/components/Icon';
 import { MachineGallery } from '@/components/MachineGallery';
+import { modelPhotosOf } from '@/lib/modelPhotos';
 import { MachinePhoto } from '@/components/MachinePhoto';
 import { MachineAmbience } from '@/components/MachineAmbience';
 import {
@@ -107,6 +108,8 @@ export default async function EquipmentDetailPage({ params }: { params: { id: st
   const ownFleet = item.company.name === SITE.legalName;
   const executor = 'Парк СпецПласт16 · машинист в штате';
   const photos = item.imageUrls.filter(isDisplayableImage);
+  // No own photo yet: photos of the same model, labelled as such.
+  const modelPhotos = photos.length ? [] : modelPhotosOf(item.name);
   const averageRating = item.reviews.length
     ? item.reviews.reduce((sum, review) => sum + review.rating, 0) / item.reviews.length
     : null;
@@ -228,6 +231,13 @@ export default async function EquipmentDetailPage({ params }: { params: { id: st
             <div style={{ viewTransitionName: 'machine-photo' }}>
               <MachineGallery images={photos} name={item.name} />
             </div>
+          ) : modelPhotos.length > 0 ? (
+            <figure style={{ viewTransitionName: 'machine-photo' }}>
+              <MachineGallery images={modelPhotos} name={item.name} />
+              <figcaption className="mt-2 text-xs text-slate-500">
+                Фото этой модели из открытых источников — не наша машина
+              </figcaption>
+            </figure>
           ) : illustration ? (
             <figure style={{ viewTransitionName: 'machine-photo' }}>
               <div className="relative aspect-[16/9] overflow-hidden rounded-3xl bg-slate-950">
