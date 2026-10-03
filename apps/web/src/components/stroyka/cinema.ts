@@ -41,6 +41,10 @@ const GradeShader = {
     time: { value: 0 },
     vignette: { value: 0.38 },
     grain: { value: 0.035 },
+    // The sun on screen (0…1) and the flare strength; aspect for round shapes.
+    sunPos: { value: new THREE.Vector2(0.5, 0.5) },
+    flare: { value: 0 },
+    aspect: { value: 1 },
   },
   vertexShader: /* glsl */ `
     varying vec2 vUv;
@@ -50,6 +54,9 @@ const GradeShader = {
     uniform float time;
     uniform float vignette;
     uniform float grain;
+    uniform vec2 sunPos;
+    uniform float flare;
+    uniform float aspect;
     varying vec2 vUv;
     float hash(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
     void main() {
@@ -65,6 +72,21 @@ const GradeShader = {
       // Film grain, stronger in the shadows.
       float g = hash(vUv * 1000.0 + fract(time) * 31.0) - 0.5;
       col += g * grain * (1.2 - l);
+      // Lens flare: a soft glow round the sun and ghosts along the lens axis.
+      if (flare > 0.001) {
+        vec2 asp = vec2(aspect, 1.0);
+        float d = length((vUv - sunPos) * asp);
+        col += vec3(1.0, 0.85, 0.6) * flare * (0.35 * exp(-d * 6.0) + 0.12 * exp(-d * 1.6));
+        vec2 axis = vec2(0.5) - sunPos;
+        for (int i = 1; i <= 4; i++) {
+          float f = float(i);
+          vec2 ghost = sunPos + axis * (0.45 * f);
+          float g = length((vUv - ghost) * asp);
+          float size = 0.03 + 0.025 * f;
+          vec3 tint = i == 2 ? vec3(0.5, 0.8, 1.0) : vec3(1.0, 0.7, 0.4);
+          col += tint * flare * 0.08 * smoothstep(size, size * 0.4, g);
+        }
+      }
       gl_FragColor = vec4(col, c.a);
     }`,
 };
@@ -132,6 +154,21 @@ export class Cinema {
     }
     this.grade!.uniforms.time!.value = time;
     this.composer.render();
+  }
+
+  /** Sun position in the frame and how strong its flare is (0 hides it). */
+  setSun(x: number, y: number, strength: number, aspect: number) {
+    if (!this.grade) return;
+    this.grade.uniforms.sunPos!.value.set(x, y);
+    this.grade.uniforms.flare!.value = strength;
+    this.grade.uniforms.aspect!.value = aspect;
+  }
+
+  /** The opening shot: deeper vignette, more contrast and grain (k 0…1). */
+  setIntro(k: number) {
+    if (!this.grade) return;
+    this.grade.uniforms.vignette!.value = 0.38 + 0.25 * k;
+    this.grade.uniforms.grain!.value = 0.035 + 0.025 * k;
   }
 
   /** Night needs a stronger bloom on floodlights, day a faint one. */

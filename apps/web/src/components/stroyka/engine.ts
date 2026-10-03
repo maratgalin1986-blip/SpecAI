@@ -116,6 +116,8 @@ export interface EngineOptions {
   onAdClick(target: AdTarget): void;
   /** The site dog was tapped. */
   onDog?(): void;
+  /** The opening fly-over (the «game cinematic») ended or was skipped. */
+  onIntroEnd?(): void;
 }
 
 interface Character {
@@ -187,6 +189,7 @@ function skyDir(azimuth: number, elevation: number, out = new THREE.Vector3()) {
 export class StroykaEngine {
   private renderer!: THREE.WebGLRenderer;
   private cinema: Cinema | null = null;
+  private flarePoint = new THREE.Vector3();
   private scene = new THREE.Scene();
   private camera!: THREE.PerspectiveCamera;
   private clock = new THREE.Clock();
@@ -981,6 +984,10 @@ export class StroykaEngine {
     if (!this.intro.active) return;
     this.intro.active = false;
     this.startBlend(1.2);
+    this.cinema?.setIntro(0);
+    this.camera.fov = this.camera.aspect < 1 ? 72 : 58;
+    this.camera.updateProjectionMatrix();
+    this.opts.onIntroEnd?.();
   }
 
   private introPose(k: number) {
@@ -992,6 +999,14 @@ export class StroykaEngine {
     this.camera.position.set(Math.cos(a) * r, h, Math.sin(a) * r + 10);
     const look = new THREE.Vector3(0, 0, -10).lerp(new THREE.Vector3(0, 2, 52), e * e);
     this.camera.lookAt(look);
+    // A slow banking roll and a narrower lens, like a game's opening shot.
+    this.camera.rotateZ(Math.sin(k * Math.PI) * 0.06);
+    const fov = (this.camera.aspect < 1 ? 66 : 48) + 8 * e;
+    if (Math.abs(this.camera.fov - fov) > 0.05) {
+      this.camera.fov = fov;
+      this.camera.updateProjectionMatrix();
+    }
+    this.cinema?.setIntro(1 - smooth(0.85, 1, k));
   }
 
   /** Real (or overridden) time and the forecast point. */
@@ -1960,6 +1975,15 @@ export class StroykaEngine {
     this.atmosphere.setSky(E.zenith, E.horizon, E.sun, E.sunDir);
     this.cinema?.updateEnvironment(this.time);
     this.cinema?.setNight(nightK);
+    // Lens flare when the sun is in the frame on a clear day.
+    if (this.cinema) {
+      const p = this.flarePoint.copy(E.sunDir).multiplyScalar(300).add(this.camera.position);
+      p.project(this.camera);
+      const inFrame = p.z < 1 && Math.abs(p.x) < 1.1 && Math.abs(p.y) < 1.1;
+      const strength =
+        inFrame && E.sunDir.y > 0 ? (1 - E.clouds * 0.9) * (1 - nightK) * (1 - w.fog) : 0;
+      this.cinema.setSun((p.x + 1) / 2, (p.y + 1) / 2, strength, this.camera.aspect);
+    }
     this.atmosphere.skyUniforms.glow.value = (1 - E.clouds * 0.8) * (1 - nightK);
     this.atmosphere.skyUniforms.flash.value = flash * 0.5;
     this.atmosphere.setBodies(
