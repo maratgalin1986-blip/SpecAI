@@ -5,7 +5,8 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { MachineType } from '@/lib/machinePhotos';
 import { BUILDING, FENCE, GATE_HALF, PIT, PRICES, rub } from '@/lib/stroyka';
-import { STAGES, type WorldProgress } from '@/lib/stroyka/progress';
+import { formatDate, formatMonth, STAGES, type WorldProgress } from '@/lib/stroyka/progress';
+import { onOuterPlot, PLOTS } from '@/lib/stroyka/plots';
 import { SITE } from '@/lib/site';
 import {
   dotTexture,
@@ -62,6 +63,8 @@ export interface World {
   updateAds(time: number, night: number): void;
   /** Placeholder skyline, hidden once the real OSM city is loaded. */
   procCity: THREE.Object3D;
+  /** Trees of the finished plots, drawn by the same instanced trees as the rest. */
+  setPlotTrees(spots: [number, number, number][]): void;
 }
 
 /** What a tap on an ad opens: the order panel with a machine, or an estimate. */
@@ -328,15 +331,31 @@ export function buildWorld(M: Materials, mobile: boolean): World {
   terrainMesh.receiveShadow = true;
   group.add(terrainMesh);
 
-  // Ground beyond the site: a frame around it, so it never covers the pits.
+  // Ground beyond the site: a frame around it, so it never covers the pits,
+  // with holes where the district plots draw their own ground (and pits).
   const frame: THREE.BufferGeometry[] = [];
   const R = 700;
-  for (const [x0, x1, z0, z1] of [
-    [-R, R, -R, T.minZ],
-    [-R, R, T.maxZ, R],
-    [-R, T.minX, T.minZ, T.maxZ],
-    [T.maxX, R, T.minZ, T.maxZ],
-  ] as [number, number, number, number][]) {
+  const holes = [T, ...PLOTS.slice(1)];
+  const xs = [...new Set([-R, R, ...holes.flatMap((h) => [h.minX, h.maxX])])].sort((a, b) => a - b);
+  const zs = [...new Set([-R, R, ...holes.flatMap((h) => [h.minZ, h.maxZ])])].sort((a, b) => a - b);
+  const quads: [number, number, number, number][] = [];
+  for (let j = 0; j + 1 < zs.length; j++) {
+    let run: [number, number, number, number] | null = null;
+    for (let k = 0; k + 1 < xs.length; k++) {
+      const [x0, x1, z0, z1] = [xs[k]!, xs[k + 1]!, zs[j]!, zs[j + 1]!];
+      const mx = (x0 + x1) / 2;
+      const mz = (z0 + z1) / 2;
+      const hole = holes.some((h) => mx > h.minX && mx < h.maxX && mz > h.minZ && mz < h.maxZ);
+      if (!hole && run) run[1] = x1;
+      else if (!hole) run = [x0, x1, z0, z1];
+      if (hole && run) {
+        quads.push(run);
+        run = null;
+      }
+    }
+    if (run) quads.push(run);
+  }
+  for (const [x0, x1, z0, z1] of quads) {
     const g = new THREE.PlaneGeometry(x1 - x0, z1 - z0);
     g.rotateX(-Math.PI / 2);
     const uv = g.attributes.uv!;
@@ -583,6 +602,7 @@ export function buildWorld(M: Materials, mobile: boolean): World {
     const h = 6 + Math.floor(rand() * 9) * 3;
     const w = 8 + Math.floor(rand() * 3) * 4;
     const shade = 0x8a8f98 + Math.floor(rand() * 3) * 0x0a0a0a;
+    if (onOuterPlot(Math.cos(a) * r, Math.sin(a) * r, w / 2 + 2)) continue;
     city.add(Math.cos(a) * r, h / 2, Math.sin(a) * r, shade, w, h, w);
   }
   // Until the real map loads: the same windowed facades as the city.
@@ -609,18 +629,21 @@ export function buildWorld(M: Materials, mobile: boolean): World {
       z = (rand() - 0.5) * 210;
     } while (Math.abs(x) < 68 && Math.abs(z - 2) < 72);
     if (Math.abs(x) < 9 && z > 64) continue;
+    if (onOuterPlot(x, z, 3)) continue;
     const h = 2 + Math.floor(rand() * 3);
     treeSpots.push([x, z, h]);
   }
+  // Room for the trees of the finished district plots (same draw calls).
+  const PLOT_TREES = 200;
   const trunks = new THREE.InstancedMesh(
     trunkGeo,
     new THREE.MeshStandardMaterial({ color: 0x5b3d22, roughness: 0.95 }),
-    treeSpots.length,
+    treeSpots.length + PLOT_TREES,
   );
   const crowns = new THREE.InstancedMesh(
     crownGeo,
     new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9 }),
-    treeSpots.length * 3,
+    (treeSpots.length + PLOT_TREES) * 3,
   );
   const tm = new THREE.Matrix4();
   treeSpots.forEach(([x, z, h], n) => {
@@ -643,11 +666,48 @@ export function buildWorld(M: Materials, mobile: boolean): World {
       crowns.setColorAt(n * 3 + c, tint(0x3f6a2a, 0.15));
     }
   });
+  const placeTree = ([x, z, h]: [number, number, number], n: number, k: number) => {
+    trunks.setMatrixAt(
+      n,
+      tm.compose(
+        new THREE.Vector3(x, h / 2, z),
+        new THREE.Quaternion(),
+        new THREE.Vector3(1, h, 1),
+      ),
+    );
+    for (let c = 0; c < 3; c++) {
+      // Deterministic jitter (not rand(): the plot trees change with the timeline).
+      const j = Math.sin((n * 3 + c) * 12.9898 + k) * 0.5;
+      const r = 1.1 + (j + 0.5) * 0.6;
+      tm.compose(
+        new THREE.Vector3(x + j * 1.2, h + 0.6 + c * 0.55, z - j * 1.1),
+        new THREE.Quaternion(),
+        new THREE.Vector3(r, r * 0.85, r),
+      );
+      crowns.setMatrixAt(n * 3 + c, tm);
+      crowns.setColorAt(
+        n * 3 + c,
+        new THREE.Color(0x3f6a2a).multiplyScalar(0.9 + (j + 0.5) * 0.25),
+      );
+    }
+  };
+  const setPlotTrees = (spots: [number, number, number][]) => {
+    const list = spots.slice(0, PLOT_TREES);
+    list.forEach((spot, i) => placeTree(spot, treeSpots.length + i, 7));
+    trunks.count = treeSpots.length + list.length;
+    crowns.count = trunks.count * 3;
+    trunks.instanceMatrix.needsUpdate = true;
+    crowns.instanceMatrix.needsUpdate = true;
+    if (crowns.instanceColor) crowns.instanceColor.needsUpdate = true;
+    trunks.computeBoundingSphere();
+    crowns.computeBoundingSphere();
+  };
+  setPlotTrees([]);
   group.add(trunks, crowns);
-  // A couple of tower cranes on neighbouring sites.
+  // A couple of tower cranes on neighbouring sites (clear of the district plots).
   for (const [x, z, rot] of [
     [-120, -90, 0.6],
-    [140, 30, 2.2],
+    [205, 40, 0.15],
   ] as [number, number, number][]) {
     const tower = node(propsNode, [x, 0, z]);
     tower.rotation.y = rot;
@@ -856,7 +916,11 @@ export function buildWorld(M: Materials, mobile: boolean): World {
       ctx.font = '22px Arial, sans-serif';
       ctx.fillText(`Генподрядчик и техника: ${SITE.name}`, 20, 148);
       ctx.fillText(`Квартал ${SITE.name} · объект № ${p.projectIndex + 1}`, 20, 180);
-      ctx.fillText('Старт квартала: 01.10.2026', 20, 212);
+      ctx.fillText(
+        `Начало работ: ${formatDate(p.startedAt)} · сдача ≈ ${formatMonth(p.finishAt)}`,
+        20,
+        212,
+      );
       ctx.fillText(`Сейчас: ${p.stageName} · ${p.totalPercent}%`, 20, 252);
       const step = 472 / STAGES.length;
       STAGES.forEach((stage, i) => {
@@ -1102,6 +1166,7 @@ export function buildWorld(M: Materials, mobile: boolean): World {
     clickables,
     updateAds,
     procCity: cityBuilt.mesh,
+    setPlotTrees,
   };
 }
 

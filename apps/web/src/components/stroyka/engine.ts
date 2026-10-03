@@ -35,7 +35,14 @@ import { emitNature, emitSteps, emitThunder } from '@/lib/sceneEvents';
 import { cullProps, loadProps } from './props3d';
 import { LedScreen } from './ledScreen';
 import { Wildlife } from './wildlife';
-import { buildDistrict, buildProject, buildTowerCrane, type ProjectBuild } from './project';
+import {
+  buildDistrict,
+  buildProject,
+  buildTowerCrane,
+  type DistrictBuild,
+  type ProjectBuild,
+} from './project';
+import { footprintOn } from '@/lib/stroyka/plots';
 import { buildCity } from './cityMesh';
 import { placeSite, type CityData } from '@/lib/stroyka/city';
 import {
@@ -101,6 +108,8 @@ export interface Telemetry {
   tourStop: ZoneId | null;
   ready: boolean;
   drawCalls: number;
+  /** Triangles drawn in the last frame (all passes). */
+  triangles?: number;
   pixelRatio: number;
   cityInstances?: number;
   /** People drawn in full detail / as one-mesh stand-ins, last frame. */
@@ -244,8 +253,13 @@ export class StroykaEngine {
   private obstacles = obstaclesFor(false);
   private voxelMat = new THREE.MeshStandardMaterial({ map: pixelTexture(), roughness: 0.85 });
   private project: ProjectBuild | null = null;
-  private district: { group: THREE.Group; lit: THREE.InstancedMesh } | null = null;
+  /** ЖК «Кама» standing finished on the site once the next object is under way. */
+  private home: ProjectBuild | null = null;
+  private district: DistrictBuild | null = null;
   private tower: ReturnType<typeof buildTowerCrane> | null = null;
+  private towerPlot = -1;
+  /** Centre and top of the current object (fireworks at its handover). */
+  private projectTop = new THREE.Vector3(24, 36, -29);
   private progress: WorldProgress | null = null;
   private agpRoot: THREE.Object3D | null = null;
   private reveal: { from: number; t: number; dur: number } | null = null;
@@ -352,6 +366,8 @@ export class StroykaEngine {
     this.maxPixelRatio = Math.min(window.devicePixelRatio || 1, mobile ? 1.5 : 2);
     this.pixelRatio = this.maxPixelRatio;
     this.renderer.setPixelRatio(this.pixelRatio);
+    // Count the whole frame (scene, shadows and post passes), not the last pass.
+    this.renderer.info.autoReset = false;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.shadowMap.enabled = true;
@@ -805,6 +821,17 @@ export class StroykaEngine {
   }
 
   /** Free walk: stand at x, z looking along yaw (tests and screenshots). */
+  /**
+   * Debug (window.__stroyka.inspect): look at the district from any point,
+   * e.g. from above to check the plots; null gives the camera back.
+   */
+  inspect(from: [number, number, number] | null, at: [number, number, number] = [0, 0, 0]) {
+    this.inspectView = from
+      ? { pos: new THREE.Vector3(...from), look: new THREE.Vector3(...at) }
+      : null;
+  }
+  private inspectView: { pos: THREE.Vector3; look: THREE.Vector3 } | null = null;
+
   standAt(x: number, z: number, yaw: number, pitch = 0) {
     this.setMode('free');
     this.blend = null;
@@ -817,7 +844,12 @@ export class StroykaEngine {
     this.activeZone = zone;
   }
 
-  /** The district's real progress: rebuilds the object on the plot (optionally as a time-lapse). */
+  /**
+   * The district's state from the timeline: the current object at its stage
+   * on its own plot (optionally as a time-lapse), ЖК «Кама» finished on the
+   * site once it is handed over, the finished objects and the fenced future
+   * plots around (lib/stroyka/progress.ts, lib/stroyka/plots.ts).
+   */
   setProgress(p: WorldProgress, timelapse = false) {
     const same =
       this.progress &&
@@ -825,25 +857,61 @@ export class StroykaEngine {
       this.progress.stage === p.stage &&
       this.progress.stagePercent === p.stagePercent;
     if (same) return;
+    const plot = p.plot ?? 0;
     this.progress = p;
-    if (this.project) {
-      this.scene.remove(this.project.group);
-      this.project.mesh.dispose();
-      this.project.lit.dispose();
+    for (const old of [this.project, this.home]) {
+      if (!old) continue;
+      this.scene.remove(old.group);
+      old.mesh.dispose();
+      old.lit.dispose();
     }
-    this.project = buildProject(this.M, p, this.voxelMat, this.opts.mobile);
+    const box = footprintOn(plot, p.projectType);
+    this.project = buildProject(this.M, p, this.voxelMat, this.opts.mobile, { box });
     this.scene.add(this.project.group);
-    this.obstacles = obstaclesFor(this.project.hasWalls);
+    this.projectTop.set((box.minX + box.maxX) / 2, p.floors * 4 + 4, (box.minZ + box.maxZ) / 2);
+    const kama = p.finishedProjects.find((f) => f.plot === 0);
+    this.home =
+      plot !== 0 && kama
+        ? buildProject(
+            this.M,
+            {
+              projectType: kama.type,
+              floors: kama.floors,
+              stage: 8,
+              stagePercent: 100,
+              floorsBuilt: kama.floors,
+            },
+            this.voxelMat,
+            this.opts.mobile,
+            { done: true },
+          )
+        : null;
+    if (this.home) this.scene.add(this.home.group);
+    this.obstacles = obstaclesFor(plot === 0 ? this.project.hasWalls : true);
     this.reveal = timelapse ? { from: Math.floor(this.project.total * 0.55), t: 0, dur: 5 } : null;
     if (this.reveal) this.project.mesh.count = this.reveal.from;
-    // Finished objects around the site.
-    if (this.district) this.scene.remove(this.district.group);
-    this.district = buildDistrict(p.finishedProjects, this.voxelMat);
+    // Finished objects and the plots around the site.
+    if (this.district) {
+      this.scene.remove(this.district.group);
+      for (const o of this.district.group.children) (o as THREE.InstancedMesh).dispose();
+    }
+    this.district = buildDistrict(p, this.voxelMat);
+    this.district.setGround(this.ground ?? 'dry');
     this.scene.add(this.district.group);
+    this.world.setPlotTrees(this.district.trees);
     // Machines follow the stage: the tower crane from foundation to facade, the platform for the facade.
     const towerNeeded = p.stage >= 1 && p.stage <= 4;
+    if (this.tower && this.towerPlot !== plot) {
+      this.scene.remove(this.tower.root);
+      const parts = new Set<THREE.Object3D>();
+      this.tower.root.traverse((o) => parts.add(o));
+      this.clickables = this.clickables.filter((o) => !parts.has(o));
+      this.tower = null;
+    }
     if (towerNeeded && !this.tower) {
-      this.tower = buildTowerCrane(this.M, p.floors * 4);
+      const at: [number, number] = plot === 0 ? [38, -30] : [box.maxX + 3, box.minZ + 6];
+      this.tower = buildTowerCrane(this.M, p.floors * 4, at, plot === 0);
+      this.towerPlot = plot;
       this.scene.add(this.tower.root);
       const banner = new THREE.Mesh(new THREE.PlaneGeometry(8, 2), this.brandMat);
       banner.position.set(8, 0.6, 0.47);
@@ -856,7 +924,8 @@ export class StroykaEngine {
       this.clickables.push(banner, back);
     }
     if (this.tower) this.tower.root.visible = towerNeeded;
-    if (this.agpRoot) this.agpRoot.visible = p.stage >= 4 && p.stage <= 6;
+    // The aerial platform works on the site plot only.
+    if (this.agpRoot) this.agpRoot.visible = plot === 0 && p.stage >= 4 && p.stage <= 6;
     this.world.setPassport(p);
     if (p.stage === 8 && !this.fireworks) {
       this.fireworks = new Debris(this.opts.mobile ? 160 : 320, 0xffd36b, 0.5, -5);
@@ -1425,6 +1494,11 @@ export class StroykaEngine {
     const dt = Math.min(raw, 0.05);
     this.time += dt;
     this.tick(dt, Math.min(raw, 0.5));
+    if (this.inspectView) {
+      this.camera.position.copy(this.inspectView.pos);
+      this.camera.lookAt(this.inspectView.look);
+    }
+    this.renderer.info.reset();
     this.cinema!.render(this.time);
     this.measure();
   };
@@ -1441,6 +1515,7 @@ export class StroykaEngine {
     const t = this.opts.telemetry;
     t.fps = Math.round(fps);
     t.drawCalls = this.renderer.info.render.calls;
+    t.triangles = this.renderer.info.render.triangles;
     // Adaptive resolution: step down when slow for a few seconds.
     if (fps < 26) this.slowWindows++;
     else this.slowWindows = 0;
@@ -1979,6 +2054,7 @@ export class StroykaEngine {
     if (ground !== this.ground) {
       this.ground = ground;
       this.world.setGround(ground);
+      this.district?.setGround(ground);
       this.world.puddles.visible = ground === 'wet';
     }
 
@@ -1994,6 +2070,10 @@ export class StroykaEngine {
     const wz = -Math.cos(toward) * w.wind;
     this.world.updateFlags(this.time, w.wind, Math.atan2(wx, wz));
     this.world.updateAds(this.time, n);
+    if (this.home) {
+      (this.home.lit.material as THREE.MeshBasicMaterial).opacity = 0.95 * n;
+      this.home.lit.visible = n > 0.02;
+    }
     if (this.project) {
       (this.project.lit.material as THREE.MeshBasicMaterial).opacity = 0.95 * n;
       this.project.lit.visible = n > 0.02;
@@ -2014,7 +2094,7 @@ export class StroykaEngine {
     }
     if (this.district) {
       (this.district.lit.material as THREE.MeshBasicMaterial).opacity = 0.9 * n;
-      this.district.lit.visible = n > 0.02;
+      this.district.lit.visible = n > 0.02 && this.district.lit.count > 0;
     }
     if (this.tower?.root.visible) {
       this.tower.jib.rotation.y = Math.sin(this.time * 0.07) * 1.4 + 0.6;
@@ -2036,9 +2116,9 @@ export class StroykaEngine {
       if (n > 0.4 && this.time > this.nextFirework) {
         this.nextFirework = this.time + 1.2 + Math.random() * 2;
         const at = new THREE.Vector3(
-          18 + Math.random() * 12,
-          30 + Math.random() * 12,
-          -30 + Math.random() * 6,
+          this.projectTop.x - 6 + Math.random() * 12,
+          this.projectTop.y + Math.random() * 12,
+          this.projectTop.z - 1 + Math.random() * 6,
         );
         this.fireworks.emit(at, 0.3, 40);
         (this.fireworks.points.material as THREE.PointsMaterial).color.setHSL(

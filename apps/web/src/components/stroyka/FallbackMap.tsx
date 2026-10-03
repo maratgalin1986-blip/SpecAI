@@ -1,7 +1,13 @@
 'use client';
 
 import { ZONES, type ZoneId } from '@/lib/stroyka';
-import { progressLine, STAGES, type WorldProgress } from '@/lib/stroyka/progress';
+import {
+  formatDate,
+  formatMonth,
+  progressLine,
+  STAGES,
+  type WorldProgress,
+} from '@/lib/stroyka/progress';
 import { SiteMapSvg } from './MiniMap';
 
 export function Passport({
@@ -22,8 +28,10 @@ export function Passport({
       <div className="font-bold">{progress.projectName}</div>
       {!compact && (
         <div className="text-xs text-slate-300">
-          Генподрядчик и техника: СпецПласт16 · объект № {progress.projectIndex + 1} квартала ·
-          старт квартала 01.10.2026
+          Генподрядчик и техника: СпецПласт16 · объект № {progress.projectIndex + 1} квартала
+          {progress.startedAt
+            ? ` · начало работ ${formatDate(progress.startedAt)} · сдача ≈ ${formatMonth(progress.finishAt)}`
+            : ''}
         </div>
       )}
       <div
