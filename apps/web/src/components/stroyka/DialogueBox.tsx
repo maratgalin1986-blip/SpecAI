@@ -204,7 +204,7 @@ export function DialogueBox({
                 key={form.message}
                 source="stroyka"
                 dark
-                title="Наряд — Свете"
+                title="Заявка — Свете"
                 subtitle={`${SITE.callbackPromise}. Всё, что вы рассказали, уже в заявке.`}
                 defaultMessage={form.message}
               />

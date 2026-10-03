@@ -17,7 +17,7 @@ export const BADGES: Badge[] = [
   { id: 'rain', icon: '🌧️', title: 'Пережил ливень', hint: 'Прийти на стройку в дождь' },
   { id: 'talk', icon: '💬', title: 'Поговорил со всеми', hint: 'Поговорить с каждым на объекте' },
   { id: 'dog', icon: '🐶', title: 'Нашёл Бетона', hint: 'Погладить собаку прораба' },
-  { id: 'order', icon: '📋', title: 'Собрал наряд', hint: 'Заполнить все пункты наряда' },
+  { id: 'order', icon: '📋', title: 'Собрал заявку', hint: 'Заполнить все пункты заявки' },
 ];
 
 export interface BadgeState {

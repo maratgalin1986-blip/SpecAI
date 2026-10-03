@@ -67,7 +67,7 @@ export interface Zone {
   radius: number;
   /** Machines working in the zone (for the sound layer). */
   machines: MachineType[];
-  /** The machine «Оформить наряд» orders from this zone. */
+  /** The machine «Оформить заявку» orders from this zone. */
   order?: MachineType;
   /** Where the NPC stands. */
   npc: Vec2;
@@ -272,7 +272,7 @@ export const CALL: Reply = {
 };
 const NEXT: Reply = { label: 'Дальше по объекту', action: { kind: 'next' } };
 
-/** «Оформить наряд» for a machine: the wizard on the home page, with its jobs. */
+/** «Оформить заявку» for a machine: the wizard on the home page, with its jobs. */
 export function orderHref(type: MachineType): string {
   return `/?m=${type}#podbor`;
 }
@@ -391,15 +391,15 @@ export const DIALOGUE: Record<string, DialogNode> = {
     id: 'kotlovan',
     speaker: 'rinat',
     text: `Котлован под фундамент? Траншея под трубы? Мой JCB за смену сделает. От ${rub(PRICES.other)} ₽/ч с машинистом.`,
-    replies: [order('backhoe', 'Нужен такой — оформить наряд'), CALL, NEXT, TO_SVETA],
+    replies: [order('backhoe', 'Нужен такой — оформить заявку'), CALL, NEXT, TO_SVETA],
   },
   planirovka: {
     id: 'planirovka',
     speaker: 'mihalych',
     text: `Площадку выровнять, грунт растолкать — бульдозер, от ${P(PRICES.other)}. Снег, покос, прицеп — трактор, от ${P(PRICES.tractor)}.`,
     replies: [
-      order('dozer', 'Наряд на бульдозер'),
-      order('tractor', 'Наряд на трактор'),
+      order('dozer', 'Заявка на бульдозер'),
+      order('tractor', 'Заявка на трактор'),
       NEXT,
       TO_SVETA,
     ],
@@ -408,15 +408,15 @@ export const DIALOGUE: Record<string, DialogNode> = {
     id: 'doroga',
     speaker: 'rinat',
     text: `Щебень самосвалом подвезём — ${P(PRICES.truck)}, катком прикатаем — ${P(PRICES.other)}. Слышишь, пищит? Это самосвал сдаёт задом.`,
-    replies: [order('roller', 'Наряд на каток'), order('truck', 'Нужен самосвал'), NEXT, TO_SVETA],
+    replies: [order('roller', 'Заявка на каток'), order('truck', 'Нужен самосвал'), NEXT, TO_SVETA],
   },
   sklad: {
     id: 'sklad',
     speaker: 'ildar',
     text: `Блоки с машины снять, поддоны раскидать — манипулятор КМУ или фронтальный погрузчик. Оба от ${P(PRICES.other)}, смена — ${SHIFT_HOURS} часов.`,
     replies: [
-      order('kmu', 'Наряд на манипулятор'),
-      order('loader', 'Наряд на погрузчик'),
+      order('kmu', 'Заявка на манипулятор'),
+      order('loader', 'Заявка на погрузчик'),
       NEXT,
       TO_SVETA,
     ],
@@ -425,13 +425,13 @@ export const DIALOGUE: Record<string, DialogNode> = {
     id: 'korpus',
     speaker: 'mihalych',
     text: `Глянь в окно — люлька поднимается. Автовышка: фасад, окна, вывески, кровля. От ${P(PRICES.agp)} с оператором.`,
-    replies: [order('agp', 'Нужна автовышка — наряд'), CALL, NEXT, TO_SVETA],
+    replies: [order('agp', 'Нужна автовышка — оформить заявку'), CALL, NEXT, TO_SVETA],
   },
   montazh: {
     id: 'montazh',
     speaker: 'ildar',
     text: `Плиту на место — аккуратно, без рывков. Автокран 25 т — от ${P(PRICES.crane)}, 32 т — ${P(PRICES.crane32)}. Гидромолот, если надо, — ${P(PRICES.hammer)}.`,
-    replies: [order('crane', 'Оформить наряд на кран'), CALL, NEXT, TO_SVETA],
+    replies: [order('crane', 'Заявка на кран'), CALL, NEXT, TO_SVETA],
   },
   smeta: {
     id: 'smeta',

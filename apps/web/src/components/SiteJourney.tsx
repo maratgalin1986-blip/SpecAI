@@ -91,7 +91,7 @@ const SCENES: Scene[] = [
     text: 'Оставьте заявку — подберём технику и назовём цену за 15 минут.',
     href: '/#callback',
     cta: 'Оставить заявку',
-    sub: '— Ваш объект — следующий. Позвоните или оставьте наряд',
+    sub: '— Ваш объект — следующий. Позвоните или оставьте заявку',
   },
 ];
 
@@ -254,7 +254,7 @@ export function SiteJourney() {
                 href={scene.type === 'trench' ? '/#podbor' : `/?m=${scene.type}#podbor`}
                 className="inline-flex items-center rounded-full bg-amber-500 px-4 py-2 text-sm font-semibold text-slate-950"
               >
-                Наряд
+                Заявка
               </a>
             </div>
           </div>
@@ -454,7 +454,7 @@ export function SiteJourney() {
                       href={scene.type === 'trench' ? '/#podbor' : `/?m=${scene.type}#podbor`}
                       className="inline-flex items-center rounded-full bg-amber-500 px-3 py-1 text-xs font-semibold text-slate-950 hover:bg-amber-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white"
                     >
-                      Наряд
+                      Заявка
                     </a>
                   </div>
                 </div>

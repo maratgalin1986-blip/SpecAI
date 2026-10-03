@@ -43,7 +43,7 @@ export const SITE_LINES: Line[] = [
   { speaker: 'rinat', text: 'Михалыч, каска где? — На голове, Ринат, на голове.', kind: 'joke' },
   { speaker: 'worker', text: 'Кто последний кофе брал — тот и стропит!', kind: 'joke' },
   { speaker: 'ildar', text: 'Сверху всё видно. Особенно, кто не работает.', kind: 'joke' },
-  { speaker: 'sveta', text: 'В наряде всё сходится, до копейки. Чудо!', kind: 'joke' },
+  { speaker: 'sveta', text: 'В заявке всё сходится, до копейки. Чудо!', kind: 'joke' },
   { speaker: 'rinat', text: 'Каток не трактор, но тоже старается.', kind: 'joke' },
   // The foreman's «censored» grumbling.
   { speaker: 'mihalych', text: 'Кто ковш поставил на кабель, #@%&!', kind: 'joke' },

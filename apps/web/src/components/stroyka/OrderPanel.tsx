@@ -67,7 +67,7 @@ export function OrderPanel({
         <div className="flex items-center justify-between gap-3 border-b border-white/10 px-4 py-3">
           <div>
             <div className="font-mono text-[11px] uppercase tracking-widest text-amber-400">
-              Наряд на технику
+              Заявка на технику
             </div>
             <div className="text-lg font-bold">Техника СпецПласт16 — что нужно?</div>
             <div className="text-xs text-slate-400">
@@ -107,7 +107,7 @@ export function OrderPanel({
                     href={orderHref(type)}
                     className="rounded-full bg-amber-500 px-3 py-1.5 text-sm font-bold text-slate-950 hover:bg-amber-400"
                   >
-                    Оформить наряд
+                    Оформить заявку
                   </a>
                   <a
                     href={SITE.phoneHref}
