@@ -451,6 +451,7 @@ export function Stroyka() {
       telemetry,
       goTo: (z: ZoneId) => engine.goToZone(z),
       skipIntro: () => engine.skipIntro(),
+      fx: (on: boolean) => engine.setFx(on),
       state: () => engine.state,
       toScreen: (x: number, y: number, z: number) => engine.toScreen(x, y, z),
       standAt: (x: number, z: number, yaw: number, pitch?: number) => {
