@@ -890,7 +890,7 @@ export function Stroyka() {
       const line = holiday
         ? { text: holiday.text, tags: ['joke'] }
         : own
-          ? { text: own, tags: ['joke'] }
+          ? { text: own.text, tags: ['joke'] }
           : picker.current.pick(who.speaker, want);
       if (!line) return;
       const kind = line.tags.includes('business') ? 'business' : 'joke';
@@ -901,7 +901,8 @@ export function Stroyka() {
         tags: line.tags,
         hour: conditions.hour,
       });
-      engine.say(who.id, shown.text, 5.5, shown.mood);
+      // The crew's bubble says who is talking; the voice says only the words.
+      engine.say(who.id, own ? `${own.name}: ${shown.text}` : shown.text, 5.5, shown.mood);
       emitDialog(who.speaker, shown.text, kind, shown.mood);
       saveUsed(picker.current.used);
     };

@@ -136,6 +136,45 @@ const rand = (() => {
   return () => (s = (s * 16807) % 2147483647) / 2147483647;
 })();
 
+type FlagKind = 'ru' | 'tt' | 'brand';
+
+/**
+ * The flag of Russia (white, blue, red), of Tatarstan (green, a narrow white
+ * band, red: 7/15, 1/15, 7/15) or ours with the «16» mark and the name.
+ */
+function flagTexture(kind: FlagKind) {
+  return canvasTexture(240, 160, (ctx) => {
+    if (kind === 'ru') {
+      for (const [i, c] of ['#ffffff', '#0039a6', '#d52b1e'].entries()) {
+        ctx.fillStyle = c;
+        ctx.fillRect(0, (i * 160) / 3, 240, 160 / 3 + 1);
+      }
+    } else if (kind === 'tt') {
+      ctx.fillStyle = '#009a49';
+      ctx.fillRect(0, 0, 240, 75);
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 74, 240, 12);
+      ctx.fillStyle = '#ce1126';
+      ctx.fillRect(0, 85, 240, 75);
+    } else {
+      ctx.fillStyle = '#f59e0b';
+      ctx.fillRect(0, 0, 240, 160);
+      ctx.fillStyle = '#111827';
+      ctx.fillRect(18, 30, 64, 64);
+      ctx.fillStyle = '#f59e0b';
+      ctx.font = 'bold 40px Arial, sans-serif';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('16', 27, 64);
+      ctx.fillStyle = '#111827';
+      ctx.font = 'bold 30px Arial, sans-serif';
+      ctx.fillText('Спец', 92, 48);
+      ctx.fillText('Пласт16', 92, 82);
+      ctx.font = 'bold 15px Arial, sans-serif';
+      ctx.fillText('аренда спецтехники', 20, 128);
+    }
+  }).texture;
+}
+
 function bannerTexture() {
   const canvas = document.createElement('canvas');
   canvas.width = 512;
@@ -444,13 +483,26 @@ export function buildWorld(M: Materials, mobile: boolean): World {
     }
     lampHeads.push(new THREE.Vector3(x, MAST_HEIGHT, z));
   }
-  // Flag poles at the gate and on the building.
-  const flagPoles = [
-    new THREE.Vector3(-GATE_HALF - 3, 0, FENCE.maxZ + 1.5),
-    new THREE.Vector3(GATE_HALF + 3, 0, FENCE.maxZ + 1.5),
-    new THREE.Vector3(BUILDING.minX + 1, 12, BUILDING.minZ + 1),
+  // Flag poles (owner, 2026-10-03: the flags of Russia and Tatarstan
+  // everywhere on the site, and ours): at the gate, on the building, by the
+  // offices and along the fence.
+  const flagPoles: { at: THREE.Vector3; kind: FlagKind }[] = [
+    { at: new THREE.Vector3(-GATE_HALF - 3, 0, FENCE.maxZ + 1.5), kind: 'ru' },
+    { at: new THREE.Vector3(GATE_HALF + 3, 0, FENCE.maxZ + 1.5), kind: 'tt' },
+    { at: new THREE.Vector3(-GATE_HALF - 5.5, 0, FENCE.maxZ + 1.5), kind: 'brand' },
+    { at: new THREE.Vector3(GATE_HALF + 5.5, 0, FENCE.maxZ + 1.5), kind: 'brand' },
+    { at: new THREE.Vector3(BUILDING.minX + 1, 12, BUILDING.minZ + 1), kind: 'ru' },
+    { at: new THREE.Vector3(BUILDING.maxX - 1, 12, BUILDING.minZ + 1), kind: 'tt' },
+    { at: new THREE.Vector3(BUILDING.minX + 10, 12, BUILDING.minZ + 1), kind: 'brand' },
+    { at: new THREE.Vector3(14.6, 0, 53.4), kind: 'ru' },
+    { at: new THREE.Vector3(22.4, 0, 53.4), kind: 'tt' },
+    { at: new THREE.Vector3(-23.6, 0, 51.6), kind: 'tt' },
+    { at: new THREE.Vector3(-16.4, 0, 51.6), kind: 'ru' },
+    { at: new THREE.Vector3(FENCE.minX + 1.5, 0, 0), kind: 'brand' },
+    { at: new THREE.Vector3(FENCE.maxX - 1.5, 0, 0), kind: 'brand' },
   ];
-  for (const p of flagPoles) props.box(propsNode, [0.15, 7, 0.15], 'steel', [p.x, p.y + 3.5, p.z]);
+  for (const { at: p } of flagPoles)
+    props.box(propsNode, [0.15, 7, 0.15], 'steel', [p.x, p.y + 3.5, p.z]);
 
   // Distant city and trees outside the fence.
   const city = new Voxels();
@@ -634,53 +686,57 @@ export function buildWorld(M: Materials, mobile: boolean): World {
   puddles.visible = false;
   group.add(puddles);
 
-  // ------------------------------------------------------------ flags (segments flutter)
-  const SEGMENTS = 6;
-  const flagMesh = new THREE.InstancedMesh(
-    new THREE.BoxGeometry(1, 1, 1),
-    new THREE.MeshLambertMaterial(),
-    flagPoles.length * SEGMENTS,
-  );
-  for (let f = 0; f < flagPoles.length; f++)
-    for (let s = 0; s < SEGMENTS; s++)
-      flagMesh.setColorAt(
-        f * SEGMENTS + s,
-        new THREE.Color(s % 2 === 0 || f === 2 ? 0xf59e0b : 0x111827),
-      );
-  flagMesh.castShadow = true;
-  flagMesh.frustumCulled = false;
-  group.add(flagMesh);
-  const m4 = new THREE.Matrix4();
-  const q = new THREE.Quaternion();
-  const e = new THREE.Euler();
-  const p = new THREE.Vector3();
-  const sc = new THREE.Vector3(0.42, 1.0, 0.06);
+  // ------------------------------------------------------------ flags (cloth that flutters)
+  // Each flag is a cloth of 12×4 cells: the vertices wave with the wind
+  // every frame, the texture is the real flag.
+  const FLAG_W = 2.4;
+  const FLAG_H = 1.6;
+  const COLS = 12;
+  const flagTextures: Record<FlagKind, THREE.Texture> = {
+    ru: flagTexture('ru'),
+    tt: flagTexture('tt'),
+    brand: flagTexture('brand'),
+  };
+  const flags = flagPoles.map(({ at, kind }) => {
+    const geo = new THREE.PlaneGeometry(FLAG_W, FLAG_H, COLS, 4);
+    geo.translate(FLAG_W / 2, 0, 0);
+    const base = Float32Array.from(geo.attributes.position!.array);
+    const mesh = new THREE.Mesh(
+      geo,
+      new THREE.MeshStandardMaterial({
+        map: flagTextures[kind],
+        side: THREE.DoubleSide,
+        roughness: 0.85,
+      }),
+    );
+    mesh.position.set(at.x, at.y + 6.2, at.z);
+    mesh.castShadow = true;
+    mesh.frustumCulled = false;
+    group.add(mesh);
+    return { mesh, base, phase: at.x * 0.37 + at.z * 0.11 };
+  });
   const updateFlags = (time: number, wind: number, toward: number) => {
-    // Flags stream downwind; with no wind they hang down.
+    // Flags stream downwind; with no wind they hang down along the pole.
     const lift = Math.min(1, wind / 8);
     const freq = 2 + wind * 0.9;
-    for (let f = 0; f < flagPoles.length; f++) {
-      const pole = flagPoles[f]!;
-      let ox = 0;
-      let oz = 0;
-      let oy = 6.4;
-      let angle = toward;
-      for (let s = 0; s < SEGMENTS; s++) {
-        const wave = Math.sin(time * freq - s * 0.9 + f) * (0.15 + 0.35 * lift);
-        angle = toward + wave;
-        const step = 0.42;
-        const droop = (1 - lift) * 0.32 + 0.04;
-        ox += Math.sin(angle) * step * (1 - droop);
-        oz += Math.cos(angle) * step * (1 - droop);
-        oy -= droop * step;
-        p.set(pole.x + ox, pole.y + oy, pole.z + oz);
-        e.set(0, angle + Math.PI / 2, 0);
-        q.setFromEuler(e);
-        m4.compose(p, q, sc);
-        flagMesh.setMatrixAt(f * SEGMENTS + s, m4);
+    for (const f of flags) {
+      f.mesh.rotation.y = toward - Math.PI / 2;
+      const pos = f.mesh.geometry.attributes.position as THREE.BufferAttribute;
+      const arr = pos.array as Float32Array;
+      for (let i = 0; i < pos.count; i++) {
+        const x = f.base[i * 3]!;
+        const y = f.base[i * 3 + 1]!;
+        const k = x / FLAG_W; // 0 at the pole, 1 at the free edge
+        const wave = Math.sin(time * freq - x * 2.6 + f.phase) * (0.06 + 0.22 * lift) * k;
+        // Hanging: the cloth swings down toward the pole as the wind drops.
+        const hang = (1 - lift) * k;
+        arr[i * 3] = x * (1 - hang * 0.55);
+        arr[i * 3 + 1] = y - hang * x * 0.75;
+        arr[i * 3 + 2] = wave + Math.sin(time * 1.3 + y * 3 + f.phase) * 0.03 * k;
       }
+      pos.needsUpdate = true;
+      f.mesh.geometry.computeVertexNormals();
     }
-    flagMesh.instanceMatrix.needsUpdate = true;
   };
   updateFlags(0, 3, 0);
 
@@ -751,12 +807,111 @@ export function buildWorld(M: Materials, mobile: boolean): World {
     ctx.fillStyle = '#111827';
     ctx.fillRect(0, 0, 1024, 96);
     ctx.fillStyle = '#f59e0b';
-    ctx.font = 'bold 46px Arial, sans-serif';
+    const text = `${SITE.platform} · генподрядчик и техника: ${SITE.name}`;
+    let px = 46;
+    do ctx.font = `bold ${px--}px Arial, sans-serif`;
+    while (ctx.measureText(text).width > 980 && px > 20);
     ctx.textBaseline = 'middle';
     ctx.textAlign = 'center';
-    ctx.fillText(`${SITE.platform} · генподрядчик и техника: ${SITE.name}`, 512, 50);
+    ctx.fillText(text, 512, 50);
   });
   signMesh(gateSign.texture, GATE_HALF * 2 + 2.6, 1.1, 0, 4.6, FENCE.maxZ + 0.17, 0, true);
+  // Safety signs in Russian and Tatar (owner, 2026-10-03: more Tatar on site).
+  const SAFETY: { tt: string; ru: string; at: [number, number]; rot: number; color: string }[] = [
+    {
+      tt: 'Рәхим итегез!',
+      ru: 'Добро пожаловать!',
+      at: [-6, 62.2],
+      rot: Math.PI,
+      color: '#16a34a',
+    },
+    { tt: 'Каска киегез', ru: 'Работать в каске', at: [6, 62.2], rot: Math.PI, color: '#2563eb' },
+    {
+      tt: 'Сак булыгыз! Техника эшли',
+      ru: 'Осторожно! Работает техника',
+      at: [-26, 30],
+      rot: Math.PI * 0.75,
+      color: '#dc2626',
+    },
+    {
+      tt: 'Стрела астында басмагыз',
+      ru: 'Не стоять под стрелой',
+      at: [26, 28],
+      rot: -Math.PI * 0.6,
+      color: '#dc2626',
+    },
+    {
+      tt: 'Төзелеш мәйданы',
+      ru: 'Строительная площадка',
+      at: [-40, 56],
+      rot: Math.PI * 0.85,
+      color: '#f59e0b',
+    },
+  ];
+  for (const sign of SAFETY) {
+    const [sx, sz] = sign.at;
+    const tex = canvasTexture(384, 256, (ctx) => {
+      ctx.fillStyle = '#f8fafc';
+      ctx.fillRect(0, 0, 384, 256);
+      ctx.fillStyle = sign.color;
+      ctx.fillRect(0, 0, 384, 26);
+      ctx.fillRect(0, 230, 384, 26);
+      ctx.fillStyle = '#111827';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      const fit = (text: string, size: number, y: number) => {
+        let px = size;
+        do ctx.font = `bold ${px--}px Arial, sans-serif`;
+        while (ctx.measureText(text).width > 350 && px > 14);
+        ctx.fillText(text, 192, y);
+      };
+      fit(sign.tt, 38, 92);
+      ctx.fillStyle = '#475569';
+      fit(sign.ru, 30, 158);
+    });
+    const ux = Math.sin(sign.rot);
+    const uz = Math.cos(sign.rot);
+    signs.box(signNode, [0.12, 2.6, 0.12], 'dark', [sx, 1.3, sz]);
+    signs.box(signNode, [1.7, 1.15, 0.06], 'dark', [sx, 2.25, sz], [0, sign.rot, 0]);
+    signMesh(tex.texture, 1.6, 1.07, sx + ux * 0.04, 2.25, sz + uz * 0.04, sign.rot);
+  }
+  // Big «СпецПласт16» boards at the corners, seen from anywhere on the site.
+  const bigBrand = canvasTexture(1024, 384, (ctx) => {
+    ctx.fillStyle = '#f59e0b';
+    ctx.fillRect(0, 0, 1024, 384);
+    ctx.fillStyle = '#111827';
+    ctx.fillRect(40, 60, 230, 230);
+    ctx.fillStyle = '#f59e0b';
+    ctx.font = 'bold 150px Arial, sans-serif';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('16', 62, 182);
+    ctx.fillStyle = '#111827';
+    ctx.font = 'bold 120px Arial, sans-serif';
+    ctx.fillText(SITE.name, 300, 130);
+    ctx.font = 'bold 44px Arial, sans-serif';
+    ctx.fillText('Аренда спецтехники · махсус техника арендага', 300, 232);
+    ctx.font = 'bold 56px Arial, sans-serif';
+    ctx.fillText(SITE.phone, 300, 316);
+  });
+  for (const [bx, bz, rot] of [
+    [-54, 58, Math.PI * 0.8],
+    [54, 58, -Math.PI * 0.8],
+    [-54, -58, Math.PI * 0.2],
+    [54, -58, -Math.PI * 0.2],
+  ] as [number, number, number][]) {
+    const ux = Math.sin(rot);
+    const uz = Math.cos(rot);
+    for (const s2 of [-2.6, 2.6])
+      signs.box(signNode, [0.3, 6, 0.3], 'dark', [
+        bx + Math.cos(rot) * s2,
+        3,
+        bz - Math.sin(rot) * s2,
+      ]);
+    signs.box(signNode, [8.2, 3.2, 0.25], 'dark', [bx, 6.2, bz], [0, rot, 0]);
+    const board = signMesh(bigBrand.texture, 8, 3, bx + ux * 0.14, 6.2, bz + uz * 0.14, rot);
+    board.userData.machine = 'backhoe';
+    clickables.push(board);
+  }
   // Neon on the site cabin.
   const neonTex = canvasTexture(512, 96, (ctx) => {
     ctx.fillStyle = 'rgba(0,0,0,0)';
