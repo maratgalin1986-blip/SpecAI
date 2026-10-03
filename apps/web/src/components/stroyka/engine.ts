@@ -979,6 +979,11 @@ export class StroykaEngine {
     if (event.snow) this.setEnvironment(this.lastDate, this.lastPoint, this.lift, true);
   }
 
+  /** Debug: post effects (AO, lens) on or off, for before/after shots. */
+  setFx(on: boolean) {
+    this.cinema?.setFx(on);
+  }
+
   /** Skip the opening fly-over. */
   skipIntro() {
     if (!this.intro.active) return;
@@ -1410,6 +1415,10 @@ export class StroykaEngine {
     // Adaptive resolution: step down when slow for a few seconds.
     if (fps < 26) this.slowWindows++;
     else this.slowWindows = 0;
+    // First the ambient occlusion goes, then the resolution steps down.
+    if (this.slowWindows >= 3 && this.cinema?.lowerQuality()) {
+      this.slowWindows = 0;
+    }
     // Never below 1: lower made the blocks look blurry and coarse.
     if (this.slowWindows >= 3 && this.pixelRatio > 1) {
       this.pixelRatio = Math.max(1, this.pixelRatio - 0.25);

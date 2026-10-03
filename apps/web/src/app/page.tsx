@@ -271,15 +271,33 @@ export default async function HomePage() {
                 <Icon name="phone" className="h-5 w-5" />
                 {SITE.phone}
               </a>
-              <a
-                href="#callback"
-                className="group inline-flex items-center gap-2 rounded-full bg-white px-6 py-3.5 text-base font-semibold text-slate-950 transition hover:bg-slate-100"
-              >
-                Заказать технику
-                <Icon name="arrow" className="h-4 w-4 transition group-hover:translate-x-1" />
-              </a>
+              <div className="flex flex-col items-start gap-3">
+                <a
+                  href="#callback"
+                  className="group inline-flex items-center gap-2 rounded-full bg-white px-6 py-3.5 text-base font-semibold text-slate-950 transition hover:bg-slate-100"
+                >
+                  Заказать технику
+                  <Icon name="arrow" className="h-4 w-4 transition group-hover:translate-x-1" />
+                </a>
+                {/* The 3D site, right under the order button and as big: a glass pill
+                    with a softly pulsing play button, calmer than the order buttons. */}
+                <a
+                  href="/stroyka"
+                  className="group inline-flex items-center gap-3 rounded-full bg-white/10 py-2 pl-2 pr-6 text-base font-semibold text-white ring-1 ring-white/30 backdrop-blur-sm transition hover:bg-white/20 hover:ring-white/60"
+                >
+                  <span className="stroyka-ping relative grid h-9 w-9 place-items-center rounded-full bg-amber-400 text-slate-950 transition group-hover:scale-110">
+                    <svg viewBox="0 0 16 16" aria-hidden className="ml-0.5 h-4 w-4 fill-current">
+                      <path d="M4 2.5v11l9-5.5z" />
+                    </svg>
+                  </span>
+                  Войти на стройку
+                  <span className="rounded bg-white/15 px-1.5 py-0.5 text-[11px] font-bold uppercase tracking-wider text-amber-200">
+                    3D
+                  </span>
+                </a>
+              </div>
             </div>
-            {/* Two buttons only (call, order); the other ways in are quiet links. */}
+            {/* Big buttons: call, order, the 3D site; the other ways in are quiet links. */}
             <nav
               aria-label="Ещё на сайте"
               className="float-in mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm font-semibold text-slate-200"
@@ -296,22 +314,6 @@ export default async function HomePage() {
                 className="inline-flex min-h-10 items-center rounded-full px-3 text-amber-300 ring-2 ring-amber-400 transition hover:bg-amber-400 hover:text-slate-950"
               >
                 🧮 Рассчитать смету
-              </a>
-              {/* The 3D site: a glass pill with a softly pulsing play button —
-                  noticeable next to the quiet links, calmer than the order buttons. */}
-              <a
-                href="/stroyka"
-                className="group inline-flex min-h-10 items-center gap-2.5 rounded-full bg-white/10 py-1 pl-1 pr-4 text-white ring-1 ring-white/30 backdrop-blur-sm transition hover:bg-white/20 hover:ring-white/60"
-              >
-                <span className="stroyka-ping relative grid h-8 w-8 place-items-center rounded-full bg-amber-400 text-slate-950 transition group-hover:scale-110">
-                  <svg viewBox="0 0 16 16" aria-hidden className="ml-0.5 h-3.5 w-3.5 fill-current">
-                    <path d="M4 2.5v11l9-5.5z" />
-                  </svg>
-                </span>
-                Войти на стройку
-                <span className="rounded bg-white/15 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-amber-200">
-                  3D
-                </span>
               </a>
               <a
                 href="/kalkulyator"

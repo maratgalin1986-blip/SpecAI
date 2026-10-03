@@ -1,10 +1,12 @@
 // The film look of /stroyka: sky reflections for the PBR materials and a
-// post-processing chain (MSAA, a soft bloom on lamps and beacons, a warm
-// film grade with vignette and grain). Phones skip the bloom and the grade
-// and render straight to the screen; the reflections are cheap and stay.
+// post-processing chain — ambient occlusion in corners and under machines
+// (GTAO, half resolution), MSAA, a soft bloom on lamps and beacons, and a
+// film grade (filmic contrast, split toning, lens fringing, vignette, grain).
+// Phones keep only the grade: one cheap full-screen pass, no AO or bloom.
 import * as THREE from 'three';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
+import { GTAOPass } from 'three/examples/jsm/postprocessing/GTAOPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
@@ -45,6 +47,8 @@ const GradeShader = {
     sunPos: { value: new THREE.Vector2(0.5, 0.5) },
     flare: { value: 0 },
     aspect: { value: 1 },
+    // Lens fringing at the frame edges (0 on phones).
+    fringe: { value: 0 },
   },
   vertexShader: /* glsl */ `
     varying vec2 vUv;
@@ -57,12 +61,23 @@ const GradeShader = {
     uniform vec2 sunPos;
     uniform float flare;
     uniform float aspect;
+    uniform float fringe;
     varying vec2 vUv;
     float hash(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
     void main() {
       vec4 c = texture2D(tDiffuse, vUv);
       vec3 col = c.rgb;
+      // Lens fringing: red and blue slightly apart towards the corners.
+      if (fringe > 0.0) {
+        vec2 off = (vUv - 0.5) * fringe * dot(vUv - 0.5, vUv - 0.5) * 4.0;
+        col.r = texture2D(tDiffuse, vUv + off).r;
+        col.b = texture2D(tDiffuse, vUv - off).b;
+      }
+      // Filmic contrast: deeper shadows, a soft shoulder, a touch more colour.
+      col = clamp(col, 0.0, 1.0);
+      col = mix(col, col * col * (3.0 - 2.0 * col), 0.35);
       float l = dot(col, vec3(0.2126, 0.7152, 0.0722));
+      col = mix(vec3(l), col, 1.08);
       // Teal-and-orange split toning, kept subtle.
       col = mix(col, col * vec3(0.94, 1.0, 1.07), (1.0 - smoothstep(0.0, 0.5, l)) * 0.35);
       col = mix(col, col * vec3(1.06, 1.0, 0.92), smoothstep(0.4, 1.2, l) * 0.35);
@@ -91,6 +106,9 @@ const GradeShader = {
     }`,
 };
 
+/** Lens fringing strength on computers. */
+const FRINGE = 0.004;
+
 export class Cinema {
   private pmrem: THREE.PMREMGenerator;
   private envScene = new THREE.Scene();
@@ -108,6 +126,7 @@ export class Cinema {
   private composer: EffectComposer | null = null;
   private bloom: UnrealBloomPass | null = null;
   private grade: ShaderPass | null = null;
+  private gtao: GTAOPass | null = null;
 
   constructor(
     private renderer: THREE.WebGLRenderer,
@@ -132,19 +151,46 @@ export class Cinema {
       }),
     );
     this.envScene.add(sphere);
-    if (!full) return;
     const size = renderer.getDrawingBufferSize(new THREE.Vector2());
     const target = new THREE.WebGLRenderTarget(size.x, size.y, {
       type: THREE.HalfFloatType,
-      samples: 4,
+      samples: full ? 4 : 0,
     });
     this.composer = new EffectComposer(renderer, target);
     this.composer.addPass(new RenderPass(scene, camera));
-    this.bloom = new UnrealBloomPass(new THREE.Vector2(size.x / 2, size.y / 2), 0.32, 0.5, 0.92);
-    this.composer.addPass(this.bloom);
+    if (full) {
+      // Contact shadows where walls meet the ground and under the machines;
+      // at half resolution, it is the most expensive pass.
+      const gtao = new GTAOPass(scene, camera, size.x / 2, size.y / 2);
+      const setSize = gtao.setSize.bind(gtao);
+      gtao.setSize = (w: number, h: number) => setSize(Math.ceil(w / 2), Math.ceil(h / 2));
+      gtao.updateGtaoMaterial({ radius: 1.2, distanceExponent: 1.5, thickness: 1.5, samples: 12 });
+      gtao.updatePdMaterial({ radius: 6, samples: 12, rings: 2 });
+      gtao.blendIntensity = 0.85;
+      this.gtao = gtao;
+      this.composer.addPass(gtao);
+      this.bloom = new UnrealBloomPass(new THREE.Vector2(size.x / 2, size.y / 2), 0.32, 0.5, 0.92);
+      this.composer.addPass(this.bloom);
+    }
     this.grade = new ShaderPass(GradeShader);
+    this.grade.uniforms.fringe!.value = full ? FRINGE : 0;
+    // Phones: a lighter grain, the screen is small.
+    if (!full) this.grade.uniforms.grain!.value = 0.025;
     this.composer.addPass(this.grade);
     this.composer.addPass(new OutputPass());
+  }
+
+  /** Debug (window.__stroyka.fx): the AO and the lens effects on or off. */
+  setFx(on: boolean) {
+    if (this.gtao) this.gtao.enabled = on;
+    if (this.grade) this.grade.uniforms.fringe!.value = on && this.full ? FRINGE : 0;
+  }
+
+  /** The machine is too slow: drop the ambient occlusion. False if already off. */
+  lowerQuality() {
+    if (!this.gtao?.enabled) return false;
+    this.gtao.enabled = false;
+    return true;
   }
 
   /** Re-captures the sky for reflections every few seconds (sky changes slowly). */
@@ -164,12 +210,8 @@ export class Cinema {
   }
 
   render(time: number) {
-    if (!this.composer) {
-      this.renderer.render(this.scene, this.camera);
-      return;
-    }
     this.grade!.uniforms.time!.value = time;
-    this.composer.render();
+    this.composer!.render();
   }
 
   /** Sun position in the frame and how strong its flare is (0 hides it). */
@@ -183,8 +225,9 @@ export class Cinema {
   /** The opening shot: deeper vignette, more contrast and grain (k 0…1). */
   setIntro(k: number) {
     if (!this.grade) return;
+    const grain = this.full ? 0.035 : 0.025;
     this.grade.uniforms.vignette!.value = 0.38 + 0.25 * k;
-    this.grade.uniforms.grain!.value = 0.035 + 0.025 * k;
+    this.grade.uniforms.grain!.value = grain + 0.025 * k;
   }
 
   /** Night needs a stronger bloom on floodlights, day a faint one. */
@@ -202,6 +245,7 @@ export class Cinema {
     this.envTarget?.dispose();
     this.pmrem.dispose();
     this.bloom?.dispose();
+    this.gtao?.dispose();
     this.composer?.renderTarget1.dispose();
     this.composer?.renderTarget2.dispose();
     this.composer?.dispose();
