@@ -18,6 +18,7 @@ import {
   type Materials,
 } from './kit';
 import { palletBuilder } from './machines';
+import { facadeMaterial } from './cityMesh';
 
 // 1 m blocks: finer than the first 2 m version, still one instanced draw.
 export const GROUND_CELL = 1;
@@ -267,6 +268,42 @@ export function buildWorld(M: Materials, mobile: boolean): World {
   groundGeo.setIndex(index);
   groundGeo.computeVertexNormals();
   const groundMat = surfaceMaterial('brown_mud_02', 1, { vertexColors: true });
+  // Break up the tiling like a real site: large patches of drier clay and
+  // darker damp soil, by world position (two noise octaves, no texture).
+  groundMat.onBeforeCompile = (shader) => {
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\nvarying vec2 vGroundXZ;')
+      .replace(
+        '#include <worldpos_vertex>',
+        '#include <worldpos_vertex>\nvGroundXZ = (modelMatrix * vec4(transformed, 1.0)).xz;',
+      );
+    shader.fragmentShader = shader.fragmentShader
+      .replace(
+        '#include <common>',
+        `#include <common>
+        varying vec2 vGroundXZ;
+        float gHash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+        float gNoise(vec2 p) {
+          vec2 i = floor(p); vec2 f = fract(p); f = f * f * (3.0 - 2.0 * f);
+          return mix(mix(gHash(i), gHash(i + vec2(1, 0)), f.x), mix(gHash(i + vec2(0, 1)), gHash(i + vec2(1, 1)), f.x), f.y);
+        }
+        float gPatch;`,
+      )
+      .replace(
+        '#include <map_fragment>',
+        `#include <map_fragment>
+        gPatch = gNoise(vGroundXZ / 23.0) * 0.65 + gNoise(vGroundXZ / 7.0) * 0.35;
+        vec3 clay = diffuseColor.rgb * vec3(1.28, 1.16, 1.0);
+        vec3 damp = diffuseColor.rgb * vec3(0.72, 0.7, 0.68);
+        diffuseColor.rgb = mix(damp, clay, smoothstep(0.25, 0.8, gPatch));`,
+      )
+      .replace(
+        '#include <roughnessmap_fragment>',
+        `#include <roughnessmap_fragment>
+        roughnessFactor = clamp(roughnessFactor * mix(0.82, 1.08, gPatch), 0.0, 1.0);`,
+      );
+  };
+  groundMat.customProgramCacheKey = () => 'ground-patches';
   const terrainMesh = new THREE.Mesh(groundGeo, groundMat);
   terrainMesh.receiveShadow = true;
   group.add(terrainMesh);
@@ -514,7 +551,8 @@ export function buildWorld(M: Materials, mobile: boolean): World {
     const shade = 0x8a8f98 + Math.floor(rand() * 3) * 0x0a0a0a;
     city.add(Math.cos(a) * r, h / 2, Math.sin(a) * r, shade, w, h, w);
   }
-  const cityBuilt = city.build(voxelMat, { receive: false });
+  // Until the real map loads: the same windowed facades as the city.
+  const cityBuilt = city.build(facadeMaterial().material, { receive: false });
   group.add(cityBuilt.mesh);
   // Trees: a trunk and a lumpy crown of a few blobs, instanced.
   const trunkGeo = new THREE.CylinderGeometry(0.12, 0.2, 1, 7);
