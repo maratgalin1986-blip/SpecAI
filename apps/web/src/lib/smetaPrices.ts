@@ -16,14 +16,16 @@
 //     row is not priced («цену подтвердим за 15 минут») but stays in the
 //     order, so re-check and bump `checkedAt` every two weeks.
 //
-// State on 2026-10-02: no dated price list from the last two weeks was found,
-// so MATERIAL_PRICES is empty and every row shows «цену подтвердим за 15
-// минут». What the research turned up (all undated, not used):
-//  - бетон М300: beton-nc.ru/price 3 350–4 500 ₽/м³; beton-naberezhnye-chelny.ru/prices 8 750 ₽/м³.
-//  - арматура А500С: metalloprokat-servis.ru 27 200–34 700 ₽/т; metallotorg.ru (Челябинск) 75 800 ₽/т.
-//  - песок, щебень: aggregator listings per tonne (chelny.pulscen.ru, stroitaxi.ru).
-//  - ФГИС ЦС (fgiscs.minstroyrf.ru) is reachable, but its quarterly regional
-//    prices are older than 14 days by design, so they are not used either.
+// State on 2026-10-03: only rebar has a dated price from the last two weeks
+// (Казань price monitor, «Цены обновлены 02.10.2026»); every other row shows
+// «цену подтвердим за 15 минут». Not used, and why:
+//  - бетон М300, песок: beton-kazan24.ru/price shows «на <today>», an automatic
+//    stamp, not a real update date.
+//  - щебень 20–40, доска 25 мм, газобетон D500, сэндвич-панели, гидроизоляция,
+//    геотекстиль: no dated Челны / Татарстан source (regtorg listings are other
+//    regions or have no matching size).
+//  - Lemana PRO, Мегастрой, Пульс цен block automated access.
+//  - ФГИС ЦС (fgiscs.minstroyrf.ru): quarterly, older than 14 days by design.
 
 export type Material =
   | 'concrete'
@@ -75,7 +77,16 @@ export type PriceTable = Partial<Record<Material, PriceEntry>>;
 
 export const MAX_PRICE_AGE_DAYS = 14;
 
-export const MATERIAL_PRICES: PriceTable = {};
+export const MATERIAL_PRICES: PriceTable = {
+  rebar: {
+    low: 60_900,
+    high: 64_100,
+    publisher: 'mcena.ru, Казань: склад Евраз Маркет — Металлоторг (с НДС, от 5 т)',
+    url: 'https://kazan.mcena.ru/metalloprokat/armatura/a500s-gost-r-52544_ceny',
+    publishedAt: '2026-10-02',
+    checkedAt: '2026-10-03',
+  },
+};
 
 export const PRICES_NOTE =
   'Предварительная цена, окончательную подтвердит менеджер СпецПласт16 после проверки наличия.';
