@@ -50,6 +50,8 @@ export function StroykaFilm({
   const [muted, setMuted] = useState(false);
   // Muted only by the browser (not by the visitor): the first touch turns it on.
   const autoMuted = useRef(false);
+  // Mirrors autoMuted for the button label.
+  const [waiting, setWaiting] = useState(false);
   const [ended, setEnded] = useState(false);
   const [line, setLine] = useState(0);
   useEffect(() => {
@@ -71,6 +73,7 @@ export function StroykaFilm({
       // Autoplay with sound refused: play muted until the first touch.
       v.muted = true;
       autoMuted.current = wantSound;
+      setWaiting(wantSound);
       setMuted(true);
       v.play().catch(() => setEnded(true));
     });
@@ -89,6 +92,7 @@ export function StroykaFilm({
         const v = video.current;
         if (!v || !autoMuted.current) return;
         autoMuted.current = false;
+        setWaiting(false);
         v.muted = false;
         setMuted(false);
       }}
@@ -160,15 +164,18 @@ export function StroykaFilm({
           onClick={() => {
             const v = video.current;
             if (!v) return;
+            // Sound wanted but the browser still waits for a touch: the
+            // button already says «Убрать звук», so this press turns it off.
+            const next = autoMuted.current ? true : !v.muted;
             autoMuted.current = false;
-            const next = !v.muted;
+            setWaiting(false);
             v.muted = next;
             setMuted(next);
             setSoundEnabled(!next);
           }}
           className="min-h-11 rounded-full bg-white px-4 py-2 text-sm font-bold text-slate-950 shadow-lg hover:bg-amber-300"
         >
-          {muted ? '🔊 Включить звук' : '🔇 Убрать звук'}
+          {muted && !waiting ? '🔊 Включить звук' : '🔇 Убрать звук'}
         </button>
         <button
           type="button"

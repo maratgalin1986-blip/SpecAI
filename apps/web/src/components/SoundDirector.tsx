@@ -153,7 +153,10 @@ export function SoundDirector() {
       });
     };
 
-    const onGesture = () => {
+    const onGesture = (event: Event) => {
+      // A press of «Выключить звук» is not a reason to start the sound first.
+      const target = event.target as Element | null;
+      if (target?.closest?.('[data-sound-toggle]')) return;
       // A scroll restored by the browser is not the visitor's gesture: wait
       // for one that lets audio start (no context is created before it).
       const activation = (navigator as Navigator & { userActivation?: { isActive: boolean } })

@@ -5,30 +5,28 @@ import { setSoundEnabled, soundEnabled, subscribeSound, SOUND_HINT_KEY } from '@
 
 const HINT_MS = 5000;
 
-/** Whether audio actually plays: SoundDirector marks <html data-sound-live> once it runs. */
-function subscribeLive(listener: () => void): () => void {
-  const observer = new MutationObserver(listener);
-  observer.observe(document.documentElement, { attributeFilter: ['data-sound-live'] });
-  return () => observer.disconnect();
-}
-const isLive = () => document.documentElement.hasAttribute('data-sound-live');
-
 /**
  * «🔊 Звук» / «🔇»: the one switch of the cinematic sound layer. Sound is on
  * from the first tap unless the visitor turned it off; the choice is
- * remembered (lib/sound.ts). Until the browser lets audio start, the switch
- * shows «🔇» and its first press starts the sound (it used to turn the saved
- * «on» off, so it took two presses, owner 2026-10-03).
+ * remembered (lib/sound.ts). The button says what it does (owner,
+ * 2026-10-03): «Выключить звук» while the sound is on — the default, which
+ * starts at the first touch of the page — and «Включить звук» once it is off.
  * Shows a one-time hint per session, after the opening titles.
  */
-export function SoundToggle({ className = '' }: { className?: string }) {
-  const enabled = useSyncExternalStore(subscribeSound, soundEnabled, () => false);
-  const live = useSyncExternalStore(subscribeLive, isLive, () => false);
-  const on = enabled && live;
+export function SoundToggle({
+  className = '',
+  iconOnPhone = false,
+}: {
+  className?: string;
+  /** The site header on a phone has room for the icon only. */
+  iconOnPhone?: boolean;
+}) {
+  // On by default: the server render shows «Выключить звук» too, so no flicker.
+  const on = useSyncExternalStore(subscribeSound, soundEnabled, () => true);
   const [hint, setHint] = useState(false);
 
   useEffect(() => {
-    if (soundEnabled() && isLive()) return;
+    if (soundEnabled()) return;
     try {
       if (sessionStorage.getItem(SOUND_HINT_KEY)) return;
     } catch {
@@ -38,7 +36,7 @@ export function SoundToggle({ className = '' }: { className?: string }) {
     let hideTimer = 0;
     let poll = 0;
     const show = () => {
-      if (soundEnabled() && isLive()) return;
+      if (soundEnabled()) return;
       try {
         sessionStorage.setItem(SOUND_HINT_KEY, '1');
       } catch {
@@ -75,21 +73,19 @@ export function SoundToggle({ className = '' }: { className?: string }) {
       <button
         type="button"
         data-sound-toggle
-        onClick={() =>
-          // On but still asleep: this press is the gesture that wakes it.
-          setSoundEnabled(soundEnabled() && isLive() ? false : true)
-        }
+        onClick={() => setSoundEnabled(!soundEnabled())}
         aria-pressed={on}
         aria-label={on ? 'Выключить звук' : 'Включить звук'}
         title={on ? 'Выключить звук' : 'Включить звук — как в кино'}
-        className={`inline-flex h-9 min-w-9 items-center justify-center gap-1 rounded-full px-2 text-sm font-semibold ring-1 transition ${
+        className={`inline-flex h-9 min-w-9 items-center justify-center gap-1 whitespace-nowrap rounded-full px-2.5 text-xs sm:text-sm font-semibold ring-1 transition ${
           on
             ? 'bg-amber-500 text-slate-950 ring-amber-500'
             : 'text-slate-600 ring-slate-300 hover:bg-slate-100'
         }`}
       >
-        <span aria-hidden>{on ? '🔊' : '🔇'}</span>
-        {on && <span className="hidden sm:inline">Звук</span>}
+        <span aria-hidden>{on ? '🔇' : '🔊'}</span>
+        {!iconOnPhone && <span className="sm:hidden">{on ? 'Выкл. звук' : 'Вкл. звук'}</span>}
+        <span className="hidden sm:inline">{on ? 'Выключить звук' : 'Включить звук'}</span>
       </button>
       {hint && (
         <span
