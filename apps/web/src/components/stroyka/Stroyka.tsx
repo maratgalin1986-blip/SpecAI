@@ -81,12 +81,15 @@ import { placeSite, points as cityPoints, type CityData } from '@/lib/stroyka/ci
 import { OrderPanel } from './OrderPanel';
 import { PhotoBooth } from './PhotoBooth';
 import { StroykaFilm } from './StroykaFilm';
+import { ZoneFilm } from './ZoneFilm';
 import { crewLine } from '@/lib/stroyka/crew';
 import { WeatherBadge } from './WeatherBadge';
 
 const StroykaWorld = dynamic(() => import('./StroykaWorld'), { ssr: false });
 
-type Phase = 'boot' | '3d' | 'fallback';
+// 'film' (default, owner 2026-10-03): real footage per stop, no 3D engine;
+// '3d': the rendered site (?3d=1 or «Пройтись в 3D»); 'fallback': the 2D list (?2d=1).
+type Phase = 'boot' | 'film' | '3d' | 'fallback';
 
 interface DialogState {
   nodeId: string;
@@ -279,7 +282,16 @@ export function Stroyka() {
     setMobile(window.matchMedia('(pointer: coarse)').matches || window.innerWidth < 768);
     const force2d = params.get('2d') === '1';
     const force3d = params.get('3d') === '1';
-    setPhase(force2d || !hasWebGL() || (prefersReduced && !force3d) ? 'fallback' : '3d');
+    // The film tour becomes the default once its footage is in (public/film/zones); ?film=1 meanwhile.
+    setPhase(
+      force2d
+        ? 'fallback'
+        : params.get('film') === '1'
+          ? 'film'
+          : hasWebGL() && !(prefersReduced && !force3d)
+            ? '3d'
+            : 'fallback',
+    );
     setFilmOn(
       !prefersReduced &&
         !['nofilm', 'nointro', 'order'].some((key) => params.get(key) === '1') &&
@@ -584,6 +596,11 @@ export function Stroyka() {
     [openNode, engine, earn, seasonLine],
   );
 
+  // The film tour starts at the gate, with the foreman's greeting.
+  useEffect(() => {
+    if (phase === 'film' && !zone) setZone('gate');
+  }, [phase, zone]);
+
   // Zone changes: sound events, the zone's dialogue unless the visitor is busy.
   useEffect(() => {
     const before = prevZone.current;
@@ -616,7 +633,7 @@ export function Stroyka() {
       setDialog(null);
       dialogRef.current = null;
       if (phase === '3d' && engine) engine.goToZone(z);
-      if (phase === 'fallback' || zone === z) {
+      if (phase === 'fallback' || phase === 'film' || zone === z) {
         setZone(z);
         openZoneDialog(z);
       }
@@ -1034,6 +1051,15 @@ export function Stroyka() {
           </span>
         </button>
       )}
+      {phase === 'film' && (
+        <ZoneFilm
+          active={zone}
+          progress={progress}
+          onZone={onFallbackZone}
+          small={mobile}
+          onForce3d={hasWebGL() ? () => setPhase('3d') : undefined}
+        />
+      )}
       {phase === 'fallback' && (
         <FallbackMap
           active={zone}
@@ -1388,7 +1414,7 @@ export function Stroyka() {
 
       {filmOn && phase !== 'boot' && (
         <StroykaFilm
-          ready={phase === 'fallback' || Boolean(engine)}
+          ready={phase === 'fallback' || phase === 'film' || Boolean(engine)}
           progress={loadPct}
           small={mobile}
           onClose={closeFilm}
@@ -1432,7 +1458,9 @@ export function Stroyka() {
         onSent={() => setCtx((c) => ({ ...c, sent: true }))}
       />
 
-      {phase === 'fallback' && <div className="sr-only">{ZONES.map((z) => z.name).join(', ')}</div>}
+      {(phase === 'fallback' || phase === 'film') && (
+        <div className="sr-only">{ZONES.map((z) => z.name).join(', ')}</div>
+      )}
       {progressReady && phase === 'fallback' && (
         <div className="hidden">
           <Passport progress={progress} compact />

@@ -76,6 +76,7 @@ export const AD_MESSAGES: { title: string; sub: string; machine: AdTarget }[] = 
   },
   { title: 'Посчитай стройку за минуту', sub: 'техника, часы, материалы — смета', machine: 'snab' },
   { title: 'СпецПласт16', sub: 'аренда спецтехники с машинистом', machine: 'backhoe' },
+  { title: 'Без булдырабыз!', sub: 'Мы сможем — техника СпецПласт16', machine: 'backhoe' },
   {
     title: 'Экскаватор-погрузчик',
     sub: `от ${rub(PRICES.other)} ₽/ч с машинистом`,
@@ -173,6 +174,25 @@ function flagTexture(kind: FlagKind) {
       ctx.font = 'bold 15px Arial, sans-serif';
       ctx.fillText('аренда спецтехники', 20, 128);
     }
+  }).texture;
+}
+
+/** «Без булдырабыз!» — «Мы сможем!», the famous Tatarstan builders' motto. */
+function sloganTexture() {
+  return canvasTexture(512, 128, (ctx) => {
+    ctx.fillStyle = '#009a49';
+    ctx.fillRect(0, 0, 512, 64);
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 60, 512, 8);
+    ctx.fillStyle = '#ce1126';
+    ctx.fillRect(0, 66, 512, 62);
+    ctx.fillStyle = '#ffffff';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.font = 'bold 50px Arial, sans-serif';
+    ctx.fillText('БЕЗ БУЛДЫРАБЫЗ!', 256, 36);
+    ctx.font = 'bold 24px Arial, sans-serif';
+    ctx.fillText(`Мы сможем! · ${SITE.name} · ${SITE.phone}`, 256, 98);
   }).texture;
 }
 
@@ -462,11 +482,25 @@ export function buildWorld(M: Materials, mobile: boolean): World {
   banner(FENCE.maxX - 0.52, 20, -Math.PI / 2);
   banner(FENCE.maxX - 0.52, -30, -Math.PI / 2);
   banner(FENCE.minX + 0.52, 34, Math.PI / 2);
+  // Every other banner carries the motto «Без булдырабыз!».
+  const brandGeos = bannerGeos.filter((_, i) => i % 2 === 0);
+  const sloganGeos = bannerGeos.filter((_, i) => i % 2 === 1);
   const banners = new THREE.Mesh(
-    mergeGeometries(bannerGeos)!,
+    mergeGeometries(brandGeos)!,
     new THREE.MeshLambertMaterial({ map: bannerTexture() }),
   );
-  group.add(banners);
+  const slogans = new THREE.Mesh(
+    mergeGeometries(sloganGeos)!,
+    new THREE.MeshLambertMaterial({ map: sloganTexture() }),
+  );
+  group.add(banners, slogans);
+  // And a big one on the gate side of the site cabin row.
+  {
+    const g = new THREE.PlaneGeometry(9, 2.25);
+    const board = new THREE.Mesh(g, new THREE.MeshLambertMaterial({ map: sloganTexture() }));
+    board.position.set(0, 7.2, FENCE.maxZ + 0.2);
+    group.add(board);
+  }
 
   // ------------------------------------------------------------ props (merged)
   const props = new Rig(M);
