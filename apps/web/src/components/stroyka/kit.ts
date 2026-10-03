@@ -29,7 +29,9 @@ function loadTex(url: string, color: boolean, repeat: number) {
   const t = textureLoader!.load(url);
   t.wrapS = t.wrapT = THREE.RepeatWrapping;
   t.repeat.set(repeat, repeat);
-  t.anisotropy = 4;
+  // Sharper ground at a glancing angle on computers (phones keep 4).
+  t.anisotropy =
+    typeof window !== 'undefined' && window.matchMedia('(pointer: fine)').matches ? 8 : 4;
   if (color) t.colorSpace = THREE.SRGBColorSpace;
   textureCache.set(key, t);
   return t;

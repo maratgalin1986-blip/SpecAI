@@ -52,6 +52,8 @@ const GradeShader = {
     aspect: { value: 1 },
     // Lens fringing at the frame edges (0 on phones).
     fringe: { value: 0 },
+    // Light shafts from the sun through cranes, dust and rain (computers).
+    rays: { value: 0 },
   },
   vertexShader: /* glsl */ `
     varying vec2 vUv;
@@ -65,6 +67,7 @@ const GradeShader = {
     uniform float flare;
     uniform float aspect;
     uniform float fringe;
+    uniform float rays;
     varying vec2 vUv;
     float hash(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
     void main() {
@@ -75,6 +78,21 @@ const GradeShader = {
         vec2 off = (vUv - 0.5) * fringe * dot(vUv - 0.5, vUv - 0.5) * 4.0;
         col.r = texture2D(tDiffuse, vUv + off).r;
         col.b = texture2D(tDiffuse, vUv - off).b;
+      }
+      // God rays: march toward the sun and gather the bright sky behind the
+      // cranes and the frame, so its light streams around them.
+      if (rays > 0.001 && flare > 0.001) {
+        vec2 stepUv = (sunPos - vUv) / 24.0;
+        vec2 uv = vUv;
+        float decay = 1.0;
+        vec3 shaft = vec3(0.0);
+        for (int i = 0; i < 24; i++) {
+          uv += stepUv;
+          vec3 s = texture2D(tDiffuse, uv).rgb;
+          shaft += max(s - 0.72, 0.0) * decay;
+          decay *= 0.93;
+        }
+        col += shaft * vec3(1.0, 0.86, 0.62) * rays * flare * 0.22;
       }
       // Filmic contrast: deeper shadows, a soft shoulder, a touch more colour.
       col = clamp(col, 0.0, 1.0);
@@ -178,6 +196,7 @@ export class Cinema {
     }
     this.grade = new ShaderPass(GradeShader);
     this.grade.uniforms.fringe!.value = full ? FRINGE : 0;
+    this.grade.uniforms.rays!.value = full ? 1 : 0;
     // Phones: a lighter grain, the screen is small.
     if (!full) this.grade.uniforms.grain!.value = 0.025;
     this.composer.addPass(this.grade);
@@ -187,14 +206,23 @@ export class Cinema {
   /** Debug (window.__stroyka.fx): the AO and the lens effects on or off. */
   setFx(on: boolean) {
     if (this.gtao) this.gtao.enabled = on;
-    if (this.grade) this.grade.uniforms.fringe!.value = on && this.full ? FRINGE : 0;
+    if (this.grade) {
+      this.grade.uniforms.fringe!.value = on && this.full ? FRINGE : 0;
+      this.grade.uniforms.rays!.value = on && this.full ? 1 : 0;
+    }
   }
 
   /** The machine is too slow: drop the ambient occlusion. False if already off. */
   lowerQuality() {
-    if (!this.gtao?.enabled) return false;
-    this.gtao.enabled = false;
-    return true;
+    if (this.gtao?.enabled) {
+      this.gtao.enabled = false;
+      return true;
+    }
+    if (this.grade && (this.grade.uniforms.rays!.value as number) > 0) {
+      this.grade.uniforms.rays!.value = 0;
+      return true;
+    }
+    return false;
   }
 
   /** Re-captures the sky for reflections every few seconds (sky changes slowly). */

@@ -197,7 +197,7 @@ export function IntroSplash() {
                 key={offer.href}
                 href={offer.href}
                 onClick={() => reachGoal('intro_offer')}
-                className="intro-offer flex min-h-12 flex-1 items-center justify-center gap-2 rounded-2xl bg-slate-950/80 px-4 py-3 text-center text-base font-bold text-white shadow-xl ring-2 ring-amber-400/80 backdrop-blur transition hover:bg-amber-400 hover:text-slate-950 sm:text-sm"
+                className="intro-offer flex min-h-12 flex-1 items-center justify-center gap-2 rounded-2xl bg-slate-950/90 px-4 py-3 text-center text-base font-bold text-white shadow-xl ring-2 ring-amber-400/80 transition hover:bg-amber-400 hover:text-slate-950 sm:text-sm"
                 style={{ animationDelay: `${3.4 + i * 0.35}s` }}
               >
                 <span aria-hidden>{offer.icon}</span>

@@ -32,7 +32,7 @@ import type { WorldProgress } from '@/lib/stroyka/progress';
 import { createMaterials, Debris, node, pixelTexture, Rig, smooth } from './kit';
 import { Cinema } from './cinema';
 import { emitNature, emitSteps, emitThunder } from '@/lib/sceneEvents';
-import { loadProps } from './props3d';
+import { cullProps, loadProps } from './props3d';
 import { LedScreen } from './ledScreen';
 import { Wildlife } from './wildlife';
 import { buildDistrict, buildProject, buildTowerCrane, type ProjectBuild } from './project';
@@ -196,6 +196,8 @@ export class StroykaEngine {
   private led: LedScreen | null = null;
   private wildlife: Wildlife | null = null;
   private natureAt = -99;
+  private props: THREE.Object3D | null = null;
+  private cullAt = 0;
   private walking = false;
   private flarePoint = new THREE.Vector3();
   private scene = new THREE.Scene();
@@ -419,7 +421,9 @@ export class StroykaEngine {
     this.renderer.compile(this.scene, this.camera);
     this.bindInput();
     void this.loadCity();
-    void loadProps(this.scene, this.opts.mobile, () => this.disposed);
+    void loadProps(this.scene, this.opts.mobile, () => this.disposed).then(([root]) => {
+      this.props = root ?? null;
+    });
     // The film screen by the gate, facing the entrance.
     this.led = new LedScreen(this.M, this.opts.mobile);
     this.place(this.led.group, -38, 53, 1.41);
@@ -1468,6 +1472,11 @@ export class StroykaEngine {
     this.updateCamera(realDt);
     this.updatePeople(dt, realDt);
     this.updateEnvironment(dt, realDt);
+    // Far props off, twice a second (phones see less far).
+    if (this.props && this.time - this.cullAt > 0.5) {
+      this.cullAt = this.time;
+      cullProps(this.props, this.camera.position, this.opts.mobile ? 55 : 95);
+    }
     this.wildlife?.update(
       dt,
       this.time,

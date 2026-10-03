@@ -158,3 +158,16 @@ export async function loadProps(group: THREE.Object3D, mobile: boolean, gone: ()
   group.add(root);
   return [root];
 }
+
+/**
+ * Hides the props far from the camera (they are a few pixels there): fewer
+ * draw calls and shadow casters; called a couple of times a second.
+ */
+export function cullProps(root: THREE.Object3D, camera: THREE.Vector3, far: number) {
+  const far2 = far * far;
+  for (const copy of root.children) {
+    const dx = copy.position.x - camera.x;
+    const dz = copy.position.z - camera.z;
+    copy.visible = dx * dx + dz * dz < far2;
+  }
+}
