@@ -42,7 +42,7 @@ export default function MapScreen() {
 
   return (
     <View style={styles.screen}>
-      <Stack.Screen options={{ title: 'Карта исполнителей' }} />
+      <Stack.Screen options={{ title: 'Заказ на карте' }} />
       {failed ? (
         <View style={styles.fallback}>
           <ErrorBanner

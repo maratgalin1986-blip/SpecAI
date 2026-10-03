@@ -201,7 +201,7 @@ export default async function EquipmentCatalogPage({
           href="/map"
           className="ml-2 mt-5 inline-flex w-fit items-center gap-2 rounded-full border border-white/40 px-5 py-2.5 text-sm font-semibold text-white transition hover:border-white"
         >
-          Наша техника на карте
+          Заказать на карте
         </a>
         <div className="mt-3 flex flex-wrap items-center gap-3">
           <TelegramButton page="equipment" />
