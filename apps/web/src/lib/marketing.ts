@@ -151,6 +151,7 @@ export type Goal =
   | 'email'
   | 'intro_skip'
   | 'intro_full'
+  | 'intro_offer'
   | 'hero_call'
   | 'geo_search'
   | 'geo_found'

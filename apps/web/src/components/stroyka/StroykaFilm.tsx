@@ -12,6 +12,25 @@ import { SITE } from '@/lib/site';
 export const FILM_SRC = { full: '/film/stroyka-film.mp4', sm: '/film/stroyka-film-sm.mp4' };
 export const FILM_POSTER = '/film/stroyka-film.webp';
 
+/** What the site offers, over the film (owner, 2026-10-03: «чтобы привлечь больше людей»). */
+const OFFERS = [
+  {
+    href: '/equipment',
+    icon: '🚜',
+    label: 'Аренда спецтехники',
+    line: 'Аренда спецтехники с машинистом',
+  },
+  { href: '/smeta', icon: '🧮', label: 'Смета онлайн', line: 'Составьте смету онлайн' },
+  {
+    href: '/dizain',
+    icon: '🏠',
+    label: 'Дизайн-проект онлайн',
+    line: 'Сделайте дизайн-проект онлайн',
+  },
+];
+/** Seconds each headline stays on screen. */
+const LINE_SECONDS = 4;
+
 export function StroykaFilm({
   ready,
   progress,
@@ -29,6 +48,14 @@ export function StroykaFilm({
   const video = useRef<HTMLVideoElement>(null);
   const [muted, setMuted] = useState(false);
   const [ended, setEnded] = useState(false);
+  const [line, setLine] = useState(0);
+  useEffect(() => {
+    const timer = window.setInterval(
+      () => setLine((k) => (k + 1) % OFFERS.length),
+      LINE_SECONDS * 1000,
+    );
+    return () => window.clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     const v = video.current;
@@ -59,14 +86,42 @@ export function StroykaFilm({
         onEnded={() => setEnded(true)}
         aria-label={`Фильм ${SITE.platform}: стройки, техника и люди`}
       />
+      {/* The offers: a big headline that changes, and a button for each. */}
+      <div className="pointer-events-none absolute inset-x-0 top-[18%] flex justify-center px-4 sm:top-[14%]">
+        <p
+          key={line}
+          className="intro-offer text-center text-2xl font-extrabold text-white drop-shadow-[0_2px_12px_rgba(0,0,0,0.9)] sm:text-4xl"
+        >
+          {OFFERS[line]!.line}
+        </p>
+      </div>
       <div className="absolute inset-x-0 bottom-0 flex flex-col items-center gap-3 px-4 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
+        <nav
+          aria-label="Что можно сделать на сайте"
+          className="flex w-full max-w-2xl flex-wrap justify-center gap-2"
+        >
+          {OFFERS.map((offer, i) => (
+            <a
+              key={offer.href}
+              href={offer.href}
+              className={`flex min-h-11 items-center gap-2 rounded-full px-4 py-2 text-sm font-bold shadow-lg ring-2 sm:text-base ${
+                i === line
+                  ? 'bg-amber-400 text-slate-950 ring-amber-300'
+                  : 'bg-slate-950/80 text-white ring-amber-400/70 hover:bg-amber-400 hover:text-slate-950'
+              }`}
+            >
+              <span aria-hidden>{offer.icon}</span>
+              {offer.label}
+            </a>
+          ))}
+        </nav>
         {ready ? (
           <button
             type="button"
             onClick={onClose}
-            className="group inline-flex items-center gap-3 rounded-full bg-white/10 py-2 pl-2 pr-6 text-base font-semibold text-white ring-1 ring-white/40 backdrop-blur-md transition hover:bg-white/20"
+            className="group inline-flex items-center gap-3 rounded-full bg-amber-500 py-2 pl-2 pr-6 text-lg font-extrabold text-slate-950 shadow-xl shadow-amber-600/40 transition hover:bg-amber-400"
           >
-            <span className="stroyka-ping relative grid h-9 w-9 place-items-center rounded-full bg-amber-400 text-slate-950">
+            <span className="stroyka-ping relative grid h-10 w-10 place-items-center rounded-full bg-slate-950 text-amber-400">
               <svg viewBox="0 0 16 16" aria-hidden className="ml-0.5 h-4 w-4 fill-current">
                 <path d="M4 2.5v11l9-5.5z" />
               </svg>
@@ -88,7 +143,7 @@ export function StroykaFilm({
             v.muted = !v.muted;
             setMuted(v.muted);
           }}
-          className="rounded-full bg-black/50 px-3 py-2 text-sm font-semibold text-white backdrop-blur hover:bg-black/70"
+          className="min-h-11 rounded-full bg-white px-4 py-2 text-sm font-bold text-slate-950 shadow-lg hover:bg-amber-300"
         >
           {muted ? '🔇 Включить звук' : '🔊 Звук'}
         </button>
@@ -99,7 +154,7 @@ export function StroykaFilm({
             if (ready) onClose();
             else setEnded(true);
           }}
-          className="rounded-full bg-black/50 px-3 py-2 text-sm font-semibold text-white backdrop-blur hover:bg-black/70"
+          className="min-h-11 rounded-full bg-white px-4 py-2 text-sm font-bold text-slate-950 shadow-lg hover:bg-amber-300"
         >
           Пропустить →
         </button>

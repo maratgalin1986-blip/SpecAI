@@ -415,7 +415,7 @@ export class StroykaEngine {
     void loadProps(this.scene, this.opts.mobile, () => this.disposed);
     // The film screen by the gate, facing the entrance.
     this.led = new LedScreen(this.M, this.opts.mobile);
-    this.place(this.led.group, -24, 36, 0.83);
+    this.place(this.led.group, -38, 53, 1.41);
     this.opts.onProgress(1);
     this.opts.telemetry.ready = true;
     this.running = true;

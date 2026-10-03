@@ -19,7 +19,14 @@ import { storedSoundChoice } from '@/lib/sound';
 // visitors who have already seen it.
 
 const SEEN_KEY = 'sp16_intro_seen';
-const DURATION_MS = 6200;
+const DURATION_MS = 7800;
+
+/** What the site offers, under the card (owner, 2026-10-03: «чтобы привлечь больше людей»). */
+const OFFERS = [
+  { href: '/equipment', icon: '🚜', label: 'Аренда спецтехники' },
+  { href: '/smeta', icon: '🧮', label: 'Составьте смету онлайн' },
+  { href: '/dizain', icon: '🏠', label: 'Дизайн-проект онлайн' },
+];
 
 // `?intro=0` in the address skips the titles too (ad landings, QA, links
 // sent to someone who has already seen them), and so does a «Наряд» deep link
@@ -143,8 +150,8 @@ export function IntroSplash() {
           </div>
         </div>
 
-        {/* 3. Partner card under a spotlight */}
-        <div className="intro-stage-3 absolute inset-0 flex items-center justify-center px-4">
+        {/* 3. Partner card under a spotlight, the three offers under it */}
+        <div className="intro-stage-3 absolute inset-0 flex flex-col items-center justify-center gap-5 px-4">
           <div className="intro-spot absolute inset-0" aria-hidden />
           <div className="intro-card-wrap relative">
             <div className="intro-card relative aspect-[1.586] w-[min(90vw,480px)] overflow-hidden rounded-[1.4rem] p-5 text-left text-slate-950 shadow-[0_40px_120px_rgba(245,158,11,0.35),0_20px_60px_rgba(0,0,0,0.7)] ring-1 ring-amber-200/60 sm:p-7">
@@ -179,6 +186,23 @@ export function IntroSplash() {
               </div>
             </div>
           </div>
+          <nav
+            aria-label="Что можно сделать на сайте"
+            className="relative flex w-[min(92vw,560px)] flex-col gap-2.5 sm:flex-row"
+          >
+            {OFFERS.map((offer, i) => (
+              <a
+                key={offer.href}
+                href={offer.href}
+                onClick={() => reachGoal('intro_offer')}
+                className="intro-offer flex min-h-12 flex-1 items-center justify-center gap-2 rounded-2xl bg-slate-950/80 px-4 py-3 text-center text-base font-bold text-white shadow-xl ring-2 ring-amber-400/80 backdrop-blur transition hover:bg-amber-400 hover:text-slate-950 sm:text-sm"
+                style={{ animationDelay: `${3.4 + i * 0.35}s` }}
+              >
+                <span aria-hidden>{offer.icon}</span>
+                {offer.label}
+              </a>
+            ))}
+          </nav>
         </div>
 
         {soundOff ? null : (
@@ -188,7 +212,7 @@ export function IntroSplash() {
         )}
         <button
           type="button"
-          className="absolute bottom-6 right-6 rounded-full bg-white/10 px-4 py-2 text-xs font-semibold text-white/80 ring-1 ring-white/20 backdrop-blur hover:bg-white/20"
+          className="absolute bottom-6 right-6 rounded-full bg-white px-5 py-2.5 text-sm font-bold text-slate-950 shadow-lg ring-1 ring-white/40 hover:bg-amber-300"
           onClick={skip}
         >
           Пропустить →

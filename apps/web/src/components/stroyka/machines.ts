@@ -139,6 +139,7 @@ export function makeDumpTruck(rig: Rig): DumpTruck {
   rig.box(root, [0.25, 0.35, 2.45], 'dark', [3.45, 1.05, 0]);
   rig.box(root, [0.06, 0.16, 0.3], 'lamp', [3.58, 1.3, 0.85]);
   rig.box(root, [0.06, 0.16, 0.3], 'lamp', [3.58, 1.3, -0.85]);
+  rig.box(root, [0.12, 0.22, 2.3], 'hazard', [-3.02, 0.72, 0]); // rear underrun bar
   rig.box(root, [0.06, 0.14, 0.25], 'tail', [-3.08, 1.0, 0.95]);
   rig.box(root, [0.06, 0.14, 0.25], 'tail', [-3.08, 1.0, -0.95]);
   rig.box(root, [0.16, 0.12, 0.16], 'beacon', [2.6, 2.83, 0.6]);
@@ -165,8 +166,22 @@ export function makeDumpTruck(rig: Rig): DumpTruck {
       rig.box(root, [x > 0 ? 1.3 : 2.5, 0.06, 0.55], 'dark', [x, 1.22, sz * 1.0]);
   const bed = node(root, [-2.95, 1.15, 0]);
   rig.box(bed, [4.5, 0.15, 2.4], 'amber', [2.25, 0.1, 0]);
-  rig.box(bed, [4.5, 0.95, 0.1], 'amber', [2.25, 0.62, 1.17]);
-  rig.box(bed, [4.5, 0.95, 0.1], 'amber', [2.25, 0.62, -1.17]);
+  // Sides taller at the front, like a real tipper body.
+  for (const z of [1.17, -1.17])
+    rig.profile(
+      bed,
+      [
+        [0, 0.15],
+        [4.5, 0.15],
+        [4.55, 1.28],
+        [0.12, 1.02],
+      ],
+      0.1,
+      'amber',
+      [0, 0, z],
+      [0, 0, 0],
+      0.02,
+    );
   rig.box(bed, [0.14, 1.3, 2.4], 'amber', [4.5, 0.8, 0]);
   rig.box(bed, [0.1, 0.9, 2.3], 'yellow', [0.05, 0.6, 0]);
   rig.box(bed, [0.6, 0.12, 2.42], 'dark', [4.0, 0.0, 0]);
@@ -185,7 +200,22 @@ export function makeDumpTruck(rig: Rig): DumpTruck {
 export function makeBackhoe(rig: Rig, dirt: Debris, truck: DumpTruck): Animated {
   const root = node(null);
   rig.box(root, [4.4, 0.7, 1.9], 'dark', [0, 0.95, 0]);
-  rig.box(root, [1.7, 0.8, 1.5], 'yellow', [1.25, 1.65, 0]);
+  // Engine hood: a sloped nose, cut from a side outline.
+  rig.profile(
+    root,
+    [
+      [0.4, 1.25],
+      [2.15, 1.25],
+      [2.27, 1.62],
+      [2.0, 2.04],
+      [0.4, 2.08],
+    ],
+    1.5,
+    'yellow',
+    [0, 0, 0],
+    [0, 0, 0],
+    0.06,
+  );
   rig.box(root, [0.1, 0.5, 1.1], 'dark', [2.12, 1.55, 0]);
   rig.box(root, [1.5, 0.25, 2.25], 'yellow', [-0.6, 1.32, 0]);
   rig.box(root, [1.8, 0.16, 0.6], 'yellow', [-1.2, 1.72, 1.0]);
@@ -196,34 +226,115 @@ export function makeBackhoe(rig: Rig, dirt: Debris, truck: DumpTruck): Animated 
   exhaust(rig, root, [1.7, 2.0, -0.45], 0.8);
   // Engine hood louvres and a sloped nose.
   for (let i = 0; i < 4; i++) rig.box(root, [0.06, 0.04, 1.2], 'dark', [0.9 + i * 0.25, 2.06, 0]);
-  rig.box(root, [0.5, 0.5, 1.4], 'yellow', [2.0, 1.75, 0], [0, 0, 0.5]);
   rig.wheel(root, [-1.2, 0.78, 1.05], 0.78, 0.5);
   rig.wheel(root, [-1.2, 0.78, -1.05], 0.78, 0.5);
   rig.wheel(root, [1.45, 0.52, 0.95], 0.52, 0.36);
   rig.wheel(root, [1.45, 0.52, -0.95], 0.52, 0.36);
   for (const z of [1.15, -1.15]) {
-    rig.box(root, [0.2, 1.2, 0.2], 'dark', [-2.3, 0.62, z], [z > 0 ? -0.25 : 0.25, 0, 0]);
+    rig.box(root, [0.2, 1.2, 0.2], 'hazard', [-2.3, 0.62, z], [z > 0 ? -0.25 : 0.25, 0, 0]);
     rig.box(root, [0.55, 0.08, 0.55], 'dark', [-2.3, 0.04, z * 1.25]);
   }
   // Front loader bucket.
   const loader = node(root, [0.3, 1.5, 0]);
   for (const z of [1.0, -1.0])
     rig.box(loader, [2.6, 0.2, 0.16], 'yellow', [1.2, -0.4, z], [0, 0, -0.35]);
-  rig.box(loader, [0.7, 0.7, 2.3], 'yellow', [2.65, -0.95, 0]);
+  // Loader bucket: open to the front, a sloping back and a flat floor.
+  rig.profile(
+    loader,
+    [
+      [2.3, -0.55],
+      [2.52, -0.6],
+      [3.02, -1.06],
+      [3.08, -1.32],
+      [2.42, -1.32],
+      [2.28, -1.12],
+    ],
+    2.3,
+    'yellow',
+    [0, 0, 0],
+    [0, 0, 0],
+    0.04,
+  );
   rig.box(loader, [0.1, 0.08, 2.3], 'steel', [3.0, -1.3, 0]);
   for (const z of [0.7, -0.7]) ram(rig, loader, [0.2, -0.15, z], [1.9, -0.75, z], 0.06);
   // Backhoe arm: swing post → boom → stick → bucket.
   const swing = node(root, [-2.45, 1.25, 0]);
   rig.box(swing, [0.45, 0.65, 0.55], 'dark', [0, 0, 0]);
   const boom = node(swing, [-0.1, 0.1, 0]);
-  rig.box(boom, [1.5, 0.34, 0.28], 'yellow', [-0.7, 0.12, 0], [0, 0, 0.15]);
-  rig.box(boom, [1.4, 0.3, 0.28], 'yellow', [-2.0, 0.12, 0], [0, 0, -0.1]);
+  // Banana-shaped boom, deeper in the middle like the real one.
+  rig.profile(
+    boom,
+    [
+      [0.15, 0.2],
+      [-0.6, 0.55],
+      [-1.4, 0.68],
+      [-2.1, 0.5],
+      [-2.82, 0.16],
+      [-2.82, -0.15],
+      [-2.1, 0.17],
+      [-1.4, 0.33],
+      [-0.6, 0.21],
+      [0.15, -0.2],
+    ],
+    0.3,
+    'yellow',
+    [0, 0, 0],
+    [0, 0, 0],
+    0.04,
+  );
+  // Hoses from the swing post along both sides of the boom.
+  for (const z of [0.19, -0.19])
+    rig.hose(boom, [
+      [0, 0.3, z],
+      [-0.7, 0.7, z],
+      [-1.5, 0.8, z],
+      [-2.2, 0.6, z],
+      [-2.75, 0.25, z * 0.7],
+    ]);
   ram(rig, boom, [-0.1, 0.45, 0], [-1.9, 0.38, 0], 0.08);
   const stick = node(boom, [-2.7, 0, 0]);
-  rig.box(stick, [2.3, 0.26, 0.24], 'yellow', [-1.15, 0, 0]);
+  // Tapered stick with a knuckle at the bucket end.
+  rig.profile(
+    stick,
+    [
+      [0.18, 0.2],
+      [-2.38, 0.1],
+      [-2.38, -0.1],
+      [0.18, -0.22],
+    ],
+    0.26,
+    'yellow',
+    [0, 0, 0],
+    [0, 0, 0],
+    0.04,
+  );
+  rig.cyl(stick, 0.11, 0.34, 'dark', [-2.3, 0, 0], [Math.PI / 2, 0, 0]);
+  for (const z of [0.15, -0.15])
+    rig.hose(stick, [
+      [0.1, 0.24, z],
+      [-0.8, 0.22, z],
+      [-1.6, 0.17, z],
+    ]);
   ram(rig, stick, [-0.1, 0.24, 0], [-1.7, 0.2, 0], 0.06);
   const bucket = node(stick, [-2.3, 0, 0]);
-  rig.box(bucket, [0.65, 0.55, 0.75], 'dark', [-0.25, -0.25, 0]);
+  // Digging bucket: a rounded scoop seen from the side.
+  rig.profile(
+    bucket,
+    [
+      [0.06, 0.12],
+      [-0.35, 0.18],
+      [-0.68, -0.04],
+      [-0.78, -0.44],
+      [-0.62, -0.62],
+      [-0.3, -0.36],
+      [0, -0.1],
+    ],
+    0.75,
+    'dark',
+    [0, 0, 0],
+    [0, 0, 0],
+    0.03,
+  );
   rig.box(bucket, [0.12, 0.12, 0.78], 'steel', [-0.55, -0.55, 0]);
   for (let i = 0; i < 5; i++)
     rig.box(bucket, [0.16, 0.05, 0.07], 'steel', [-0.64, -0.6, -0.3 + i * 0.15], [0, 0, 0.3]);
