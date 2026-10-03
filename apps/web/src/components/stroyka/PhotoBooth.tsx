@@ -22,6 +22,32 @@ async function frame(snap: Snap, date: Date) {
   ctx.fillStyle = '#f59e0b';
   ctx.fillRect(L.pad / 2, L.pad / 2, L.photo.w + L.pad, L.photo.h + L.pad);
   ctx.drawImage(img, L.photo.x, L.photo.y, L.photo.w, L.photo.h);
+  // The СпецПласт16 badge on the photo itself, top right (owner, 2026-10-03).
+  {
+    const h = Math.round(L.photo.h * 0.09);
+    ctx.font = `bold ${Math.round(h * 0.5)}px Arial, sans-serif`;
+    const textW = ctx.measureText(SITE.name).width;
+    const w = h + textW + h * 0.6;
+    const bx = L.photo.x + L.photo.w - w - h * 0.4;
+    const by = L.photo.y + h * 0.4;
+    ctx.fillStyle = 'rgba(15,23,42,0.78)';
+    ctx.beginPath();
+    ctx.roundRect(bx, by, w, h, h / 2);
+    ctx.fill();
+    ctx.fillStyle = '#f59e0b';
+    ctx.beginPath();
+    ctx.roundRect(bx + h * 0.12, by + h * 0.12, h * 0.76, h * 0.76, h * 0.18);
+    ctx.fill();
+    ctx.fillStyle = '#0f172a';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.font = `bold ${Math.round(h * 0.42)}px ui-monospace, monospace`;
+    ctx.fillText('16', bx + h * 0.5, by + h * 0.52);
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#ffffff';
+    ctx.font = `bold ${Math.round(h * 0.5)}px Arial, sans-serif`;
+    ctx.fillText(SITE.name, bx + h * 1.05, by + h * 0.53);
+  }
   const caption = photoCaption(date, window.location.host);
   const top = L.photo.y + L.photo.h + L.pad;
   const size = Math.round(L.band * 0.3);

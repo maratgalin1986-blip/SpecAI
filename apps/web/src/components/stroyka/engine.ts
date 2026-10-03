@@ -255,6 +255,7 @@ export class StroykaEngine {
   private fireworks: Debris | null = null;
   private nextFirework = 0;
   private cityLit: THREE.InstancedMesh | null = null;
+  private cityFacade: { cityNight: { value: number } } | null = null;
 
   // Camera state
   private mode: Mode = 'tour';
@@ -441,9 +442,10 @@ export class StroykaEngine {
       if (!response.ok) return;
       const data = (await response.json()) as CityData;
       if (this.disposed || !data.b || data.b.length < 20) return;
-      const city = buildCity(data, placeSite(data), this.voxelMat, this.opts.mobile);
+      const city = buildCity(data, placeSite(data), this.opts.mobile);
       this.scene.add(city.group);
       this.cityLit = city.lit;
+      this.cityFacade = city.facade;
       this.world.procCity.visible = false;
       this.opts.telemetry.cityInstances = city.instances;
     } catch {
@@ -1627,6 +1629,14 @@ export class StroykaEngine {
     this.desired.look.copy(fpLook).lerp(tpLook, s);
     this.camera.position.copy(this.desired.pos);
     this.camera.lookAt(this.desired.look);
+    // A camera operator's breathing: a tiny slow drift, never seasick (the
+    // 3D scene does not open under reduced motion at all).
+    {
+      const t = this.time;
+      this.camera.rotateX((Math.sin(t * 0.7) + Math.sin(t * 1.9 + 1.3) * 0.4) * 0.0022);
+      this.camera.rotateY((Math.sin(t * 0.5 + 2.1) + Math.sin(t * 1.3) * 0.3) * 0.0028);
+      this.camera.rotateZ(Math.sin(t * 0.37 + 0.6) * 0.0018);
+    }
     if (this.blend) {
       this.blend.t += dt;
       const k = smooth(0, 1, this.blend.t / this.blend.dur);
@@ -1925,13 +1935,15 @@ export class StroykaEngine {
 
     // Fog distance: weather and night.
     const mobileFar = this.opts.mobile ? 0.85 : 1;
-    const far = (230 - 170 * E.fog_ - 70 * E.rain - 60 * E.snow) * mobileFar;
+    // A clear day sees the city (with its windows) through a light haze;
+    // rain, snow and fog close it in.
+    const far = (430 - 360 * E.fog_ - 200 * E.rain - 170 * E.snow) * mobileFar;
     // The aerial opening shot sees farther.
     const aerial = this.intro.active
       ? 1 + 1.6 * (1 - smooth(0.6, 1, this.intro.t / this.intro.dur))
       : 1;
     this.fog.far = Math.max(45, far) * aerial;
-    this.fog.near = Math.max(3, 40 - 34 * E.fog_ - 10 * E.rain) * aerial;
+    this.fog.near = Math.max(3, 60 - 54 * E.fog_ - 25 * E.rain) * aerial;
     this.fog.color.copy(E.fog);
     this.scene.background = this.fog.color;
 
@@ -1994,7 +2006,9 @@ export class StroykaEngine {
         if (k >= 1) this.reveal = null;
       }
     }
-    if (this.cityLit) {
+    // City windows light up in the facades at dusk.
+    if (this.cityFacade) this.cityFacade.cityNight.value = n;
+    else if (this.cityLit) {
       (this.cityLit.material as THREE.MeshBasicMaterial).opacity = 0.85 * n;
       this.cityLit.visible = n > 0.02;
     }

@@ -15,6 +15,7 @@ import { RINAT_TEMPLATES } from '../src/lib/stroyka/lines/rinat';
 import { SVETA_TEMPLATES } from '../src/lib/stroyka/lines/sveta';
 import { WORKER_TEMPLATES } from '../src/lib/stroyka/lines/worker';
 import { RECORDED_SPEAKERS, radioClipKey, voiceKey } from '../src/lib/stroyka/voice';
+import { CREW, CREW_VOICE } from '../src/lib/stroyka/crew';
 
 const TEMPLATES = {
   mihalych: MIHALYCH_TEMPLATES,
@@ -51,6 +52,10 @@ RADIO_PAIRS.forEach((pair, n) => {
     add(radioClipKey(n, side), speaker, text);
   }
 });
+// The crew by name, each in their own voice style (crew-<name> in the recorder).
+for (const [id, member] of Object.entries(CREW)) {
+  member.lines.forEach((text, n) => add(`${CREW_VOICE[id]}-${n}`, CREW_VOICE[id]!, text));
+}
 // Manifest: spoken text → clips. Hand and radio lines map to one clip; every
 // template combination maps to its opener and remark.
 const clips: Record<string, string[]> = {};

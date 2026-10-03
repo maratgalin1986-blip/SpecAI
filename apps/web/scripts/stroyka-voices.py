@@ -29,7 +29,55 @@ STYLE = {
     "rinat": ("denis", 0.94, 1.0),  # operator: quick
     "ildar": ("denis", 1.1, 0.9),  # crane operator: low and calm
     "worker": ("dmitri", 0.98, 1.05),
+    # The crew by name: each a voice of his own (pace, pitch). An accent is
+    # beyond a Russian TTS; the native words get their own stress (STRESS).
+    "crew-rustam": ("denis", 1.07, 0.96),  # Рустам: unhurried, soft
+    "crew-armen": ("dmitri", 0.97, 0.9),  # Армен: lively, low
+    "crew-aidar": ("denis", 1.0, 1.04),  # Айдар
+    "crew-nurlan": ("dmitri", 1.05, 1.0),  # Нурлан: measured
+    "crew-elchin": ("denis", 0.95, 0.94),  # Эльчин: quick
+    "crew-nikolai": ("dmitri", 1.14, 0.87),  # Николай Петрович: old, slow
 }
+
+# Native words in the crew's and the Tatar characters' lines: spelled so the
+# Russian voice says them right, with the stress (U+0301) where it falls.
+STRESS = {
+    "Ассалому алейкум": "Ассало́му але́йкум",
+    "Салам алейкум": "Сала́м але́йкум",
+    "Сәлеметсіз бе": "Салеметси́з бе",
+    "Һаумыһығыҙ": "Хаумыхыгы́з",
+    "Исәнмесез": "Исэнмесе́з",
+    "Рәхмәт": "Рахма́т",
+    "Рахмат": "Рахма́т",
+    "Рахмет": "Рахме́т",
+    "рахмат": "рахма́т",
+    "Яхши": "Яхши́",
+    "яхши": "яхши́",
+    "жақсы": "жаксы́",
+    "ака": "ака́",
+    "ахпер": "ахпе́р",
+    "Ара,": "А́ра,",
+    "гардаш": "гарда́ш",
+    "Сағ ол": "Саг о́л",
+    "армуды": "арму́ды",
+    "апа": "апа́",
+    "Әйдә": "Айда́",
+    "әйдә": "айда́",
+    "Әйбәт": "Айба́т",
+    "эчпочмак": "эчпочма́к",
+    "батыр": "баты́р",
+    "казана": "казана́",
+    "Хәерле көн": "Хаерле́ кён",
+    "Әйбәт эш": "Айба́т эш",
+    "Сак булыгыз": "Сак булыгы́з",
+    "Мин краннан бөтен шәһәрне күрәм": "Мин краннан бётен шахарне́ кюра́м",
+    "Сау булыгыз": "Сау булыгы́з",
+    "Бүген": "Бюге́н",
+    "иртәгә": "иртага́",
+}
+# Tatar, Bashkir and Kazakh letters the Russian voice does not know.
+LETTERS = str.maketrans({"ә": "а", "Ә": "А", "ө": "ё", "Ө": "Ё", "ү": "у", "Ү": "У", "һ": "х",
+                         "Һ": "Х", "ң": "н", "җ": "ж", "ҙ": "з", "і": "и", "ғ": "г", "қ": "к"})
 
 CENSORED = re.compile(r"[#@%&$*!]*[#@%&$*][#@%&$*!]*")
 EMOJI = re.compile("[\U0001F000-\U0001FAFF☀-➿️‍]")
@@ -38,6 +86,9 @@ EMOJI = re.compile("[\U0001F000-\U0001FAFF☀-➿️‍]")
 def speakable(text: str) -> str:
     """Makes prices and the brand readable for the TTS."""
     t = EMOJI.sub(" ", text)
+    for word, said in STRESS.items():
+        t = re.sub(rf"(?<!\w){re.escape(word)}(?!\w)", said, t)
+    t = t.translate(LETTERS)
     t = re.sub(r"(\d)[\s ](\d{3})\b", r"\1\2", t)  # 3 300 → 3300
     t = t.replace("₽/ч", " рублей в час").replace("₽", " рублей")
     t = t.replace("СпецПласт16", "СпецПласт шестнадцать")

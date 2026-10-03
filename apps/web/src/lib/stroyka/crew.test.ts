@@ -13,7 +13,7 @@ describe('crew', () => {
   });
 
   it('a crew line says who is talking; others get none', () => {
-    expect(crewLine('worker-pit', undefined, () => 0)).toMatch(/^Рустам: /);
+    expect(crewLine('worker-pit', undefined, () => 0)?.name).toBe('Рустам');
     expect(crewLine('npc-gate')).toBeNull();
   });
 });

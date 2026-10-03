@@ -19,6 +19,83 @@ const AREA_COLOR: Record<string, number> = {
 
 const SITE = { x: 72, zMin: -76, zMax: 84 };
 
+/**
+ * Real-looking facades for the city blocks, drawn in the shader from the
+ * world position (no textures): floors of 3 m with windows, glass that
+ * reflects the sky by day, a random share of windows lit at night, darker
+ * flat roofs, a plinth. `uniforms.cityNight` is set by the engine.
+ */
+export function facadeMaterial() {
+  const uniforms = { cityNight: { value: 0 } };
+  const material = new THREE.MeshStandardMaterial({ roughness: 0.82, metalness: 0 });
+  material.onBeforeCompile = (shader) => {
+    shader.uniforms.cityNight = uniforms.cityNight;
+    shader.vertexShader = shader.vertexShader
+      .replace(
+        '#include <common>',
+        '#include <common>\nvarying vec3 vCityPos;\nvarying vec3 vCityNormal;',
+      )
+      .replace(
+        '#include <worldpos_vertex>',
+        `#include <worldpos_vertex>
+        mat4 cityM = modelMatrix;
+        #ifdef USE_INSTANCING
+          cityM = modelMatrix * instanceMatrix;
+        #endif
+        vCityPos = (cityM * vec4(transformed, 1.0)).xyz;
+        vCityNormal = normalize(mat3(cityM) * objectNormal);`,
+      );
+    shader.fragmentShader = shader.fragmentShader
+      .replace(
+        '#include <common>',
+        `#include <common>
+        varying vec3 vCityPos;
+        varying vec3 vCityNormal;
+        uniform float cityNight;
+        float cityHash(vec2 p) { return fract(sin(dot(p, vec2(41.3, 289.1))) * 43758.5453); }
+        float cityWin;
+        float cityLit;`,
+      )
+      .replace(
+        '#include <color_fragment>',
+        `#include <color_fragment>
+        cityWin = 0.0;
+        cityLit = 0.0;
+        vec3 cn = normalize(vCityNormal);
+        if (cn.y > 0.6) {
+          diffuseColor.rgb *= 0.55; // flat roofs: bitumen and gravel
+        } else if (abs(cn.y) < 0.4) {
+          vec2 tan2 = normalize(vec2(-cn.z, cn.x));
+          float u = dot(vCityPos.xz, tan2) / 1.7;
+          float v = vCityPos.y / 3.0;
+          vec2 cell = floor(vec2(u, v));
+          vec2 f = fract(vec2(u, v));
+          float frame = step(0.17, f.x) * step(f.x, 0.83) * step(0.28, f.y) * step(f.y, 0.86);
+          cityWin = frame * step(1.0, v); // no windows on the plinth
+          float variant = cityHash(cell + floor(vCityPos.xz / 40.0));
+          vec3 glass = mix(vec3(0.07, 0.10, 0.14), vec3(0.16, 0.2, 0.24), variant);
+          diffuseColor.rgb = mix(diffuseColor.rgb, glass, cityWin);
+          // Plinth and floor slabs a shade darker.
+          diffuseColor.rgb *= mix(0.78, 1.0, step(1.0, v)) * (1.0 - 0.08 * step(f.y, 0.06));
+          cityLit = cityWin * step(variant, 0.38) * cityNight;
+        }`,
+      )
+      .replace(
+        '#include <metalnessmap_fragment>',
+        `#include <metalnessmap_fragment>
+        roughnessFactor = mix(roughnessFactor, 0.08, cityWin);
+        metalnessFactor = mix(metalnessFactor, 0.6, cityWin);`,
+      )
+      .replace(
+        '#include <emissivemap_fragment>',
+        `#include <emissivemap_fragment>
+        totalEmissiveRadiance += vec3(1.0, 0.72, 0.38) * cityLit * 1.4;`,
+      );
+  };
+  material.customProgramCacheKey = () => 'city-facade';
+  return { material, uniforms };
+}
+
 function excluded(x: number, z: number, pad = 0) {
   if (Math.abs(x) < SITE.x + pad && z > SITE.zMin - pad && z < SITE.zMax + pad) return true;
   return DISTRICT_SLOTS.some(
@@ -26,7 +103,7 @@ function excluded(x: number, z: number, pad = 0) {
   );
 }
 
-export function buildCity(data: CityData, offset: Pt, voxelMat: THREE.Material, mobile: boolean) {
+export function buildCity(data: CityData, offset: Pt, mobile: boolean) {
   const group = new THREE.Group();
   const blocks = new Voxels();
   const lit = new Voxels();
@@ -157,7 +234,8 @@ export function buildCity(data: CityData, offset: Pt, voxelMat: THREE.Material, 
     blocks.add(x - 5, 35.8, z, 0x374151, 3, 2, 2);
   }
 
-  const built = blocks.build(voxelMat, { cast: false, receive: true });
+  const facade = facadeMaterial();
+  const built = blocks.build(facade.material, { cast: false, receive: true });
   const litBuilt = lit.build(new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true }), {
     cast: false,
     receive: false,
@@ -167,5 +245,12 @@ export function buildCity(data: CityData, offset: Pt, voxelMat: THREE.Material, 
     receive: true,
   });
   group.add(built.mesh, litBuilt.mesh, flatBuilt.mesh);
-  return { group, lit: litBuilt.mesh, instances: blocks.count + flat.count + lit.count };
+  // The painted lit-window strips are replaced by the facade's own windows.
+  litBuilt.mesh.visible = false;
+  return {
+    group,
+    lit: litBuilt.mesh,
+    facade: facade.uniforms,
+    instances: blocks.count + flat.count + lit.count,
+  };
 }

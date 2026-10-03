@@ -78,10 +78,24 @@ export const CREW: Record<string, CrewMember> = {
   },
 };
 
-/** A line from this crew member, «Имя: текст», or null if the id is not crew. */
-export function crewLine(id: string, avoid?: string, random = Math.random): string | null {
+/** Who speaks how in the recordings (voice, pace, pitch): see scripts/stroyka-voices.py. */
+export const CREW_VOICE: Record<string, string> = {
+  'worker-pit': 'crew-rustam',
+  'worker-sling': 'crew-armen',
+  'worker-yard': 'crew-aidar',
+  'worker-road': 'crew-nurlan',
+  'worker-walk': 'crew-elchin',
+  guard: 'crew-nikolai',
+};
+
+/** A line from this crew member, or null if the id is not crew. */
+export function crewLine(
+  id: string,
+  avoid?: string,
+  random = Math.random,
+): { name: string; text: string } | null {
   const m = CREW[id];
   if (!m) return null;
-  const pool = m.lines.length > 1 && avoid ? m.lines.filter((l) => !avoid.endsWith(l)) : m.lines;
-  return `${m.name}: ${pool[Math.floor(random() * pool.length) % pool.length]}`;
+  const pool = m.lines.length > 1 && avoid ? m.lines.filter((l) => l !== avoid) : m.lines;
+  return { name: m.name, text: pool[Math.floor(random() * pool.length) % pool.length]! };
 }
