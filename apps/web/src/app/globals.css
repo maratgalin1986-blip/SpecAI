@@ -2037,3 +2037,210 @@ body:has(#intro:not([hidden])) :is(.journey-clouds, .story-dust, .marquee, .hero
 body:has(#intro:not([hidden])) .stroyka-ping::after {
   animation-play-state: paused;
 }
+
+/* ---- /stroyka film tour: the cinematic layer (ZoneFilm, FilmLook) ---------
+   Compositor-only: every animation here moves transform or opacity, nothing
+   repaints per frame and no filter touches a text layer. The whole block sits
+   inside ZoneFilm's own stacking context (z-0), under the top bar, the
+   chapter cards and the dialogue box. */
+
+/* Camera life: a slow push-in and drift on the footage only. Scale >= 1 and
+   the drift stays inside the (scale - 1) / 2 margin, so no edge ever shows. */
+.zf-cam {
+  animation: zf-kenburns 22s ease-in-out infinite alternate;
+  transform-origin: 50% 45%;
+}
+@keyframes zf-kenburns {
+  from {
+    transform: scale(1);
+  }
+  to {
+    transform: translate3d(-1.2%, -0.8%, 0) scale(1.06);
+  }
+}
+
+/* The cut between zones (~700 ms): the outgoing shot whips away and fades,
+   the picture dips toward black under a warm light-leak swipe, the new shot
+   settles in from a slight push. Never a hard cut. */
+.zf-shot {
+  opacity: 0;
+}
+.zf-fade {
+  animation: zf-fade 700ms ease-out both;
+}
+.zf-in {
+  animation: zf-in 720ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+.zf-out {
+  animation: zf-out 720ms cubic-bezier(0.5, 0, 0.75, 0) both;
+}
+@keyframes zf-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes zf-in {
+  0%,
+  30% {
+    opacity: 0;
+    transform: translate3d(3%, 0, 0) scale(1.08);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes zf-out {
+  0% {
+    opacity: 1;
+    transform: none;
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(-4%, 0, 0) scale(1.1);
+  }
+}
+.zf-dip {
+  background: #000;
+  animation: zf-dip 760ms ease-in-out both;
+}
+@keyframes zf-dip {
+  0% {
+    opacity: 0;
+  }
+  42% {
+    opacity: 0.72;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+.zf-leak {
+  width: 220%;
+  left: -60%;
+  background: linear-gradient(
+    100deg,
+    transparent 30%,
+    rgba(255, 140, 50, 0.32) 44%,
+    rgba(255, 214, 160, 0.42) 50%,
+    rgba(255, 120, 60, 0.26) 56%,
+    transparent 70%
+  );
+  animation: zf-leak 780ms cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+@keyframes zf-leak {
+  0% {
+    opacity: 0;
+    transform: translate3d(-35%, 0, 0);
+  }
+  25%,
+  70% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(30%, 0, 0);
+  }
+}
+
+/* Grade glass: a soft vignette, a warm halation bloom from the top corner,
+   teal in the low shadows and a faint chromatic fringe at the frame edge.
+   One static layer of gradients, painted once. */
+.zf-glass {
+  background:
+    radial-gradient(
+      ellipse 75% 70% at 50% 46%,
+      transparent 58%,
+      rgba(255, 70, 40, 0.035) 78%,
+      rgba(0, 170, 190, 0.05) 90%,
+      transparent 100%
+    ),
+    radial-gradient(ellipse 90% 85% at 50% 45%, transparent 52%, rgba(0, 0, 0, 0.5) 100%),
+    radial-gradient(circle at 92% 6%, rgba(255, 176, 96, 0.2), transparent 38%),
+    radial-gradient(circle at 4% 96%, rgba(0, 92, 104, 0.22), transparent 45%);
+}
+
+/* Film grain: a 128 px tiling texture (8 KB, drawn at 96 px) jumped between offsets with
+   steps(), about 12 times a second. The layer moves, it never repaints. */
+.zf-grain {
+  inset: -128px;
+  background: url('/film/grain.png') repeat;
+  background-size: 96px 96px;
+  opacity: 0.11;
+  animation: zf-grain 0.66s steps(1) infinite;
+}
+@keyframes zf-grain {
+  0% {
+    transform: translate3d(0, 0, 0);
+  }
+  12.5% {
+    transform: translate3d(-37px, 52px, 0);
+  }
+  25% {
+    transform: translate3d(61px, -18px, 0);
+  }
+  37.5% {
+    transform: translate3d(-84px, -71px, 0);
+  }
+  50% {
+    transform: translate3d(23px, 96px, 0);
+  }
+  62.5% {
+    transform: translate3d(102px, 41px, 0);
+  }
+  75% {
+    transform: translate3d(-58px, 9px, 0);
+  }
+  87.5% {
+    transform: translate3d(47px, -99px, 0);
+  }
+}
+
+/* 2.39:1 letterbox for the opening seconds of each zone, easing back to full
+   frame. Bars never exceed 14vh (a true 2.39 matte would bury a phone). */
+.zf-matte {
+  height: min(14vh, max(0px, calc((100vh - 100vw / 2.39) / 2)));
+  animation: zf-matte 3.6s cubic-bezier(0.6, 0, 0.2, 1) both;
+}
+.zf-matte-top {
+  transform-origin: top;
+}
+.zf-matte-bottom {
+  transform-origin: bottom;
+}
+@keyframes zf-matte {
+  0%,
+  58% {
+    transform: scaleY(1);
+  }
+  100% {
+    transform: scaleY(0);
+  }
+}
+
+/* Held still while the opening film covers the tour (ZoneFilm paused). */
+.zf-hold :is(.zf-cam, .zf-grain) {
+  animation-play-state: paused;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .zf-cam,
+  .zf-grain,
+  .zf-in,
+  .zf-out,
+  .zf-fade {
+    animation: none;
+  }
+  .zf-in,
+  .zf-fade {
+    opacity: 1;
+  }
+  .zf-matte,
+  .zf-dip,
+  .zf-leak {
+    display: none;
+  }
+}
