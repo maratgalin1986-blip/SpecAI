@@ -5,7 +5,11 @@ import {
   BOUNDS,
   DIALOGUE,
   FORM_NODE,
+  nextZone,
   OBSTACLES,
+  ORDER_LABEL,
+  orderReply,
+  P,
   PIT,
   PRICES,
   PLAYER_RADIUS,
@@ -21,6 +25,8 @@ import {
   zoneById,
   zoneDialogue,
 } from '@/lib/stroyka';
+import { stageNode } from '@/lib/stroyka/stage';
+import { STAGES, worldProgress } from '@/lib/stroyka/progress';
 
 const inside = (x: number, z: number) =>
   OBSTACLES.some((b) => x > b.minX && x < b.maxX && z > b.minZ && z < b.maxZ);
@@ -57,13 +63,68 @@ describe('dialogue graph', () => {
 
   it('the excavator line and its replies match the brief', () => {
     const node = DIALOGUE.kotlovan!;
-    expect(node.text).toContain(`От ${rub(PRICES.other)} ₽/ч с машинистом`);
+    expect(node.text).toContain(P(PRICES.other));
     expect(node.replies.map((r) => r.action)).toEqual([
+      { kind: 'form' },
       { kind: 'link', href: '/?m=backhoe#podbor' },
       { kind: 'link', href: 'tel:+79272428088' },
       { kind: 'next' },
-      { kind: 'form' },
     ]);
+    expect(node.replies[0]).toMatchObject({
+      label: ORDER_LABEL,
+      primary: true,
+      set: { machine: 'backhoe' },
+    });
+    expect(node.replies[1]!.label).toBe('Подробнее о технике');
+  });
+
+  // The amber button orders right here, in the film: Света's form opens under
+  // her line with the machine filled in; the wizard (another page) is secondary.
+  it('keeps the order button in the film in every zone', () => {
+    for (const zone of ZONES) {
+      const node = DIALOGUE[zone.root]!;
+      for (const reply of node.replies.filter((r) => r.primary))
+        expect(reply.action.kind, `${zone.id}: ${reply.label}`).toBe('form');
+      if (zone.order) {
+        const primary = node.replies.find((r) => r.primary);
+        expect(primary?.set?.machine, zone.id).toBe(zone.order);
+        expect(primary?.label).toBe(ORDER_LABEL);
+      }
+    }
+    expect(orderReply('crane')).toEqual({
+      label: ORDER_LABEL,
+      action: { kind: 'form' },
+      primary: true,
+      set: { machine: 'crane' },
+    });
+  });
+
+  it('keeps the order in the film at the object, whatever the stage', () => {
+    const p = worldProgress(Date.now(), null);
+    for (const stage of STAGES) {
+      const node = stageNode({ ...p, stageKey: stage.key });
+      expect(node.replies[0]!.action.kind).toBe('form');
+      expect(node.replies[0]!.primary).toBe(true);
+      expect(node.text).toMatch(/₽\/ч с\sмашинистом/);
+    }
+  });
+
+  it('writes every price as «от … ₽/ч с машинистом»', () => {
+    expect(P(4000)).toBe(`от\u00a0${rub(4000)}\u00a0₽/ч с\u00a0машинистом`);
+    expect(P(3300)).toMatch(/^от\s3\s300\s₽\/ч с\sмашинистом$/);
+    for (const node of Object.values(DIALOGUE))
+      for (const m of node.text.matchAll(/₽\/ч/g)) {
+        const tail = node.text.slice(m.index!, m.index! + 16);
+        expect(tail, node.id).toMatch(/^₽\/ч с\sмашинистом/);
+        expect(node.text.slice(Math.max(0, m.index! - 12), m.index!), node.id).toMatch(
+          /[оО]т\s[\d\s]+\s$/,
+        );
+      }
+  });
+
+  it('goes round the stops for «Дальше по объекту»', () => {
+    expect(nextZone('gate')).toBe(ZONES[1]!.id);
+    expect(nextZone(ZONES[ZONES.length - 1]!.id)).toBe('gate');
   });
 
   it('quotes the owner prices', () => {

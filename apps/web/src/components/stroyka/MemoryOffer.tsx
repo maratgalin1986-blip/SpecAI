@@ -1,17 +1,17 @@
 'use client';
 
-// «Давайте я вас запомню?» — Михалыч or Света offers to remember the visitor
+// «Давайте я вас запомню?» — the zone's own character offers to remember the visitor
 // on this device (lib/stroyka/visitorMemory.ts). It sits on top of the
 // dialogue box in the same style, never replaces it, and the order buttons
 // stay where they are. The consent text is /soglasie#zapominanie. The same
 // card carries the short answer after «Да», «Не сейчас» or «Забыть меня».
 
-import { SPEAKERS } from '@/lib/stroyka';
+import { SPEAKERS, type SpeakerId } from '@/lib/stroyka';
 import { Portrait } from './Portraits';
 
 export type MemoryNote = {
   mode: 'offer' | 'yes' | 'no' | 'bye';
-  speaker: 'mihalych' | 'sveta';
+  speaker: SpeakerId;
   text: string;
 };
 
@@ -30,7 +30,7 @@ export function MemoryOffer({
       data-testid={offer ? 'memory-consent' : 'memory-note'}
       aria-label={offer ? 'Предложение запомнить вас' : undefined}
       aria-live="polite"
-      className="pointer-events-auto mx-auto w-full max-w-2xl rounded-2xl border border-amber-500/50 bg-slate-950/95 p-3 text-white antialiased shadow-2xl sm:p-4"
+      className="pointer-events-auto mx-auto w-full max-w-2xl rounded-2xl border border-amber-500/50 bg-slate-950 p-3 text-white antialiased shadow-2xl sm:p-4"
     >
       <div className="flex gap-3">
         <Portrait
@@ -42,7 +42,11 @@ export function MemoryOffer({
           <div className="font-mono text-sm font-bold uppercase tracking-wider text-amber-400">
             {SPEAKERS[note.speaker].name}
           </div>
-          <p className="mt-1 text-base font-semibold leading-relaxed sm:text-[17px]">{note.text}</p>
+          <p
+            className={`mt-1 text-base leading-relaxed sm:text-[17px] ${offer ? 'font-bold' : 'font-semibold'}`}
+          >
+            {note.text}
+          </p>
         </div>
       </div>
       {offer && (
@@ -67,7 +71,7 @@ export function MemoryOffer({
             href="/soglasie#zapominanie"
             target="_blank"
             rel="noopener"
-            className="ml-auto text-sm font-semibold text-slate-200 underline decoration-dotted underline-offset-2 hover:text-white"
+            className="ml-auto text-sm font-bold text-white underline decoration-dotted underline-offset-2 hover:text-amber-200"
           >
             Что именно запоминаем
           </a>

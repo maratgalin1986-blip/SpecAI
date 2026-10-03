@@ -36,7 +36,7 @@ export function ChapterCard({ chapter, onDone }: { chapter: Chapter; onDone: () 
           part. Crisp text on a near-solid plate; the whole title fades by
           opacity only (owner: «текст должен быть чётким всегда»). */}
       <div className="absolute inset-x-0 top-[calc(env(safe-area-inset-top)+5rem)] flex justify-center px-4 sm:top-[34%]">
-        <div className="sp-ch-fade flex max-w-lg flex-col items-center rounded-2xl bg-slate-950/90 px-6 py-4 text-center antialiased">
+        <div className="sp-ch-fade flex max-w-lg flex-col items-center rounded-2xl bg-slate-950 px-6 py-4 text-center antialiased">
           <div className="font-mono text-sm font-bold uppercase tracking-[0.35em] text-amber-300">
             Глава {chapter.number}
           </div>

@@ -1,7 +1,7 @@
 'use client';
 
 // The end of the visitor's film: after the order goes through, short credits
-// roll over the footage — «В главных ролях: вы, Михалыч, Ринат…», the crew,
+// roll on a solid black screen — «В главных ролях: Вы (or the name), Михалыч, Ринат…», the crew,
 // «Съёмочная группа: СпецПласт16» and the phone. About 6 s, then it fades; a
 // tap anywhere closes it at once. With reduced motion the text just appears.
 
@@ -41,7 +41,7 @@ export function EndCredits({ credits, onDone }: { credits: Credits; onDone: () =
       role="dialog"
       aria-label="Титры"
       onClick={onDone}
-      className={`ym-hide-content fixed inset-0 z-[100] flex cursor-pointer flex-col items-center justify-center overflow-hidden bg-black/90 px-6 text-center text-white antialiased transition-opacity duration-700 ${
+      className={`ym-hide-content fixed inset-0 z-[100] flex cursor-pointer flex-col items-center justify-center overflow-hidden bg-black px-6 text-center text-white antialiased transition-opacity duration-700 ${
         leaving ? 'opacity-0' : 'opacity-100'
       }`}
     >

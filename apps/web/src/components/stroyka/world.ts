@@ -88,15 +88,15 @@ export const AD_MESSAGES: { title: string; sub: string; machine: AdTarget }[] = 
   { title: 'Подача в день заявки', sub: 'свой парк · свои машинисты', machine: 'truck' },
   {
     title: 'Автокран 25 т',
-    sub: `от ${rub(PRICES.crane)} ₽/ч · 32 т — ${rub(PRICES.crane32)} ₽/ч`,
+    sub: `от ${rub(PRICES.crane)} ₽/ч с машинистом · есть и 32 т`,
     machine: 'crane',
   },
   {
     title: 'Самосвал',
-    sub: `от ${rub(PRICES.truck)} ₽/ч · щебень, песок, грунт`,
+    sub: `от ${rub(PRICES.truck)} ₽/ч с машинистом`,
     machine: 'truck',
   },
-  { title: 'Автовышка', sub: `от ${rub(PRICES.agp)} ₽/ч · фасады, окна, вывески`, machine: 'agp' },
+  { title: 'Автовышка', sub: `от ${rub(PRICES.agp)} ₽/ч с машинистом`, machine: 'agp' },
 ];
 
 /** A canvas texture drawn by `draw`. */

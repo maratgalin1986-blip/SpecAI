@@ -7,7 +7,14 @@ import { stripEmoji } from '@/lib/stripEmoji';
 export type Speaker = 'mihalych' | 'rinat' | 'sveta' | 'ildar' | 'worker';
 export type LineKind = 'business' | 'joke' | 'radio';
 
-export type Line = { speaker: Speaker; text: string; kind?: LineKind; mood?: string };
+export type Line = {
+  speaker: Speaker;
+  text: string;
+  kind?: LineKind;
+  mood?: string;
+  /** The other voice's answer, said right after (one speaker per line). */
+  reply?: Line;
+};
 
 /** How each character sounds when only pitch and rate can tell them apart. */
 export const SPEAKER_STYLE: Record<
@@ -40,7 +47,12 @@ export const SITE_LINES: Line[] = [
   { speaker: 'mihalych', text: 'Мужики, стропы проверьте.' },
   { speaker: 'sveta', text: 'Михалыч, манипулятор выехал, будет к обеду.' },
   // Jokes: clean, no politics.
-  { speaker: 'rinat', text: 'Михалыч, каска где? — На голове, Ринат, на голове.', kind: 'joke' },
+  {
+    speaker: 'rinat',
+    text: 'Михалыч, каска где?',
+    kind: 'joke',
+    reply: { speaker: 'mihalych', text: 'На голове, Ринат, на голове.', kind: 'joke' },
+  },
   { speaker: 'worker', text: 'Кто последний кофе брал — тот и стропит!', kind: 'joke' },
   { speaker: 'ildar', text: 'Сверху всё видно. Особенно, кто не работает.', kind: 'joke' },
   { speaker: 'sveta', text: 'В заявке всё сходится, до копейки. Чудо!', kind: 'joke' },
