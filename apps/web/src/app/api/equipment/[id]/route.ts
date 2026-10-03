@@ -31,7 +31,12 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     : null;
   if (own) {
     return NextResponse.json({
-      equipment: { ...own, ...listingPhoto(own, request.nextUrl.origin) },
+      // The edit form saves imageUrls back: keep them as stored, add only the cover.
+      equipment: {
+        ...own,
+        ...listingPhoto(own, request.nextUrl.origin),
+        imageUrls: own.imageUrls,
+      },
     });
   }
 

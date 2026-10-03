@@ -43,9 +43,10 @@ describe('GET /api/equipment/[id]', () => {
 
   it('gives the owning provider its machine in any status with stored prices', async () => {
     getRequestUser.mockResolvedValue({ role: 'PROVIDER_ADMIN', companyId: 'specplast16-house' });
-    findFirst.mockResolvedValue(machine);
+    findFirst.mockResolvedValue({ ...machine, imageUrls: ['/uploads/kamaz.jpg'] });
     const { status, body } = await get('?mine=1');
     expect(status).toBe(200);
+    expect(body.equipment.imageUrls).toEqual(['/uploads/kamaz.jpg']);
     expect(body.equipment.hourlyRate).toBe('2300');
     expect(findFirst.mock.calls[0]?.[0].where).toEqual({
       id: 'm1',
