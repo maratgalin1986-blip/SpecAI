@@ -277,25 +277,29 @@ export default async function HomePage() {
                 Заказать технику
                 <Icon name="arrow" className="h-4 w-4 transition group-hover:translate-x-1" />
               </a>
+            </div>
+            {/* Two buttons only (call, order); the other ways in are quiet links. */}
+            <nav
+              aria-label="Ещё на сайте"
+              className="float-in mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm font-semibold text-slate-200"
+              style={{ animationDelay: '420ms' }}
+            >
               <a
                 href="#podbor"
-                className="inline-flex items-center gap-2 rounded-full px-6 py-3.5 text-base font-semibold text-white ring-1 ring-white/30 backdrop-blur transition hover:bg-white/10"
+                className="py-1 underline-offset-4 hover:text-white hover:underline"
               >
-                Подобрать технику
+                Подобрать технику →
               </a>
-              <a
-                href="/smeta"
-                className="inline-flex items-center gap-2 rounded-full px-6 py-3.5 text-base font-semibold text-amber-300 ring-2 ring-amber-400 backdrop-blur transition hover:bg-amber-400 hover:text-slate-950"
-              >
+              <a href="/smeta" className="py-1 text-amber-300 underline-offset-4 hover:underline">
                 🧮 Рассчитать смету
               </a>
               <a
                 href="/stroyka"
-                className="inline-flex items-center gap-2 rounded-full px-6 py-3.5 text-base font-semibold text-white/90 ring-1 ring-white/25 backdrop-blur transition hover:bg-white/10"
+                className="py-1 underline-offset-4 hover:text-white hover:underline"
               >
                 Войти на стройку ▶
               </a>
-            </div>
+            </nav>
             <p className="float-in mt-5 text-sm text-slate-400" style={{ animationDelay: '480ms' }}>
               Свой парк · Свои машинисты · Без посредников · Работаем с НДС и ЭДО
             </p>
@@ -536,7 +540,7 @@ export default async function HomePage() {
             <li key={step.title}>
               <Reveal delay={index * 100} className="h-full">
                 <div className="h-full rounded-3xl border border-slate-200 bg-white p-6 transition hover:-translate-y-1 hover:border-amber-300">
-                  <div className="font-mono text-4xl font-bold text-amber-500">0{index + 1}</div>
+                  <div className="font-mono text-4xl font-bold text-amber-600">0{index + 1}</div>
                   <h3 className="mt-4 text-lg font-bold">{step.title}</h3>
                   <p className="mt-1 text-sm text-slate-600">{step.text}</p>
                 </div>

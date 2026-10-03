@@ -13,7 +13,9 @@ const NAV_LINKS = [
   { href: '/orders', label: 'Заявка' },
   { href: '/agents', label: 'ИИ-агенты' },
   { href: '/contacts', label: 'Контакты' },
-  { href: '/dashboard', label: 'Кабинет' },
+  // Also in «Войти» and the mobile menu: hidden on narrow desktops (lg) so the
+  // header fits in one line at 1024 px.
+  { href: '/dashboard', label: 'Кабинет', wide: true },
 ];
 
 export function SiteHeader() {
@@ -83,9 +85,16 @@ export function SiteHeader() {
           </span>
         </a>
 
-        <nav className="hidden items-center gap-5 text-sm font-medium text-slate-600 lg:flex">
+        <nav
+          aria-label="Основное меню"
+          className="hidden items-center gap-3 whitespace-nowrap text-sm font-medium text-slate-600 lg:flex xl:gap-5"
+        >
           {NAV_LINKS.map((link) => (
-            <a key={link.href} href={link.href} className="hover:text-slate-900">
+            <a
+              key={link.href}
+              href={link.href}
+              className={`hover:text-slate-900 ${'wide' in link ? 'hidden xl:inline' : ''}`}
+            >
               {link.label}
             </a>
           ))}
@@ -151,6 +160,7 @@ export function SiteHeader() {
       {isMenuOpen && (
         <nav
           id="mobile-nav"
+          aria-label="Меню"
           className="flex flex-col gap-1 border-t border-slate-200 px-4 py-3 text-sm font-medium text-slate-600 lg:hidden"
         >
           {NAV_LINKS.map((link) => (

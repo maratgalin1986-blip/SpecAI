@@ -1186,7 +1186,9 @@ html {
   scroll-padding-top: 5.5rem;
 }
 
-/* Chat button: above the contact bar on phones, above the cookie strip when shown. */
+/* Chat button: above the contact bar on phones, above the cookie strip when shown.
+   On wider screens the strip sits bottom-right (the hero's buttons are on the
+   left), so the chat and WhatsApp buttons move up while it is open. */
 .chat-fab {
   bottom: calc(4.75rem + env(safe-area-inset-bottom));
 }
@@ -1194,9 +1196,14 @@ html[data-cookie-strip] .chat-fab {
   bottom: calc(7.25rem + env(safe-area-inset-bottom));
 }
 @media (min-width: 640px) {
-  .chat-fab,
-  html[data-cookie-strip] .chat-fab {
+  .chat-fab {
     bottom: 1rem;
+  }
+  html[data-cookie-strip] .chat-fab {
+    bottom: 4.75rem;
+  }
+  html[data-cookie-strip] .wa-fab {
+    bottom: 8.75rem;
   }
 }
 
