@@ -63,7 +63,7 @@ export async function generateMetadata({ params }: { params: { id: string } }): 
     title: `${item.name} — аренда ${rate.price}${rate.unit}`,
     // A retired machine keeps its page for old links but leaves the search index.
     robots: item.status === 'RETIRED' ? { index: false } : undefined,
-    description: item.description ?? `Аренда: ${item.name}`,
+    description: item.description ?? `Аренда: ${item.name} от ${SITE.name}, ${SITE.city}`,
   };
 }
 
@@ -229,7 +229,7 @@ export default async function EquipmentDetailPage({ params }: { params: { id: st
 
           {photos.length > 0 ? (
             <div style={{ viewTransitionName: 'machine-photo' }}>
-              <MachineGallery images={photos} name={item.name} />
+              <MachineGallery images={photos} name={item.name} owner={SITE.name} />
             </div>
           ) : modelPhotos.length > 0 ? (
             <figure style={{ viewTransitionName: 'machine-photo' }}>

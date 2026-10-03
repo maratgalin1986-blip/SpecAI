@@ -21,8 +21,8 @@ export default function PageError({
       <div className="text-7xl">🛠️</div>
       <h1 className="mt-4 text-3xl font-bold">Сервис временно недоступен</h1>
       <p className="mt-2 text-slate-600">
-        Мы уже чиним. Попробуйте обновить страницу через минуту или позвоните — оформим заказ по
-        телефону.
+        Бригада {SITE.name} уже чинит. Попробуйте обновить страницу через минуту или позвоните —
+        оформим заказ по телефону.
       </p>
       <div className="mt-6 flex flex-wrap justify-center gap-3">
         <button

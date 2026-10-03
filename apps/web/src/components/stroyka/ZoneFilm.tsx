@@ -13,6 +13,7 @@ import { ZONES, type ZoneId } from '@/lib/stroyka';
 import type { WorldProgress } from '@/lib/stroyka/progress';
 import { ZONE_FILMS, zoneFilmPoster, zoneFilmSrc } from '@/lib/stroyka/zoneFilms';
 import { Passport } from './FallbackMap';
+import { ChannelBug } from './ChannelBug';
 
 const FADE_MS = 600;
 /** Swap even if the new clip has not loaded by then (its poster shows). */
@@ -238,6 +239,7 @@ export function ZoneFilm({
       {/* Cinematic shading so the top bar and the dialogue box read. */}
       <div className="pointer-events-none absolute inset-x-0 top-0 h-48 bg-gradient-to-b from-black/70 via-black/30 to-transparent" />
       <div className="pointer-events-none absolute inset-x-0 bottom-0 h-[45%] bg-gradient-to-t from-black/80 via-black/35 to-transparent" />
+      <ChannelBug corner="tour" />
 
       <div
         ref={strip}

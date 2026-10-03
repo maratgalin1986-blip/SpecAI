@@ -12,7 +12,8 @@ export default function GlobalError({ reset }: { error: Error; reset: () => void
       >
         <h1 style={{ fontSize: 28 }}>Сервис временно недоступен</h1>
         <p style={{ color: '#475569' }}>
-          Попробуйте обновить страницу через минуту или позвоните нам.
+          Бригада {SITE.name} уже чинит. Попробуйте обновить страницу через минуту или позвоните
+          нам.
         </p>
         <p>
           <button type="button" onClick={reset} style={{ padding: '10px 20px', marginRight: 12 }}>

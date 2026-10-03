@@ -193,7 +193,9 @@ export default async function OrdersPage({ searchParams }: { searchParams: Order
           {orders.length === 0 ? (
             <div className="rounded-lg border border-dashed border-slate-300 bg-white p-8 text-center">
               <p className="font-medium text-slate-700">
-                {status === 'ALL' ? 'Заявок пока нет.' : 'Заявок с таким статусом нет.'}
+                {status === 'ALL'
+                  ? `Заявок пока нет — техника ${SITE.name} ждёт первой задачи.`
+                  : 'Заявок с таким статусом нет.'}
               </p>
               {status !== 'OPEN' && (
                 <p className="mt-2 text-sm text-slate-500">

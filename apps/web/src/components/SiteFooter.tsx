@@ -13,6 +13,9 @@ export function SiteFooter() {
             {SITE.platform} <span className="text-amber-400">от {SITE.name}</span>
           </div>
           <p className="mt-2">{SITE.tagline}.</p>
+          <p className="mt-3 text-xs italic text-slate-400">
+            Копаем, поднимаем, вывозим — техника {SITE.name} с машинистом.
+          </p>
         </div>
         <div className="flex flex-col sm:gap-1">
           <div className="font-semibold text-white">Разделы</div>

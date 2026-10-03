@@ -356,7 +356,7 @@ export default async function EquipmentCatalogPage({
           <div className="flex flex-col justify-center gap-3 rounded-3xl border border-slate-200 bg-white p-8">
             <div className="eyebrow text-amber-700">Ничего не нашлось</div>
             <h2 className="text-2xl font-bold tracking-tight">
-              {hasFilters ? 'По этим фильтрам техника не найдена' : 'Каталог пополняется'}
+              {hasFilters ? 'По этим фильтрам техника не найдена' : `Парк ${SITE.name} пополняется`}
             </h2>
             <p className="text-sm text-slate-600">
               {hasFilters && (
