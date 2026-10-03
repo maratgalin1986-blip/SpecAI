@@ -1,6 +1,8 @@
 import type { MetadataRoute } from 'next';
 import { prisma } from '@specai/database';
 import { LANDINGS } from '@/lib/landings';
+import { cityPages, cityPath } from '@/lib/cities';
+import { JOBS } from '@/lib/jobs';
 import { siteUrl } from '@/lib/siteUrl';
 import { PUBLIC_FLEET } from '@/lib/fleet';
 
@@ -11,6 +13,9 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const staticPages = [
     '',
     ...LANDINGS.map((landing) => `/arenda/${landing.slug}`),
+    ...cityPages().map((page) => cityPath(page.slug, page.city)),
+    '/raboty',
+    ...JOBS.map((job) => `/raboty/${job.slug}`),
     '/equipment',
     '/smeta',
     '/dizain',
