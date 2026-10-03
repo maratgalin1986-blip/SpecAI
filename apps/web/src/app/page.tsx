@@ -370,7 +370,7 @@ export default async function HomePage() {
               href="/map"
               className="group inline-flex items-center gap-2 rounded-full border border-slate-300 px-5 py-2.5 text-sm font-semibold transition hover:border-slate-900"
             >
-              Наша техника на карте
+              Заказать на карте
               <Icon name="arrow" className="h-4 w-4 transition group-hover:translate-x-1" />
             </a>
           </div>
