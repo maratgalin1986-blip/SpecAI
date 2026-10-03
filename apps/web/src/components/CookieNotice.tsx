@@ -3,17 +3,14 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import {
-  COOKIE_CHOICE_EVENT,
-  COOKIE_CONSENT_KEY,
-  enableWebvisorIfQueued,
-  stopMetrika,
-} from '@/lib/marketing';
+import { COOKIE_CHOICE_EVENT, COOKIE_CONSENT_KEY, enableWebvisorIfQueued } from '@/lib/marketing';
 
-// Notice about cookies and Yandex.Metrika (152-ФЗ). Metrika works until the
-// visitor refuses; the choice is kept in localStorage and read by the counter's
-// init script and by reachGoal. Nothing is rendered on the server, and the
-// card is fixed, so it cannot shift the page.
+// A small strip at the bottom on arrival: consent to the processing of
+// personal data and cookies (owner's request, 2026-10-03). The visitor either
+// agrees («Согласен», Webvisor on) or hides it (✕, nothing changes: Metrika
+// keeps working without Webvisor, as before an answer). Refusing Metrika is on
+// /privacy. The choice is kept in localStorage; nothing is rendered on the
+// server, and the strip is fixed, so it cannot shift the page.
 export function CookieNotice() {
   const pathname = usePathname();
   const [visible, setVisible] = useState(false);
@@ -27,8 +24,7 @@ export function CookieNotice() {
       // Storage blocked: the notice is shown on every visit.
     }
     if (chosen) return;
-    // Not on first paint: only after the intro has ended and the visitor
-    // has scrolled (or 6 s have passed).
+    // Soon after arrival, once the intro has ended; scrolling shows it at once.
     let scrolled = false;
     let timedOut = false;
     let frame = 0;
@@ -59,7 +55,7 @@ export function CookieNotice() {
     const timeout = window.setTimeout(() => {
       timedOut = true;
       check();
-    }, 6000);
+    }, 1500);
     const poll = window.setInterval(check, 400);
     window.addEventListener('scroll', onScroll, { passive: true });
     return () => {
@@ -85,17 +81,14 @@ export function CookieNotice() {
     return () => document.documentElement.removeAttribute('data-cookie-strip');
   }, [open]);
 
-  function choose(value: 'yes' | 'no') {
+  function choose(value: 'yes' | 'hidden') {
     try {
       localStorage.setItem(COOKIE_CONSENT_KEY, value);
     } catch {
       // Ignore: the choice just lasts until the page is closed.
     }
-    // «Нет» stops Metrika on this page too; «OK» switches Webvisor on when
-    // the counter has not started yet (lib/marketing.ts).
-    // A running counter only stops for good on a reload (lib/marketing.ts).
-    if (value === 'no' && stopMetrika()) window.location.reload();
-    else enableWebvisorIfQueued();
+    // «Согласен» switches Webvisor on when the counter has not started yet.
+    if (value === 'yes') enableWebvisorIfQueued();
     setVisible(false);
   }
 
@@ -104,33 +97,33 @@ export function CookieNotice() {
   return (
     <div
       role="region"
-      aria-label="Уведомление о cookie"
+      aria-label="Согласие на обработку персональных данных"
       data-bottom-bar
-      className={`fixed inset-x-0 bottom-[calc(4rem+env(safe-area-inset-bottom))] z-[45] flex min-h-10 items-center gap-2 border-t border-slate-200 bg-white/95 px-3 py-1 text-xs text-slate-700 shadow-md backdrop-blur motion-safe:transition motion-safe:duration-300 sm:inset-x-auto sm:bottom-4 sm:right-6 sm:rounded-full sm:border sm:py-1.5 sm:pl-4 sm:pr-2 ${
+      className={`fixed inset-x-2 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-[45] flex items-center gap-1.5 rounded-full border border-slate-200 bg-white/95 py-1 pl-3 pr-1 text-xs text-slate-700 shadow-md backdrop-blur motion-safe:transition motion-safe:duration-300 sm:inset-x-auto sm:bottom-4 sm:right-6 ${
         shown ? 'translate-y-0 opacity-100' : 'translate-y-4 opacity-0 motion-reduce:translate-y-0'
       }`}
     >
       <p className="min-w-0 flex-1 leading-snug">
-        Cookie и Метрика ·{' '}
+        Обработка персональных данных и cookie ·{' '}
         <Link href="/privacy" className="text-amber-800 underline">
-          Политика
+          Подробнее
         </Link>
       </p>
       <button
         type="button"
         onClick={() => choose('yes')}
-        className="min-h-9 shrink-0 rounded-full bg-slate-900 px-4 py-1.5 font-semibold text-white hover:bg-slate-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-600"
+        className="min-h-9 shrink-0 rounded-full bg-slate-900 px-3 font-semibold text-white hover:bg-slate-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-600"
       >
-        OK
+        Согласен
       </button>
       <button
         type="button"
-        onClick={() => choose('no')}
-        aria-label="Нет, отключить Метрику"
-        title="Отключить Яндекс.Метрику и Вебвизор"
-        className="min-h-9 shrink-0 px-2 py-1.5 text-slate-600 underline hover:text-slate-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-600"
+        onClick={() => choose('hidden')}
+        aria-label="Скрыть сообщение"
+        title="Скрыть"
+        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-base text-slate-500 hover:bg-slate-100 hover:text-slate-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-600"
       >
-        Нет
+        ✕
       </button>
     </div>
   );
