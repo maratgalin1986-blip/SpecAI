@@ -6,8 +6,9 @@ import { setSoundEnabled, soundEnabled, subscribeSound, SOUND_HINT_KEY } from '@
 const HINT_MS = 5000;
 
 /**
- * «🔊 Звук» / «🔇»: the one switch of the cinematic sound layer. Sound is off
- * until the visitor presses it; the choice is remembered (lib/sound.ts).
+ * «🔊 Звук» / «🔇»: the one switch of the cinematic sound layer. Sound is on
+ * from the first tap unless the visitor turned it off; the choice is
+ * remembered (lib/sound.ts).
  * Shows a one-time hint per session, after the opening titles.
  */
 export function SoundToggle({ className = '' }: { className?: string }) {
