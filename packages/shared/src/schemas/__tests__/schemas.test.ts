@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   createBidSchema,
   createBookingSchema,
+  createLeadSchema,
   createEquipmentSchema,
   updateEquipmentSchema,
   emailSchema,
@@ -229,5 +230,20 @@ describe('updateEquipmentSchema', () => {
     expect(createEquipmentSchema.parse({ ...base, status: 'RETIRED' }).status).toBe('RETIRED');
     const missing = createEquipmentSchema.safeParse({ ...base, dailyRate: undefined });
     expect(missing.success || missing.error.issues[0]?.message).toBe('Укажите цену за смену');
+  });
+});
+
+describe('createLeadSchema', () => {
+  const base = { phone: '+7 927 000-00-00', consent: true };
+
+  it('needs only the phone and the consent: the name is optional', () => {
+    expect(createLeadSchema.parse(base).name).toBe('Имя не указано');
+    expect(createLeadSchema.parse({ ...base, name: '  ' }).name).toBe('Имя не указано');
+    expect(createLeadSchema.parse({ ...base, name: ' Иван ' }).name).toBe('Иван');
+  });
+
+  it('still refuses a lead without a phone or without the consent', () => {
+    expect(createLeadSchema.safeParse({ ...base, phone: '123' }).success).toBe(false);
+    expect(createLeadSchema.safeParse({ ...base, consent: false }).success).toBe(false);
   });
 });

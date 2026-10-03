@@ -16,10 +16,13 @@ const HINT_MS = 5000;
 export function SoundToggle({
   className = '',
   iconOnPhone = false,
+  large = false,
 }: {
   className?: string;
   /** The site header on a phone has room for the icon only. */
   iconOnPhone?: boolean;
+  /** A 44 px tap target (the site header); 36 px with a 44 px hit area on desktop. */
+  large?: boolean;
 }) {
   // On by default: the server render shows «Выключить звук» too, so no flicker.
   const on = useSyncExternalStore(subscribeSound, soundEnabled, () => true);
@@ -77,7 +80,11 @@ export function SoundToggle({
         aria-pressed={on}
         aria-label={on ? 'Выключить звук' : 'Включить звук'}
         title={on ? 'Выключить звук' : 'Включить звук — как в кино'}
-        className={`inline-flex h-9 min-w-9 items-center justify-center gap-1 whitespace-nowrap rounded-full px-2.5 text-xs sm:text-sm font-semibold ring-1 transition ${
+        className={`${
+          large
+            ? "relative h-11 min-w-11 lg:h-9 lg:min-w-9 lg:before:absolute lg:before:-inset-1 lg:before:content-['']"
+            : 'h-9 min-w-9'
+        } inline-flex items-center justify-center gap-1 whitespace-nowrap rounded-full px-2.5 text-xs sm:text-sm font-semibold ring-1 transition ${
           on
             ? 'bg-amber-500 text-slate-950 ring-amber-500'
             : 'text-slate-600 ring-slate-300 hover:bg-slate-100'

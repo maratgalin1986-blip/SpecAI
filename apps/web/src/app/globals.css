@@ -1836,6 +1836,17 @@ html[data-vt-kind='fade']::view-transition-group(root) {
   html {
     scroll-padding-bottom: 8.5rem;
   }
+  /* The cookie strip sits on top of the contact bar: keep the end of the page
+     and a focused field clear of both while it is open. */
+  html[data-cookie-strip] {
+    scroll-padding-bottom: 12rem;
+  }
+  html[data-cookie-strip] body {
+    padding-bottom: 3.5rem;
+  }
+  html[data-cookie-strip] .chat-fab {
+    bottom: calc(8.25rem + env(safe-area-inset-bottom));
+  }
   [data-bottom-bar] {
     transition:
       transform 0.2s ease,

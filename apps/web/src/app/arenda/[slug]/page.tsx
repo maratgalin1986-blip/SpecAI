@@ -10,7 +10,7 @@ import { SITE } from '@/lib/site';
 import { siteUrl } from '@/lib/siteUrl';
 import { CinemaBand } from '@/components/CinemaBand';
 import { CinemaLayer } from '@/components/CinemaHero';
-import { fromPrice, houseRate, rateOf, rub } from '@/lib/prices';
+import { fromPerHour, houseRate, rateOf, rub } from '@/lib/prices';
 import { PUBLIC_FLEET } from '@/lib/fleet';
 import { MachineAmbience } from '@/components/MachineAmbience';
 import { TelegramButton } from '@/components/TelegramButton';
@@ -44,7 +44,7 @@ export async function generateMetadata({
   const landing = landingBySlug(params.slug);
   if (!landing) return { title: 'Страница не найдена' };
   // The price comes from lib/prices.ts, never from the database.
-  const title = `Аренда ${landing.title} в Набережных Челнах — ${fromPrice(landing.machine)}`;
+  const title = `Аренда ${landing.title} в Набережных Челнах — ${fromPerHour(landing.machine)}`;
   return {
     title,
     description: `${landing.intro} ${SITE.city} и ${SITE.region}. ${SITE.phone}`,
@@ -125,7 +125,7 @@ export default async function LandingPage({ params }: { params: { slug: string }
                   {i > 0 && <span className="mr-2 text-slate-500">·</span>}
                   <a
                     href={cityPath(landing.slug, city.slug)}
-                    className="text-amber-300 hover:underline"
+                    className="inline-flex min-h-[44px] items-center text-amber-300 hover:underline"
                   >
                     {city.name}
                   </a>
@@ -166,7 +166,7 @@ export default async function LandingPage({ params }: { params: { slug: string }
                   {/* Never below the site price list (lib/prices.ts). */}
                   <p className="mt-auto text-lg font-semibold" data-testid="fleet-card-price">
                     от {rub(houseRate(item.hourlyRate, machine))} ₽
-                    <span className="text-sm font-normal text-slate-500">/ч</span>
+                    <span className="text-sm font-normal text-slate-500">/ч с машинистом</span>
                   </p>
                   <span className="text-sm font-medium text-amber-700">Рассчитать стоимость →</span>
                 </Card>
@@ -215,7 +215,11 @@ export default async function LandingPage({ params }: { params: { slug: string }
       <section className="flex flex-wrap gap-2 text-sm">
         <span className="text-slate-500">Другая техника:</span>
         {LANDINGS.filter((l) => l.slug !== landing.slug).map((l) => (
-          <a key={l.slug} href={`/arenda/${l.slug}`} className="text-amber-700 hover:underline">
+          <a
+            key={l.slug}
+            href={`/arenda/${l.slug}`}
+            className="inline-flex min-h-[44px] items-center text-amber-700 hover:underline"
+          >
             {l.short}
           </a>
         ))}

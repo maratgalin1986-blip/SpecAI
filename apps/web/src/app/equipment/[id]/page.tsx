@@ -288,7 +288,7 @@ export default async function EquipmentDetailPage({ params }: { params: { id: st
             />
             {item.status === 'AVAILABLE' && (
               <details className="group rounded-3xl border border-slate-200 bg-white px-5 py-4">
-                <summary className="flex cursor-pointer list-none items-center justify-between gap-2 text-sm font-semibold [&::-webkit-details-marker]:hidden">
+                <summary className="flex min-h-[44px] cursor-pointer list-none items-center justify-between gap-2 text-sm font-semibold [&::-webkit-details-marker]:hidden">
                   Забронировать на даты
                   <Icon
                     name="plus"

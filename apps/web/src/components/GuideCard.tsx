@@ -33,7 +33,9 @@ export function GuideCard({ guide }: { guide: GuideResult }) {
         </a>
       )}
       <details className="mt-3 text-sm">
-        <summary className="cursor-pointer text-amber-800">{guide.title}: все шаги</summary>
+        <summary className="min-h-[44px] cursor-pointer py-3 text-amber-800">
+          {guide.title}: все шаги
+        </summary>
         <ol className="mt-2 flex flex-col gap-1.5">
           {steps.map((step) => (
             <li key={step.id} className="flex gap-2">

@@ -75,6 +75,14 @@ export function fromPrice(typeOrRate: MachineType | number): string {
 }
 
 /**
+ * «от 4 000 ₽/ч с машинистом»: how a price reads anywhere outside a price
+ * table (the operator is always included, and the visitor must see that).
+ */
+export function fromPerHour(typeOrRate: MachineType | number): string {
+  return `${fromPrice(typeOrRate)} с\u00a0машинистом`;
+}
+
+/**
  * The price list as the FAQ reads it: machines that share a price are named
  * together (prices.test.ts checks that they really do).
  */

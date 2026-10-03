@@ -222,13 +222,12 @@ export function OrderMap({ embed = false }: { embed?: boolean }) {
             ))}
           </select>
           <input
-            required
             value={name}
             onChange={(e) => setName(e.target.value)}
             maxLength={100}
-            placeholder="Ваше имя"
+            placeholder="Имя (необязательно)"
             autoComplete="name"
-            aria-label="Ваше имя"
+            aria-label="Имя (необязательно)"
             className={input}
           />
           <input

@@ -1,7 +1,6 @@
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { prisma } from '@specai/database';
-import { Button } from '@specai/ui';
 import { PUBLIC_AGENT_PROFILES } from '@specai/shared';
 import { CallbackForm } from '@/components/CallbackForm';
 import { CallbackIris } from '@/components/CallbackIris';
@@ -19,7 +18,9 @@ import { TiltCard } from '@/components/TiltCard';
 import type { MachineType } from '@/lib/machinePhotos';
 import { pluralizeRu } from '@/lib/pluralize';
 import { SITE } from '@/lib/site';
-import { fromPrice, HAMMER_RATE, MIN_RATE, priceFaqAnswer, SHIFT_HOURS } from '@/lib/prices';
+import { fromPerHour, HAMMER_RATE, MIN_RATE, priceFaqAnswer, SHIFT_HOURS } from '@/lib/prices';
+
+const cap = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
 
 // Big interactive blocks below the fold: separate chunks, so the browser
 // hydrates them in their own short tasks instead of one long one.
@@ -39,70 +40,70 @@ const SERVICES: {
     title: 'Экскаваторы-погрузчики',
     photo: 'backhoe',
     text: 'JCB 4CX, CASE 570, Hidromek 102B, LGCE B877F — траншеи, котлованы, планировка.',
-    price: fromPrice('backhoe'),
+    price: fromPerHour('backhoe'),
   },
   {
     icon: 'excavator',
     title: 'Гусеничные экскаваторы',
     photo: 'excavator',
     text: 'Котлованы, карьеры и большие объёмы грунта — ковш под задачу.',
-    price: fromPrice('excavator'),
+    price: fromPerHour('excavator'),
   },
   {
     icon: 'hammer',
     title: 'Гидромолот',
     photo: 'trench',
     text: 'Демонтаж, вскрытие асфальта и бетона, работа по мёрзлому грунту.',
-    price: fromPrice(HAMMER_RATE),
+    price: fromPerHour(HAMMER_RATE),
   },
   {
     icon: 'hammer',
     title: 'Колёсный экскаватор с гидромолотом',
     photo: 'wheeled-excavator',
     text: 'Дробление бетона и асфальта в городе — своим ходом, без трала.',
-    price: fromPrice('wheeled-excavator'),
+    price: fromPerHour('wheeled-excavator'),
   },
   {
     icon: 'crane',
     title: 'Автокраны',
     photo: 'crane',
     text: 'До 32 т — монтаж конструкций, погрузка и подъём грузов.',
-    price: fromPrice('crane'),
+    price: fromPerHour('crane'),
   },
   {
     icon: 'crane',
     title: 'Манипулятор КМУ 7 т',
     photo: 'kmu',
     text: 'Погрузка, перевозка и разгрузка одной машиной: блоки, плиты, бытовки.',
-    price: fromPrice('kmu'),
+    price: fromPerHour('kmu'),
   },
   {
     icon: 'lift',
     title: 'Автовышка АГП',
     photo: 'agp',
     text: 'Работы на высоте: фасады, кровля, освещение, вывески, обрезка деревьев.',
-    price: fromPrice('agp'),
+    price: fromPerHour('agp'),
   },
   {
     icon: 'loader',
     title: 'Фронтальные погрузчики',
     photo: 'loader',
     text: 'Погрузка грунта, щебня и песка, уборка снега на объектах.',
-    price: fromPrice('loader'),
+    price: fromPerHour('loader'),
   },
   {
     icon: 'roller',
     title: 'Виброкаток',
     photo: 'roller',
     text: 'Уплотнение грунта, щебня и асфальта на дорогах и благоустройстве.',
-    price: fromPrice('roller'),
+    price: fromPerHour('roller'),
   },
   {
     icon: 'tractor',
     title: 'Тракторы',
     photo: 'tractor',
     text: 'МТЗ «Беларус» для вспомогательных и коммунальных работ.',
-    price: fromPrice('tractor'),
+    price: fromPerHour('tractor'),
   },
   {
     icon: 'helmet',
@@ -146,10 +147,10 @@ const STEPS = [
     text: 'Диспетчер СпецПласт16 перезвонит, подберёт машину из нашего парка и назовёт цену.',
   },
   {
-    title: 'Забронируйте',
-    text: 'Подтвердите — мы закрепим за вами машину и машиниста из штата СпецПласт16.',
+    title: 'Оставьте заявку',
+    text: 'Подтвердите по телефону — мы закрепим за вами машину и машиниста из штата СпецПласт16.',
   },
-  { title: 'Работайте', text: 'Следите за статусом в личном кабинете, оставьте отзыв.' },
+  { title: 'Работайте', text: 'Диспетчер на связи, оплата по факту.' },
 ];
 
 // Service cards link to their catalog category (matched by name) and show how
@@ -237,10 +238,10 @@ export default async function HomePage() {
   return (
     <div className="flex flex-col gap-24">
       <IntroSplash />
-      <section className="hero-short depth-exit relative -mt-2 min-h-[640px] overflow-hidden rounded-[2rem] bg-slate-950 text-white shadow-2xl lg:min-h-[680px]">
+      <section className="hero-short depth-exit relative -mt-2 min-h-[520px] overflow-hidden rounded-[2rem] sm:min-h-[640px] bg-slate-950 text-white shadow-2xl lg:min-h-[680px]">
         <HeroPhotos />
         <div className="hero-parallax-text relative grid lg:grid-cols-2">
-          <div className="hero-copy z-10 flex flex-col justify-center px-6 pb-20 pt-14 sm:px-10 lg:py-24">
+          <div className="hero-copy z-10 flex flex-col justify-center px-5 pb-16 pt-7 sm:px-10 sm:pb-20 sm:pt-14 lg:py-24">
             <div className="float-in inline-flex w-fit items-center gap-2 rounded-full bg-white/10 px-3 py-1.5 ring-1 ring-white/15">
               <span className="relative flex h-2 w-2">
                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75 motion-reduce:animate-none" />
@@ -251,32 +252,40 @@ export default async function HomePage() {
               </span>
             </div>
             <h1
-              className="float-in mt-6 text-[2.6rem] font-extrabold leading-[1.02] tracking-[-0.04em] sm:text-6xl"
+              className="float-in mt-4 text-[2.25rem] font-extrabold leading-[1.02] tracking-[-0.04em] sm:mt-6 sm:text-6xl"
               style={{ animationDelay: '120ms' }}
             >
               Аренда <span className="marker text-white">спецтехники</span> с машинистом
             </h1>
+            {/* Phones get the short line, so «Заказать технику» is on the
+                first screen at 360x740 above the bottom bars. */}
             <p
-              className="float-in mt-6 max-w-xl text-lg leading-relaxed text-slate-300"
+              className="float-in mt-3 max-w-xl text-base leading-snug text-slate-300 sm:hidden"
               style={{ animationDelay: '240ms' }}
             >
-              Экскаваторы-погрузчики, автокраны и погрузчики с машинистами в Набережных Челнах и по
-              Татарстану — {fromPrice(MIN_RATE)}. Свой парк и свои машинисты {SITE.name}, без
-              посредников: подача в день заявки, работаем с НДС.
+              {cap(fromPerHour(MIN_RATE))}. Свой парк {SITE.name}, подача в день заявки.
+            </p>
+            <p
+              className="float-in mt-6 hidden max-w-xl text-lg leading-relaxed text-slate-300 sm:block"
+              style={{ animationDelay: '240ms' }}
+            >
+              Экскаваторы-погрузчики, автокраны и погрузчики в Набережных Челнах и по Татарстану —{' '}
+              {fromPerHour(MIN_RATE)}. Свой парк и свои машинисты {SITE.name}, без посредников:
+              подача в день заявки, работаем с НДС.
             </p>
             {/* Owner, 2026-10-03: order, estimate and design as real buttons,
                 «Заказать технику» the biggest and brightest; then the phone and
                 the 3D site; the other ways in stay quiet links. */}
             <div
-              className="float-in mt-8 flex max-w-xl flex-col gap-3"
+              className="float-in mt-5 flex max-w-xl flex-col gap-3 sm:mt-8"
               style={{ animationDelay: '360ms' }}
             >
               <a
                 href="#callback"
-                className="group relative inline-flex w-full items-center justify-center gap-3 overflow-hidden rounded-2xl bg-gradient-to-r from-amber-400 via-amber-500 to-orange-500 px-7 py-5 text-xl font-extrabold text-slate-950 shadow-2xl shadow-amber-500/40 ring-2 ring-amber-200/70 transition hover:brightness-110 sm:text-2xl"
+                className="group relative inline-flex w-full items-center justify-center gap-2 overflow-hidden whitespace-nowrap rounded-2xl bg-gradient-to-r from-amber-400 via-amber-500 to-orange-500 px-4 py-4 text-lg font-extrabold sm:gap-3 sm:px-7 sm:py-5 text-slate-950 shadow-2xl shadow-amber-500/40 ring-2 ring-amber-200/70 transition hover:brightness-110 sm:text-2xl"
               >
                 <span className="cta-shine pointer-events-none absolute inset-0" aria-hidden />
-                <span aria-hidden className="text-2xl sm:text-3xl">
+                <span aria-hidden className="text-xl sm:text-3xl">
                   🚜
                 </span>
                 Заказать технику
@@ -333,13 +342,13 @@ export default async function HomePage() {
             >
               <a
                 href="#podbor"
-                className="inline-flex min-h-10 items-center underline-offset-4 hover:text-white hover:underline"
+                className="inline-flex min-h-[44px] items-center underline-offset-4 hover:text-white hover:underline"
               >
                 Подобрать технику →
               </a>
               <a
                 href="/kalkulyator"
-                className="inline-flex min-h-10 items-center underline-offset-4 hover:text-white hover:underline"
+                className="inline-flex min-h-[44px] items-center underline-offset-4 hover:text-white hover:underline"
               >
                 Калькулятор работ →
               </a>
@@ -395,14 +404,14 @@ export default async function HomePage() {
             </h2>
             <a
               href="/equipment"
-              className="group inline-flex items-center gap-2 rounded-full border border-slate-300 px-5 py-2.5 text-sm font-semibold transition hover:border-slate-900"
+              className="group inline-flex min-h-[44px] items-center gap-2 rounded-full border border-slate-300 px-5 py-2.5 text-sm font-semibold transition hover:border-slate-900"
             >
               Весь каталог
               <Icon name="arrow" className="h-4 w-4 transition group-hover:translate-x-1" />
             </a>
             <a
               href="/map"
-              className="group inline-flex items-center gap-2 rounded-full border border-slate-300 px-5 py-2.5 text-sm font-semibold transition hover:border-slate-900"
+              className="group inline-flex min-h-[44px] items-center gap-2 rounded-full border border-slate-300 px-5 py-2.5 text-sm font-semibold transition hover:border-slate-900"
             >
               Заказать на карте
               <Icon name="arrow" className="h-4 w-4 transition group-hover:translate-x-1" />
@@ -560,7 +569,7 @@ export default async function HomePage() {
                 <p className="mt-2 text-sm text-slate-300">{agent.description}</p>
                 <a
                   href={`/agents?agent=${agent.id}`}
-                  className="mt-4 inline-block text-sm font-semibold text-amber-400 hover:underline"
+                  className="mt-2 inline-flex min-h-[44px] items-center text-sm font-semibold text-amber-400 hover:underline"
                 >
                   Написать →
                 </a>
@@ -654,8 +663,11 @@ export default async function HomePage() {
               Опишите задачу — диспетчер {SITE.name} подберёт машину из нашего парка, назовёт цену и
               поставит её в график. Машинисты в штате, без посредников и перекупщиков.
             </p>
-            <a href="/orders" className="mt-5 inline-block">
-              <Button>Оставить заявку</Button>
+            <a
+              href="/orders"
+              className="mt-5 inline-flex min-h-11 items-center justify-center rounded-md bg-amber-700 px-5 text-sm font-bold text-white transition-colors hover:bg-amber-800"
+            >
+              Оставить заявку
             </a>
           </div>
           <div className="flex flex-col gap-2 text-slate-700">

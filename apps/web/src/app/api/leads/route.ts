@@ -21,7 +21,7 @@ export async function POST(request: NextRequest) {
   const parsed = createLeadSchema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json(
-      { error: 'Проверьте имя, телефон и согласие на обработку данных' },
+      { error: 'Проверьте телефон и согласие на обработку данных' },
       { status: 400 },
     );
   }
