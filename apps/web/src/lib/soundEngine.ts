@@ -39,6 +39,8 @@ import {
   type Speaker,
 } from '@/lib/soundVoices';
 import { clipsFor } from '@/lib/stroyka/voice';
+import type { Ground, NatureEventDetail } from '@/lib/sceneEvents';
+import { NatureLayer } from '@/lib/soundNature';
 
 const ARRIVAL_GAP_S = 20;
 
@@ -49,6 +51,7 @@ const LEVEL = {
   site: 0.22,
   machine: 0.28, // owner: machines a little quieter under the voices
   reverb: 0.35,
+  nature: 0.6, // rain, wind, birds, steps around the 3D site
 };
 
 type Queued = { line: Line; radio: boolean; volume: number };
@@ -81,6 +84,7 @@ export class SoundEngine {
   private lastSpeaker: Speaker | null = null;
   private finishLine: (() => void) | null = null;
   private disposed = false;
+  private nature: NatureLayer;
 
   /** `ctx` is created by the director inside the visitor's gesture. */
   constructor(ctx: AudioContext) {
@@ -104,6 +108,28 @@ export class SoundEngine {
     this.music.connect(this.reverb);
     this.site.connect(this.reverb);
     this.fx.connect(this.reverb);
+    // Nature sits with the beds: it steps back while the visitor types.
+    const natureBus = this.gain(LEVEL.nature, this.beds);
+    natureBus.connect(this.reverb);
+    this.nature = new NatureLayer(
+      ctx,
+      natureBus,
+      (name) => this.sample(name),
+      (buffer, gain, pan, rate) => void this.play(buffer, natureBus, { gain, pan, rate }),
+    );
+  }
+
+  /** The weather around the visitor on the 3D site (null: the scene closed). */
+  setNature(state: NatureEventDetail | null): void {
+    if (!this.disposed) this.nature.set(state);
+  }
+
+  setSteps(moving: boolean, ground: Ground): void {
+    if (!this.disposed) this.nature.setSteps(moving, ground);
+  }
+
+  thunder(): void {
+    if (!this.disposed) this.nature.thunder();
   }
 
   private gain(value: number, to: AudioNode): GainNode {
@@ -628,6 +654,7 @@ export class SoundEngine {
 
   dispose(): void {
     this.disposed = true;
+    this.nature.dispose();
     this.stopBeds();
     window.clearTimeout(this.voiceTimer);
     void this.ctx.close().catch(() => {});

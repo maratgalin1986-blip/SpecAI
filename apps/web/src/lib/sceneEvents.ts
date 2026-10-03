@@ -6,12 +6,33 @@
 //             static), mood from lib/stroyka/mood.ts. Comic «swear» runs (#@%&$*!) stay in
 //             the text for the sound layer to bleep; emojis stay too and must be stripped
 //             (stripEmoji) before anything is spoken.
+//   sp:nature { rain, snow, wind, night, ground } or null — the weather around the
+//             visitor (null when the scene closes): rain and snow 0…1, wind m/s,
+//             night 0…1, ground 'dry' | 'wet' | 'snow'.
+//   sp:steps  { moving, ground } — the visitor walks (or stops) on that ground.
+//   sp:thunder {} — a lightning flash: the thunder follows.
 import type { MachineType } from '@/lib/machinePhotos';
 import type { Mood } from '@/lib/stroyka/mood';
 import type { BanterSpeaker } from '@/lib/stroykaJokes';
 
 export const SCENE_EVENT = 'sp:scene';
 export const DIALOG_EVENT = 'sp:dialog';
+export const NATURE_EVENT = 'sp:nature';
+export const STEPS_EVENT = 'sp:steps';
+export const THUNDER_EVENT = 'sp:thunder';
+
+export type Ground = 'dry' | 'wet' | 'snow';
+export interface NatureEventDetail {
+  rain: number;
+  snow: number;
+  wind: number;
+  night: number;
+  ground: Ground;
+}
+export interface StepsEventDetail {
+  moving: boolean;
+  ground: Ground;
+}
 
 export interface SceneEventDetail {
   machine: MachineType;
@@ -40,4 +61,16 @@ export function emitDialog(
   mood?: Mood,
 ) {
   emit<DialogEventDetail>(DIALOG_EVENT, { speaker, text, kind, ...(mood ? { mood } : {}) });
+}
+
+export function emitNature(detail: NatureEventDetail | null) {
+  emit<NatureEventDetail | null>(NATURE_EVENT, detail);
+}
+
+export function emitSteps(moving: boolean, ground: Ground) {
+  emit<StepsEventDetail>(STEPS_EVENT, { moving, ground });
+}
+
+export function emitThunder() {
+  emit<Record<string, never>>(THUNDER_EVENT, {});
 }

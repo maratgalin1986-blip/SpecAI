@@ -751,3 +751,77 @@ export function animateDog(d: Dog, pose: DogPose, time: number, phase: number) {
     d.head.rotation.y = Math.sin(time * 0.6) * 0.3;
   }
 }
+
+// ---------------------------------------------------------------- the cat
+
+export interface Cat {
+  root: THREE.Group;
+  body: THREE.Group;
+  head: THREE.Group;
+  tail: THREE.Group;
+  legs: THREE.Group[];
+}
+
+/** A grey tabby that wanders round the cabins, tail up. */
+export function makeCat(): Cat {
+  const root = new THREE.Group();
+  const body = group(root, [0, 0.2, 0]);
+  const head = group(body, [0, 0.07, 0.17]);
+  const tail = group(body, [0, 0.05, -0.17]);
+  const legs = [
+    group(root, [0.045, 0.16, 0.11]),
+    group(root, [-0.045, 0.16, 0.11]),
+    group(root, [0.045, 0.16, -0.11]),
+    group(root, [-0.045, 0.16, -0.11]),
+  ];
+  const GREY = 0x8a8580;
+  const STRIPE = 0x4f4a45;
+  const LIGHT = 0xd9d3c9;
+  const bb = new Blocks();
+  bb.box([0.13, 0.12, 0.32], [0, 0, 0], GREY);
+  for (const z of [-0.09, 0, 0.09]) bb.box([0.135, 0.03, 0.03], [0, 0.05, z], STRIPE);
+  bb.box([0.1, 0.06, 0.12], [0, -0.04, 0.08], LIGHT);
+  bb.mesh(body);
+  const hb = new Blocks();
+  hb.box([0.12, 0.1, 0.1], [0, 0.03, 0.03], GREY);
+  hb.box([0.06, 0.04, 0.03], [0, 0.0, 0.085], LIGHT);
+  hb.box([0.018, 0.014, 0.01], [0, 0.015, 0.1], 0xd98c8c);
+  for (const x of [0.03, -0.03]) {
+    hb.box([0.02, 0.018, 0.01], [x, 0.045, 0.081], 0xb7d84a);
+    hb.box([0.035, 0.05, 0.02], [x * 1.3, 0.1, 0.02], GREY, [0, 0, x > 0 ? -0.3 : 0.3]);
+  }
+  hb.mesh(head);
+  const tb = new Blocks();
+  tb.box([0.03, 0.03, 0.12], [0, 0.02, -0.05], GREY);
+  tb.box([0.03, 0.12, 0.03], [0, 0.09, -0.11], STRIPE);
+  tb.mesh(tail);
+  for (const leg of legs) {
+    const lb = new Blocks();
+    lb.box([0.035, 0.16, 0.04], [0, -0.08, 0], GREY);
+    lb.box([0.04, 0.02, 0.05], [0, -0.155, 0.01], LIGHT);
+    lb.mesh(leg);
+  }
+  return { root, body, head, tail, legs };
+}
+
+/** Walk (legs, a slight sway) or sit (back down, tail swishing). */
+export function animateCat(c: Cat, walking: boolean, time: number, phase: number) {
+  const [fl, fr, bl, br] = c.legs as [THREE.Group, THREE.Group, THREE.Group, THREE.Group];
+  c.tail.rotation.set(walking ? 0.15 : -0.6, Math.sin(time * (walking ? 3 : 1.2)) * 0.5, 0);
+  if (walking) {
+    const s = Math.sin(phase) * 0.55;
+    fl.rotation.x = br.rotation.x = s;
+    fr.rotation.x = bl.rotation.x = -s;
+    c.body.rotation.x = 0;
+    c.body.position.y = 0.2 + Math.abs(Math.sin(phase)) * 0.01;
+    c.head.rotation.set(Math.sin(phase * 0.5) * 0.05, 0, 0);
+    for (const leg of c.legs) leg.position.y = 0.16;
+  } else {
+    for (const leg of c.legs) leg.rotation.x = 0;
+    bl.rotation.x = br.rotation.x = -1.2;
+    bl.position.y = br.position.y = 0.09;
+    c.body.rotation.x = -0.45;
+    c.body.position.y = 0.17;
+    c.head.rotation.set(0.35, Math.sin(time * 0.5) * 0.4, 0);
+  }
+}

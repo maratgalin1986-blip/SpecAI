@@ -109,7 +109,9 @@ describe('sound map', () => {
     const credited = new Set(SOUND_CREDITS.map((c) => c.name));
     for (const s of SITE_SAMPLES) expect(credited.has(s.name)).toBe(true);
     for (const s of Object.values(MACHINE_SAMPLES)) expect(credited.has(s!.name)).toBe(true);
-    for (const c of SOUND_CREDITS) expect(c.license).toMatch(/^(CC0|CC BY|Public domain)/);
+    // Free licences only: CC0 / CC BY / public domain, or Mixkit's free licence (as the videos).
+    for (const c of SOUND_CREDITS)
+      expect(c.license).toMatch(/^(CC0|CC BY|Public domain|Mixkit Sound Effects Free License)/);
   });
 
   it('ships every credited recording as small mono webm + mp3', () => {

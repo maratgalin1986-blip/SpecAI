@@ -10,6 +10,38 @@ void main() {
   gl_Position = p.xyww;
 }`;
 
+/**
+ * Photo sky (Poly Haven «puresky» HDRIs, CC0, upper hemisphere as JPG): two
+ * photos cross-faded, each turned so its sun sits where the scene's sun is.
+ * Shared by the visible dome and the reflections (cinema.ts).
+ */
+export const SKY_PHOTO_GLSL = /* glsl */ `
+uniform sampler2D photoA;
+uniform sampler2D photoB;
+uniform float photoMix;
+uniform float photoAmount;
+uniform float yawA;
+uniform float yawB;
+uniform float photoGain;
+vec3 skyPhoto(vec3 d, vec3 base) {
+  if (photoAmount < 0.001) return base;
+  float u = atan(d.x, -d.z) / 6.2831853 + 0.5;
+  float v = clamp(asin(clamp(d.y, 0.0, 1.0)) / 1.5707963, 0.004, 0.996);
+  vec3 a = texture2D(photoA, vec2(fract(u + yawA), v)).rgb;
+  vec3 b = texture2D(photoB, vec2(fract(u + yawB), v)).rgb;
+  vec3 p = mix(a, b, photoMix) * photoGain;
+  // Below the horizon the photo's horizon colour fades into the base sky.
+  return mix(base, p, photoAmount * smoothstep(-0.08, 0.0, d.y));
+}`;
+
+/** Where the sun is in each photo (u across the panorama, measured from the files). */
+const PHOTOS = {
+  day: { file: 'sky-day', sunU: 0.596 },
+  overcast: { file: 'sky-overcast', sunU: 0.457 },
+  sunset: { file: 'sky-sunset', sunU: 0.629 },
+} as const;
+type PhotoName = keyof typeof PHOTOS;
+
 const SKY_FRAGMENT = /* glsl */ `
 uniform vec3 zenith;
 uniform vec3 horizon;
@@ -18,18 +50,24 @@ uniform vec3 sunDir;
 uniform float glow;
 uniform float flash;
 varying vec3 vDir;
+${SKY_PHOTO_GLSL}
 void main() {
   vec3 d = normalize(vDir);
   float h = clamp(d.y, 0.0, 1.0);
   vec3 col = mix(horizon, zenith, pow(h, 0.5));
   if (d.y < 0.0) col = horizon * 0.85;
+  col = skyPhoto(d, col);
   float s = max(dot(d, sunDir), 0.0);
-  col += sunColor * (pow(s, 6.0) * 0.28 + pow(s, 60.0) * 0.5) * glow;
+  col += sunColor * (pow(s, 6.0) * 0.28 + pow(s, 60.0) * 0.5) * glow * (1.0 - photoAmount * 0.7);
   col += vec3(flash);
   gl_FragColor = vec4(col, 1.0);
   #include <tonemapping_fragment>
   #include <colorspace_fragment>
 }`;
+
+/** A 1×1 placeholder until a photo has loaded. */
+const BLANK = new THREE.DataTexture(new Uint8Array([200, 215, 235, 255]), 1, 1);
+BLANK.needsUpdate = true;
 
 function moonTexture(phase: number) {
   // A 16×16 pixel moon: lit part from the phase (blocky, like the rest).
@@ -78,7 +116,20 @@ export class Atmosphere {
     sunDir: { value: THREE.Vector3 };
     glow: { value: number };
     flash: { value: number };
+    photoA: { value: THREE.Texture };
+    photoB: { value: THREE.Texture };
+    photoMix: { value: number };
+    photoAmount: { value: number };
+    yawA: { value: number };
+    yawB: { value: number };
+    photoGain: { value: number };
   };
+  private photos = new Map<PhotoName, THREE.Texture>();
+  private photoNow: PhotoName = 'day';
+  private photoNext: PhotoName = 'day';
+  /** The first photo is put up at once, without a cross-fade. */
+  private photoShown = false;
+  private mobile: boolean;
   private sun: THREE.Mesh;
   private moon: THREE.Mesh;
   private moonPhaseShown = -1;
@@ -120,7 +171,16 @@ export class Atmosphere {
       sunDir: { value: new THREE.Vector3(0, 1, 0) },
       glow: { value: 1 },
       flash: { value: 0 },
+      photoA: { value: BLANK },
+      photoB: { value: BLANK },
+      photoMix: { value: 0 },
+      photoAmount: { value: 0 },
+      yawA: { value: 0 },
+      yawB: { value: 0 },
+      photoGain: { value: 1 },
     };
+    this.mobile = mobile;
+    this.loadPhoto('day');
     this.sky = new THREE.Mesh(
       new THREE.SphereGeometry(450, 24, 12),
       new THREE.ShaderMaterial({
@@ -328,7 +388,58 @@ export class Atmosphere {
     this.moon.visible = moonVisible > 0.01;
   }
 
+  private loadPhoto(name: PhotoName) {
+    if (this.photos.has(name) || typeof window === 'undefined') return;
+    const texture = new THREE.TextureLoader().load(
+      `/stroyka/sky/${PHOTOS[name].file}${this.mobile ? '-sm' : ''}.jpg`,
+    );
+    texture.colorSpace = THREE.SRGBColorSpace;
+    texture.wrapS = THREE.RepeatWrapping;
+    // No mipmaps: at the panorama's seam they would draw a dotted line.
+    texture.generateMipmaps = false;
+    texture.minFilter = THREE.LinearFilter;
+    this.photos.set(name, texture);
+  }
+
+  /** Which photo the weather and the sun call for, and how strongly it shows. */
+  private updatePhoto(dt: number, w: WeatherLevels) {
+    const u = this.skyUniforms;
+    const sun = u.sunDir.value;
+    const grey = w.clouds > 0.6 || w.rain > 0.1 || w.snow > 0.1;
+    const want: PhotoName = grey ? 'overcast' : sun.y < 0.2 ? 'sunset' : 'day';
+    this.loadPhoto(want);
+    const ready = (n: PhotoName) => {
+      const t = this.photos.get(n);
+      return !!t?.image && (t.image as HTMLImageElement).complete !== false;
+    };
+    if (!this.photoShown && ready(want)) {
+      this.photoShown = true;
+      this.photoNow = this.photoNext = want;
+      u.photoAmount.value = 1 - Math.min(1, w.night * 1.3);
+    }
+    if (want !== this.photoNext && u.photoMix.value <= 0) this.photoNext = want;
+    // Cross-fade A → B, then B becomes A.
+    if (this.photoNext !== this.photoNow && ready(this.photoNext)) {
+      u.photoMix.value = Math.min(1, u.photoMix.value + dt / 3);
+      if (u.photoMix.value >= 1) {
+        this.photoNow = this.photoNext;
+        u.photoMix.value = 0;
+      }
+    }
+    u.photoA.value = ready(this.photoNow) ? this.photos.get(this.photoNow)! : BLANK;
+    u.photoB.value = ready(this.photoNext) ? this.photos.get(this.photoNext)! : u.photoA.value;
+    // Turn each photo so its sun is where the scene's sun is.
+    const sunU = Math.atan2(sun.x, -sun.z) / (Math.PI * 2) + 0.5;
+    u.yawA.value = PHOTOS[this.photoNow].sunU - sunU;
+    u.yawB.value = PHOTOS[this.photoNext].sunU - sunU;
+    // Night belongs to the painted sky with its stars; rain darkens the photo.
+    const target = ready(this.photoNow) ? 1 - Math.min(1, w.night * 1.3) : 0;
+    u.photoAmount.value += (target - u.photoAmount.value) * Math.min(1, dt * 1.5);
+    u.photoGain.value = 1.15 * (1 - w.rain * 0.35) * (1 - w.night * 0.6);
+  }
+
   update(dt: number, time: number, camera: THREE.Camera, w: WeatherLevels) {
+    this.updatePhoto(dt, w);
     const c = camera.position;
     this.sky.position.copy(c);
     this.stars.position.copy(c);
@@ -343,7 +454,12 @@ export class Atmosphere {
       .lerp(this.white, 0.55 * (1 - w.night))
       .multiplyScalar(1 - w.clouds * 0.35);
     // Show the first clusters by coverage, drift with the wind, wrap around.
-    const shown = Math.round(this.cloudCenters.length * Math.min(1, 0.08 + w.clouds));
+    // Under a photo sky its own clouds show; the painted ones step aside.
+    const shown = Math.round(
+      this.cloudCenters.length *
+        Math.min(1, 0.08 + w.clouds) *
+        Math.max(0, 1 - this.skyUniforms.photoAmount.value * 2),
+    );
     this.cloudOffset.x += w.windX * dt * 1.5;
     this.cloudOffset.y += w.windZ * dt * 1.5;
     if (this.frame % 2 === 0 || this.clouds.count === 0) {
