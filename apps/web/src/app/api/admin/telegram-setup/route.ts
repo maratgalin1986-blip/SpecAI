@@ -31,7 +31,8 @@ export async function POST(request: NextRequest) {
     const hook = await api('setWebhook', {
       url,
       secret_token: secret,
-      allowed_updates: ['message', 'channel_post'],
+      // callback_query: the order funnel's buttons (lib/botFunnel.ts).
+      allowed_updates: ['message', 'channel_post', 'callback_query'],
     });
     if (!hook.ok) {
       return NextResponse.json({ error: `Telegram: ${hook.description}` }, { status: 400 });

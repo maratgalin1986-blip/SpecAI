@@ -180,7 +180,7 @@ export function wantsPrice(text: string): boolean {
 export function leadAcceptedText(onShift: boolean): string {
   return onShift
     ? `Принято! Диспетчер ${SITE.name} перезвонит в течение 15 минут и назовёт точную цену.`
-    : `Принято! Сейчас нерабочее время — диспетчер перезвонит утром, с ${SHIFT.from}:00.`;
+    : `Заявка принята, позвоним с ${SHIFT.from}:00 — сейчас нерабочее время.`;
 }
 
 export const ASK_FOR_PHONE =
