@@ -100,3 +100,18 @@ test('stroyka shaders compile', async ({ page }, testInfo) => {
   expect(shaderErrors, 'shader errors').toEqual([]);
   expect(errors, 'page errors').toEqual([]);
 });
+
+// The default tour plays real footage per zone; the strip switches zones and
+// the order button stays on top of the film.
+test('stroyka film tour', async ({ page }) => {
+  const errors = await guard(page);
+  await page.route('**/film/zones/*.mp4', (route) => route.abort());
+  await page.goto('/stroyka?nointro=1', { waitUntil: 'load' });
+  await expect(page.getByTestId('zone-film')).toBeVisible({ timeout: 15_000 });
+  const strip = page.getByTestId('zone-strip');
+  await expect(strip).toBeVisible();
+  await strip.locator('button').nth(1).click();
+  await page.waitForTimeout(800);
+  await expect(page.getByRole('button', { name: /Заказать технику/ }).first()).toBeVisible();
+  expect(errors, 'page errors').toEqual([]);
+});

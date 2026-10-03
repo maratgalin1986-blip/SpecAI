@@ -3,6 +3,11 @@ import { CinemaHero } from '@/components/CinemaHero';
 import { PHOTO_CREDITS } from '@/lib/photoCredits';
 import { SOUND_CREDITS } from '@/lib/soundAssets';
 import { SITE } from '@/lib/site';
+import { ZONE_FILMS } from '@/lib/stroyka/zoneFilms';
+
+const filmIds = [...new Set(Object.values(ZONE_FILMS).flatMap((f) => f.sources))]
+  .map((id) => `#${id}`)
+  .join(', ');
 
 export const metadata: Metadata = {
   title: 'Авторы фото, видео и звука',
@@ -52,6 +57,11 @@ export default function CreditsPage() {
         баллонов, мешков с цементом, мусорного контейнера и электрощитов, фото неба (днём, в
         пасмурную погоду, на закате) — Poly Haven (CC0). Карта города под ней — данные{' '}
         <span>© участники OpenStreetMap</span> (лицензия ODbL). Погода — MET Norway (CC BY 4.0).
+      </p>
+      <p className="text-slate-600">
+        Прогулка по стройке (/stroyka) показывает на каждой остановке короткий ролик из настоящих
+        съёмок Mixkit (лицензия Mixkit): {filmIds}. Изменения: фрагмент, цветокоррекция,
+        зацикливание, без звука.
       </p>
       <p className="text-sm text-slate-500">
         Mixkit: <span>mixkit.co/license</span>

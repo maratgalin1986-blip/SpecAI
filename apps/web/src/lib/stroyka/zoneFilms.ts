@@ -15,15 +15,15 @@ export type ZoneFilm = {
 };
 
 export const ZONE_FILMS: Record<ZoneId, ZoneFilm> = {
-  gate: { alt: 'Стройплощадка с высоты: краны, корпуса, техника', sources: [] },
-  kotlovan: { alt: 'Экскаватор грузит грунт в самосвал', sources: [] },
-  planirovka: { alt: 'Экскаватор-погрузчик расчищает и планирует участок', sources: [] },
-  doroga: { alt: 'Самосвал везёт щебень по площадке', sources: [] },
-  sklad: { alt: 'Погрузчик загружает самосвал, поддоны и материалы', sources: [] },
-  korpus: { alt: 'Корпус растёт этаж за этажом', sources: [] },
-  montazh: { alt: 'Кран поднимает плиту на этаж', sources: [] },
-  office: { alt: 'Прораб и инженеры с чертежами на площадке', sources: [] },
-  smeta: { alt: 'Бетон, кладка, материалы на объекте', sources: [] },
+  gate: { alt: 'Стройплощадка с высоты: краны, корпуса, техника', sources: [42333] },
+  kotlovan: { alt: 'Экскаватор грузит грунт в самосвал', sources: [25444] },
+  planirovka: { alt: 'Экскаватор-погрузчик расчищает и планирует участок', sources: [49142] },
+  doroga: { alt: 'Самосвал везёт щебень по площадке', sources: [45816, 10327] },
+  sklad: { alt: 'Погрузчик загружает самосвал, поддоны и материалы', sources: [49189] },
+  korpus: { alt: 'Корпус растёт этаж за этажом', sources: [9686] },
+  montazh: { alt: 'Кран поднимает плиту на этаж', sources: [31473] },
+  office: { alt: 'Прораб и инженеры с чертежами на площадке', sources: [23511] },
+  smeta: { alt: 'Бетон, кладка, материалы на объекте', sources: [14729, 20874] },
 };
 
 export const zoneFilmSrc = (zone: ZoneId, small: boolean) =>

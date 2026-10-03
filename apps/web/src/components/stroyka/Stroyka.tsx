@@ -282,16 +282,9 @@ export function Stroyka() {
     setMobile(window.matchMedia('(pointer: coarse)').matches || window.innerWidth < 768);
     const force2d = params.get('2d') === '1';
     const force3d = params.get('3d') === '1';
-    // The film tour becomes the default once its footage is in (public/film/zones); ?film=1 meanwhile.
-    setPhase(
-      force2d
-        ? 'fallback'
-        : params.get('film') === '1'
-          ? 'film'
-          : hasWebGL() && !(prefersReduced && !force3d)
-            ? '3d'
-            : 'fallback',
-    );
+    // Real footage per zone is the default tour (owner, 2026-10-03: «не рисовать
+    // графику, склеить ролик из настоящих съёмок»); the 3D scene is one tap away or ?3d=1.
+    setPhase(force2d ? 'fallback' : force3d && hasWebGL() ? '3d' : 'film');
     setFilmOn(
       !prefersReduced &&
         !['nofilm', 'nointro', 'order'].some((key) => params.get(key) === '1') &&
