@@ -401,6 +401,18 @@ export class Atmosphere {
     this.photos.set(name, texture);
   }
 
+  /**
+   * Frees the sky photos that are not on screen (a 4096×1024 photo is 16 MB
+   * of video memory); they load again if the weather calls for them.
+   */
+  private dropUnused() {
+    for (const [name, texture] of this.photos) {
+      if (name === this.photoNow || name === this.photoNext) continue;
+      texture.dispose();
+      this.photos.delete(name);
+    }
+  }
+
   /** Which photo the weather and the sun call for, and how strongly it shows. */
   private updatePhoto(dt: number, w: WeatherLevels) {
     const u = this.skyUniforms;
@@ -416,6 +428,7 @@ export class Atmosphere {
       this.photoShown = true;
       this.photoNow = this.photoNext = want;
       u.photoAmount.value = 1 - Math.min(1, w.night * 1.3);
+      this.dropUnused();
     }
     if (want !== this.photoNext && u.photoMix.value <= 0) this.photoNext = want;
     // Cross-fade A → B, then B becomes A.
@@ -424,6 +437,7 @@ export class Atmosphere {
       if (u.photoMix.value >= 1) {
         this.photoNow = this.photoNext;
         u.photoMix.value = 0;
+        this.dropUnused();
       }
     }
     u.photoA.value = ready(this.photoNow) ? this.photos.get(this.photoNow)! : BLANK;
