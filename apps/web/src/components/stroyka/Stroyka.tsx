@@ -77,6 +77,8 @@ import { Censored, DialogueBox } from './DialogueBox';
 import { FallbackMap, Passport } from './FallbackMap';
 import { Joystick } from './Joystick';
 import { MiniMap, type MiniCity } from './MiniMap';
+import { NavChooser } from './NavChooser';
+import { NAV_SIGHTS } from './navTargets';
 import { placeSite, points as cityPoints, type CityData } from '@/lib/stroyka/city';
 import { OrderPanel } from './OrderPanel';
 import { PhotoBooth } from './PhotoBooth';
@@ -145,7 +147,7 @@ export function Stroyka() {
       z: 66,
       yaw: Math.PI,
       fps: 0,
-      mode: 'tour',
+      mode: 'free',
       zone: null,
       tourStop: null,
       ready: false,
@@ -154,7 +156,10 @@ export function Stroyka() {
     }),
     [],
   );
-  const [mode, setMode] = useState<Mode>('tour');
+  // The visitor leads by default; «Экскурсия» is opt-in (owner, 2026-10-03).
+  const [mode, setMode] = useState<Mode>('free');
+  // «Куда идём?»: places, people and sights to go to.
+  const [navOpen, setNavOpen] = useState(false);
   const [view, setView] = useState<View>('fp');
   const [zone, setZone] = useState<ZoneId | null>(null);
   const [dialog, setDialog] = useState<DialogState | null>(null);
@@ -946,6 +951,33 @@ export function Stroyka() {
     return () => window.clearTimeout(timer);
   }, [toast]);
 
+  // Arrived next to a person the visitor chose: talk. A zone character opens
+  // the zone's conversation (the zone effect does it when the zone changed);
+  // a crew member answers with a line of their own.
+  const onPersonArrive = useCallback(
+    (id: string, z?: ZoneId) => {
+      if (z) {
+        window.setTimeout(() => {
+          if (!dialogRef.current) openZoneDialog(z);
+        }, 250);
+        return;
+      }
+      const line = crewLine(id);
+      if (!line || !engine) return;
+      engine.say(id, `${line.name}: ${line.text}`, 6, 'happy');
+      emitDialog('worker', line.text, 'joke', 'happy');
+    },
+    [engine, openZoneDialog],
+  );
+  const goPlace = (z: ZoneId) => {
+    const zn = zoneById(z);
+    engine?.travelTo({ x: zn.stand[0], z: zn.stand[1], look: zn.focus });
+  };
+  const goSight = (id: string) => {
+    const sight = NAV_SIGHTS.find((s) => s.id === id);
+    if (sight) engine?.travelTo(sight.target);
+  };
+
   // ------------------------------------------------------------ actions
   // A link, so a tap before hydration (slow phones, the loading screen) still
   // works: it reloads with ?order=1 and the panel opens on boot.
@@ -1014,6 +1046,7 @@ export function Stroyka() {
           }}
           onDog={onDog}
           onIntroEnd={() => setIntroOn(false)}
+          onPerson={onPersonArrive}
           onError={() => setPhase('fallback')}
         />
       )}
@@ -1326,22 +1359,34 @@ export function Stroyka() {
           dialog ? 'z-[60]' : 'z-20'
         } flex flex-col gap-2 px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:px-4`}
       >
-        {phase === '3d' && mode === 'free' && !(dialog && mobile) && !order.open && (
+        {phase === '3d' && !(dialog && mobile) && !order.open && (
           <div className="flex items-end justify-between">
-            <Joystick input={input} />
-            {!dialog && zone && (
-              <button
-                type="button"
-                data-testid="talk-btn"
-                onClick={() => openZoneDialog(zone)}
-                className="pointer-events-auto mb-2 rounded-full bg-amber-500 px-4 py-2 text-sm font-bold text-slate-950"
-              >
-                Поговорить: {BANTER_NAMES[zoneById(zone).speaker]}
-              </button>
-            )}
+            {mode === 'free' ? <Joystick input={input} /> : <span />}
+            <div className="mb-2 flex flex-col items-end gap-2">
+              {engine && !navOpen && (
+                <button
+                  type="button"
+                  data-testid="nav-open"
+                  onClick={() => setNavOpen(true)}
+                  className="pointer-events-auto flex items-center gap-1.5 rounded-full bg-white px-4 py-2 text-sm font-bold text-slate-950 shadow-lg shadow-black/30 hover:bg-amber-50"
+                >
+                  <span aria-hidden>🧭</span> Куда идём?
+                </button>
+              )}
+              {!dialog && zone && (
+                <button
+                  type="button"
+                  data-testid="talk-btn"
+                  onClick={() => openZoneDialog(zone)}
+                  className="pointer-events-auto rounded-full bg-amber-500 px-4 py-2 text-sm font-bold text-slate-950"
+                >
+                  Поговорить: {BANTER_NAMES[zoneById(zone).speaker]}
+                </button>
+              )}
+            </div>
           </div>
         )}
-        {phase !== '3d' || mode !== 'free'
+        {phase !== '3d'
           ? !dialog &&
             zone && (
               <button
@@ -1441,6 +1486,19 @@ export function Stroyka() {
             Пропустить → к заказу
           </a>
         </div>
+      )}
+
+      {phase === '3d' && engine && (
+        <NavChooser
+          open={navOpen}
+          active={zone}
+          touring={mode === 'tour'}
+          onClose={() => setNavOpen(false)}
+          onPlace={goPlace}
+          onPerson={(id) => engine.walkToPerson(id)}
+          onSight={goSight}
+          onTour={() => setMode((m) => (m === 'tour' ? 'free' : 'tour'))}
+        />
       )}
 
       <OrderPanel
