@@ -1,0 +1,42 @@
+name: E2E smoke
+
+# Builds the web app without a database and runs apps/web/e2e (Chromium,
+# iPhone 13 and desktop). Leads and every other non-GET request are answered
+# inside the test, nothing is sent anywhere.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      DATABASE_URL: 'postgresql://u:p@localhost:5432/d'
+      DIRECT_URL: 'postgresql://u:p@localhost:5432/d'
+      NEXTAUTH_SECRET: 'e2e'
+      PW: ${{ runner.temp }}/pw
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm db:generate
+      - name: Build the web app
+        working-directory: apps/web
+        run: npx next build
+      # Playwright stays out of the workspace lockfile; same version as the
+      # browsers preinstalled in the cloud sessions (1.56.1).
+      - name: Install Playwright and Chromium
+        run: |
+          npm install --no-save --no-package-lock --prefix "$PW" playwright@1.56.1
+          "$PW/node_modules/.bin/playwright" install --with-deps chromium
+      - name: Smoke test
+        working-directory: apps/web
+        run: NODE_PATH="$PW/node_modules" node "$PW/node_modules/playwright/cli.js" test -c e2e
