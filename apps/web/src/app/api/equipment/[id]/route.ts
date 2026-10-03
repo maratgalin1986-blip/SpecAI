@@ -13,11 +13,12 @@ export const dynamic = 'force-dynamic';
 /**
  * Карточка техники (мобильное приложение). Заказчик видит только
  * опубликованный парк СпецПласт16 с ценами по прайсу; поставщик свою машину —
- * в любом статусе и с сохранёнными ценами (их подставляет форма правки).
+ * в любом статусе и с сохранёнными ценами (?mine=1, форма правки).
  */
 export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
   const currentUser = await getRequestUser(request);
-  const owner = isProvider(currentUser) ? currentUser.companyId : null;
+  const mine = request.nextUrl.searchParams.get('mine') === '1';
+  const owner = mine && isProvider(currentUser) ? currentUser.companyId : null;
   const own = owner
     ? await prisma.equipment.findFirst({
         where: { id: params.id, companyId: owner },

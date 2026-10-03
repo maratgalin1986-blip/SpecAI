@@ -3,7 +3,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { Alert } from 'react-native';
 import { EquipmentForm } from '@/components/EquipmentForm';
 import { ErrorBanner, Loader } from '@/components/ui';
-import { ApiError, fetchEquipmentById, type Equipment } from '@/lib/api';
+import { ApiError, fetchMyEquipmentById, type Equipment } from '@/lib/api';
 
 /** Правка своей техники: статус, цены, описание, характеристики, фото. */
 export default function EditEquipmentScreen() {
@@ -15,7 +15,7 @@ export default function EditEquipmentScreen() {
   const load = useCallback(async () => {
     setError(null);
     try {
-      const data = await fetchEquipmentById(String(id));
+      const data = await fetchMyEquipmentById(String(id));
       setEquipment(data.equipment);
     } catch (caught) {
       setError(caught instanceof ApiError ? caught.message : 'Не удалось загрузить технику');

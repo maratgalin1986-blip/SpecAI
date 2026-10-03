@@ -453,6 +453,14 @@ export function sendAgentMessage(messages: { role: 'user' | 'assistant'; content
 
 // ---- Сторона поставщика (роль PROVIDER_ADMIN) ----
 
+/**
+ * Своя машина для формы правки: с токеном, в любом статусе и с ценами из
+ * базы (публичная карточка отдаёт цены по прайсу, их нельзя сохранять).
+ */
+export function fetchMyEquipmentById(id: string) {
+  return apiFetch<{ equipment: Equipment }>(`/api/equipment/${encodeURIComponent(id)}?mine=1`);
+}
+
 /** Техника компании текущего поставщика. */
 export function fetchMyEquipment(params: { page?: number; pageSize?: number } = {}) {
   const search = new URLSearchParams({ mine: '1' });
