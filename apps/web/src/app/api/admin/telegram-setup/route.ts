@@ -36,10 +36,10 @@ export async function POST(request: NextRequest) {
     if (!hook.ok) {
       return NextResponse.json({ error: `Telegram: ${hook.description}` }, { status: 400 });
     }
-    // The bot's menu button opens the site as a Telegram Mini App.
+    // The bot's menu button opens the Telegram Mini App (/tg).
     const origin = new URL(request.url).origin;
     const menu = await api('setChatMenuButton', {
-      menu_button: { type: 'web_app', text: 'Заказать технику', web_app: { url: origin } },
+      menu_button: { type: 'web_app', text: 'Заказать технику', web_app: { url: `${origin}/tg` } },
     });
     return NextResponse.json({ ok: true, bot: me.result?.username, url, miniApp: menu.ok });
   } catch (error) {
