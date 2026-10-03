@@ -65,12 +65,13 @@ export function rub(value: number): string {
 /** «4 000 ₽/ч» for a machine type or a rate. */
 export function price(typeOrRate: MachineType | number): string {
   const rate = typeof typeOrRate === 'number' ? typeOrRate : rateOf(typeOrRate);
-  return `${rub(rate)} ₽/ч`;
+  // No-break spaces: «от 3 300 ₽/ч» never splits across lines.
+  return `${rub(rate)}\u00a0₽/ч`;
 }
 
 /** «от 4 000 ₽/ч» for a machine type or a rate. */
 export function fromPrice(typeOrRate: MachineType | number): string {
-  return `от ${price(typeOrRate)}`;
+  return `от\u00a0${price(typeOrRate)}`;
 }
 
 /**

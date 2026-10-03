@@ -54,10 +54,12 @@ export function InstallPrompt() {
   useEffect(() => {
     if (isStandalone() || isDismissed()) return;
 
+    // Chrome offers installation right away; the banner still waits (below).
+    let offered = false;
     const onBeforeInstall = (event: Event) => {
       event.preventDefault();
       setDeferred(event as BeforeInstallPromptEvent);
-      setMode('native');
+      offered = true;
     };
     const onInstalled = () => {
       setMode('hidden');
@@ -78,7 +80,9 @@ export function InstallPrompt() {
         // Storage blocked: the cookie notice shows every visit, skip the hint.
         cookieAnswered = false;
       }
-      if (isIosSafari() && cookieAnswered) setMode('ios');
+      if (!cookieAnswered) return;
+      if (offered) setMode('native');
+      else if (isIosSafari()) setMode('ios');
     }, 30_000);
 
     return () => {

@@ -254,6 +254,8 @@ export function EstimateBox({
             value={phone}
             onChange={(e) => setPhone(e.target.value)}
             maxLength={30}
+            pattern="(?:\D*\d){10,15}\D*"
+            title="Номер телефона: от 10 цифр"
             placeholder="Телефон, +7 (___) ___-__-__"
             autoComplete="tel"
             inputMode="tel"
