@@ -133,7 +133,11 @@ export type Goal =
   | 'geo_fail'
   | 'window_book'
   | 'lead_retry'
-  | 'lead_offline_call';
+  | 'lead_offline_call'
+  // Telegram funnel (2026-10-03): deep link taps, the Mini App, the calculator.
+  | 'telegram_click'
+  | 'miniapp_open'
+  | 'calc_done';
 
 /** The visitor pressed «Отказаться» in the cookie notice. */
 export const COOKIE_CONSENT_KEY = 'cookie-consent';
