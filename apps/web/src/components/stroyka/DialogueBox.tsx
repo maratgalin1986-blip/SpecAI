@@ -124,7 +124,7 @@ export function DialogueBox({
       data-testid="dialogue"
       aria-live="polite"
       aria-label={`Говорит: ${name}`}
-      className="ym-hide-content pointer-events-auto mx-auto flex max-h-[52dvh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-amber-500/50 bg-slate-950/88 text-white shadow-2xl backdrop-blur-md"
+      className="ym-hide-content pointer-events-auto mx-auto flex max-h-[52dvh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-amber-500/50 bg-slate-950/95 text-white antialiased shadow-2xl"
     >
       <div className="flex-1 overflow-y-auto overscroll-contain p-3 sm:p-4">
         {radio.length > 0 && (
@@ -167,7 +167,10 @@ export function DialogueBox({
                 ✕
               </button>
             </div>
-            <p className="mt-1 text-[15px] leading-snug sm:text-base" data-testid="dialogue-text">
+            <p
+              className="mt-1 text-base font-semibold leading-relaxed sm:text-[17px]"
+              data-testid="dialogue-text"
+            >
               {typed}
               {shown < total && <span className="animate-pulse text-amber-400">▌</span>}
             </p>
@@ -234,7 +237,7 @@ export function DialogueBox({
         )}
         {extra && (
           <p
-            className="mt-3 border-t border-white/10 pt-2 text-sm italic text-slate-300"
+            className="mt-3 border-t border-white/10 pt-2 text-sm font-medium italic text-slate-200"
             data-testid="banter"
           >
             <b className="not-italic text-slate-400">{BANTER_NAMES[extra.speaker]}:</b>{' '}

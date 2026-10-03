@@ -1816,7 +1816,8 @@ export class StroykaEngine {
         return;
       }
       this.bubbleRects.push({ x, y, w: bw, h: bh });
-      el.style.transform = `translate(${x}px, ${y}px) translate(-50%, -100%)`;
+      // Whole pixels: a bubble on a half pixel (translate -50%) renders blurry.
+      el.style.transform = `translate(${Math.round(x - bw / 2)}px, ${Math.round(y - bh)}px)`;
     }
   }
 
