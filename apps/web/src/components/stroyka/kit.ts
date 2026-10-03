@@ -134,7 +134,7 @@ function grime(material: THREE.MeshStandardMaterial, strength = 1) {
         float gMud = (1.0 - smoothstep(0.05, 1.4, vGrimePos.y + gN * 0.5)) * grimeStrength;
         // Dust and wear everywhere, in blotches.
         float gDust = smoothstep(0.45, 0.9, gN) * 0.35 * grimeStrength;
-        diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.36, 0.29, 0.22), clamp(gMud * 0.85, 0.0, 0.85));
+        diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.26, 0.21, 0.16), clamp(gMud * 0.75, 0.0, 0.75));
         diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(0.86, 0.82, 0.76), gDust);
         roughnessFactor = clamp(roughnessFactor + gMud * 0.5 + gDust * 0.25, 0.0, 1.0);
         metalnessFactor = metalnessFactor * (1.0 - gMud * 0.8);`,
@@ -142,6 +142,29 @@ function grime(material: THREE.MeshStandardMaterial, strength = 1) {
   };
   material.customProgramCacheKey = () => `grime-${strength}`;
   return material;
+}
+
+/** Black-and-yellow hazard stripes (outriggers, bumpers, counterweights). */
+function hazardTexture() {
+  if (typeof document === 'undefined') return null;
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = 128;
+  const ctx = canvas.getContext('2d')!;
+  ctx.fillStyle = '#f2b705';
+  ctx.fillRect(0, 0, 128, 128);
+  ctx.fillStyle = '#151515';
+  for (let k = -2; k < 4; k++) {
+    ctx.beginPath();
+    ctx.moveTo(k * 64, 0);
+    ctx.lineTo(k * 64 + 32, 0);
+    ctx.lineTo(k * 64 + 160, 128);
+    ctx.lineTo(k * 64 + 128, 128);
+    ctx.fill();
+  }
+  const t = new THREE.CanvasTexture(canvas);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  return t;
 }
 
 /** Tyre tread: chevron lugs across the tread, as a bump map (canvas, no file). */
@@ -184,8 +207,8 @@ export function createMaterials() {
     black: grime(pbr(0x161616, 0.85, 0), 0.7), // rubber, plastics
     steel: grime(pbr(0x9aa1ab, 0.32, 0.9), 0.6),
     // Tyres: rubber with a lugged tread, caked with mud low down.
-    tyre: grime(pbr(0x1a1a1a, 0.92, 0, { bumpMap: treadTexture(), bumpScale: 2.5 }), 1.2),
-    glass: pbr(0x1d2a36, 0.06, 0.6, { emissive: 0x3a2412, envMapIntensity: 1.6 }),
+    tyre: grime(pbr(0x141414, 0.9, 0, { bumpMap: treadTexture(), bumpScale: 2.5 }), 0.55),
+    glass: pbr(0x0b1620, 0.03, 0.85, { emissive: 0x06080a, envMapIntensity: 2.4 }),
     concrete: surfaceMaterial('concrete_slab_wall', 1, { color: 0xd6d0c8 }),
     concreteDark: surfaceMaterial('concrete_floor_worn_001', 1, { color: 0xa39c93 }),
     block: pbr(0xe8e3d9, 0.9, 0),
@@ -197,6 +220,9 @@ export function createMaterials() {
     skin: pbr(0xc98d68, 0.65, 0),
     pants: pbr(0x334155, 0.85, 0),
     red: grime(pbr(0xc81e1e, 0.4, 0.05), 0.6),
+    hazard: grime(pbr(0xffffff, 0.5, 0.05, { map: hazardTexture() }), 0.7),
+    // Hydraulic hoses: glossy black rubber.
+    hose: pbr(0x111111, 0.45, 0),
     wood: pbr(0x9a6a33, 0.85, 0),
     cabin: pbr(0x3b6e8f, 0.4, 0.1),
     lamp: new THREE.MeshBasicMaterial({ color: 0xfff2c4 }),
@@ -213,6 +239,8 @@ const UNIT_CYL = new THREE.CylinderGeometry(0.5, 0.5, 1, 20);
 // A tyre: a thick ring around the axle (Z after rotation), and the rim inside.
 const TYRE = new THREE.TorusGeometry(0.72, 0.28, 14, 40);
 const RIM = new THREE.CylinderGeometry(0.5, 0.5, 1, 18).rotateX(Math.PI / 2);
+// Hex wheel nut.
+const NUT = new THREE.CylinderGeometry(0.5, 0.5, 1, 6).rotateX(Math.PI / 2);
 
 type V3 = [number, number, number];
 const tmpMatrix = new THREE.Matrix4();
@@ -263,6 +291,59 @@ export class Rig {
     this.add(node, TYRE, 'tyre', pos, [0, 0, 0], [r, r, w / 0.56]);
     this.add(node, RIM, 'steel', pos, [0, 0, 0], [r * 1.05, r * 1.05, w * 0.9]);
     this.add(node, RIM, 'dark', pos, [0, 0, 0], [r * 0.45, r * 0.45, w + 0.02]);
+    // Hub cap and wheel nuts on both faces.
+    for (const side of [-1, 1]) {
+      const z = pos[2] + side * (w / 2 + 0.012);
+      this.add(node, RIM, 'steel', [pos[0], pos[1], z], [0, 0, 0], [r * 0.22, r * 0.22, 0.05]);
+      for (let k = 0; k < 8; k++) {
+        const a = (k / 8) * Math.PI * 2;
+        this.add(
+          node,
+          NUT,
+          'steel',
+          [pos[0] + Math.cos(a) * r * 0.32, pos[1] + Math.sin(a) * r * 0.32, z],
+          [0, 0, 0],
+          [r * 0.07, r * 0.07, 0.04],
+        );
+      }
+    }
+    return this;
+  }
+
+  /**
+   * A flat part cut from a 2D outline (in the node's XY plane) and extruded
+   * `depth` along Z, centred, with softened edges: booms, buckets, hoods.
+   */
+  profile(
+    node: THREE.Object3D,
+    outline: [number, number][],
+    depth: number,
+    mat: MatKey,
+    pos: V3 = [0, 0, 0],
+    rot: V3 = [0, 0, 0],
+    bevel = 0.025,
+  ) {
+    const shape = new THREE.Shape(outline.map(([x, y]) => new THREE.Vector2(x, y)));
+    const geo = new THREE.ExtrudeGeometry(shape, {
+      depth: Math.max(0.001, depth - bevel * 2),
+      bevelEnabled: bevel > 0,
+      bevelThickness: bevel,
+      bevelSize: bevel,
+      bevelSegments: 2,
+      curveSegments: 8,
+    });
+    geo.translate(0, 0, -depth / 2 + bevel);
+    this.add(node, geo, mat, pos, rot);
+    geo.dispose();
+    return this;
+  }
+
+  /** A hose through the given points (node frame), radius r. */
+  hose(node: THREE.Object3D, points: V3[], r = 0.03, mat: MatKey = 'hose') {
+    const curve = new THREE.CatmullRomCurve3(points.map((p) => new THREE.Vector3(...p)));
+    const geo = new THREE.TubeGeometry(curve, points.length * 6, r, 6, false);
+    this.add(node, geo, mat);
+    geo.dispose();
     return this;
   }
 
