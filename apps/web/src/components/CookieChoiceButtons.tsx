@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { COOKIE_CONSENT_KEY, stopMetrika } from '@/lib/marketing';
+import { COOKIE_CHOICE_EVENT, COOKIE_CONSENT_KEY, stopMetrika } from '@/lib/marketing';
 
 type Choice = 'yes' | 'no' | null;
 
@@ -31,6 +31,7 @@ export function CookieChoiceButtons() {
     }
     if (value === 'no') stopMetrika();
     setChoice(value);
+    window.dispatchEvent(new Event(COOKIE_CHOICE_EVENT));
   }
 
   if (!ready) return null;

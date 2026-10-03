@@ -3,7 +3,12 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { COOKIE_CONSENT_KEY, enableWebvisorIfQueued, stopMetrika } from '@/lib/marketing';
+import {
+  COOKIE_CHOICE_EVENT,
+  COOKIE_CONSENT_KEY,
+  enableWebvisorIfQueued,
+  stopMetrika,
+} from '@/lib/marketing';
 
 // Notice about cookies and Yandex.Metrika (152-ФЗ). Metrika works until the
 // visitor refuses; the choice is kept in localStorage and read by the counter's
@@ -36,6 +41,12 @@ export function CookieNotice() {
       if (revealed || !(scrolled || timedOut) || introOn()) return;
       revealed = true;
       window.clearInterval(poll);
+      // Chosen meanwhile on /privacy (CookieChoiceButtons): stay hidden.
+      try {
+        if (localStorage.getItem(COOKIE_CONSENT_KEY)) return;
+      } catch {
+        // Storage blocked: show the notice.
+      }
       setVisible(true);
       frame = requestAnimationFrame(() => setShown(true));
     };
@@ -57,6 +68,13 @@ export function CookieNotice() {
       window.removeEventListener('scroll', onScroll);
       cancelAnimationFrame(frame);
     };
+  }, []);
+
+  // The choice made on /privacy hides the strip too.
+  useEffect(() => {
+    const hide = () => setVisible(false);
+    window.addEventListener(COOKIE_CHOICE_EVENT, hide);
+    return () => window.removeEventListener(COOKIE_CHOICE_EVENT, hide);
   }, []);
 
   // Lets the chat button sit above the strip (see globals.css).

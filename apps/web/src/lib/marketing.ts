@@ -134,6 +134,9 @@ export type Goal =
 /** The visitor pressed «Отказаться» in the cookie notice. */
 export const COOKIE_CONSENT_KEY = 'cookie-consent';
 
+/** Dispatched on window when the choice is made elsewhere (/privacy): the notice hides. */
+export const COOKIE_CHOICE_EVENT = 'cookie-choice';
+
 export function analyticsRefused(): boolean {
   try {
     return localStorage.getItem(COOKIE_CONSENT_KEY) === 'no';
