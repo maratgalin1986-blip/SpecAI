@@ -99,7 +99,7 @@ const GradeShader = {
           float g = length((vUv - ghost) * asp);
           float size = 0.03 + 0.025 * f;
           vec3 tint = i == 2 ? vec3(0.5, 0.8, 1.0) : vec3(1.0, 0.7, 0.4);
-          col += tint * flare * 0.08 * smoothstep(size, size * 0.4, g);
+          col += tint * flare * 0.08 * (1.0 - smoothstep(size * 0.4, size, g));
         }
       }
       gl_FragColor = vec4(col, c.a);

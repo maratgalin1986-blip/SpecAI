@@ -47,9 +47,11 @@ export default function CreditsPage() {
         ))}
       </ul>
       <p className="text-sm text-slate-600">
-        3D-стройка (/stroyka) построена процедурно, без сторонних моделей; фототекстуры грунта,
-        щебня, песка и бетона — Poly Haven (CC0). Карта города под ней — данные{' '}
-        <span>© участники OpenStreetMap</span> (лицензия ODbL). Погода — MET Norway (CC BY 4.0).
+        3D-стройка (/stroyka): техника, здания и люди построены процедурно; фототекстуры грунта,
+        щебня, песка и бетона и 3D-модели бетонных блоков, покрышек, бочек, генератора, газовых
+        баллонов, мешков с цементом, мусорного контейнера и электрощитов — Poly Haven (CC0). Карта
+        города под ней — данные <span>© участники OpenStreetMap</span> (лицензия ODbL). Погода — MET
+        Norway (CC BY 4.0).
       </p>
       <p className="text-sm text-slate-500">
         Mixkit: <span>mixkit.co/license</span>
