@@ -537,6 +537,62 @@ html {
   }
 }
 
+/* ---- Acid date/time/weather badge on /stroyka (WeatherBadge) -----------
+   Five acid colours, a new one every 5 s with a 0.7 s fade (the old React
+   timer + transition-colors, now without re-rendering). The colour animation
+   starts at 5 s, the first change; until then the 0% frame holds the first
+   colour. The glow switches at once at each change, as before. */
+.acid-cycle {
+  color: #39ff14;
+  text-shadow: 0 0 8px #39ff1488;
+  animation:
+    acid-color 25s cubic-bezier(0.4, 0, 0.2, 1) 5s infinite both,
+    acid-glow 25s step-end infinite;
+}
+@keyframes acid-color {
+  0% {
+    color: #39ff14;
+  }
+  2.8%,
+  20% {
+    color: #f5ff00;
+  }
+  22.8%,
+  40% {
+    color: #00f0ff;
+  }
+  42.8%,
+  60% {
+    color: #ff2bd6;
+  }
+  62.8%,
+  80% {
+    color: #ff8a00;
+  }
+  82.8%,
+  100% {
+    color: #39ff14;
+  }
+}
+@keyframes acid-glow {
+  0% {
+    text-shadow: 0 0 8px #39ff1488;
+  }
+  20% {
+    text-shadow: 0 0 8px #f5ff0088;
+  }
+  40% {
+    text-shadow: 0 0 8px #00f0ff88;
+  }
+  60% {
+    text-shadow: 0 0 8px #ff2bd688;
+  }
+  80%,
+  100% {
+    text-shadow: 0 0 8px #ff8a0088;
+  }
+}
+
 /* ---- Rotating 3D cube (agents section) ----------------------------------- */
 
 .cube-scene {
