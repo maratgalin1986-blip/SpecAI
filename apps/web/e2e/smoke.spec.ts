@@ -123,7 +123,7 @@ test('stroyka film tour', async ({ page }) => {
 test('stroyka chooser', async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== 'desktop', 'one run is enough');
   // Software WebGL renders about a frame a second: React updates come late.
-  test.setTimeout(180_000);
+  test.setTimeout(300_000);
   const errors = await guard(page);
   await page.goto('/stroyka?nointro=1&3d=1', { waitUntil: 'load' });
   const ready = await page
@@ -147,10 +147,10 @@ test('stroyka chooser', async ({ page }, testInfo) => {
     (window as unknown as { __stroyka: { fx: (on: boolean) => void } }).__stroyka.fx(false),
   );
   await page.getByTestId('nav-open').dispatchEvent('click');
-  await expect(page.getByTestId('nav-chooser')).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByTestId('nav-chooser')).toBeVisible({ timeout: 60_000 });
   await expect(page.getByTestId('nav-person-npc-office')).toBeAttached();
   await page.getByTestId('nav-zone-sklad').dispatchEvent('click');
-  await expect(page.getByTestId('zone-title')).toHaveText(/Склад/, { timeout: 60_000 });
+  await expect(page.getByTestId('zone-title')).toHaveText(/Склад/, { timeout: 150_000 });
   await expect(page.getByTestId('order-btn')).toBeAttached();
   expect(errors, 'page errors').toEqual([]);
 });
