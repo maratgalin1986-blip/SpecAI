@@ -1,4 +1,4 @@
-// Sky dome, sun and moon, stars, drifting block clouds, rain, snow and dust.
+// Sky dome, sun and moon, stars, drifting cumulus clouds, rain, snow and dust.
 // Particles are Points/LineSegments around the camera with capped counts.
 import * as THREE from 'three';
 
@@ -181,7 +181,7 @@ export class Atmosphere {
     this.stars.frustumCulled = false;
     this.group.add(this.stars);
 
-    // Block clouds: clusters of flat boxes.
+    // Cumulus clouds: clusters of soft puffs (lumpy ellipsoids).
     const clusters = mobile ? 26 : 44;
     for (let c = 0; c < clusters; c++) {
       this.cloudCenters.push(
@@ -198,16 +198,30 @@ export class Atmosphere {
           dx: (Math.random() - 0.5) * 30,
           dy: (Math.random() - 0.5) * 3,
           dz: (Math.random() - 0.5) * 20,
-          sx: 10 + Math.floor(Math.random() * 3) * 6,
-          sy: 3 + Math.floor(Math.random() * 2) * 2,
-          sz: 8 + Math.floor(Math.random() * 3) * 4,
+          sx: 12 + Math.random() * 16,
+          sy: 6 + Math.random() * 6,
+          sz: 10 + Math.random() * 12,
         });
       }
       this.clusterEnd.push(this.cloudBlocks.length);
     }
+    const puff = new THREE.IcosahedronGeometry(0.5, 3);
+    const pp = puff.attributes.position!;
+    for (let i = 0; i < pp.count; i++) {
+      const v = new THREE.Vector3().fromBufferAttribute(pp, i);
+      const n = 1 + 0.12 * Math.sin(v.x * 11 + v.y * 7) * Math.cos(v.z * 9 - v.x * 5);
+      // Flat bottom, round top: how cumulus clouds look.
+      pp.setXYZ(i, v.x * n, Math.max(v.y, -0.18) * n, v.z * n);
+    }
+    puff.computeVertexNormals();
     this.clouds = new THREE.InstancedMesh(
-      new THREE.BoxGeometry(1, 1, 1),
-      new THREE.MeshBasicMaterial({ color: 0xffffff, fog: false }),
+      puff,
+      new THREE.MeshBasicMaterial({
+        color: 0xffffff,
+        fog: false,
+        transparent: true,
+        opacity: 0.93,
+      }),
       this.cloudBlocks.length,
     );
     this.clouds.frustumCulled = false;
