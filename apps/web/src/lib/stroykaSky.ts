@@ -2,7 +2,14 @@
 // the sun and moon over Набережные Челны, the sky palette for a sun
 // elevation, and the mapping of a MET Norway forecast point to scene state.
 
-import { assessWork, CHELNY, symbolLabel, type HourPoint, type ShiftWeather } from '@/lib/weather';
+import {
+  assessWork,
+  CHELNY,
+  symbolIcon,
+  symbolLabel,
+  type HourPoint,
+  type ShiftWeather,
+} from '@/lib/weather';
 
 const RAD = Math.PI / 180;
 
@@ -280,12 +287,23 @@ export function mskClock(date: Date) {
   return `${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}`;
 }
 
-/** «Челны · 21:14 · +3° · дождь · ветер 7 м/с». */
+const WEEKDAYS = ['вс', 'пн', 'вт', 'ср', 'чт', 'пт', 'сб'];
+const MONTHS = ['янв', 'фев', 'мар', 'апр', 'мая', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'];
+
+/** «пт, 2 окт» — the real date in Moscow time. */
+export function mskDate(date: Date) {
+  const d = new Date(date.getTime() + MSK_MS);
+  return `${WEEKDAYS[d.getUTCDay()]}, ${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]}`;
+}
+
+/** «🌧️ Челны · пт, 2 окт · 21:14 · +3° · дождь · ветер 7 м/с». */
 export function conditionsLine(date: Date, weather: WeatherScene | null) {
-  const parts = ['Челны', mskClock(date)];
+  const parts = ['Челны', mskDate(date), mskClock(date)];
   if (weather) {
     const t = Math.round(weather.temp);
     parts.push(`${t > 0 ? '+' : ''}${t}°`, weather.label, `ветер ${Math.round(weather.wind)} м/с`);
+    const hour = Number(mskClock(date).slice(0, 2));
+    return `${symbolIcon(weather.symbol, hour < 6 || hour >= 20)} ${parts.join(' · ')}`;
   }
   return parts.join(' · ');
 }

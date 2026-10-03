@@ -128,9 +128,11 @@ describe('HUD and overrides', () => {
   it('prints the conditions line in Moscow time', () => {
     const date = new Date('2026-10-02T18:14:00Z');
     expect(conditionsLine(date, weatherScene({ ...WEATHER_PRESETS.rain!, temp: 3, wind: 7 }))).toBe(
-      'Челны · 21:14 · +3° · дождь · ветер 7 м/с',
+      '🌧️ Челны · пт, 2 окт · 21:14 · +3° · дождь · ветер 7 м/с',
     );
-    expect(conditionsLine(date, null)).toBe('Челны · 21:14');
+    expect(conditionsLine(date, null)).toBe('Челны · пт, 2 окт · 21:14');
+    // A clear night shows the moon.
+    expect(conditionsLine(date, weatherScene(WEATHER_PRESETS.clear!)).startsWith('🌙')).toBe(true);
   });
 
   it('reads ?time= and ?weather= overrides', () => {
