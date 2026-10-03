@@ -7,6 +7,14 @@
 // idle slot quietly preloads the next stop, so at most two videos are ever
 // alive. A missing clip shows its poster, a missing poster a dark gradient.
 // With «уменьшение движения» only the poster is shown.
+//
+// «Как в кино» (owner, 2026-10-03): the footage sits in a slow Ken Burns
+// camera (.zf-cam), a zone change is a cinematic cut (the old shot whips out,
+// a dip toward black under a warm light-leak swipe, the new shot settles in),
+// each zone opens in a 2.39:1 letterbox that eases back to full frame, and
+// FilmLook lays grain, vignette and halation over the picture. All of it is
+// CSS transform/opacity (globals.css, «/stroyka film tour» section) and sits
+// under every text layer; nothing here filters or moves text.
 
 import { useCallback, useEffect, useRef, useState, type TouchEvent } from 'react';
 import { ZONES, type ZoneId } from '@/lib/stroyka';
@@ -14,8 +22,10 @@ import type { WorldProgress } from '@/lib/stroyka/progress';
 import { ZONE_FILMS, zoneFilmPoster, zoneFilmSrc } from '@/lib/stroyka/zoneFilms';
 import { Passport } from './FallbackMap';
 import { ChannelBug } from './ChannelBug';
+import { FilmLook } from './FilmLook';
 
-const FADE_MS = 600;
+/** The cut between zones (zf-in / zf-out / zf-dip in globals.css). */
+const FADE_MS = 720;
 /** Swap even if the new clip has not loaded by then (its poster shows). */
 const SWAP_TIMEOUT_MS = 1500;
 const SWIPE_PX = 50;
@@ -68,6 +78,10 @@ export function ZoneFilm({
   // ------------------------------------------------------------ video slots
   const [slots, setSlots] = useState<[ZoneId | null, ZoneId | null]>([target, null]);
   const [front, setFront] = useState<Slot>(0);
+  /** The slot whose shot is whipping out during a cut, and a count of cuts
+   *  (keys the dip, the light leak and the letterbox so they replay). */
+  const [leaving, setLeaving] = useState<Slot | null>(null);
+  const [cuts, setCuts] = useState(0);
   /** Whether each slot's current clip has a decoded frame. */
   const [ready, setReady] = useState<[boolean, boolean]>([false, false]);
   const videos = useRef<[HTMLVideoElement | null, HTMLVideoElement | null]>([null, null]);
@@ -88,10 +102,13 @@ export function ZoneFilm({
     pending.current = null;
     const old = frontRef.current;
     setFront(idx);
+    setLeaving(old);
+    setCuts((n) => n + 1);
     if (live()) play(videos.current[idx]);
     // Pause the old clip once it has faded out.
     window.setTimeout(() => {
       if (frontRef.current !== old) videos.current[old]?.pause();
+      setLeaving((l) => (l === old ? null : l));
     }, FADE_MS);
   }, []);
 
@@ -197,57 +214,87 @@ export function ZoneFilm({
 
   // ------------------------------------------------------------ render
   const shown = slots[front] ?? target;
+  /** The first shot fades in; later ones arrive by a cut; the old one whips out. */
+  const shotClass = (idx: Slot) => {
+    if (idx === front) return ready[idx] ? (cuts === 0 ? 'zf-fade' : 'zf-in') : '';
+    return idx === leaving ? 'zf-out' : '';
+  };
   const [posterOk, setPosterOk] = useState(true);
   useEffect(() => setPosterOk(true), [shown]);
 
   return (
     <div
       data-testid="zone-film"
-      className="absolute inset-0 z-0 overflow-hidden bg-[radial-gradient(ellipse_at_top,#334155,#0b1220)]"
+      className={`absolute inset-0 z-0 overflow-hidden bg-[radial-gradient(ellipse_at_top,#334155,#0b1220)] ${
+        paused ? 'zf-hold' : ''
+      }`}
       onTouchStart={onTouchStart}
       onTouchEnd={onTouchEnd}
     >
-      {/* Poster underneath: the first frame before the clip loads, the whole
+      {/* The camera: a slow push and drift on the picture only. */}
+      <div className="zf-cam absolute inset-0">
+        {/* Poster underneath: the first frame before the clip loads, the whole
           picture with reduced motion or a missing clip. */}
-      {posterOk && (
-        <img
-          src={zoneFilmPoster(shown)}
-          alt={reduced ? ZONE_FILMS[shown].alt : ''}
-          aria-hidden={reduced ? undefined : true}
-          className="absolute inset-0 h-full w-full object-cover"
-          onError={() => setPosterOk(false)}
-        />
-      )}
+        {posterOk && (
+          <img
+            src={zoneFilmPoster(shown)}
+            alt={reduced ? ZONE_FILMS[shown].alt : ''}
+            aria-hidden={reduced ? undefined : true}
+            className="absolute inset-0 h-full w-full object-cover"
+            onError={() => setPosterOk(false)}
+          />
+        )}
 
-      {reduced === false &&
-        ([0, 1] as const).map((idx) => {
-          const zone = slots[idx];
-          if (!zone) return null;
-          const isFront = idx === front;
-          return (
-            <video
-              key={idx}
-              ref={(el) => {
-                videos.current[idx] = el;
-              }}
-              src={zoneFilmSrc(zone, small)}
-              poster={zoneFilmPoster(zone)}
-              muted
-              loop
-              playsInline
-              autoPlay={isFront && !paused}
-              preload="auto"
-              disablePictureInPicture
-              aria-label={ZONE_FILMS[zone].alt}
-              aria-hidden={isFront ? undefined : true}
-              onLoadedData={() => onLoaded(idx)}
-              onError={() => onFailed(idx)}
-              className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-[600ms] ease-out ${
-                isFront && ready[idx] ? 'opacity-100' : 'opacity-0'
-              }`}
-            />
-          );
-        })}
+        {reduced === false &&
+          ([0, 1] as const).map((idx) => {
+            const zone = slots[idx];
+            if (!zone) return null;
+            const isFront = idx === front;
+            return (
+              <video
+                key={idx}
+                ref={(el) => {
+                  videos.current[idx] = el;
+                }}
+                src={zoneFilmSrc(zone, small)}
+                poster={zoneFilmPoster(zone)}
+                muted
+                loop
+                playsInline
+                autoPlay={isFront && !paused}
+                preload="auto"
+                disablePictureInPicture
+                aria-label={ZONE_FILMS[zone].alt}
+                aria-hidden={isFront ? undefined : true}
+                onLoadedData={() => onLoaded(idx)}
+                onError={() => onFailed(idx)}
+                className={`zf-shot absolute inset-0 h-full w-full object-cover ${shotClass(idx)}`}
+              />
+            );
+          })}
+      </div>
+
+      <FilmLook grain={reduced === false} />
+
+      {reduced === false && (
+        <>
+          {/* Each zone opens in a 2.39:1 letterbox that eases back to full frame. */}
+          <div key={`matte-${cuts}`} aria-hidden className="pointer-events-none">
+            <div className="zf-matte zf-matte-top absolute inset-x-0 top-0 bg-black" />
+            <div className="zf-matte zf-matte-bottom absolute inset-x-0 bottom-0 bg-black" />
+          </div>
+          {cuts > 0 && (
+            <div
+              key={`cut-${cuts}`}
+              aria-hidden
+              className="pointer-events-none absolute inset-0 overflow-hidden"
+            >
+              <div className="zf-dip absolute inset-0" />
+              <div className="zf-leak absolute inset-y-0" />
+            </div>
+          )}
+        </>
+      )}
 
       {/* Cinematic shading so the top bar and the dialogue box read. */}
       <div className="pointer-events-none absolute inset-x-0 top-0 h-48 bg-gradient-to-b from-black/70 via-black/30 to-transparent" />
