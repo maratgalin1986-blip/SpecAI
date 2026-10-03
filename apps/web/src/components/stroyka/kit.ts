@@ -237,6 +237,8 @@ export type MatKey = keyof Materials;
 
 /** A unit box with softly bevelled edges: no toy-like sharp cubes. */
 const UNIT_BOX = new RoundedBoxGeometry(1, 1, 1, 2, 0.06);
+/** A plain unit box (12 triangles) for blocks seen from afar (the district). */
+export const PLAIN_BOX = new THREE.BoxGeometry(1, 1, 1);
 const UNIT_CYL = new THREE.CylinderGeometry(0.5, 0.5, 1, 20);
 // A tyre: a thick ring around the axle (Z after rotation), and the rim inside.
 const TYRE = new THREE.TorusGeometry(0.72, 0.28, 14, 40);
@@ -575,8 +577,15 @@ export class Voxels {
   get count() {
     return this.items.length;
   }
-  build(material: THREE.Material, { cast = false, receive = true } = {}) {
-    const mesh = new THREE.InstancedMesh(UNIT_BOX, material, Math.max(1, this.items.length));
+  build(
+    material: THREE.Material,
+    {
+      cast = false,
+      receive = true,
+      geometry = UNIT_BOX,
+    }: { cast?: boolean; receive?: boolean; geometry?: THREE.BufferGeometry } = {},
+  ) {
+    const mesh = new THREE.InstancedMesh(geometry, material, Math.max(1, this.items.length));
     const m = new THREE.Matrix4();
     const q = new THREE.Quaternion();
     const p = new THREE.Vector3();

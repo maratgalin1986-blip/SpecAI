@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { awayFor, awayMessage, daysBetween, plural, snapshot } from '@/lib/stroyka/away';
-import { progressFromUnits } from '@/lib/stroyka/progress';
+import { progressAtStage, progressFromUnits } from '@/lib/stroyka/progress';
 
 const DAY = 86_400_000;
 const T0 = Date.parse('2026-10-05T07:00:00Z'); // 10:00 MSK
@@ -31,23 +31,23 @@ describe('day counting and plurals', () => {
 
 describe('«Пока вас не было»', () => {
   it('lists what was built over several days', () => {
-    const before = snapshot(progressFromUnits(0.02), T0);
-    const now = progressFromUnits(0.18 + 0.3 * 0.25);
+    const before = snapshot(progressAtStage(0, 'pit', 0.3), T0);
+    const now = progressAtStage(0, 'frame', 0.15);
     expect(awayMessage(before, now, T0 + 5 * DAY)).toBe(
       'Вас не было 5 дней. За это время: выкопали котлован, залили фундамент, подняли 3 этажа каркаса.',
     );
   });
 
   it('notices half a floor on the same day', () => {
-    const before = snapshot(progressFromUnits(0.18 + 0.3 * 0.3), T0);
-    const now = progressFromUnits(0.18 + 0.3 * 0.36);
+    const before = snapshot(progressAtStage(0, 'frame', 0.3), T0);
+    const now = progressAtStage(0, 'frame', 0.33);
     expect(awayMessage(before, now, T0 + 4 * 3_600_000)).toBe(
       'С возвращением! С утра подняли ещё полэтажа.',
     );
   });
 
   it('tells about a finished object after weeks away', () => {
-    const before = snapshot(progressFromUnits(0.7), T0);
+    const before = snapshot(progressAtStage(0, 'interior', 0.5), T0);
     const now = progressFromUnits(1.1);
     expect(awayMessage(before, now, T0 + 21 * DAY)).toBe(
       `Вас не было 3 недели — ЖК «Кама» уже сдали, начали ${now.projectName.charAt(0).toLowerCase() + now.projectName.slice(1)} по соседству.`,

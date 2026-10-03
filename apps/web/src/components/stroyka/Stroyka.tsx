@@ -40,6 +40,7 @@ import {
 } from '@/lib/stroyka/context';
 import type { LineConditions, LinePicker } from '@/lib/stroyka/lines';
 import {
+  progressAt,
   progressFromUnits,
   progressLine,
   worldProgress,
@@ -509,9 +510,12 @@ export function Stroyka() {
       apply(progressFromUnits(forced, false), false);
       return;
     }
+    // `?date=2027-06-01`: preview the construction on that day (not remembered).
+    const date = parseOverrides(window.location.search).date;
+    if (date !== undefined) return apply(progressAt(date), false);
     fetch('/api/world')
       .then((r) => (r.ok ? (r.json() as Promise<WorldProgress>) : Promise.reject()))
-      .then((p) => apply(p, true))
+      .then((p) => apply(p.startedAt ? p : worldProgress(Date.now(), null), true))
       .catch(() => apply(worldProgress(Date.now(), null), true));
   }, [phase]);
 
@@ -559,6 +563,7 @@ export function Stroyka() {
       fx: (on: boolean) => engine.setFx(on),
       state: () => engine.state,
       toScreen: (x: number, y: number, z: number) => engine.toScreen(x, y, z),
+      inspect: (...args: Parameters<StroykaEngine['inspect']>) => engine.inspect(...args),
       standAt: (x: number, z: number, yaw: number, pitch?: number) => {
         setMode('free');
         engine.standAt(x, z, yaw, pitch);

@@ -5,7 +5,7 @@
 import * as THREE from 'three';
 import { centroid, footprintRuns, points, type CityData, type Pt } from '@/lib/stroyka/city';
 import { Voxels } from './kit';
-import { DISTRICT_SLOTS } from './project';
+import { onOuterPlot } from '@/lib/stroyka/plots';
 
 const FACADES = [0xcfc8bd, 0xd9d2c3, 0xbfc5cc, 0xe0d6c4, 0xb9b2a6, 0xc8bba8, 0xa9b4bf];
 const ROAD_WIDTH = [4, 7, 10, 14];
@@ -98,9 +98,8 @@ export function facadeMaterial() {
 
 function excluded(x: number, z: number, pad = 0) {
   if (Math.abs(x) < SITE.x + pad && z > SITE.zMin - pad && z < SITE.zMax + pad) return true;
-  return DISTRICT_SLOTS.some(
-    ([sx, sz]) => Math.abs(x - sx) < 24 + pad && Math.abs(z - sz) < 18 + pad,
-  );
+  // The district's plots (they are on free land; this only keeps it so).
+  return onOuterPlot(x, z, pad);
 }
 
 export function buildCity(data: CityData, offset: Pt, mobile: boolean) {

@@ -142,6 +142,9 @@ describe('HUD and overrides', () => {
     });
     expect(parseOverrides('?weather=toString&time=25:00')).toEqual({});
     expect(parseOverrides('?wind=12').weather?.wind).toBe(12);
+    expect(parseOverrides('?date=2027-06-01').date).toBe(Date.parse('2027-06-01T12:00:00+03:00'));
+    expect(parseOverrides('?date=2027-02-30').date).toBeUndefined();
+    expect(parseOverrides('?date=tomorrow').date).toBeUndefined();
     const at = atMskTime(new Date('2026-10-02T22:30:00Z'), 23, 0);
     expect(at.toISOString()).toBe('2026-10-03T20:00:00.000Z');
   });

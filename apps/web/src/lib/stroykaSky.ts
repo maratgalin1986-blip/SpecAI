@@ -325,9 +325,11 @@ export interface SceneOverrides {
   /** Moscow time of day to show instead of now. */
   time?: { h: number; m: number };
   weather?: WeatherPoint;
+  /** `?date=2027-06-01`: the construction as it will be on that Moscow day (noon). */
+  date?: number;
 }
 
-/** Reads `?time=23:00&weather=rain&wind=12` (testing and demos). */
+/** Reads `?time=23:00&weather=rain&wind=12&date=2027-06-01` (testing and demos). */
 export function parseOverrides(search: string): SceneOverrides {
   const params = new URLSearchParams(search);
   const out: SceneOverrides = {};
@@ -340,6 +342,15 @@ export function parseOverrides(search: string): SceneOverrides {
   const preset = params.get('weather');
   if (preset && Object.prototype.hasOwnProperty.call(WEATHER_PRESETS, preset)) {
     out.weather = { ...WEATHER_PRESETS[preset]! };
+  }
+  const date = /^(\d{4})-(\d{2})-(\d{2})$/.exec(params.get('date') ?? '');
+  if (date) {
+    const [y, mo, d] = [Number(date[1]), Number(date[2]), Number(date[3])];
+    // Noon in Moscow; a real calendar day within a sane range only.
+    const ms = Date.UTC(y, mo - 1, d, 9);
+    const check = new Date(ms);
+    if (y >= 2020 && y <= 2100 && check.getUTCMonth() === mo - 1 && check.getUTCDate() === d)
+      out.date = ms;
   }
   const wind = Number(params.get('wind'));
   if (params.has('wind') && Number.isFinite(wind) && wind >= 0 && wind < 60) {
