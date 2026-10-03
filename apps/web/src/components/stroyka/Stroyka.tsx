@@ -945,6 +945,16 @@ export function Stroyka() {
     earn({ type: 'dog' });
   }, [engine, earn]);
 
+  // After the opening shot, once: how to lead the walk (nothing moves by itself).
+  const navHinted = useRef(false);
+  useEffect(() => {
+    if (phase !== '3d' || !engine || introOn || filmOn || navHinted.current) return;
+    navHinted.current = true;
+    setToast(
+      (t) => t ?? '👆 Коснитесь земли или человека — пойдём туда. Или «🧭 Куда идём?» внизу.',
+    );
+  }, [phase, engine, introOn, filmOn]);
+
   useEffect(() => {
     if (!toast) return;
     const timer = window.setTimeout(() => setToast(null), 7000);
