@@ -3,7 +3,13 @@
 import dynamic from 'next/dynamic';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { MachineType } from '@/lib/machinePhotos';
-import { emitDialog, emitScene } from '@/lib/sceneEvents';
+import {
+  DIALOG_EVENT,
+  emitDialog,
+  emitNature,
+  emitScene,
+  type DialogEventDetail,
+} from '@/lib/sceneEvents';
 import { SITE } from '@/lib/site';
 import {
   DIALOGUE,
@@ -83,6 +89,7 @@ import { PhotoBooth } from './PhotoBooth';
 import { StroykaFilm } from './StroykaFilm';
 import { ZoneFilm } from './ZoneFilm';
 import { crewLine } from '@/lib/stroyka/crew';
+import { crewDelay, filmNature, pickCrewLine } from '@/lib/stroyka/filmAmbience';
 import { WeatherBadge } from './WeatherBadge';
 
 const StroykaWorld = dynamic(() => import('./StroykaWorld'), { ssr: false });
@@ -101,7 +108,10 @@ interface DialogState {
 
 const BUBBLE_CSS = `.stroyka-bubble{position:absolute;left:0;top:0;max-width:min(240px,60vw);padding:6px 10px;border-radius:12px;background:rgba(255,255,255,.96);color:#0f172a;font-size:13px;line-height:1.25;font-weight:600;box-shadow:0 6px 18px rgba(0,0,0,.35);transition:opacity .35s;opacity:0;will-change:transform}
         .stroyka-bubble::after{content:'';position:absolute;left:50%;bottom:-6px;margin-left:-6px;border:6px solid transparent;border-top-color:rgba(255,255,255,.96);border-bottom:0}
-        .stroyka-censor{color:#dc2626;font-weight:900}`;
+        .stroyka-censor{color:#dc2626;font-weight:900}
+        .crew-sub{animation:crew-sub 4.5s ease forwards}
+        @keyframes crew-sub{0%{opacity:0;transform:translateY(4px)}8%{opacity:1;transform:none}80%{opacity:1}100%{opacity:0}}
+        @media (prefers-reduced-motion:reduce){.crew-sub{animation:none}}`;
 
 const VISIT_KEY = 'stroyka.visit.v1';
 const WEATHER_KEY = 'stroyka.weather.v1';
@@ -932,6 +942,80 @@ export function Stroyka() {
     };
   }, [phase, engine, order.open, zone, conditions, logRadio, seasonLine]);
 
+  // ------------------------------------------------------------ film tour: nature and crew
+  // The 3D engine tells the sound layer about the weather; the film tour has no
+  // engine, so the page does it from the same time and forecast.
+  const filmNatureKey = useMemo(
+    () => (phase === 'film' ? JSON.stringify(filmNature(now, point, Boolean(season?.snow))) : null),
+    [phase, now, point, season?.snow],
+  );
+  useEffect(() => {
+    if (filmNatureKey) emitNature(JSON.parse(filmNatureKey));
+  }, [filmNatureKey]);
+  // Silence only when the film tour ends (not between two weather updates).
+  const filmPhase = phase === 'film';
+  useEffect(() => {
+    if (filmPhase) return () => emitNature(null);
+  }, [filmPhase]);
+
+  // Background crew chatter over the footage (in 3D one hears them walking past).
+  const [crewSub, setCrewSub] = useState<{ name: string; text: string; key: number } | null>(null);
+  const zoneRef = useRef(zone);
+  zoneRef.current = zone;
+  const filmChatter = phase === 'film' && !filmOn && !order.open;
+  useEffect(() => {
+    if (!filmChatter) return;
+    // Someone is still talking until about this time (any line on the page).
+    let busyUntil = 0;
+    const onDialog = (event: Event) => {
+      const detail = (event as CustomEvent<DialogEventDetail>).detail;
+      if (!detail?.text || detail.speaker === 'dog') return;
+      busyUntil = Math.max(busyUntil, Date.now() + 1500 + detail.text.length * 75);
+    };
+    window.addEventListener(DIALOG_EVENT, onDialog);
+    let last: string | null = null;
+    let timer = 0;
+    const schedule = (ms: number) => {
+      window.clearTimeout(timer);
+      timer = window.setTimeout(tick, ms);
+    };
+    const tick = () => {
+      if (document.hidden) return;
+      const wait = busyUntil - Date.now();
+      if (wait > 0) return schedule(wait + 2500);
+      const line = pickCrewLine(zoneRef.current, last);
+      last = line.text;
+      const shown = moodLine({
+        speaker: 'worker',
+        text: line.text,
+        kind: 'joke',
+        tags: ['joke'],
+        hour: hourRef.current,
+      });
+      emitDialog('worker', shown.text, 'joke', shown.mood);
+      setCrewSub({ name: line.name, text: shown.text, key: ++keyRef.current });
+      schedule(crewDelay());
+    };
+    // Nothing runs while the tab is hidden; back on the tab, the next line comes later.
+    const onVisibility = () => {
+      if (document.hidden) window.clearTimeout(timer);
+      else schedule(crewDelay());
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    if (!document.hidden) schedule(crewDelay());
+    return () => {
+      window.clearTimeout(timer);
+      window.removeEventListener(DIALOG_EVENT, onDialog);
+      document.removeEventListener('visibilitychange', onVisibility);
+      setCrewSub(null);
+    };
+  }, [filmChatter]);
+  useEffect(() => {
+    if (!crewSub) return;
+    const timer = window.setTimeout(() => setCrewSub(null), 4500);
+    return () => window.clearTimeout(timer);
+  }, [crewSub]);
+
   // «Бетон» barks when tapped.
   const onDog = useCallback(() => {
     const text = 'Гав! 🐶';
@@ -1340,6 +1424,17 @@ export function Stroyka() {
               </button>
             )}
           </div>
+        )}
+        {phase === 'film' && crewSub && (
+          <p
+            key={crewSub.key}
+            data-testid="crew-subtitle"
+            aria-live="off"
+            className="crew-sub max-w-[min(26rem,85vw)] self-start rounded-lg bg-slate-950/55 px-2.5 py-1 text-[11px] leading-snug text-white/85 backdrop-blur-sm sm:text-xs"
+          >
+            <b className="font-semibold text-amber-300">{crewSub.name}:</b>{' '}
+            <Censored text={crewSub.text} />
+          </p>
         )}
         {phase !== '3d' || mode !== 'free'
           ? !dialog &&
