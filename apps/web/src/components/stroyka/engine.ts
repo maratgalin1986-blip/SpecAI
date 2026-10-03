@@ -1234,6 +1234,8 @@ export class StroykaEngine {
       if (!movement.includes(key)) return;
       if (down) {
         this.keys.add(key);
+        // A movement key ends the fly-over, like a tap does.
+        if (key !== 'shift') this.skipIntro();
         if (this.mode === 'tour' && key !== 'shift') this.opts.onWantFree();
         if (key.startsWith('arrow')) event.preventDefault();
       } else this.keys.delete(key);
