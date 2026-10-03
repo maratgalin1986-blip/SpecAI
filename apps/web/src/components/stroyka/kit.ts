@@ -92,15 +92,99 @@ function vestLogo() {
   return texture;
 }
 
+/**
+ * Site wear on a material: dust and dried mud rising from the ground (by
+ * world height, so it stays right on moving machines), blotchy and duller
+ * paint higher up. One cheap noise in the fragment shader, no textures.
+ */
+function grime(material: THREE.MeshStandardMaterial, strength = 1) {
+  material.onBeforeCompile = (shader) => {
+    shader.uniforms.grimeStrength = { value: strength };
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\nvarying vec3 vGrimePos;')
+      .replace(
+        '#include <worldpos_vertex>',
+        `#include <worldpos_vertex>
+        vec4 grimeWorld = vec4(transformed, 1.0);
+        #ifdef USE_INSTANCING
+          grimeWorld = instanceMatrix * grimeWorld;
+        #endif
+        vGrimePos = (modelMatrix * grimeWorld).xyz;`,
+      );
+    shader.fragmentShader = shader.fragmentShader
+      .replace(
+        '#include <common>',
+        `#include <common>
+        varying vec3 vGrimePos;
+        uniform float grimeStrength;
+        float grimeHash(vec3 p) { return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }
+        float grimeNoise(vec3 p) {
+          vec3 i = floor(p); vec3 f = fract(p); f = f * f * (3.0 - 2.0 * f);
+          return mix(mix(mix(grimeHash(i), grimeHash(i + vec3(1,0,0)), f.x),
+                         mix(grimeHash(i + vec3(0,1,0)), grimeHash(i + vec3(1,1,0)), f.x), f.y),
+                     mix(mix(grimeHash(i + vec3(0,0,1)), grimeHash(i + vec3(1,0,1)), f.x),
+                         mix(grimeHash(i + vec3(0,1,1)), grimeHash(i + vec3(1,1,1)), f.x), f.y), f.z);
+        }`,
+      )
+      .replace(
+        '#include <metalnessmap_fragment>',
+        `#include <metalnessmap_fragment>
+        float gN = grimeNoise(vGrimePos * 3.1) * 0.6 + grimeNoise(vGrimePos * 11.0) * 0.4;
+        // Mud: heavy near the ground, splashes up to about 1.4 m.
+        float gMud = (1.0 - smoothstep(0.05, 1.4, vGrimePos.y + gN * 0.5)) * grimeStrength;
+        // Dust and wear everywhere, in blotches.
+        float gDust = smoothstep(0.45, 0.9, gN) * 0.35 * grimeStrength;
+        diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.36, 0.29, 0.22), clamp(gMud * 0.85, 0.0, 0.85));
+        diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(0.86, 0.82, 0.76), gDust);
+        roughnessFactor = clamp(roughnessFactor + gMud * 0.5 + gDust * 0.25, 0.0, 1.0);
+        metalnessFactor = metalnessFactor * (1.0 - gMud * 0.8);`,
+      );
+  };
+  material.customProgramCacheKey = () => `grime-${strength}`;
+  return material;
+}
+
+/** Tyre tread: chevron lugs across the tread, as a bump map (canvas, no file). */
+function treadTexture() {
+  if (typeof document === 'undefined') return null;
+  const canvas = document.createElement('canvas');
+  canvas.width = 512;
+  canvas.height = 64;
+  const ctx = canvas.getContext('2d')!;
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, 512, 64);
+  ctx.fillStyle = '#000000';
+  // u runs around the wheel, v around the tube from the outer edge (v = 0 and
+  // 1 meet on the tread): chevron grooves centred there, drawn twice to wrap.
+  for (const off of [-32, 32]) {
+    for (let k = 0; k < 32; k++) {
+      const x = k * 16;
+      ctx.beginPath();
+      ctx.moveTo(x, 14 + off);
+      ctx.lineTo(x + 6, 32 + off);
+      ctx.lineTo(x, 50 + off);
+      ctx.lineTo(x + 4, 50 + off);
+      ctx.lineTo(x + 10, 32 + off);
+      ctx.lineTo(x + 4, 14 + off);
+      ctx.fill();
+    }
+  }
+  const t = new THREE.CanvasTexture(canvas);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  return t;
+}
+
 export function createMaterials() {
   return {
     vestLogo: pbr(0xffffff, 0.75, 0, { map: vestLogo() }),
     // Machine paint: glossy clear coat that catches the sky.
-    yellow: pbr(0xf0a20b, 0.38, 0.05),
-    amber: pbr(0xc9700a, 0.45, 0.05),
-    dark: pbr(0x1f2937, 0.55, 0.3),
-    black: pbr(0x161616, 0.85, 0), // rubber, plastics
-    steel: pbr(0x9aa1ab, 0.32, 0.9),
+    yellow: grime(pbr(0xf0a20b, 0.38, 0.05)),
+    amber: grime(pbr(0xc9700a, 0.45, 0.05)),
+    dark: grime(pbr(0x1f2937, 0.55, 0.3)),
+    black: grime(pbr(0x161616, 0.85, 0), 0.7), // rubber, plastics
+    steel: grime(pbr(0x9aa1ab, 0.32, 0.9), 0.6),
+    // Tyres: rubber with a lugged tread, caked with mud low down.
+    tyre: grime(pbr(0x1a1a1a, 0.92, 0, { bumpMap: treadTexture(), bumpScale: 2.5 }), 1.2),
     glass: pbr(0x1d2a36, 0.06, 0.6, { emissive: 0x3a2412, envMapIntensity: 1.6 }),
     concrete: surfaceMaterial('concrete_slab_wall', 1, { color: 0xd6d0c8 }),
     concreteDark: surfaceMaterial('concrete_floor_worn_001', 1, { color: 0xa39c93 }),
@@ -112,7 +196,7 @@ export function createMaterials() {
     white: pbr(0xf1f5f9, 0.45, 0.05),
     skin: pbr(0xc98d68, 0.65, 0),
     pants: pbr(0x334155, 0.85, 0),
-    red: pbr(0xc81e1e, 0.4, 0.05),
+    red: grime(pbr(0xc81e1e, 0.4, 0.05), 0.6),
     wood: pbr(0x9a6a33, 0.85, 0),
     cabin: pbr(0x3b6e8f, 0.4, 0.1),
     lamp: new THREE.MeshBasicMaterial({ color: 0xfff2c4 }),
@@ -127,7 +211,7 @@ export type MatKey = keyof Materials;
 const UNIT_BOX = new RoundedBoxGeometry(1, 1, 1, 2, 0.06);
 const UNIT_CYL = new THREE.CylinderGeometry(0.5, 0.5, 1, 20);
 // A tyre: a thick ring around the axle (Z after rotation), and the rim inside.
-const TYRE = new THREE.TorusGeometry(0.72, 0.28, 10, 28);
+const TYRE = new THREE.TorusGeometry(0.72, 0.28, 14, 40);
 const RIM = new THREE.CylinderGeometry(0.5, 0.5, 1, 18).rotateX(Math.PI / 2);
 
 type V3 = [number, number, number];
@@ -176,7 +260,7 @@ export class Rig {
 
   /** A wheel whose axle runs along Z: rubber tyre of radius r, steel rim. */
   wheel(node: THREE.Object3D, pos: V3, r: number, w: number) {
-    this.add(node, TYRE, 'black', pos, [0, 0, 0], [r, r, w / 0.56]);
+    this.add(node, TYRE, 'tyre', pos, [0, 0, 0], [r, r, w / 0.56]);
     this.add(node, RIM, 'steel', pos, [0, 0, 0], [r * 1.05, r * 1.05, w * 0.9]);
     this.add(node, RIM, 'dark', pos, [0, 0, 0], [r * 0.45, r * 0.45, w + 0.02]);
     return this;

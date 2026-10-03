@@ -74,3 +74,29 @@ for (const path of PAGES) {
     expect(errors, 'page errors').toEqual([]);
   });
 }
+
+// The 3D site: every material compiles (a broken shader leaves machines
+// invisible while the page itself shows no script error). Skipped where the
+// browser has no WebGL and the page falls back to the 2D map.
+test('stroyka shaders compile', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop', 'one run is enough');
+  const errors = await guard(page);
+  const shaderErrors: string[] = [];
+  page.on('console', (message) => {
+    if (/Shader Error|WebGLProgram|program not valid/.test(message.text())) {
+      shaderErrors.push(message.text().slice(0, 300));
+    }
+  });
+  await page.goto('/stroyka?nointro=1&3d=1', { waitUntil: 'load' });
+  const ready = await page
+    .waitForFunction(() => Boolean((window as { __stroyka?: unknown }).__stroyka), null, {
+      timeout: 45_000,
+    })
+    .then(() => true)
+    .catch(() => false);
+  test.skip(!ready, 'no WebGL in this browser');
+  // Props and the city load after the first frame: let them compile too.
+  await page.waitForTimeout(5000);
+  expect(shaderErrors, 'shader errors').toEqual([]);
+  expect(errors, 'page errors').toEqual([]);
+});
