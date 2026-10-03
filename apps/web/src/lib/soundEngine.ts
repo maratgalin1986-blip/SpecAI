@@ -25,6 +25,8 @@ import {
   renderStart,
   renderThunk,
   renderWhoosh,
+  renderSiteEvent,
+  SITE_EVENTS,
 } from '@/lib/soundSynth';
 import {
   isFemaleVoice,
@@ -45,7 +47,7 @@ const LEVEL = {
   fx: 0.7,
   music: 0.07, // ≈ -20 dB under fx
   site: 0.22,
-  machine: 0.42,
+  machine: 0.28, // owner: machines a little quieter under the voices
   reverb: 0.35,
 };
 
@@ -70,6 +72,7 @@ export class SoundEngine {
   private voice: Voice | null = null;
   private machineToken = 0;
   private lastArrival = -Infinity;
+  private eventTimer = 0;
   private voiceTimer = 0;
   private ducked = false;
   private speechToken = 0;
@@ -224,11 +227,36 @@ export class SoundEngine {
       loop(buffer, this.site, SITE_SAMPLES[i]!.gain, SITE_SAMPLES[i]!.pan),
     );
     this.scheduleVoice();
+    this.scheduleSiteEvent();
+  }
+
+  /** Hammer, grinder, back-up alarm, clank or horn somewhere on the site. */
+  private scheduleSiteEvent() {
+    window.clearTimeout(this.eventTimer);
+    this.eventTimer = window.setTimeout(
+      async () => {
+        if (!this.bedsOn || this.disposed) return;
+        if (this.running && document.visibilityState === 'visible') {
+          const kind = SITE_EVENTS[Math.floor(Math.random() * SITE_EVENTS.length)]!;
+          const buffer = await this.synth(`event:${kind}`, () => renderSiteEvent(this.ctx, kind));
+          if (this.bedsOn) {
+            this.play(buffer, this.site, {
+              gain: (this.ducked ? 0.25 : 0.55) * (kind === 'reverse' ? 0.5 : 1),
+              pan: (Math.random() - 0.5) * 1.6,
+              rate: 0.92 + Math.random() * 0.16,
+            });
+          }
+        }
+        this.scheduleSiteEvent();
+      },
+      5000 + Math.random() * 7000,
+    );
   }
 
   stopBeds(): void {
     this.bedsOn = false;
     window.clearTimeout(this.voiceTimer);
+    window.clearTimeout(this.eventTimer);
     const now = this.ctx.currentTime;
     this.music.gain.setTargetAtTime(0, now, 0.3);
     this.site.gain.setTargetAtTime(0, now, 0.3);
@@ -254,6 +282,43 @@ export class SoundEngine {
   }
 
   private sayLine() {
+    if (this.speaking) return;
+    // Workers talking somewhere on the site, in the recorded neural voices.
+    void this.sayRecordedLine().then((said) => {
+      if (said || this.speaking) return;
+      this.saySynthLine();
+    });
+  }
+
+  /** A random recorded line far back in the mix; false when there are none. */
+  private async sayRecordedLine(): Promise<boolean> {
+    const { VOICE_CLIPS } = await import('@/lib/stroyka/voiceClips').catch(() => ({
+      VOICE_CLIPS: {} as Record<string, string[]>,
+    }));
+    const pool = Object.values(VOICE_CLIPS);
+    if (!pool.length) return false;
+    const keys = pool[Math.floor(Math.random() * pool.length)]!;
+    const buffers = await Promise.all(
+      keys.map((key) => {
+        const url = `/audio/stroyka/${key}.mp3`;
+        return this.cached(`clip:${url}`, () => this.fetchClip(url));
+      }),
+    );
+    if (!buffers.every(Boolean) || this.speaking || !this.speakable()) return false;
+    this.speaking = true;
+    const radio = Math.random() < 0.4;
+    await this.playClips(
+      buffers as AudioBuffer[],
+      radio,
+      0.09,
+      (Math.random() - 0.5) * 1.4,
+      this.site,
+    );
+    this.speaking = false;
+    return true;
+  }
+
+  private saySynthLine() {
     // No Russian voice in this browser, or someone is talking: stay quiet.
     if (!russianVoices().length || this.speaking) return;
     const line = SITE_LINES[Math.floor(Math.random() * SITE_LINES.length)]!;
@@ -403,7 +468,13 @@ export class SoundEngine {
    * Plays recorded clips back to back through the effects bus; a radio line
    * is band-limited like a walkie-talkie. Resolves at the end or when cut.
    */
-  private playClips(buffers: AudioBuffer[], radio: boolean, volume: number, pan: number) {
+  private playClips(
+    buffers: AudioBuffer[],
+    radio: boolean,
+    volume: number,
+    pan: number,
+    bus: AudioNode = this.fx,
+  ) {
     return new Promise<void>((resolve) => {
       const out = this.ctx.createGain();
       out.gain.value = Math.min(1, volume * 3);
@@ -422,7 +493,7 @@ export class SoundEngine {
         tail.connect(p);
         tail = p;
       }
-      tail.connect(this.fx);
+      tail.connect(bus);
       const sources: AudioBufferSourceNode[] = [];
       let at = this.ctx.currentTime + 0.05;
       for (const buffer of buffers) {
