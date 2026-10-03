@@ -297,11 +297,21 @@ export default async function HomePage() {
               >
                 🧮 Рассчитать смету
               </a>
+              {/* The 3D site: a glass pill with a softly pulsing play button —
+                  noticeable next to the quiet links, calmer than the order buttons. */}
               <a
                 href="/stroyka"
-                className="inline-flex min-h-10 items-center underline-offset-4 hover:text-white hover:underline"
+                className="group inline-flex min-h-10 items-center gap-2.5 rounded-full bg-white/10 py-1 pl-1 pr-4 text-white ring-1 ring-white/30 backdrop-blur-sm transition hover:bg-white/20 hover:ring-white/60"
               >
-                Войти на стройку ▶
+                <span className="stroyka-ping relative grid h-8 w-8 place-items-center rounded-full bg-amber-400 text-slate-950 transition group-hover:scale-110">
+                  <svg viewBox="0 0 16 16" aria-hidden className="ml-0.5 h-3.5 w-3.5 fill-current">
+                    <path d="M4 2.5v11l9-5.5z" />
+                  </svg>
+                </span>
+                Войти на стройку
+                <span className="rounded bg-white/15 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-amber-200">
+                  3D
+                </span>
               </a>
               <a
                 href="/kalkulyator"

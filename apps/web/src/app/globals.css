@@ -493,6 +493,27 @@ html {
   }
 }
 
+/* ---- «Войти на стройку» play button: a soft ring every few seconds ------- */
+
+.stroyka-ping::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  box-shadow: 0 0 0 0 rgb(251 191 36 / 0.6);
+  animation: stroyka-ping 2.8s ease-out infinite;
+}
+
+@keyframes stroyka-ping {
+  0% {
+    box-shadow: 0 0 0 0 rgb(251 191 36 / 0.6);
+  }
+  60%,
+  100% {
+    box-shadow: 0 0 0 10px rgb(251 191 36 / 0);
+  }
+}
+
 /* ---- Rotating 3D cube (agents section) ----------------------------------- */
 
 .cube-scene {
@@ -575,6 +596,7 @@ html {
   .journey-flicker,
   .journey-dust-fast,
   .journey-rec,
+  .stroyka-ping::after,
   .story-dust,
   .float-in {
     animation: none;
