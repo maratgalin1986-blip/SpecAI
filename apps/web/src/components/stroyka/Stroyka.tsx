@@ -999,7 +999,7 @@ export function Stroyka() {
               {SITE.name} представляет
             </span>
             <span className="stroyka-cine-t2 mt-3 text-5xl font-black tracking-[-0.04em] sm:text-7xl">
-              ИИСтройка
+              {SITE.platform}
             </span>
             <span className="stroyka-cine-t3 mt-3 font-mono text-xs uppercase tracking-[0.3em] text-white/80 sm:text-sm">
               {chip}

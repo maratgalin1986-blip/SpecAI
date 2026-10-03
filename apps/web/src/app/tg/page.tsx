@@ -5,7 +5,7 @@ import { SITE } from '@/lib/site';
 // The Telegram Mini App, opened by the bot's menu button
 // (app/api/admin/telegram-setup). An in-Telegram page: not for search engines.
 export const metadata: Metadata = {
-  title: { absolute: 'ИИСтройка в Telegram' },
+  title: { absolute: 'ИИСтройка24 в Telegram' },
   description: `Работы, техника и заказ спецтехники ${SITE.name} с машинистом прямо в Telegram.`,
   robots: { index: false, follow: false },
 };

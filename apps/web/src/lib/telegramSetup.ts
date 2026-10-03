@@ -7,8 +7,26 @@ import { telegramWebhookSecret } from '@/lib/integrations';
 type TgResult<T> = { ok: boolean; result?: T; description?: string };
 
 export type ConnectResult =
-  | { ok: true; bot?: string; url: string; already: boolean; miniApp: boolean }
+  | {
+      ok: true;
+      bot?: string;
+      url: string;
+      already: boolean;
+      miniApp: boolean;
+      /** What Telegram had before (for diagnostics; no secrets). */
+      previous: { url: string; lastError?: string };
+    }
   | { ok: false; error: string; status: number };
+
+/** «https://Site.ru/x/» → «https://site.ru/x»: Telegram may echo the URL differently. */
+const normal = (url: string | undefined) => {
+  try {
+    const u = new URL((url ?? '').trim());
+    return `${u.protocol}//${u.host.toLowerCase()}${u.pathname.replace(/\/+$/, '')}`;
+  } catch {
+    return '';
+  }
+};
 
 const UPDATES = ['message', 'channel_post', 'callback_query'];
 
@@ -34,12 +52,27 @@ export async function connectBot(origin: string, force = false): Promise<Connect
     const me = await api<{ username?: string }>('getMe');
     if (!me.ok) return { ok: false, status: 400, error: `Telegram: ${me.description}` };
     const url = `${origin}/api/integrations/telegram`;
-    const info = await api<{ url?: string; allowed_updates?: string[] }>('getWebhookInfo');
+    const info = await api<{
+      url?: string;
+      allowed_updates?: string[];
+      last_error_message?: string;
+    }>('getWebhookInfo');
+    const previous = { url: info.result?.url ?? '', lastError: info.result?.last_error_message };
+    // No allowed_updates in the answer means Telegram's default set, which
+    // includes messages and button presses.
+    const updates = info.result?.allowed_updates;
+    const menu = await api<{ type?: string; web_app?: { url?: string } }>('getChatMenuButton');
+    const menuOk =
+      menu.result?.type === 'web_app' &&
+      normal(menu.result.web_app?.url) === normal(`${origin}/tg`);
     const already =
       !force &&
-      info.result?.url === url &&
-      UPDATES.every((u) => info.result?.allowed_updates?.includes(u));
-    if (already) return { ok: true, bot: me.result?.username, url, already: true, miniApp: true };
+      normal(info.result?.url) === normal(url) &&
+      (!updates?.length || UPDATES.every((u) => updates.includes(u))) &&
+      menuOk;
+    if (already) {
+      return { ok: true, bot: me.result?.username, url, already: true, miniApp: true, previous };
+    }
     const hook = await api('setWebhook', {
       url,
       secret_token: secret,
@@ -48,10 +81,17 @@ export async function connectBot(origin: string, force = false): Promise<Connect
     });
     if (!hook.ok) return { ok: false, status: 400, error: `Telegram: ${hook.description}` };
     // The bot's menu button opens the Telegram Mini App (/tg).
-    const menu = await api('setChatMenuButton', {
+    const setMenu = await api('setChatMenuButton', {
       menu_button: { type: 'web_app', text: 'Заказать технику', web_app: { url: `${origin}/tg` } },
     });
-    return { ok: true, bot: me.result?.username, url, already: false, miniApp: menu.ok };
+    return {
+      ok: true,
+      bot: me.result?.username,
+      url,
+      already: false,
+      miniApp: setMenu.ok,
+      previous,
+    };
   } catch (error) {
     return { ok: false, status: 502, error: `Не удалось связаться с Telegram: ${String(error)}` };
   }

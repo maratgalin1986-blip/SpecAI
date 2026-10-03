@@ -5,8 +5,12 @@ const create = vi.fn();
 const findFirst = vi.fn();
 const findMany = vi.fn();
 const update = vi.fn();
+const updateMany = vi.fn();
+const deleteMany = vi.fn();
 const notifyTelegram = vi.fn();
-vi.mock('@specai/database', () => ({ prisma: { lead: { create, findFirst, findMany, update } } }));
+vi.mock('@specai/database', () => ({
+  prisma: { lead: { create, findFirst, findMany, update, updateMany, deleteMany } },
+}));
 vi.mock('@/lib/notify', () => ({ notifyTelegram }));
 vi.mock('@/lib/integrations', () => ({
   telegramWebhookSecret: () => 'secret',
@@ -38,7 +42,8 @@ const chat = { id: 777, type: 'private' };
 describe('bot funnel webhook', () => {
   beforeEach(() => {
     sent.length = 0;
-    for (const f of [create, findFirst, findMany, update, notifyTelegram]) f.mockReset();
+    for (const f of [create, findFirst, findMany, update, updateMany, deleteMany, notifyTelegram])
+      f.mockReset();
     findMany.mockResolvedValue([]);
     notifyTelegram.mockResolvedValue(true);
   });
@@ -73,12 +78,38 @@ describe('bot funnel webhook', () => {
       message: data.message,
     });
     await post({
-      message: { message_id: 2, chat, contact: { phone_number: '+79272428088' }, from: {} },
+      message: {
+        message_id: 2,
+        chat,
+        contact: { phone_number: '+79272428088', user_id: 5 },
+        from: { id: 5, first_name: 'Иван' },
+      },
     });
     expect(update.mock.calls[0]![0].data.phone).toBe('+79272428088');
     expect(update.mock.calls[0]![0].data.message).not.toContain('[черновик]');
     const text = notifyTelegram.mock.calls[0]![0] as string;
     expect(text).toContain('+79272428088');
     expect(text).toContain('кампания master');
+    expect(text).toContain('Иван');
+    // Other empty drafts of the chat are removed.
+    expect(deleteMany).toHaveBeenCalledOnce();
+  });
+
+  it('ignores a contact card of someone else', async () => {
+    findFirst.mockResolvedValue({
+      id: 'L1',
+      name: 'x',
+      source: 'tg-bot:home',
+      message: '[tg:777]',
+    });
+    await post({
+      message: {
+        message_id: 3,
+        chat,
+        contact: { phone_number: '+79990000000', user_id: 9 },
+        from: { id: 5 },
+      },
+    });
+    expect(update).not.toHaveBeenCalled();
   });
 });

@@ -129,7 +129,7 @@ describe('badges', () => {
 describe('photo', () => {
   it('caption with the brand, Moscow date and host as text', () => {
     const c = photoCaption(msk(2026, 10, 2), 'https://spec-ai-web.vercel.app/stroyka');
-    expect(c.title).toBe('Я на стройке ИИСтройка · СпецПласт16');
+    expect(c.title).toBe('Я на стройке ИИСтройка24 · СпецПласт16');
     expect(c.date).toBe('2 октября 2026');
     expect(c.site).toBe('spec-ai-web.vercel.app');
     expect(photoFileName(msk(2026, 10, 2, 23))).toBe('specplast16-stroyka-2026-10-02.png');

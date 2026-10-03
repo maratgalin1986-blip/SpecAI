@@ -28,7 +28,8 @@ import {
   whenKeyboard,
   whenText,
 } from '@/lib/botFunnel';
-import { attachPhone, findDraft, sendDueReminders, unsubscribe } from '@/lib/botDrafts';
+import { attachPhone, findDraft, saveDraft, sendDueReminders, unsubscribe } from '@/lib/botDrafts';
+import { checkRateLimit } from '@/lib/rateLimit';
 import { telegramApi } from '@/lib/telegramApi';
 
 export const dynamic = 'force-dynamic';
@@ -38,8 +39,14 @@ interface TelegramMessage {
   text?: string;
   caption?: string;
   chat: { id: number; type: string; title?: string; username?: string };
-  from?: { first_name?: string; last_name?: string; username?: string; is_bot?: boolean };
-  contact?: { phone_number?: string };
+  from?: {
+    id?: number;
+    first_name?: string;
+    last_name?: string;
+    username?: string;
+    is_bot?: boolean;
+  };
+  contact?: { phone_number?: string; user_id?: number };
 }
 
 async function reply(chatId: number, text: string, markup?: unknown) {
@@ -63,6 +70,8 @@ async function onCallback(query: CallbackQuery) {
   await telegramApi('answerCallbackQuery', { callback_query_id: query.id });
   const chatId = query.message?.chat.id;
   if (!chatId || query.message?.chat.type !== 'private') return;
+  // A flood of button presses costs nothing: 20 a minute per chat.
+  if (!checkRateLimit(`tg-cb:${chatId}`, { limit: 20, windowMs: 60_000 }).ok) return;
   const step = parseCallback(query.data);
   if (!step) return;
   if (step.step === 'unsubscribe') {
@@ -78,13 +87,10 @@ async function onCallback(query: CallbackQuery) {
     await reply(chatId, PLACE_TEXT, placeKeyboard(step.machine, step.when, step.src));
     return;
   }
-  const name =
-    [query.from.first_name, query.from.last_name].filter(Boolean).join(' ') ||
-    (query.from.username ? `@${query.from.username}` : 'Из Telegram');
+  // One draft per chat: a second pass through the buttons updates it. No
+  // name yet — personal data only after the consent notice at the phone step.
   try {
-    await prisma.lead.create({
-      data: { name, phone: '', message: draftMessage(step, chatId), source: leadSource(step.src) },
-    });
+    await saveDraft(chatId, draftMessage(step, chatId), leadSource(step.src));
   } catch (error) {
     console.error('[telegram] draft lead not saved', error);
   }
@@ -114,13 +120,21 @@ export async function POST(request: NextRequest) {
   const message = update?.message ?? update?.channel_post;
   // A shared contact (or a typed phone) completes a draft from the funnel.
   if (message && message.chat.type === 'private' && !message.from?.is_bot) {
+    // Only the person's own contact counts, not a contact card of someone else.
+    const ownContact =
+      message.contact && (!message.contact.user_id || message.contact.user_id === message.from?.id)
+        ? message.contact.phone_number
+        : undefined;
     const phone =
-      message.contact?.phone_number ??
+      ownContact ??
       (message.text && !message.text.startsWith('/') ? phoneFromText(message.text) : null);
     if (phone) {
       const draft = await findDraft(message.chat.id).catch(() => null);
       if (draft) {
-        await attachPhone(draft, phone);
+        const fullName = [message.from?.first_name, message.from?.last_name]
+          .filter(Boolean)
+          .join(' ');
+        await attachPhone(draft, phone, fullName || message.from?.username || 'Из Telegram');
         await reply(message.chat.id, acceptedText(isOnShift()), { remove_keyboard: true });
         return NextResponse.json({ ok: true, result: 'funnel-lead' });
       }
@@ -146,7 +160,7 @@ export async function POST(request: NextRequest) {
     const src = shortSource(start);
     const calc = parseCalcStart(start);
     if (calc) {
-      await reply(message.chat.id, calcText(calc.machine, calc.hours));
+      await reply(message.chat.id, calcText(calc.machine, calc.hours, calc.hammer));
       await reply(message.chat.id, whenText(calc.machine), whenKeyboard(calc.machine, src));
     } else {
       await reply(message.chat.id, greeting(), machineKeyboard(src));

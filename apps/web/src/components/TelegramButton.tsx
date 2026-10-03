@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { reachGoal } from '@/lib/marketing';
+import { currentYclid, reachGoal } from '@/lib/marketing';
 import { startParam, telegramLink, withYclid } from '@/lib/telegram';
 
 const CAMPAIGN_KEY = 'sp16_tg_campaign';
@@ -15,9 +15,12 @@ function campaignOf(): { campaign: string; yclid: string } {
       sessionStorage.setItem(CAMPAIGN_KEY, JSON.stringify(fresh));
       return fresh;
     }
-    return (
-      JSON.parse(sessionStorage.getItem(CAMPAIGN_KEY) ?? 'null') ?? { campaign: '', yclid: '' }
-    );
+    const saved = JSON.parse(sessionStorage.getItem(CAMPAIGN_KEY) ?? 'null') as {
+      campaign: string;
+      yclid: string;
+    } | null;
+    // A later visit still carries the Direct click remembered for 30 days.
+    return { campaign: saved?.campaign ?? '', yclid: saved?.yclid || currentYclid() };
   } catch {
     return { campaign: '', yclid: '' };
   }

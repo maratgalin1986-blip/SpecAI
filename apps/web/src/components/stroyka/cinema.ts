@@ -96,6 +96,15 @@ export class Cinema {
   private envScene = new THREE.Scene();
   private envTarget: THREE.WebGLRenderTarget | null = null;
   private envAt = -99;
+  private envKey = '';
+  private skyUniforms: Record<string, THREE.IUniform>;
+  private skyKey() {
+    const u = this.skyUniforms;
+    const c = (v: THREE.Color) =>
+      `${Math.round(v.r * 20)},${Math.round(v.g * 20)},${Math.round(v.b * 20)}`;
+    const d = u.sunDir!.value as THREE.Vector3;
+    return `${c(u.zenith!.value)}|${c(u.horizon!.value)}|${Math.round(d.x * 10)},${Math.round(d.y * 10)},${Math.round(d.z * 10)}|${Math.round((u.glow!.value as number) * 10)}`;
+  }
   private composer: EffectComposer | null = null;
   private bloom: UnrealBloomPass | null = null;
   private grade: ShaderPass | null = null;
@@ -107,8 +116,10 @@ export class Cinema {
     skyUniforms: Record<string, THREE.IUniform>,
     private full: boolean,
   ) {
-    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    // Soft shadows cost a lot on phones: plain PCF there.
+    this.renderer.shadowMap.type = full ? THREE.PCFSoftShadowMap : THREE.PCFShadowMap;
     this.renderer.toneMappingExposure = 1.05;
+    this.skyUniforms = skyUniforms;
     this.pmrem = new THREE.PMREMGenerator(renderer);
     const sphere = new THREE.Mesh(
       new THREE.SphereGeometry(50, 32, 16),
@@ -139,6 +150,11 @@ export class Cinema {
   /** Re-captures the sky for reflections every few seconds (sky changes slowly). */
   updateEnvironment(time: number, force = false) {
     if (!force && time - this.envAt < 4) return;
+    // Re-captured only when the sky visibly changed (or every 60 s): a PMREM
+    // pass is 6 renders plus blur, too much to repeat for nothing on a phone.
+    const key = this.skyKey();
+    if (!force && key === this.envKey && time - this.envAt < 60) return;
+    this.envKey = key;
     this.envAt = time;
     const old = this.envTarget;
     this.envTarget = this.pmrem.fromScene(this.envScene, 0, 0.1, 100);
@@ -185,6 +201,15 @@ export class Cinema {
   dispose() {
     this.envTarget?.dispose();
     this.pmrem.dispose();
+    this.bloom?.dispose();
+    this.composer?.renderTarget1.dispose();
+    this.composer?.renderTarget2.dispose();
     this.composer?.dispose();
+    this.envScene.traverse((o) => {
+      if (o instanceof THREE.Mesh) {
+        o.geometry.dispose();
+        (o.material as THREE.Material).dispose();
+      }
+    });
   }
 }

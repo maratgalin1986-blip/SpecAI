@@ -21,7 +21,9 @@ export function WorkCalculator() {
   const [machine, setMachine] = useState(picked.machine);
   const [hours, setHours] = useState(picked.hours);
   const counted = useRef(false);
-  const { rate, total } = workCost(machine, hours);
+  // Demolition is priced with the hammer, as on /raboty/demontazh.
+  const hammer = Boolean(picked.hammer && machine === picked.machine);
+  const { rate, total } = workCost(machine, hours, hammer);
   const index = landingIndex(machine);
 
   useEffect(() => {
@@ -106,14 +108,19 @@ export function WorkCalculator() {
       >
         <div className="eyebrow text-amber-400">Ориентировочно</div>
         <p className="mt-2 text-sm text-white/80">
-          {MACHINE_LABELS[machine]} с машинистом: {hours} ч × {rub(rate)} ₽
+          {MACHINE_LABELS[machine]}
+          {hammer ? ' с гидромолотом' : ''} с машинистом: {hours} ч × {rub(rate)} ₽
         </p>
         <p className="mt-1 text-4xl font-extrabold text-amber-400">{rub(total)} ₽</p>
         <p className="mt-2 text-xs text-white/60">
           Цена «от», с машинистом; подачу и точную сумму назовёт диспетчер СпецПласт16.
         </p>
         <div className="mt-5 flex flex-wrap items-center gap-3">
-          <TelegramButton page={`calc_${index}_${hours}`} label="Получить расчёт в Telegram" dark />
+          <TelegramButton
+            page={`calc_${index}_${hours}${hammer ? '_h' : ''}`}
+            label="Получить расчёт в Telegram"
+            dark
+          />
           <a href="/privacy" className="text-xs text-white/60 underline">
             Политика конфиденциальности
           </a>

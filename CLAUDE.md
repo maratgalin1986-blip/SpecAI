@@ -56,7 +56,7 @@ small so merges stay conflict-free.
   `apps/web/src/lib/fleet.ts`), provider sign-up is closed
   (`PROVIDER_SIGNUP_OPEN` in `app/api/auth/register/route.ts`), there are no links
   to other websites, and construction materials are sold by СпецПласт16 itself
-  (`lib/smetaPrices.ts`). The platform is called «ИИСтройка от СпецПласт16»
+  (`lib/smetaPrices.ts`). The platform is called «ИИСтройка24 от СпецПласт16» (owner, 2026-10-03; domain to buy: iistroyka24.ru)
   (`SITE.platform`); prices live in `lib/prices.ts`. Details:
   `docs/owner-requests.md`. Do not bring the marketplace back without the owner.
 - Shared memory lives in the repo: `docs/owner-requests.md` (the owner's

@@ -15,7 +15,7 @@ async function activity(): Promise<Activity | null> {
     );
     const [leads, orders, bids, comments] = await Promise.race([
       Promise.all([
-        prisma.lead.count({ where: since }),
+        prisma.lead.count({ where: { ...since, NOT: { phone: '' } } }),
         prisma.order.count({ where: since }),
         prisma.bid.count({ where: since }),
         prisma.comment.count({ where: since }),

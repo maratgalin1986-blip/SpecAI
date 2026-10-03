@@ -8,7 +8,7 @@ import {
   CONTACT_KEYBOARD,
   DRAFT_MARK,
   REMINDED_MARK,
-  REMINDER_TEXT,
+  reminderText,
   UNSUBSCRIBE,
   UNSUB_MARK,
 } from '@/lib/botFunnel';
@@ -52,16 +52,47 @@ const clean = (message: string | null) =>
     .replace(/\s{2,}/g, ' ')
     .trim();
 
+/**
+ * Saves the chat's draft: updates the open one instead of adding rows, so
+ * repeated button presses never pile up leads. An earlier «Отписаться» in
+ * this chat carries over to the new draft (no reminder then).
+ */
+export async function saveDraft(chatId: number, message: string, source: string) {
+  const [open, unsubscribed] = await Promise.all([
+    findDraft(chatId),
+    prisma.lead.findFirst({
+      where: {
+        AND: [{ message: { contains: chatMark(chatId) } }, { message: { contains: UNSUB_MARK } }],
+      },
+      select: { id: true },
+    }),
+  ]);
+  const text = unsubscribed ? `${message} ${UNSUB_MARK}` : message;
+  if (open) {
+    await prisma.lead.update({ where: { id: open.id }, data: { message: text, source } });
+  } else {
+    await prisma.lead.create({ data: { name: 'Из Telegram', phone: '', message: text, source } });
+  }
+}
+
 /** Completes the draft with the phone and tells the owner at once. */
-export async function attachPhone(draft: Lead, phone: string) {
+export async function attachPhone(draft: Lead, phone: string, name: string) {
   const message = clean(draft.message);
+  const who = name.slice(0, 100);
   await prisma.lead.update({
     where: { id: draft.id },
-    data: { phone: phone.slice(0, 30), message },
+    data: { phone: phone.slice(0, 30), message, name: who },
   });
+  // Any other empty drafts of this chat are placeholders: gone, never reminded.
+  const chatId = Number(/\[tg:(-?\d+)\]/.exec(draft.message ?? '')?.[1]);
+  if (chatId) {
+    await prisma.lead.deleteMany({
+      where: { phone: '', message: { contains: chatMark(chatId) }, NOT: { id: draft.id } },
+    });
+  }
   await notifyTelegram(
     leadMessage(
-      { name: draft.name, phone, message, source: `${draft.source} (${sourceLine(draft.source)})` },
+      { name: who, phone, message, source: `${draft.source} (${sourceLine(draft.source)})` },
       SITE.name,
       true,
     ),
@@ -97,15 +128,16 @@ export async function sendDueReminders(now = Date.now()) {
   let sent = 0;
   for (const d of due) {
     const chatId = Number(/\[tg:(-?\d+)\]/.exec(d.message ?? '')?.[1]);
-    // Marked first: a failure never turns into a second reminder.
-    await prisma.lead.update({
-      where: { id: d.id },
+    // Claimed atomically before sending: of two parallel runs (webhook and
+    // cron) only the one that marks the row sends — never two reminders.
+    const claimed = await prisma.lead.updateMany({
+      where: { id: d.id, NOT: { message: { contains: REMINDED_MARK } } },
       data: { message: `${d.message} ${REMINDED_MARK}` },
     });
-    if (!chatId) continue;
+    if (claimed.count !== 1 || !chatId) continue;
     const ok = await telegramApi('sendMessage', {
       chat_id: chatId,
-      text: REMINDER_TEXT,
+      text: reminderText(d.message ?? ''),
       reply_markup: CONTACT_KEYBOARD,
     });
     await telegramApi('sendMessage', {
