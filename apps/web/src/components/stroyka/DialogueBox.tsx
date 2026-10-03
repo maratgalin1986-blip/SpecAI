@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { CallbackForm } from '@/components/CallbackForm';
 import { SITE } from '@/lib/site';
 import { SPEAKERS, type Reply } from '@/lib/stroyka';
@@ -9,6 +9,7 @@ import { BANTER_NAMES, splitCensored, type BanterSpeaker } from '@/lib/stroykaJo
 import { moodLine, type Mood } from '@/lib/stroyka/mood';
 import { Portrait } from './Portraits';
 import { ConsentText } from '@/components/ConsentText';
+import { listen } from './voiceInput';
 
 export function Censored({ text }: { text: string }) {
   return (
@@ -105,6 +106,12 @@ export function DialogueBox({
   const { shown, total, text: typed, finish } = useTypewriter(text, instant);
   const [address, setAddress] = useState('');
   const [message, setMessage] = useState('');
+  // «🎤 Сказать» with an empty field: speech to text, then sent as typed.
+  const [listening, setListening] = useState(false);
+  const [voiceHint, setVoiceHint] = useState<string | null>(null);
+  const stopVoice = useRef<(() => void) | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  useEffect(() => () => stopVoice.current?.(), []);
   const [consent, setConsent] = useState(false);
   useEffect(() => {
     if (skipTyping) finish();
@@ -276,25 +283,64 @@ export function DialogueBox({
           onSubmit={(e) => {
             e.preventDefault();
             const text = message.trim();
-            if (!text) return;
-            chat.onSend(text);
-            setMessage('');
+            if (text) {
+              chat.onSend(text);
+              setMessage('');
+              setVoiceHint(null);
+              return;
+            }
+            if (listening) {
+              stopVoice.current?.();
+              return;
+            }
+            // Empty field: speak instead of typing (or type, if the browser can't listen).
+            const stop = listen(
+              (heard) => {
+                setVoiceHint(null);
+                chat.onSend(heard);
+              },
+              (error) => {
+                setListening(false);
+                stopVoice.current = null;
+                if (error === 'not-allowed' || error === 'service-not-allowed')
+                  setVoiceHint('Микрофон не разрешён — напишите вопрос здесь');
+                else if (error && error !== 'aborted')
+                  setVoiceHint('Не расслышал — скажите ещё раз или напишите');
+                else setVoiceHint(null);
+              },
+            );
+            if (stop) {
+              stopVoice.current = stop;
+              setListening(true);
+              setVoiceHint('Слушаю… говорите');
+            } else {
+              setVoiceHint('Напишите вопрос здесь и нажмите «Отправить»');
+              inputRef.current?.focus();
+            }
           }}
         >
           <input
+            ref={inputRef}
             value={message}
             onChange={(e) => setMessage(e.target.value)}
             maxLength={300}
-            placeholder={chat.placeholder}
+            placeholder={voiceHint ?? chat.placeholder}
             aria-label={chat.placeholder}
             enterKeyHint="send"
-            className="min-w-0 flex-1 rounded-full border border-slate-600 bg-slate-900 px-4 py-2 text-sm text-white placeholder:text-slate-400"
+            className={`min-w-0 flex-1 rounded-full border bg-slate-900 px-4 py-2 text-sm text-white placeholder:text-slate-400 ${
+              voiceHint ? 'border-amber-400 placeholder:text-amber-200' : 'border-slate-600'
+            }`}
           />
           <button
             type="submit"
-            className="rounded-full bg-white/10 px-4 text-sm font-semibold hover:bg-white/20"
+            aria-label={message.trim() ? 'Отправить' : 'Сказать голосом'}
+            className={`min-h-11 shrink-0 rounded-full px-4 text-sm font-bold transition ${
+              listening
+                ? 'animate-pulse bg-red-500 text-white'
+                : 'bg-amber-500 text-slate-950 hover:bg-amber-400'
+            }`}
           >
-            Сказать
+            {message.trim() ? 'Отправить' : listening ? '● Слушаю' : '🎤 Сказать'}
           </button>
         </form>
       )}

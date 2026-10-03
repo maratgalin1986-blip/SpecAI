@@ -27,8 +27,9 @@ const nextConfig = {
     ];
     // Site-wide hardening. Only frame-ancestors in the CSP: a script policy
     // would break Yandex.Metrika and the inline scripts. Telegram may frame the
-    // site (Mini App). Nothing on the site asks for the camera, microphone or
-    // location (checked 2026-10-02); allow them here if that changes.
+    // site (Mini App). Our own pages may use the location («Я на объекте» on
+    // /map) and the microphone (voice questions on /stroyka); never the camera,
+    // and never for other sites.
     const security = [
       { key: 'X-Content-Type-Options', value: 'nosniff' },
       { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
@@ -36,7 +37,7 @@ const nextConfig = {
         key: 'Content-Security-Policy',
         value: "frame-ancestors 'self' https://web.telegram.org https://*.telegram.org",
       },
-      { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=(self)' },
+      { key: 'Permissions-Policy', value: 'camera=(), microphone=(self), geolocation=(self)' },
     ];
     return [
       { source: '/:path*', headers: security },
