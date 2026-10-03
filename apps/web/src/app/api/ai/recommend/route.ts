@@ -7,6 +7,7 @@ import { checkRateLimit } from '@/lib/rateLimit';
 import { clientIpFrom } from '@/lib/loginErrors';
 import { PUBLIC_FLEET } from '@/lib/fleet';
 import { matchTask } from '@/lib/dispatcher';
+import { customerRates } from '@/lib/equipmentCatalog';
 
 const requestSchema = z.object({
   jobDescription: z.string().min(1).max(2000),
@@ -56,7 +57,7 @@ export async function POST(request: NextRequest) {
     id: item.id,
     name: item.name,
     category: item.category.name,
-    dailyRate: Number(item.dailyRate),
+    dailyRate: customerRates({ ...item, categoryName: item.category.name }).dailyRate,
     specs: (item.specs as Record<string, unknown> | null) ?? undefined,
   }));
 

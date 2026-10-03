@@ -228,8 +228,6 @@ export async function POST(request: NextRequest) {
         status: item.status,
         city: item.location?.city ?? null,
         ...customerRates({ ...item, categoryName: item.category.name }),
-        weeklyRate: item.weeklyRate ? Number(item.weeklyRate) : null,
-        monthlyRate: item.monthlyRate ? Number(item.monthlyRate) : null,
         currency: item.currency,
         specs: item.specs,
         description: item.description,
@@ -252,17 +250,18 @@ export async function POST(request: NextRequest) {
       if (!item || !isHouseEquipment(item)) {
         throw new ToolError('Техника не найдена');
       }
-      const daily = customerRates({ ...item, categoryName: item.category.name }).dailyRate;
+      const rates = customerRates({ ...item, categoryName: item.category.name });
+      const daily = rates.dailyRate;
       const options = [{ plan: 'посуточно', total: daily * days }];
-      if (item.weeklyRate) {
-        const weekly = Number(item.weeklyRate);
+      if (rates.weeklyRate) {
+        const weekly = rates.weeklyRate;
         options.push({
           plan: 'понедельно + посуточно',
           total: Math.floor(days / 7) * weekly + (days % 7) * daily,
         });
       }
-      if (item.monthlyRate) {
-        const monthly = Number(item.monthlyRate);
+      if (rates.monthlyRate) {
+        const monthly = rates.monthlyRate;
         options.push({ plan: 'помесячно', total: Math.ceil(days / 30) * monthly });
       }
       const best = options.reduce((a, b) => (b.total < a.total ? b : a));

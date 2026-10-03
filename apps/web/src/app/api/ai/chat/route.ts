@@ -9,6 +9,7 @@ import {
   type SearchEquipmentInput,
 } from '@specai/ai-service';
 import { getRequestUser } from '@/lib/requestUser';
+import { customerRates } from '@/lib/equipmentCatalog';
 import { checkRateLimit } from '@/lib/rateLimit';
 import { PUBLIC_FLEET } from '@/lib/fleet';
 import { maskMessagesForAi } from '@/lib/privacy';
@@ -79,7 +80,7 @@ async function searchEquipment(input: SearchEquipmentInput) {
     model: item.model,
     category: item.category.name,
     city: item.location?.city ?? null,
-    dailyRate: Number(item.dailyRate),
+    dailyRate: customerRates({ ...item, categoryName: item.category.name }).dailyRate,
     currency: item.currency,
   }));
 }

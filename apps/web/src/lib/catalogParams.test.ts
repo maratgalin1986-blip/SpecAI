@@ -28,7 +28,7 @@ describe('customer rates of a house machine', () => {
         hourlyRate: 2300,
         dailyRate: 18400,
       }),
-    ).toEqual({ hourlyRate: 3300, dailyRate: 26400 });
+    ).toEqual({ hourlyRate: 3300, dailyRate: 26400, weeklyRate: null, monthlyRate: null });
     expect(
       customerRates({
         name: 'Кран 32 т',
@@ -36,6 +36,19 @@ describe('customer rates of a house machine', () => {
         hourlyRate: 5500,
         dailyRate: null,
       }),
-    ).toEqual({ hourlyRate: 5500, dailyRate: 44000 });
+    ).toEqual({ hourlyRate: 5500, dailyRate: 44000, weeklyRate: null, monthlyRate: null });
+  });
+
+  it('keeps a weekly or monthly discount above the working days at list price', async () => {
+    const { customerRates } = await import('./equipmentCatalog');
+    const rates = customerRates({
+      name: 'КамАЗ',
+      categoryName: 'Самосвал',
+      hourlyRate: 3300,
+      weeklyRate: 100000,
+      monthlyRate: 900000,
+    });
+    expect(rates.weeklyRate).toBe(26400 * 5);
+    expect(rates.monthlyRate).toBe(900000);
   });
 });

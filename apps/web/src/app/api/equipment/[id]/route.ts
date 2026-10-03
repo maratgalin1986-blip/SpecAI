@@ -6,6 +6,7 @@ import { getRequestUser } from '@/lib/requestUser';
 import { isProvider } from '@/lib/fleet';
 import { INVALID_JSON_MESSAGE, readJson, zodErrorMessage } from '@/lib/apiInput';
 import { listingPhoto } from '@/lib/equipmentPhoto';
+import { customerRates } from '@/lib/equipmentCatalog';
 
 export const dynamic = 'force-dynamic';
 
@@ -26,7 +27,12 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
   }
 
   return NextResponse.json({
-    equipment: { ...equipment, ...listingPhoto(equipment, request.nextUrl.origin) },
+    equipment: {
+      ...equipment,
+      // Prices as on the site: never below lib/prices.ts.
+      ...customerRates({ ...equipment, categoryName: equipment.category.name }),
+      ...listingPhoto(equipment, request.nextUrl.origin),
+    },
   });
 }
 

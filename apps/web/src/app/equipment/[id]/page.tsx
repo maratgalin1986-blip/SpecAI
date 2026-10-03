@@ -146,11 +146,11 @@ export default async function EquipmentDetailPage({ params }: { params: { id: st
     ...(shift !== null
       ? [{ label: 'Цена за смену 8 ч', value: formatMoney(shift, item.currency) }]
       : []),
-    ...(item.weeklyRate
-      ? [{ label: 'Цена за неделю', value: formatMoney(item.weeklyRate, item.currency) }]
+    ...(rates.weeklyRate
+      ? [{ label: 'Цена за неделю', value: formatMoney(rates.weeklyRate, item.currency) }]
       : []),
-    ...(item.monthlyRate
-      ? [{ label: 'Цена за месяц', value: formatMoney(item.monthlyRate, item.currency) }]
+    ...(rates.monthlyRate
+      ? [{ label: 'Цена за месяц', value: formatMoney(rates.monthlyRate, item.currency) }]
       : []),
     ...specRows.map((row) => ({
       label: row.label,
