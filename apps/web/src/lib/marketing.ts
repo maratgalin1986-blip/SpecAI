@@ -142,6 +142,35 @@ export function analyticsRefused(): boolean {
   }
 }
 
+type YmQueue = ((...args: unknown[]) => void) & { a?: unknown[][] };
+type MetrikaWindow = { ym?: YmQueue; __ymOff?: boolean };
+
+/**
+ * «Нет» in the cookie notice, on the current page: tag.js is not loaded if it
+ * has not been yet (the loader in YandexMetrika checks `__ymOff`), the queued
+ * calls are dropped and later calls go nowhere. On the next page load the
+ * init script sees the refusal and does not initialise the counter at all.
+ */
+export function stopMetrika(win: MetrikaWindow = window as unknown as MetrikaWindow) {
+  win.__ymOff = true;
+  if (win.ym?.a) win.ym.a.length = 0;
+  if (win.ym) win.ym = Object.assign(() => {}, { a: [] });
+}
+
+/**
+ * «OK» before tag.js has loaded: the queued init call still waits in `ym.a`,
+ * so Webvisor is switched on for this very page. Once tag.js is running it
+ * cannot be enabled any more, and it starts from the next page load.
+ */
+export function enableWebvisorIfQueued(win: MetrikaWindow = window as unknown as MetrikaWindow) {
+  for (const call of win.ym?.a ?? []) {
+    const options = call[2];
+    if (call[1] === 'init' && options && typeof options === 'object') {
+      (options as { webvisor?: boolean }).webvisor = true;
+    }
+  }
+}
+
 export function reachGoal(goal: Goal) {
   if (analyticsRefused()) return;
   const id = Number(SITE.metrikaId);

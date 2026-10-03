@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { COOKIE_CONSENT_KEY } from '@/lib/marketing';
+import { COOKIE_CONSENT_KEY, enableWebvisorIfQueued, stopMetrika } from '@/lib/marketing';
 
 // Notice about cookies and Yandex.Metrika (152-ФЗ). Metrika works until the
 // visitor refuses; the choice is kept in localStorage and read by the counter's
@@ -73,6 +73,10 @@ export function CookieNotice() {
     } catch {
       // Ignore: the choice just lasts until the page is closed.
     }
+    // «Нет» stops Metrika on this page too; «OK» switches Webvisor on when
+    // the counter has not started yet (lib/marketing.ts).
+    if (value === 'no') stopMetrika();
+    else enableWebvisorIfQueued();
     setVisible(false);
   }
 
@@ -103,6 +107,8 @@ export function CookieNotice() {
       <button
         type="button"
         onClick={() => choose('no')}
+        aria-label="Нет, отключить Метрику"
+        title="Отключить Яндекс.Метрику и Вебвизор"
         className="min-h-9 shrink-0 px-2 py-1.5 text-slate-600 underline hover:text-slate-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-600"
       >
         Нет

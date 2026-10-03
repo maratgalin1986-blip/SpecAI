@@ -14,8 +14,10 @@ import { SITE } from '@/lib/site';
 //
 // Webvisor (session recording) runs only after the visitor pressed «OK» in
 // the cookie notice. Metrika cannot switch Webvisor on for a counter that is
-// already initialised, so it starts from the next page load after «OK»; visits
-// and goals are counted as before until the visitor refuses.
+// already initialised, so it starts from the next page load after «OK» (or on
+// the same page when tag.js has not loaded yet: enableWebvisorIfQueued in
+// lib/marketing.ts). Visits and goals are counted until the visitor refuses;
+// «Нет» sets `window.__ymOff`, so the loader below does not fetch tag.js.
 export function YandexMetrika() {
   const id = SITE.metrikaId;
   if (!/^\d+$/.test(id)) return null;
@@ -29,7 +31,7 @@ export function YandexMetrika() {
         }}
       />
       <Script id="yandex-metrika" strategy="lazyOnload">
-        {`(function(e,t,r){if(!window.ym)return;for(var j=0;j<e.scripts.length;j++){if(e.scripts[j].src===r){return;}}
+        {`(function(e,t,r){if(!window.ym||window.__ymOff)return;for(var j=0;j<e.scripts.length;j++){if(e.scripts[j].src===r){return;}}
 var k=e.createElement(t),a=e.getElementsByTagName(t)[0];k.async=1;k.src=r;a.parentNode.insertBefore(k,a)})
 (document,"script","https://mc.yandex.ru/metrika/tag.js?id=${id}");`}
       </Script>
