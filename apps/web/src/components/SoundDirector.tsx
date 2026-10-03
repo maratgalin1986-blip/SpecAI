@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import type { MachineType } from '@/lib/machinePhotos';
 import {
   announcedMachines,
+  MIC_EVENT,
   onCue,
   onMachine,
   setSoundEnabled,
@@ -219,10 +220,25 @@ export function SoundDirector() {
       if (document.visibilityState === 'hidden') {
         engine.hush();
         engine.suspend();
-      } else if (soundEnabled()) {
+      } else if (soundEnabled() && !micOn) {
         void engine.resume().then((ok) => {
           if (ok) onRunning();
           else addGestures();
+        });
+      }
+    };
+
+    // The chat microphone: iOS hears nothing while the page plays audio.
+    let micOn = false;
+    const onMic = (event: Event) => {
+      micOn = (event as CustomEvent<boolean>).detail;
+      if (!engine) return;
+      if (micOn) {
+        engine.hush();
+        engine.suspend();
+      } else if (soundEnabled() && document.visibilityState === 'visible') {
+        void engine.resume().then((ok) => {
+          if (ok) onRunning();
         });
       }
     };
@@ -326,6 +342,7 @@ export function SoundDirector() {
     window.addEventListener(THUNDER_EVENT, onThunder);
 
     document.addEventListener('visibilitychange', onVisibility);
+    window.addEventListener(MIC_EVENT, onMic);
     document.addEventListener('focusin', onFocusIn);
     document.addEventListener('focusout', onFocusOut);
     document.addEventListener('click', onClick);
@@ -341,6 +358,7 @@ export function SoundDirector() {
       removeGestures();
       window.clearInterval(introPoll);
       document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener(MIC_EVENT, onMic);
       document.removeEventListener('focusin', onFocusIn);
       document.removeEventListener('focusout', onFocusOut);
       document.removeEventListener('click', onClick);

@@ -21,6 +21,8 @@ export type MachineSource = 'hero' | 'journey' | 'page' | 'wizard' | 'scene';
 // saved under the old key were accidents; sound is on again for everyone.
 export const SOUND_STORAGE_KEY = 'specplast16_sound_v2';
 export const SOUND_HINT_KEY = 'specplast16_sound_hint';
+/** The chat microphone opened (detail true) or closed: the site's sound steps aside. */
+export const MIC_EVENT = 'specplast16:mic';
 const CUE_EVENT = 'specplast16:sound-cue';
 const MACHINE_EVENT = 'specplast16:sound-machine';
 
