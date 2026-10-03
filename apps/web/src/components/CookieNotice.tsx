@@ -93,7 +93,8 @@ export function CookieNotice() {
     }
     // «Нет» stops Metrika on this page too; «OK» switches Webvisor on when
     // the counter has not started yet (lib/marketing.ts).
-    if (value === 'no') stopMetrika();
+    // A running counter only stops for good on a reload (lib/marketing.ts).
+    if (value === 'no' && stopMetrika()) window.location.reload();
     else enableWebvisorIfQueued();
     setVisible(false);
   }

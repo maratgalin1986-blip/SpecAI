@@ -29,7 +29,8 @@ export function CookieChoiceButtons() {
     } catch {
       // Ignore: the choice lasts until the page is closed.
     }
-    if (value === 'no') stopMetrika();
+    // A running counter only stops for good on a reload (lib/marketing.ts).
+    if (value === 'no' && stopMetrika()) window.location.reload();
     setChoice(value);
     window.dispatchEvent(new Event(COOKIE_CHOICE_EVENT));
   }

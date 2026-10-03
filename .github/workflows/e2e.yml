@@ -16,7 +16,6 @@ jobs:
       DATABASE_URL: 'postgresql://u:p@localhost:5432/d'
       DIRECT_URL: 'postgresql://u:p@localhost:5432/d'
       NEXTAUTH_SECRET: 'e2e'
-      PW: ${{ runner.temp }}/pw
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -35,8 +34,11 @@ jobs:
       # browsers preinstalled in the cloud sessions (1.56.1).
       - name: Install Playwright and Chromium
         run: |
+          PW="$RUNNER_TEMP/pw"
           npm install --no-save --no-package-lock --prefix "$PW" playwright@1.56.1
           "$PW/node_modules/.bin/playwright" install --with-deps chromium
       - name: Smoke test
         working-directory: apps/web
-        run: NODE_PATH="$PW/node_modules" node "$PW/node_modules/playwright/cli.js" test -c e2e
+        run: |
+          PW="$RUNNER_TEMP/pw"
+          NODE_PATH="$PW/node_modules" node "$PW/node_modules/playwright/cli.js" test -c e2e

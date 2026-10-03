@@ -100,3 +100,10 @@ describe('cookie choice and the Metrika queue', () => {
     expect(() => enableWebvisorIfQueued({})).not.toThrow();
   });
 });
+
+describe('stopMetrika on a running counter', () => {
+  it('tells the caller to reload when tag.js already runs', () => {
+    expect(stopMetrika({ Ya: {} })).toBe(true);
+    expect(stopMetrika({})).toBe(false);
+  });
+});

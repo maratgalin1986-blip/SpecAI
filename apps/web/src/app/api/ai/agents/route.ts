@@ -11,7 +11,7 @@ import { getRequestUser } from '@/lib/requestUser';
 import { formatRate } from '@/lib/money';
 import { maskContacts, maskMessagesForAi } from '@/lib/privacy';
 import { LEAD_RATE_LIMIT, checkRateLimit } from '@/lib/rateLimit';
-import { PUBLIC_FLEET, isProvider } from '@/lib/fleet';
+import { PUBLIC_FLEET, isProvider, isHouseEquipment } from '@/lib/fleet';
 import { notifyTelegram } from '@/lib/notify';
 import { acceptLead } from '@/lib/leadIntake';
 import { phoneLimitMessage, prismaRecentLeads } from '@/lib/leadLimit';
@@ -214,7 +214,7 @@ export async function POST(request: NextRequest) {
         where: { id: requireString(input, 'equipmentId') },
         include: { category: true, location: true, reviews: true, company: true },
       });
-      if (!item || !item.company?.isProvider) {
+      if (!item || !isHouseEquipment(item)) {
         throw new ToolError('Техника не найдена');
       }
       const ratings = item.reviews.map((r) => r.rating);
@@ -250,7 +250,7 @@ export async function POST(request: NextRequest) {
         where: { id: requireString(input, 'equipmentId') },
         include: { company: true },
       });
-      if (!item || !item.company?.isProvider) {
+      if (!item || !isHouseEquipment(item)) {
         throw new ToolError('Техника не найдена');
       }
       const daily = Number(item.dailyRate);

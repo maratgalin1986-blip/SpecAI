@@ -28,7 +28,7 @@ export default function PageError({
         <button
           type="button"
           onClick={reset}
-          className="rounded-md bg-amber-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-amber-500"
+          className="rounded-md bg-amber-700 px-5 py-2.5 text-sm font-semibold text-white hover:bg-amber-800"
         >
           Попробовать ещё раз
         </button>
@@ -40,7 +40,7 @@ export default function PageError({
         </a>
       </div>
       {error.digest ? (
-        <p className="mt-6 text-xs text-slate-400">Код ошибки: {error.digest}</p>
+        <p className="mt-6 text-xs text-slate-600">Код ошибки: {error.digest}</p>
       ) : null}
     </div>
   );

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { SITE } from '@/lib/site';
-import { submitLead } from '@/lib/submitLead';
+import { submitLead, leadErrorText } from '@/lib/submitLead';
 import { ConsentText } from '@/components/ConsentText';
 import { useHydrated } from '@/lib/useHydrated';
 
@@ -58,9 +58,7 @@ export function SmetaUnlock({ text, onUnlocked }: { text: string; onUnlocked: ()
       onUnlocked();
     } catch (err) {
       setStatus('idle');
-      setError(
-        `${err instanceof Error ? err.message : 'Не удалось отправить'}. Или позвоните: ${SITE.phone}`,
-      );
+      setError(leadErrorText(err, SITE.phone));
     }
   }
 

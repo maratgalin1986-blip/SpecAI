@@ -1,6 +1,6 @@
-// The site is an aggregator ("a taxi for heavy machinery"): any provider
-// company publishes its fleet and answers customers' orders, and the owner's
-// own company, СпецПласт16, takes part alongside them. Kept free of Prisma
+// Owner's decision (2026-10-02): customers see and order only СпецПласт16's
+// own fleet; provider accounts remain in the data model but are not public.
+// Kept free of Prisma
 // imports so client components can use it; a test checks the id against
 // @specai/database.
 export const HOUSE_COMPANY_ID = 'specplast16-house';
@@ -8,13 +8,12 @@ export const HOUSE_COMPANY_ID = 'specplast16-house';
 /** СпецПласт16's own fleet (house badge, owner-only views). */
 export const OWN_FLEET = { companyId: HOUSE_COMPANY_ID } as const;
 
-/** Prisma `where` fragment for public equipment queries: every provider's fleet. */
-// Owner's decision (2026-10-02): customers see only СпецПласт16's own machinery.
+/** Prisma `where` fragment for public equipment queries: СпецПласт16's own fleet only. */
 export const PUBLIC_FLEET = { companyId: HOUSE_COMPANY_ID } as const;
 
 /**
- * The catalog, the map and «Похожая техника»: every provider's machinery
- * except what its owner took off the site (RETIRED, «Снять с публикации»).
+ * The catalog, the map and «Похожая техника»: СпецПласт16's machinery except
+ * what was taken off the site (RETIRED, «Снять с публикации»).
  */
 export const PUBLISHED_FLEET = { ...PUBLIC_FLEET, status: { not: 'RETIRED' as const } };
 

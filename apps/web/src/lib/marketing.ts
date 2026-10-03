@@ -146,7 +146,7 @@ export function analyticsRefused(): boolean {
 }
 
 type YmQueue = ((...args: unknown[]) => void) & { a?: unknown[][] };
-type MetrikaWindow = { ym?: YmQueue; __ymOff?: boolean };
+type MetrikaWindow = { ym?: YmQueue; __ymOff?: boolean; Ya?: unknown };
 
 /**
  * «Нет» in the cookie notice, on the current page: tag.js is not loaded if it
@@ -154,10 +154,14 @@ type MetrikaWindow = { ym?: YmQueue; __ymOff?: boolean };
  * calls are dropped and later calls go nowhere. On the next page load the
  * init script sees the refusal and does not initialise the counter at all.
  */
-export function stopMetrika(win: MetrikaWindow = window as unknown as MetrikaWindow) {
+export function stopMetrika(win: MetrikaWindow = window as unknown as MetrikaWindow): boolean {
+  // tag.js already running keeps its click map and link tracking until the
+  // page is reloaded; the caller reloads when this returns true.
+  const running = Boolean(win.Ya);
   win.__ymOff = true;
   if (win.ym?.a) win.ym.a.length = 0;
   if (win.ym) win.ym = Object.assign(() => {}, { a: [] });
+  return running;
 }
 
 /**

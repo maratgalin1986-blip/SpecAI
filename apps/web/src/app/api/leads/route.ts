@@ -53,7 +53,10 @@ export async function POST(request: NextRequest) {
       console.error('[leads] failed to save lead', error, JSON.stringify(data)),
   });
   if (outcome === 'limited') {
-    return NextResponse.json({ error: phoneLimitMessage(SITE.phone) }, { status: 429 });
+    return NextResponse.json(
+      { error: phoneLimitMessage(SITE.phone), alreadyReceived: true },
+      { status: 429 },
+    );
   }
   if (outcome === 'saved') return NextResponse.json({ ok: true }, { status: 201 });
   if (outcome === 'notified-only') return NextResponse.json({ ok: true }, { status: 202 });

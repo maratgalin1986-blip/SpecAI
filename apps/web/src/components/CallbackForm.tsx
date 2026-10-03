@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { SITE } from '@/lib/site';
-import { readLeadDraft, submitLead } from '@/lib/submitLead';
+import { readLeadDraft, submitLead, leadErrorText } from '@/lib/submitLead';
 import { LeadSuccess } from '@/components/LeadSuccess';
 import { PointPicker } from '@/components/PointPicker';
 import { POINT_LINE_PREFIX, withPointLine, type MapPoint } from '@/lib/mapPoint';
@@ -51,9 +51,7 @@ export function CallbackForm({
       setStatus('sent');
     } catch (err) {
       setStatus('idle');
-      setError(
-        `${err instanceof Error ? err.message : 'Не удалось отправить'}. Или позвоните: ${SITE.phone}`,
-      );
+      setError(leadErrorText(err, SITE.phone));
     }
   }
 
