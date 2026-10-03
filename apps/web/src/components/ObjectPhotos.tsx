@@ -1,4 +1,5 @@
 import { OBJECT_PHOTOS } from '@/lib/objectPhotos';
+import { SITE } from '@/lib/site';
 
 // «Фото с объектов»: real photos from clients and executors. Hidden until the
 // first approved photo is added to lib/objectPhotos.ts.
@@ -16,7 +17,7 @@ export function ObjectPhotos() {
           <figure key={photo.src} className="overflow-hidden rounded-2xl bg-slate-100">
             <img
               src={photo.src}
-              alt={photo.caption}
+              alt={`${photo.caption} — объект ${SITE.name}`}
               loading="lazy"
               className="aspect-[4/3] w-full object-cover"
             />
