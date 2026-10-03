@@ -15,12 +15,20 @@ export interface Animated {
 /** A seated operator merged into a cab node, facing +X. */
 function operator(rig: Rig, cab: THREE.Object3D, pos: [number, number, number]) {
   const [x, y, z] = pos;
-  rig.box(cab, [0.27, 0.55, 0.44], 'vest', [x, y + 0.28, z]);
-  rig.box(cab, [0.22, 0.22, 0.2], 'skin', [x + 0.02, y + 0.68, z]);
-  rig.box(cab, [0.26, 0.12, 0.26], 'white', [x + 0.02, y + 0.84, z]);
+  rig.box(cab, [0.42, 0.12, 0.46], 'dark', [x - 0.05, y + 0.02, z]); // seat
+  rig.box(cab, [0.12, 0.62, 0.46], 'dark', [x - 0.25, y + 0.35, z]); // backrest
+  rig.box(cab, [0.27, 0.5, 0.42], 'vest', [x, y + 0.32, z]);
+  rig.cyl(cab, 0.1, 0.2, 'skin', [x + 0.02, y + 0.7, z]);
+  rig.add(cab, HELMET, 'white', [x + 0.02, y + 0.8, z], [0, 0, 0], [0.15, 0.13, 0.15]);
+  rig.cyl(cab, 0.12, 0.04, 'dark', [x + 0.32, y + 0.42, z], [0, 0, 0.6]); // steering wheel
 }
 
-/** Cab: glass block, dark corner posts, a roof and an orange beacon. */
+const HELMET = new THREE.SphereGeometry(1, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2);
+
+/**
+ * Cab: a frame of round pillars with glass on every side, a peaked roof,
+ * mirrors on arms, work lights and a rotating-beacon dome.
+ */
 function cab(
   rig: Rig,
   parent: THREE.Object3D,
@@ -30,13 +38,85 @@ function cab(
 ) {
   const [x, y, z] = pos;
   const [w, h, d] = size;
-  rig.box(parent, [w - 0.06, h, d - 0.06], 'glass', [x, y, z]);
+  // Glass panes, slightly inset from the frame.
+  rig.box(parent, [0.03, h * 0.92, d - 0.1], 'glass', [x + w / 2 - 0.03, y + 0.02, z]);
+  rig.box(parent, [0.03, h * 0.92, d - 0.1], 'glass', [x - w / 2 + 0.03, y + 0.02, z]);
+  for (const sz of [-1, 1])
+    rig.box(parent, [w - 0.1, h * 0.92, 0.03], 'glass', [x, y + 0.02, z + (sz * (d - 0.06)) / 2]);
+  // Pillars and a sill.
   for (const sx of [-1, 1])
     for (const sz of [-1, 1])
-      rig.box(parent, [0.09, h, 0.09], 'dark', [x + (sx * w) / 2, y, z + (sz * d) / 2]);
-  rig.box(parent, [w + 0.14, 0.12, d + 0.14], roof, [x, y + h / 2 + 0.06, z]);
-  rig.box(parent, [0.16, 0.12, 0.16], 'beacon', [x - w / 4, y + h / 2 + 0.18, z + d / 4]);
+      rig.cyl(parent, 0.05, h + 0.04, 'dark', [x + (sx * w) / 2, y, z + (sz * d) / 2]);
+  rig.box(parent, [w + 0.04, 0.12, d + 0.04], roof, [x, y - h / 2 + 0.02, z]);
+  // Peaked roof with an overhang over the windscreen.
+  rig.box(parent, [w + 0.22, 0.1, d + 0.16], roof, [x + 0.05, y + h / 2 + 0.06, z]);
+  rig.box(parent, [w * 0.7, 0.06, d * 0.8], roof, [x, y + h / 2 + 0.14, z]);
+  // Work lights on the roof edge and the beacon dome.
+  for (const sz of [-1, 1]) {
+    rig.box(parent, [0.08, 0.1, 0.16], 'dark', [
+      x + w / 2 + 0.06,
+      y + h / 2 + 0.02,
+      z + sz * d * 0.35,
+    ]);
+    rig.box(parent, [0.02, 0.07, 0.12], 'lamp', [
+      x + w / 2 + 0.11,
+      y + h / 2 + 0.02,
+      z + sz * d * 0.35,
+    ]);
+  }
+  rig.cyl(parent, 0.07, 0.04, 'dark', [x - w / 4, y + h / 2 + 0.19, z + d / 4]);
+  rig.add(
+    parent,
+    HELMET,
+    'beacon',
+    [x - w / 4, y + h / 2 + 0.21, z + d / 4],
+    [0, 0, 0],
+    [0.07, 0.1, 0.07],
+  );
+  // Mirrors on arms.
+  for (const sz of [-1, 1]) {
+    rig.cyl(
+      parent,
+      0.015,
+      0.3,
+      'dark',
+      [x + w / 2, y + h * 0.2, z + sz * (d / 2 + 0.12)],
+      [Math.PI / 2, 0, 0],
+    );
+    rig.box(parent, [0.04, 0.22, 0.14], 'dark', [
+      x + w / 2 + 0.02,
+      y + h * 0.2,
+      z + sz * (d / 2 + 0.28),
+    ]);
+  }
   operator(rig, parent, [x, y - h / 2 + 0.05, z]);
+}
+
+/** A hydraulic ram from a to b in the node's frame: painted barrel, chrome rod. */
+function ram(
+  rig: Rig,
+  parent: THREE.Object3D,
+  a: [number, number, number],
+  b: [number, number, number],
+  r = 0.07,
+) {
+  const va = new THREE.Vector3(...a);
+  const vb = new THREE.Vector3(...b);
+  const dir = vb.clone().sub(va);
+  const len = dir.length();
+  const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.normalize());
+  const e = new THREE.Euler().setFromQuaternion(q);
+  const rot: [number, number, number] = [e.x, e.y, e.z];
+  const barrel = va.clone().lerp(vb, 0.3);
+  const rod = va.clone().lerp(vb, 0.75);
+  rig.cyl(parent, r, len * 0.6, 'yellow', [barrel.x, barrel.y, barrel.z], rot);
+  rig.cyl(parent, r * 0.55, len * 0.5, 'steel', [rod.x, rod.y, rod.z], rot);
+}
+
+/** A vertical exhaust stack with a rain cap. */
+function exhaust(rig: Rig, parent: THREE.Object3D, pos: [number, number, number], h = 0.9) {
+  rig.cyl(parent, 0.06, h, 'steel', [pos[0], pos[1] + h / 2, pos[2]]);
+  rig.cyl(parent, 0.08, 0.04, 'dark', [pos[0], pos[1] + h + 0.02, pos[2]]);
 }
 
 // ---------------------------------------------------------------- dump truck
@@ -63,6 +143,15 @@ export function makeDumpTruck(rig: Rig): DumpTruck {
   rig.box(root, [0.06, 0.14, 0.25], 'tail', [-3.08, 1.0, -0.95]);
   rig.box(root, [0.16, 0.12, 0.16], 'beacon', [2.6, 2.83, 0.6]);
   operator(rig, root, [2.7, 1.3, 0.45]);
+  // Grille, bumper steps, fuel tank, exhaust, mirrors.
+  for (let i = 0; i < 5; i++) rig.box(root, [0.04, 0.05, 1.5], 'dark', [3.43, 1.42 + i * 0.1, 0]);
+  rig.box(root, [0.3, 0.12, 2.5], 'steel', [3.5, 0.82, 0]);
+  rig.cyl(root, 0.32, 1.1, 'steel', [1.3, 0.85, 1.0], [0, 0, Math.PI / 2]);
+  exhaust(rig, root, [2.0, 1.4, -1.0], 1.6);
+  for (const sz of [-1, 1]) {
+    rig.cyl(root, 0.015, 0.35, 'dark', [3.35, 2.5, sz * 1.3], [Math.PI / 2, 0, 0]);
+    rig.box(root, [0.05, 0.4, 0.18], 'dark', [3.38, 2.45, sz * 1.48]);
+  }
   const wheels: THREE.Group[] = [];
   for (const x of [2.6, -1.3, -2.5]) {
     const axle = node(root, [x, 0.55, 0]);
@@ -70,6 +159,10 @@ export function makeDumpTruck(rig: Rig): DumpTruck {
     rig.wheel(axle, [0, 0, -1.0], 0.55, 0.45);
     wheels.push(axle);
   }
+  // Mudguards over the wheels.
+  for (const x of [2.6, -1.9])
+    for (const sz of [-1, 1])
+      rig.box(root, [x > 0 ? 1.3 : 2.5, 0.06, 0.55], 'dark', [x, 1.22, sz * 1.0]);
   const bed = node(root, [-2.95, 1.15, 0]);
   rig.box(bed, [4.5, 0.15, 2.4], 'amber', [2.25, 0.1, 0]);
   rig.box(bed, [4.5, 0.95, 0.1], 'amber', [2.25, 0.62, 1.17]);
@@ -77,6 +170,10 @@ export function makeDumpTruck(rig: Rig): DumpTruck {
   rig.box(bed, [0.14, 1.3, 2.4], 'amber', [4.5, 0.8, 0]);
   rig.box(bed, [0.1, 0.9, 2.3], 'yellow', [0.05, 0.6, 0]);
   rig.box(bed, [0.6, 0.12, 2.42], 'dark', [4.0, 0.0, 0]);
+  // Ribs along the body sides.
+  for (let i = 0; i < 5; i++)
+    for (const sz of [-1, 1])
+      rig.box(bed, [0.08, 0.95, 0.06], 'amber', [0.5 + i * 0.95, 0.62, sz * 1.23]);
   const heap = node(bed, [2.3, 0.18, 0]);
   rig.heap(heap, 1.9, 0.8, 'dirt', [0, 0, 0]);
   return { root, bed, heap, wheels };
@@ -96,6 +193,10 @@ export function makeBackhoe(rig: Rig, dirt: Debris, truck: DumpTruck): Animated 
   rig.box(root, [0.06, 0.14, 0.3], 'lamp', [2.12, 1.95, 0.5]);
   rig.box(root, [0.06, 0.14, 0.3], 'lamp', [2.12, 1.95, -0.5]);
   cab(rig, root, [-0.55, 2.2, 0], [1.5, 1.5, 1.5]);
+  exhaust(rig, root, [1.7, 2.0, -0.45], 0.8);
+  // Engine hood louvres and a sloped nose.
+  for (let i = 0; i < 4; i++) rig.box(root, [0.06, 0.04, 1.2], 'dark', [0.9 + i * 0.25, 2.06, 0]);
+  rig.box(root, [0.5, 0.5, 1.4], 'yellow', [2.0, 1.75, 0], [0, 0, 0.5]);
   rig.wheel(root, [-1.2, 0.78, 1.05], 0.78, 0.5);
   rig.wheel(root, [-1.2, 0.78, -1.05], 0.78, 0.5);
   rig.wheel(root, [1.45, 0.52, 0.95], 0.52, 0.36);
@@ -110,19 +211,22 @@ export function makeBackhoe(rig: Rig, dirt: Debris, truck: DumpTruck): Animated 
     rig.box(loader, [2.6, 0.2, 0.16], 'yellow', [1.2, -0.4, z], [0, 0, -0.35]);
   rig.box(loader, [0.7, 0.7, 2.3], 'yellow', [2.65, -0.95, 0]);
   rig.box(loader, [0.1, 0.08, 2.3], 'steel', [3.0, -1.3, 0]);
+  for (const z of [0.7, -0.7]) ram(rig, loader, [0.2, -0.15, z], [1.9, -0.75, z], 0.06);
   // Backhoe arm: swing post → boom → stick → bucket.
   const swing = node(root, [-2.45, 1.25, 0]);
   rig.box(swing, [0.45, 0.65, 0.55], 'dark', [0, 0, 0]);
   const boom = node(swing, [-0.1, 0.1, 0]);
   rig.box(boom, [1.5, 0.34, 0.28], 'yellow', [-0.7, 0.12, 0], [0, 0, 0.15]);
   rig.box(boom, [1.4, 0.3, 0.28], 'yellow', [-2.0, 0.12, 0], [0, 0, -0.1]);
-  rig.box(boom, [1.6, 0.1, 0.1], 'steel', [-1.0, 0.36, 0], [0, 0, 0.05]);
+  ram(rig, boom, [-0.1, 0.45, 0], [-1.9, 0.38, 0], 0.08);
   const stick = node(boom, [-2.7, 0, 0]);
   rig.box(stick, [2.3, 0.26, 0.24], 'yellow', [-1.15, 0, 0]);
-  rig.box(stick, [1.5, 0.09, 0.09], 'steel', [-0.9, 0.2, 0]);
+  ram(rig, stick, [-0.1, 0.24, 0], [-1.7, 0.2, 0], 0.06);
   const bucket = node(stick, [-2.3, 0, 0]);
   rig.box(bucket, [0.65, 0.55, 0.75], 'dark', [-0.25, -0.25, 0]);
   rig.box(bucket, [0.12, 0.12, 0.78], 'steel', [-0.55, -0.55, 0]);
+  for (let i = 0; i < 5; i++)
+    rig.box(bucket, [0.16, 0.05, 0.07], 'steel', [-0.64, -0.6, -0.3 + i * 0.15], [0, 0, 0.3]);
   const pose = [0, 0, 0, 0];
   // [time, swing, boom, stick, bucket]
   const keys = [
