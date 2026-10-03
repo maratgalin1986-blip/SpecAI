@@ -6,6 +6,7 @@ import { acceptLead } from '@/lib/leadIntake';
 import { siteUrl } from '@/lib/siteUrl';
 import { PHOTO_AFTER_PATH } from '@/lib/photoShare';
 import { LEAD_RATE_LIMIT, checkRateLimit } from '@/lib/rateLimit';
+import { phoneLimitMessage, prismaRecentLeads } from '@/lib/leadLimit';
 import { SITE } from '@/lib/site';
 
 export const dynamic = 'force-dynamic';
@@ -44,12 +45,16 @@ export async function POST(request: NextRequest) {
       prisma.lead.create({ data: { ...data, ymClientId: parsed.data.ymClientId ?? null } }),
     notify: notifyTelegram,
     siteName: SITE.name,
+    phoneLimit: prismaRecentLeads(prisma),
     footer: `📷 После работ можно попросить фото: ${siteUrl()}${PHOTO_AFTER_PATH}`,
     // The database is down: Telegram gets only the phone (lib/leadIntake.ts),
     // the full lead stays in the server log so it can be recovered.
     onSaveError: (error, data) =>
       console.error('[leads] failed to save lead', error, JSON.stringify(data)),
   });
+  if (outcome === 'limited') {
+    return NextResponse.json({ error: phoneLimitMessage(SITE.phone) }, { status: 429 });
+  }
   if (outcome === 'saved') return NextResponse.json({ ok: true }, { status: 201 });
   if (outcome === 'notified-only') return NextResponse.json({ ok: true }, { status: 202 });
   return NextResponse.json(

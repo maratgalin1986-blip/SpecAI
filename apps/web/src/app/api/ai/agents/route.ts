@@ -14,6 +14,7 @@ import { LEAD_RATE_LIMIT, checkRateLimit } from '@/lib/rateLimit';
 import { PUBLIC_FLEET, isProvider } from '@/lib/fleet';
 import { notifyTelegram } from '@/lib/notify';
 import { acceptLead } from '@/lib/leadIntake';
+import { phoneLimitMessage, prismaRecentLeads } from '@/lib/leadLimit';
 import { zodErrorMessage } from '@/lib/apiInput';
 import { asksWhatNext, guideReply } from '@/lib/guide';
 import { guideFor } from '@/lib/guideState';
@@ -121,9 +122,14 @@ export async function POST(request: NextRequest) {
       save: (data) => prisma.lead.create({ data }),
       notify: notifyTelegram,
       siteName: SITE.name,
+      phoneLimit: prismaRecentLeads(prisma),
       onSaveError: (error, data) =>
         console.error('[agents] failed to save chat lead', error, JSON.stringify(data)),
     });
+    if (outcome === 'limited') {
+      // A friendly answer, not an error: the earlier leads already reached us.
+      return NextResponse.json({ agentId, reply: phoneLimitMessage(SITE.phone), toolsUsed: [] });
+    }
     if (outcome === 'lost') {
       return NextResponse.json({
         agentId,

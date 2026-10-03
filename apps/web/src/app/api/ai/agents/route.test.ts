@@ -2,10 +2,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 
 const create = vi.fn();
+const findMany = vi.fn();
 const notifyTelegram = vi.fn();
 const runAgent = vi.fn();
 const routeToAgent = vi.fn();
-vi.mock('@specai/database', () => ({ prisma: { lead: { create } } }));
+vi.mock('@specai/database', () => ({ prisma: { lead: { create, findMany } } }));
 vi.mock('@/lib/notify', () => ({ notifyTelegram }));
 vi.mock('@/lib/requestUser', () => ({ getRequestUser: vi.fn().mockResolvedValue(null) }));
 vi.mock('@specai/ai-service', () => ({ runAgent, routeToAgent }));
@@ -27,6 +28,7 @@ describe('POST /api/ai/agents — a phone in the chat', () => {
   beforeEach(() => {
     vi.stubEnv('ANTHROPIC_API_KEY', 'test-key');
     create.mockReset().mockResolvedValue({});
+    findMany.mockReset().mockResolvedValue([]);
     notifyTelegram.mockReset().mockResolvedValue(true);
     runAgent.mockReset();
   });
@@ -69,12 +71,25 @@ describe('POST /api/ai/agents — a phone in the chat', () => {
     expect(data.lead).toBeUndefined();
     expect(data.reply).toContain('Позвоните');
   });
+
+  it('answers kindly when the phone already sent 3 leads in 10 minutes', async () => {
+    const recent = new Date();
+    findMany.mockResolvedValue(
+      [1, 2, 3].map(() => ({ phone: '+7 900 000-00-00', createdAt: recent })),
+    );
+    const data = await (await POST(request({ messages: phoneMessage, consent: true }))).json();
+    expect(data.lead).toBeUndefined();
+    expect(data.reply).toContain('перезвоним');
+    expect(data.reply).toContain('+7 (927) 242-80-88');
+    expect(create).not.toHaveBeenCalled();
+  });
 });
 
 describe('POST /api/ai/agents — privacy and limits', () => {
   beforeEach(() => {
     vi.stubEnv('ANTHROPIC_API_KEY', 'test-key');
     create.mockReset().mockResolvedValue({});
+    findMany.mockReset().mockResolvedValue([]);
     notifyTelegram.mockReset().mockResolvedValue(true);
     routeToAgent.mockReset().mockResolvedValue('consultant');
     runAgent.mockReset().mockResolvedValue({ agentId: 'consultant', reply: 'ok', toolsUsed: [] });

@@ -2,8 +2,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 
 const create = vi.fn();
+const findMany = vi.fn();
 const notifyTelegram = vi.fn();
-vi.mock('@specai/database', () => ({ prisma: { lead: { create } } }));
+vi.mock('@specai/database', () => ({ prisma: { lead: { create, findMany } } }));
 vi.mock('@/lib/notify', () => ({ notifyTelegram }));
 
 const { POST } = await import('./route');
@@ -21,6 +22,7 @@ function request() {
 describe('POST /api/leads', () => {
   beforeEach(() => {
     create.mockReset();
+    findMany.mockReset().mockResolvedValue([]);
     notifyTelegram.mockReset();
   });
 
@@ -44,6 +46,21 @@ describe('POST /api/leads', () => {
     expect(text).toContain('+79270000000');
     // Localisation: without the database the name stays off the messenger.
     expect(text).not.toContain('Иван');
+  });
+
+  it('refuses a 4th lead from the same phone in 10 minutes, from any IP', async () => {
+    const recent = new Date();
+    findMany.mockResolvedValue([
+      { phone: '8 927 000-00-00', createdAt: recent },
+      { phone: '+7 927 000-00-00', createdAt: recent },
+      { phone: '+79270000000', createdAt: recent },
+    ]);
+    const response = await POST(request());
+    expect(response.status).toBe(429);
+    expect((await response.json()).error).toContain('+7 (927) 242-80-88');
+    expect(findMany.mock.calls[0]?.[0]).toMatchObject({ where: { phone: { endsWith: '00' } } });
+    expect(create).not.toHaveBeenCalled();
+    expect(notifyTelegram).not.toHaveBeenCalled();
   });
 
   it('tells the client to call when neither the database nor Telegram works', async () => {

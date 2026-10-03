@@ -7,6 +7,11 @@
 // Localisation (152-ФЗ): personal data is first recorded in the database. When
 // that fails, Telegram gets only the phone number, without the name and the
 // message; the full lead goes to the server log (onSaveError) for recovery.
+//
+// Forms and the chat pass `phoneLimit`: a durable per-phone limit counted in
+// the `Lead` table (lib/leadLimit.ts) on top of the in-memory per-IP limit.
+
+import { checkPhoneLeadLimit, type RecentLeadsLookup } from './leadLimit';
 
 export interface LeadData {
   name: string;
@@ -23,10 +28,15 @@ export interface LeadIntakeDeps {
   /** Extra line for the saved-lead message (e.g. the photo link). */
   footer?: string;
   onSaveError?: (error: unknown, lead: LeadData) => void;
+  /** Saved leads of the same phone; when given, a 4th lead in 10 min or an 11th a day is refused. */
+  phoneLimit?: RecentLeadsLookup;
 }
 
-/** saved — in the database; notified-only — only in Telegram; lost — neither. */
-export type LeadOutcome = 'saved' | 'notified-only' | 'lost';
+/**
+ * saved — in the database; notified-only — only in Telegram; lost — neither;
+ * limited — refused by the per-phone limit (show phoneLimitMessage).
+ */
+export type LeadOutcome = 'saved' | 'notified-only' | 'lost' | 'limited';
 
 /** The database-down notice: the phone only, the rest stays off the messenger. */
 export function unsavedLeadMessage(phone: string): string {
@@ -53,6 +63,9 @@ export function leadMessage(
 }
 
 export async function acceptLead(lead: LeadData, deps: LeadIntakeDeps): Promise<LeadOutcome> {
+  if (deps.phoneLimit && !(await checkPhoneLeadLimit(lead.phone, deps.phoneLimit)).ok) {
+    return 'limited';
+  }
   let saved = true;
   try {
     await deps.save(lead);

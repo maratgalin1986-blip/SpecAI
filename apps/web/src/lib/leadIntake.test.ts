@@ -76,4 +76,23 @@ describe('leadMessage', () => {
       ),
     );
   });
+
+  it('refuses a lead over the per-phone limit before saving or notifying', async () => {
+    const d = deps();
+    const phoneLimit = vi.fn().mockResolvedValue([
+      { phone: '8 900 000-00-00', createdAt: new Date() },
+      { phone: '+79000000000', createdAt: new Date() },
+      { phone: '+7 900 000-00-00', createdAt: new Date() },
+    ]);
+    await expect(acceptLead(lead, { ...d, phoneLimit })).resolves.toBe('limited');
+    expect(d.save).not.toHaveBeenCalled();
+    expect(d.notify).not.toHaveBeenCalled();
+  });
+
+  it('accepts the lead when the per-phone lookup fails (database down)', async () => {
+    const d = deps();
+    const phoneLimit = vi.fn().mockRejectedValue(new Error('db down'));
+    const other = { ...lead, phone: '+7 900 123-45-67' };
+    await expect(acceptLead(other, { ...d, phoneLimit })).resolves.toBe('saved');
+  });
 });
