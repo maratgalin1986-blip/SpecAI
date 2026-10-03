@@ -154,13 +154,17 @@ export function StroykaFilm({
       <div className="absolute right-3 top-3 flex gap-2 sm:right-5 sm:top-5">
         <button
           type="button"
+          // Not the film's «first touch unmutes»: that ran first and this click
+          // then muted again, so the sound took two presses (owner, 2026-10-03).
+          onPointerDown={(event) => event.stopPropagation()}
           onClick={() => {
             const v = video.current;
             if (!v) return;
             autoMuted.current = false;
-            v.muted = !muted;
-            setMuted(!muted);
-            setSoundEnabled(muted);
+            const next = !v.muted;
+            v.muted = next;
+            setMuted(next);
+            setSoundEnabled(!next);
           }}
           className="min-h-11 rounded-full bg-white px-4 py-2 text-sm font-bold text-slate-950 shadow-lg hover:bg-amber-300"
         >
