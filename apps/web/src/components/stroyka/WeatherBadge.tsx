@@ -1,13 +1,16 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { memo, useState } from 'react';
 import { mskToday } from '@/lib/weather';
 
 // Date, time and the live weather on the object, always on screen (owner,
 // 2026-10-03): small type in an acid colour that changes every 5 s, and an
 // offer to check the weather on the object for any day of the forecast.
-
-const ACID = ['#39ff14', '#f5ff00', '#00f0ff', '#ff2bd6', '#ff8a00'];
+//
+// The colour cycle is a CSS animation (.acid-cycle in globals.css: #39ff14,
+// #f5ff00, #00f0ff, #ff2bd6, #ff8a00, a 0.7 s fade every 5 s). It used to be a
+// React timer, which re-rendered the badge every 5 s; the badge is also
+// memoised, so the busy /stroyka page around it does not re-render it.
 
 type Note = { level: 'ok' | 'caution' | 'stop'; title: string; advice: string };
 type Forecast = {
@@ -44,20 +47,19 @@ const days = () =>
 
 const signed = (t: number) => `${t > 0 ? '+' : ''}${Math.round(t)}°`;
 
-export function WeatherBadge({ line, machine }: { line: string; machine?: string | null }) {
-  const [tick, setTick] = useState(0);
+export const WeatherBadge = memo(function WeatherBadge({
+  line,
+  machine,
+}: {
+  line: string;
+  machine?: string | null;
+}) {
   const [open, setOpen] = useState(false);
   const [date, setDate] = useState(() => mskToday());
   const [address, setAddress] = useState('');
   const [state, setState] = useState<'idle' | 'loading' | 'error'>('idle');
   const [result, setResult] = useState<Forecast | null>(null);
   const [error, setError] = useState('');
-
-  useEffect(() => {
-    const timer = window.setInterval(() => setTick((n) => n + 1), 5000);
-    return () => window.clearInterval(timer);
-  }, []);
-  const color = ACID[tick % ACID.length]!;
 
   async function check(event: React.FormEvent) {
     event.preventDefault();
@@ -83,8 +85,7 @@ export function WeatherBadge({ line, machine }: { line: string; machine?: string
         type="button"
         data-testid="conditions"
         onClick={() => setOpen((v) => !v)}
-        className="flex max-w-full items-center gap-1.5 truncate rounded-full bg-black/55 px-2.5 py-1 font-mono text-[11px] font-bold transition-colors duration-700 sm:text-xs"
-        style={{ color, textShadow: `0 0 8px ${color}88` }}
+        className="acid-cycle flex max-w-full items-center gap-1.5 truncate rounded-full bg-black/55 px-2.5 py-1 font-mono text-[11px] font-bold sm:text-xs"
         aria-expanded={open}
       >
         <span className="truncate">{line}</span>
@@ -172,4 +173,4 @@ export function WeatherBadge({ line, machine }: { line: string; machine?: string
       )}
     </div>
   );
-}
+});

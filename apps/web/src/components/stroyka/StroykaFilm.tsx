@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { memo, useEffect, useRef, useState } from 'react';
 import { SITE } from '@/lib/site';
 import { setSoundEnabled, storedSoundChoice } from '@/lib/sound';
 
@@ -32,7 +32,9 @@ const OFFERS = [
 /** Seconds each headline stays on screen. */
 const LINE_SECONDS = 4;
 
-export function StroykaFilm({
+// Memoised: the /stroyka page around it updates often (radio, dialogue,
+// loading), and the film should re-render only when its own props change.
+export const StroykaFilm = memo(function StroykaFilm({
   ready,
   progress,
   small,
@@ -184,4 +186,4 @@ export function StroykaFilm({
       </div>
     </div>
   );
-}
+});

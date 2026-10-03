@@ -11,23 +11,8 @@
 import { MACHINE_VOICES, type SoundCue } from '@/lib/sound';
 import type { MachineType } from '@/lib/machinePhotos';
 import { SITE_SAMPLES, MACHINE_SAMPLES, type SampleName } from '@/lib/soundAssets';
-import {
-  renderArrival,
-  renderBeep,
-  renderBoom,
-  renderClick,
-  renderHiss,
-  renderImpulse,
-  renderMachine,
-  renderMusic,
-  renderSiteBed,
-  renderSquelch,
-  renderStart,
-  renderThunk,
-  renderWhoosh,
-  renderSiteEvent,
-  SITE_EVENTS,
-} from '@/lib/soundSynth';
+import { SITE_EVENTS } from '@/lib/soundSynth';
+import { renderJob, type SynthJob, type SynthResult } from '@/lib/soundSynthJobs';
 import {
   isFemaleVoice,
   moodVoice,
@@ -70,6 +55,10 @@ export class SoundEngine {
   private fx: GainNode;
   private reverb: ConvolverNode;
   private buffers = new Map<string, Promise<AudioBuffer | null>>();
+  /** The synthesis worker (null: none, render in place; undefined: not started yet). */
+  private worker: Worker | null | undefined;
+  private jobs = new Map<number, (result: SynthResult) => void>();
+  private lastJob = 0;
   private bedSources: AudioBufferSourceNode[] = [];
   private bedsOn = false;
   private voice: Voice | null = null;
@@ -98,7 +87,11 @@ export class SoundEngine {
     this.master = this.gain(0, comp);
     this.master.gain.setTargetAtTime(LEVEL.master, ctx.currentTime, 0.4);
     this.reverb = ctx.createConvolver();
-    this.reverb.buffer = renderImpulse(ctx);
+    // The impulse arrives from the synthesis worker a moment later; until then
+    // the reverb send is simply silent.
+    void this.synth('impulse', { name: 'impulse' }).then((buffer) => {
+      if (buffer && !this.disposed) this.reverb.buffer = buffer;
+    });
     this.reverb.connect(this.gain(LEVEL.reverb, this.master));
     this.beds = this.gain(1, this.master);
     this.music = this.gain(0, this.beds);
@@ -168,13 +161,64 @@ export class SoundEngine {
     return promise;
   }
 
-  private synth(key: string, make: () => AudioBuffer) {
-    // Yield first, so a long render never lands inside a click handler.
-    return this.cached(
-      key,
-      () =>
-        new Promise<AudioBuffer | null>((resolve) => window.setTimeout(() => resolve(make()), 0)),
+  /**
+   * A procedural sound, rendered in the synthesis worker so the opening titles
+   * and films keep their frame rate; in place (after a yield, so a long render
+   * never lands inside a click handler) where workers are unavailable.
+   */
+  private synth(key: string, job: SynthJob) {
+    return this.cached(key, async () => (await this.renderOffThread(job)) ?? this.renderHere(job));
+  }
+
+  private renderHere(job: SynthJob) {
+    return new Promise<AudioBuffer>((resolve) =>
+      window.setTimeout(() => resolve(renderJob(this.ctx, job)), 0),
     );
+  }
+
+  private renderOffThread(job: SynthJob): Promise<AudioBuffer | null> {
+    const worker = this.synthWorker();
+    if (!worker) return Promise.resolve(null);
+    const id = ++this.lastJob;
+    return new Promise((resolve) => {
+      this.jobs.set(id, ({ channels, rate }) => {
+        if (!channels?.length) return resolve(null);
+        try {
+          const buffer = this.ctx.createBuffer(channels.length, channels[0]!.length, rate);
+          channels.forEach((ch, c) => buffer.copyToChannel(ch, c));
+          resolve(buffer);
+        } catch {
+          resolve(null);
+        }
+      });
+      worker.postMessage({ id, job, sampleRate: this.ctx.sampleRate });
+    });
+  }
+
+  private synthWorker(): Worker | null {
+    if (this.worker !== undefined) return this.worker;
+    this.worker = null;
+    if (typeof Worker === 'undefined') return null;
+    try {
+      const worker = new Worker(new URL('./soundSynth.worker.ts', import.meta.url));
+      worker.onmessage = (event: MessageEvent<SynthResult>) => {
+        const done = this.jobs.get(event.data.id);
+        this.jobs.delete(event.data.id);
+        done?.(event.data);
+      };
+      // The worker did not load: what is pending, and everything later, renders here.
+      worker.onerror = () => {
+        worker.terminate();
+        this.worker = null;
+        const pending = [...this.jobs.values()];
+        this.jobs.clear();
+        pending.forEach((done) => done({ id: 0, channels: null, rate: 0 }));
+      };
+      this.worker = worker;
+    } catch {
+      /* no worker: render in place */
+    }
+    return this.worker;
   }
 
   /** A recording from /public/audio: Opus first, MP3 where Opus fails. */
@@ -236,8 +280,8 @@ export class SoundEngine {
     this.music.gain.setTargetAtTime(LEVEL.music, now, 1.2);
     this.site.gain.setTargetAtTime(LEVEL.site, now, 1.2);
     const [music, bed, ...recordings] = await Promise.all([
-      this.synth('music', () => renderMusic(this.ctx)),
-      this.synth('site', () => renderSiteBed(this.ctx)),
+      this.synth('music', { name: 'music' }),
+      this.synth('site', { name: 'site' }),
       ...SITE_SAMPLES.map((s) => this.sample(s.name)),
     ]);
     if (!this.bedsOn || this.disposed) return;
@@ -264,7 +308,7 @@ export class SoundEngine {
         if (!this.bedsOn || this.disposed) return;
         if (this.running && document.visibilityState === 'visible') {
           const kind = SITE_EVENTS[Math.floor(Math.random() * SITE_EVENTS.length)]!;
-          const buffer = await this.synth(`event:${kind}`, () => renderSiteEvent(this.ctx, kind));
+          const buffer = await this.synth(`event:${kind}`, { name: 'event', arg: kind });
           if (this.bedsOn) {
             this.play(buffer, this.site, {
               gain: (this.ducked ? 0.25 : 0.55) * (kind === 'reverse' ? 0.5 : 1),
@@ -404,9 +448,9 @@ export class SoundEngine {
     const style = moodVoice(styleFor(line.speaker, isFemaleVoice(voice)), line.mood);
     const pan = Math.random() - 0.5;
     const [squelch, beep, hiss] = await Promise.all([
-      this.synth('squelch', () => renderSquelch(this.ctx)),
-      this.synth('beep', () => renderBeep(this.ctx)),
-      line.kind === 'radio' ? this.synth('hiss', () => renderHiss(this.ctx)) : null,
+      this.synth('squelch', { name: 'squelch' }),
+      this.synth('beep', { name: 'beep' }),
+      line.kind === 'radio' ? this.synth('hiss', { name: 'hiss' }) : null,
     ]);
     const alive = () => token === this.speechToken && this.speakable();
     if (!alive()) return;
@@ -573,8 +617,8 @@ export class SoundEngine {
     }
     if (!type) return;
     const [idle, arrival, recording] = await Promise.all([
-      this.synth(`machine:${type}`, () => renderMachine(this.ctx, type)),
-      arrive ? this.synth(`arrive:${type}`, () => renderArrival(this.ctx, type)) : null,
+      this.synth(`machine:${type}`, { name: 'machine', arg: type }),
+      arrive ? this.synth(`arrive:${type}`, { name: 'arrive', arg: type }) : null,
       MACHINE_SAMPLES[type] ? this.sample(MACHINE_SAMPLES[type]!.name) : null,
     ]);
     if (token !== this.machineToken || this.disposed || !idle) return;
@@ -613,30 +657,30 @@ export class SoundEngine {
     if (!this.running) return;
     switch (cue) {
       case 'click':
-        this.play(await this.synth('click', () => renderClick(this.ctx)), this.fx, {
+        this.play(await this.synth('click', { name: 'click' }), this.fx, {
           gain: 0.18,
           rate: 0.9 + Math.random() * 0.2,
         });
         break;
       case 'thunk':
-        this.play(await this.synth('thunk', () => renderThunk(this.ctx)), this.fx, { gain: 0.5 });
+        this.play(await this.synth('thunk', { name: 'thunk' }), this.fx, { gain: 0.5 });
         break;
       case 'stamp':
-        this.play(await this.synth('stamp', () => renderThunk(this.ctx, true)), this.fx, {
+        this.play(await this.synth('stamp', { name: 'stamp' }), this.fx, {
           gain: 0.6,
         });
         break;
       case 'whoosh':
-        this.play(await this.synth('whoosh', () => renderWhoosh(this.ctx)), this.fx, {
+        this.play(await this.synth('whoosh', { name: 'whoosh' }), this.fx, {
           gain: 0.3,
         });
         break;
       case 'boom':
-        this.play(await this.synth('boom', () => renderBoom(this.ctx)), this.fx, { gain: 0.65 });
+        this.play(await this.synth('boom', { name: 'boom' }), this.fx, { gain: 0.65 });
         break;
       case 'start': {
         const type = machine ?? 'backhoe';
-        this.play(await this.synth(`start:${type}`, () => renderStart(this.ctx, type)), this.fx, {
+        this.play(await this.synth(`start:${type}`, { name: 'start', arg: type }), this.fx, {
           gain: 0.4,
         });
         break;
@@ -657,6 +701,8 @@ export class SoundEngine {
     this.nature.dispose();
     this.stopBeds();
     window.clearTimeout(this.voiceTimer);
+    this.worker?.terminate();
+    this.worker = null;
     void this.ctx.close().catch(() => {});
   }
 }
