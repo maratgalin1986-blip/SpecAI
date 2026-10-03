@@ -4,6 +4,7 @@ import { memo, useEffect, useRef, useState } from 'react';
 import { SITE } from '@/lib/site';
 import { setSoundEnabled, storedSoundChoice } from '@/lib/sound';
 import { ChannelBug } from './ChannelBug';
+import { FilmLook } from './FilmLook';
 
 // The opening film of /stroyka: a 44 s montage of open-licence footage
 // (Mixkit, see /credits) with music, shown while the 3D site loads. With
@@ -110,6 +111,7 @@ export const StroykaFilm = memo(function StroykaFilm({
         onEnded={() => setEnded(true)}
         aria-label={`Фильм ${SITE.platform}: стройки, техника и люди`}
       />
+      <FilmLook />
       <ChannelBug corner="top-left" />
       {/* The offers: a big headline that changes, and a button for each. */}
       <div className="pointer-events-none absolute inset-x-0 top-[18%] flex justify-center px-4 sm:top-[14%]">
