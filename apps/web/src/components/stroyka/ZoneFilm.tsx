@@ -37,12 +37,14 @@ export function ZoneFilm({
   onZone,
   small,
   onForce3d,
+  onOrder,
 }: {
   active: ZoneId | null;
   progress: WorldProgress;
   onZone: (zone: ZoneId) => void;
   small: boolean;
   onForce3d?: () => void;
+  onOrder?: () => void;
 }): JSX.Element {
   const target: ZoneId = active ?? 'gate';
 
@@ -242,7 +244,7 @@ export function ZoneFilm({
         data-testid="zone-strip"
         role="tablist"
         aria-label="Зоны стройки"
-        className="absolute inset-x-0 top-[calc(max(0.5rem,env(safe-area-inset-top))+5.5rem)] z-10 flex gap-2 overflow-x-auto overscroll-x-contain px-3 [scrollbar-width:none] sm:top-[calc(max(0.5rem,env(safe-area-inset-top))+3.75rem)] [&::-webkit-scrollbar]:hidden"
+        className="absolute inset-x-0 top-[calc(max(0.5rem,env(safe-area-inset-top))+12.75rem)] z-10 flex gap-2 overflow-x-auto overscroll-x-contain px-3 [scrollbar-width:none] sm:top-[calc(max(0.5rem,env(safe-area-inset-top))+3.75rem)] sm:pl-[26rem] [&::-webkit-scrollbar]:hidden"
       >
         {ZONES.map((zone) => {
           const on = zone.id === target;
@@ -264,7 +266,17 @@ export function ZoneFilm({
         })}
       </div>
 
-      <div className="absolute right-3 top-[calc(max(0.5rem,env(safe-area-inset-top))+8.75rem)] z-10 flex flex-col items-end gap-2 sm:top-[calc(max(0.5rem,env(safe-area-inset-top))+7rem)]">
+      <div className="absolute right-3 top-[calc(max(0.5rem,env(safe-area-inset-top))+16rem)] z-10 flex flex-col items-end gap-2 sm:top-[calc(max(0.5rem,env(safe-area-inset-top))+7rem)]">
+        {onOrder && (
+          <button
+            type="button"
+            data-testid="film-order"
+            onClick={onOrder}
+            className="rounded-full bg-amber-500 px-5 py-3 text-base font-black text-slate-950 shadow-xl shadow-amber-600/40 ring-2 ring-amber-300/60 hover:bg-amber-400 sm:text-lg"
+          >
+            🚜 Заказать технику
+          </button>
+        )}
         {onForce3d && (
           <button
             type="button"

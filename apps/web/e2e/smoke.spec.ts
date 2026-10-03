@@ -112,6 +112,8 @@ test('stroyka film tour', async ({ page }) => {
   await expect(strip).toBeVisible();
   await strip.locator('button').nth(1).click();
   await page.waitForTimeout(800);
-  await expect(page.getByRole('button', { name: /Заказать технику/ }).first()).toBeVisible();
+  await expect(page.getByTestId('film-order')).toBeVisible();
+  await page.getByTestId('film-order').click();
+  await page.waitForTimeout(500);
   expect(errors, 'page errors').toEqual([]);
 });

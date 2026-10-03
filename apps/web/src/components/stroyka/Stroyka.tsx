@@ -1051,6 +1051,7 @@ export function Stroyka() {
           onZone={onFallbackZone}
           small={mobile}
           onForce3d={hasWebGL() ? () => setPhase('3d') : undefined}
+          onOrder={() => skipToOrder()}
         />
       )}
       {phase === 'fallback' && (
@@ -1109,7 +1110,7 @@ export function Stroyka() {
       {/* ---------------- mission card (left) and map (right) */}
       {phase !== 'boot' && (
         <div
-          className={`pointer-events-none absolute inset-x-0 top-[calc(3.5rem+env(safe-area-inset-top))] ${
+          className={`pointer-events-none absolute inset-x-0 top-[calc(5.25rem+env(safe-area-inset-top))] sm:top-[calc(3.5rem+env(safe-area-inset-top))] ${
             // The open phone menu lies over the dialogue, like any menu.
             hudOpen ? 'z-30' : 'z-10'
           } ${
@@ -1129,7 +1130,6 @@ export function Stroyka() {
                     ? 'Экскурсия по объекту'
                     : 'Свободная прогулка'}
               </div>
-              <div className="truncate text-xs text-slate-300 md:hidden">{chip}</div>
               <div className="truncate text-xs text-slate-200" data-testid="progress-line">
                 {progressLine(progress)}
               </div>

@@ -17,7 +17,7 @@ export type ZoneFilm = {
 export const ZONE_FILMS: Record<ZoneId, ZoneFilm> = {
   gate: { alt: 'Стройплощадка с высоты: краны, корпуса, техника', sources: [42333] },
   kotlovan: { alt: 'Экскаватор грузит грунт в самосвал', sources: [25444] },
-  planirovka: { alt: 'Экскаватор-погрузчик расчищает и планирует участок', sources: [49142] },
+  planirovka: { alt: 'Бульдозер расчищает и планирует участок', sources: [49142] },
   doroga: { alt: 'Самосвалы возят грунт по технологической дороге', sources: [45816, 10327] },
   sklad: { alt: 'Погрузчик загружает самосвал, поддоны и материалы', sources: [49189] },
   korpus: { alt: 'Корпус растёт этаж за этажом', sources: [9686] },
