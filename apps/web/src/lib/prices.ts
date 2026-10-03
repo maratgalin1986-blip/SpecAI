@@ -42,6 +42,19 @@ export function rateOf(type: MachineType): number {
 }
 
 /**
+ * The hourly price of a house machine shown on a card: the database rate, but
+ * never below the site price list (a stale or not yet repriced row must not
+ * undercut lib/prices.ts). A higher row (the 32 t crane) keeps its own price.
+ */
+export function houseRate(
+  dbRate: number | string | { toString(): string } | null | undefined,
+  type: MachineType,
+): number {
+  const db = dbRate === null || dbRate === undefined ? 0 : Number(dbRate.toString());
+  return Math.max(Number.isFinite(db) ? db : 0, rateOf(type));
+}
+
+/**
  * 4000 → «4 000» with a no-break space, the same as toLocaleString('ru-RU')
  * but independent of the runtime's locale data (server and browser agree).
  */

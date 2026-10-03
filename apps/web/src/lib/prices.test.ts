@@ -7,6 +7,7 @@ import {
   CRANE_HEAVY_RATE,
   fromPrice,
   HAMMER_RATE,
+  houseRate,
   MIN_RATE,
   PRICE_GROUPS,
   priceFaqAnswer,
@@ -80,5 +81,23 @@ describe('prices', () => {
       expect(source, file).not.toMatch(/\d[  ]?\d{3} ?₽/);
     }
     expect(readFileSync(join(__dirname, '../app/page.tsx'), 'utf8')).toContain('priceFaqAnswer()');
+  });
+});
+
+describe('houseRate (landing «Техника в наличии» cards)', () => {
+  it('never shows a database price below the site price list', () => {
+    expect(houseRate(2300, 'truck')).toBe(RATES.truck);
+    expect(houseRate('3000.00', 'backhoe')).toBe(RATES.backhoe);
+    expect(houseRate(null, 'crane')).toBe(RATES.crane);
+  });
+
+  it('keeps a higher database price (the 32 t crane)', () => {
+    expect(houseRate(CRANE_HEAVY_RATE, 'crane')).toBe(CRANE_HEAVY_RATE);
+  });
+
+  it('is what the landing cards render', () => {
+    const page = readFileSync(join(__dirname, '../app/arenda/[slug]/page.tsx'), 'utf8');
+    expect(page).toContain('houseRate(item.hourlyRate, machine)');
+    expect(page).not.toContain('formatRate(item)');
   });
 });

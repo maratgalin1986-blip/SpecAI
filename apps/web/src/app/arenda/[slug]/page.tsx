@@ -6,12 +6,11 @@ import { CallbackForm } from '@/components/CallbackForm';
 import { Faq } from '@/components/Faq';
 import { TrustBadges } from '@/components/TrustBadges';
 import { LANDINGS, landingBySlug } from '@/lib/landings';
-import { formatRate } from '@/lib/money';
 import { SITE } from '@/lib/site';
 import { siteUrl } from '@/lib/siteUrl';
 import { CinemaBand } from '@/components/CinemaBand';
 import { CinemaLayer } from '@/components/CinemaHero';
-import { fromPrice, rateOf, rub } from '@/lib/prices';
+import { fromPrice, houseRate, rateOf, rub } from '@/lib/prices';
 import { PUBLIC_FLEET } from '@/lib/fleet';
 import { MachineAmbience } from '@/components/MachineAmbience';
 
@@ -156,11 +155,10 @@ export default async function LandingPage({ params }: { params: { slug: string }
                     <StatusBadge status={item.status} />
                   </div>
                   {item.location && <p className="text-sm text-slate-500">{item.location.city}</p>}
-                  <p className="mt-auto text-lg font-semibold">
-                    {formatRate(item).price}
-                    <span className="text-sm font-normal text-slate-500">
-                      {formatRate(item).unit}
-                    </span>
+                  {/* Never below the site price list (lib/prices.ts). */}
+                  <p className="mt-auto text-lg font-semibold" data-testid="fleet-card-price">
+                    от {rub(houseRate(item.hourlyRate, machine))} ₽
+                    <span className="text-sm font-normal text-slate-500">/ч</span>
                   </p>
                   <span className="text-sm font-medium text-amber-700">Рассчитать стоимость →</span>
                 </Card>
