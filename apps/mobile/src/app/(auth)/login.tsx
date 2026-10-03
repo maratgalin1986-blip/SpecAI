@@ -58,7 +58,7 @@ export default function LoginScreen() {
           <View style={styles.header}>
             <View style={styles.logo}>
               <Text style={styles.logoText} numberOfLines={1} adjustsFontSizeToFit>
-                СП16
+                СпецПласт16
               </Text>
             </View>
             <Text style={styles.title}>{SITE.name}</Text>

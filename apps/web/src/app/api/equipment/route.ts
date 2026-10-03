@@ -80,8 +80,9 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({
     equipment: equipment.map((item) => ({
       ...item,
-      // Prices as on the site: never below lib/prices.ts.
-      ...customerRates({ ...item, categoryName: item.category.name }),
+      // Customers see prices as on the site (never below lib/prices.ts); the
+      // provider's own list keeps the stored ones, which its edit form saves.
+      ...(ownFleet ? {} : customerRates({ ...item, categoryName: item.category.name })),
       ...listingPhoto(item, origin),
     })),
     total,

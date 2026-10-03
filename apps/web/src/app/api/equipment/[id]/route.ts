@@ -10,8 +10,30 @@ import { customerRates } from '@/lib/equipmentCatalog';
 
 export const dynamic = 'force-dynamic';
 
-/** Публичная карточка техники (используется мобильным приложением). */
+/**
+ * Карточка техники (мобильное приложение). Заказчик видит только
+ * опубликованный парк СпецПласт16 с ценами по прайсу; поставщик свою машину —
+ * в любом статусе и с сохранёнными ценами (их подставляет форма правки).
+ */
 export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
+  const currentUser = await getRequestUser(request);
+  const owner = isProvider(currentUser) ? currentUser.companyId : null;
+  const own = owner
+    ? await prisma.equipment.findFirst({
+        where: { id: params.id, companyId: owner },
+        include: {
+          category: true,
+          location: true,
+          company: { select: { id: true, name: true } },
+        },
+      })
+    : null;
+  if (own) {
+    return NextResponse.json({
+      equipment: { ...own, ...listingPhoto(own, request.nextUrl.origin) },
+    });
+  }
+
   // Only СпецПласт16's own machinery is public (owner's decision, 2026-10-02).
   const equipment = await prisma.equipment.findFirst({
     where: { id: params.id, ...PUBLISHED_FLEET },
