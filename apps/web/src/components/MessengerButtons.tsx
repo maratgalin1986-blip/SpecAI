@@ -87,17 +87,19 @@ export function MessengerButtons() {
           <WhatsAppIcon /> WhatsApp
         </a>
       </nav>
-      <a
-        href={SITE.whatsappHref}
-        target="_blank"
-        rel="noopener"
-        aria-label="Написать в WhatsApp"
-        className={`fixed bottom-20 right-6 z-50 hidden h-12 w-12 items-center justify-center rounded-full bg-emerald-700 text-white shadow-lg transition hover:scale-105 hover:bg-emerald-600 sm:flex ${
-          inJourney ? 'pointer-events-none opacity-0' : 'opacity-100'
-        }`}
-      >
-        <WhatsAppIcon className="h-6 w-6" />
-      </a>
+      <aside aria-label="WhatsApp">
+        <a
+          href={SITE.whatsappHref}
+          target="_blank"
+          rel="noopener"
+          aria-label="Написать в WhatsApp"
+          className={`wa-fab fixed bottom-20 right-6 z-50 hidden h-12 w-12 items-center justify-center rounded-full bg-emerald-700 text-white shadow-lg transition hover:scale-105 hover:bg-emerald-600 sm:flex ${
+            inJourney ? 'pointer-events-none opacity-0' : 'opacity-100'
+          }`}
+        >
+          <WhatsAppIcon className="h-6 w-6" />
+        </a>
+      </aside>
     </>
   );
 }

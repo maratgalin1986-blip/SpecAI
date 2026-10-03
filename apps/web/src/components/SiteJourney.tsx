@@ -222,6 +222,7 @@ export function SiteJourney() {
   if (reduced) {
     return (
       <section aria-label="Путешествие по объекту" className="grid gap-4 sm:grid-cols-2">
+        <h2 className="sr-only">Путешествие по объекту</h2>
         {scenes.map((scene) => (
           <div
             key={scene.type}

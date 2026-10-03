@@ -230,7 +230,7 @@ export function TaskWizard() {
             {['Задача', 'Когда', 'Объём', 'Результат'].map((label, index) => (
               <li
                 key={label}
-                className={`flex items-center gap-3 ${index <= step ? 'text-white' : 'text-slate-600'}`}
+                className={`flex items-center gap-3 ${index <= step ? 'text-white' : 'text-slate-400'}`}
               >
                 <span
                   className={`flex h-7 w-7 items-center justify-center rounded-full text-xs ${
