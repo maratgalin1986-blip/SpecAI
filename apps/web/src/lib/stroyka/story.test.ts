@@ -234,14 +234,30 @@ describe('hooks to come back', () => {
   });
 
   it('names the next stage from the progress, with or without a date', () => {
-    const p = { nextMilestone: { stage: 2, stageName: 'каркас', remainingPercent: 40 } };
+    const p = {
+      nextMilestone: {
+        stage: 2,
+        stageName: 'каркас',
+        remainingPercent: 40,
+        startsAt: 0,
+        daysLeft: 2,
+      },
+    };
     expect(hookLine('mihalych', p, 2, () => 0)).toBe(
       'Через пару дней начнём этап «каркас» — заходи, будет на что посмотреть.',
     );
     expect(hookLine('rinat', p, null)).toBe(
       'Дальше по плану — этап «каркас». Заходите, будет на что посмотреть.',
     );
-    const handover = { nextMilestone: { stage: 0, stageName: 'котлован', remainingPercent: 5 } };
+    const handover = {
+      nextMilestone: {
+        stage: 0,
+        stageName: 'котлован',
+        remainingPercent: 5,
+        startsAt: 0,
+        daysLeft: 0,
+      },
+    };
     expect(hookLine('alsu', handover, null)).toMatch(/новый объект/);
   });
 });
