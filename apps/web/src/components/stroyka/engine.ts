@@ -37,6 +37,7 @@ import { LedScreen } from './ledScreen';
 import { Wildlife } from './wildlife';
 import { buildDistrict, buildProject, buildTowerCrane, type ProjectBuild } from './project';
 import { buildCity } from './cityMesh';
+import { clampToBounds, easeInOut, turnBetween, type TravelTarget } from './navTargets';
 import { placeSite, type CityData } from '@/lib/stroyka/city';
 import {
   CRANE,
@@ -122,6 +123,8 @@ export interface EngineOptions {
   onDog?(): void;
   /** The opening fly-over (the «game cinematic») ended or was skipped. */
   onIntroEnd?(): void;
+  /** The camera arrived next to a character the visitor chose (tap or «Куда идём?»). */
+  onPerson?(id: string, zone?: ZoneId): void;
 }
 
 interface Character {
@@ -258,7 +261,9 @@ export class StroykaEngine {
   private cityFacade: { cityNight: { value: number } } | null = null;
 
   // Camera state
-  private mode: Mode = 'tour';
+  // The visitor leads (owner, 2026-10-03: «сам выбирал, куда идти»); the
+  // guided walk runs only after «Экскурсия».
+  private mode: Mode = 'free';
   private view: View = 'fp';
   private hold = false;
   private curve!: THREE.CatmullRomCurve3;
@@ -276,6 +281,24 @@ export class StroykaEngine {
   private pitch = 0;
   private lookOffset = 0;
   private keys = new Set<string>();
+  /** A move the visitor asked for (a chosen place, a tapped person or spot), eased. */
+  private travel: {
+    from: THREE.Vector3;
+    to: THREE.Vector3;
+    yaw0: number;
+    yaw1: number;
+    pitch0: number;
+    pitch1: number;
+    rise0: number;
+    rise1: number;
+    hop: number;
+    t: number;
+    dur: number;
+    walk: boolean;
+    onArrive?: () => void;
+  } | null = null;
+  /** Extra eye height (the view from the top); eases back down once the visitor walks. */
+  private rise = 0;
   private blend: { from: THREE.Vector3; fromQ: THREE.Quaternion; t: number; dur: number } | null =
     null;
   private zone: ZoneId | null = null;
@@ -742,6 +765,8 @@ export class StroykaEngine {
       this.yaw = Math.atan2(dir.x, dir.z);
       this.pitch = 0;
     } else {
+      this.travel = null;
+      this.rise = 0;
       // Rejoin the tour at the nearest point of the route.
       let best = 0;
       let bestD = Infinity;
@@ -788,12 +813,82 @@ export class StroykaEngine {
         this.tourPhase = 'stop';
         this.tourTimer = 0;
       }
+      this.startBlend(1.8);
     } else {
-      this.player.set(zone.stand[0], 0, zone.stand[1]);
-      this.yaw = Math.atan2(zone.focus[0] - zone.stand[0], zone.focus[2] - zone.stand[1]);
-      this.pitch = 0;
+      this.travelTo({ x: zone.stand[0], z: zone.stand[1], look: zone.focus, how: 'fly' });
     }
-    this.startBlend(1.8);
+  }
+
+  /**
+   * Moves the visitor's camera to a target with eased motion: a low cinematic
+   * arc ('fly', the default) or a walk on the ground around obstacles. Only
+   * ever called for the visitor's own choice — nothing moves the camera by itself.
+   */
+  travelTo(target: TravelTarget, onArrive?: () => void) {
+    if (this.mode !== 'free') {
+      this.setMode('free');
+      this.opts.onWantFree();
+    }
+    this.skipIntro();
+    const [x, z] = clampToBounds(target.x, target.z);
+    const to = new THREE.Vector3(x, 0, z);
+    const dist = to.distanceTo(this.player);
+    const walk = target.how === 'walk';
+    const rise1 = target.lift ?? 0;
+    const eyeY = 1.65 + rise1;
+    const [lx, ly, lz] = target.look;
+    const yaw1 = Math.atan2(lx - x, lz - z);
+    const flat = Math.hypot(lx - x, lz - z);
+    const pitch1 = Math.max(-1.05, Math.min(0.6, Math.atan2(ly - eyeY, Math.max(0.5, flat))));
+    this.travel = {
+      from: this.player.clone(),
+      to,
+      yaw0: this.yaw,
+      yaw1: this.yaw + turnBetween(this.yaw, yaw1),
+      pitch0: this.pitch,
+      pitch1,
+      rise0: this.rise,
+      rise1,
+      hop: walk ? 0 : Math.min(14, Math.max(1.5, dist * 0.18)),
+      t: 0,
+      dur: walk
+        ? Math.min(12, Math.max(0.8, dist / 4.4))
+        : Math.min(4.2, Math.max(1.4, 1.3 + dist / 24)),
+      walk,
+      onArrive,
+    };
+  }
+
+  /** Walks (near) or flies (far) to a character and faces them; `onPerson` on arrival. */
+  walkToPerson(id: string) {
+    const c = this.characters.find((ch) => ch.id === id);
+    if (!c) return;
+    const p = c.person.root.position;
+    const zone = c.zone ? zoneById(c.zone) : null;
+    let x: number;
+    let z: number;
+    if (zone) [x, z] = zone.stand;
+    else {
+      // Two metres in front of a crew member, on the visitor's side.
+      const dx = this.player.x - p.x;
+      const dz = this.player.z - p.z;
+      const d = Math.hypot(dx, dz) || 1;
+      [x, z] = resolveCollision(
+        p.x + (dx / d) * 2.2,
+        p.z + (dz / d) * 2.2,
+        PLAYER_RADIUS,
+        this.obstacles,
+      );
+    }
+    const near = Math.hypot(x - this.player.x, z - this.player.z) < 16;
+    this.travelTo({ x, z, look: [p.x, 1.55, p.z], how: near ? 'walk' : 'fly' }, () =>
+      this.opts.onPerson?.(c.id, c.zone),
+    );
+  }
+
+  /** True while a chosen move is under way (tests). */
+  get traveling() {
+    return this.travel !== null;
   }
 
   /** Screen position (CSS px) of a world point, or null behind the camera (tests). */
@@ -808,6 +903,8 @@ export class StroykaEngine {
   standAt(x: number, z: number, yaw: number, pitch = 0) {
     this.setMode('free');
     this.blend = null;
+    this.travel = null;
+    this.rise = 0;
     this.player.set(x, 0, z);
     this.yaw = yaw;
     this.pitch = pitch;
@@ -1328,8 +1425,11 @@ export class StroykaEngine {
     };
     let downAt = { x: 0, y: 0, t: 0 };
     const raycaster = new THREE.Raycaster();
+    let tapDuringIntro = false;
     const tapStart = (e: PointerEvent) => {
-      downAt = { x: e.clientX, y: e.clientY, t: performance.now() };
+      downAt = { x: e.clientX, y: e.clientY, t: e.timeStamp };
+      // A tap that only skips the opening shot does not also walk somewhere.
+      tapDuringIntro = this.intro.active;
       this.skipIntro();
     };
     canvas.addEventListener('pointerdown', tapStart);
@@ -1337,7 +1437,8 @@ export class StroykaEngine {
     const up = (e: PointerEvent) => {
       if (drag?.id === e.pointerId) drag = null;
       const moved = Math.hypot(e.clientX - downAt.x, e.clientY - downAt.y);
-      if (moved > 8 || performance.now() - downAt.t > 450) return;
+      if (moved > 8 || e.timeStamp - downAt.t > 450 || tapDuringIntro) return;
+      // Raycasting happens only here, on a tap — never per frame.
       const rect = canvas.getBoundingClientRect();
       const ndc = new THREE.Vector2(
         ((e.clientX - rect.left) / rect.width) * 2 - 1,
@@ -1353,12 +1454,40 @@ export class StroykaEngine {
         return visible && o.visible;
       });
       const hit = raycaster.intersectObjects(targets, false)[0];
+      // People: a tap on a character walks there and starts the conversation.
+      const roots: THREE.Object3D[] = this.characters
+        .filter((c) => c.person.root.visible)
+        .map((c) => c.person.root);
+      const personHit = raycaster.intersectObjects(roots, true)[0];
+      if (personHit && (!hit || personHit.distance < hit.distance)) {
+        let o: THREE.Object3D | null = personHit.object;
+        while (o && !roots.includes(o)) o = o.parent;
+        const c = this.characters.find((ch) => ch.person.root === o);
+        if (c) {
+          this.walkToPerson(c.id);
+          return;
+        }
+      }
       if (hit?.object.userData.dog) {
         this.opts.onDog?.();
         return;
       }
       const target = hit?.object.userData.machine as AdTarget | undefined;
-      if (target) this.opts.onAdClick(target);
+      if (target) {
+        this.opts.onAdClick(target);
+        return;
+      }
+      // The ground: walk to that point (inside the site's bounds).
+      const ground = raycaster.ray.intersectPlane(this.groundPlane, this.tmpTap);
+      if (!ground || ground.distanceTo(this.camera.position) > 70) return;
+      const [gx, gz] = clampToBounds(ground.x, ground.z);
+      const dir = Math.atan2(gx - this.player.x, gz - this.player.z);
+      this.travelTo({
+        x: gx,
+        z: gz,
+        look: [gx + Math.sin(dir) * 10, 1.6, gz + Math.cos(dir) * 10],
+        how: this.rise > 3 ? 'fly' : 'walk',
+      });
     };
     canvas.addEventListener('pointerdown', down);
     canvas.addEventListener('pointermove', move);
@@ -1492,6 +1621,8 @@ export class StroykaEngine {
   }
 
   private desired = { pos: new THREE.Vector3(), look: new THREE.Vector3() };
+  private groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+  private tmpTap = new THREE.Vector3();
   private tmpA = new THREE.Vector3();
   private tmpB = new THREE.Vector3();
 
@@ -1578,14 +1709,60 @@ export class StroykaEngine {
         fwd /= len;
         side /= len;
       }
-      const speed = (k.has('shift') ? 7 : 4.2) * dt;
-      const sin = Math.sin(this.yaw);
-      const cos = Math.cos(this.yaw);
-      const nx = this.player.x + (sin * fwd - cos * side) * speed;
-      const nz = this.player.z + (cos * fwd + sin * side) * speed;
-      const [rx, rz] = resolveCollision(nx, nz, PLAYER_RADIUS, this.obstacles);
-      moving = Math.min(1, len);
-      this.player.set(rx, 0, rz);
+      // The visitor's own keys or joystick take over from a chosen move at once.
+      if (len > 0.05 || k.has('arrowleft') || k.has('arrowright')) this.travel = null;
+      const tr = this.travel;
+      if (tr) {
+        tr.t += dt;
+        const e = easeInOut(tr.t / tr.dur);
+        const nx = tr.from.x + (tr.to.x - tr.from.x) * e;
+        const nz = tr.from.z + (tr.to.z - tr.from.z) * e;
+        if (tr.walk) {
+          const [rx, rz] = resolveCollision(nx, nz, PLAYER_RADIUS, this.obstacles);
+          // Blocked by a stack or a fence: stop where we are, facing the goal.
+          if (Math.hypot(rx - nx, rz - nz) > 1.2) tr.t = tr.dur;
+          this.player.set(rx, 0, rz);
+          moving = Math.sin(Math.PI * Math.min(1, tr.t / tr.dur)) > 0.15 ? 1 : 0;
+        } else this.player.set(nx, 0, nz);
+        // Turn toward the goal early, settle the gaze on the way in.
+        const ey = easeInOut(Math.min(1, (tr.t / tr.dur) * 1.4));
+        this.yaw = tr.yaw0 + (tr.yaw1 - tr.yaw0) * ey;
+        this.pitch = tr.pitch0 + (tr.pitch1 - tr.pitch0) * ey;
+        this.rise = tr.rise0 + (tr.rise1 - tr.rise0) * e + tr.hop * Math.sin(Math.PI * e);
+        if (tr.t >= tr.dur) {
+          this.travel = null;
+          this.rise = tr.rise1;
+          const [rx, rz] = resolveCollision(
+            this.player.x,
+            this.player.z,
+            PLAYER_RADIUS,
+            this.obstacles,
+          );
+          this.player.set(rx, 0, rz);
+          // Zones first (the zone's conversation), then the arrival callback.
+          const zone = detectZone(rx, rz, this.zone);
+          if (zone !== this.zone) {
+            this.zone = zone;
+            t.zone = zone;
+            this.opts.onZone(zone);
+          }
+          tr.onArrive?.();
+        }
+      } else {
+        const speed = (k.has('shift') ? 7 : 4.2) * dt;
+        const sin = Math.sin(this.yaw);
+        const cos = Math.cos(this.yaw);
+        const nx = this.player.x + (sin * fwd - cos * side) * speed;
+        const nz = this.player.z + (cos * fwd + sin * side) * speed;
+        const [rx, rz] = resolveCollision(nx, nz, PLAYER_RADIUS, this.obstacles);
+        moving = Math.min(1, len);
+        this.player.set(rx, 0, rz);
+        // Walking off a high viewpoint brings the eye back down to the ground.
+        if (moving > 0.05 && this.rise > 0) {
+          this.rise *= 1 - damp(2.5, dt);
+          if (this.rise < 0.02) this.rise = 0;
+        }
+      }
       heading = this.yaw;
       this.tp += ((this.view === 'tp' ? 1 : 0) - this.tp) * damp(4, dt);
       t.tourStop = null;
@@ -1605,7 +1782,12 @@ export class StroykaEngine {
     const fz = Math.cos(h);
     const bob = moving * Math.sin(this.walkPhase * 2) * 0.045;
     const sway = moving * Math.sin(this.walkPhase) * 0.03;
-    const eye = this.tmpA.set(this.player.x - fz * sway, 1.65 + bob, this.player.z + fx * sway);
+    const rise = this.mode === 'free' ? this.rise : 0;
+    const eye = this.tmpA.set(
+      this.player.x - fz * sway,
+      1.65 + bob + rise,
+      this.player.z + fx * sway,
+    );
     const fpLook =
       this.mode === 'tour' && Math.abs(this.lookOffset) < 0.01
         ? this.lookTarget.clone()
@@ -1616,12 +1798,12 @@ export class StroykaEngine {
           );
     const tpPos = new THREE.Vector3(
       this.player.x - fx * 3.4 - fz * 0.75,
-      2.35 - pitch * 1.2,
+      2.35 - pitch * 1.2 + rise,
       this.player.z - fz * 3.4 + fx * 0.75,
     );
     const tpLook = new THREE.Vector3(
       this.player.x + fx * 6,
-      1.4 + Math.sin(pitch) * 6,
+      1.4 + Math.sin(pitch) * 6 + rise,
       this.player.z + fz * 6,
     );
     const s = smooth(0, 1, this.tp);
@@ -1653,8 +1835,8 @@ export class StroykaEngine {
     av.rotation.y = heading;
     walk(this.avatar, this.walkPhase, moving);
 
-    // Zones.
-    const zone = detectZone(this.player.x, this.player.z, this.zone);
+    // Zones (not while flying over them to a chosen place).
+    const zone = this.travel ? this.zone : detectZone(this.player.x, this.player.z, this.zone);
     if (zone !== this.zone) {
       this.zone = zone;
       t.zone = zone;

@@ -20,6 +20,7 @@ export default function StroykaWorld({
   onAdClick,
   onDog,
   onIntroEnd,
+  onPerson,
   onError,
 }: {
   mobile: boolean;
@@ -32,6 +33,7 @@ export default function StroykaWorld({
   onAdClick: (target: AdTarget) => void;
   onDog?: () => void;
   onIntroEnd?: () => void;
+  onPerson?: (id: string, zone?: ZoneId) => void;
   onError: (error: unknown) => void;
 }) {
   const canvas = useRef<HTMLCanvasElement>(null);
@@ -44,10 +46,21 @@ export default function StroykaWorld({
     onAdClick,
     onDog,
     onIntroEnd,
+    onPerson,
     onEngine,
     onError,
   });
-  cb.current = { onZone, onProgress, onWantFree, onAdClick, onDog, onIntroEnd, onEngine, onError };
+  cb.current = {
+    onZone,
+    onProgress,
+    onWantFree,
+    onAdClick,
+    onDog,
+    onIntroEnd,
+    onPerson,
+    onEngine,
+    onError,
+  };
 
   useEffect(() => {
     let engine: StroykaEngine | null = null;
@@ -64,6 +77,7 @@ export default function StroykaWorld({
       onAdClick: (m) => cb.current.onAdClick(m),
       onDog: () => cb.current.onDog?.(),
       onIntroEnd: () => cb.current.onIntroEnd?.(),
+      onPerson: (id, z) => cb.current.onPerson?.(id, z),
     })
       .then((created) => {
         if (cancelled) {

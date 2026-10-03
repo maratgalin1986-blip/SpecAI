@@ -138,3 +138,40 @@ test('stroyka chapter card and memory offer', async ({ page }) => {
   expect(await stored()).toContain('declinedAt');
   expect(errors, 'page errors').toEqual([]);
 });
+
+// The visitor leads in 3D: the camera never moves by itself, and «Куда идём?»
+// flies to the chosen place (owner, 2026-10-03: «сам выбирал, куда идти»).
+test('stroyka chooser', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop', 'one run is enough');
+  // Software WebGL renders about a frame a second: React updates come late.
+  test.setTimeout(300_000);
+  const errors = await guard(page);
+  await page.goto('/stroyka?nointro=1&3d=1', { waitUntil: 'load' });
+  const ready = await page
+    .waitForFunction(() => Boolean((window as { __stroyka?: unknown }).__stroyka), null, {
+      timeout: 45_000,
+    })
+    .then(() => true)
+    .catch(() => false);
+  test.skip(!ready, 'no WebGL in this browser');
+  type W = { __stroyka: { state: () => { camera: number[]; intro: boolean } } };
+  await page.waitForFunction(() => !(window as unknown as W).__stroyka.state().intro);
+  // The blend out of the opening shot, then the camera must stay put.
+  await page.waitForTimeout(2500);
+  const camera = () => page.evaluate(() => (window as unknown as W).__stroyka.state().camera);
+  const before = await camera();
+  await page.waitForTimeout(3000);
+  expect(await camera(), 'no surprise moves').toEqual(before);
+  // Clicks go in through the page (dispatchEvent): software rendering holds
+  // real input events back for a long time.
+  await page.evaluate(() =>
+    (window as unknown as { __stroyka: { fx: (on: boolean) => void } }).__stroyka.fx(false),
+  );
+  await page.getByTestId('nav-open').dispatchEvent('click');
+  await expect(page.getByTestId('nav-chooser')).toBeVisible({ timeout: 60_000 });
+  await expect(page.getByTestId('nav-person-npc-office')).toBeAttached();
+  await page.getByTestId('nav-zone-sklad').dispatchEvent('click');
+  await expect(page.getByTestId('zone-title')).toHaveText(/Склад/, { timeout: 150_000 });
+  await expect(page.getByTestId('order-btn')).toBeAttached();
+  expect(errors, 'page errors').toEqual([]);
+});
