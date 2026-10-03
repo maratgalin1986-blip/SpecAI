@@ -392,8 +392,10 @@ export class SoundEngine {
     // No Russian voice in this browser, or someone is talking: stay quiet.
     if (!russianVoices().length || this.speaking) return;
     const line = SITE_LINES[Math.floor(Math.random() * SITE_LINES.length)]!;
-    // Half the time the line comes over a walkie-talkie.
-    this.enqueue({ line, radio: Math.random() < 0.5, volume: 0.16 });
+    // Half the time the line comes over a walkie-talkie; an answer follows in its own voice.
+    const radio = Math.random() < 0.5;
+    this.enqueue({ line, radio, volume: 0.16 });
+    if (line.reply) this.enqueue({ line: line.reply, radio, volume: 0.16 });
   }
 
   /**

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  CONSENT_DAYS,
   CONSENT_VERSION,
   MAX_CHARS,
   MEMORY_KEY,
@@ -16,7 +17,9 @@ import {
   nameFromText,
   newSession,
   rememberFacts,
+  sanitize,
   saveMemory,
+  seedFromMemory,
   serialize,
   type VisitorMemory,
 } from './visitorMemory';
@@ -193,5 +196,53 @@ describe('names', () => {
     expect(cleanName('Имя не указано')).toBeNull();
     expect(cleanName('<b>Марат</b>')).toBeNull();
     expect(cleanName('  анна  мария ')).toBe('Анна Мария');
+  });
+});
+
+describe('consent for 12 months, the visit starts from memory', () => {
+  const DAY = 86_400_000;
+  const at = new Date('2026-01-10T09:00:00Z');
+  const remembered = () =>
+    grantConsent(
+      { ...emptyMemory(), visits: 1 },
+      { name: 'Марат', task: 'котлован под фундамент', machine: 'backhoe', sent: true },
+      at,
+      '2026-01-10',
+    );
+
+  it('keeps the personal memory for less than 365 days, drops it after', () => {
+    expect(CONSENT_DAYS).toBe(365);
+    const raw = JSON.parse(JSON.stringify(remembered()));
+    const inside = sanitize(raw, at.getTime() + 364 * DAY);
+    expect(hasConsent(inside)).toBe(true);
+    expect(inside.name).toBe('Марат');
+    const after = sanitize(raw, at.getTime() + 365 * DAY);
+    expect(hasConsent(after)).toBe(false);
+    expect(after.name).toBeUndefined();
+    expect(after.task).toBeUndefined();
+    expect(after.sent).toBeUndefined();
+    // Not personal, so kept without consent.
+    expect(after.visits).toBe(1);
+    // Loading and saving after expiry writes nothing personal back.
+    const s = store({ [MEMORY_KEY]: JSON.stringify(raw) });
+    const loaded = loadMemory(s, at.getTime() + 400 * DAY);
+    expect(serialize(loaded, at.getTime() + 400 * DAY)).not.toContain('Марат');
+  });
+
+  it('seeds the job, the machine and the name only with consent', () => {
+    expect(seedFromMemory(remembered())).toEqual({
+      task: 'котлован под фундамент',
+      machine: 'backhoe',
+      name: 'Марат',
+    });
+    expect(seedFromMemory(forget(remembered(), at.getTime()))).toEqual({});
+    expect(seedFromMemory(emptyMemory())).toEqual({});
+  });
+
+  it('remembers when the order went out', () => {
+    const m = rememberFacts(remembered(), { sentAt: at.getTime() });
+    expect(sanitize(JSON.parse(serialize(m, at.getTime())), at.getTime()).sentAt).toBe(
+      at.getTime(),
+    );
   });
 });

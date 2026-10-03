@@ -6,7 +6,7 @@ import { SITE } from '@/lib/site';
 import { SPEAKERS, type Reply } from '@/lib/stroyka';
 import type { RadioLine } from '@/lib/stroyka/context';
 import { BANTER_NAMES, splitCensored, type BanterSpeaker } from '@/lib/stroykaJokes';
-import { moodLine, type Mood } from '@/lib/stroyka/mood';
+import type { Mood } from '@/lib/stroyka/mood';
 import { Portrait } from './Portraits';
 import { ConsentText } from '@/components/ConsentText';
 import { listen } from './voiceInput';
@@ -64,10 +64,14 @@ export interface DialogueChat {
   onSendPhone: () => void;
   /** The visitor started typing or speaking: keep the window, stop the tour. */
   onEngage: () => void;
+  /** The chat field lost focus: zones and offers may come again. */
+  onRelease?: () => void;
 }
 
 export interface DialogueForm {
   message: string;
+  /** The visitor's name, if told: the form starts with it. */
+  name?: string;
   needAddress: boolean;
   onAddress: (address: string) => void;
   onSubmit: () => void;
@@ -86,6 +90,7 @@ export function DialogueBox({
   chat,
   instant,
   skipTyping,
+  compact = false,
   onReply,
   onClose,
 }: {
@@ -102,6 +107,8 @@ export function DialogueBox({
   instant: boolean;
   /** Bumped by «Пропустить»: finishes the typewriter at once. */
   skipTyping: number;
+  /** Something sits on top (the memory offer): the box gives up height, the zone strip stays reachable. */
+  compact?: boolean;
   onReply: (reply: Reply) => void;
   onClose: () => void;
 }) {
@@ -124,21 +131,20 @@ export function DialogueBox({
       data-testid="dialogue"
       aria-live="polite"
       aria-label={`Говорит: ${name}`}
-      className="ym-hide-content pointer-events-auto mx-auto flex max-h-[52dvh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-amber-500/50 bg-slate-950/95 text-white antialiased shadow-2xl"
+      className={`ym-hide-content pointer-events-auto mx-auto flex ${compact ? 'max-h-[34dvh]' : 'max-h-[52dvh]'} w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-amber-500/50 bg-slate-950 text-white antialiased shadow-2xl`}
     >
       <div className="flex-1 overflow-y-auto overscroll-contain p-3 sm:p-4">
         {radio.length > 0 && (
           <div
             data-testid="radio-exchange"
-            className="mb-2 rounded-lg border border-emerald-400/30 bg-emerald-950/40 p-2 font-mono text-xs text-emerald-200"
+            className="mb-2 rounded-lg border border-emerald-400/40 bg-emerald-950 p-2 font-mono text-sm font-semibold text-emerald-100"
           >
-            <div className="mb-1 text-[10px] uppercase tracking-widest text-emerald-400">
+            <div className="mb-1 text-sm font-semibold uppercase tracking-widest text-emerald-400">
               Рация · кшш…
             </div>
             {radio.map((line, i) => (
               <p key={i}>
-                <b>{SPEAKERS[line.speaker].name.split(' ').pop()}:</b> «
-                {moodLine({ speaker: line.speaker, text: line.text, kind: 'radio' }).text}»{' '}
+                <b>{SPEAKERS[line.speaker].name.split(' ').pop()}:</b> «{line.text}»{' '}
                 <span className="opacity-60">кшш</span>
               </p>
             ))}
@@ -152,7 +158,7 @@ export function DialogueBox({
           />
           <div className="min-w-0 flex-1">
             <div className="flex items-start justify-between gap-2">
-              <div className="font-mono text-xs font-bold uppercase tracking-wider text-amber-400">
+              <div className="font-mono text-sm font-bold uppercase tracking-wider text-amber-400">
                 {name}
               </div>
               <button
@@ -208,8 +214,13 @@ export function DialogueBox({
                 source="stroyka"
                 dark
                 title="Заявка — Свете"
-                subtitle={`${SITE.callbackPromise}. Всё, что вы рассказали, уже в заявке.`}
+                subtitle={
+                  form.message
+                    ? `${SITE.callbackPromise}. Всё, что вы рассказали, уже в заявке.`
+                    : `${SITE.callbackPromise}.`
+                }
                 defaultMessage={form.message}
+                defaultName={form.name}
               />
             </div>
           </div>
@@ -237,10 +248,10 @@ export function DialogueBox({
         )}
         {extra && (
           <p
-            className="mt-3 border-t border-white/10 pt-2 text-sm font-medium italic text-slate-200"
+            className="mt-3 border-t border-white/10 pt-2 text-[15px] font-semibold not-italic leading-snug text-white"
             data-testid="banter"
           >
-            <b className="not-italic text-slate-400">{BANTER_NAMES[extra.speaker]}:</b>{' '}
+            <b className="font-bold text-amber-300">{BANTER_NAMES[extra.speaker]}:</b>{' '}
             <Censored text={extra.text} />
           </p>
         )}
@@ -333,6 +344,9 @@ export function DialogueBox({
               chat.onEngage();
             }}
             onFocus={chat.onEngage}
+            onBlur={() => {
+              if (!message.trim() && !listening) chat.onRelease?.();
+            }}
             maxLength={300}
             placeholder={voiceHint ?? chat.placeholder}
             aria-label={chat.placeholder}

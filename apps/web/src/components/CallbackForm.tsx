@@ -13,17 +13,20 @@ import { useHydrated } from '@/lib/useHydrated';
 export function CallbackForm({
   source,
   defaultMessage = '',
+  defaultName = '',
   title = 'Заявка на звонок',
   subtitle = 'Оставьте телефон — менеджер перезвонит, подберёт технику и назовёт цену.',
   dark = false,
 }: {
   source: string;
   defaultMessage?: string;
+  /** A name the visitor already told (the /stroyka chat): the field starts with it. */
+  defaultName?: string;
   title?: string;
   subtitle?: string;
   dark?: boolean;
 }) {
-  const [name, setName] = useState('');
+  const [name, setName] = useState(defaultName);
   const [phone, setPhone] = useState('');
   const [message, setMessage] = useState(defaultMessage);
   const [point, setPoint] = useState<MapPoint | null>(null);

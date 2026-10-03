@@ -16,6 +16,7 @@ import {
   dialogueNode,
   FORM_NODE,
   MACHINE_ZONE,
+  nextZone,
   SPEAKERS,
   ZONES,
   zoneById,
@@ -130,6 +131,7 @@ import {
   newSession,
   rememberFacts,
   saveMemory,
+  seedFromMemory,
   type PersonalFacts,
   type VisitorMemory,
 } from '@/lib/stroyka/visitorMemory';
@@ -147,7 +149,12 @@ type Phase = 'boot' | 'film' | '3d' | 'fallback';
 interface DialogState {
   nodeId: string;
   radio: RadioLine[];
-  /** The visitor is busy with it (answered, form open): the tour waits, zones do not replace it. */
+  /**
+   * The visitor answered or typed: the 3D tour holds at this stop. Whether a
+   * zone change may replace the conversation is `busy()` (the chat field in
+   * focus, Света's form or the order panel open); a zone the visitor picks
+   * always opens.
+   */
   engaged: boolean;
   key: number;
 }
@@ -155,9 +162,17 @@ interface DialogState {
 const BUBBLE_CSS = `.stroyka-bubble{position:absolute;left:0;top:0;max-width:min(240px,60vw);padding:6px 10px;border-radius:12px;background:#fff;color:#0f172a;font-size:14px;line-height:1.3;font-weight:700;-webkit-font-smoothing:antialiased;box-shadow:0 6px 18px rgba(0,0,0,.35);transition:opacity .35s;opacity:0;will-change:transform}
         .stroyka-bubble::after{content:'';position:absolute;left:50%;bottom:-6px;margin-left:-6px;border:6px solid transparent;border-top-color:#fff;border-bottom:0}
         .stroyka-censor{color:#dc2626;font-weight:900}
-        .crew-sub{animation:crew-sub 4.5s ease forwards}
-        @keyframes crew-sub{0%{opacity:0;transform:translateY(4px)}8%{opacity:1;transform:none}80%{opacity:1}100%{opacity:0}}
+        .crew-sub{animation:crew-sub 4.5s linear forwards}
+        @keyframes crew-sub{0%{opacity:0}4%{opacity:1}95%{opacity:1}100%{opacity:0}}
         @media (prefers-reduced-motion:reduce){.crew-sub{animation:none}}`;
+
+const CHAT_PLACEHOLDER: Record<SpeakerId, string> = {
+  mihalych: 'Напишите прорабу…',
+  rinat: 'Напишите машинисту…',
+  ildar: 'Напишите крановщику…',
+  sveta: 'Напишите Свете…',
+  alsu: 'Напишите Алсу…',
+};
 
 const VISIT_KEY = 'stroyka.visit.v1';
 const WEATHER_KEY = 'stroyka.weather.v1';
@@ -239,6 +254,8 @@ export function Stroyka() {
   const [timelapse, setTimelapse] = useState(false);
   const [away, setAway] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const toastRef = useRef(toast);
+  toastRef.current = toast;
   const [extra, setExtra] = useState<{ speaker: BanterSpeaker; text: string } | null>(null);
   const [cardOpen, setCardOpen] = useState(false);
   const pendingRadio = useRef<RadioLine[]>([]);
@@ -276,7 +293,12 @@ export function Stroyka() {
   const returning = useRef(false);
   const [consented, setConsented] = useState(false);
   const facts = useRef<PersonalFacts>({});
-  const welcome = useRef<{ key: number; greeting: string; known: string } | null>(null);
+  const welcome = useRef<{
+    key: number;
+    greeting: string;
+    known: string;
+    speaker: SpeakerId;
+  } | null>(null);
   const [memoryNote, setMemoryNote] = useState<MemoryNote | null>(null);
   const offered = useRef(false);
   const hooksSaid = useRef(new Set<SpeakerId>());
@@ -346,13 +368,20 @@ export function Stroyka() {
 
   // «Значки прораба»: just for fun, kept in localStorage.
   useEffect(() => setBadges(loadBadges()), []);
+  // A badge earned while the end credits roll waits until they close.
+  const creditsOn = useRef(false);
+  const heldBadges = useRef<string[]>([]);
   const earn = useCallback((event: BadgeEvent) => {
     const { state, earned } = applyBadge(badgesRef.current, event);
     if (JSON.stringify(state) === JSON.stringify(badgesRef.current)) return;
     badgesRef.current = state;
     setBadges(state);
     saveBadges(state);
-    for (const b of earned) setToast(`🏅 Новый значок: ${b.icon} «${b.title}»`);
+    for (const b of earned) {
+      const text = `🏅 Новый значок: ${b.icon} «${b.title}»`;
+      if (creditsOn.current) heldBadges.current.push(text);
+      else setToast(text);
+    }
   }, []);
 
   // ------------------------------------------------------------ boot
@@ -392,6 +421,15 @@ export function Stroyka() {
       memory.current = started.memory;
       saveMemory(started.memory);
       setConsented(hasConsent(started.memory));
+      // With consent the visit starts where the last one stopped: the job,
+      // the machine and the name are in the order (and the form) from the start.
+      const seed = seedFromMemory(started.memory);
+      if (seed.task || seed.machine || seed.name) {
+        const c: OrderContext = { ...emptyContext(), ...seed };
+        ctxRef.current = c;
+        setCtx(c);
+        facts.current = { ...seed };
+      }
     }
     import('@/lib/stroyka/lines').then((mod) => {
       linesMod.current = mod;
@@ -493,7 +531,8 @@ export function Stroyka() {
         const message = awayMessage(prev, p, Date.now());
         if (message) {
           setAway(message);
-          setToast(message);
+          // Filler («Работа идёт по плану.») is not news: no toast for it.
+          if (awayTail(message)) setToast(message);
         }
         if (
           prev &&
@@ -589,14 +628,14 @@ export function Stroyka() {
         text = `${contextIntro(c, node.speaker)} ${text}`;
       if (node.id === 'gate-next') {
         // The foreman offers a rough estimate for the job (the /smeta calculator).
-        text = `${text} Хотите, прикину смету? Скажите размеры — посчитаю примерно, а Света уточнит.`;
+        text = `${text} Хочешь, прикину смету? Скажи размеры — посчитаю примерно, а Света уточнит.`;
         return {
           ...node,
           text,
           replies: [
             ...node.replies,
             {
-              label: '🧮 Прикинуть смету',
+              label: 'Прикинуть смету',
               action: { kind: 'link', href: smetaHref(c.task, c.machine) },
             },
           ],
@@ -632,9 +671,9 @@ export function Stroyka() {
 
   /** The greeting plus «пока вас не было…» (the progress may arrive a moment later). */
   const welcomeText = useCallback(
-    (w: { greeting: string; known: string }) =>
+    (w: { greeting: string; known: string; speaker: SpeakerId }) =>
       // «Имя, с возвращением! Пока вас не было: … В прошлый раз вы спрашивали про …»
-      [w.greeting, awayTail(away), w.known].filter(Boolean).join(' '),
+      [w.greeting, awayTail(away, w.speaker), w.known].filter(Boolean).join(' '),
     [away],
   );
 
@@ -654,7 +693,7 @@ export function Stroyka() {
         const known = ok
           ? [lastTimeLine(node.speaker, m), orderStatusLine(node.speaker, m)].filter(Boolean)
           : [];
-        welcome.current = { key, greeting: g.text, known: known.join(' ') };
+        welcome.current = { key, greeting: g.text, known: known.join(' '), speaker: node.speaker };
         commitMemory({ ...m, greeting: g.id });
       }
       if (welcome.current?.key === key)
@@ -667,6 +706,14 @@ export function Stroyka() {
       });
       emitDialog(node.speaker, shown.text, 'business', shown.mood);
       engine?.speak(node.speaker, shown.mood, 6);
+      dialogSpeaker.current = node.speaker;
+      // An open offer to remember the visitor comes from whoever is talking now.
+      if (node.speaker !== 'sveta' || nodeId !== FORM_NODE)
+        setMemoryNote((n) =>
+          n?.mode === 'offer' && n.speaker !== node.speaker
+            ? { ...n, speaker: node.speaker, text: OFFER_TEXT[node.speaker] }
+            : n,
+        );
       setExtra(null);
       setChat(null);
       setPendingPhone(null);
@@ -674,6 +721,22 @@ export function Stroyka() {
     },
     [nodeFor, away, engine, earn, commitMemory, welcomeText],
   );
+
+  // The visitor is busy (nothing replaces the conversation, no offer pops up):
+  // the chat field in focus, Света's order form on screen or the order panel open.
+  const chatFocus = useRef(false);
+  const [typing, setTyping] = useState(false);
+  const busy = useCallback(
+    () =>
+      chatFocus.current ||
+      orderOpen.current ||
+      (!!dialogRef.current && dialogRef.current.nodeId === FORM_NODE),
+    [],
+  );
+  /** Who speaks in the open conversation (the offer comes from them). */
+  const dialogSpeaker = useRef<SpeakerId | null>(null);
+  // A zone the visitor chose (strip, swipe, «Дальше по объекту», «Показать технику»).
+  const pickedZone = useRef<ZoneId | null>(null);
 
   const openZoneDialog = useCallback(
     (z: ZoneId) => {
@@ -697,11 +760,11 @@ export function Stroyka() {
       ) {
         offered.current = true;
         window.setTimeout(() => {
-          if (dialogRef.current?.engaged || orderOpen.current) {
+          if (busy()) {
             offered.current = false;
             return;
           }
-          const who = offerSpeaker(zn.speaker);
+          const who = offerSpeaker(dialogSpeaker.current ?? zn.speaker);
           setMemoryNote({ mode: 'offer', speaker: who, text: OFFER_TEXT[who] });
         }, 3000);
       }
@@ -718,7 +781,22 @@ export function Stroyka() {
         emitDialog(zn.speaker, shown.text, 'joke', shown.mood);
       }
     },
-    [openNode, engine, earn, seasonLine],
+    [openNode, engine, earn, seasonLine, busy],
+  );
+
+  /** The visitor chose a zone: it opens now, whatever was on screen. */
+  const pickZone = useCallback(
+    (z: ZoneId) => {
+      chatFocus.current = false;
+      setTyping(false);
+      if (zone === z) {
+        openZoneDialog(z);
+        return;
+      }
+      pickedZone.current = z;
+      setZone(z);
+    },
+    [zone, openZoneDialog],
   );
 
   // The film tour starts at the gate, with the foreman's greeting.
@@ -734,7 +812,11 @@ export function Stroyka() {
     if (zone) for (const m of zoneById(zone).machines) emitScene(m, true);
     engine?.setActiveZone(zone);
     if (zone) earn({ type: 'zone', zone, all: ALL_ZONES });
-    if (dialogRef.current?.engaged) return;
+    // A zone the visitor picked always opens; walking or the tour into a zone
+    // waits only while the visitor is typing, filling in the form or ordering.
+    const picked = pickedZone.current === zone;
+    pickedZone.current = null;
+    if (!picked && busy()) return;
     if (!zone) {
       setDialog(null);
       return;
@@ -757,13 +839,12 @@ export function Stroyka() {
       ctxRef.current = c;
       setDialog(null);
       dialogRef.current = null;
-      if (phase === '3d' && engine) engine.goToZone(z);
-      if (phase === 'fallback' || phase === 'film' || zone === z) {
-        setZone(z);
-        openZoneDialog(z);
-      }
+      if (phase === '3d' && engine && zone !== z) {
+        pickedZone.current = z;
+        engine.goToZone(z);
+      } else pickZone(z);
     },
-    [engine, logRadio, openZoneDialog, phase, zone],
+    [engine, logRadio, phase, zone, pickZone],
   );
 
   const onReply = useCallback(
@@ -791,6 +872,13 @@ export function Stroyka() {
         }
         case 'next':
           setCtx(next);
+          ctxRef.current = next;
+          // The film and the 2D map go to the next stop and open it; in 3D the
+          // tour moves on (or the visitor walks on in the free mode).
+          if (phase === 'film' || phase === 'fallback') {
+            pickZone(nextZone(zone ?? 'gate'));
+            return;
+          }
           setDialog(null);
           if (mode === 'tour') engine?.next();
           return;
@@ -805,13 +893,19 @@ export function Stroyka() {
         }
       }
     },
-    [engine, handoffToZone, logRadio, mode, nodeFor, openNode],
+    [engine, handoffToZone, logRadio, mode, nodeFor, openNode, phase, pickZone, zone],
   );
 
   // Typing or speaking to someone holds the tour at this stop: the window must
   // not close under the visitor's fingers (owner, 2026-10-03).
   const engageDialog = useCallback(() => {
+    chatFocus.current = true;
+    setTyping(true);
     setDialog((d) => (d && !d.engaged ? { ...d, engaged: true } : d));
+  }, []);
+  const releaseDialog = useCallback(() => {
+    chatFocus.current = false;
+    setTyping(false);
   }, []);
 
   const closeDialog = () => {
@@ -951,6 +1045,7 @@ export function Stroyka() {
     try {
       await submitLead({
         phone: pendingPhone,
+        name: ctxRef.current.name,
         message: orderSummary(ctxRef.current) || 'Заявка со стройки на сайте',
         source: 'stroyka',
         consent: true,
@@ -971,7 +1066,7 @@ export function Stroyka() {
   /** A text line under the business one; voiced only where a voice exists. */
   const sayExtra = useCallback(
     (speaker: SpeakerId, text: string, voiced: boolean) => {
-      const shown = moodLine({ speaker, text, kind: 'joke', hour: hourRef.current });
+      const shown = moodLine({ speaker, text, kind: 'joke', hour: hourRef.current, plain: true });
       setExtra({ speaker, text: shown.text });
       if (!voiced) return;
       emitDialog(speaker, shown.text, 'joke', shown.mood);
@@ -1098,6 +1193,9 @@ export function Stroyka() {
   const rememberName = useCallback(
     (name: string) => {
       facts.current = { ...facts.current, name };
+      // For this visit: the radio, the form and the credits call the visitor by name.
+      ctxRef.current = { ...ctxRef.current, name };
+      setCtx((c) => ({ ...c, name }));
       if (hasConsent(memory.current)) commitMemory(rememberFacts(memory.current, { name }));
     },
     [commitMemory],
@@ -1106,8 +1204,14 @@ export function Stroyka() {
   // The order went through: end credits (and, with consent, the order status).
   const rollCredits = useCallback(() => {
     const c = ctxRef.current;
-    setEndCredits(buildCredits(c, uniq([...met.current, ...c.heardBy])));
-    const sent: PersonalFacts = { sent: true, sentMachine: c.machine };
+    creditsOn.current = true;
+    // A badge toast already on screen waits for the end of the credits too.
+    if (toastRef.current?.startsWith('🏅')) {
+      heldBadges.current.push(toastRef.current);
+      setToast(null);
+    }
+    setEndCredits(buildCredits(c, uniq([...met.current, ...c.heardBy]), c.name));
+    const sent: PersonalFacts = { sent: true, sentMachine: c.machine, sentAt: Date.now() };
     facts.current = { ...facts.current, ...sent };
     if (hasConsent(memory.current)) commitMemory(rememberFacts(memory.current, sent));
   }, [commitMemory]);
@@ -1155,7 +1259,7 @@ export function Stroyka() {
     const name = memory.current.name;
     commitMemory(forget(memory.current, Date.now()));
     facts.current = {};
-    setMemoryNote({ mode: 'bye', speaker: 'mihalych', text: forgetText(name) });
+    setMemoryNote({ mode: 'bye', speaker: 'sveta', text: forgetText(name) });
   }, [commitMemory]);
   // The short answers fade by themselves.
   useEffect(() => {
@@ -1173,7 +1277,13 @@ export function Stroyka() {
     return nextDays.current.days;
   }, []);
 
-  const closeCredits = useCallback(() => setEndCredits(null), []);
+  const closeCredits = useCallback(() => {
+    setEndCredits(null);
+    creditsOn.current = false;
+    const held = heldBadges.current;
+    heldBadges.current = [];
+    if (held.length) setToast(held.join(' · '));
+  }, []);
 
   // ------------------------------------------------------------ ambient banter, site events, radio
   const conditions = useMemo<LineConditions>(
@@ -1301,6 +1411,7 @@ export function Stroyka() {
         kind: 'joke',
         tags: ['joke'],
         hour: hourRef.current,
+        plain: true,
       });
       emitDialog('worker', shown.text, 'joke', shown.mood);
       setCrewSub({ name: line.name, text: shown.text, key: ++keyRef.current });
@@ -1400,12 +1511,12 @@ export function Stroyka() {
       current?.speaker ?? (zone ? zoneById(zone).speaker : 'mihalych'),
     );
   };
-  const onFallbackZone = (z: ZoneId) => {
-    setZone(z);
-    if (zone === z) openZoneDialog(z);
-  };
+  const onFallbackZone = (z: ZoneId) => pickZone(z);
 
   const node = dialog ? nodeFor(dialog.nodeId, ctx) : null;
+  const formOpen = !!node?.form && !chat;
+  const showNote =
+    !!memoryNote && !(memoryNote.mode === 'offer' && (typing || order.open || formOpen));
   const gateAway =
     dialog && welcome.current?.key === dialog.key ? `${welcomeText(welcome.current)} ` : '';
   const shownLine = chat
@@ -1755,7 +1866,7 @@ export function Stroyka() {
       {toast && (
         <div
           data-testid="toast"
-          className="pointer-events-none absolute inset-x-0 top-[calc(env(safe-area-inset-top)+3.25rem)] z-[66] mx-auto w-[min(90vw,30rem)] rounded-xl bg-slate-950/95 px-4 py-3 text-center text-sm font-semibold text-white shadow-xl sm:top-[38%] sm:z-30"
+          className="pointer-events-none absolute inset-x-0 top-[calc(env(safe-area-inset-top)+3.25rem)] z-[66] mx-auto w-[min(90vw,30rem)] rounded-xl bg-slate-950 px-4 py-3 text-center text-sm font-semibold text-white shadow-xl sm:top-[38%] sm:z-30"
         >
           {toast}
         </div>
@@ -1801,7 +1912,7 @@ export function Stroyka() {
             key={crewSub.key}
             data-testid="crew-subtitle"
             aria-live="off"
-            className="crew-sub max-w-[min(26rem,85vw)] self-start rounded-lg bg-slate-950/85 px-3 py-1.5 text-[13px] font-medium leading-snug text-white antialiased sm:text-sm"
+            className="crew-sub max-w-[min(26rem,85vw)] self-start rounded-lg bg-slate-950 px-3 py-1.5 text-[15px] font-semibold leading-snug text-white antialiased"
           >
             <b className="font-semibold text-amber-300">{crewSub.name}:</b>{' '}
             <Censored text={crewSub.text} />
@@ -1820,7 +1931,7 @@ export function Stroyka() {
               </button>
             )
           : null}
-        {memoryNote && !(memoryNote.mode === 'offer' && (dialog?.engaged || order.open)) && (
+        {showNote && memoryNote && (
           <MemoryOffer note={memoryNote} onYes={onMemoryYes} onNo={onMemoryNo} />
         )}
         {dialog && node && (
@@ -1830,12 +1941,7 @@ export function Stroyka() {
             text={shownLine?.text ?? node.text}
             mood={shownLine?.mood}
             chat={{
-              placeholder:
-                (chat?.speaker ?? node.speaker) === 'sveta'
-                  ? 'Напишите Свете…'
-                  : (chat?.speaker ?? node.speaker) === 'mihalych'
-                    ? 'Напишите прорабу…'
-                    : 'Напишите машинисту…',
+              placeholder: CHAT_PLACEHOLDER[chat?.speaker ?? node.speaker],
               quick: chat?.quick ?? [],
               onSend: (text) => void onChatSend(text),
               onQuick: (i) => chat?.quick[i] && onChatQuick(chat.quick[i]!),
@@ -1843,18 +1949,21 @@ export function Stroyka() {
               sending: phoneSending,
               onSendPhone: () => void onSendPhone(),
               onEngage: engageDialog,
+              onRelease: releaseDialog,
             }}
             replies={node.replies}
             radio={dialog.radio}
             extra={extra}
             instant={reduced}
             skipTyping={skipTyping}
+            compact={showNote}
             onReply={(reply) => onReply(reply)}
             onClose={closeDialog}
             form={
               node.form && !chat
                 ? {
                     message: orderSummary(ctx),
+                    name: ctx.name,
                     needAddress: !ctx.address,
                     onAddress: (address) => {
                       const next = applyReply(ctxRef.current, 'Адрес', { address });

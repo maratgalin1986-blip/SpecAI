@@ -5,6 +5,7 @@ import {
   smetaHref,
   hazardOf,
   machineFor,
+  nameReply,
   parsePlace,
   parseWhen,
   respond,
@@ -202,5 +203,52 @@ describe('QA fixes: generic excavator, date phrasing', () => {
     expect(whenPhrase('завтра')).toBe('на завтра');
     expect(whenPhrase('15 октября')).toBe('на 15 октября');
     expect(whenPhrase('на выходных')).toBe('на выходных');
+  });
+});
+
+describe('the visitor tells their name', () => {
+  it("answers with the name, in each character's voice", () => {
+    const ctx = emptyContext();
+    expect(respond('меня зовут Марат', 'mihalych', ctx, NOW).text).toBe(
+      'Марат — понял, запомню. Ну, Марат, что строим?',
+    );
+    expect(respond('Меня зовут Марат', 'rinat', ctx, NOW).text).toBe(
+      'Очень приятно, Марат. Что копаем?',
+    );
+    expect(respond('я Марат', 'ildar', ctx, NOW).text).toBe('Марат, принял. Что поднимаем?');
+    expect(respond('меня зовут марат', 'sveta', ctx, NOW).text).toBe(
+      'Марат, записала. Что за работа и куда?',
+    );
+    expect(respond('это Марат', 'alsu', ctx, NOW).text).toBe(
+      'Приятно познакомиться, Марат. Что привезти?',
+    );
+    expect(understand('меня зовут Марат', NOW).intents).toContain('name');
+    expect(understand('меня зовут Марат', NOW).name).toBe('Марат');
+  });
+
+  it('says the name back also when the job comes in the same message', () => {
+    const r = respond('меня зовут Марат, нужен экскаватор завтра', 'mihalych', emptyContext(), NOW);
+    expect(r.text.startsWith('Марат, приятно познакомиться.')).toBe(true);
+    expect(r.set.machine).toBe('backhoe');
+  });
+
+  it('never answers rudely when it does not understand', () => {
+    for (let i = 0; i < 6; i++) {
+      const r = respond('ывапр'.repeat(i + 1), 'mihalych', emptyContext(), NOW);
+      expect(r.text).not.toMatch(/переводчик/);
+    }
+    expect(nameReply('rinat', 'Ирина')).toBe('Очень приятно, Ирина. Что копаем?');
+  });
+
+  it('writes prices as «от … ₽/ч с машинистом»', () => {
+    const r = respond('сколько стоит', 'sveta', emptyContext(), NOW);
+    const rates = r.text.match(/₽\/ч[^,.)]*/g) ?? [];
+    expect(rates.length).toBeGreaterThan(3);
+    for (const m of rates) expect(m).toMatch(/^₽\/ч с\sмашинистом/);
+  });
+
+  it("puts the visitor's name on the radio", () => {
+    const [call] = radioHandoff('mihalych', 'sveta', { ...emptyContext(), name: 'Марат' });
+    expect(call!.text).toBe('Света, приём! Тут Марат — по технике.');
   });
 });

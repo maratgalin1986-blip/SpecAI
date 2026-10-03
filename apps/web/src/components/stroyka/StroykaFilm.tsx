@@ -117,7 +117,7 @@ export const StroykaFilm = memo(function StroykaFilm({
       <div className="pointer-events-none absolute inset-x-0 top-[18%] flex justify-center px-4 sm:top-[14%]">
         <p
           key={line}
-          className="intro-offer text-center text-2xl font-extrabold text-white drop-shadow-[0_2px_12px_rgba(0,0,0,0.9)] sm:text-4xl"
+          className="intro-offer text-center text-2xl font-extrabold text-white drop-shadow-[0_1px_0_rgba(0,0,0,0.9)] sm:text-4xl"
         >
           {OFFERS[line]!.line}
         </p>

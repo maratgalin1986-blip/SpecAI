@@ -20,6 +20,12 @@ export interface Line {
   speaker: BanterSpeaker;
   text: string;
   tags: string[];
+  /**
+   * A template line: `text` is the remark alone and one of these openers is
+   * put in front of it when the line is said (LinePicker.pick), so the
+   * shuffle-bag counts the remark once, whatever the opener.
+   */
+  openers?: string[];
 }
 
 function build(speaker: BanterSpeaker, hand: RawLine[], templates: Template): Line[] {
@@ -29,17 +35,28 @@ function build(speaker: BanterSpeaker, hand: RawLine[], templates: Template): Li
     text,
     tags: tags.split(' '),
   }));
-  templates.openers.forEach((opener, o) =>
-    templates.remarks.forEach(([remark, tags], r) =>
-      lines.push({
-        id: `${speaker}-t${o}-${r}`,
-        speaker,
-        text: opener + remark,
-        tags: tags.split(' '),
-      }),
-    ),
+  templates.remarks.forEach(([remark, tags], r) =>
+    lines.push({
+      id: `${speaker}-t-${r}`,
+      speaker,
+      text: remark,
+      tags: tags.split(' '),
+      openers: templates.openers,
+    }),
   );
   return lines;
+}
+
+/** Every text a line can be said as (a template line: each opener + the remark). */
+export function lineTexts(line: Line): string[] {
+  return line.openers ? line.openers.map((o) => o + line.text) : [line.text];
+}
+
+/** The line as said now: a template line gets a random opener. */
+export function sayLine(line: Line, random: () => number = Math.random): Line {
+  if (!line.openers?.length) return line;
+  const opener = line.openers[Math.floor(random() * line.openers.length) % line.openers.length]!;
+  return { id: line.id, speaker: line.speaker, text: opener + line.text, tags: line.tags };
 }
 
 export const LINES: Record<BanterSpeaker, Line[]> = {
@@ -94,13 +111,6 @@ export const RADIO_PAIRS: RadioPair[] = [
     b: 'sveta',
     bText: 'Приняла, Михалыч. Миксер на семь, второй — к девяти.',
     tags: 'any',
-  },
-  {
-    a: 'mihalych',
-    aText: 'Света, у соседей экскаватор сломался, просят помочь.',
-    b: 'sveta',
-    bText: 'Пусть звонят СпецПласт16 — у нас подача в день заявки. Шучу, уже записала их.',
-    tags: 'ad',
   },
   {
     a: 'sveta',
@@ -213,9 +223,10 @@ export class LinePicker {
   pick(speaker: BanterSpeaker, want: string[] = [], allowAd = true): Line | null {
     const pool = LINES[speaker];
     const lastWasAd = this.recent[this.recent.length - 1] === 'ad';
-    const ad = allowAd && !lastWasAd && this.random() < AD_SHARE;
+    const ads = pool.filter((l) => l.tags.includes('ad'));
+    const ad = allowAd && !lastWasAd && ads.length > 0 && this.random() < AD_SHARE;
     let candidates: Line[];
-    if (ad) candidates = pool.filter((l) => l.tags.includes('ad'));
+    if (ad) candidates = ads;
     else {
       const wanted = want.length ? pool.filter((l) => l.tags.some((t) => want.includes(t))) : [];
       candidates = wanted.length
@@ -225,8 +236,9 @@ export class LinePicker {
     }
     const id = this.bag.next(candidates.map((l) => l.id));
     const line = pool.find((l) => l.id === id) ?? null;
-    if (line) this.recent = [...this.recent, line.tags.includes('ad') ? 'ad' : 'line'].slice(-6);
-    return line;
+    if (!line) return null;
+    this.recent = [...this.recent, line.tags.includes('ad') ? 'ad' : 'line'].slice(-6);
+    return sayLine(line, this.random);
   }
 
   /** A radio exchange that fits the conditions. */

@@ -5,15 +5,15 @@ import { CallbackForm } from '@/components/CallbackForm';
 import { MACHINE_LABELS, type MachineType } from '@/lib/machinePhotos';
 import { MACHINE_WORKS } from '@/lib/machineWorks';
 import { SITE } from '@/lib/site';
-import { hourlyRate, orderHref, PRICES, rub, SHIFT_HOURS } from '@/lib/stroyka';
+import { hourlyRate, orderHref, P, PRICES, rub, SHIFT_HOURS } from '@/lib/stroyka';
 import { orderSummary, type OrderContext } from '@/lib/stroyka/context';
 import { smetaHref } from '@/lib/stroyka/smetaLink';
 
 const MACHINES = Object.keys(MACHINE_WORKS) as MachineType[];
 
 function priceNote(type: MachineType) {
-  if (type === 'crane') return `32 т — ${rub(PRICES.crane32)} ₽/ч`;
-  if (MACHINE_WORKS[type]?.hammerRate) return `гидромолот — ${rub(PRICES.hammer)} ₽/ч`;
+  if (type === 'crane') return `32 т — ${P(PRICES.crane32)}`;
+  if (MACHINE_WORKS[type]?.hammerRate) return `гидромолот — ${P(PRICES.hammer)}`;
   return null;
 }
 
@@ -98,7 +98,7 @@ export function OrderPanel({
                 <div className="flex flex-wrap items-baseline justify-between gap-x-3">
                   <span className="font-semibold">{MACHINE_LABELS[type]}</span>
                   <span className="font-mono text-sm text-amber-300">
-                    от {rub(rate)} ₽/ч · смена {rub(rate * SHIFT_HOURS)} ₽
+                    {P(rate)} · смена {rub(rate * SHIFT_HOURS)} ₽
                   </span>
                 </div>
                 {note && <div className="text-xs text-slate-400">{note}</div>}

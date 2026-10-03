@@ -58,7 +58,8 @@ export function pickCrewLine(
   random = Math.random,
 ): { id: string; name: string; text: string } {
   const local = zone ? ZONE_CREW[zone] : undefined;
-  const ids = Object.keys(CREW);
+  // Николай Петрович stays at his gate: elsewhere only the crew of the site talk.
+  const ids = Object.keys(CREW).filter((id) => id !== 'guard' || zone === 'gate');
   const id = local && random() < 0.7 ? local : ids[Math.floor(random() * ids.length) % ids.length]!;
   const line = crewLine(id, last ?? undefined, random)!;
   return { id, ...line };

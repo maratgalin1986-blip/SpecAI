@@ -139,6 +139,22 @@ test('stroyka chapter card and memory offer', async ({ page }) => {
   expect(errors, 'page errors').toEqual([]);
 });
 
+// The story goes on after the visitor engaged, and the amber order button
+// opens Света's form right in the film (no other page).
+test('stroyka order stays in the film', async ({ page }) => {
+  const errors = await guard(page);
+  await page.route('**/film/zones/*.mp4', (route) => route.abort());
+  await page.goto('/stroyka?nointro=1', { waitUntil: 'load' });
+  await expect(page.getByTestId('dialogue')).toBeVisible({ timeout: 15_000 });
+  await page.getByRole('button', { name: 'Копать котлован или траншею' }).click();
+  await page.getByTestId('zone-strip').getByRole('tab', { name: 'Котлован', exact: true }).click();
+  await expect(page.getByTestId('dialogue')).toContainText('Ринат');
+  await page.getByTestId('replies').getByRole('button', { name: 'Оформить у Светы' }).click();
+  await expect(page.getByTestId('dialogue').locator('input[name="phone"]')).toBeVisible();
+  expect(new URL(page.url()).pathname).toBe('/stroyka');
+  expect(errors, 'page errors').toEqual([]);
+});
+
 // The visitor leads in 3D: the camera never moves by itself, and «Куда идём?»
 // flies to the chosen place (owner, 2026-10-03: «сам выбирал, куда идти»).
 test('stroyka chooser', async ({ page }, testInfo) => {
