@@ -109,6 +109,12 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="ru" className={`${sans.variable} ${mono.variable}`} suppressHydrationWarning>
       <body className="flex min-h-screen flex-col bg-[#f7f7f5] font-sans text-slate-900 antialiased grain">
+        <a
+          href="#content"
+          className="sr-only z-[100] rounded-md bg-amber-700 px-4 py-2 font-semibold text-white focus:not-sr-only focus:fixed focus:left-3 focus:top-3"
+        >
+          К содержимому
+        </a>
         {/* Black bars open on every page load, like the start of a scene. */}
         <div className="cine-curtain" aria-hidden />
         <script
@@ -123,7 +129,11 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         />
         <Providers>
           <SiteHeader />
-          <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 sm:px-6 sm:py-8">
+          <main
+            id="content"
+            tabIndex={-1}
+            className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 outline-none sm:px-6 sm:py-8"
+          >
             {children}
           </main>
           <SiteFooter />

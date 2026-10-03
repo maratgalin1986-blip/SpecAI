@@ -71,6 +71,11 @@ const FORM_LABELS: Record<string, string> = {
   contacts: 'Контакты',
   orders: 'Страница заявки',
   'agents-chat': 'Чат с ИИ-агентами',
+  smeta: 'Смета',
+  'smeta-app': 'Полная смета (ранний доступ к приложению)',
+  'smeta-snab': 'Смета для снабженца, заказ материалов',
+  stroyka: '3D-стройка',
+  dizain: 'Дизайн-проект',
   provider: 'Поставщикам (старая форма)',
 };
 
@@ -127,7 +132,6 @@ export type Goal =
   | 'geo_found'
   | 'geo_fail'
   | 'window_book'
-  | 'card_open'
   | 'lead_retry'
   | 'lead_offline_call';
 

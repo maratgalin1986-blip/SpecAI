@@ -38,3 +38,10 @@ describe('houseFirst', () => {
     expect([HOUSE_COMPANY_ID, 'ckz0abc', 'cm1xyz'].sort().reverse()[0]).toBe(HOUSE_COMPANY_ID);
   });
 });
+
+describe('public equipment filter', () => {
+  it('is always the house fleet', async () => {
+    const { PUBLISHED_FLEET, HOUSE_COMPANY_ID } = await import('./fleet');
+    expect(PUBLISHED_FLEET.companyId).toBe(HOUSE_COMPANY_ID);
+  });
+});

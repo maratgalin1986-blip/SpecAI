@@ -69,7 +69,7 @@ import {
 import { mskToday, type WorkNote } from '@/lib/weather';
 import { isOnShift } from '@/lib/site';
 import { leadAcceptedText } from '@/lib/dispatcher';
-import { submitLead } from '@/lib/submitLead';
+import { submitLead, leadErrorText } from '@/lib/submitLead';
 import { reachGoal } from '@/lib/marketing';
 import type { Quick } from '@/lib/stroyka/brain';
 import { smetaHref } from '@/lib/stroyka/smetaLink';
@@ -795,11 +795,9 @@ export function Stroyka() {
       setCtx((c) => ({ ...c, sent: true }));
       sayAs('sveta', leadAcceptedText(isOnShift()), []);
     } catch (error) {
-      sayAs(
-        'sveta',
-        `Не ушло: ${error instanceof Error ? error.message : 'нет связи'}. Позвоните, пожалуйста: ${SITE.phone}.`,
-        [{ label: 'Позвонить', action: 'call' }],
-      );
+      sayAs('sveta', `Не ушло: ${leadErrorText(error, SITE.phone)}`, [
+        { label: 'Позвонить', action: 'call' },
+      ]);
     } finally {
       setPhoneSending(false);
     }

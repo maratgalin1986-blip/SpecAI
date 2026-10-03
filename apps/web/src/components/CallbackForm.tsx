@@ -91,7 +91,7 @@ export function CallbackForm({
           onChange={(e) => setPhone(e.target.value)}
           maxLength={30}
           pattern="(?:\D*\d){10,15}\D*"
-          title="Номер телефона: 10–11 цифр"
+          title="Номер телефона: от 10 цифр"
           placeholder="+7 (___) ___-__-__"
           autoComplete="tel"
           inputMode="tel"

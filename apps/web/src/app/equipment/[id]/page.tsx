@@ -21,7 +21,7 @@ import {
 import { formatMoney, formatRate } from '@/lib/money';
 import { pluralizeRu } from '@/lib/pluralize';
 import { SITE } from '@/lib/site';
-import { PUBLISHED_FLEET, isHouseEquipment } from '@/lib/fleet';
+import { PUBLISHED_FLEET, isHouseEquipment, PUBLIC_FLEET } from '@/lib/fleet';
 import { isDisplayableImage } from '@/lib/providerMap';
 import { shortAuthorName } from '@/lib/comments';
 import { maskContactsAndLinks } from '@/lib/privacy';
@@ -40,8 +40,8 @@ const STATUS_NOTE: Record<string, string> = {
 };
 
 export async function generateMetadata({ params }: { params: { id: string } }): Promise<Metadata> {
-  const item = await prisma.equipment.findUnique({
-    where: { id: params.id },
+  const item = await prisma.equipment.findFirst({
+    where: { id: params.id, ...PUBLIC_FLEET },
     select: { name: true, description: true, dailyRate: true, hourlyRate: true, currency: true },
   });
   if (!item) return { title: 'Техника не найдена' };
@@ -65,7 +65,8 @@ export default async function EquipmentDetailPage({ params }: { params: { id: st
     },
   });
 
-  if (!item || !item.company.isProvider) {
+  // Only СпецПласт16's own machinery has a public page.
+  if (!item || !isHouseEquipment(item)) {
     notFound();
   }
 
@@ -88,9 +89,7 @@ export default async function EquipmentDetailPage({ params }: { params: { id: st
     (/гидромолот/i.test(item.name) ? HAMMER_RATE : undefined);
   const illustration = machineTypeOf(item.category.name, item.name);
   const ownFleet = item.company.name === SITE.legalName;
-  // Aggregator: who does the job — СпецПласт16's own fleet or a provider company.
-  const house = isHouseEquipment(item);
-  const executor = house ? 'Парк СпецПласт16 · машинист в штате' : item.company.name;
+  const executor = 'Парк СпецПласт16 · машинист в штате';
   const photos = item.imageUrls.filter(isDisplayableImage);
   const averageRating = item.reviews.length
     ? item.reviews.reduce((sum, review) => sum + review.rating, 0) / item.reviews.length
@@ -333,7 +332,7 @@ export default async function EquipmentDetailPage({ params }: { params: { id: st
           <section id="comments" className="scroll-mt-24">
             <div className="eyebrow text-amber-700">Комментарии заказчиков</div>
             <p className="mt-2 text-sm text-slate-500">
-              О работе {house ? SITE.name : `«${item.company.name}»`}. Публикуются после проверки.
+              О работе {SITE.name}. Публикуются после проверки.
             </p>
             <div className="mt-4 flex flex-col gap-4">
               <CommentList comments={comments} empty="Комментариев пока нет." />

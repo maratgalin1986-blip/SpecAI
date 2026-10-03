@@ -1,3 +1,4 @@
+import { PUBLIC_FLEET } from '@/lib/fleet';
 import { NextRequest, NextResponse } from 'next/server';
 import { Prisma, prisma } from '@specai/database';
 import { updateEquipmentSchema } from '@specai/shared';
@@ -10,8 +11,9 @@ export const dynamic = 'force-dynamic';
 
 /** Публичная карточка техники (используется мобильным приложением). */
 export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
-  const equipment = await prisma.equipment.findUnique({
-    where: { id: params.id },
+  // Only СпецПласт16's own machinery is public (owner's decision, 2026-10-02).
+  const equipment = await prisma.equipment.findFirst({
+    where: { id: params.id, ...PUBLIC_FLEET },
     include: {
       category: true,
       location: true,
