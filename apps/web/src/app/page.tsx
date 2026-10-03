@@ -263,27 +263,53 @@ export default async function HomePage() {
               Татарстану — {fromPrice(MIN_RATE)}. Свой парк и свои машинисты {SITE.name}, без
               посредников: подача в день заявки, работаем с НДС.
             </p>
-            <div className="float-in mt-8 flex flex-wrap gap-3" style={{ animationDelay: '360ms' }}>
+            {/* Owner, 2026-10-03: order, estimate and design as real buttons,
+                «Заказать технику» the biggest and brightest; then the phone and
+                the 3D site; the other ways in stay quiet links. */}
+            <div
+              className="float-in mt-8 flex max-w-xl flex-col gap-3"
+              style={{ animationDelay: '360ms' }}
+            >
               <a
-                href={SITE.phoneHref}
-                className="inline-flex w-full items-center justify-center gap-2.5 rounded-full bg-amber-500 px-6 py-3.5 font-mono text-lg font-bold tabular-nums text-slate-950 shadow-lg shadow-amber-500/30 transition hover:bg-amber-400 sm:w-auto"
+                href="#callback"
+                className="group relative inline-flex w-full items-center justify-center gap-3 overflow-hidden rounded-2xl bg-gradient-to-r from-amber-400 via-amber-500 to-orange-500 px-7 py-5 text-xl font-extrabold text-slate-950 shadow-2xl shadow-amber-500/40 ring-2 ring-amber-200/70 transition hover:brightness-110 sm:text-2xl"
               >
-                <Icon name="phone" className="h-5 w-5" />
-                {SITE.phone}
+                <span className="cta-shine pointer-events-none absolute inset-0" aria-hidden />
+                <span aria-hidden className="text-2xl sm:text-3xl">
+                  🚜
+                </span>
+                Заказать технику
+                <Icon name="arrow" className="h-5 w-5 transition group-hover:translate-x-1" />
               </a>
-              <div className="flex flex-col items-start gap-3">
+              <div className="grid grid-cols-2 gap-3">
+                {[
+                  { href: '/smeta', icon: '🧮', label: 'Рассчитать смету' },
+                  { href: '/dizain', icon: '🏠', label: 'Создать дизайн' },
+                ].map((item) => (
+                  <a
+                    key={item.href}
+                    href={item.href}
+                    className="inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-white/10 px-3 py-3 text-center text-sm font-bold text-white ring-1 ring-white/40 backdrop-blur-md transition hover:bg-white hover:text-slate-950 sm:text-base"
+                  >
+                    <span aria-hidden className="text-lg">
+                      {item.icon}
+                    </span>
+                    {item.label}
+                  </a>
+                ))}
+              </div>
+              <div className="flex flex-wrap gap-3">
                 <a
-                  href="#callback"
-                  className="group inline-flex items-center gap-2 rounded-full bg-white px-6 py-3.5 text-base font-semibold text-slate-950 transition hover:bg-slate-100"
+                  href={SITE.phoneHref}
+                  className="inline-flex flex-1 items-center justify-center gap-2.5 rounded-full bg-white px-5 py-3 font-mono text-base font-bold tabular-nums text-slate-950 shadow-lg transition hover:bg-amber-100 sm:flex-none"
                 >
-                  Заказать технику
-                  <Icon name="arrow" className="h-4 w-4 transition group-hover:translate-x-1" />
+                  <Icon name="phone" className="h-5 w-5" />
+                  {SITE.phone}
                 </a>
-                {/* The 3D site, right under the order button and as big: a glass pill
-                    with a softly pulsing play button, calmer than the order buttons. */}
+                {/* The 3D site: a glass pill with a softly pulsing play button. */}
                 <a
                   href="/stroyka"
-                  className="group inline-flex items-center gap-3 rounded-full bg-white/10 py-2 pl-2 pr-6 text-base font-semibold text-white ring-1 ring-white/30 backdrop-blur-sm transition hover:bg-white/20 hover:ring-white/60"
+                  className="group inline-flex flex-1 items-center justify-center gap-3 rounded-full bg-white/10 py-2 pl-2 pr-5 text-base font-semibold text-white ring-1 ring-white/30 backdrop-blur-sm transition hover:bg-white/20 hover:ring-white/60 sm:flex-none"
                 >
                   <span className="stroyka-ping relative grid h-9 w-9 place-items-center rounded-full bg-amber-400 text-slate-950 transition group-hover:scale-110">
                     <svg viewBox="0 0 16 16" aria-hidden className="ml-0.5 h-4 w-4 fill-current">
@@ -297,7 +323,6 @@ export default async function HomePage() {
                 </a>
               </div>
             </div>
-            {/* Big buttons: call, order, the 3D site; the other ways in are quiet links. */}
             <nav
               aria-label="Ещё на сайте"
               className="float-in mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm font-semibold text-slate-200"
@@ -308,12 +333,6 @@ export default async function HomePage() {
                 className="inline-flex min-h-10 items-center underline-offset-4 hover:text-white hover:underline"
               >
                 Подобрать технику →
-              </a>
-              <a
-                href="/smeta"
-                className="inline-flex min-h-10 items-center rounded-full px-3 text-amber-300 ring-2 ring-amber-400 transition hover:bg-amber-400 hover:text-slate-950"
-              >
-                🧮 Рассчитать смету
               </a>
               <a
                 href="/kalkulyator"

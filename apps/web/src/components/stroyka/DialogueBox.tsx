@@ -62,6 +62,8 @@ export interface DialogueChat {
   phone: string | null;
   sending: boolean;
   onSendPhone: () => void;
+  /** The visitor started typing or speaking: keep the window, stop the tour. */
+  onEngage: () => void;
 }
 
 export interface DialogueForm {
@@ -309,6 +311,7 @@ export function DialogueBox({
                 else setVoiceHint(null);
               },
             );
+            chat.onEngage();
             if (stop) {
               stopVoice.current = stop;
               setListening(true);
@@ -322,7 +325,11 @@ export function DialogueBox({
           <input
             ref={inputRef}
             value={message}
-            onChange={(e) => setMessage(e.target.value)}
+            onChange={(e) => {
+              setMessage(e.target.value);
+              chat.onEngage();
+            }}
+            onFocus={chat.onEngage}
             maxLength={300}
             placeholder={voiceHint ?? chat.placeholder}
             aria-label={chat.placeholder}

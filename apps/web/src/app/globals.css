@@ -493,6 +493,29 @@ html {
   }
 }
 
+/* ---- «Заказать технику»: a light sweep across the main button ---------- */
+
+.cta-shine {
+  background: linear-gradient(
+    110deg,
+    transparent 30%,
+    rgba(255, 255, 255, 0.55) 48%,
+    transparent 66%
+  );
+  transform: translateX(-120%);
+  animation: cta-shine 3.6s ease-in-out 1.2s infinite;
+}
+
+@keyframes cta-shine {
+  0%,
+  55% {
+    transform: translateX(-120%);
+  }
+  100% {
+    transform: translateX(120%);
+  }
+}
+
 /* ---- «Войти на стройку» play button: a soft ring every few seconds ------- */
 
 .stroyka-ping::after {
@@ -597,6 +620,7 @@ html {
   .journey-dust-fast,
   .journey-rec,
   .stroyka-ping::after,
+  .cta-shine,
   .story-dust,
   .float-in {
     animation: none;
@@ -857,9 +881,6 @@ html {
 }
 .intro-sound-hint {
   animation: intro-rise 0.6s ease-out 0.6s both;
-}
-html[data-sound-live] .intro-sound-hint {
-  display: none;
 }
 /* The hero footage starts from above, like a drone coming down. */
 .hero-drone {

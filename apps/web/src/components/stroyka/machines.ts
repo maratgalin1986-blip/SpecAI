@@ -119,6 +119,49 @@ function exhaust(rig: Rig, parent: THREE.Object3D, pos: [number, number, number]
   rig.cyl(parent, 0.08, 0.04, 'dark', [pos[0], pos[1] + h + 0.02, pos[2]]);
 }
 
+/**
+ * A KamAZ-style truck cab centred at local x = `x` (front at x + 0.68): a body
+ * with a raked windscreen and a rounded roof, sun visor, grille, headlights,
+ * a steel bumper, side steps and mirrors on arms.
+ */
+function truckCab(rig: Rig, parent: THREE.Object3D, x: number, paint: MatKey) {
+  rig.profile(
+    parent,
+    [
+      [x - 0.68, 1.17],
+      [x + 0.68, 1.17],
+      [x + 0.7, 2.02],
+      [x + 0.55, 2.66],
+      [x + 0.4, 2.72],
+      [x - 0.62, 2.72],
+      [x - 0.68, 2.62],
+    ],
+    2.35,
+    paint,
+    [0, 0, 0],
+    [0, 0, 0],
+    0.07,
+  );
+  // Raked windscreen and side windows.
+  rig.box(parent, [0.04, 0.58, 2.05], 'glass', [x + 0.64, 2.34, 0], [0, 0, 0.23]);
+  for (const sz of [-1, 1])
+    rig.box(parent, [0.95, 0.52, 0.04], 'glass', [x + 0.02, 2.32, sz * 1.18]);
+  rig.box(parent, [0.22, 0.05, 2.2], 'dark', [x + 0.66, 2.7, 0]); // sun visor
+  // Grille, headlights, bumper and the steps up to the doors.
+  for (let i = 0; i < 5; i++)
+    rig.box(parent, [0.04, 0.05, 1.3], 'dark', [x + 0.71, 1.42 + i * 0.1, 0]);
+  for (const sz of [-1, 1]) {
+    rig.box(parent, [0.06, 0.16, 0.32], 'lamp', [x + 0.73, 1.32, sz * 0.82]);
+    rig.box(parent, [0.08, 0.2, 0.36], 'dark', [x + 0.7, 1.32, sz * 0.82]);
+    rig.box(parent, [0.5, 0.05, 0.22], 'steel', [x - 0.1, 0.95, sz * 1.2]);
+    rig.box(parent, [0.5, 0.05, 0.22], 'steel', [x - 0.1, 0.65, sz * 1.2]);
+    rig.cyl(parent, 0.015, 0.35, 'dark', [x + 0.6, 2.5, sz * 1.3], [Math.PI / 2, 0, 0]);
+    rig.box(parent, [0.05, 0.4, 0.18], 'dark', [x + 0.63, 2.45, sz * 1.48]);
+  }
+  rig.box(parent, [0.3, 0.3, 2.45], 'dark', [x + 0.72, 1.02, 0]);
+  rig.box(parent, [0.32, 0.1, 2.5], 'steel', [x + 0.78, 0.84, 0]);
+}
+
 // ---------------------------------------------------------------- dump truck
 
 export interface DumpTruck {
@@ -132,27 +175,15 @@ export interface DumpTruck {
 export function makeDumpTruck(rig: Rig): DumpTruck {
   const root = node(null);
   rig.box(root, [6.3, 0.4, 1.1], 'dark', [0.1, 0.9, 0]);
-  rig.box(root, [1.35, 1.55, 2.35], 'yellow', [2.75, 1.95, 0]);
-  rig.box(root, [0.06, 0.7, 2.05], 'glass', [3.44, 2.3, 0]);
-  rig.box(root, [1.0, 0.55, 0.05], 'glass', [2.8, 2.3, 1.18]);
-  rig.box(root, [1.0, 0.55, 0.05], 'glass', [2.8, 2.3, -1.18]);
-  rig.box(root, [0.25, 0.35, 2.45], 'dark', [3.45, 1.05, 0]);
-  rig.box(root, [0.06, 0.16, 0.3], 'lamp', [3.58, 1.3, 0.85]);
-  rig.box(root, [0.06, 0.16, 0.3], 'lamp', [3.58, 1.3, -0.85]);
+  truckCab(rig, root, 2.75, 'yellow');
   rig.box(root, [0.12, 0.22, 2.3], 'hazard', [-3.02, 0.72, 0]); // rear underrun bar
   rig.box(root, [0.06, 0.14, 0.25], 'tail', [-3.08, 1.0, 0.95]);
   rig.box(root, [0.06, 0.14, 0.25], 'tail', [-3.08, 1.0, -0.95]);
   rig.box(root, [0.16, 0.12, 0.16], 'beacon', [2.6, 2.83, 0.6]);
   operator(rig, root, [2.7, 1.3, 0.45]);
-  // Grille, bumper steps, fuel tank, exhaust, mirrors.
-  for (let i = 0; i < 5; i++) rig.box(root, [0.04, 0.05, 1.5], 'dark', [3.43, 1.42 + i * 0.1, 0]);
-  rig.box(root, [0.3, 0.12, 2.5], 'steel', [3.5, 0.82, 0]);
+  // Fuel tank and exhaust.
   rig.cyl(root, 0.32, 1.1, 'steel', [1.3, 0.85, 1.0], [0, 0, Math.PI / 2]);
   exhaust(rig, root, [2.0, 1.4, -1.0], 1.6);
-  for (const sz of [-1, 1]) {
-    rig.cyl(root, 0.015, 0.35, 'dark', [3.35, 2.5, sz * 1.3], [Math.PI / 2, 0, 0]);
-    rig.box(root, [0.05, 0.4, 0.18], 'dark', [3.38, 2.45, sz * 1.48]);
-  }
   const wheels: THREE.Group[] = [];
   for (const x of [2.6, -1.3, -2.5]) {
     const axle = node(root, [x, 0.55, 0]);
@@ -415,13 +446,14 @@ export function makeCrane(
   }
   for (const x of [3.0, -4.6])
     for (const s of [1, -1]) {
-      rig.box(root, [0.3, 0.3, 2.4], 'yellow', [x, 1.0, s * 2.3]);
+      rig.box(root, [0.3, 0.3, 2.4], 'hazard', [x, 1.0, s * 2.3]);
       rig.box(root, [0.28, 0.95, 0.28], 'dark', [x, 0.55, s * 3.45]);
+      ram(rig, root, [x, 1.0, s * 3.45], [x, 0.25, s * 3.45], 0.09);
       rig.box(root, [0.8, 0.1, 0.8], 'dark', [x, 0.05, s * 3.45]);
     }
   const turret = node(root, [CRANE.turretX, CRANE.turretY, 0]);
   rig.box(turret, [3.4, 1.1, 2.3], 'yellow', [-0.3, 0.55, 0]);
-  rig.box(turret, [1.0, 1.1, 2.4], 'dark', [-2.3, 0.65, 0]);
+  rig.box(turret, [1.0, 1.1, 2.4], 'hazard', [-2.3, 0.65, 0]); // counterweight
   rig.box(turret, [1.3, 1.4, 0.9], 'glass', [0.9, 1.0, -1.25]);
   rig.box(turret, [1.4, 0.12, 1.0], 'yellow', [0.9, 1.76, -1.25]);
   rig.box(turret, [0.16, 0.12, 0.16], 'beacon', [-1.2, 1.2, 0.8]);
@@ -433,19 +465,18 @@ export function makeCrane(
   const ay = 0.7;
   const bx = px + 4 * Math.cos(e);
   const by = py + 4 * Math.sin(e);
-  rig.box(
-    turret,
-    [Math.hypot(bx - ax, by - ay), 0.22, 0.22],
-    'steel',
-    [(ax + bx) / 2, (ay + by) / 2, 0],
-    [0, 0, Math.atan2(by - ay, bx - ax)],
-  );
+  ram(rig, turret, [ax, ay, 0], [bx, by, 0], 0.17);
   const boom = node(turret, [px, py, 0]);
   boom.rotation.z = e;
   rig.box(boom, [7.2, 0.78, 0.66], 'yellow', [3.4, 0, 0]);
   rig.box(boom, [6.0, 0.6, 0.52], 'yellow', [9.0, 0, 0]);
   rig.box(boom, [4.4, 0.46, 0.4], 'amber', [13.8, 0, 0]);
   rig.cyl(boom, 0.32, 0.3, 'dark', [16, 0, 0], [Math.PI / 2, 0, 0]);
+  rig.hose(boom, [
+    [0.3, 0.42, 0.2],
+    [3.5, 0.42, 0.2],
+    [6.8, 0.4, 0.2],
+  ]);
   const tip = craneTip();
   const pend = node(turret, [tip.reach, tip.height - CRANE.turretY, 0]);
   const cable = node(pend);
@@ -514,8 +545,7 @@ export function makeCrane(
 export function makeAgp(rig: Rig): Animated {
   const root = node(null);
   rig.box(root, [6.6, 0.4, 1.1], 'dark', [0, 0.9, 0]);
-  rig.box(root, [1.35, 1.55, 2.35], 'white', [2.85, 1.95, 0]);
-  rig.box(root, [0.06, 0.7, 2.05], 'glass', [3.54, 2.3, 0]);
+  truckCab(rig, root, 2.85, 'white');
   rig.box(root, [4.6, 0.5, 2.4], 'yellow', [-0.9, 1.35, 0]);
   rig.box(root, [0.16, 0.12, 0.16], 'beacon', [2.7, 2.83, 0.6]);
   for (const x of [2.7, -1.6]) {
@@ -524,7 +554,7 @@ export function makeAgp(rig: Rig): Animated {
   }
   for (const x of [1.6, -3.0])
     for (const s of [1, -1]) {
-      rig.box(root, [0.25, 0.25, 1.2], 'yellow', [x, 1.0, s * 1.6]);
+      rig.box(root, [0.25, 0.25, 1.2], 'hazard', [x, 1.0, s * 1.6]);
       rig.box(root, [0.22, 0.9, 0.22], 'dark', [x, 0.5, s * 2.15]);
       rig.box(root, [0.6, 0.08, 0.6], 'dark', [x, 0.04, s * 2.15]);
     }
@@ -534,6 +564,7 @@ export function makeAgp(rig: Rig): Animated {
   rig.box(turret, [0.9, 0.6, 0.8], 'yellow', [0, 0.6, 0]);
   const boom = node(turret, [0, 0.6, 0]);
   rig.box(boom, [4.3, 0.42, 0.42], 'yellow', [2.0, 0, 0]);
+  ram(rig, boom, [0.2, -0.3, 0], [2.2, -0.25, 0], 0.09);
   const ext = node(boom, [1, 0, 0]);
   rig.box(ext, [4.0, 0.3, 0.3], 'white', [2.0, 0, 0]);
   const basket = node(ext, [4.0, 0, 0]);
@@ -592,10 +623,12 @@ export function makeRoller(rig: Rig): Animated & { drive(x: number): void } {
   const drum = node(root, [1.6, 0.78, 0]);
   rig.cyl(drum, 0.78, 2.1, 'steel', [0, 0, 0], [Math.PI / 2, 0, 0]);
   rig.box(drum, [0.12, 1.2, 0.05], 'dark', [0, 0, 1.06]);
+  for (const z of [1.07, -1.07]) rig.cyl(drum, 0.5, 0.04, 'dark', [0, 0, z], [Math.PI / 2, 0, 0]);
   for (const z of [1.15, -1.15]) rig.box(root, [1.7, 1.0, 0.14], 'yellow', [1.4, 1.15, z]);
   rig.box(root, [0.5, 0.4, 2.4], 'yellow', [2.1, 1.65, 0]);
   rig.box(root, [2.4, 1.15, 1.9], 'yellow', [-0.9, 1.3, 0]);
   rig.box(root, [0.08, 0.5, 1.4], 'dark', [-2.12, 1.4, 0]);
+  rig.box(root, [0.12, 0.22, 1.95], 'hazard', [-2.14, 0.85, 0]); // rear bumper
   rig.wheel(root, [-1.1, 0.72, 0.95], 0.72, 0.6);
   rig.wheel(root, [-1.1, 0.72, -0.95], 0.72, 0.6);
   for (const sx of [-1, 1])
@@ -624,6 +657,7 @@ export function makeLoader(rig: Rig): Animated & { lift(v: number): void } {
   const root = node(null);
   rig.box(root, [2.5, 1.2, 2.0], 'yellow', [-1.3, 1.35, 0]);
   rig.box(root, [0.1, 0.6, 1.6], 'dark', [-2.56, 1.5, 0]);
+  rig.box(root, [0.35, 0.45, 2.05], 'hazard', [-2.6, 0.95, 0]); // counterweight
   rig.box(root, [1.7, 0.8, 1.5], 'yellow', [0.9, 1.15, 0]);
   rig.box(root, [0.6, 0.6, 0.8], 'dark', [-0.1, 1.0, 0]);
   cab(rig, root, [-0.65, 2.75, 0], [1.3, 1.6, 1.4]);
@@ -632,10 +666,43 @@ export function makeLoader(rig: Rig): Animated & { lift(v: number): void } {
     rig.wheel(root, [x, 0.82, -1.05], 0.82, 0.55);
   }
   const arms = node(root, [0.9, 1.75, 0]);
-  for (const z of [0.75, -0.75])
-    rig.box(arms, [2.6, 0.26, 0.22], 'yellow', [1.25, -0.4, z], [0, 0, -0.3]);
+  // Curved lift arms and their cylinders.
+  for (const z of [0.75, -0.75]) {
+    rig.profile(
+      arms,
+      [
+        [-0.1, 0.12],
+        [1.2, 0.0],
+        [2.62, -0.7],
+        [2.5, -0.92],
+        [1.15, -0.28],
+        [-0.1, -0.14],
+      ],
+      0.22,
+      'yellow',
+      [0, 0, z],
+      [0, 0, 0],
+      0.03,
+    );
+    ram(rig, arms, [-0.4, -0.55, z * 0.8], [1.2, -0.35, z * 0.8], 0.08);
+  }
   const bucket = node(arms, [2.5, -0.8, 0]);
-  rig.box(bucket, [0.9, 0.95, 2.5], 'amber', [0.3, -0.1, 0]);
+  rig.profile(
+    bucket,
+    [
+      [-0.15, 0.35],
+      [0.1, 0.38],
+      [0.75, -0.2],
+      [0.82, -0.55],
+      [0.0, -0.55],
+      [-0.18, -0.3],
+    ],
+    2.5,
+    'amber',
+    [0, 0, 0],
+    [0, 0, 0],
+    0.04,
+  );
   rig.box(bucket, [0.12, 0.08, 2.5], 'steel', [0.78, -0.55, 0]);
   let lift = 0;
   return {
@@ -656,8 +723,7 @@ export function makeLoader(rig: Rig): Animated & { lift(v: number): void } {
 export function makeKmu(rig: Rig, pallet: (n: THREE.Object3D) => void): Animated {
   const root = node(null);
   rig.box(root, [8.2, 0.4, 1.1], 'dark', [0.2, 0.9, 0]);
-  rig.box(root, [1.35, 1.6, 2.35], 'white', [3.65, 1.95, 0]);
-  rig.box(root, [0.06, 0.7, 2.05], 'glass', [4.34, 2.3, 0]);
+  truckCab(rig, root, 3.65, 'white');
   rig.box(root, [5.4, 0.18, 2.4], 'wood', [-1.0, 1.35, 0]);
   rig.box(root, [5.4, 0.3, 0.08], 'yellow', [-1.0, 1.55, 1.2]);
   rig.box(root, [5.4, 0.3, 0.08], 'yellow', [-1.0, 1.55, -1.2]);
@@ -668,7 +734,7 @@ export function makeKmu(rig: Rig, pallet: (n: THREE.Object3D) => void): Animated
     rig.wheel(root, [x, 0.55, -1.0], 0.55, 0.45);
   }
   for (const s of [1, -1]) {
-    rig.box(root, [0.3, 0.3, 1.4], 'yellow', [2.2, 1.0, s * 1.7]);
+    rig.box(root, [0.3, 0.3, 1.4], 'hazard', [2.2, 1.0, s * 1.7]);
     rig.box(root, [0.25, 0.9, 0.25], 'dark', [2.2, 0.5, s * 2.35]);
   }
   for (const x of [-2.9, -1.4]) {
@@ -679,6 +745,7 @@ export function makeKmu(rig: Rig, pallet: (n: THREE.Object3D) => void): Animated
   rig.box(column, [0.5, 1.6, 0.5], 'yellow', [0, 0.8, 0]);
   const boom1 = node(column, [0, 1.6, 0]);
   rig.box(boom1, [3.3, 0.36, 0.32], 'yellow', [1.6, 0, 0]);
+  ram(rig, boom1, [0.3, -0.25, 0], [2.4, -0.22, 0], 0.08);
   const boom2 = node(boom1, [3.2, 0, 0]);
   rig.box(boom2, [3.1, 0.3, 0.26], 'yellow', [1.5, 0, 0]);
   rig.box(boom2, [0.2, 0.3, 0.2], 'dark', [3.0, -0.15, 0]);
@@ -741,7 +808,19 @@ export function makeKmu(rig: Rig, pallet: (n: THREE.Object3D) => void): Animated
 export function makeDozer(rig: Rig): Animated & { pile: THREE.Group } {
   const root = node(null);
   for (const z of [1.1, -1.1]) {
-    rig.box(root, [3.4, 0.75, 0.6], 'black', [0, 0.45, z]);
+    // Track: a long loop with rounded ends.
+    const track: [number, number][] = [];
+    for (let k = 0; k <= 8; k++) {
+      const a = -Math.PI / 2 + (k / 8) * Math.PI;
+      track.push([1.55 + Math.cos(a) * 0.42, 0.45 + Math.sin(a) * 0.42]);
+    }
+    for (let k = 0; k <= 8; k++) {
+      const a = Math.PI / 2 + (k / 8) * Math.PI;
+      track.push([-1.55 + Math.cos(a) * 0.42, 0.45 + Math.sin(a) * 0.42]);
+    }
+    rig.profile(root, track, 0.6, 'tyre', [0, 0, z], [0, 0, 0], 0.03);
+    for (let k = 0; k < 4; k++)
+      rig.cyl(root, 0.12, 0.64, 'dark', [-0.9 + k * 0.6, 0.2, z], [Math.PI / 2, 0, 0]);
     rig.cyl(root, 0.38, 0.62, 'dark', [1.55, 0.45, z], [Math.PI / 2, 0, 0]);
     rig.cyl(root, 0.38, 0.62, 'dark', [-1.55, 0.45, z], [Math.PI / 2, 0, 0]);
   }
@@ -749,9 +828,30 @@ export function makeDozer(rig: Rig): Animated & { pile: THREE.Group } {
   rig.box(root, [1.5, 0.5, 1.5], 'yellow', [0.8, 2.05, 0]);
   rig.box(root, [0.15, 0.6, 0.15], 'dark', [1.0, 2.55, 0.4]);
   cab(rig, root, [-0.75, 2.55, 0], [1.3, 1.4, 1.5]);
-  rig.box(root, [0.35, 1.25, 3.1], 'yellow', [2.35, 0.7, 0]);
+  // Curved moldboard, the cutting edge at the bottom.
+  rig.profile(
+    root,
+    [
+      [2.2, 0.08],
+      [2.55, 0.08],
+      [2.42, 0.45],
+      [2.42, 0.85],
+      [2.6, 1.3],
+      [2.38, 1.36],
+      [2.2, 0.9],
+      [2.18, 0.45],
+    ],
+    3.1,
+    'yellow',
+    [0, 0, 0],
+    [0, 0, 0],
+    0.03,
+  );
   rig.box(root, [0.1, 0.1, 3.1], 'steel', [2.5, 0.1, 0]);
-  for (const z of [0.9, -0.9]) rig.box(root, [1.3, 0.2, 0.2], 'dark', [1.7, 0.9, z], [0, 0, -0.3]);
+  for (const z of [0.9, -0.9]) {
+    rig.box(root, [1.3, 0.2, 0.2], 'dark', [1.7, 0.9, z], [0, 0, -0.3]);
+    ram(rig, root, [1.0, 1.75, z * 0.6], [2.25, 1.1, z * 0.6], 0.07);
+  }
   rig.box(root, [0.2, 0.9, 0.2], 'dark', [-1.9, 0.6, 0], [0, 0, 0.3]);
   const pile = node(null);
   rig.heap(pile, 1.5, 1.0, 'dirt', [0, 0, 0]);
@@ -762,8 +862,24 @@ export function makeDozer(rig: Rig): Animated & { pile: THREE.Group } {
 
 export function makeTractor(rig: Rig): Animated & { wheels: THREE.Group[] } {
   const root = node(null);
-  rig.box(root, [2.2, 0.8, 1.0], 'yellow', [0.6, 1.25, 0]);
-  rig.box(root, [0.08, 0.4, 0.8], 'dark', [1.72, 1.2, 0]);
+  // Hood sloping down to the grille, like the MTZ.
+  rig.profile(
+    root,
+    [
+      [-0.5, 0.85],
+      [1.72, 0.85],
+      [1.75, 1.45],
+      [1.45, 1.66],
+      [-0.5, 1.66],
+    ],
+    1.0,
+    'yellow',
+    [0, 0, 0],
+    [0, 0, 0],
+    0.05,
+  );
+  for (let i = 0; i < 4; i++) rig.box(root, [0.04, 0.05, 0.8], 'dark', [1.76, 1.0 + i * 0.11, 0]);
+  for (const sz of [-1, 1]) rig.box(root, [0.05, 0.12, 0.18], 'lamp', [1.74, 1.52, sz * 0.36]);
   rig.box(root, [1.3, 0.7, 1.4], 'dark', [-0.8, 1.15, 0]);
   cab(rig, root, [-0.8, 2.25, 0], [1.2, 1.5, 1.3]);
   rig.box(root, [0.1, 0.8, 0.1], 'dark', [1.2, 1.95, 0.3]);

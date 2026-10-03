@@ -10,6 +10,7 @@ import { GTAOPass } from 'three/examples/jsm/postprocessing/GTAOPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
+import { SKY_PHOTO_GLSL } from './atmosphere';
 
 const ENV_VERTEX = /* glsl */ `
 varying vec3 vDir;
@@ -26,10 +27,12 @@ uniform vec3 sunColor;
 uniform vec3 sunDir;
 uniform float glow;
 varying vec3 vDir;
+${SKY_PHOTO_GLSL}
 void main() {
   vec3 d = normalize(vDir);
   float h = clamp(d.y, 0.0, 1.0);
   vec3 col = mix(horizon, zenith, pow(h, 0.5));
+  col = skyPhoto(d, col);
   if (d.y < 0.0) col = mix(horizon * 0.55, vec3(0.32, 0.27, 0.22), clamp(-d.y * 3.0, 0.0, 1.0));
   float s = max(dot(d, sunDir), 0.0);
   col += sunColor * (pow(s, 8.0) * 0.6 + pow(s, 200.0) * 6.0) * glow;
@@ -121,7 +124,8 @@ export class Cinema {
     const c = (v: THREE.Color) =>
       `${Math.round(v.r * 20)},${Math.round(v.g * 20)},${Math.round(v.b * 20)}`;
     const d = u.sunDir!.value as THREE.Vector3;
-    return `${c(u.zenith!.value)}|${c(u.horizon!.value)}|${Math.round(d.x * 10)},${Math.round(d.y * 10)},${Math.round(d.z * 10)}|${Math.round((u.glow!.value as number) * 10)}`;
+    const photo = `${Math.round((u.photoAmount!.value as number) * 10)}:${Math.round((u.photoMix!.value as number) * 4)}:${(u.photoA!.value as THREE.Texture).id}`;
+    return `${c(u.zenith!.value)}|${c(u.horizon!.value)}|${Math.round(d.x * 10)},${Math.round(d.y * 10)},${Math.round(d.z * 10)}|${Math.round((u.glow!.value as number) * 10)}|${photo}`;
   }
   private composer: EffectComposer | null = null;
   private bloom: UnrealBloomPass | null = null;

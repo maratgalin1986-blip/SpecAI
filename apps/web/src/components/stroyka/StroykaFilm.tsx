@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { SITE } from '@/lib/site';
+import { setSoundEnabled, storedSoundChoice } from '@/lib/sound';
 
 // The opening film of /stroyka: a 44 s montage of open-licence footage
 // (Mixkit, see /credits) with music, shown while the 3D site loads. With
@@ -47,6 +48,8 @@ export function StroykaFilm({
 }) {
   const video = useRef<HTMLVideoElement>(null);
   const [muted, setMuted] = useState(false);
+  // Muted only by the browser (not by the visitor): the first touch turns it on.
+  const autoMuted = useRef(false);
   const [ended, setEnded] = useState(false);
   const [line, setLine] = useState(0);
   useEffect(() => {
@@ -60,10 +63,14 @@ export function StroykaFilm({
   useEffect(() => {
     const v = video.current;
     if (!v) return;
-    v.muted = false;
+    // The visitor switched the site's sound off earlier: start muted.
+    const wantSound = storedSoundChoice();
+    v.muted = !wantSound;
+    setMuted(!wantSound);
     v.play().catch(() => {
-      // Autoplay with sound refused: play muted, the visitor can unmute.
+      // Autoplay with sound refused: play muted until the first touch.
       v.muted = true;
+      autoMuted.current = wantSound;
       setMuted(true);
       v.play().catch(() => setEnded(true));
     });
@@ -75,7 +82,17 @@ export function StroykaFilm({
   }, [ended, ready, onClose]);
 
   return (
-    <div className="absolute inset-0 z-[80] bg-black" data-testid="stroyka-film">
+    <div
+      className="absolute inset-0 z-[80] bg-black"
+      data-testid="stroyka-film"
+      onPointerDown={() => {
+        const v = video.current;
+        if (!v || !autoMuted.current) return;
+        autoMuted.current = false;
+        v.muted = false;
+        setMuted(false);
+      }}
+    >
       <video
         ref={video}
         className="absolute inset-0 h-full w-full object-contain"
@@ -140,12 +157,14 @@ export function StroykaFilm({
           onClick={() => {
             const v = video.current;
             if (!v) return;
-            v.muted = !v.muted;
-            setMuted(v.muted);
+            autoMuted.current = false;
+            v.muted = !muted;
+            setMuted(!muted);
+            setSoundEnabled(muted);
           }}
           className="min-h-11 rounded-full bg-white px-4 py-2 text-sm font-bold text-slate-950 shadow-lg hover:bg-amber-300"
         >
-          {muted ? '🔇 Включить звук' : '🔊 Звук'}
+          {muted ? '🔊 Включить звук' : '🔇 Убрать звук'}
         </button>
         <button
           type="button"

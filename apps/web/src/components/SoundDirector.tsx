@@ -15,6 +15,13 @@ import {
 import type { SoundEngine } from '@/lib/soundEngine';
 import { asSpeaker } from '@/lib/soundVoices';
 import { stripEmoji } from '@/lib/stripEmoji';
+import {
+  NATURE_EVENT,
+  STEPS_EVENT,
+  THUNDER_EVENT,
+  type NatureEventDetail,
+  type StepsEventDetail,
+} from '@/lib/sceneEvents';
 
 // The cinematic sound layer, mounted once in the layout. Off by default; it
 // wakes only after the visitor turns it on (SoundToggle) and only inside a
@@ -84,12 +91,15 @@ export function SoundDirector() {
     };
 
     /** Everything that starts once the context runs: beds, machine, intro. */
+    // Set once the nature listeners exist (below); applies the kept weather.
+    let natureSync = () => {};
     const onRunning = () => {
       if (!engine || !live()) return;
       removeGestures();
       // Hides the «коснитесь — включится звук» hint of the opening titles.
       document.documentElement.setAttribute('data-sound-live', '');
       void engine.startBeds();
+      natureSync();
       playing = null;
       applyMachine(true);
       // Sound came on while the opening titles are up: the brass hit for the
@@ -195,6 +205,10 @@ export function SoundDirector() {
       wasOn = true;
       setSoundEnabled(true, false);
       addGestures();
+      // Try at once: a browser that already trusts the site (the visitor was
+      // here before) lets audio start without a tap. Otherwise it stays
+      // asleep until the first touch, as before.
+      wake();
     }
 
     const onVisibility = () => {
@@ -284,6 +298,30 @@ export function SoundDirector() {
       });
     };
 
+    // Nature on the 3D site: the latest state is kept, so an engine that wakes
+    // later (the first tap) starts with the right weather.
+    let nature: NatureEventDetail | null = null;
+    let steps: StepsEventDetail = { moving: false, ground: 'dry' };
+    const onNature = (event: Event) => {
+      nature = (event as CustomEvent<NatureEventDetail | null>).detail;
+      if (live()) engine!.setNature(nature);
+    };
+    const onSteps = (event: Event) => {
+      steps = (event as CustomEvent<StepsEventDetail>).detail;
+      if (live()) engine!.setSteps(steps.moving, steps.ground);
+    };
+    const onThunder = () => {
+      if (live()) engine!.thunder();
+    };
+    natureSync = () => {
+      if (!live()) return;
+      engine!.setNature(nature);
+      engine!.setSteps(steps.moving, steps.ground);
+    };
+    window.addEventListener(NATURE_EVENT, onNature);
+    window.addEventListener(STEPS_EVENT, onSteps);
+    window.addEventListener(THUNDER_EVENT, onThunder);
+
     document.addEventListener('visibilitychange', onVisibility);
     document.addEventListener('focusin', onFocusIn);
     document.addEventListener('focusout', onFocusOut);
@@ -306,6 +344,9 @@ export function SoundDirector() {
       window.removeEventListener('pageswap', whoosh);
       window.removeEventListener('sp:scene', onScene);
       window.removeEventListener('sp:dialog', onDialog);
+      window.removeEventListener(NATURE_EVENT, onNature);
+      window.removeEventListener(STEPS_EVENT, onSteps);
+      window.removeEventListener(THUNDER_EVENT, onThunder);
       if (engine) engine.dispose();
       else void ctx?.close().catch(() => {});
       engine = null;

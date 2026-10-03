@@ -668,6 +668,12 @@ export function Stroyka() {
     [engine, handoffToZone, logRadio, mode, nodeFor, openNode],
   );
 
+  // Typing or speaking to someone holds the tour at this stop: the window must
+  // not close under the visitor's fingers (owner, 2026-10-03).
+  const engageDialog = useCallback(() => {
+    setDialog((d) => (d && !d.engaged ? { ...d, engaged: true } : d));
+  }, []);
+
   const closeDialog = () => {
     setDialog(null);
     setChat(null);
@@ -1344,6 +1350,7 @@ export function Stroyka() {
               phone: pendingPhone,
               sending: phoneSending,
               onSendPhone: () => void onSendPhone(),
+              onEngage: engageDialog,
             }}
             replies={node.replies}
             radio={dialog.radio}

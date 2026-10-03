@@ -31,8 +31,10 @@ import { Atmosphere } from './atmosphere';
 import type { WorldProgress } from '@/lib/stroyka/progress';
 import { createMaterials, Debris, node, pixelTexture, Rig, smooth } from './kit';
 import { Cinema } from './cinema';
+import { emitNature, emitSteps, emitThunder } from '@/lib/sceneEvents';
 import { loadProps } from './props3d';
 import { LedScreen } from './ledScreen';
+import { Wildlife } from './wildlife';
 import { buildDistrict, buildProject, buildTowerCrane, type ProjectBuild } from './project';
 import { buildCity } from './cityMesh';
 import { placeSite, type CityData } from '@/lib/stroyka/city';
@@ -192,6 +194,9 @@ export class StroykaEngine {
   private renderer!: THREE.WebGLRenderer;
   private cinema: Cinema | null = null;
   private led: LedScreen | null = null;
+  private wildlife: Wildlife | null = null;
+  private natureAt = -99;
+  private walking = false;
   private flarePoint = new THREE.Vector3();
   private scene = new THREE.Scene();
   private camera!: THREE.PerspectiveCamera;
@@ -383,6 +388,8 @@ export class StroykaEngine {
     await nextFrame();
 
     this.buildPeople();
+    this.wildlife = new Wildlife(mobile);
+    this.scene.add(this.wildlife.group);
     this.opts.onProgress(0.8);
     await nextFrame();
 
@@ -1214,6 +1221,8 @@ export class StroykaEngine {
 
   dispose() {
     this.disposed = true;
+    emitNature(null);
+    emitSteps(false, 'dry');
     this.running = false;
     cancelAnimationFrame(this.raf);
     this.cleanups.forEach((fn) => fn());
@@ -1459,6 +1468,16 @@ export class StroykaEngine {
     this.updateCamera(realDt);
     this.updatePeople(dt, realDt);
     this.updateEnvironment(dt, realDt);
+    this.wildlife?.update(
+      dt,
+      this.time,
+      {
+        day: 1 - this.env.night,
+        rain: this.env.rain,
+        snow: this.env.snow,
+      },
+      this.camera.position,
+    );
   }
 
   private desired = { pos: new THREE.Vector3(), look: new THREE.Vector3() };
@@ -1561,6 +1580,12 @@ export class StroykaEngine {
       t.tourStop = null;
     }
     this.walkPhase += moving * dt * 7.5;
+    // Footsteps: tell the sound layer when walking starts or stops.
+    const walking = moving > 0.3;
+    if (walking !== this.walking) {
+      this.walking = walking;
+      emitSteps(walking, this.ground ?? 'dry');
+    }
 
     // First-person eye and over-the-shoulder camera, blended by `tp`.
     const h = heading + this.lookOffset;
@@ -1863,6 +1888,7 @@ export class StroykaEngine {
       if (this.time > this.nextFlash) {
         this.flashUntil = this.time + 0.18;
         this.nextFlash = this.time + 6 + Math.random() * 10;
+        emitThunder();
       }
       if (this.time < this.flashUntil) flash = 0.6 + Math.random() * 0.4;
     }
@@ -1933,6 +1959,12 @@ export class StroykaEngine {
       this.ground = ground;
       this.world.setGround(ground);
       this.world.puddles.visible = ground === 'wet';
+    }
+
+    // The weather for the sound layer, about once a second.
+    if (this.time - this.natureAt > 1) {
+      this.natureAt = this.time;
+      emitNature({ rain: E.rain, snow: E.snow, wind: w.wind, night: nightK, ground });
     }
 
     // Wind direction in world space: the wind blows toward windDir + 180°.
