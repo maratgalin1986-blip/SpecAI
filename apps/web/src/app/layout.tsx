@@ -24,6 +24,8 @@ const mono = JetBrains_Mono({
   subsets: ['latin', 'cyrillic'],
   variable: '--font-mono',
   display: 'swap',
+  // Small labels only: not preloaded, so it does not compete with the hero poster (LCP).
+  preload: false,
 });
 
 export const metadata: Metadata = {
