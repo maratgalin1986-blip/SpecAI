@@ -9,6 +9,7 @@ import {
 import { routeToAgent, runAgent, type AgentToolHandlers } from '@specai/ai-service';
 import { getRequestUser } from '@/lib/requestUser';
 import { formatRate } from '@/lib/money';
+import { customerRates } from '@/lib/equipmentCatalog';
 import { maskContacts, maskMessagesForAi } from '@/lib/privacy';
 import { LEAD_RATE_LIMIT, checkRateLimit } from '@/lib/rateLimit';
 import { PUBLIC_FLEET, isProvider, isHouseEquipment } from '@/lib/fleet';
@@ -201,8 +202,7 @@ export async function POST(request: NextRequest) {
         name: item.name,
         category: item.category.name,
         city: item.location?.city ?? null,
-        dailyRate: Number(item.dailyRate),
-        hourlyRate: item.hourlyRate ? Number(item.hourlyRate) : null,
+        ...customerRates({ ...item, categoryName: item.category.name }),
         currency: item.currency,
         status: item.status,
         link: `/equipment/${item.id}`,
@@ -227,8 +227,7 @@ export async function POST(request: NextRequest) {
         category: item.category.name,
         status: item.status,
         city: item.location?.city ?? null,
-        dailyRate: Number(item.dailyRate),
-        hourlyRate: item.hourlyRate ? Number(item.hourlyRate) : null,
+        ...customerRates({ ...item, categoryName: item.category.name }),
         weeklyRate: item.weeklyRate ? Number(item.weeklyRate) : null,
         monthlyRate: item.monthlyRate ? Number(item.monthlyRate) : null,
         currency: item.currency,
@@ -248,12 +247,12 @@ export async function POST(request: NextRequest) {
       }
       const item = await prisma.equipment.findUnique({
         where: { id: requireString(input, 'equipmentId') },
-        include: { company: true },
+        include: { company: true, category: true },
       });
       if (!item || !isHouseEquipment(item)) {
         throw new ToolError('Техника не найдена');
       }
-      const daily = Number(item.dailyRate);
+      const daily = customerRates({ ...item, categoryName: item.category.name }).dailyRate;
       const options = [{ plan: 'посуточно', total: daily * days }];
       if (item.weeklyRate) {
         const weekly = Number(item.weeklyRate);

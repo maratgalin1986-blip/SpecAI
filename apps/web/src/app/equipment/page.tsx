@@ -16,6 +16,12 @@ import { pluralizeRu } from '@/lib/pluralize';
 import { SITE } from '@/lib/site';
 import { CinemaHero } from '@/components/CinemaHero';
 import { PUBLISHED_FLEET } from '@/lib/fleet';
+import {
+  cleanSearchParams,
+  FILTER_KEYS,
+  priceParam,
+  type EquipmentSearchParams,
+} from '@/lib/catalogParams';
 
 export const metadata = {
   title: 'Каталог спецтехники',
@@ -26,20 +32,6 @@ export const metadata = {
 export const dynamic = 'force-dynamic';
 
 const PAGE_SIZE = 12;
-
-interface EquipmentSearchParams {
-  category?: string;
-  group?: string;
-  city?: string;
-  minPrice?: string;
-  maxPrice?: string;
-  q?: string;
-  sort?: string;
-  page?: string;
-  /** One provider's machinery (link «Техника этого поставщика» on /map). */
-}
-
-const FILTER_KEYS = ['q', 'city', 'minPrice', 'maxPrice', 'sort'] as const;
 
 /** Catalog link that keeps the search filters and replaces the category/group. */
 function catalogHref(
@@ -95,12 +87,13 @@ function Pill({
 }
 
 export default async function EquipmentCatalogPage({
-  searchParams,
+  searchParams: rawSearchParams,
 }: {
-  searchParams: EquipmentSearchParams;
+  searchParams: Record<string, string | string[] | undefined>;
 }) {
-  const minPrice = searchParams.minPrice ? Number(searchParams.minPrice) : undefined;
-  const maxPrice = searchParams.maxPrice ? Number(searchParams.maxPrice) : undefined;
+  const searchParams = cleanSearchParams(rawSearchParams);
+  const minPrice = priceParam(searchParams.minPrice);
+  const maxPrice = priceParam(searchParams.maxPrice);
   const sort = parseEnumParam(searchParams.sort, EQUIPMENT_SORT_OPTIONS, 'newest');
   const requestedPage = parsePage(searchParams.page);
 

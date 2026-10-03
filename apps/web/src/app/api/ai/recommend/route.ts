@@ -4,6 +4,7 @@ import { prisma } from '@specai/database';
 import { recommendEquipment } from '@specai/ai-service';
 import { getRequestUser } from '@/lib/requestUser';
 import { checkRateLimit } from '@/lib/rateLimit';
+import { clientIpFrom } from '@/lib/loginErrors';
 import { PUBLIC_FLEET } from '@/lib/fleet';
 import { matchTask } from '@/lib/dispatcher';
 
@@ -12,14 +13,16 @@ const requestSchema = z.object({
 });
 
 const RATE_LIMIT = { limit: 10, windowMs: 60_000 };
+const GUEST_RATE_LIMIT = { limit: 5, windowMs: 60_000 };
 
 export async function POST(request: NextRequest) {
+  // Guests may pick a machine too (/recommend has no sign-in), limited by IP
+  // to keep AI costs bounded.
   const currentUser = await getRequestUser(request);
-  if (!currentUser) {
-    return NextResponse.json({ error: 'Необходимо войти в аккаунт' }, { status: 401 });
-  }
-
-  const rate = checkRateLimit(`ai:recommend:${currentUser.id}`, RATE_LIMIT);
+  const ip = clientIpFrom((name) => request.headers.get(name));
+  const rate = currentUser
+    ? checkRateLimit(`ai:recommend:${currentUser.id}`, RATE_LIMIT)
+    : checkRateLimit(`ai:recommend:ip:${ip}`, GUEST_RATE_LIMIT);
   if (!rate.ok) {
     return NextResponse.json(
       { error: 'Слишком много запросов, попробуйте позже' },
@@ -36,7 +39,7 @@ export async function POST(request: NextRequest) {
   const parsed = requestSchema.safeParse(body);
 
   if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
+    return NextResponse.json({ error: 'Опишите задачу — до 2000 символов.' }, { status: 400 });
   }
 
   const available = await prisma.equipment.findMany({

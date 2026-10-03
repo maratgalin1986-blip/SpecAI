@@ -10,6 +10,7 @@ import { MachineGallery } from '@/components/MachineGallery';
 import { MachinePhoto } from '@/components/MachinePhoto';
 import { MachineAmbience } from '@/components/MachineAmbience';
 import {
+  customerRates,
   headlinePrices,
   keySpecs,
   machineTypeOf,
@@ -42,11 +43,25 @@ const STATUS_NOTE: Record<string, string> = {
 export async function generateMetadata({ params }: { params: { id: string } }): Promise<Metadata> {
   const item = await prisma.equipment.findFirst({
     where: { id: params.id, ...PUBLIC_FLEET },
-    select: { name: true, description: true, dailyRate: true, hourlyRate: true, currency: true },
+    select: {
+      name: true,
+      description: true,
+      dailyRate: true,
+      hourlyRate: true,
+      currency: true,
+      status: true,
+      category: { select: { name: true } },
+    },
   });
   if (!item) return { title: 'Техника не найдена' };
+  const rate = formatRate({
+    ...customerRates({ ...item, categoryName: item.category.name }),
+    currency: item.currency,
+  });
   return {
-    title: `${item.name} — аренда ${formatRate(item).price}${formatRate(item).unit}`,
+    title: `${item.name} — аренда ${rate.price}${rate.unit}`,
+    // A retired machine keeps its page for old links but leaves the search index.
+    robots: item.status === 'RETIRED' ? { index: false } : undefined,
     description: item.description ?? `Аренда: ${item.name}`,
   };
 }
@@ -81,7 +96,8 @@ export default async function EquipmentDetailPage({ params }: { params: { id: st
   const specs = item.specs;
   const specRows = specEntries(specs);
   const chips = keySpecs(specs, 4).map(specChip);
-  const { hour, shift } = headlinePrices(item);
+  const rates = customerRates({ ...item, categoryName: item.category.name });
+  const { hour, shift } = headlinePrices(rates);
   // Machines sold as «с гидромолотом» without a hammer price in their specs
   // still get the owner's hammer rate.
   const hammerRate =
@@ -272,7 +288,7 @@ export default async function EquipmentDetailPage({ params }: { params: { id: st
                 <div className="mt-4">
                   <BookingForm
                     equipmentId={item.id}
-                    dailyRate={Number(item.dailyRate)}
+                    dailyRate={rates.dailyRate}
                     currency={item.currency}
                   />
                 </div>

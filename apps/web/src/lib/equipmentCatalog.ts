@@ -3,6 +3,7 @@
 // formatting and headline prices. Pure functions — safe on server and client.
 
 import { defaultPhotoOf, type MachineType } from './machinePhotos';
+import { houseRate } from './prices';
 
 export type TaskGroupId = 'earth' | 'lifting' | 'loading' | 'transport' | 'other';
 
@@ -145,6 +146,24 @@ export function headlinePrices(item: { hourlyRate?: Amount; dailyRate?: Amount }
   const hour = toNumber(item.hourlyRate);
   const shift = toNumber(item.dailyRate) ?? (hour !== null ? hour * SHIFT_HOURS : null);
   return { hour, shift };
+}
+
+/**
+ * The rates a customer sees for a house machine: the hourly rate never below
+ * the lib/prices.ts list (as on /arenda), the shift never below 8 such hours.
+ */
+export function customerRates(item: {
+  name: string;
+  categoryName: string;
+  hourlyRate?: Amount;
+  dailyRate?: Amount;
+}): { hourlyRate: number; dailyRate: number } {
+  const hourlyRate = houseRate(
+    toNumber(item.hourlyRate),
+    machineTypeOf(item.categoryName, item.name),
+  );
+  const dailyRate = Math.max(toNumber(item.dailyRate) ?? 0, hourlyRate * SHIFT_HOURS);
+  return { hourlyRate, dailyRate };
 }
 
 /** "24 000 ₽", kept on one line by a non-breaking space before the sign. */

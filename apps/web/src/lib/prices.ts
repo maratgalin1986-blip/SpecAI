@@ -37,8 +37,8 @@ export const CRANE_HEAVY_RATE = 5500;
 /** The lowest hourly price on the site (the dump truck). */
 export const MIN_RATE = Math.min(...Object.values(RATES));
 
-export function rateOf(type: MachineType): number {
-  return RATES[type] ?? DEFAULT_RATE;
+export function rateOf(type: MachineType | null): number {
+  return (type && RATES[type]) || DEFAULT_RATE;
 }
 
 /**
@@ -48,7 +48,7 @@ export function rateOf(type: MachineType): number {
  */
 export function houseRate(
   dbRate: number | string | { toString(): string } | null | undefined,
-  type: MachineType,
+  type: MachineType | null,
 ): number {
   const db = dbRate === null || dbRate === undefined ? 0 : Number(dbRate.toString());
   return Math.max(Number.isFinite(db) ? db : 0, rateOf(type));
