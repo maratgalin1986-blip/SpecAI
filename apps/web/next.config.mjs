@@ -36,11 +36,12 @@ const nextConfig = {
         key: 'Content-Security-Policy',
         value: "frame-ancestors 'self' https://web.telegram.org https://*.telegram.org",
       },
-      { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
+      { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=(self)' },
     ];
     return [
       { source: '/:path*', headers: security },
       { source: '/video/:path*', headers: media },
+      { source: '/film/:path*', headers: media },
       { source: '/images/:path*', headers: media },
       { source: '/audio/:path*', headers: media },
     ];

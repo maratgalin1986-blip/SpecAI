@@ -83,6 +83,7 @@ import { MiniMap, type MiniCity } from './MiniMap';
 import { placeSite, points as cityPoints, type CityData } from '@/lib/stroyka/city';
 import { OrderPanel } from './OrderPanel';
 import { PhotoBooth } from './PhotoBooth';
+import { StroykaFilm } from './StroykaFilm';
 
 const StroykaWorld = dynamic(() => import('./StroykaWorld'), { ssr: false });
 
@@ -126,6 +127,9 @@ export function Stroyka() {
   const [phase, setPhase] = useState<Phase>('boot');
   // The opening cinematic, until the engine says the fly-over ended.
   const [introOn, setIntroOn] = useState(true);
+  // The opening film, shown while the site loads (not with ?nofilm=1,
+  // ?nointro=1, a direct order link or reduced motion).
+  const [filmOn, setFilmOn] = useState(false);
   const [reduced, setReduced] = useState(false);
   const [mobile, setMobile] = useState(false);
   const [overrides, setOverrides] = useState<SceneOverrides>({});
@@ -278,6 +282,11 @@ export function Stroyka() {
     const force2d = params.get('2d') === '1';
     const force3d = params.get('3d') === '1';
     setPhase(force2d || !hasWebGL() || (prefersReduced && !force3d) ? 'fallback' : '3d');
+    setFilmOn(
+      !prefersReduced &&
+        !['nofilm', 'nointro', 'order'].some((key) => params.get(key) === '1') &&
+        params.get('film') !== '0',
+    );
     if (ov.time) setNow(atMskTime(new Date(), ov.time.h, ov.time.m));
     if (params.get('order') === '1') {
       setOrder({ open: true, machine: null });
@@ -443,6 +452,10 @@ export function Stroyka() {
   useEffect(() => {
     engine?.setHold(!!dialog?.engaged || order.open);
   }, [engine, dialog?.engaged, order.open]);
+  // The 3D fly-over waits for the end of the film.
+  useEffect(() => {
+    engine?.holdIntro(filmOn);
+  }, [engine, filmOn]);
   useEffect(() => {
     if (!engine) return;
     if (new URLSearchParams(window.location.search).get('nointro') === '1') engine.skipIntro();
@@ -950,6 +963,7 @@ export function Stroyka() {
       ? moodLine({ speaker: node.speaker, text: `${gateAway}${node.text}`, kind: 'business', hour })
       : null;
   const loading = phase === '3d' && !engine;
+  const closeFilm = useCallback(() => setFilmOn(false), []);
   const loadPct = Math.round(Math.max(loadSim, loadReal * 0.95 + 0.05) * 100);
   const steps = orderProgress(ctx);
   const zoneName = zone ? zoneById(zone).name : null;
@@ -985,7 +999,7 @@ export function Stroyka() {
         />
       )}
       {/* The opening fly-over as a game cinematic: letterbox bars and titles. */}
-      {phase === '3d' && engine && introOn && (
+      {phase === '3d' && engine && introOn && !filmOn && (
         <button
           type="button"
           data-testid="stroyka-cinematic"
@@ -1360,6 +1374,15 @@ export function Stroyka() {
           </p>
         )}
       </div>
+
+      {filmOn && phase !== 'boot' && (
+        <StroykaFilm
+          ready={phase === 'fallback' || Boolean(engine)}
+          progress={loadPct}
+          small={mobile}
+          onClose={closeFilm}
+        />
+      )}
 
       {/* ---------------- loading screen */}
       {(loading || phase === 'boot') && (
