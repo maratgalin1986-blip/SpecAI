@@ -123,6 +123,7 @@ export const MIHALYCH: RawLine[] = [
     'joke',
   ],
   ['Каток проехал — ровно. Самосвал проехал — опять каток зови.', 'joke'],
+  ['Как у нас в Татарстане говорят: без булдырабыз! Мы сможем. Вот и строим.', 'joke'],
 ];
 
 export const MIHALYCH_TEMPLATES: Template = {
