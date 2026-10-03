@@ -1443,6 +1443,7 @@ export function Stroyka() {
           small={mobile}
           onForce3d={hasWebGL() ? () => setPhase('3d') : undefined}
           onOrder={() => skipToOrder()}
+          paused={filmOn}
         />
       )}
       {chapterCard && (
@@ -1706,7 +1707,7 @@ export function Stroyka() {
       {toast && (
         <div
           data-testid="toast"
-          className="pointer-events-none absolute left-1/2 top-[38%] z-30 w-[min(90vw,30rem)] -translate-x-1/2 rounded-xl bg-slate-950/85 px-4 py-3 text-center text-sm shadow-xl backdrop-blur"
+          className="pointer-events-none absolute inset-x-0 top-[calc(env(safe-area-inset-top)+3.25rem)] z-[66] mx-auto w-[min(90vw,30rem)] rounded-xl bg-slate-950/95 px-4 py-3 text-center text-sm font-semibold text-white shadow-xl sm:top-[38%] sm:z-30"
         >
           {toast}
         </div>

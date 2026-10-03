@@ -39,6 +39,7 @@ export function ZoneFilm({
   small,
   onForce3d,
   onOrder,
+  paused = false,
 }: {
   active: ZoneId | null;
   progress: WorldProgress;
@@ -46,8 +47,13 @@ export function ZoneFilm({
   small: boolean;
   onForce3d?: () => void;
   onOrder?: () => void;
+  /** Held still (no playback) while something opaque covers it, e.g. the opening film. */
+  paused?: boolean;
 }): JSX.Element {
   const target: ZoneId = active ?? 'gate';
+  const pausedRef = useRef(paused);
+  pausedRef.current = paused;
+  const live = () => !document.hidden && !pausedRef.current;
 
   // null until the media query has been read, so no clip starts by mistake.
   const [reduced, setReduced] = useState<boolean | null>(null);
@@ -82,7 +88,7 @@ export function ZoneFilm({
     pending.current = null;
     const old = frontRef.current;
     setFront(idx);
-    if (!document.hidden) play(videos.current[idx]);
+    if (live()) play(videos.current[idx]);
     // Pause the old clip once it has faded out.
     window.setTimeout(() => {
       if (frontRef.current !== old) videos.current[old]?.pause();
@@ -120,7 +126,7 @@ export function ZoneFilm({
 
   const onLoaded = (idx: Slot) => {
     setReady((r) => (idx === 0 ? [true, r[1]] : [r[0], true]));
-    if (idx === frontRef.current && !document.hidden) play(videos.current[idx]);
+    if (idx === frontRef.current && live()) play(videos.current[idx]);
     else swapTo(idx);
   };
   const onFailed = (idx: Slot) => {
@@ -133,11 +139,18 @@ export function ZoneFilm({
     const onVisibility = () => {
       const video = videos.current[frontRef.current];
       if (document.hidden) video?.pause();
-      else play(video);
+      else if (!pausedRef.current) play(video);
     };
     document.addEventListener('visibilitychange', onVisibility);
     return () => document.removeEventListener('visibilitychange', onVisibility);
   }, []);
+
+  // Under the opening film the phone would decode two videos at once: hold
+  // this one still until the film is gone.
+  useEffect(() => {
+    if (paused) videos.current.forEach((v) => v?.pause());
+    else if (!document.hidden) play(videos.current[frontRef.current]);
+  }, [paused]);
 
   // ------------------------------------------------------------ navigation
   const step = useCallback((dir: 1 | -1) => onZone(neighbour(target, dir)), [onZone, target]);
@@ -222,7 +235,7 @@ export function ZoneFilm({
               muted
               loop
               playsInline
-              autoPlay={isFront}
+              autoPlay={isFront && !paused}
               preload="auto"
               disablePictureInPicture
               aria-label={ZONE_FILMS[zone].alt}
