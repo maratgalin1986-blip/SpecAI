@@ -246,13 +246,13 @@ export function SiteJourney() {
               <p className="w-full text-sm italic text-slate-600">{scene.sub}</p>
               <a
                 href={SITE.phoneHref}
-                className="inline-flex items-center gap-1.5 rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white"
+                className="inline-flex min-h-11 items-center gap-1.5 rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white"
               >
                 <Icon name="phone" className="h-4 w-4" /> {SITE.phone}
               </a>
               <a
                 href={scene.type === 'trench' ? '/#podbor' : `/?m=${scene.type}#podbor`}
-                className="inline-flex items-center rounded-full bg-amber-500 px-4 py-2 text-sm font-semibold text-slate-950"
+                className="inline-flex min-h-11 items-center rounded-full bg-amber-500 px-4 py-2 text-sm font-semibold text-slate-950"
               >
                 Заявка
               </a>
@@ -385,7 +385,7 @@ export function SiteJourney() {
             <button
               type="button"
               onClick={skip}
-              className="rounded-full bg-white/10 px-3 py-1.5 text-xs font-semibold text-white/80 ring-1 ring-white/20 backdrop-blur"
+              className="min-h-11 rounded-full bg-white/10 px-4 py-1.5 text-xs font-semibold text-white/80 ring-1 ring-white/20 backdrop-blur"
             >
               Пропустить ↓
             </button>

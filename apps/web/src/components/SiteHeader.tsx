@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { usePathname } from 'next/navigation';
 import { JOURNEY_SELECTOR } from '@/components/useJourneyInView';
 import { SoundToggle } from '@/components/SoundToggle';
 import { SITE } from '@/lib/site';
@@ -20,6 +21,16 @@ export function SiteHeader() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   // Dark translucent variant while the header is over the journey scene.
   const [dark, setDark] = useState(false);
+  const pathname = usePathname();
+  const headerRef = useRef<HTMLElement>(null);
+  // /stroyka is a full-screen layer over the page: the header and footer
+  // behind it must not take keyboard focus (or be read out) while it is open.
+  const behindStroyka = !!pathname?.startsWith('/stroyka');
+  useEffect(() => {
+    const chrome = [headerRef.current, document.querySelector('[data-site-footer]')];
+    chrome.forEach((el) => el?.toggleAttribute('inert', behindStroyka));
+    return () => chrome.forEach((el) => el?.removeAttribute('inert'));
+  }, [behindStroyka]);
   useEffect(() => {
     let observer: IntersectionObserver | null = null;
     let timer = 0;
@@ -64,13 +75,14 @@ export function SiteHeader() {
 
   return (
     <header
+      ref={headerRef}
       data-dark={dark ? 'true' : undefined}
       className="site-header-vt sticky top-0 z-40 border-b border-slate-200/70 bg-white/75 backdrop-blur-md"
     >
-      <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3 sm:px-6 sm:py-4">
+      <div className="mx-auto flex max-w-6xl items-center justify-between gap-2 px-4 py-3 sm:gap-4 sm:px-6 sm:py-4">
         <a
           href="/"
-          className="flex shrink-0 items-center gap-2 text-lg font-extrabold tracking-tight text-slate-900"
+          className="flex min-h-11 shrink-0 items-center gap-2 text-lg font-extrabold tracking-tight text-slate-900"
         >
           <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-500 font-mono text-sm text-slate-950">
             ИИ
@@ -109,15 +121,15 @@ export function SiteHeader() {
             Заказать технику
             <span className="transition group-hover:translate-x-0.5">→</span>
           </a>
-          <SoundToggle />
+          <SoundToggle large />
         </nav>
 
         <div className="ml-auto flex items-center gap-2 lg:hidden">
-          <SoundToggle iconOnPhone />
+          <SoundToggle iconOnPhone large />
           <a
             href={SITE.phoneHref}
             aria-label="Позвонить"
-            className="vt-phone inline-flex min-h-10 items-center rounded-full bg-slate-900 px-3 text-sm font-semibold text-white"
+            className="vt-phone inline-flex min-h-11 min-w-11 items-center justify-center rounded-full bg-slate-900 px-3 text-sm font-semibold text-white"
           >
             {/* The smallest phones (360 px): the icon, so the menu button stays on screen. */}
             <span className="max-[379px]:hidden">Позвонить</span>
@@ -133,7 +145,7 @@ export function SiteHeader() {
           aria-label={isMenuOpen ? 'Закрыть меню' : 'Открыть меню'}
           aria-expanded={isMenuOpen}
           aria-controls="mobile-nav"
-          className="flex h-11 w-11 items-center justify-center rounded-md text-slate-600 hover:bg-slate-100 lg:hidden"
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-slate-600 hover:bg-slate-100 lg:hidden"
         >
           {isMenuOpen ? (
             <svg
@@ -170,7 +182,7 @@ export function SiteHeader() {
               key={link.href}
               href={link.href}
               onClick={() => setIsMenuOpen(false)}
-              className="rounded-md px-2 py-2 hover:bg-slate-100 hover:text-slate-900"
+              className="flex min-h-11 items-center rounded-md px-2 hover:bg-slate-100 hover:text-slate-900"
             >
               {link.label}
             </a>
@@ -178,14 +190,14 @@ export function SiteHeader() {
           <a
             href="/smeta"
             onClick={() => setIsMenuOpen(false)}
-            className="rounded-md bg-amber-100 px-2 py-2 font-semibold text-amber-800"
+            className="flex min-h-11 items-center rounded-md bg-amber-100 px-2 font-semibold text-amber-800"
           >
             🧮 Рассчитать смету
           </a>
           <a
             href="/smeta?mode=snab"
             onClick={() => setIsMenuOpen(false)}
-            className="rounded-md bg-amber-50 px-2 py-2 font-semibold text-amber-800"
+            className="flex min-h-11 items-center rounded-md bg-amber-50 px-2 font-semibold text-amber-800"
           >
             📦 Смета для снабженца
           </a>

@@ -75,6 +75,52 @@ for (const path of PAGES) {
   });
 }
 
+// A link to the order form (header «Заказать технику →», ad visitors) never
+// opens the intro film over the form, and marks it seen for the session.
+test('intro stays hidden on /#callback', async ({ page }) => {
+  const errors = await guard(page);
+  await page.goto('/#callback', { waitUntil: 'load' });
+  await page.waitForTimeout(500);
+  await expect(page.locator('#intro')).toHaveCount(0);
+  expect(await page.evaluate(() => sessionStorage.getItem('sp16_intro_seen'))).toBe('1');
+  expect(errors, 'page errors').toEqual([]);
+});
+
+// Only the phone and the consent are required: a lead without a name goes through.
+test('callback form sends a lead without a name', async ({ page }) => {
+  const errors = await guard(page);
+  const sent: { body?: Record<string, unknown> } = {};
+  await page.route('**/api/leads', (route) => {
+    sent.body = route.request().postDataJSON();
+    return route.fulfill({ status: 201, contentType: 'application/json', body: '{"ok":true}' });
+  });
+  await page.goto('/?intro=0#callback', { waitUntil: 'load' });
+  const form = page.locator('#callback form');
+  await form.getByLabel('Телефон').fill('+7 927 000-00-00');
+  await form.locator('input[name="consent"]').check();
+  await form.getByRole('button', { name: 'Жду звонка' }).click();
+  await expect(page.getByText(/Заявка у диспетчера/)).toBeVisible();
+  expect(sent.body?.phone).toBe('+7 927 000-00-00');
+  expect(errors, 'page errors').toEqual([]);
+});
+
+// Phones: the main «Заказать технику» is on the first screen, above the bottom bar.
+test('hero order button above the fold on a phone', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'iphone-13', 'phone layout');
+  await guard(page);
+  for (const size of [
+    { width: 360, height: 740 },
+    { width: 390, height: 844 },
+  ]) {
+    await page.setViewportSize(size);
+    await page.goto('/?intro=0', { waitUntil: 'load' });
+    const cta = page.locator('main a[href="#callback"]').first();
+    const box = (await cta.boundingBox())!;
+    const bar = (await page.getByRole('navigation', { name: 'Быстрая связь' }).boundingBox())!;
+    expect(box.y + box.height, `${size.width}x${size.height}`).toBeLessThanOrEqual(bar.y);
+  }
+});
+
 // The 3D site: every material compiles (a broken shader leaves machines
 // invisible while the page itself shows no script error). Skipped where the
 // browser has no WebGL and the page falls back to the 2D map.

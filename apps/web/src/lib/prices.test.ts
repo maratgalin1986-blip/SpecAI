@@ -5,6 +5,7 @@ import { LANDINGS } from './landings';
 import { MACHINE_WORKS } from './machineWorks';
 import {
   CRANE_HEAVY_RATE,
+  fromPerHour,
   fromPrice,
   HAMMER_RATE,
   houseRate,
@@ -35,6 +36,11 @@ describe('prices', () => {
   it('formats rubles with a no-break space', () => {
     expect(rub(4000)).toBe('4 000');
     expect(fromPrice('crane')).toBe('от\u00a04\u00a0500\u00a0₽/ч');
+  });
+
+  it('says «с машинистом» with every price outside a table', () => {
+    expect(fromPerHour('truck')).toBe('от\u00a03\u00a0300\u00a0₽/ч с\u00a0машинистом');
+    expect(fromPerHour(5500)).toBe('от\u00a05\u00a0500\u00a0₽/ч с\u00a0машинистом');
   });
 
   it('names together only machines that share a price', () => {

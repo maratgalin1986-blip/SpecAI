@@ -1,5 +1,5 @@
 import type { MachineType } from '@/lib/machinePhotos';
-import { CRANE_HEAVY_RATE, fromPrice, HAMMER_RATE, SHIFT_HOURS } from '@/lib/prices';
+import { CRANE_HEAVY_RATE, fromPerHour, fromPrice, HAMMER_RATE, SHIFT_HOURS } from '@/lib/prices';
 
 // SEO landing pages "аренда <техники> в Набережных Челнах" (/arenda/<slug>).
 // Each maps to a catalog category; prices in the FAQ come from lib/prices.ts.
@@ -70,7 +70,7 @@ export const LANDINGS: Landing[] = [
     faq: [
       {
         q: 'Сколько стоит аренда автокрана?',
-        a: `${cap(fromPrice('crane'))}, автокран 32 т — ${fromPrice(CRANE_HEAVY_RATE)} с машинистом. Смена — ${SHIFT_HOURS} часов.`,
+        a: `${cap(fromPrice('crane'))}, автокран 32 т — ${fromPerHour(CRANE_HEAVY_RATE)}. Смена — ${SHIFT_HOURS} часов.`,
       },
       {
         q: 'Нужен ли стропальщик?',
@@ -118,7 +118,7 @@ export const LANDINGS: Landing[] = [
     faq: [
       {
         q: 'Сколько стоит аренда трактора?',
-        a: `${cap(fromPrice('tractor'))} с оператором. Смена — ${SHIFT_HOURS} часов.`,
+        a: `${cap(fromPrice('tractor'))} с машинистом. Смена — ${SHIFT_HOURS} часов.`,
       },
     ],
   },

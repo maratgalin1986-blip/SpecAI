@@ -24,10 +24,11 @@ import {
   type StepsEventDetail,
 } from '@/lib/sceneEvents';
 
-// The cinematic sound layer, mounted once in the layout. Off by default; it
-// wakes only after the visitor turns it on (SoundToggle) and only inside a
-// gesture, as browsers require. Until then it downloads nothing: the engine,
-// its synthesis code and the recordings load with import()/fetch on demand.
+// The cinematic sound layer, mounted once in the layout. On by default; it
+// wakes at the visitor's first real gesture (or the SoundToggle press), as
+// browsers require: no AudioContext exists before that. Until then it
+// downloads nothing: the engine, its synthesis code and the recordings load
+// with import()/fetch on demand.
 //
 // Components only announce what is on screen (lib/sound.ts: playCue,
 // announceMachine, useMachineSound); a 3D scene can also dispatch
@@ -125,6 +126,9 @@ export function SoundDirector() {
     const wake = () => {
       if (disposed || !soundEnabled() || document.visibilityState !== 'visible') return;
       if (!ctx) {
+        // No context before the visitor's first real gesture: the browser
+        // would refuse to start it and warn in the console.
+        if (!activated()) return;
         const Ctor =
           window.AudioContext ??
           (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
@@ -152,6 +156,15 @@ export function SoundDirector() {
       void Promise.all([resumed.catch(() => {}), loadEngine()]).then(() => {
         if (context.state === 'running') onRunning();
       });
+    };
+
+    // The page has had a real gesture (sticky activation). Browsers without
+    // the API reach wake() from gesture handlers only, so they pass.
+    const activated = () => {
+      const activation = (
+        navigator as Navigator & { userActivation?: { isActive: boolean; hasBeenActive: boolean } }
+      ).userActivation;
+      return !activation || activation.isActive || activation.hasBeenActive;
     };
 
     const onGesture = (event: Event) => {
@@ -209,10 +222,12 @@ export function SoundDirector() {
       wasOn = true;
       setSoundEnabled(true, false);
       addGestures();
-      // Try at once: a browser that already trusts the site (the visitor was
-      // here before) lets audio start without a tap. Otherwise it stays
-      // asleep until the first touch, as before.
-      wake();
+      // The page was already touched (a client-side navigation): wake now.
+      // Otherwise the context is created lazily on the first touch, so no
+      // AudioContext exists before a gesture.
+      const activation = (navigator as Navigator & { userActivation?: { hasBeenActive: boolean } })
+        .userActivation;
+      if (activation?.hasBeenActive) wake();
     }
 
     const onVisibility = () => {

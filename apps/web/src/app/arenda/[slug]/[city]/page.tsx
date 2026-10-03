@@ -197,16 +197,22 @@ export default function CityLandingPage({ params }: { params: Params }) {
             <a
               key={c.slug}
               href={cityPath(landing.slug, c.slug)}
-              className="text-amber-700 hover:underline"
+              className="inline-flex min-h-[44px] items-center text-amber-700 hover:underline"
             >
               {c.name}
             </a>
           ))}
         </div>
-        <a href={`/arenda/${landing.slug}`} className="text-amber-700 hover:underline">
+        <a
+          href={`/arenda/${landing.slug}`}
+          className="inline-flex min-h-[44px] items-center text-amber-700 hover:underline"
+        >
           ← Аренда {landing.title}: вся информация и техника в наличии
         </a>
-        <a href="/raboty" className="text-amber-700 hover:underline">
+        <a
+          href="/raboty"
+          className="inline-flex min-h-[44px] items-center text-amber-700 hover:underline"
+        >
           Работы и цены: траншеи, котлованы, снег, демонтаж →
         </a>
       </section>

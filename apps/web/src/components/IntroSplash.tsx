@@ -29,9 +29,51 @@ const OFFERS = [
 ];
 
 // `?intro=0` in the address skips the titles too (ad landings, QA, links
-// sent to someone who has already seen them), and so does a «Наряд» deep link
-// (`?m=<machine>#podbor`): the visitor asked for the wizard, not the titles.
-const HIDE_IF_SEEN = `try{if(/(?:^|;\\s*)sp_ab=calm/.test(document.cookie)||sessionStorage.getItem('${SEEN_KEY}')||/[?&](intro=0|m=|yclid|gclid|utm_medium=cpc)/.test(location.search)||matchMedia('(prefers-reduced-motion: reduce)').matches){document.getElementById('intro').hidden=true}}catch(e){}`;
+// sent to someone who has already seen them), and so does a deep link to the
+// order form or the wizard (`/#callback`, `?m=<machine>#podbor`): the visitor
+// asked for the form, not the titles. Hiding also marks them seen, so the
+// next home page visit in this session does not play them either.
+const HIDE_IF_SEEN = `try{if(/(?:^|;\\s*)sp_ab=calm/.test(document.cookie)||sessionStorage.getItem('${SEEN_KEY}')||/[?&](intro=0|m=|yclid|gclid|utm_medium=cpc)/.test(location.search)||/^#(callback|podbor)/.test(location.hash)||matchMedia('(prefers-reduced-motion: reduce)').matches){document.getElementById('intro').hidden=true;sessionStorage.setItem('${SEEN_KEY}','1')}}catch(e){}`;
+
+/** The address asks for the order form or the wizard. */
+const FORM_HASH = /^#(callback|podbor)/;
+
+/**
+ * A deep link to the form (`/#callback`, `#podbor`): the browser scrolls to it
+ * at once, then the blocks above load (lazy chunks, photos) and push it down.
+ * Keep it in place for a few seconds, until the visitor scrolls himself.
+ */
+function keepFormAnchored(): () => void {
+  const id = FORM_HASH.exec(window.location.hash)?.[1];
+  const el = id ? document.getElementById(id) : null;
+  if (!el) return () => {};
+  const instant = 'instant' as ScrollBehavior;
+  el.scrollIntoView({ block: 'start', behavior: instant });
+  const anchor = el.getBoundingClientRect().top;
+  const stops = ['wheel', 'touchstart', 'keydown', 'pointerdown'] as const;
+  let timer = 0;
+  const stop = () => {
+    window.clearInterval(timer);
+    stops.forEach((name) => window.removeEventListener(name, stop));
+  };
+  stops.forEach((name) => window.addEventListener(name, stop, { passive: true }));
+  const until = performance.now() + 4000;
+  timer = window.setInterval(() => {
+    if (performance.now() > until) return stop();
+    if (Math.abs(el.getBoundingClientRect().top - anchor) > 4) {
+      el.scrollIntoView({ block: 'start', behavior: instant });
+    }
+  }, 150);
+  return stop;
+}
+
+function markSeen() {
+  try {
+    sessionStorage.setItem(SEEN_KEY, '1');
+  } catch {
+    // Storage blocked: the titles just play on every visit.
+  }
+}
 
 // The card number flies into the header «Позвонить» button through a View
 // Transition. Old snapshot: only the card number carries the name. In the
@@ -77,17 +119,21 @@ export function IntroSplash() {
   useEffect(() => {
     // The inline script has already hidden it for a repeat visit; the flag
     // is read there only, so an effect that runs twice still plays it.
-    if (document.getElementById('intro')?.hidden) {
+    const intro = document.getElementById('intro');
+    if (!intro || intro.hidden || FORM_HASH.test(window.location.hash)) {
+      markSeen();
       setDone(true);
-      return;
+      return keepFormAnchored();
     }
     setSoundOff(!storedSoundChoice());
     const offSound = subscribeSound(() => setSoundOff(!soundEnabled()));
-    try {
-      sessionStorage.setItem(SEEN_KEY, '1');
-    } catch {
-      // Storage blocked: the titles just play on every visit.
-    }
+    markSeen();
+    // A link to the form while the titles play (the header «Заказать
+    // технику →» is `/#callback`): end them at once.
+    const onHash = () => {
+      if (FORM_HASH.test(window.location.hash)) finish();
+    };
+    window.addEventListener('hashchange', onHash);
     const onKey = (event: KeyboardEvent) => {
       if (event.key !== 'Escape' && event.key !== 'Enter') return;
       reachGoal('intro_skip');
@@ -101,6 +147,7 @@ export function IntroSplash() {
     return () => {
       window.clearTimeout(timer);
       window.removeEventListener('keydown', onKey);
+      window.removeEventListener('hashchange', onHash);
       offSound();
     };
   }, []);
@@ -215,6 +262,10 @@ export function IntroSplash() {
             event.stopPropagation();
             setSoundEnabled(soundOff);
           }}
+          // Same switch as the header one: pressing it must not wake the
+          // sound first (SoundDirector skips gestures on [data-sound-toggle]).
+          data-sound-toggle
+          aria-pressed={!soundOff}
           className="intro-sound-hint absolute bottom-6 left-4 flex min-h-11 items-center gap-2 rounded-full bg-white px-4 py-2.5 text-sm font-bold text-slate-950 shadow-lg ring-1 ring-white/40 hover:bg-amber-300 sm:left-6"
         >
           {soundOff ? '🔊 Включить звук' : '🔇 Убрать звук'}
