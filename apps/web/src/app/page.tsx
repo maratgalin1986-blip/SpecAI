@@ -286,19 +286,19 @@ export default async function HomePage() {
             >
               <a
                 href="#podbor"
-                className="py-1 underline-offset-4 hover:text-white hover:underline"
+                className="inline-flex min-h-10 items-center underline-offset-4 hover:text-white hover:underline"
               >
                 Подобрать технику →
               </a>
               <a
                 href="/smeta"
-                className="rounded-full px-3 py-1 text-amber-300 ring-2 ring-amber-400 transition hover:bg-amber-400 hover:text-slate-950"
+                className="inline-flex min-h-10 items-center rounded-full px-3 text-amber-300 ring-2 ring-amber-400 transition hover:bg-amber-400 hover:text-slate-950"
               >
                 🧮 Рассчитать смету
               </a>
               <a
                 href="/stroyka"
-                className="py-1 underline-offset-4 hover:text-white hover:underline"
+                className="inline-flex min-h-10 items-center underline-offset-4 hover:text-white hover:underline"
               >
                 Войти на стройку ▶
               </a>

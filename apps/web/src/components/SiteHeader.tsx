@@ -119,7 +119,7 @@ export function SiteHeader() {
           <SoundToggle />
           <a
             href={SITE.phoneHref}
-            className="vt-phone rounded-full bg-slate-900 px-3 py-1.5 text-sm font-semibold text-white"
+            className="vt-phone inline-flex min-h-10 items-center rounded-full bg-slate-900 px-3 text-sm font-semibold text-white"
           >
             Позвонить
           </a>
@@ -131,7 +131,7 @@ export function SiteHeader() {
           aria-label={isMenuOpen ? 'Закрыть меню' : 'Открыть меню'}
           aria-expanded={isMenuOpen}
           aria-controls="mobile-nav"
-          className="flex h-9 w-9 items-center justify-center rounded-md text-slate-600 hover:bg-slate-100 lg:hidden"
+          className="flex h-11 w-11 items-center justify-center rounded-md text-slate-600 hover:bg-slate-100 lg:hidden"
         >
           {isMenuOpen ? (
             <svg

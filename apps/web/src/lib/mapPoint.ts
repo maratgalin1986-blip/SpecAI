@@ -22,9 +22,20 @@ export function pointMessageLine(point: MapPoint): string {
   return `${POINT_LINE_PREFIX} ${formatCoords(point.lat, point.lon)} — ${yandexMapsLink(point)}`;
 }
 
-/** Replaces an earlier point line in a message, or appends one. */
-export function withPointLine(message: string, point: MapPoint): string {
-  const lines = message.split('\n').filter((line) => !line.startsWith(POINT_LINE_PREFIX));
-  const base = lines.join('\n').trim();
-  return base ? `${base}\n${pointMessageLine(point)}` : pointMessageLine(point);
+/** The lead API keeps the first 1000 characters of a message. */
+export const MESSAGE_MAX = 1000;
+
+/**
+ * Replaces an earlier point line in a message, or appends one. A long message
+ * is shortened instead of the point, so the coordinates always fit.
+ */
+export function withPointLine(message: string, point: MapPoint, max = MESSAGE_MAX): string {
+  const line = pointMessageLine(point);
+  const lines = message.split('\n').filter((l) => !l.startsWith(POINT_LINE_PREFIX));
+  const base = lines
+    .join('\n')
+    .trim()
+    .slice(0, Math.max(0, max - line.length - 1))
+    .trimEnd();
+  return base ? `${base}\n${line}` : line;
 }

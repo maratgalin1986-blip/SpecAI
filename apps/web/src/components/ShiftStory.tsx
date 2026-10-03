@@ -137,9 +137,10 @@ export function ShiftStory() {
         <div className="story-dust pointer-events-none absolute inset-0" aria-hidden />
         {/* Glowing rim of the portal window; fades once it is full screen. */}
         <div
-          className="pointer-events-none absolute z-20 ring-2 ring-inset ring-amber-400/70 shadow-[inset_0_0_60px_rgba(245,158,11,0.35)]"
+          className="pointer-events-none absolute inset-0 z-20 ring-2 ring-inset ring-amber-400/70 shadow-[inset_0_0_60px_rgba(245,158,11,0.35)]"
           style={{
-            inset: `${insetY}% ${insetX}%`,
+            // Scaled, not resized: a transform does not count as a layout shift.
+            transform: `scale(${1 - (2 * insetX) / 100}, ${1 - (2 * insetY) / 100})`,
             borderRadius: 48 * closed,
             opacity: closed > 0.001 ? Math.min(1, closed * 3) : 0,
           }}
@@ -172,7 +173,7 @@ export function ShiftStory() {
             ['К оплате', `${price.toLocaleString('ru-RU')} ₽`],
           ].map(([label, value]) => (
             <div key={label} className="min-w-0">
-              <dt className="text-[0.6rem] uppercase tracking-[0.2em] text-slate-500">{label}</dt>
+              <dt className="text-xs uppercase tracking-[0.2em] text-slate-400">{label}</dt>
               <dd className="truncate text-sm tabular-nums text-slate-100 sm:text-xl">{value}</dd>
             </div>
           ))}

@@ -340,7 +340,9 @@ export function DesignStudio({
             <p className="text-xs text-slate-500">
               {form.object === 'landscape'
                 ? `Площадь участка ${((form.length * form.width) / 100).toLocaleString('ru-RU', { maximumFractionDigits: 1 })} сот.`
-                : `Площадь застройки ${(form.length * form.width).toLocaleString('ru-RU', { maximumFractionDigits: 1 })} м² по наружным стенам`}
+                : form.object === 'flat'
+                  ? `Площадь ${(form.length * form.width).toLocaleString('ru-RU', { maximumFractionDigits: 1 })} м²`
+                  : `Площадь застройки ${(form.length * form.width).toLocaleString('ru-RU', { maximumFractionDigits: 1 })} м² по наружным стенам`}
             </p>
           </div>
           <div>

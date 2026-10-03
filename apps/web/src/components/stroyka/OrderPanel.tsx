@@ -42,6 +42,12 @@ export function OrderPanel({
       first.current?.scrollIntoView({ block: 'nearest' });
     }
   }, [open, machine]);
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [open, onClose]);
   if (!open) return null;
   const list = machine ? [machine, ...MACHINES.filter((m) => m !== machine)] : MACHINES;
   return (

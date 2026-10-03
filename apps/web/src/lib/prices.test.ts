@@ -34,7 +34,7 @@ describe('prices', () => {
 
   it('formats rubles with a no-break space', () => {
     expect(rub(4000)).toBe('4 000');
-    expect(fromPrice('crane')).toBe('от 4 500 ₽/ч');
+    expect(fromPrice('crane')).toBe('от\u00a04\u00a0500\u00a0₽/ч');
   });
 
   it('names together only machines that share a price', () => {
@@ -65,7 +65,7 @@ describe('prices', () => {
   it('gives every landing the price of its own machine', () => {
     for (const landing of LANDINGS) {
       expect(MACHINE_WORKS[landing.machine]?.landing, landing.slug).toBe(landing.slug);
-      expect(fromPrice(landing.machine)).toBe(`от ${rub(RATES[landing.machine])} ₽/ч`);
+      expect(fromPrice(landing.machine)).toBe(`от\u00a0${rub(RATES[landing.machine])}\u00a0₽/ч`);
     }
   });
 

@@ -50,6 +50,7 @@ export function PhotoShare({
   const [stage, setStage] = useState<PhotoStage>(initialStage);
   const prompt = PHOTO_PROMPTS[role][stage];
   const [files, setFiles] = useState<File[]>([]);
+  const [tooMany, setTooMany] = useState(false);
   const [note, setNote] = useState('');
   const [consent, setConsent] = useState(false);
   const [state, setState] = useState<'idle' | 'sending' | 'done' | 'error'>('idle');
@@ -137,11 +138,19 @@ export function PhotoShare({
         accept="image/jpeg,image/png,image/webp"
         multiple
         aria-label="Фото с объекта"
-        onChange={(event) =>
-          setFiles(Array.from(event.target.files ?? []).slice(0, PHOTO_MAX_FILES))
-        }
+        onChange={(event) => {
+          const picked = Array.from(event.target.files ?? []);
+          setFiles(picked.slice(0, PHOTO_MAX_FILES));
+          setTooMany(picked.length > PHOTO_MAX_FILES);
+        }}
         className={`text-sm ${muted}`}
       />
+      {tooMany && (
+        <p className={`text-sm ${muted}`} role="status">
+          За один раз — до {PHOTO_MAX_FILES} фото, отправим первые {PHOTO_MAX_FILES}. Остальные
+          можно прислать следующим заходом.
+        </p>
+      )}
       {role === 'client' && (
         <textarea
           value={note}

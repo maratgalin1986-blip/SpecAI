@@ -391,7 +391,9 @@ export function SiteJourney() {
             </button>
           </div>
 
-          <div className="mt-auto max-w-2xl">
+          {/* All captions share one grid cell, so the box keeps the tallest
+              height and the buttons below never jump (no layout shift). */}
+          <div className="mt-auto grid max-w-2xl">
             {scenes.map((scene, i) => {
               const shown = i === index;
               const fade = shown
@@ -400,30 +402,28 @@ export function SiteJourney() {
               return (
                 <div
                   key={scene.type}
-                  className={`${shown ? '' : 'pointer-events-none absolute'} transition-none`}
+                  className={`[grid-area:1/1] ${shown ? '' : 'pointer-events-none invisible'} transition-none`}
                   style={{
                     opacity: i === n - 1 && shown ? clamp((local - 0.06) / 0.14) : fade,
                     transform: `translateY(${(1 - (i === n - 1 && shown ? 1 : fade)) * 24}px)`,
                   }}
                   aria-hidden={!shown}
                 >
-                  {shown && (
-                    <>
-                      <div className="font-mono text-xs uppercase tracking-[0.25em] text-amber-400">
-                        {scene.place}
-                      </div>
-                      <h2 className="mt-3 text-4xl font-extrabold leading-[1.02] tracking-[-0.03em] drop-shadow-lg sm:text-6xl">
-                        {scene.title}
-                      </h2>
-                      <p className="mt-4 max-w-xl text-lg text-white/80">{scene.text}</p>
-                      <a
-                        href={scene.href}
-                        className="mt-6 inline-flex items-center gap-2 rounded-full bg-amber-500 px-6 py-3 font-semibold text-slate-950 transition hover:bg-amber-400"
-                      >
-                        {scene.cta} →
-                      </a>
-                    </>
-                  )}
+                  <>
+                    <div className="font-mono text-xs uppercase tracking-[0.25em] text-amber-400">
+                      {scene.place}
+                    </div>
+                    <h2 className="mt-3 text-4xl font-extrabold leading-[1.02] tracking-[-0.03em] drop-shadow-lg sm:text-6xl">
+                      {scene.title}
+                    </h2>
+                    <p className="mt-4 max-w-xl text-lg text-white/80">{scene.text}</p>
+                    <a
+                      href={scene.href}
+                      className="mt-6 inline-flex items-center gap-2 rounded-full bg-amber-500 px-6 py-3 font-semibold text-slate-950 transition hover:bg-amber-400"
+                    >
+                      {scene.cta} →
+                    </a>
+                  </>
                 </div>
               );
             })}

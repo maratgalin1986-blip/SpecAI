@@ -22,6 +22,7 @@ import {
   snabCsv,
   snabRow,
   snabText,
+  totalLine,
   trips,
   UNPRICED,
   visibleSnabRows,
@@ -144,6 +145,19 @@ describe('delivery, machinery and the order', () => {
     // Nothing priced: the order still works with quantities.
     expect(list.unpriced).toBe(list.rows.length);
     expect(list.total).toBe(list.deliveryTotal);
+  });
+
+  it('keeps hidden rows out of the partial order text', () => {
+    const list = projectSnab(buildProject({ object: 'house' }), today, prices);
+    const open = visibleSnabRows(list);
+    const text = snabText(list, open);
+    for (const row of list.rows.slice(open)) expect(text).not.toContain(row.name);
+    expect(text).toContain(`Ещё ${list.rows.length - open} поз.`);
+  });
+
+  it('says the sum is delivery only when no material is priced', () => {
+    const list = projectSnab(buildProject({ object: 'house' }), today, {});
+    expect(totalLine(list)).toMatch(/^Доставка и разгрузка ≈ .* \+ материалы, \d+ поз\./);
   });
 
   it('writes an order with totals and no supplier names', () => {

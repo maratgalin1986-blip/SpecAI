@@ -32,7 +32,15 @@ export function useUnlocked(): [boolean, () => void] {
 // «Полная смета — в приложении»: an honest early-access hook. The app is not
 // out yet, so we never say «скачайте»: the phone unlocks the full estimate
 // right here and puts the visitor first in line for the app link.
-export function SmetaUnlock({ text, onUnlocked }: { text: string; onUnlocked: () => void }) {
+export function SmetaUnlock({
+  text,
+  onUnlocked,
+  title,
+}: {
+  text: string;
+  onUnlocked: () => void;
+  title?: string;
+}) {
   const [phone, setPhone] = useState('');
   const [consent, setConsent] = useState(false);
   const [website, setWebsite] = useState('');
@@ -73,7 +81,8 @@ export function SmetaUnlock({ text, onUnlocked }: { text: string; onUnlocked: ()
         Ранний доступ
       </p>
       <h3 className="text-lg font-bold text-slate-950">
-        Полная смета с этапами и 3D-моделью — откроем сразу здесь, приложение {SITE.name} скоро
+        {title ??
+          `Полная смета с этапами и 3D-моделью — откроем сразу здесь, приложение ${SITE.name} скоро`}
       </h3>
       <p className="text-sm text-slate-700">
         Приложение готовится к выпуску: оставьте телефон — откроем полную смету прямо сейчас, а
