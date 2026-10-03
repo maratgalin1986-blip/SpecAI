@@ -23,7 +23,7 @@ export default function AboutScreen() {
         <View style={styles.hero}>
           <View style={styles.logo}>
             <Text style={styles.logoText} numberOfLines={1} adjustsFontSizeToFit>
-              СП16
+              СпецПласт16
             </Text>
           </View>
           <Text style={styles.name}>{SITE.name}</Text>

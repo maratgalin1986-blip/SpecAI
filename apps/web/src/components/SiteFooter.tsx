@@ -1,52 +1,51 @@
 import { LANDINGS } from '@/lib/landings';
 import { SITE } from '@/lib/site';
 
+// At least 44 px tap height on phones; compact rows from sm up.
+const LINK = 'flex min-h-11 items-center hover:text-white sm:min-h-0';
+
 export function SiteFooter() {
   return (
     <footer className="border-t border-slate-200 bg-slate-900 text-slate-300">
       <div className="mx-auto grid max-w-6xl gap-6 px-6 py-10 pb-36 text-sm sm:grid-cols-3">
         <div>
-          <div className="text-base font-semibold text-white">{SITE.name}</div>
+          <div className="text-base font-semibold text-white">
+            {SITE.platform} <span className="text-amber-400">от {SITE.name}</span>
+          </div>
           <p className="mt-2">{SITE.tagline}.</p>
         </div>
-        <div className="flex flex-col gap-1">
+        <div className="flex flex-col sm:gap-1">
           <div className="font-semibold text-white">Разделы</div>
-          <a href="/equipment" className="hover:text-white">
+          <a href="/equipment" className={LINK}>
             Каталог техники
           </a>
-          <a href="/map" className="hover:text-white">
-            Карта исполнителей
-          </a>
           {LANDINGS.map((landing) => (
-            <a key={landing.slug} href={`/arenda/${landing.slug}`} className="hover:text-white">
+            <a key={landing.slug} href={`/arenda/${landing.slug}`} className={LINK}>
               Аренда {landing.title}
             </a>
           ))}
-          <a href="/orders" className="hover:text-white">
+          <a href="/orders" className={LINK}>
             Заявка на технику
           </a>
-          <a href="/agents" className="hover:text-white">
+          <a href="/agents" className={LINK}>
             ИИ-агенты
           </a>
-          <a href="/contacts" className="hover:text-white">
+          <a href="/contacts" className={LINK}>
             Контакты
           </a>
-          <a href="/privacy" className="hover:text-white">
+          <a href="/privacy" className={LINK}>
             Политика конфиденциальности
           </a>
-          <a href="/support" className="font-semibold text-amber-400 hover:text-white">
-            ♥ Поддержать проект
-          </a>
-          <a href="/credits" className="hover:text-white">
+          <a href="/credits" className={LINK}>
             Авторы фото и видео
           </a>
         </div>
-        <div className="flex flex-col gap-1">
+        <div className="flex flex-col sm:gap-1">
           <div className="font-semibold text-white">Контакты</div>
-          <a href={SITE.phoneHref} className="hover:text-white">
+          <a href={SITE.phoneHref} className={LINK}>
             {SITE.phone}
           </a>
-          <a href={`mailto:${SITE.email}`} className="hover:text-white">
+          <a href={`mailto:${SITE.email}`} className={LINK}>
             {SITE.email}
           </a>
           <span>

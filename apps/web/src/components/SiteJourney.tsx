@@ -4,9 +4,10 @@ import Image from 'next/image';
 import { useEffect, useRef, useState } from 'react';
 import { defaultPhotoOf, pickPhoto, type MachineType } from '@/lib/machinePhotos';
 import { currentSiteObject, SITE_OBJECTS, type ObjectStop } from '@/lib/siteObjects';
-import { footageAllowed } from '@/components/CinemaVideo';
+import { clipSources, footageAllowed, lightFootage } from '@/components/CinemaVideo';
 import { LiveClock } from '@/components/LiveClock';
 import { Icon } from '@/components/Icon';
+import { useMachineSound } from '@/components/useMachineSound';
 import { SITE } from '@/lib/site';
 
 // «Путешествие по объекту»: a pinned, scroll-driven fly-through of one big
@@ -110,10 +111,14 @@ export function SiteJourney() {
   // Clips are mounted only after hydration, once this visit's project is
   // known, so the server-side default clips are never downloaded.
   const [mounted, setMounted] = useState(false);
+  // Phones and 3G get the light cut of each clip (CinemaVideo).
+  const [light, setLight] = useState(false);
   // Photos too: the stage is far below the fold, and the server-side default
   // photos would otherwise be fetched and then replaced by this visit's pick.
   const [hydrated, setHydrated] = useState(false);
   const [near, setNear] = useState(false);
+  // The stage fills the screen (the visitor is inside the journey).
+  const [onStage, setOnStage] = useState(false);
   const posRef = useRef(0);
 
   useEffect(() => {
@@ -123,6 +128,7 @@ export function SiteJourney() {
     setScenes(route);
     setPhotos(route.map((scene) => pickPhoto(scene.type, 'journey')));
     setObject(currentSiteObject());
+    setLight(lightFootage());
     setMounted(footageAllowed());
     setHydrated(true);
   }, []);
@@ -142,6 +148,7 @@ export function SiteJourney() {
       setProgress(scrollable > 0 ? clamp(-rect.top / scrollable) : 0);
       // Start fetching footage only when the stage is about to come in.
       setNear(rect.top < window.innerHeight * 1.5 && rect.bottom > -window.innerHeight);
+      setOnStage(rect.top < window.innerHeight * 0.5 && rect.bottom > window.innerHeight * 0.5);
     };
     const onScroll = () => {
       if (!frame) frame = requestAnimationFrame(update);
@@ -206,19 +213,28 @@ export function SiteJourney() {
     };
   }, [reduced]);
 
+  // Sound (only when the visitor turned it on): each stop's machine while
+  // the stage is on screen, cross-fading as the camera moves on.
+  const stop = scenes[Math.min(scenes.length - 1, Math.floor(progress * scenes.length))];
+  useMachineSound('journey', stop?.type, onStage && !reduced);
+
   // Reduced motion: a plain list of the stops.
   if (reduced) {
     return (
       <section aria-label="Путешествие по объекту" className="grid gap-4 sm:grid-cols-2">
+        <h2 className="sr-only">Путешествие по объекту</h2>
         {scenes.map((scene) => (
           <div
             key={scene.type}
             className="overflow-hidden rounded-3xl border border-slate-200 bg-white"
           >
             <a href={scene.href} className="block">
-              <img
-                src={photos[scenes.indexOf(scene)]}
+              <Image
+                src={photos[scenes.indexOf(scene)] ?? defaultPhotoOf(scene.type)}
                 alt=""
+                width={640}
+                height={360}
+                sizes="(min-width: 768px) 33vw, 100vw"
                 className="aspect-video w-full object-cover"
               />
               <div className="p-5">
@@ -315,8 +331,7 @@ export function SiteJourney() {
                     preload={near && pos > i - 1.5 ? 'auto' : 'none'}
                     poster={`/video/${object.clips[scene.stop]}.webp`}
                   >
-                    <source src={`/video/${object.clips[scene.stop]}.webm`} type="video/webm" />
-                    <source src={`/video/${object.clips[scene.stop]}.mp4`} type="video/mp4" />
+                    {clipSources(object.clips[scene.stop]!, light)}
                   </video>
                 )}
                 <div className="journey-clouds absolute inset-0" />

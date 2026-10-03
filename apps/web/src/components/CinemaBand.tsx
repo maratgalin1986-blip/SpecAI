@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import { useEffect, useRef, useState } from 'react';
 import { Icon } from '@/components/Icon';
 import { defaultPhotoOf, type MachineType } from '@/lib/machinePhotos';
@@ -50,12 +51,12 @@ export function CinemaBand({
       data-open={open ? 'true' : 'false'}
       className={`cine-band relative isolate flex min-h-[320px] items-center overflow-hidden rounded-[2rem] bg-slate-950 text-white shadow-2xl sm:min-h-[400px] ${className}`}
     >
-      <img
+      <Image
         src={defaultPhotoOf(machine)}
         alt=""
-        loading="lazy"
-        decoding="async"
-        className="cine-band-photo absolute inset-0 -z-10 h-full w-full object-cover"
+        fill
+        sizes="(min-width: 1280px) 1200px, 100vw"
+        className="cine-band-photo -z-10 object-cover"
       />
       <div className="absolute inset-0 -z-10 bg-gradient-to-r from-slate-950/90 via-slate-950/55 to-slate-950/20" />
       <div className="absolute inset-0 -z-10 bg-gradient-to-t from-slate-950/80 via-transparent to-slate-950/50" />

@@ -5,7 +5,8 @@ import type { Map as LeafletMap, Marker } from 'leaflet';
 import { machineCountLabel, spreadOverlapping, type ProviderMapPin } from '@/lib/providerMap';
 import { createBaseMap, loadLeaflet, pinIcon } from '@/components/leaflet';
 
-// The customers' map of providers: a round marker per provider base (its
+// The customers' map of СпецПласт16's bases (only the own fleet is public,
+// see PUBLIC_FLEET): a round marker per base (its
 // machinery photo or the machine icon, an amber ring for СпецПласт16's own
 // fleet); a tap opens a card at the bottom of the map with the note, how much
 // machinery there is and links to the provider's catalog and to an order.
@@ -118,11 +119,11 @@ export function ProviderMap({ pins, embed = false }: { pins: ProviderMapPin[]; e
               : 'h-[68svh] min-h-[420px] w-full sm:h-[70vh] sm:min-h-[520px]'
           }
           role="region"
-          aria-label="Карта исполнителей"
+          aria-label="Карта техники СпецПласт16"
         />
         {failed && (
           <p className="absolute inset-0 flex items-center justify-center p-6 text-center text-sm text-slate-600">
-            Не удалось загрузить карту — список исполнителей ниже.
+            Не удалось загрузить карту — список техники ниже.
           </p>
         )}
         {selected && (
@@ -135,12 +136,11 @@ export function ProviderMap({ pins, embed = false }: { pins: ProviderMapPin[]; e
 
       <section className={`flex flex-col gap-3 ${embed ? 'px-4' : ''}`}>
         <h2 className="text-lg font-semibold">
-          Исполнители на карте <span className="text-slate-400">· {pins.length}</span>
+          Наш парк на карте <span className="text-slate-400">· {pins.length}</span>
         </h2>
         {pins.length === 0 ? (
           <p className="text-sm text-slate-600">
-            Пока на карте никого нет. Исполнители появятся здесь, когда отметят базу и опубликуют
-            технику.
+            Карта пока пуста. Позвоните диспетчеру — он скажет, где сейчас ближайшая машина.
           </p>
         ) : (
           <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -241,7 +241,7 @@ function ProviderCard({ pin, onClose }: { pin: ProviderMapPin; onClose: () => vo
           href={pin.catalogUrl}
           className="flex min-h-11 items-center justify-center rounded-xl border border-slate-300 px-3 py-2 text-center hover:border-slate-900"
         >
-          Техника этого поставщика
+          Техника на этой базе
         </a>
         <a
           href={`/orders?provider=${encodeURIComponent(pin.id)}`}

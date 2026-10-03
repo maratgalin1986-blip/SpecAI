@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { AGENT_PROFILES, PUBLIC_AGENT_PROFILES, type AgentId } from '@specai/shared';
 import { reachGoal } from '@/lib/marketing';
+import { findPhone } from '@/lib/dispatcher';
+import { ConsentText } from '@/components/ConsentText';
 
 type Selection = AgentId | 'auto';
 
@@ -53,16 +55,28 @@ function renderContent(text: string) {
 export function AgentChat({
   initialAgent = 'auto',
   compact = false,
+  autoFocus = false,
 }: {
   initialAgent?: Selection;
   compact?: boolean;
+  /** Focus the message input on mount (the floating chat window). */
+  autoFocus?: boolean;
 }) {
   const [selection, setSelection] = useState<Selection>(initialAgent);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [isSending, setIsSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // A phone typed into the chat becomes a callback request only with consent.
+  const [consent, setConsent] = useState(false);
+  const [pendingPhone, setPendingPhone] = useState<string | null>(null);
+  const typedPhone = findPhone(input);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (autoFocus) inputRef.current?.focus();
+  }, [autoFocus]);
 
   const profile = AGENT_PROFILES.find((p) => p.id === selection);
   const greeting = profile?.greeting ?? AUTO_GREETING;
@@ -99,6 +113,7 @@ export function AgentChat({
         body: JSON.stringify({
           agentId: selection,
           messages: nextMessages.slice(-30).map(({ role, content: c }) => ({ role, content: c })),
+          consent,
         }),
       });
       const data = await response.json().catch(() => null);
@@ -106,7 +121,12 @@ export function AgentChat({
         throw new Error(typeof data?.error === 'string' ? data.error : 'Агент не ответил.');
       }
       // A phone number typed into the chat became a callback request.
-      if (data.lead) reachGoal('lead');
+      if (data.lead) {
+        reachGoal('lead');
+        setPendingPhone(null);
+      }
+      // The server saw a phone without consent: the box stays open with a resend button.
+      if (data.needConsent && typeof data.phone === 'string') setPendingPhone(data.phone);
       setMessages([
         ...nextMessages,
         { role: 'assistant', content: data.reply, agentId: data.agentId },
@@ -137,7 +157,11 @@ export function AgentChat({
         ))}
       </div>
 
-      <div ref={scrollRef} className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-4">
+      <div
+        ref={scrollRef}
+        aria-live="polite"
+        className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-4"
+      >
         <Bubble role="assistant" label={profile?.name ?? 'Ассистент'}>
           {greeting}
         </Bubble>
@@ -148,7 +172,9 @@ export function AgentChat({
             role={message.role}
             label={message.role === 'assistant' ? agentName(message.agentId) : undefined}
           >
-            {message.role === 'assistant' ? renderContent(message.content) : message.content}
+            <span className="ym-hide-content">
+              {message.role === 'assistant' ? renderContent(message.content) : message.content}
+            </span>
           </Bubble>
         ))}
 
@@ -158,7 +184,9 @@ export function AgentChat({
           </div>
         )}
         {error && (
-          <div className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>
+          <div role="alert" className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
+            {error}
+          </div>
         )}
 
         {messages.length === 0 && (
@@ -188,19 +216,47 @@ export function AgentChat({
         </button>
         <span className="text-xs text-slate-500">Помощник подскажет ваш следующий шаг</span>
       </div>
+      {(typedPhone || pendingPhone) && (
+        <div
+          className="ym-hide-content border-t border-slate-200 px-3 pt-2 text-xs text-slate-600"
+          data-testid="chat-consent"
+        >
+          <label className="flex items-start gap-2">
+            <input
+              type="checkbox"
+              checked={consent}
+              onChange={(e) => setConsent(e.target.checked)}
+              className="mt-0.5"
+            />
+            <ConsentText />
+          </label>
+          {pendingPhone && !typedPhone && (
+            <button
+              type="button"
+              disabled={!consent || isSending}
+              onClick={() => send(`Мой телефон: ${pendingPhone}`)}
+              className="mt-2 rounded-full bg-amber-500 px-3 py-1 text-xs font-semibold text-slate-950 hover:bg-amber-400 disabled:opacity-50"
+            >
+              Отправить заявку: {pendingPhone}
+            </button>
+          )}
+        </div>
+      )}
       <form
         onSubmit={(event) => {
           event.preventDefault();
           send(input);
         }}
-        className="flex gap-2 p-3"
+        className="ym-hide-content flex gap-2 px-3 pt-3"
       >
         <input
+          ref={inputRef}
           value={input}
           onChange={(e) => setInput(e.target.value)}
           maxLength={4000}
           placeholder="Напишите сообщение…"
-          className="min-w-0 flex-1 rounded-md border border-slate-300 px-3 py-2 text-sm"
+          aria-label="Сообщение"
+          className="ym-hide-content min-w-0 flex-1 rounded-md border border-slate-300 px-3 py-2 text-sm"
         />
         <button
           type="submit"
@@ -210,6 +266,12 @@ export function AgentChat({
           Отправить
         </button>
       </form>
+      <p className="px-3 pb-2 pt-1 text-[11px] leading-snug text-slate-500">
+        Сообщения обрабатывает ИИ-сервис (США); телефон и e-mail мы скрываем. Подробнее —{' '}
+        <a href="/soglasie" className="underline hover:text-slate-700">
+          согласие
+        </a>
+      </p>
     </div>
   );
 }

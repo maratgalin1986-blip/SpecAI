@@ -46,8 +46,8 @@ export function createBaseMap(
     minZoom: TILE_MIN_ZOOM,
     maxZoom: 18,
     bounds,
-    attribution:
-      '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">участники OpenStreetMap</a>',
+    // No outbound links on the site: the licence page is linked from /credits.
+    attribution: '<a href="/credits">© участники OpenStreetMap</a>',
   }).addTo(map);
   return map;
 }

@@ -7,6 +7,33 @@ import { createPrismaClient } from '../src';
 const prisma = createPrismaClient();
 
 const COMPANY_ID = 'specplast16-house';
+// The fleet's hourly rates below mirror apps/web/src/lib/prices.ts (the site's
+// single price source; a different package, so they are kept in step by hand).
+const PRICE_RAISE = 1000;
+// The +1000 raise of 2026-10-02 is a one-time migration with no marker in the
+// schema: it runs only on deploys before this date, then never again, so a
+// price the owner lowers by hand later is not raised back on the next deploy.
+const PRICE_RAISE_UNTIL = Date.parse('2026-10-31');
+// Rows edited after the decision day (end of 2026-10-02, Moscow time) are never
+// raised: a price set by hand in the cabinet, even one equal to the old price,
+// stays as the owner left it.
+const PRICE_RAISE_EDITED_AFTER = new Date('2026-10-03T00:00:00+03:00');
+
+/** A Telegram message to the owner, if the bot is configured; never throws. */
+async function alertOwner(text: string) {
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  const chatId = process.env.TELEGRAM_CHAT_ID;
+  if (!token || !chatId) return;
+  try {
+    await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: chatId, text }),
+    });
+  } catch {
+    // Nothing else to do from a build step.
+  }
+}
 const LOCATION_ID = 'specplast16-location';
 
 interface FleetItem {
@@ -27,13 +54,13 @@ const FLEET: FleetItem[] = [
     make: 'JCB',
     model: '4CX',
     categorySlug: 'backhoe-loaders',
-    hourlyRate: 3000,
+    hourlyRate: 4000,
     description:
       'Экскаватор-погрузчик с оператором: траншеи, котлованы, планировка, погрузка. ' +
       'Доступен с гидромолотом для демонтажа и работы по мёрзлому грунту.',
     specs: {
       'Навесное оборудование': 'ковш, гидромолот',
-      'Цена с гидромолотом, ₽/ч': 3500,
+      'Цена с гидромолотом, ₽/ч': 4500,
     },
   },
   {
@@ -42,13 +69,13 @@ const FLEET: FleetItem[] = [
     make: 'Hidromek',
     model: 'HMK 102B',
     categorySlug: 'backhoe-loaders',
-    hourlyRate: 3000,
+    hourlyRate: 4000,
     description:
       'Универсальный экскаватор-погрузчик с оператором. В парке несколько машин — ' +
       'можно заказать сразу на несколько объектов.',
     specs: {
       'Навесное оборудование': 'ковш, гидромолот',
-      'Цена с гидромолотом, ₽/ч': 3500,
+      'Цена с гидромолотом, ₽/ч': 4500,
     },
   },
   {
@@ -57,11 +84,11 @@ const FLEET: FleetItem[] = [
     make: 'LGCE',
     model: 'B877F',
     categorySlug: 'backhoe-loaders',
-    hourlyRate: 3000,
+    hourlyRate: 4000,
     description: 'Экскаватор-погрузчик с оператором для земляных и погрузочных работ.',
     specs: {
       'Навесное оборудование': 'ковш, гидромолот',
-      'Цена с гидромолотом, ₽/ч': 3500,
+      'Цена с гидромолотом, ₽/ч': 4500,
     },
   },
   {
@@ -70,7 +97,7 @@ const FLEET: FleetItem[] = [
     make: 'CASE',
     model: '570',
     categorySlug: 'backhoe-loaders',
-    hourlyRate: 3000,
+    hourlyRate: 4000,
     description: 'Экскаватор-погрузчик с оператором: копка, засыпка, погрузка сыпучих материалов.',
     specs: { 'Навесное оборудование': 'ковш' },
   },
@@ -80,7 +107,7 @@ const FLEET: FleetItem[] = [
     make: 'Lonking',
     model: 'LG833G',
     categorySlug: 'loaders',
-    hourlyRate: 3000,
+    hourlyRate: 4000,
     description: 'Фронтальный погрузчик с оператором: погрузка грунта, щебня, песка, уборка снега.',
     specs: { 'Навесное оборудование': 'ковш' },
   },
@@ -90,7 +117,7 @@ const FLEET: FleetItem[] = [
     make: 'МТЗ',
     model: 'Беларус 82.1',
     categorySlug: 'tractors',
-    hourlyRate: 2500,
+    hourlyRate: 3500,
     description: 'Колёсный трактор с оператором для вспомогательных и коммунальных работ.',
     specs: {},
   },
@@ -100,7 +127,7 @@ const FLEET: FleetItem[] = [
     make: '',
     model: '',
     categorySlug: 'cranes',
-    hourlyRate: 4500,
+    hourlyRate: 5500,
     description: 'Автокран грузоподъёмностью 32 т с машинистом: монтаж, погрузка, подъём грузов.',
     specs: { 'Грузоподъёмность, т': 32 },
   },
@@ -110,7 +137,7 @@ const FLEET: FleetItem[] = [
     make: '',
     model: 'КС-55716',
     categorySlug: 'cranes',
-    hourlyRate: 3500,
+    hourlyRate: 4500,
     description: 'Автокран с машинистом для монтажных и погрузочно-разгрузочных работ.',
     specs: {},
   },
@@ -120,7 +147,7 @@ const FLEET: FleetItem[] = [
     make: '',
     model: '',
     categorySlug: 'excavators',
-    hourlyRate: 3000,
+    hourlyRate: 4000,
     description:
       'Гусеничный экскаватор с машинистом: котлованы, траншеи, планировка, работа на слабых грунтах.',
     specs: {},
@@ -131,7 +158,7 @@ const FLEET: FleetItem[] = [
     make: '',
     model: '',
     categorySlug: 'excavators',
-    hourlyRate: 3000,
+    hourlyRate: 4000,
     description:
       'Колёсный экскаватор с машинистом: земляные работы в городе, демонтаж и разбивка гидромолотом.',
     specs: { 'Навесное оборудование': 'ковш, гидромолот' },
@@ -142,7 +169,7 @@ const FLEET: FleetItem[] = [
     make: '',
     model: '',
     categorySlug: 'crane-trucks',
-    hourlyRate: 3000,
+    hourlyRate: 4000,
     description:
       'Грузовик с краном-манипулятором и водителем: погрузка, перевозка и разгрузка грузов до 7 т.',
     specs: { 'Грузоподъёмность КМУ, т': 7 },
@@ -153,7 +180,7 @@ const FLEET: FleetItem[] = [
     make: '',
     model: '',
     categorySlug: 'aerial-platforms',
-    hourlyRate: 2500,
+    hourlyRate: 3500,
     description:
       'Автогидроподъёмник с машинистом: высотные работы, фасады, кровля, освещение, спил деревьев.',
     specs: {},
@@ -164,7 +191,7 @@ const FLEET: FleetItem[] = [
     make: '',
     model: '',
     categorySlug: 'rollers',
-    hourlyRate: 3000,
+    hourlyRate: 4000,
     description: 'Виброкаток с машинистом: уплотнение грунта, щебня и асфальта.',
     specs: {},
   },
@@ -174,7 +201,7 @@ const FLEET: FleetItem[] = [
     make: '',
     model: '',
     categorySlug: 'dump-trucks',
-    hourlyRate: 2300,
+    hourlyRate: 3300,
     description: 'Самосвал с водителем: вывоз грунта и мусора, доставка песка, щебня, ПГС.',
     specs: {},
   },
@@ -184,7 +211,7 @@ const FLEET: FleetItem[] = [
     make: '',
     model: '',
     categorySlug: 'bulldozers',
-    hourlyRate: 3000,
+    hourlyRate: 4000,
     description:
       'Бульдозер с машинистом: планировка участка, перемещение и разравнивание грунта, засыпка.',
     specs: {},
@@ -256,6 +283,35 @@ async function main() {
     created += 1;
   }
   console.log(`Парк СпецПласт16: добавлено ${created}, всего позиций ${FLEET.length}.`);
+
+  // 2026-10-02: the owner raised every customer price by 1000 ₽/h. Production
+  // only (previews share the database), only rows still at the old price and
+  // not edited since 2026-10-02 (so prices edited by hand in the cabinet are
+  // left alone), and only until
+  // PRICE_RAISE_UNTIL, which makes it one-time without a schema change.
+  if (process.env.VERCEL_ENV === 'production' && Date.now() < PRICE_RAISE_UNTIL) {
+    try {
+      let repriced = 0;
+      for (const item of FLEET) {
+        const result = await prisma.equipment.updateMany({
+          where: {
+            id: item.id,
+            hourlyRate: item.hourlyRate - PRICE_RAISE,
+            updatedAt: { lt: PRICE_RAISE_EDITED_AFTER },
+          },
+          data: { hourlyRate: item.hourlyRate, dailyRate: item.hourlyRate * 8, specs: item.specs },
+        });
+        repriced += result.count;
+      }
+      console.log(`Парк СпецПласт16: новые цены у ${repriced} позиций.`);
+    } catch (error) {
+      // The deploy goes on, but the owner must know the catalog kept old prices.
+      console.error('repricing failed', error);
+      await alertOwner(
+        '⚠️ Сайт: не удалось обновить цены техники в каталоге — проверьте /arenda/samosval',
+      );
+    }
+  }
 }
 
 main()

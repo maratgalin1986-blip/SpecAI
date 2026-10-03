@@ -219,8 +219,10 @@ export function assessWork(w: ShiftWeather, group: MachineGroup): WorkNote[] {
     );
   }
   if (lifting && w.windMax >= LIFT_WIND_STOP) {
+    // Without a chosen machine this is a warning for lifting work only, not a
+    // «перенести» for an excavator customer.
     add(
-      'stop',
+      group === 'any' ? 'caution' : 'stop',
       `Ветер ${wind} м/с`,
       'Для автокрана, манипулятора и автовышки это выше рабочих ограничений с учётом порывов — работы с подъёмом лучше перенести.',
     );

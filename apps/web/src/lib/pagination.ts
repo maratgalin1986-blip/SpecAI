@@ -1,3 +1,4 @@
+import { HOUSE_FIRST_ORDER } from '@/lib/fleet';
 import type { Prisma } from '@specai/database';
 import type { EquipmentSort } from '@specai/shared';
 
@@ -27,10 +28,11 @@ export const EQUIPMENT_ORDER_BY: Record<
   EquipmentSort,
   Prisma.EquipmentOrderByWithRelationInput | Prisma.EquipmentOrderByWithRelationInput[]
 > = {
-  newest: { createdAt: 'desc' },
-  price_asc: [{ dailyRate: 'asc' }, { createdAt: 'desc' }],
-  price_desc: [{ dailyRate: 'desc' }, { createdAt: 'desc' }],
-  name: [{ name: 'asc' }, { createdAt: 'desc' }],
+  // СпецПласт16's own machinery first in every sort (see HOUSE_FIRST_ORDER).
+  newest: [HOUSE_FIRST_ORDER, { createdAt: 'desc' }],
+  price_asc: [HOUSE_FIRST_ORDER, { dailyRate: 'asc' }, { createdAt: 'desc' }],
+  price_desc: [HOUSE_FIRST_ORDER, { dailyRate: 'desc' }, { createdAt: 'desc' }],
+  name: [HOUSE_FIRST_ORDER, { name: 'asc' }, { createdAt: 'desc' }],
 };
 
 export const EQUIPMENT_SORT_LABELS: Record<EquipmentSort, string> = {

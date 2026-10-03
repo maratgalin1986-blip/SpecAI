@@ -64,7 +64,7 @@ export function CommentForm({
   const length = text.trim().length;
   return (
     <form
-      className="flex flex-col gap-2"
+      className="ym-hide-content flex flex-col gap-2"
       onSubmit={async (event) => {
         event.preventDefault();
         setError(null);

@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 
 // Finale of the home page: when the block scrolls in, a circular iris opens
@@ -51,12 +52,12 @@ export function CallbackIris({
         data-iris={state === 'idle' ? undefined : state}
         className={`cine-iris relative overflow-hidden rounded-[2rem] bg-slate-950 text-white ${className}`}
       >
-        <img
+        <Image
           src={backdrop}
           alt=""
-          loading="lazy"
-          decoding="async"
-          className="cine-iris-bg absolute inset-0 h-full w-full object-cover"
+          fill
+          sizes="(min-width: 1280px) 1200px, 100vw"
+          className="cine-iris-bg object-cover"
         />
         <div className="absolute inset-0 bg-slate-950/75" />
         <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-transparent to-slate-950/60" />

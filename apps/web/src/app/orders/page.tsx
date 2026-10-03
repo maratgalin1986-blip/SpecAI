@@ -16,7 +16,7 @@ import { CallbackForm } from '@/components/CallbackForm';
 export const metadata: Metadata = {
   title: 'Заявка на технику',
   description:
-    'Опишите задачу — исполнители со своей техникой и машинистами, включая парк СпецПласт16, пришлют предложения с ценой.',
+    'Опишите задачу — диспетчер СпецПласт16 подберёт технику из своего парка и назовёт одну цену с подачей.',
 };
 
 export const dynamic = 'force-dynamic';
@@ -101,8 +101,8 @@ export default async function OrdersPage({ searchParams }: { searchParams: Order
           </p>
         ) : (
           <p>
-            Опишите задачу — исполнители со своей техникой и машинистами, включая парк {SITE.name},
-            пришлют предложения с ценой. Вы выбираете лучшее, сервис бесплатный.
+            Опишите задачу — диспетчер {SITE.name} подберёт технику из нашего парка и назовёт одну
+            цену с подачей. Наши машинисты, без посредников.
           </p>
         )}
       </CinemaHero>
@@ -114,7 +114,7 @@ export default async function OrdersPage({ searchParams }: { searchParams: Order
           </h2>
           {forProvider && (
             <p className="mb-3 max-w-xl text-sm text-slate-600">
-              Заявку увидит «{forProvider.name}» и другие исполнители — сравните предложения.
+              Заявку получит диспетчер {SITE.name} — он назовёт цену и время подачи.
             </p>
           )}
           {viewerId ? (

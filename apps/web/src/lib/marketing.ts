@@ -71,6 +71,11 @@ const FORM_LABELS: Record<string, string> = {
   contacts: 'Контакты',
   orders: 'Страница заявки',
   'agents-chat': 'Чат с ИИ-агентами',
+  smeta: 'Смета',
+  'smeta-app': 'Полная смета (ранний доступ к приложению)',
+  'smeta-snab': 'Смета для снабженца, заказ материалов',
+  stroyka: '3D-стройка',
+  dizain: 'Дизайн-проект',
   provider: 'Поставщикам (старая форма)',
 };
 
@@ -127,18 +132,53 @@ export type Goal =
   | 'geo_found'
   | 'geo_fail'
   | 'window_book'
-  | 'card_open'
   | 'lead_retry'
   | 'lead_offline_call';
 
 /** The visitor pressed «Отказаться» in the cookie notice. */
 export const COOKIE_CONSENT_KEY = 'cookie-consent';
 
+/** Dispatched on window when the choice is made elsewhere (/privacy): the notice hides. */
+export const COOKIE_CHOICE_EVENT = 'cookie-choice';
+
 export function analyticsRefused(): boolean {
   try {
     return localStorage.getItem(COOKIE_CONSENT_KEY) === 'no';
   } catch {
     return false;
+  }
+}
+
+type YmQueue = ((...args: unknown[]) => void) & { a?: unknown[][] };
+type MetrikaWindow = { ym?: YmQueue; __ymOff?: boolean; Ya?: unknown };
+
+/**
+ * «Нет» in the cookie notice, on the current page: tag.js is not loaded if it
+ * has not been yet (the loader in YandexMetrika checks `__ymOff`), the queued
+ * calls are dropped and later calls go nowhere. On the next page load the
+ * init script sees the refusal and does not initialise the counter at all.
+ */
+export function stopMetrika(win: MetrikaWindow = window as unknown as MetrikaWindow): boolean {
+  // tag.js already running keeps its click map and link tracking until the
+  // page is reloaded; the caller reloads when this returns true.
+  const running = Boolean(win.Ya);
+  win.__ymOff = true;
+  if (win.ym?.a) win.ym.a.length = 0;
+  if (win.ym) win.ym = Object.assign(() => {}, { a: [] });
+  return running;
+}
+
+/**
+ * «OK» before tag.js has loaded: the queued init call still waits in `ym.a`,
+ * so Webvisor is switched on for this very page. Once tag.js is running it
+ * cannot be enabled any more, and it starts from the next page load.
+ */
+export function enableWebvisorIfQueued(win: MetrikaWindow = window as unknown as MetrikaWindow) {
+  for (const call of win.ym?.a ?? []) {
+    const options = call[2];
+    if (call[1] === 'init' && options && typeof options === 'object') {
+      (options as { webvisor?: boolean }).webvisor = true;
+    }
   }
 }
 

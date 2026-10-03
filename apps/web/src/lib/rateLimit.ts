@@ -19,6 +19,12 @@ export interface RateLimitResult {
   retryAfterSec: number;
 }
 
+/**
+ * Лимит заявок с одного IP: общий для форм сайта (/api/leads) и заявок из
+ * ИИ-чата (/api/ai/agents), ключ `leads:<ip>` — один счётчик на оба канала.
+ */
+export const LEAD_RATE_LIMIT: RateLimitOptions = { limit: 5, windowMs: 10 * 60 * 1000 };
+
 // Каждый бакет помнит своё окно: ключи с разными windowMs чистятся независимо.
 const buckets = new Map<string, { windowMs: number; timestamps: number[] }>();
 

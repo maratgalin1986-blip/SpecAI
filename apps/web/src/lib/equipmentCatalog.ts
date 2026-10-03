@@ -3,6 +3,7 @@
 // formatting and headline prices. Pure functions — safe on server and client.
 
 import { defaultPhotoOf, type MachineType } from './machinePhotos';
+import { houseRate } from './prices';
 
 export type TaskGroupId = 'earth' | 'lifting' | 'loading' | 'transport' | 'other';
 
@@ -131,6 +132,8 @@ export function numericSpec(specs: unknown, pattern: RegExp): number | null {
 }
 
 export const SHIFT_HOURS = 8;
+const WEEK_SHIFTS = 5;
+const MONTH_SHIFTS = 22;
 
 type Amount = number | string | { toString(): string } | null | undefined;
 
@@ -145,6 +148,40 @@ export function headlinePrices(item: { hourlyRate?: Amount; dailyRate?: Amount }
   const hour = toNumber(item.hourlyRate);
   const shift = toNumber(item.dailyRate) ?? (hour !== null ? hour * SHIFT_HOURS : null);
   return { hour, shift };
+}
+
+/**
+ * The rates a customer sees for a house machine: the hourly rate never below
+ * the lib/prices.ts list (as on /arenda), the shift never below 8 such hours.
+ */
+export function customerRates(item: {
+  name: string;
+  categoryName: string;
+  hourlyRate?: Amount;
+  dailyRate?: Amount;
+  weeklyRate?: Amount;
+  monthlyRate?: Amount;
+}): {
+  hourlyRate: number;
+  dailyRate: number;
+  weeklyRate: number | null;
+  monthlyRate: number | null;
+} {
+  const hourlyRate = houseRate(
+    toNumber(item.hourlyRate),
+    machineTypeOf(item.categoryName, item.name),
+  );
+  const dailyRate = Math.max(toNumber(item.dailyRate) ?? 0, hourlyRate * SHIFT_HOURS);
+  // A week or a month may be cheaper per day, but not below its working days
+  // (5 and 22 shifts) at the list price.
+  const weekly = toNumber(item.weeklyRate);
+  const monthly = toNumber(item.monthlyRate);
+  return {
+    hourlyRate,
+    dailyRate,
+    weeklyRate: weekly === null ? null : Math.max(weekly, dailyRate * WEEK_SHIFTS),
+    monthlyRate: monthly === null ? null : Math.max(monthly, dailyRate * MONTH_SHIFTS),
+  };
 }
 
 /** "24 000 ₽", kept on one line by a non-breaking space before the sign. */

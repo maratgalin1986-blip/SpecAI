@@ -107,7 +107,7 @@ export function BidForm({ orderId, existing }: { orderId: string; existing?: Exi
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+    <form onSubmit={handleSubmit} className="ym-hide-content flex flex-col gap-3">
       {existing && (
         <p className="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-900">
           Вы уже предложили {formatMoney(existing.price, existing.currency)} — можно изменить цену,

@@ -6,7 +6,7 @@ import { CinemaVideo } from '@/components/CinemaVideo';
 import { SITE } from '@/lib/site';
 import { reachGoal } from '@/lib/marketing';
 
-// Opening titles of the home page, about 3 seconds: a drone shot descends over
+// Opening titles of the home page, about 5 seconds: a drone shot descends over
 // a construction site, «ООО «СпецПласт 16» представляет», then the partner card
 // turns towards the viewer and the camera dives into the site. Shown once per
 // browser session; a click or any key skips it; off with reduced motion.
@@ -16,7 +16,7 @@ import { reachGoal } from '@/lib/marketing';
 // visitors who have already seen it.
 
 const SEEN_KEY = 'sp16_intro_seen';
-const DURATION_MS = 2800;
+const DURATION_MS = 4800;
 
 // `?intro=0` in the address skips the titles too (ad landings, QA, links
 // sent to someone who has already seen them), and so does a «Наряд» deep link

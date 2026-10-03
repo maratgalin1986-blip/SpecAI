@@ -37,6 +37,14 @@ export function maskContacts(text: string): string {
     });
 }
 
+/**
+ * Chat history as it goes to the external AI provider: every message with
+ * phones, e-mails and messenger handles hidden. Roles and order are kept.
+ */
+export function maskMessagesForAi<T extends { content: string }>(messages: readonly T[]): T[] {
+  return messages.map((message) => ({ ...message, content: maskContacts(message.content) }));
+}
+
 export const HIDDEN_LINK = '[ссылка скрыта]';
 
 // Any web link: with a scheme, starting with www., or a bare domain with a

@@ -7,6 +7,7 @@ import { MachinePhoto } from '@/components/MachinePhoto';
 import { QuickOrder } from '@/components/QuickOrder';
 import { TiltCard } from '@/components/TiltCard';
 import {
+  customerRates,
   headlinePrices,
   keySpecs,
   machineTypeOf,
@@ -49,7 +50,9 @@ export function categoryIcon(categoryName: string): IconName {
 // hourly and per-shift price, and the quick-order / details actions.
 export function EquipmentCard({ item }: { item: EquipmentCardItem }) {
   const href = `/equipment/${item.id}`;
-  const { hour, shift } = headlinePrices(item);
+  const { hour, shift } = headlinePrices(
+    customerRates({ ...item, categoryName: item.category.name }),
+  );
   const chips = keySpecs(item.specs, 3).map(specChip);
   // Only https photos or the site's own paths (never javascript: or data:).
   const photo = item.imageUrls.find(isDisplayableImage);

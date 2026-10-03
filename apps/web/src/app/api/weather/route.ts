@@ -10,6 +10,7 @@ import {
   worstLevel,
 } from '@/lib/weather';
 import { checkRateLimit } from '@/lib/rateLimit';
+import { liftingStop, nearestPoint } from '@/lib/stroykaSky';
 
 // Forecast for a work shift and what it means for a machine:
 // GET /api/weather?date=YYYY-MM-DD&kind=crane[&lat=&lon= | &q=address]
@@ -51,9 +52,20 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Прогноз временно недоступен' }, { status: 503 });
   }
   const weather = shiftWeather(points, date);
+  const nowPoint = nearestPoint(points, Date.now());
   const notes = weather ? assessWork(weather, machineGroup(params.get('kind'))) : [];
   return NextResponse.json(
-    { place, date, weather, notes, level: weather ? worstLevel(notes) : null },
+    {
+      place,
+      date,
+      weather,
+      notes,
+      level: weather ? worstLevel(notes) : null,
+      // The forecast hour closest to the request and whether lifting machines
+      // stop then (assessWork), for the live /stroyka scene.
+      now: nowPoint,
+      nowLift: nowPoint ? liftingStop(nowPoint) : null,
+    },
     { headers: { 'Cache-Control': 'public, s-maxage=900, stale-while-revalidate=1800' } },
   );
 }

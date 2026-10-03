@@ -3,7 +3,12 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { COOKIE_CONSENT_KEY } from '@/lib/marketing';
+import {
+  COOKIE_CHOICE_EVENT,
+  COOKIE_CONSENT_KEY,
+  enableWebvisorIfQueued,
+  stopMetrika,
+} from '@/lib/marketing';
 
 // Notice about cookies and Yandex.Metrika (152-ФЗ). Metrika works until the
 // visitor refuses; the choice is kept in localStorage and read by the counter's
@@ -36,6 +41,12 @@ export function CookieNotice() {
       if (revealed || !(scrolled || timedOut) || introOn()) return;
       revealed = true;
       window.clearInterval(poll);
+      // Chosen meanwhile on /privacy (CookieChoiceButtons): stay hidden.
+      try {
+        if (localStorage.getItem(COOKIE_CONSENT_KEY)) return;
+      } catch {
+        // Storage blocked: show the notice.
+      }
       setVisible(true);
       frame = requestAnimationFrame(() => setShown(true));
     };
@@ -59,6 +70,13 @@ export function CookieNotice() {
     };
   }, []);
 
+  // The choice made on /privacy hides the strip too.
+  useEffect(() => {
+    const hide = () => setVisible(false);
+    window.addEventListener(COOKIE_CHOICE_EVENT, hide);
+    return () => window.removeEventListener(COOKIE_CHOICE_EVENT, hide);
+  }, []);
+
   // Lets the chat button sit above the strip (see globals.css).
   const open = visible && !pathname?.startsWith('/admin');
   useEffect(() => {
@@ -73,6 +91,11 @@ export function CookieNotice() {
     } catch {
       // Ignore: the choice just lasts until the page is closed.
     }
+    // «Нет» stops Metrika on this page too; «OK» switches Webvisor on when
+    // the counter has not started yet (lib/marketing.ts).
+    // A running counter only stops for good on a reload (lib/marketing.ts).
+    if (value === 'no' && stopMetrika()) window.location.reload();
+    else enableWebvisorIfQueued();
     setVisible(false);
   }
 
@@ -82,12 +105,13 @@ export function CookieNotice() {
     <div
       role="region"
       aria-label="Уведомление о cookie"
-      className={`fixed inset-x-0 bottom-[calc(4rem+env(safe-area-inset-bottom))] z-[45] flex h-10 items-center gap-2 border-t border-slate-200 bg-white/95 px-3 text-xs text-slate-700 shadow-md backdrop-blur motion-safe:transition motion-safe:duration-300 sm:inset-x-auto sm:bottom-4 sm:left-4 sm:h-auto sm:rounded-full sm:border sm:py-1.5 sm:pl-4 sm:pr-2 ${
+      data-bottom-bar
+      className={`fixed inset-x-0 bottom-[calc(4rem+env(safe-area-inset-bottom))] z-[45] flex min-h-10 items-center gap-2 border-t border-slate-200 bg-white/95 px-3 py-1 text-xs text-slate-700 shadow-md backdrop-blur motion-safe:transition motion-safe:duration-300 sm:inset-x-auto sm:bottom-4 sm:right-6 sm:rounded-full sm:border sm:py-1.5 sm:pl-4 sm:pr-2 ${
         shown ? 'translate-y-0 opacity-100' : 'translate-y-4 opacity-0 motion-reduce:translate-y-0'
       }`}
     >
-      <p className="min-w-0 flex-1 truncate">
-        Используем cookie и Яндекс.Метрику ·{' '}
+      <p className="min-w-0 flex-1 leading-snug">
+        Cookie и Метрика ·{' '}
         <Link href="/privacy" className="text-amber-800 underline">
           Политика
         </Link>
@@ -95,14 +119,16 @@ export function CookieNotice() {
       <button
         type="button"
         onClick={() => choose('yes')}
-        className="rounded-full bg-slate-900 px-3 py-1 font-semibold text-white hover:bg-slate-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-600"
+        className="min-h-9 shrink-0 rounded-full bg-slate-900 px-4 py-1.5 font-semibold text-white hover:bg-slate-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-600"
       >
         OK
       </button>
       <button
         type="button"
         onClick={() => choose('no')}
-        className="px-1.5 py-1 text-slate-600 underline hover:text-slate-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-600"
+        aria-label="Нет, отключить Метрику"
+        title="Отключить Яндекс.Метрику и Вебвизор"
+        className="min-h-9 shrink-0 px-2 py-1.5 text-slate-600 underline hover:text-slate-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-600"
       >
         Нет
       </button>

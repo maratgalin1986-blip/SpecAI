@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, type Mock } from 'vitest';
-import { acceptLead, leadMessage, UNSAVED_LEAD_WARNING, type LeadData } from './leadIntake';
+import { acceptLead, leadMessage, type LeadData } from './leadIntake';
 
 const lead: LeadData = {
   name: 'Иван',
@@ -23,7 +23,8 @@ describe('acceptLead', () => {
     await expect(acceptLead(lead, d)).resolves.toBe('saved');
     expect(d.save).toHaveBeenCalledWith(lead);
     expect(d.notify).toHaveBeenCalledOnce();
-    expect(d.notify).toHaveBeenCalledWith(expect.not.stringContaining(UNSAVED_LEAD_WARNING));
+    expect(d.notify).toHaveBeenCalledWith(expect.not.stringContaining('база недоступна'));
+    expect(d.notify).toHaveBeenCalledWith(expect.stringContaining('Имя: Иван'));
     expect(d.onSaveError).not.toHaveBeenCalled();
   });
 
@@ -31,9 +32,13 @@ describe('acceptLead', () => {
     const dbError = new Error("Can't reach database server");
     const d = deps({ save: vi.fn().mockRejectedValue(dbError) });
     await expect(acceptLead(lead, d)).resolves.toBe('notified-only');
-    expect(d.onSaveError).toHaveBeenCalledWith(dbError);
-    expect(d.notify).toHaveBeenCalledWith(expect.stringContaining('+7 900 000-00-00'));
-    expect(d.notify).toHaveBeenCalledWith(expect.stringContaining(UNSAVED_LEAD_WARNING));
+    expect(d.onSaveError).toHaveBeenCalledWith(dbError, lead);
+    const text = d.notify.mock.calls[0]![0] as string;
+    expect(text).toContain('база недоступна');
+    expect(text).toContain('+7 900 000-00-00');
+    // Localisation: the name and the message stay off the messenger.
+    expect(text).not.toContain('Иван');
+    expect(text).not.toContain('экскаватор');
   });
 
   it('reports a lost lead when neither the database nor Telegram worked', async () => {
@@ -59,6 +64,10 @@ describe('acceptLead', () => {
 });
 
 describe('leadMessage', () => {
+  it('adds the footer to a saved lead', () => {
+    expect(leadMessage(lead, 'СпецПласт16', true, '📷 фото')).toMatch(/\n📷 фото$/);
+  });
+
   it('omits empty optional lines', () => {
     const text = leadMessage({ ...lead, message: null, source: null }, 'СпецПласт16', true);
     expect(text).toBe(
@@ -66,5 +75,24 @@ describe('leadMessage', () => {
         '\n',
       ),
     );
+  });
+
+  it('refuses a lead over the per-phone limit before saving or notifying', async () => {
+    const d = deps();
+    const phoneLimit = vi.fn().mockResolvedValue([
+      { phone: '8 900 000-00-00', createdAt: new Date() },
+      { phone: '+79000000000', createdAt: new Date() },
+      { phone: '+7 900 000-00-00', createdAt: new Date() },
+    ]);
+    await expect(acceptLead(lead, { ...d, phoneLimit })).resolves.toBe('limited');
+    expect(d.save).not.toHaveBeenCalled();
+    expect(d.notify).not.toHaveBeenCalled();
+  });
+
+  it('accepts the lead when the per-phone lookup fails (database down)', async () => {
+    const d = deps();
+    const phoneLimit = vi.fn().mockRejectedValue(new Error('db down'));
+    const other = { ...lead, phone: '+7 900 123-45-67' };
+    await expect(acceptLead(other, { ...d, phoneLimit })).resolves.toBe('saved');
   });
 });

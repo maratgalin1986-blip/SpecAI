@@ -8,7 +8,9 @@ import { EstimateBox } from '@/components/EstimateBox';
 import { Icon } from '@/components/Icon';
 import { MachineGallery } from '@/components/MachineGallery';
 import { MachinePhoto } from '@/components/MachinePhoto';
+import { MachineAmbience } from '@/components/MachineAmbience';
 import {
+  customerRates,
   headlinePrices,
   keySpecs,
   machineTypeOf,
@@ -20,7 +22,7 @@ import {
 import { formatMoney, formatRate } from '@/lib/money';
 import { pluralizeRu } from '@/lib/pluralize';
 import { SITE } from '@/lib/site';
-import { PUBLISHED_FLEET, isHouseEquipment } from '@/lib/fleet';
+import { PUBLISHED_FLEET, isHouseEquipment, PUBLIC_FLEET } from '@/lib/fleet';
 import { isDisplayableImage } from '@/lib/providerMap';
 import { shortAuthorName } from '@/lib/comments';
 import { maskContactsAndLinks } from '@/lib/privacy';
@@ -28,6 +30,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { approvedComments, commentAccessError } from '@/lib/commentAccess';
 import { CommentForm, CommentList } from '@/components/Comments';
+import { HAMMER_RATE } from '@/lib/machineWorks';
 
 export const dynamic = 'force-dynamic';
 
@@ -38,13 +41,27 @@ const STATUS_NOTE: Record<string, string> = {
 };
 
 export async function generateMetadata({ params }: { params: { id: string } }): Promise<Metadata> {
-  const item = await prisma.equipment.findUnique({
-    where: { id: params.id },
-    select: { name: true, description: true, dailyRate: true, hourlyRate: true, currency: true },
+  const item = await prisma.equipment.findFirst({
+    where: { id: params.id, ...PUBLIC_FLEET },
+    select: {
+      name: true,
+      description: true,
+      dailyRate: true,
+      hourlyRate: true,
+      currency: true,
+      status: true,
+      category: { select: { name: true } },
+    },
   });
   if (!item) return { title: 'Техника не найдена' };
+  const rate = formatRate({
+    ...customerRates({ ...item, categoryName: item.category.name }),
+    currency: item.currency,
+  });
   return {
-    title: `${item.name} — аренда ${formatRate(item).price}${formatRate(item).unit}`,
+    title: `${item.name} — аренда ${rate.price}${rate.unit}`,
+    // A retired machine keeps its page for old links but leaves the search index.
+    robots: item.status === 'RETIRED' ? { index: false } : undefined,
     description: item.description ?? `Аренда: ${item.name}`,
   };
 }
@@ -63,7 +80,8 @@ export default async function EquipmentDetailPage({ params }: { params: { id: st
     },
   });
 
-  if (!item || !item.company.isProvider) {
+  // Only СпецПласт16's own machinery has a public page.
+  if (!item || !isHouseEquipment(item)) {
     notFound();
   }
 
@@ -78,13 +96,16 @@ export default async function EquipmentDetailPage({ params }: { params: { id: st
   const specs = item.specs;
   const specRows = specEntries(specs);
   const chips = keySpecs(specs, 4).map(specChip);
-  const { hour, shift } = headlinePrices(item);
-  const hammerRate = numericSpec(specs, /гидромолот.*₽/i) ?? undefined;
+  const rates = customerRates({ ...item, categoryName: item.category.name });
+  const { hour, shift } = headlinePrices(rates);
+  // Machines sold as «с гидромолотом» without a hammer price in their specs
+  // still get the owner's hammer rate.
+  const hammerRate =
+    numericSpec(specs, /гидромолот.*₽/i) ??
+    (/гидромолот/i.test(item.name) ? HAMMER_RATE : undefined);
   const illustration = machineTypeOf(item.category.name, item.name);
   const ownFleet = item.company.name === SITE.legalName;
-  // Aggregator: who does the job — СпецПласт16's own fleet or a provider company.
-  const house = isHouseEquipment(item);
-  const executor = house ? 'Парк СпецПласт16 · машинист в штате' : item.company.name;
+  const executor = 'Парк СпецПласт16 · машинист в штате';
   const photos = item.imageUrls.filter(isDisplayableImage);
   const averageRating = item.reviews.length
     ? item.reviews.reduce((sum, review) => sum + review.rating, 0) / item.reviews.length
@@ -116,7 +137,7 @@ export default async function EquipmentDetailPage({ params }: { params: { id: st
     ...(item.location
       ? [{ label: 'Местоположение', value: `${item.location.city}, ${item.location.country}` }]
       : []),
-    { label: 'Исполнитель', value: executor },
+    { label: 'Кто работает', value: executor },
     ...(item.make || item.model
       ? [{ label: 'Марка и модель', value: [item.make, item.model].filter(Boolean).join(' ') }]
       : []),
@@ -125,11 +146,11 @@ export default async function EquipmentDetailPage({ params }: { params: { id: st
     ...(shift !== null
       ? [{ label: 'Цена за смену 8 ч', value: formatMoney(shift, item.currency) }]
       : []),
-    ...(item.weeklyRate
-      ? [{ label: 'Цена за неделю', value: formatMoney(item.weeklyRate, item.currency) }]
+    ...(rates.weeklyRate
+      ? [{ label: 'Цена за неделю', value: formatMoney(rates.weeklyRate, item.currency) }]
       : []),
-    ...(item.monthlyRate
-      ? [{ label: 'Цена за месяц', value: formatMoney(item.monthlyRate, item.currency) }]
+    ...(rates.monthlyRate
+      ? [{ label: 'Цена за месяц', value: formatMoney(rates.monthlyRate, item.currency) }]
       : []),
     ...specRows.map((row) => ({
       label: row.label,
@@ -139,6 +160,7 @@ export default async function EquipmentDetailPage({ params }: { params: { id: st
 
   return (
     <div className="flex flex-col gap-16">
+      {illustration && <MachineAmbience type={illustration} />}
       <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_400px] lg:gap-10">
         {/* Title, chips and gallery */}
         <div className="flex min-w-0 flex-col gap-6">
@@ -266,7 +288,7 @@ export default async function EquipmentDetailPage({ params }: { params: { id: st
                 <div className="mt-4">
                   <BookingForm
                     equipmentId={item.id}
-                    dailyRate={Number(item.dailyRate)}
+                    dailyRate={rates.dailyRate}
                     currency={item.currency}
                   />
                 </div>
@@ -326,20 +348,20 @@ export default async function EquipmentDetailPage({ params }: { params: { id: st
           <section id="comments" className="scroll-mt-24">
             <div className="eyebrow text-amber-700">Комментарии заказчиков</div>
             <p className="mt-2 text-sm text-slate-500">
-              Об исполнителе «{item.company.name}». Публикуются после проверки.
+              О работе {SITE.name}. Публикуются после проверки.
             </p>
             <div className="mt-4 flex flex-col gap-4">
               <CommentList comments={comments} empty="Комментариев пока нет." />
               {canComment ? (
                 <CommentForm
                   targetCompanyId={item.companyId}
-                  label="Оставить комментарий об исполнителе"
+                  label="Оставить комментарий о работе"
                   compact={comments.length > 0}
                 />
               ) : (
                 <p className="text-xs text-slate-500">
                   {session?.user ? (
-                    'Комментарий можно оставить после брони этой техники или предложения исполнителя по вашей заявке.'
+                    'Комментарий можно оставить после брони этой техники или ответа диспетчера по вашей заявке.'
                   ) : (
                     <>
                       <a

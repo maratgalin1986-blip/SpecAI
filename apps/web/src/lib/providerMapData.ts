@@ -1,3 +1,4 @@
+import { HOUSE_COMPANY_ID } from '@/lib/fleet';
 import type { PrismaClient } from '@specai/database';
 import { toMapPins, type ProviderMapPin } from './providerMap';
 
@@ -8,7 +9,8 @@ import { toMapPins, type ProviderMapPin } from './providerMap';
  */
 export async function loadMapPins(prisma: PrismaClient): Promise<ProviderMapPin[]> {
   const companies = await prisma.company.findMany({
-    where: { isProvider: true, baseLat: { not: null }, baseLon: { not: null } },
+    // Only СпецПласт16 is shown (owner's decision, 2026-10-02).
+    where: { id: HOUSE_COMPANY_ID, baseLat: { not: null }, baseLon: { not: null } },
     select: {
       id: true,
       name: true,

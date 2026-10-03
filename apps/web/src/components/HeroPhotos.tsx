@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { CinemaVideo } from '@/components/CinemaVideo';
 import { MachinePhoto } from '@/components/MachinePhoto';
+import { useMachineSound } from '@/components/useMachineSound';
 import { MACHINE_LABELS, type MachineType } from '@/lib/machinePhotos';
 import { currentSiteObject, SITE_OBJECTS } from '@/lib/siteObjects';
 
@@ -26,6 +27,7 @@ const SLIDES: { type: MachineType; href: string }[] = [
 
 const SLIDE_MS = 6500;
 const VIDEO_MS = 12000;
+const SOFT_SLIDE_MS = 9000;
 // Real construction footage of the visit's project (see siteObjects.ts); the
 // hero opens on it (index -1), then cycles through the machine photos and
 // comes back to the footage.
@@ -49,10 +51,17 @@ export function HeroPhotos() {
   }, []);
 
   useEffect(() => {
-    if (paused || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    if (paused) return;
+    // Soft mode («Уменьшение движения»): no footage and no push-in, the
+    // machine photos only cross-fade, slower.
+    const soft = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (soft && current === -1) {
+      setCurrent(0);
+      return;
+    }
     const timer = window.setTimeout(
-      () => setCurrent((i) => (i + 1 >= SLIDES.length ? -1 : i + 1)),
-      current === -1 ? VIDEO_MS : SLIDE_MS,
+      () => setCurrent((i) => (i + 1 >= SLIDES.length ? (soft ? 0 : -1) : i + 1)),
+      soft ? SOFT_SLIDE_MS : current === -1 ? VIDEO_MS : SLIDE_MS,
     );
     return () => window.clearTimeout(timer);
   }, [current, paused]);
@@ -97,6 +106,20 @@ export function HeroPhotos() {
       cancelAnimationFrame(frame);
     };
   }, []);
+
+  // Sound (only when the visitor turned it on): the machine on screen revs
+  // in as its slide comes up, while the hero is in view.
+  const [inView, setInView] = useState(true);
+  useEffect(() => {
+    const el = rootRef.current;
+    if (!el || typeof IntersectionObserver === 'undefined') return;
+    const observer = new IntersectionObserver(([entry]) => setInView(!!entry?.isIntersecting), {
+      threshold: 0.35,
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+  useMachineSound('hero', current === -1 ? null : SLIDES[current]?.type, inView);
 
   const slide = SLIDES[Math.max(0, current)]!;
 
@@ -160,7 +183,7 @@ export function HeroPhotos() {
         ))}
       </div>
       <a
-        href={slide.href}
+        href={current === -1 ? '/stroyka' : slide.href}
         className="absolute bottom-5 left-6 z-10 font-mono text-[0.65rem] uppercase tracking-[0.2em] text-slate-400 hover:text-amber-400 sm:left-10 lg:hidden"
       >
         {current === -1 ? 'Стройка онлайн' : MACHINE_LABELS[slide.type]} →

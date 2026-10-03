@@ -1,5 +1,14 @@
-import { describe, expect, it } from 'vitest';
-import { channelFrom, DIRECT, formLabel, goalOfHref, splitSource, withChannel } from './marketing';
+import { describe, expect, it, vi } from 'vitest';
+import {
+  channelFrom,
+  DIRECT,
+  enableWebvisorIfQueued,
+  formLabel,
+  goalOfHref,
+  splitSource,
+  stopMetrika,
+  withChannel,
+} from './marketing';
 
 const HOST = 'spec-ai-web.vercel.app';
 const home = (query = '') => `https://${HOST}/${query}`;
@@ -58,5 +67,43 @@ describe('formLabel', () => {
     expect(formLabel('wizard')).toBe('Подбор техники');
     expect(formLabel('—')).toBe('Без отметки');
     expect(formLabel('something-new')).toBe('something-new');
+  });
+});
+
+function queuedYm() {
+  const ym = Object.assign(vi.fn(), { a: [] as unknown[][] });
+  ym.a.push([1, 'init', { webvisor: false }], [1, 'reachGoal', 'lead']);
+  return ym;
+}
+
+describe('cookie choice and the Metrika queue', () => {
+  it('«Нет» drops queued calls, blocks the loader and silences later calls', () => {
+    const ym = queuedYm();
+    const win: { ym?: typeof ym; __ymOff?: boolean } = { ym };
+    stopMetrika(win);
+    expect(ym.a).toHaveLength(0);
+    expect(win.__ymOff).toBe(true);
+    expect(win.ym).not.toBe(ym);
+    win.ym?.(1, 'reachGoal', 'call');
+    expect(ym).not.toHaveBeenCalled();
+  });
+
+  it('«OK» before tag.js loads switches Webvisor on in the queued init', () => {
+    const ym = queuedYm();
+    enableWebvisorIfQueued({ ym });
+    expect(ym.a[0]?.[2]).toEqual({ webvisor: true });
+    expect(ym.a[1]).toEqual([1, 'reachGoal', 'lead']);
+  });
+
+  it('does nothing without a counter', () => {
+    expect(() => stopMetrika({})).not.toThrow();
+    expect(() => enableWebvisorIfQueued({})).not.toThrow();
+  });
+});
+
+describe('stopMetrika on a running counter', () => {
+  it('tells the caller to reload when tag.js already runs', () => {
+    expect(stopMetrika({ Ya: {} })).toBe(true);
+    expect(stopMetrika({})).toBe(false);
   });
 });

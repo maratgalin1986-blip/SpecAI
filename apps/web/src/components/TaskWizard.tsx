@@ -1,13 +1,14 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { MACHINE_WORKS, machineFromQuery, machineLabel } from '@/lib/machineWorks';
+import { MACHINE_WORKS, machineFromQuery, machineLabel, workRate } from '@/lib/machineWorks';
 import { CallbackForm } from '@/components/CallbackForm';
 import { Icon, type IconName } from '@/components/Icon';
 import { MachinePhoto } from '@/components/MachinePhoto';
 import type { MachineType } from '@/lib/machinePhotos';
 import { WorkOrderPreview } from '@/components/WorkOrderPreview';
 import { WeatherHud } from '@/components/WeatherHud';
+import { playCue } from '@/lib/sound';
 import {
   machineGroup,
   mskToday,
@@ -15,6 +16,7 @@ import {
   type ShiftWeather,
   type WorkNote,
 } from '@/lib/weather';
+import { HAMMER_RATE, RATES } from '@/lib/prices';
 
 // «Подобрать технику»: three quick questions → a recommended machine, a rough
 // price range from the price list and a callback form with the answers filled in.
@@ -33,7 +35,7 @@ const TASKS: {
     icon: 'excavator',
     label: 'Траншея, котлован, планировка',
     machine: 'Экскаватор-погрузчик',
-    rate: 3000,
+    rate: RATES.backhoe,
     landing: 'ekskavator-pogruzchik',
     photo: 'backhoe',
   },
@@ -42,7 +44,7 @@ const TASKS: {
     icon: 'hammer',
     label: 'Демонтаж, асфальт, бетон',
     machine: 'Экскаватор-погрузчик с гидромолотом',
-    rate: 3500,
+    rate: HAMMER_RATE,
     landing: 'ekskavator-pogruzchik',
     photo: 'backhoe',
   },
@@ -51,7 +53,7 @@ const TASKS: {
     icon: 'crane',
     label: 'Поднять, смонтировать груз',
     machine: 'Автокран',
-    rate: 3500,
+    rate: RATES.crane,
     landing: 'avtokran',
     photo: 'crane',
   },
@@ -60,7 +62,7 @@ const TASKS: {
     icon: 'crane',
     label: 'Подъём и перевозка груза манипулятором',
     machine: 'Манипулятор КМУ 7 т',
-    rate: 3000,
+    rate: RATES.kmu,
     landing: 'manipulyator-kmu',
     photo: 'kmu',
   },
@@ -69,7 +71,7 @@ const TASKS: {
     icon: 'lift',
     label: 'Работы на высоте',
     machine: 'Автовышка АГП',
-    rate: 2500,
+    rate: RATES.agp,
     landing: 'avtovyshka-agp',
     photo: 'agp',
   },
@@ -78,7 +80,7 @@ const TASKS: {
     icon: 'loader',
     label: 'Погрузка сыпучих, уборка снега',
     machine: 'Фронтальный погрузчик',
-    rate: 3000,
+    rate: RATES.loader,
     landing: 'frontalnyj-pogruzchik',
     photo: 'loader',
   },
@@ -87,7 +89,7 @@ const TASKS: {
     icon: 'roller',
     label: 'Уплотнение грунта и асфальта',
     machine: 'Виброкаток',
-    rate: 3000,
+    rate: RATES.roller,
     landing: 'vibrokatok',
     photo: 'roller',
   },
@@ -96,7 +98,7 @@ const TASKS: {
     icon: 'tractor',
     label: 'Коммунальные и вспомогательные работы',
     machine: 'Трактор МТЗ',
-    rate: 2500,
+    rate: RATES.tractor,
     landing: 'traktor',
     photo: 'tractor',
   },
@@ -169,13 +171,24 @@ export function TaskWizard() {
       .catch((error: Error) => {
         if (error.name !== 'AbortError') setForecastDone(true);
       });
-    // Never keep the form waiting for long.
-    const timer = window.setTimeout(() => setForecastDone(true), 2500);
+    // Never keep the form waiting for long. A forecast that comes later is
+    // dropped: it would change the form's key and wipe what the visitor typed.
+    const timer = window.setTimeout(() => {
+      controller.abort();
+      setForecastDone(true);
+    }, 2500);
     return () => {
       controller.abort();
       window.clearTimeout(timer);
     };
   }, [step, task, workDate]);
+
+  // Sound (when on): the «Готов» stamp lands on the finished work order.
+  useEffect(() => {
+    if (step !== 3) return;
+    const timer = window.setTimeout(() => playCue('stamp'), 260);
+    return () => window.clearTimeout(timer);
+  }, [step]);
 
   const estimate =
     task?.rate && volume?.hours
@@ -217,7 +230,7 @@ export function TaskWizard() {
             {['Задача', 'Когда', 'Объём', 'Результат'].map((label, index) => (
               <li
                 key={label}
-                className={`flex items-center gap-3 ${index <= step ? 'text-white' : 'text-slate-600'}`}
+                className={`flex items-center gap-3 ${index <= step ? 'text-white' : 'text-slate-400'}`}
               >
                 <span
                   className={`flex h-7 w-7 items-center justify-center rounded-full text-xs ${
@@ -236,7 +249,7 @@ export function TaskWizard() {
           </ol>
         </div>
 
-        <div className="p-6 sm:p-10 lg:col-span-8">
+        <div className="min-w-0 p-6 sm:p-10 lg:col-span-8">
           {step === 0 && (
             <div>
               <h3 className="text-xl font-bold">
@@ -260,8 +273,8 @@ export function TaskWizard() {
                         id: `${machine}-${index}`,
                         icon: 'helmet' as IconName,
                         label,
-                        machine: `${machineLabel(machine)} — ${label.toLowerCase()}`,
-                        rate: works.rate,
+                        machine: `${machineLabel(machine)} — ${label.charAt(0).toLowerCase()}${label.slice(1)}`,
+                        rate: workRate(works, label),
                         landing: works.landing,
                         photo: machine,
                       })),
@@ -286,6 +299,8 @@ export function TaskWizard() {
                     onClick={() => {
                       setTask(item);
                       setStep(1);
+                      // The chosen machine starts its engine (when sound is on).
+                      playCue('start', item.photo ?? null);
                     }}
                   >
                     <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-900 text-amber-400">
@@ -341,8 +356,8 @@ export function TaskWizard() {
           )}
 
           {step === 3 && task && (
-            <div className="grid gap-6 xl:grid-cols-2">
-              <div>
+            <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+              <div className="min-w-0">
                 {task.photo && (
                   <div className="wizard-photo relative mb-5 aspect-[16/9] overflow-hidden rounded-2xl bg-slate-950">
                     <MachinePhoto
@@ -375,7 +390,7 @@ export function TaskWizard() {
                 {estimate && (
                   <div className="mt-4 rounded-2xl bg-slate-950 p-4 text-white">
                     <div className="eyebrow text-[0.65rem] text-slate-400">
-                      Ориентир, без доставки
+                      Примерно, без доставки
                     </div>
                     <div className="mt-1 font-mono text-2xl font-bold text-amber-400">
                       {estimate}
@@ -400,7 +415,7 @@ export function TaskWizard() {
                   </button>
                 </div>
               </div>
-              <div className="flex flex-col gap-4">
+              <div className="flex min-w-0 flex-col gap-4">
                 <WorkOrderPreview
                   machine={task.machine}
                   when={when}
