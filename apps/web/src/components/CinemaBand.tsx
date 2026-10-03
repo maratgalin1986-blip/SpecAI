@@ -80,7 +80,7 @@ export function CinemaBand({
             href={`/?m=${machine}#podbor`}
             className="inline-flex items-center gap-2 rounded-full px-6 py-3 text-base font-semibold text-white ring-1 ring-white/40 backdrop-blur transition hover:bg-white/10"
           >
-            Наряд
+            Заявка
             <Icon name="arrow" className="h-4 w-4" />
           </a>
         </div>

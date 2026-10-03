@@ -36,7 +36,7 @@ export function stageNode(p: WorldProgress): DialogNode {
     text: TEXT[p.stageKey](p),
     replies: [
       {
-        label: `Наряд: ${MACHINE_LABELS[machine].toLowerCase()}`,
+        label: `Заявка: ${MACHINE_LABELS[machine].toLowerCase()}`,
         action: { kind: 'link', href: orderHref(machine) },
         primary: true,
         set: { machine },

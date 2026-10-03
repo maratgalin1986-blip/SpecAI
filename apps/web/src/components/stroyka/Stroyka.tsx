@@ -432,7 +432,7 @@ export function Stroyka() {
     engine?.setEnvironment(now, point, lift);
   }, [engine, season, now, point, lift]);
 
-  // «Собрал наряд»: every point of the order filled in, or the order sent.
+  // «Собрал заявку»: every point of the order filled in, or the order sent.
   useEffect(() => {
     if (ctx.sent || orderProgress(ctx).done >= 5) earn({ type: 'order' });
   }, [ctx, earn]);
@@ -962,7 +962,7 @@ export function Stroyka() {
     const zoneMachine = zone ? zoneById(zone).order : undefined;
     onReply(
       {
-        label: 'Оформить наряд',
+        label: 'Оформить заявку',
         action: { kind: 'form' },
         set: !ctx.machine && zoneMachine ? { machine: zoneMachine } : undefined,
       },
@@ -1140,7 +1140,7 @@ export function Stroyka() {
                   onClick={orderInWorld}
                   className="whitespace-nowrap rounded-full bg-amber-500 px-3 py-1 text-xs font-bold text-slate-950 hover:bg-amber-400"
                 >
-                  Оформить наряд
+                  Оформить заявку
                 </button>
                 <a
                   href={smetaHref(
@@ -1160,7 +1160,7 @@ export function Stroyka() {
                   className="flex items-center gap-1 text-[11px] text-slate-300"
                   data-testid="order-card-toggle"
                 >
-                  Наряд
+                  Заявка
                   <span className="flex gap-0.5" aria-hidden>
                     {steps.steps.map((s) => (
                       <span

@@ -116,12 +116,17 @@ export function SiteHeader() {
         </nav>
 
         <div className="ml-auto flex items-center gap-2 lg:hidden">
-          <SoundToggle />
+          <SoundToggle iconOnPhone />
           <a
             href={SITE.phoneHref}
+            aria-label="Позвонить"
             className="vt-phone inline-flex min-h-10 items-center rounded-full bg-slate-900 px-3 text-sm font-semibold text-white"
           >
-            Позвонить
+            {/* The smallest phones (360 px): the icon, so the menu button stays on screen. */}
+            <span className="max-[379px]:hidden">Позвонить</span>
+            <span aria-hidden className="min-[380px]:hidden">
+              📞
+            </span>
           </a>
         </div>
 

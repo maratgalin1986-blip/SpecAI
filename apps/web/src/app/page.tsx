@@ -1,4 +1,5 @@
 import dynamic from 'next/dynamic';
+import Link from 'next/link';
 import { prisma } from '@specai/database';
 import { Button } from '@specai/ui';
 import { PUBLIC_AGENT_PROFILES } from '@specai/shared';
@@ -306,8 +307,10 @@ export default async function HomePage() {
                   <Icon name="phone" className="h-5 w-5" />
                   {SITE.phone}
                 </a>
-                {/* The 3D site: a glass pill with a softly pulsing play button. */}
-                <a
+                {/* The 3D site: a glass pill with a softly pulsing play button. A
+                    client-side link, so the tap that started the sound here keeps
+                    it playing on the site (a full page load would need a new tap). */}
+                <Link
                   href="/stroyka"
                   className="group inline-flex flex-1 items-center justify-center gap-3 rounded-full bg-white/10 py-2 pl-2 pr-5 text-base font-semibold text-white ring-1 ring-white/30 backdrop-blur-sm transition hover:bg-white/20 hover:ring-white/60 sm:flex-none"
                 >
@@ -320,7 +323,7 @@ export default async function HomePage() {
                   <span className="rounded bg-white/15 px-1.5 py-0.5 text-[11px] font-bold uppercase tracking-wider text-amber-200">
                     3D
                   </span>
-                </a>
+                </Link>
               </div>
             </div>
             <nav
@@ -488,7 +491,7 @@ export default async function HomePage() {
       <CinemaBand
         machine="excavator"
         eyebrow="Свой парк"
-        phrase="Котлован к утру — не обещание, а наряд"
+        phrase="Котлован к утру — не обещание, а принятая заявка"
       />
 
       <ShiftStory />

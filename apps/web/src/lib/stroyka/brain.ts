@@ -520,7 +520,7 @@ export function respond(
   } else if (has('price')) {
     parts.push(priceText(merged.machine));
     quick = [
-      { label: 'Оформить наряд', action: 'form' },
+      { label: 'Оформить заявку', action: 'form' },
       { label: 'Позвонить', action: 'call' },
     ];
   } else if (has('faq')) {
@@ -546,7 +546,7 @@ export function respond(
     quick = QUICK_START;
   } else if (has('thanks')) {
     parts.push('Обращайтесь! Техника ждёт, машинисты на связи.');
-    quick = [{ label: 'Оформить наряд', action: 'form' }];
+    quick = [{ label: 'Оформить заявку', action: 'form' }];
   } else if (has('bye')) {
     parts.push('Бывай! Надумаешь — Света на связи, телефон наверху.');
   } else if (has('smalltalk')) {
