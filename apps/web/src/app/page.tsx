@@ -290,7 +290,10 @@ export default async function HomePage() {
               >
                 Подобрать технику →
               </a>
-              <a href="/smeta" className="py-1 text-amber-300 underline-offset-4 hover:underline">
+              <a
+                href="/smeta"
+                className="rounded-full px-3 py-1 text-amber-300 ring-2 ring-amber-400 transition hover:bg-amber-400 hover:text-slate-950"
+              >
                 🧮 Рассчитать смету
               </a>
               <a
