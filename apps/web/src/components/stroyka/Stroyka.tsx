@@ -90,6 +90,49 @@ import { StroykaFilm } from './StroykaFilm';
 import { ZoneFilm } from './ZoneFilm';
 import { crewLine } from '@/lib/stroyka/crew';
 import { crewDelay, filmNature, pickCrewLine } from '@/lib/stroyka/filmAmbience';
+import {
+  callbackLine,
+  chapter,
+  credits as buildCredits,
+  awayTail,
+  daysToNextStage,
+  forgetText,
+  greeting as pickGreeting,
+  hookLine,
+  withoutHello,
+  lastTimeLine,
+  mskMoment,
+  OFFER_TEXT,
+  offerNoText,
+  offerSpeaker,
+  offerYesText,
+  orderStatusLine,
+  type Chapter,
+  type Credits,
+  type Moment,
+} from '@/lib/stroyka/story';
+import { innerTurn, pickInner } from '@/lib/stroyka/lines/inner';
+import { RECORDED_SPEAKERS } from '@/lib/stroyka/voice';
+import {
+  beginVisit,
+  canOffer,
+  declineOffer,
+  emptyMemory,
+  forget,
+  grantConsent,
+  hasConsent,
+  loadMemory,
+  cleanName,
+  nameFromText,
+  newSession,
+  rememberFacts,
+  saveMemory,
+  type PersonalFacts,
+  type VisitorMemory,
+} from '@/lib/stroyka/visitorMemory';
+import { ChapterCard } from './ChapterCard';
+import { MemoryOffer, type MemoryNote } from './MemoryOffer';
+import { EndCredits } from './EndCredits';
 import { WeatherBadge } from './WeatherBadge';
 
 const StroykaWorld = dynamic(() => import('./StroykaWorld'), { ssr: false });
@@ -180,6 +223,8 @@ export function Stroyka() {
   const [order, setOrder] = useState<{ open: boolean; machine?: MachineType | null }>({
     open: false,
   });
+  const orderOpen = useRef(false);
+  orderOpen.current = order.open;
   const [skipTyping, setSkipTyping] = useState(0);
   const [now, setNow] = useState(() => new Date());
   const [point, setPoint] = useState<WeatherPoint | null>(null);
@@ -187,7 +232,6 @@ export function Stroyka() {
   const [progressReady, setProgressReady] = useState(false);
   const [timelapse, setTimelapse] = useState(false);
   const [away, setAway] = useState<string | null>(null);
-  const awayShown = useRef(false);
   const [toast, setToast] = useState<string | null>(null);
   const [extra, setExtra] = useState<{ speaker: BanterSpeaker; text: string } | null>(null);
   const [cardOpen, setCardOpen] = useState(false);
@@ -213,6 +257,29 @@ export function Stroyka() {
   const [hudOpen, setHudOpen] = useState(false);
   const [phoneSending, setPhoneSending] = useState(false);
   const brain = useRef<typeof import('@/lib/stroyka/brain') | null>(null);
+  // The personal film: chapter cards, remembered jobs, inner lines, end credits.
+  const [chapterCard, setChapterCard] = useState<{ chapter: Chapter; n: number } | null>(null);
+  const [endCredits, setEndCredits] = useState<Credits | null>(null);
+  const met = useRef<SpeakerId[]>([]);
+  const innerSaid = useRef(new Set<string>());
+  const innerAt = useRef<number | null>(null);
+  const calledBack = useRef(new Set<SpeakerId>());
+  // What the crew remember (lib/stroyka/visitorMemory.ts): read once on mount,
+  // written on events only. Personal facts wait in `facts` until consent.
+  const memory = useRef<VisitorMemory>(emptyMemory());
+  const returning = useRef(false);
+  const [consented, setConsented] = useState(false);
+  const facts = useRef<PersonalFacts>({});
+  const welcome = useRef<{ key: number; greeting: string; known: string } | null>(null);
+  const [memoryNote, setMemoryNote] = useState<MemoryNote | null>(null);
+  const offered = useRef(false);
+  const hooksSaid = useRef(new Set<SpeakerId>());
+  const rootRef = useRef<HTMLDivElement>(null);
+  const commitMemory = useCallback((next: VisitorMemory) => {
+    memory.current = next;
+    saveMemory(next);
+    setConsented(hasConsent(next));
+  }, []);
   const [miniCity, setMiniCity] = useState<MiniCity | null>(null);
 
   // The mini-map shows the same OSM city as the world (buildings and roads around the site).
@@ -313,6 +380,13 @@ export function Stroyka() {
     const prev = html.style.overflow;
     html.style.overflow = 'hidden';
     document.body.style.overflow = 'hidden';
+    {
+      const started = beginVisit(loadMemory(), mskToday(), newSession());
+      returning.current = started.returning;
+      memory.current = started.memory;
+      saveMemory(started.memory);
+      setConsented(hasConsent(started.memory));
+    }
     import('@/lib/stroyka/lines').then((mod) => {
       linesMod.current = mod;
       picker.current = new mod.LinePicker(loadUsed());
@@ -546,15 +620,35 @@ export function Stroyka() {
     );
   }, []);
 
+  /** The greeting plus «пока вас не было…» (the progress may arrive a moment later). */
+  const welcomeText = useCallback(
+    (w: { greeting: string; known: string }) =>
+      // «Имя, с возвращением! Пока вас не было: … В прошлый раз вы спрашивали про …»
+      [w.greeting, awayTail(away), w.known].filter(Boolean).join(' '),
+    [away],
+  );
+
   const openNode = useCallback(
     (nodeId: string, radio: RadioLine[], engaged: boolean, c: OrderContext = ctxRef.current) => {
       const node = nodeFor(nodeId, c);
       if (!node) return;
       let text = node.text;
-      if (node.id === 'gate' && away && !awayShown.current) {
-        awayShown.current = true;
-        text = `${away} ${text}`;
+      const key = ++keyRef.current;
+      // A returning visitor: the first zone character greets them, by name
+      // with consent, and says what changed and what was agreed last time.
+      const zoneRoot = ZONES.some((z) => z.root === node.id) && node.id !== FORM_NODE;
+      if (!welcome.current && zoneRoot && (returning.current || away)) {
+        const m = memory.current;
+        const ok = hasConsent(m);
+        const g = pickGreeting(node.speaker, ok ? m.name : undefined, m.greeting);
+        const known = ok
+          ? [lastTimeLine(node.speaker, m), orderStatusLine(node.speaker, m)].filter(Boolean)
+          : [];
+        welcome.current = { key, greeting: g.text, known: known.join(' ') };
+        commitMemory({ ...m, greeting: g.id });
       }
+      if (welcome.current?.key === key)
+        text = `${welcomeText(welcome.current)} ${withoutHello(text)}`;
       const shown = moodLine({
         speaker: node.speaker,
         text,
@@ -566,9 +660,9 @@ export function Stroyka() {
       setExtra(null);
       setChat(null);
       setPendingPhone(null);
-      setDialog({ nodeId, radio, engaged, key: ++keyRef.current });
+      setDialog({ nodeId, radio, engaged, key });
     },
-    [nodeFor, away, engine, earn],
+    [nodeFor, away, engine, earn, commitMemory, welcomeText],
   );
 
   const openZoneDialog = useCallback(
@@ -583,6 +677,24 @@ export function Stroyka() {
         ? { text: holiday.text, tags: ['joke'] }
         : picker.current?.pick(zn.speaker, [visited.current.has(z) ? 'return' : 'greet'], false);
       visited.current.add(z);
+      if (!met.current.includes(zn.speaker)) met.current = [...met.current, zn.speaker];
+      // «Давайте я вас запомню?» — once a visit, from the second zone or once
+      // the visitor has told something, never during an order.
+      if (
+        !offered.current &&
+        canOffer(memory.current, Date.now()) &&
+        (visited.current.size >= 2 || contextFacts(ctxRef.current))
+      ) {
+        offered.current = true;
+        window.setTimeout(() => {
+          if (dialogRef.current?.engaged || orderOpen.current) {
+            offered.current = false;
+            return;
+          }
+          const who = offerSpeaker(zn.speaker);
+          setMemoryNote({ mode: 'offer', speaker: who, text: OFFER_TEXT[who] });
+        }, 3000);
+      }
       earn({ type: 'talk', speaker: zn.speaker, all: ALL_SPEAKERS });
       if (line && engine) {
         const shown = moodLine({
@@ -767,6 +879,8 @@ export function Stroyka() {
           .filter((l) => l.tags.includes('joke'))
           .map((l) => l.text) ?? [];
       const reply = mod.respond(text, speaker, ctxRef.current, new Date(), jokes);
+      const told = nameFromText(text);
+      if (told) rememberName(told);
       let next = applyReply(ctxRef.current, text.slice(0, 60), reply.set);
       let radio: RadioLine[] = [];
       if (reply.handoff && reply.handoff !== speaker) {
@@ -834,6 +948,7 @@ export function Stroyka() {
       setPendingPhone(null);
       setCtx((c) => ({ ...c, sent: true }));
       sayAs('sveta', leadAcceptedText(isOnShift()), []);
+      rollCredits();
     } catch (error) {
       sayAs('sveta', `Не ушло: ${leadErrorText(error, SITE.phone)}`, [
         { label: 'Позвонить', action: 'call' },
@@ -843,12 +958,67 @@ export function Stroyka() {
     }
   };
 
+  /** A text line under the business one; voiced only where a voice exists. */
+  const sayExtra = useCallback(
+    (speaker: SpeakerId, text: string, voiced: boolean) => {
+      const shown = moodLine({ speaker, text, kind: 'joke', hour: hourRef.current });
+      setExtra({ speaker, text: shown.text });
+      if (!voiced) return;
+      emitDialog(speaker, shown.text, 'joke', shown.mood);
+      engine?.speak(speaker, shown.mood, 5);
+    },
+    [engine],
+  );
+
+  // A character in another zone remembers the visitor's job (once each, never
+  // during the order itself). Dynamic text, so never a recorded voice.
+  useEffect(() => {
+    if (!dialog || dialog.engaged || order.open) return;
+    const timer = window.setTimeout(() => {
+      const node = nodeFor(dialog.nodeId, ctxRef.current);
+      if (!node || node.form || dialogRef.current?.engaged) return;
+      if (calledBack.current.has(node.speaker) || calledBack.current.size >= 3) return;
+      const text = callbackLine(node.speaker, ctxRef.current);
+      if (!text) return;
+      calledBack.current.add(node.speaker);
+      const recorded = (RECORDED_SPEAKERS as readonly string[]).includes(node.speaker);
+      sayExtra(node.speaker, text, !recorded);
+    }, 5_000);
+    return () => window.clearTimeout(timer);
+  }, [dialog, nodeFor, order.open, sayExtra]);
+
   // A visitor who lingers gets a word from the character (under the business line).
   useEffect(() => {
     if (!dialog) return;
     const timer = window.setTimeout(() => {
       const node = nodeFor(dialog.nodeId, ctxRef.current);
-      if (!node || !picker.current) return;
+      if (!node) return;
+      // Now and then a bit of the character's own life instead of banter
+      // (lib/stroyka/lines/inner.ts), never while the visitor is ordering.
+      const busy = dialogRef.current?.engaged || node.form;
+      if (!busy && innerTurn(innerAt.current, Date.now())) {
+        const inner = pickInner(node.speaker, innerSaid.current, mskMoment(new Date()));
+        if (inner) {
+          innerSaid.current.add(inner.id);
+          innerAt.current = Date.now();
+          sayExtra(node.speaker, inner.text, inner.voiced);
+          return;
+        }
+      }
+      // Or what happens next on the object, so there is a reason to come back.
+      if (
+        !busy &&
+        !hooksSaid.current.has(node.speaker) &&
+        hooksSaid.current.size < 2 &&
+        Math.random() < 0.35
+      ) {
+        hooksSaid.current.add(node.speaker);
+        const recorded = (RECORDED_SPEAKERS as readonly string[]).includes(node.speaker);
+        const p = progressRef.current;
+        sayExtra(node.speaker, hookLine(node.speaker, p, nextStageDays(p)), !recorded);
+        return;
+      }
+      if (!picker.current) return;
       const line = picker.current.pick(node.speaker, ['idle', 'joke']);
       if (!line) return;
       const shown = moodLine({
@@ -863,7 +1033,137 @@ export function Stroyka() {
       engine?.speak(node.speaker, shown.mood, 5);
     }, 14_000);
     return () => window.clearTimeout(timer);
-  }, [dialog, nodeFor, engine]);
+  }, [dialog, nodeFor, engine, sayExtra]);
+
+  // ------------------------------------------------------------ the personal film
+  const moment = useMemo<Moment>(
+    () => ({
+      ...mskMoment(now),
+      rain: weather.rain > 0.05,
+      snow: weather.snow > 0.05,
+      fog: weather.fog > 0.4,
+      wind: weather.wind >= 7,
+      cold: weather.temp <= -10,
+      heat: weather.temp >= 28,
+    }),
+    [now, weather],
+  );
+  const momentRef = useRef(moment);
+  momentRef.current = moment;
+
+  // A chapter title over the footage each time a zone opens (not under the
+  // opening film, not with reduced motion).
+  useEffect(() => {
+    if (phase !== 'film' || !zone || filmOn || reduced) {
+      setChapterCard(null);
+      return;
+    }
+    setChapterCard((c) => ({ chapter: chapter(zone, momentRef.current), n: (c?.n ?? 0) + 1 }));
+  }, [phase, zone, filmOn, reduced]);
+  const closeChapter = useCallback(() => setChapterCard(null), []);
+
+  // Consented memory follows the conversation (what is built, the machine, answers).
+  useEffect(() => {
+    const told: PersonalFacts = {
+      task: ctx.task,
+      machine: ctx.machine,
+      // Chat answers, without anything that looks like a phone number.
+      answers: ctx.answers.filter((a) => (a.match(/\d/g) ?? []).length < 6).slice(-6),
+    };
+    facts.current = { ...facts.current, ...told };
+    if (hasConsent(memory.current)) commitMemory(rememberFacts(memory.current, told));
+  }, [ctx.task, ctx.machine, ctx.answers, commitMemory]);
+
+  // Zones seen: not personal, kept without consent.
+  useEffect(() => {
+    if (zone && !memory.current.zones.includes(zone))
+      commitMemory({ ...memory.current, zones: [...memory.current.zones, zone] });
+  }, [zone, commitMemory]);
+  useEffect(() => {
+    const n = chapterCard?.chapter.number;
+    if (n && !memory.current.chapters.includes(n))
+      commitMemory({ ...memory.current, chapters: [...memory.current.chapters, n] });
+  }, [chapterCard, commitMemory]);
+
+  const rememberName = useCallback(
+    (name: string) => {
+      facts.current = { ...facts.current, name };
+      if (hasConsent(memory.current)) commitMemory(rememberFacts(memory.current, { name }));
+    },
+    [commitMemory],
+  );
+
+  // The order went through: end credits (and, with consent, the order status).
+  const rollCredits = useCallback(() => {
+    const c = ctxRef.current;
+    setEndCredits(buildCredits(c, uniq([...met.current, ...c.heardBy])));
+    const sent: PersonalFacts = { sent: true, sentMachine: c.machine };
+    facts.current = { ...facts.current, ...sent };
+    if (hasConsent(memory.current)) commitMemory(rememberFacts(memory.current, sent));
+  }, [commitMemory]);
+
+  // The in-world forms report a submit, not the result: the credits wait for
+  // the form's own «Принято» panel. The name typed there is remembered too.
+  useEffect(() => {
+    const root = rootRef.current;
+    if (!root) return;
+    let poll = 0;
+    const onSubmit = (e: Event) => {
+      const form = e.target as HTMLFormElement | null;
+      if (!form?.querySelector?.('input[name="phone"]')) return;
+      const name = cleanName(form.querySelector<HTMLInputElement>('input[name="name"]')?.value);
+      if (name) rememberName(name);
+      window.clearInterval(poll);
+      const started = Date.now();
+      poll = window.setInterval(() => {
+        if (root.querySelector('[role="status"] .stamp')) {
+          window.clearInterval(poll);
+          rollCredits();
+        } else if (Date.now() - started > 20_000) window.clearInterval(poll);
+      }, 400);
+    };
+    root.addEventListener('submit', onSubmit, true);
+    return () => {
+      root.removeEventListener('submit', onSubmit, true);
+      window.clearInterval(poll);
+    };
+  }, [rememberName, rollCredits]);
+
+  // «Да, запомни меня» / «Не сейчас» / «Забыть меня».
+  const onMemoryYes = useCallback(() => {
+    const who = memoryNote?.speaker ?? 'mihalych';
+    const next = grantConsent(memory.current, facts.current, new Date(), mskToday());
+    commitMemory(next);
+    setMemoryNote({ mode: 'yes', speaker: who, text: offerYesText(who, next.name) });
+  }, [commitMemory, memoryNote]);
+  const onMemoryNo = useCallback(() => {
+    const who = memoryNote?.speaker ?? 'mihalych';
+    commitMemory(declineOffer(memory.current, Date.now()));
+    setMemoryNote({ mode: 'no', speaker: who, text: offerNoText(who) });
+  }, [commitMemory, memoryNote]);
+  const onForget = useCallback(() => {
+    const name = memory.current.name;
+    commitMemory(forget(memory.current, Date.now()));
+    facts.current = {};
+    setMemoryNote({ mode: 'bye', speaker: 'mihalych', text: forgetText(name) });
+  }, [commitMemory]);
+  // The short answers fade by themselves.
+  useEffect(() => {
+    if (!memoryNote || memoryNote.mode === 'offer') return;
+    const timer = window.setTimeout(() => setMemoryNote(null), 5500);
+    return () => window.clearTimeout(timer);
+  }, [memoryNote]);
+
+  // When the object moves on next (for the hooks), through the progress API only.
+  const progressRef = useRef(progress);
+  progressRef.current = progress;
+  const nextDays = useRef<{ p: WorldProgress; days: number | null } | null>(null);
+  const nextStageDays = useCallback((p: WorldProgress) => {
+    if (nextDays.current?.p !== p) nextDays.current = { p, days: daysToNextStage(p, Date.now()) };
+    return nextDays.current.days;
+  }, []);
+
+  const closeCredits = useCallback(() => setEndCredits(null), []);
 
   // ------------------------------------------------------------ ambient banter, site events, radio
   const conditions = useMemo<LineConditions>(
@@ -1059,11 +1359,17 @@ export function Stroyka() {
   };
 
   const node = dialog ? nodeFor(dialog.nodeId, ctx) : null;
-  const gateAway = node?.id === 'gate' && away && awayShown.current ? `${away} ` : '';
+  const gateAway =
+    dialog && welcome.current?.key === dialog.key ? `${welcomeText(welcome.current)} ` : '';
   const shownLine = chat
     ? { text: chat.text, mood: chat.mood }
     : node
-      ? moodLine({ speaker: node.speaker, text: `${gateAway}${node.text}`, kind: 'business', hour })
+      ? moodLine({
+          speaker: node.speaker,
+          text: `${gateAway}${gateAway ? withoutHello(node.text) : node.text}`,
+          kind: 'business',
+          hour,
+        })
       : null;
   const loading = phase === '3d' && !engine;
   const closeFilm = useCallback(() => setFilmOn(false), []);
@@ -1077,6 +1383,7 @@ export function Stroyka() {
 
   return (
     <div
+      ref={rootRef}
       className="fixed inset-0 z-[80] overflow-hidden bg-slate-950 text-white"
       data-testid="stroyka"
     >
@@ -1137,6 +1444,9 @@ export function Stroyka() {
           onForce3d={hasWebGL() ? () => setPhase('3d') : undefined}
           onOrder={() => skipToOrder()}
         />
+      )}
+      {chapterCard && (
+        <ChapterCard key={chapterCard.n} chapter={chapterCard.chapter} onDone={closeChapter} />
       )}
       {phase === 'fallback' && (
         <FallbackMap
@@ -1449,6 +1759,9 @@ export function Stroyka() {
               </button>
             )
           : null}
+        {memoryNote && !(memoryNote.mode === 'offer' && (dialog?.engaged || order.open)) && (
+          <MemoryOffer note={memoryNote} onYes={onMemoryYes} onNo={onMemoryNo} />
+        )}
         {dialog && node && (
           <DialogueBox
             key={dialog.key}
@@ -1491,6 +1804,16 @@ export function Stroyka() {
                 : null
             }
           />
+        )}
+        {consented && (
+          <button
+            type="button"
+            data-testid="forget-me"
+            onClick={onForget}
+            className="pointer-events-auto mx-auto rounded-full bg-slate-950/85 px-3 py-1 text-sm font-semibold text-white/85 underline decoration-dotted underline-offset-2 hover:text-white"
+          >
+            Забыть меня
+          </button>
         )}
         {/* Attribution: below everything, so it never covers the dialogue's ✕ or the HUD. */}
         {phase === '3d' && (
@@ -1545,6 +1868,8 @@ export function Stroyka() {
         onClose={() => setOrder({ open: false })}
         onSent={() => setCtx((c) => ({ ...c, sent: true }))}
       />
+
+      {endCredits && <EndCredits credits={endCredits} onDone={closeCredits} />}
 
       {(phase === 'fallback' || phase === 'film') && (
         <div className="sr-only">{ZONES.map((z) => z.name).join(', ')}</div>

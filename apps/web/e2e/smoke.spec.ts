@@ -117,3 +117,24 @@ test('stroyka film tour', async ({ page }) => {
   await page.waitForTimeout(500);
   expect(errors, 'page errors').toEqual([]);
 });
+
+// The personal film: a chapter card that never takes a click, and the offer to
+// remember the visitor that stores nothing personal until «Да».
+test('stroyka chapter card and memory offer', async ({ page }) => {
+  const errors = await guard(page);
+  await page.route('**/film/zones/*.mp4', (route) => route.abort());
+  await page.goto('/stroyka?nointro=1', { waitUntil: 'load' });
+  await expect(page.getByTestId('zone-film')).toBeVisible({ timeout: 15_000 });
+  await page.getByTestId('zone-strip').locator('button').nth(1).click();
+  const card = page.getByTestId('chapter-card');
+  await expect(card).toContainText('Котлован');
+  expect(await card.evaluate((el) => getComputedStyle(el).pointerEvents)).toBe('none');
+  await expect(page.getByTestId('memory-consent')).toBeVisible({ timeout: 8_000 });
+  await expect(card).toHaveCount(0);
+  const stored = () => page.evaluate(() => localStorage.getItem('stroyka.memory.v1') ?? '');
+  expect(await stored()).not.toContain('consent');
+  await page.getByTestId('memory-no').click();
+  await expect(page.getByTestId('memory-consent')).toHaveCount(0);
+  expect(await stored()).toContain('declinedAt');
+  expect(errors, 'page errors').toEqual([]);
+});

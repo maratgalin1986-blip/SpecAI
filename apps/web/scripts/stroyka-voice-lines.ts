@@ -16,6 +16,7 @@ import { SVETA_TEMPLATES } from '../src/lib/stroyka/lines/sveta';
 import { WORKER_TEMPLATES } from '../src/lib/stroyka/lines/worker';
 import { RECORDED_SPEAKERS, radioClipKey, voiceKey } from '../src/lib/stroyka/voice';
 import { CREW, CREW_VOICE } from '../src/lib/stroyka/crew';
+import { INNER_LINES } from '../src/lib/stroyka/lines/inner';
 
 const TEMPLATES = {
   mihalych: MIHALYCH_TEMPLATES,
@@ -55,6 +56,12 @@ RADIO_PAIRS.forEach((pair, n) => {
 // The crew by name, each in their own voice style (crew-<name> in the recorder).
 for (const [id, member] of Object.entries(CREW)) {
   member.lines.forEach((text, n) => add(`${CREW_VOICE[id]}-${n}`, CREW_VOICE[id]!, text));
+}
+// The characters' inner-life lines (lib/stroyka/lines/inner.ts), shown as text
+// only (`voiced: false`) until recorded; flip `voiced` once the clips exist.
+for (const line of INNER_LINES) {
+  if ((RECORDED_SPEAKERS as readonly string[]).includes(line.speaker))
+    add(line.id, line.speaker, line.text);
 }
 // Manifest: spoken text → clips. Hand and radio lines map to one clip; every
 // template combination maps to its opener and remark.
