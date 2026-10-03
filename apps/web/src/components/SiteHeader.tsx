@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react';
 import { JOURNEY_SELECTOR } from '@/components/useJourneyInView';
-import { AuthStatus } from '@/components/AuthStatus';
 import { SoundToggle } from '@/components/SoundToggle';
 import { SITE } from '@/lib/site';
 
@@ -15,7 +14,6 @@ const NAV_LINKS = [
   { href: '/contacts', label: 'Контакты' },
   // Also in «Войти» and the mobile menu: hidden on narrow desktops (lg) so the
   // header fits in one line at 1024 px.
-  { href: '/dashboard', label: 'Кабинет', wide: true },
 ];
 
 export function SiteHeader() {
@@ -104,7 +102,6 @@ export function SiteHeader() {
           >
             Смета
           </a>
-          <AuthStatus />
           <a
             href="/#callback"
             className="group inline-flex items-center gap-1.5 rounded-full bg-slate-900 px-4 py-2 text-white transition hover:bg-amber-500 hover:text-slate-950"
@@ -192,9 +189,7 @@ export function SiteHeader() {
           >
             📦 Смета для снабженца
           </a>
-          <div className="px-2 py-2">
-            <AuthStatus />
-          </div>
+          <div className="px-2 py-2"></div>
         </nav>
       )}
     </header>

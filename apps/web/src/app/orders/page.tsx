@@ -141,16 +141,6 @@ export default async function OrdersPage({ searchParams }: { searchParams: Order
                 >
                   Подобрать технику за 30 секунд
                 </a>
-                <p className="text-xs text-slate-500">
-                  Есть аккаунт?{' '}
-                  <a
-                    href={`/login?callbackUrl=${encodeURIComponent(forProvider ? `/orders?provider=${forProvider.id}` : '/orders')}`}
-                    className="text-amber-700 underline"
-                  >
-                    Войдите
-                  </a>{' '}
-                  — заявка с адресом покажет прогноз и карту места работ.
-                </p>
               </Card>
             </div>
           )}
