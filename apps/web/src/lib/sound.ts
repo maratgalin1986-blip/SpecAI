@@ -17,7 +17,9 @@ export type SoundCue =
 /** Where a machine is announced from; the newest active source wins. */
 export type MachineSource = 'hero' | 'journey' | 'page' | 'wizard' | 'scene';
 
-export const SOUND_STORAGE_KEY = 'specplast16_sound';
+// v2 (2026-10-03): the old switch took two presses, so many «off» choices
+// saved under the old key were accidents; sound is on again for everyone.
+export const SOUND_STORAGE_KEY = 'specplast16_sound_v2';
 export const SOUND_HINT_KEY = 'specplast16_sound_hint';
 const CUE_EVENT = 'specplast16:sound-cue';
 const MACHINE_EVENT = 'specplast16:sound-machine';
