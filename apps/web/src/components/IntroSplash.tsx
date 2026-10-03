@@ -5,7 +5,7 @@ import { flushSync } from 'react-dom';
 import { CinemaVideo } from '@/components/CinemaVideo';
 import { SITE } from '@/lib/site';
 import { reachGoal } from '@/lib/marketing';
-import { storedSoundChoice } from '@/lib/sound';
+import { setSoundEnabled, soundEnabled, storedSoundChoice, subscribeSound } from '@/lib/sound';
 
 // Opening titles of the home page, about 6 seconds, cut like a TV channel
 // ident: light beams over a drone shot, «ООО «СпецПласт 16» представляет»,
@@ -82,6 +82,7 @@ export function IntroSplash() {
       return;
     }
     setSoundOff(!storedSoundChoice());
+    const offSound = subscribeSound(() => setSoundOff(!soundEnabled()));
     try {
       sessionStorage.setItem(SEEN_KEY, '1');
     } catch {
@@ -100,6 +101,7 @@ export function IntroSplash() {
     return () => {
       window.clearTimeout(timer);
       window.removeEventListener('keydown', onKey);
+      offSound();
     };
   }, []);
 
@@ -205,11 +207,18 @@ export function IntroSplash() {
           </nav>
         </div>
 
-        {soundOff ? null : (
-          <div className="intro-sound-hint pointer-events-none absolute bottom-7 left-4 sm:left-6 flex items-center gap-2 rounded-full bg-white/10 px-3 py-1.5 text-xs font-semibold text-white/85 ring-1 ring-white/20 backdrop-blur">
-            🔊 Коснитесь — со звуком
-          </div>
-        )}
+        {/* Sound is on by default (it starts at the first touch where the
+            browser asks for one); this button takes it away, or brings it back. */}
+        <button
+          type="button"
+          onClick={(event) => {
+            event.stopPropagation();
+            setSoundEnabled(soundOff);
+          }}
+          className="intro-sound-hint absolute bottom-6 left-4 flex min-h-11 items-center gap-2 rounded-full bg-white px-4 py-2.5 text-sm font-bold text-slate-950 shadow-lg ring-1 ring-white/40 hover:bg-amber-300 sm:left-6"
+        >
+          {soundOff ? '🔊 Включить звук' : '🔇 Убрать звук'}
+        </button>
         <button
           type="button"
           className="absolute bottom-6 right-6 rounded-full bg-white px-5 py-2.5 text-sm font-bold text-slate-950 shadow-lg ring-1 ring-white/40 hover:bg-amber-300"

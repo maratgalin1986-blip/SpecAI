@@ -195,6 +195,10 @@ export function SoundDirector() {
       wasOn = true;
       setSoundEnabled(true, false);
       addGestures();
+      // Try at once: a browser that already trusts the site (the visitor was
+      // here before) lets audio start without a tap. Otherwise it stays
+      // asleep until the first touch, as before.
+      wake();
     }
 
     const onVisibility = () => {
