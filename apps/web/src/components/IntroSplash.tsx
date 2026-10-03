@@ -9,7 +9,7 @@ import { storedSoundChoice } from '@/lib/sound';
 
 // Opening titles of the home page, about 6 seconds, cut like a TV channel
 // ident: light beams over a drone shot, «ООО «СпецПласт 16» представляет»,
-// a brass hit with a flash and the gold «ИИСтройка» logo, then the bright
+// a brass hit with a flash and the gold «ИИСтройка24» logo, then the bright
 // partner card under a spotlight for about three seconds, and the camera
 // dives into the site. Shown once per browser session; «Пропустить» or Esc
 // skips it (a tap only switches the sound on); off with reduced motion.
@@ -136,7 +136,7 @@ export function IntroSplash() {
         {/* 2. The logo hit */}
         <div className="intro-stage-2 absolute inset-0 flex flex-col items-center justify-center px-6 text-center">
           <div className="intro-logo text-6xl font-black tracking-[-0.04em] sm:text-8xl">
-            ИИСтройка
+            {SITE.platform}
           </div>
           <div className="mt-3 font-mono text-sm font-bold uppercase tracking-[0.45em] text-amber-100 drop-shadow sm:text-lg">
             от {SITE.name}

@@ -13,7 +13,9 @@ vi.stubGlobal(
         ? { username: 'specplast16_zayavki_bot' }
         : method === 'getWebhookInfo'
           ? { url: webhookUrl, allowed_updates: ['message', 'channel_post', 'callback_query'] }
-          : true;
+          : method === 'getChatMenuButton'
+            ? { type: 'web_app', web_app: { url: 'https://spec-ai-web.vercel.app/tg' } }
+            : true;
     return new Response(JSON.stringify({ ok: true, result }));
   }),
 );

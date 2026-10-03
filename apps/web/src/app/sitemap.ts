@@ -13,7 +13,10 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const staticPages = [
     '',
     ...LANDINGS.map((landing) => `/arenda/${landing.slug}`),
-    ...cityPages().map((page) => cityPath(page.slug, page.city)),
+    // Chelny pages point their canonical at /arenda/<slug>, so they stay out.
+    ...cityPages()
+      .filter((page) => page.city !== 'naberezhnye-chelny')
+      .map((page) => cityPath(page.slug, page.city)),
     '/raboty',
     ...JOBS.map((job) => `/raboty/${job.slug}`),
     '/equipment',

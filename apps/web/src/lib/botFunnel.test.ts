@@ -10,6 +10,8 @@ import {
   phoneFromText,
   placeKeyboard,
   priceLine,
+  reminderText,
+  shortSource,
   whenKeyboard,
 } from './botFunnel';
 
@@ -53,7 +55,12 @@ describe('bot funnel', () => {
   });
 
   it('reads the calculator hand-off', () => {
-    expect(parseCalcStart(`calc_${truck}_8__direct`)).toEqual({ machine: truck, hours: 8 });
+    expect(parseCalcStart(`calc_${truck}_8__direct`)).toEqual({
+      machine: truck,
+      hours: 8,
+      hammer: false,
+    });
+    expect(parseCalcStart(`calc_${truck}_4_h`)).toMatchObject({ hammer: true });
     expect(parseCalcStart('calc_99_8')).toBe(null);
     expect(parseCalcStart('calc_0_0')).toBe(null);
   });
@@ -76,5 +83,20 @@ describe('bot funnel', () => {
         .map((b) => b.text)
         .join(' '),
     ).not.toMatch(/СП16/);
+  });
+
+  it('keeps the yclid when the source is shortened', () => {
+    const long = 'arenda-kolyosnyj-ekskavator-gidromolot-elabuga__master-2026__y1234567890123';
+    const short = shortSource(long);
+    expect(short.length).toBeLessThanOrEqual(48);
+    expect(short.endsWith('__y1234567890123')).toBe(true);
+  });
+
+  it('reminds with the chosen machine and price', () => {
+    const draft = draftMessage(
+      { step: 'place', machine: truck, when: '1', city: 1, src: 'home' },
+      7,
+    );
+    expect(reminderText(draft)).toMatch(/^Вы выбирали самосвал, завтра, Елабуга — от 3/);
   });
 });

@@ -28,5 +28,7 @@ export async function GET(request: NextRequest) {
     bot: result.bot,
     already: result.already,
     miniApp: result.miniApp,
+    webhook: result.url,
+    previous: result.previous,
   });
 }

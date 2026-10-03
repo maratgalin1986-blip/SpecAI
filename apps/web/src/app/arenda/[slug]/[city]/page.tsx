@@ -40,7 +40,13 @@ export function generateMetadata({ params }: { params: Params }): Metadata {
   return {
     title: text.title,
     description: text.description,
-    alternates: { canonical: cityPath(page.landing.slug, page.city.slug) },
+    // The base city's page repeats the main landing: point search engines there.
+    alternates: {
+      canonical:
+        page.city.slug === 'naberezhnye-chelny'
+          ? `/arenda/${page.landing.slug}`
+          : cityPath(page.landing.slug, page.city.slug),
+    },
     openGraph: { title: text.title, description: text.description },
   };
 }

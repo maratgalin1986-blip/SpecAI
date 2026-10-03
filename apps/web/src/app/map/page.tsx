@@ -8,7 +8,7 @@ import { SITE } from '@/lib/site';
 export const dynamic = 'force-dynamic';
 
 export const metadata: Metadata = {
-  // The layout's template adds «· ИИСтройка · СпецПласт16».
+  // The layout's template adds «· ИИСтройка24 · СпецПласт16».
   title: 'Наша техника на карте',
   description:
     'Где стоит техника СпецПласт16 в Набережных Челнах и по Татарстану: наш парк, наши ' +

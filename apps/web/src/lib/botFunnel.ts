@@ -8,7 +8,7 @@
 
 import { LANDINGS } from '@/lib/landings';
 import { MACHINE_LABELS } from '@/lib/machinePhotos';
-import { rateOf, rub, SHIFT_HOURS } from '@/lib/prices';
+import { HAMMER_RATE, rateOf, rub, SHIFT_HOURS } from '@/lib/prices';
 import { SITE } from '@/lib/site';
 import { siteUrl } from '@/lib/siteUrl';
 
@@ -31,9 +31,14 @@ export const CITIES = [
 ] as const;
 
 /** Source kept in callback data: Telegram allows 64 bytes per button. */
-const SRC_MAX = 30;
-export const shortSource = (start: string) =>
-  start.replace(/[^A-Za-z0-9_-]/g, '').slice(0, SRC_MAX) || 'bot';
+const SRC_MAX = 48;
+/** Shortens a start parameter for callback_data, keeping the «__y<yclid>» tail. */
+export function shortSource(start: string) {
+  const clean = start.replace(/[^A-Za-z0-9_-]/g, '');
+  if (clean.length <= SRC_MAX) return clean || 'bot';
+  const y = /__y\d+$/.exec(clean)?.[0] ?? '';
+  return `${clean.slice(0, SRC_MAX - y.length).replace(/[-_]+$/, '')}${y}` || 'bot';
+}
 
 export const UNSUBSCRIBE: InlineButton = { text: 'Отписаться', callback_data: 'u' };
 
@@ -113,18 +118,20 @@ export function parseCallback(data: string | undefined): Callback | null {
 }
 
 /** A calculator hand-off: «calc_<landing>_<hours>» from /kalkulyator. */
-export function parseCalcStart(start: string): { machine: number; hours: number } | null {
-  const m = /^calc_(\d{1,2})_(\d{1,3})(?:__|$)/.exec(start);
+export function parseCalcStart(
+  start: string,
+): { machine: number; hours: number; hammer: boolean } | null {
+  const m = /^calc_(\d{1,2})_(\d{1,3})(_h)?(?:__|$)/.exec(start);
   if (!m) return null;
   const machine = Number(m[1]);
   const hours = Number(m[2]);
   if (!LANDINGS[machine] || hours < 1 || hours > 240) return null;
-  return { machine, hours };
+  return { machine, hours, hammer: Boolean(m[3]) };
 }
 
-export function calcText(machine: number, hours: number) {
+export function calcText(machine: number, hours: number, hammer = false) {
   const landing = LANDINGS[machine]!;
-  const rate = rateOf(landing.machine);
+  const rate = hammer ? Math.max(HAMMER_RATE, rateOf(landing.machine)) : rateOf(landing.machine);
   return (
     `Ваш расчёт: ${machineName(machine).toLowerCase()}, ${hours} ч × ${rub(rate)} ₽ = ` +
     `${rub(rate * hours)} ₽ (ориентировочно, с машинистом; подачу назовёт диспетчер).`
@@ -176,9 +183,15 @@ export function acceptedText(onShift: boolean) {
     : `Заявка принята, позвоним с 8:00. Срочно — ${SITE.phone}`;
 }
 
-export const REMINDER_TEXT =
-  'Вы выбирали технику, но не оставили номер. Нажмите «📱 Поделиться номером» — ' +
-  'диспетчер назовёт точную цену. Больше напоминать не будем.';
+/** The single reminder, with what the person chose: «Бот: самосвал, завтра, Елабуга. …». */
+export function reminderText(draft: string) {
+  const chosen = /^Бот: ([^.]+)\./.exec(draft)?.[1];
+  const price = /Ориентировочно (от .+?₽)\./.exec(draft)?.[1];
+  return (
+    `Вы выбирали ${chosen ?? 'технику'}${price ? ` — ${price}` : ''}, но не оставили номер. ` +
+    'Нажмите «📱 Поделиться номером» — диспетчер назовёт точную цену. Больше напоминать не будем.'
+  );
+}
 
 export const UNSUBSCRIBED_TEXT =
   'Вы отписаны: бот больше не напишет первым. Оставить заявку можно в любой момент — /start.';
