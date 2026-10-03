@@ -55,12 +55,9 @@ import { BANTER_NAMES, type BanterSpeaker } from '@/lib/stroykaJokes';
 import {
   atMskTime,
   conditionsLine,
-  dayPhase,
   nearestPoint,
   overrideLiftStop,
   parseOverrides,
-  PHASE_LABEL,
-  sunPosition,
   weatherScene,
   type LiftStop,
   type SceneOverrides,
@@ -84,6 +81,8 @@ import { placeSite, points as cityPoints, type CityData } from '@/lib/stroyka/ci
 import { OrderPanel } from './OrderPanel';
 import { PhotoBooth } from './PhotoBooth';
 import { StroykaFilm } from './StroykaFilm';
+import { crewLine } from '@/lib/stroyka/crew';
+import { WeatherBadge } from './WeatherBadge';
 
 const StroykaWorld = dynamic(() => import('./StroykaWorld'), { ssr: false });
 
@@ -243,7 +242,6 @@ export function Stroyka() {
   const hour = (now.getUTCHours() + 3) % 24;
   const hourRef = useRef(hour);
   hourRef.current = hour;
-  const sun = useMemo(() => sunPosition(now), [now]);
 
   // Holidays by the real date (?date=YYYY-MM-DD to preview one).
   const [dateOverride, setDateOverride] = useState<Date | null>(null);
@@ -887,9 +885,13 @@ export function Stroyka() {
       const r = Math.random();
       const want = r < 0.3 ? events : r < 0.6 ? tags : [];
       const holiday = seasonLine(who.speaker);
+      // The crew speak as themselves (name and their own words) most of the time.
+      const own = who.speaker === 'worker' && Math.random() < 0.65 ? crewLine(who.id) : null;
       const line = holiday
         ? { text: holiday.text, tags: ['joke'] }
-        : picker.current.pick(who.speaker, want);
+        : own
+          ? { text: own, tags: ['joke'] }
+          : picker.current.pick(who.speaker, want);
       if (!line) return;
       const kind = line.tags.includes('business') ? 'business' : 'joke';
       const shown = moodLine({
@@ -974,9 +976,9 @@ export function Stroyka() {
   const steps = orderProgress(ctx);
   const zoneName = zone ? zoneById(zone).name : null;
   // Time and weather only after mount: the server does not know the visitor's clock.
+  const badgeMachine = ctx.machine ?? (zone ? zoneById(zone).order : null);
   const chip =
     phase === 'boot' ? 'Челны' : conditionsLine(now, point || overrides.weather ? weather : null);
-  const phaseLabel = PHASE_LABEL[dayPhase(sun.elevation, sun.azimuth)];
 
   return (
     <div
@@ -1041,8 +1043,13 @@ export function Stroyka() {
         />
       )}
 
+      {/* Phones: the date, time and weather get their own row under the top bar. */}
+      <div className="pointer-events-none absolute inset-x-3 top-[calc(max(0.5rem,env(safe-area-inset-top))+3rem)] z-[65] sm:hidden">
+        <WeatherBadge line={chip} machine={badgeMachine} />
+      </div>
+
       {/* ---------------- top bar */}
-      <header className="pointer-events-none absolute inset-x-0 top-0 z-20 flex items-center gap-2 bg-gradient-to-b from-slate-950/90 to-transparent px-3 pb-6 pt-[max(0.5rem,env(safe-area-inset-top))] sm:px-4">
+      <header className="pointer-events-none absolute inset-x-0 top-0 z-[65] flex items-center gap-2 bg-gradient-to-b from-slate-950/90 to-transparent px-3 pb-6 pt-[max(0.5rem,env(safe-area-inset-top))] sm:px-4">
         <a
           href="/"
           className="pointer-events-auto flex shrink-0 items-center gap-2 font-extrabold"
@@ -1055,13 +1062,9 @@ export function Stroyka() {
             {SITE.platform} <span className="text-amber-400">от {SITE.name}</span>
           </span>
         </a>
-        <span
-          data-testid="conditions"
-          className="pointer-events-auto hidden truncate rounded-full bg-slate-900/70 px-3 py-1 font-mono text-xs text-slate-200 md:inline"
-          title={phase === 'boot' ? undefined : phaseLabel}
-        >
-          {chip}
-        </span>
+        <div className="hidden min-w-0 sm:block">
+          <WeatherBadge line={chip} machine={badgeMachine} />
+        </div>
         <div className="ml-auto flex shrink-0 items-center gap-2">
           <SoundToggle className="pointer-events-auto" />
           <a
