@@ -68,6 +68,7 @@ const FORM_LABELS: Record<string, string> = {
   'catalog-card': 'Заказ из каталога',
   'catalog-empty': 'Каталог, ничего не нашли',
   landing: 'Страница вида техники',
+  job: 'Страница работы',
   contacts: 'Контакты',
   orders: 'Страница заявки',
   'agents-chat': 'Чат с ИИ-агентами',

@@ -19,6 +19,9 @@ export function SiteFooter() {
           <a href="/equipment" className={LINK}>
             Каталог техники
           </a>
+          <a href="/raboty" className={LINK}>
+            Работы и цены
+          </a>
           {LANDINGS.map((landing) => (
             <a key={landing.slug} href={`/arenda/${landing.slug}`} className={LINK}>
               Аренда {landing.title}

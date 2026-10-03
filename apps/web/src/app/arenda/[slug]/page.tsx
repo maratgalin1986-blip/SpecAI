@@ -13,21 +13,9 @@ import { CinemaLayer } from '@/components/CinemaHero';
 import { fromPrice, houseRate, rateOf, rub } from '@/lib/prices';
 import { PUBLIC_FLEET } from '@/lib/fleet';
 import { MachineAmbience } from '@/components/MachineAmbience';
-
-// Footage behind the landing header, by machine kind.
-const LANDING_CLIPS: Record<string, string[]> = {
-  'ekskavator-pogruzchik': ['excavator-truck', 'demolition'],
-  avtokran: ['city-cranes', 'crane-sun'],
-  'frontalnyj-pogruzchik': ['excavator-truck', 'workers'],
-  traktor: ['house-frame', 'site-aerial'],
-  'gusenichnyj-ekskavator': ['excavator-truck', 'site-aerial'],
-  'kolyosnyj-ekskavator-gidromolot': ['demolition', 'excavator-truck'],
-  'manipulyator-kmu': ['city-cranes', 'workers'],
-  'avtovyshka-agp': ['welder-height', 'tower-glass'],
-  vibrokatok: ['site-aerial', 'workers'],
-  samosval: ['excavator-truck', 'site-aerial'],
-  buldozer: ['site-aerial', 'excavator-truck'],
-};
+import { TelegramButton } from '@/components/TelegramButton';
+import { cityPath, NEARBY_CITIES } from '@/lib/cities';
+import { landingClips } from '@/lib/landingClips';
 
 export const revalidate = 300;
 
@@ -96,7 +84,7 @@ export default async function LandingPage({ params }: { params: { slug: string }
     <div className="flex flex-col gap-12">
       <MachineAmbience type={machine} />
       <section className="relative isolate overflow-hidden rounded-[2rem] bg-slate-950 px-6 py-10 text-white shadow-2xl sm:px-10 sm:py-14">
-        <CinemaLayer clips={LANDING_CLIPS[landing.slug] ?? ['site-aerial']} />
+        <CinemaLayer clips={landingClips(landing.slug)} />
         <div className="relative grid gap-8 lg:grid-cols-[1fr_380px]">
           <div className="flex flex-col justify-center">
             <nav className="text-sm text-slate-400">
@@ -128,7 +116,27 @@ export default async function LandingPage({ params }: { params: { slug: string }
               >
                 Написать в WhatsApp
               </a>
+              <TelegramButton page={`/arenda/${landing.slug}`} dark />
             </div>
+            <p className="mt-3 flex flex-wrap gap-x-2 text-sm text-slate-300">
+              <span>Работаем также:</span>
+              {NEARBY_CITIES.map((city, i) => (
+                <span key={city.slug}>
+                  {i > 0 && <span className="mr-2 text-slate-500">·</span>}
+                  <a
+                    href={cityPath(landing.slug, city.slug)}
+                    className="text-amber-300 hover:underline"
+                  >
+                    {city.name}
+                  </a>
+                </span>
+              ))}
+            </p>
+            <p className="mt-2 text-xs text-slate-400">
+              <a href="/privacy" className="underline hover:text-white">
+                Политика конфиденциальности
+              </a>
+            </p>
           </div>
           <div className="rounded-2xl bg-white/5 p-5 ring-1 ring-white/10 backdrop-blur">
             <CallbackForm
