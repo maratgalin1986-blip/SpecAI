@@ -31,6 +31,7 @@ import { Atmosphere } from './atmosphere';
 import type { WorldProgress } from '@/lib/stroyka/progress';
 import { createMaterials, Debris, node, pixelTexture, Rig, smooth } from './kit';
 import { Cinema } from './cinema';
+import { loadProps } from './props3d';
 import { buildDistrict, buildProject, buildTowerCrane, type ProjectBuild } from './project';
 import { buildCity } from './cityMesh';
 import { placeSite, type CityData } from '@/lib/stroyka/city';
@@ -409,6 +410,7 @@ export class StroykaEngine {
     this.renderer.compile(this.scene, this.camera);
     this.bindInput();
     void this.loadCity();
+    void loadProps(this.scene, this.opts.mobile, () => this.disposed);
     this.opts.onProgress(1);
     this.opts.telemetry.ready = true;
     this.running = true;
