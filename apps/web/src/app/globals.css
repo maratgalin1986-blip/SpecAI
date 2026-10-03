@@ -1314,10 +1314,14 @@ html {
 .chat-fab {
   bottom: calc(4.75rem + env(safe-area-inset-bottom));
 }
-html[data-cookie-strip] .chat-fab {
+html[data-cookie-strip] .chat-fab,
+html[data-tg-chip] .chat-fab {
   bottom: calc(7.25rem + env(safe-area-inset-bottom));
 }
 @media (min-width: 640px) {
+  html[data-tg-chip] .chat-fab {
+    bottom: 1rem;
+  }
   .chat-fab {
     bottom: 1rem;
   }

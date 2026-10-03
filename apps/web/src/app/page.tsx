@@ -4,6 +4,7 @@ import { Button } from '@specai/ui';
 import { PUBLIC_AGENT_PROFILES } from '@specai/shared';
 import { CallbackForm } from '@/components/CallbackForm';
 import { CallbackIris } from '@/components/CallbackIris';
+import { TelegramButton } from '@/components/TelegramButton';
 import { CinemaBand } from '@/components/CinemaBand';
 import { CountUp } from '@/components/CountUp';
 import { Faq } from '@/components/Faq';
@@ -302,6 +303,12 @@ export default async function HomePage() {
               >
                 Войти на стройку ▶
               </a>
+              <a
+                href="/kalkulyator"
+                className="inline-flex min-h-10 items-center underline-offset-4 hover:text-white hover:underline"
+              >
+                Калькулятор работ →
+              </a>
             </nav>
             <p className="float-in mt-5 text-sm text-slate-400" style={{ animationDelay: '480ms' }}>
               Свой парк · Свои машинисты · Без посредников · Работаем с НДС и ЭДО
@@ -585,6 +592,15 @@ export default async function HomePage() {
                 <Icon name="phone" className="h-6 w-6" />
                 {SITE.phone}
               </a>
+              <div className="mt-5 flex flex-wrap items-center gap-3">
+                <TelegramButton page="home" dark />
+                <span className="text-xs text-slate-400">
+                  Цены и свободная техника — в Telegram ·{' '}
+                  <a href="/privacy" className="underline">
+                    политика
+                  </a>
+                </span>
+              </div>
             </div>
             <div className="min-w-0 rounded-3xl bg-slate-950/50 p-4 ring-1 ring-white/10 backdrop-blur sm:p-6">
               <CallbackForm source="home" dark />

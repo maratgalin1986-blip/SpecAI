@@ -5,9 +5,10 @@ vi.mock('@/lib/marketing', () => ({
   withChannel: (source: string) => source,
   reachGoal: vi.fn(),
   analyticsRefused: () => false,
+  currentYclid: () => '',
 }));
 
-const { submitLead } = await import('./submitLead');
+const { submitLead, messageWithYclid } = await import('./submitLead');
 const payload = { phone: '+79270000000', source: 'home', consent: true };
 
 describe('submitLead', () => {
@@ -64,5 +65,14 @@ describe('leads already received', () => {
     );
     await expect(submitLead(payload)).resolves.toBeUndefined();
     vi.unstubAllGlobals();
+  });
+});
+
+describe('messageWithYclid', () => {
+  it('appends the Direct click id within the 1000-character limit', () => {
+    expect(messageWithYclid('Нужен самосвал', '123')).toBe('Нужен самосвал\nyclid: 123');
+    expect(messageWithYclid('', '123')).toBe('yclid: 123');
+    expect(messageWithYclid('а'.repeat(1200), '123')!.length).toBeLessThanOrEqual(1000);
+    expect(messageWithYclid('текст', '')).toBe('текст');
   });
 });
