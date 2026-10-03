@@ -1038,7 +1038,10 @@ export function Stroyka() {
           className={`pointer-events-none absolute inset-x-0 top-[calc(3.5rem+env(safe-area-inset-top))] ${
             // The open phone menu lies over the dialogue, like any menu.
             hudOpen ? 'z-30' : 'z-10'
-          } flex items-start justify-between gap-2 px-3 sm:px-4`}
+          } ${
+            // On a phone the conversation takes the screen: the card and map step aside.
+            dialog && mobile && !hudOpen ? 'hidden' : 'flex'
+          } items-start justify-between gap-2 px-3 sm:px-4`}
         >
           <div className="pointer-events-auto flex max-w-[calc(100vw-8.75rem)] flex-col gap-1.5 sm:max-w-sm">
             <div className="rounded-xl bg-slate-950/70 px-3 py-2 backdrop-blur">
@@ -1242,7 +1245,13 @@ export function Stroyka() {
       )}
 
       {/* ---------------- bottom: dialogue, joystick, talk */}
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 flex flex-col gap-2 px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:px-4">
+      {/* An open conversation is the main thing on screen: above the header,
+          the mission card, the map, the bubbles and the toasts. */}
+      <div
+        className={`pointer-events-none absolute inset-x-0 bottom-0 ${
+          dialog ? 'z-[60]' : 'z-20'
+        } flex flex-col gap-2 px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:px-4`}
+      >
         {phase === '3d' && mode === 'free' && !(dialog && mobile) && !order.open && (
           <div className="flex items-end justify-between">
             <Joystick input={input} />

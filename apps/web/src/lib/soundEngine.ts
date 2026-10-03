@@ -36,6 +36,7 @@ import {
   type Line,
   type Speaker,
 } from '@/lib/soundVoices';
+import { clipsFor } from '@/lib/stroyka/voice';
 
 const ARRIVAL_GAP_S = 20;
 
@@ -319,6 +320,19 @@ export class SoundEngine {
     const alive = () => token === this.speechToken && this.speakable();
     if (!alive()) return;
     if (radio) this.play(squelch, this.fx, { gain: 0.07, pan });
+    // A recorded neural voice when the line has one (lib/stroyka/voice.ts).
+    const clips = await clipsFor(line.text);
+    if (clips && alive()) {
+      const buffers = await Promise.all(
+        clips.map((url) => this.cached(`clip:${url}`, () => this.fetchClip(url))),
+      );
+      if (!alive()) return;
+      if (buffers.every(Boolean)) {
+        await this.playClips(buffers as AudioBuffer[], line.kind === 'radio', volume, pan);
+        if (radio && alive()) this.play(squelch, this.fx, { gain: 0.05, pan });
+        return;
+      }
+    }
     if (!voice) return;
     // speechSynthesis cannot go through Web Audio, so the «walkie-talkie» is
     // the static around the words and a faint band-limited hiss under them.
@@ -372,6 +386,65 @@ export class SoundEngine {
         }
       };
       window.setTimeout(() => next(0), radio ? 220 : 0);
+    });
+  }
+
+  private async fetchClip(url: string): Promise<AudioBuffer | null> {
+    try {
+      const res = await fetch(url);
+      if (!res.ok) return null;
+      return await this.ctx.decodeAudioData(await res.arrayBuffer());
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Plays recorded clips back to back through the effects bus; a radio line
+   * is band-limited like a walkie-talkie. Resolves at the end or when cut.
+   */
+  private playClips(buffers: AudioBuffer[], radio: boolean, volume: number, pan: number) {
+    return new Promise<void>((resolve) => {
+      const out = this.ctx.createGain();
+      out.gain.value = Math.min(1, volume * 3);
+      let tail: AudioNode = out;
+      if (radio) {
+        const band = this.ctx.createBiquadFilter();
+        band.type = 'bandpass';
+        band.frequency.value = 1700;
+        band.Q.value = 0.7;
+        out.connect(band);
+        tail = band;
+      }
+      if (pan && typeof this.ctx.createStereoPanner === 'function') {
+        const p = this.ctx.createStereoPanner();
+        p.pan.value = pan * 0.5;
+        tail.connect(p);
+        tail = p;
+      }
+      tail.connect(this.fx);
+      const sources: AudioBufferSourceNode[] = [];
+      let at = this.ctx.currentTime + 0.05;
+      for (const buffer of buffers) {
+        const src = this.ctx.createBufferSource();
+        src.buffer = buffer;
+        src.connect(out);
+        src.start(at);
+        at += buffer.duration + 0.08;
+        sources.push(src);
+      }
+      let done = false;
+      const finish = () => {
+        if (done) return;
+        done = true;
+        window.clearTimeout(timer);
+        this.finishLine = null;
+        for (const src of sources) stopSafely(src);
+        window.setTimeout(() => tail.disconnect(), 100);
+        resolve();
+      };
+      const timer = window.setTimeout(finish, (at - this.ctx.currentTime) * 1000 + 50);
+      this.finishLine = finish;
     });
   }
 
