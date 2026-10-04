@@ -3,13 +3,20 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { COOKIE_CHOICE_EVENT, COOKIE_CONSENT_KEY, enableWebvisorIfQueued } from '@/lib/marketing';
+import {
+  COOKIE_CHOICE_EVENT,
+  COOKIE_CONSENT_KEY,
+  cookieStripDue,
+  snoozeValue,
+  startMetrika,
+} from '@/lib/marketing';
 
 // A small strip at the bottom on arrival: consent to the processing of
-// personal data and cookies (owner's request, 2026-10-03). The visitor either
-// agrees («Согласен», Webvisor on) or hides it (✕, nothing changes: Metrika
-// keeps working without Webvisor, as before an answer). Refusing Metrika is on
-// /privacy. The choice is kept in localStorage; nothing is rendered on the
+// personal data and cookies (owner's request, 2026-10-03). Yandex.Metrika
+// starts only after «Согласен» (2026-10-04), on the same page (startMetrika).
+// ✕ means «not now»: Metrika stays off and the strip comes back after a week
+// (COOKIE_SNOOZE_MS). A firm refusal is on /privacy. The choice is kept in
+// localStorage; nothing is rendered on the
 // server, and the strip is fixed, so it cannot shift the page. Both buttons
 // are 44 px tap targets; while the strip is open on a phone the page gets
 // extra bottom padding and scroll padding (globals.css, data-cookie-strip).
@@ -19,13 +26,13 @@ export function CookieNotice() {
   const [shown, setShown] = useState(false);
 
   useEffect(() => {
-    let chosen = false;
+    let due = true;
     try {
-      chosen = !!localStorage.getItem(COOKIE_CONSENT_KEY);
+      due = cookieStripDue(localStorage.getItem(COOKIE_CONSENT_KEY));
     } catch {
       // Storage blocked: the notice is shown on every visit.
     }
-    if (chosen) return;
+    if (!due) return;
     // Soon after arrival, once the intro has ended; scrolling shows it at once.
     let scrolled = false;
     let timedOut = false;
@@ -41,7 +48,7 @@ export function CookieNotice() {
       window.clearInterval(poll);
       // Chosen meanwhile on /privacy (CookieChoiceButtons): stay hidden.
       try {
-        if (localStorage.getItem(COOKIE_CONSENT_KEY)) return;
+        if (!cookieStripDue(localStorage.getItem(COOKIE_CONSENT_KEY))) return;
       } catch {
         // Storage blocked: show the notice.
       }
@@ -83,14 +90,14 @@ export function CookieNotice() {
     return () => document.documentElement.removeAttribute('data-cookie-strip');
   }, [open]);
 
-  function choose(value: 'yes' | 'hidden') {
+  function choose(value: 'yes' | 'later') {
     try {
-      localStorage.setItem(COOKIE_CONSENT_KEY, value);
+      localStorage.setItem(COOKIE_CONSENT_KEY, value === 'yes' ? 'yes' : snoozeValue());
     } catch {
       // Ignore: the choice just lasts until the page is closed.
     }
-    // «Согласен» switches Webvisor on when the counter has not started yet.
-    if (value === 'yes') enableWebvisorIfQueued();
+    // «Согласен» starts Metrika right here; ✕ leaves it off.
+    if (value === 'yes') startMetrika();
     setVisible(false);
   }
 
@@ -106,7 +113,7 @@ export function CookieNotice() {
       }`}
     >
       <p className="min-w-0 flex-1 leading-snug">
-        Персональные данные и cookie ·{' '}
+        Cookie и Метрика — только после «Согласен» ·{' '}
         <Link href="/privacy" className="font-medium text-amber-800 underline">
           Подробнее
         </Link>
@@ -120,9 +127,9 @@ export function CookieNotice() {
       </button>
       <button
         type="button"
-        onClick={() => choose('hidden')}
-        aria-label="Скрыть сообщение"
-        title="Скрыть"
+        onClick={() => choose('later')}
+        aria-label="Не сейчас: скрыть, Метрика останется выключенной"
+        title="Не сейчас"
         className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-base text-slate-500 hover:bg-slate-100 hover:text-slate-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-600"
       >
         ✕
