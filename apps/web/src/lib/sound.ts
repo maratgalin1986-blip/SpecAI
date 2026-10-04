@@ -68,7 +68,25 @@ export function onMachine(handler: (detail: MachineDetail) => void): () => void 
 
 type Listener = () => void;
 const listeners = new Set<Listener>();
-let enabled = false;
+// The first client render already shows the right label (SoundToggle): the
+// saved choice, before the director (a lazy chunk) arrives. Under reduced
+// motion the director starts sound only from the switch, so it reads «off».
+let enabled = typeof window !== 'undefined' && !prefersReducedMotion() && storedSoundChoice();
+
+/** The director starts sound by itself only without this preference. */
+export function prefersReducedMotion(): boolean {
+  try {
+    return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Pages for reading (consent, policy, credits): no cinema layer and no sound
+ * director, so no sound switch either (CinemaLayer, SoundToggle).
+ */
+export const DOCUMENT_PAGES = /^\/(soglasie|privacy|credits)(\/|$)/;
 
 export function soundEnabled(): boolean {
   return enabled;
