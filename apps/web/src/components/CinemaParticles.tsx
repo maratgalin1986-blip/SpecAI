@@ -2,12 +2,15 @@
 
 import { useEffect } from 'react';
 import { usePathname } from 'next/navigation';
-import { afterLoad, fxAllowed, hydrated, saveDataOn } from '@/lib/cinemaFx';
+import { afterIntroIdle, fxAllowed, hydrated, saveDataOn } from '@/lib/cinemaFx';
 
 // Drifting dust and a few sparks over the home hero and every CinemaBand
 // photo: one small <canvas> per host, one shared rAF loop (about 30 fps) that
 // only runs while a host is on screen and the tab is visible. DPR is capped
-// at 2, nothing runs with reduced motion or Save-Data.
+// at 2 (1 on touch screens, which also get fewer dots: the soft sprites look
+// the same, and the phone composites a quarter of the pixels over the video),
+// nothing runs with reduced motion or Save-Data. It starts once the opening
+// titles are gone and the main thread is idle.
 
 const HOSTS = '.hero-short, .cine-band';
 const MAX_DPR = 2;
@@ -57,6 +60,8 @@ export function CinemaParticles() {
     if (pathname?.startsWith('/admin') || !fxAllowed() || saveDataOn()) return;
     const dust = sprite('rgba(255,255,255,0.9)');
     const glow = sprite('rgba(251,191,36,1)');
+    const touch = window.matchMedia('(pointer: coarse)').matches;
+    const maxDpr = touch ? 1 : MAX_DPR;
     const layers = new Map<HTMLElement, Layer>();
     const live = new Set<Layer>();
     let raf = 0;
@@ -65,7 +70,7 @@ export function CinemaParticles() {
 
     const fit = (l: Layer) => {
       const r = l.host.getBoundingClientRect();
-      l.dpr = Math.min(MAX_DPR, window.devicePixelRatio || 1);
+      l.dpr = Math.min(maxDpr, window.devicePixelRatio || 1);
       l.w = Math.max(1, r.width);
       l.h = Math.max(1, r.height);
       l.canvas.width = Math.round(l.w * l.dpr);
@@ -135,7 +140,7 @@ export function CinemaParticles() {
       host.insertBefore(canvas, anchor);
       const layer: Layer = { host, canvas, ctx, dots: [], w: 1, h: 1, dpr: 1 };
       fit(layer);
-      const n = host.classList.contains('cine-band') ? 30 : 40;
+      const n = host.classList.contains('cine-band') ? (touch ? 18 : 30) : touch ? 24 : 40;
       for (let i = 0; i < n; i++) layer.dots.push(spawn(layer.w, layer.h, true));
       layers.set(host, layer);
       ro.observe(host);
@@ -145,7 +150,7 @@ export function CinemaParticles() {
     const scan = (root: ParentNode) => root.querySelectorAll<HTMLElement>(HOSTS).forEach(attach);
     let mo: MutationObserver | null = null;
     let scanRaf = 0;
-    const cancel = afterLoad(() => {
+    const cancel = afterIntroIdle(() => {
       if (disposed) return;
       scan(document);
       const main = document.querySelector('main');
