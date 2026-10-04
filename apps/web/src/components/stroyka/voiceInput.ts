@@ -39,22 +39,31 @@ export const voiceSupported = () => ctor() !== null;
 const SILENCE_MS = 1400;
 /** The microphone never stays open longer than this. */
 const MAX_MS = 12_000;
+/** Nothing heard this long after the start: close and say so. */
+const NO_SPEECH_MS = 6000;
+/** iOS sometimes never fires onend after stop(): abort and finish ourselves. */
+const STOP_WATCHDOG_MS = 1500;
 
 /**
  * Listens for one phrase. Calls `onText` with the words (or never, if the
- * visitor said nothing) and `onEnd` when the microphone closes; returns a
- * function that finishes listening and keeps what was heard.
+ * visitor said nothing), `onInterim` with the words so far while they are
+ * spoken (the field may show them), and `onEnd` exactly once when the
+ * microphone closes; returns a function that finishes listening and keeps
+ * what was heard.
  *
  * Safari on iPhone (owner, 2026-10-03: «не слышит меня чат») often never
  * marks a result final and never closes the microphone by itself, and the
  * old second tap aborted and threw the words away. So partial results are
  * kept, a pause of SILENCE_MS ends the phrase, a tap ends it too (stop, not
  * abort), and the site's own sound steps aside while the microphone is open
- * (MIC_EVENT), since iOS hears nothing while a page plays audio.
+ * (MIC_EVENT), since iOS hears nothing while a page plays audio. When onend
+ * never comes after a stop, a watchdog aborts and finishes; when nothing is
+ * heard for NO_SPEECH_MS, listening ends with 'no-speech'.
  */
 export function listen(
   onText: (text: string) => void,
   onEnd: (error?: string) => void,
+  onInterim?: (text: string) => void,
 ): (() => void) | null {
   const Ctor = ctor();
   if (!Ctor) return null;
@@ -66,20 +75,45 @@ export function listen(
   let failed: string | undefined;
   let heard = '';
   let sent = false;
+  let ended = false;
   let silence = 0;
+  let watchdog = 0;
   const deliver = () => {
     if (sent || !heard) return;
     sent = true;
     onText(heard);
   };
+  const timers: number[] = [];
+  /** The microphone closed (onend, or the watchdog): runs once. */
+  const end = () => {
+    if (ended) return;
+    ended = true;
+    window.clearTimeout(silence);
+    window.clearTimeout(watchdog);
+    timers.forEach((t) => window.clearTimeout(t));
+    micActive(false);
+    deliver();
+    onEnd(sent ? undefined : failed);
+  };
   const finish = () => {
+    if (ended) return;
     try {
       rec.stop();
     } catch {
       /* already closed */
     }
+    if (ended || watchdog) return;
+    watchdog = window.setTimeout(() => {
+      try {
+        rec.abort();
+      } catch {
+        /* already closed */
+      }
+      end();
+    }, STOP_WATCHDOG_MS);
   };
   rec.onresult = (event) => {
+    if (ended) return;
     let text = '';
     let final = false;
     for (let i = 0; i < event.results.length; i++) {
@@ -89,6 +123,7 @@ export function listen(
     }
     heard = text.trim();
     window.clearTimeout(silence);
+    if (heard && !final) onInterim?.(heard);
     if (final) {
       deliver();
       finish();
@@ -97,19 +132,21 @@ export function listen(
   rec.onerror = (event) => {
     failed = event.error;
   };
-  const cap = window.setTimeout(finish, MAX_MS);
-  rec.onend = () => {
-    window.clearTimeout(silence);
-    window.clearTimeout(cap);
-    micActive(false);
-    deliver();
-    onEnd(sent ? undefined : failed);
-  };
+  rec.onend = end;
+  timers.push(
+    window.setTimeout(finish, MAX_MS),
+    window.setTimeout(() => {
+      if (heard) return;
+      failed ??= 'no-speech';
+      finish();
+    }, NO_SPEECH_MS),
+  );
   micActive(true);
   try {
     rec.start();
   } catch {
-    window.clearTimeout(cap);
+    ended = true;
+    timers.forEach((t) => window.clearTimeout(t));
     micActive(false);
     return null;
   }

@@ -8,7 +8,7 @@
 //   fx     one-shot cues
 //   reverb a shared «open yard» send
 
-import { MACHINE_VOICES, type SoundCue } from '@/lib/sound';
+import { MACHINE_VOICES, soundEnabled, type SoundCue } from '@/lib/sound';
 import type { MachineType } from '@/lib/machinePhotos';
 import { SITE_SAMPLES, MACHINE_SAMPLES, type SampleName } from '@/lib/soundAssets';
 import { SITE_EVENTS } from '@/lib/soundSynth';
@@ -25,9 +25,19 @@ import {
 } from '@/lib/soundVoices';
 import { clipsFor } from '@/lib/stroyka/voice';
 import type { Ground, NatureEventDetail } from '@/lib/sceneEvents';
-import { NatureLayer } from '@/lib/soundNature';
+import { LOOPS, NatureLayer, STEP_LOOP } from '@/lib/soundNature';
 
 const ARRIVAL_GAP_S = 20;
+
+/**
+ * Decoded nature loops kept in memory: a few seconds of stereo PCM each, ~43 MB
+ * if all of them stayed. The least recently used beyond this are let go (a
+ * playing loop keeps its own reference) and decoded again when needed.
+ */
+const NATURE_BUFFERS_KEPT = 4;
+const NATURE_LOOPS = new Set<SampleName>([...LOOPS, ...Object.values(STEP_LOOP)]);
+/** Recorded voice clips kept decoded; the rest are fetched again (from the HTTP cache). */
+const CLIP_BUFFERS_KEPT = 24;
 
 const LEVEL = {
   master: 0.85,
@@ -43,12 +53,15 @@ type Queued = { line: Line; radio: boolean; volume: number };
 
 const wait = (ms: number) => new Promise<void>((resolve) => window.setTimeout(resolve, ms));
 
+type SourceOptions = { gain?: number; rate?: number; pan?: number; when?: number };
+
 type Voice = { source: AudioBufferSourceNode; gain: GainNode; type: MachineType };
 
 export class SoundEngine {
   readonly ctx: AudioContext;
   private master: GainNode;
   private beds: GainNode;
+  private bedVerb: GainNode;
   private music: GainNode;
   private site: GainNode;
   private machine: GainNode;
@@ -74,6 +87,11 @@ export class SoundEngine {
   private finishLine: (() => void) | null = null;
   private disposed = false;
   private nature: NatureLayer;
+  private natureBus: GainNode;
+  /** The opening film of /stroyka is on screen with its own soundtrack. */
+  private film = false;
+  /** Most recently used cache keys, per group with a cap (oldest first). */
+  private recent = new Map<string, string[]>();
 
   /** `ctx` is created by the director inside the visitor's gesture. */
   constructor(ctx: AudioContext) {
@@ -98,18 +116,72 @@ export class SoundEngine {
     this.site = this.gain(0, this.beds);
     this.machine = this.gain(LEVEL.machine, this.beds);
     this.fx = this.gain(LEVEL.fx, this.master);
-    this.music.connect(this.reverb);
-    this.site.connect(this.reverb);
+    // The beds' reverb send follows the beds' level (typing, the film).
+    this.bedVerb = this.gain(1, this.reverb);
+    this.music.connect(this.bedVerb);
+    this.site.connect(this.bedVerb);
     this.fx.connect(this.reverb);
     // Nature sits with the beds: it steps back while the visitor types.
     const natureBus = this.gain(LEVEL.nature, this.beds);
-    natureBus.connect(this.reverb);
+    natureBus.connect(this.bedVerb);
+    this.natureBus = natureBus;
     this.nature = new NatureLayer(
       ctx,
       natureBus,
-      (name) => this.sample(name),
+      (name) => this.natureSample(name),
       (buffer, gain, pan, rate) => void this.play(buffer, natureBus, { gain, pan, rate }),
+      () => this.oneShotsAllowed() && !this.film,
     );
+  }
+
+  /**
+   * One-shots (cues, site events, chirps, thunder) play only now: while the
+   * context is suspended (mic open, page hidden, before a gesture) or the sound
+   * is off, a started source would wait and then go off together with all the
+   * others at the next resume.
+   */
+  private oneShotsAllowed(): boolean {
+    return !this.disposed && this.ctx.state === 'running' && soundEnabled();
+  }
+
+  /** Stops the random site events, voices and nature calls (mic, hidden page, sound off). */
+  pauseTimers(): void {
+    window.clearTimeout(this.voiceTimer);
+    window.clearTimeout(this.eventTimer);
+    this.voiceTimer = 0;
+    this.eventTimer = 0;
+    this.nature.pause();
+  }
+
+  /** Re-arms them once the context runs again (the director's onRunning). */
+  resumeTimers(): void {
+    if (this.film || !this.oneShotsAllowed()) return;
+    if (this.bedsOn) {
+      if (!this.voiceTimer) this.scheduleVoice();
+      if (!this.eventTimer) this.scheduleSiteEvent();
+    }
+    this.nature.resume();
+  }
+
+  /**
+   * The opening film plays its own soundtrack: the beds (music, site,
+   * machines, nature) step out and the random events wait until it closes.
+   */
+  setFilm(on: boolean): void {
+    if (this.film === on || this.disposed) return;
+    this.film = on;
+    this.levelBeds(on ? 0.2 : 0.8);
+    if (on) {
+      this.hush();
+      this.pauseTimers();
+    } else this.resumeTimers();
+  }
+
+  private levelBeds(timeConstant: number) {
+    const level = this.film ? 0 : this.ducked ? 0.25 : 1;
+    const now = this.ctx.currentTime;
+    this.beds.gain.setTargetAtTime(level, now, timeConstant);
+    this.bedVerb.gain.setTargetAtTime(level, now, timeConstant);
   }
 
   /** The weather around the visitor on the 3D site (null: the scene closed). */
@@ -159,6 +231,26 @@ export class SoundEngine {
       this.buffers.set(key, promise);
     }
     return promise;
+  }
+
+  /** Marks `key` as just used in `group`; drops the oldest beyond `cap` from the cache. */
+  private touch(group: string, key: string, cap: number) {
+    const list = (this.recent.get(group) ?? []).filter((k) => k !== key);
+    list.push(key);
+    while (list.length > cap) this.buffers.delete(list.shift()!);
+    this.recent.set(group, list);
+  }
+
+  /** A nature recording; the big loops are kept only while recently used. */
+  private natureSample(name: SampleName) {
+    if (NATURE_LOOPS.has(name)) this.touch('nature', `file:${name}`, NATURE_BUFFERS_KEPT);
+    return this.sample(name);
+  }
+
+  private clip(url: string) {
+    const key = `clip:${url}`;
+    this.touch('clip', key, CLIP_BUFFERS_KEPT);
+    return this.cached(key, () => this.fetchClip(url));
   }
 
   /**
@@ -241,10 +333,17 @@ export class SoundEngine {
     });
   }
 
-  private play(
+  /** A one-shot: dropped unless it can be heard right now (see oneShotsAllowed). */
+  private play(buffer: AudioBuffer | null, bus: AudioNode, options: SourceOptions = {}) {
+    if (!this.oneShotsAllowed()) return null;
+    return this.source(buffer, bus, options);
+  }
+
+  /** Starts a buffer through `bus` (loops too: those may start while suspended). */
+  private source(
     buffer: AudioBuffer | null,
     bus: AudioNode,
-    { gain = 1, rate = 1, pan = 0, when = 0 } = {},
+    { gain = 1, rate = 1, pan = 0, when = 0 }: SourceOptions = {},
   ) {
     if (!buffer || this.disposed) return null;
     const src = this.ctx.createBufferSource();
@@ -277,8 +376,10 @@ export class SoundEngine {
     const now = this.ctx.currentTime;
     this.music.gain.cancelScheduledValues(now);
     this.site.gain.cancelScheduledValues(now);
+    this.natureBus.gain.cancelScheduledValues(now);
     this.music.gain.setTargetAtTime(LEVEL.music, now, 1.2);
     this.site.gain.setTargetAtTime(LEVEL.site, now, 1.2);
+    this.natureBus.gain.setTargetAtTime(LEVEL.nature, now, 0.8);
     const [music, bed, ...recordings] = await Promise.all([
       this.synth('music', { name: 'music' }),
       this.synth('site', { name: 'site' }),
@@ -286,7 +387,7 @@ export class SoundEngine {
     ]);
     if (!this.bedsOn || this.disposed) return;
     const loop = (buffer: AudioBuffer | null | undefined, bus: GainNode, gain: number, pan = 0) => {
-      const src = this.play(buffer ?? null, bus, { gain, pan });
+      const src = this.source(buffer ?? null, bus, { gain, pan });
       if (!src) return;
       src.loop = true;
       this.bedSources.push(src);
@@ -296,19 +397,20 @@ export class SoundEngine {
     recordings.forEach((buffer, i) =>
       loop(buffer, this.site, SITE_SAMPLES[i]!.gain, SITE_SAMPLES[i]!.pan),
     );
-    this.scheduleVoice();
-    this.scheduleSiteEvent();
+    this.resumeTimers();
   }
 
   /** Hammer, grinder, back-up alarm, clank or horn somewhere on the site. */
   private scheduleSiteEvent() {
     window.clearTimeout(this.eventTimer);
-    this.eventTimer = window.setTimeout(
+    const timer = window.setTimeout(
       async () => {
         if (!this.bedsOn || this.disposed) return;
         if (this.running && document.visibilityState === 'visible') {
           const kind = SITE_EVENTS[Math.floor(Math.random() * SITE_EVENTS.length)]!;
           const buffer = await this.synth(`event:${kind}`, { name: 'event', arg: kind });
+          // Paused (mic, hidden page, film, sound off) while it rendered: drop it.
+          if (this.eventTimer !== timer) return;
           if (this.bedsOn) {
             this.play(buffer, this.site, {
               gain: (this.ducked ? 0.25 : 0.55) * (kind === 'reverse' ? 0.5 : 1),
@@ -321,15 +423,18 @@ export class SoundEngine {
       },
       5000 + Math.random() * 7000,
     );
+    this.eventTimer = timer;
   }
 
   stopBeds(): void {
     this.bedsOn = false;
-    window.clearTimeout(this.voiceTimer);
-    window.clearTimeout(this.eventTimer);
+    this.pauseTimers();
     const now = this.ctx.currentTime;
     this.music.gain.setTargetAtTime(0, now, 0.3);
     this.site.gain.setTargetAtTime(0, now, 0.3);
+    // Nature fades with them, so the suspend 900 ms later does not click.
+    this.natureBus.gain.cancelScheduledValues(now);
+    this.natureBus.gain.setTargetAtTime(0, now, 0.25);
     const sources = this.bedSources;
     this.bedSources = [];
     window.setTimeout(() => sources.forEach(stopSafely), 1500);
@@ -370,8 +475,7 @@ export class SoundEngine {
     const keys = pool[Math.floor(Math.random() * pool.length)]!;
     const buffers = await Promise.all(
       keys.map((key) => {
-        const url = `/audio/stroyka/${key}.mp3`;
-        return this.cached(`clip:${url}`, () => this.fetchClip(url));
+        return this.clip(`/audio/stroyka/${key}.mp3`);
       }),
     );
     if (!buffers.every(Boolean) || this.speaking || !this.speakable()) return false;
@@ -404,7 +508,7 @@ export class SoundEngine {
    * whatever is queued or playing, so nothing ever talks over it.
    */
   dialog(line: Line): void {
-    if (!this.running || this.ducked) return;
+    if (!this.running || this.ducked || this.film) return;
     if (line.kind === 'business') this.hush();
     this.enqueue({
       line,
@@ -460,9 +564,7 @@ export class SoundEngine {
     // A recorded neural voice when the line has one (lib/stroyka/voice.ts).
     const clips = await clipsFor(line.text);
     if (clips && alive()) {
-      const buffers = await Promise.all(
-        clips.map((url) => this.cached(`clip:${url}`, () => this.fetchClip(url))),
-      );
+      const buffers = await Promise.all(clips.map((url) => this.clip(url)));
       if (!alive()) return;
       if (buffers.every(Boolean)) {
         await this.playClips(buffers as AudioBuffer[], line.kind === 'radio', volume, pan);
@@ -694,7 +796,7 @@ export class SoundEngine {
   duck(on: boolean): void {
     if (this.ducked === on) return;
     this.ducked = on;
-    this.beds.gain.setTargetAtTime(on ? 0.25 : 1, this.ctx.currentTime, on ? 0.15 : 0.6);
+    this.levelBeds(on ? 0.15 : 0.6);
     if (on) this.hush();
   }
 
