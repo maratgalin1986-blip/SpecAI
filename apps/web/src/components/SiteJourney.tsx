@@ -1,7 +1,7 @@
 'use client';
 
 import Image from 'next/image';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { defaultPhotoOf, pickPhoto, type MachineType } from '@/lib/machinePhotos';
 import { currentSiteObject, SITE_OBJECTS, type ObjectStop } from '@/lib/siteObjects';
 import { clipSources, footageAllowed, lightFootage } from '@/components/CinemaVideo';
@@ -18,6 +18,15 @@ import { SITE } from '@/lib/site';
 // the previous shot, holds, then dives into a focal point (a load on the hook,
 // the pit, the platform…) and comes out of the next shot — like an Apple-style
 // scroll film. Every stop is also a section of the site with a link.
+//
+// Performance: the scroll position never goes through React state. A rAF
+// writes it to the section (--journey, 0…1) and paints the continuous parts
+// (zoom, fades, flash, captions, route bars) straight into the DOM; React
+// re-renders only when a discrete thing changes (the current stop, which shots
+// are mounted, the subtitle). The scrubbing loop runs only while the visitor
+// scrolls the stage on screen, and seeks a clip at most every 100 ms and only
+// by more than 0.15 s: each seek of an H.264 clip decodes up to a second of
+// frames.
 
 type Scene = {
   type: MachineType;
@@ -98,9 +107,66 @@ const SCENES: Scene[] = [
 const clamp = (v: number, a = 0, b = 1) => Math.min(b, Math.max(a, v));
 const smooth = (t: number) => t * t * (3 - 2 * t);
 
+const SEEK_EVERY_MS = 100;
+const SEEK_MIN_S = 0.15;
+
+/** Zoom, fade and blur of shot `i` of `n` at position `pos` (0…n). */
+function shotLook(pos: number, i: number, n: number) {
+  // Arrive: the previous stop's dive lands us deep inside this shot.
+  const arrive = i === 0 ? 1 : smooth(clamp((pos - i + 0.16) / 0.4));
+  // Leave: dive into the focal point during the last third.
+  const leave = i === n - 1 ? 0 : smooth(clamp((pos - i - 0.6) / 0.4));
+  const blur = (1 - arrive) * 4 + leave * 5;
+  return {
+    visible: pos > i - 0.2 && pos < i + 1.02,
+    opacity: i === 0 ? 1 : Math.min(1, arrive * 1.4),
+    transform: `scale(${(1 + (1 - arrive) * 1.8) * (1 + leave * 3)})`,
+    filter: blur > 0.3 ? `blur(${blur.toFixed(1)}px)` : '',
+  };
+}
+
+/** Opacity of the flash as the camera passes through a frame. */
+function flashOpacity(pos: number, n: number) {
+  const index = Math.min(n - 1, Math.floor(pos));
+  const local = pos - index;
+  return local > 0.9 && index < n - 1 ? (local - 0.9) * 6 : local < 0.08 ? (0.08 - local) * 8 : 0;
+}
+
+/** Fade and lift of caption `i` at position `pos`. */
+function captionLook(pos: number, i: number, n: number) {
+  const index = Math.min(n - 1, Math.floor(pos));
+  const local = pos - index;
+  const shown = i === index;
+  const fade = shown ? clamp(local < 0.5 ? (local - 0.12) / 0.2 : (0.7 - local) / 0.15) : 0;
+  const last = i === n - 1 && shown;
+  return {
+    opacity: last ? clamp((local - 0.06) / 0.14) : fade,
+    transform: `translateY(${(1 - (last ? 1 : fade)) * 24}px)`,
+  };
+}
+
+/** The discrete state of the stage: React re-renders only when it changes. */
+function stageOf(pos: number, n: number) {
+  const index = Math.min(n - 1, Math.floor(pos));
+  const local = pos - index;
+  let shots = 0;
+  for (let i = 0; i < n; i++) if (shotLook(pos, i, n).visible) shots |= 1 << i;
+  // Clips load fully only when the camera gets close (with `near`).
+  let ahead = 0;
+  for (let i = 0; i < n; i++) if (pos > i - 1.5) ahead |= 1 << i;
+  return { index, shots, ahead, sub: index === n - 1 || (local > 0.05 && local < 0.92) };
+}
+type Stage = ReturnType<typeof stageOf>;
+const sameStage = (a: Stage, b: Stage) =>
+  a.index === b.index && a.shots === b.shots && a.ahead === b.ahead && a.sub === b.sub;
+
 export function SiteJourney() {
   const sectionRef = useRef<HTMLElement>(null);
-  const [progress, setProgress] = useState(0);
+  const shotRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const captionRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const barRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const flashRef = useRef<HTMLDivElement>(null);
+  const [stage, setStage] = useState<Stage>(() => stageOf(0, SCENES.length));
   const [reduced, setReduced] = useState(false);
   // A different photo (machine model and backdrop) of every stop on each visit.
   const [scenes, setScenes] = useState(SCENES);
@@ -119,7 +185,42 @@ export function SiteJourney() {
   const [near, setNear] = useState(false);
   // The stage fills the screen (the visitor is inside the journey).
   const [onStage, setOnStage] = useState(false);
+  // Position of the camera, 0…n (n = number of stops); never React state.
   const posRef = useRef(0);
+  // Wakes the scrubbing loop (set by its effect).
+  const kickRef = useRef<() => void>(() => {});
+
+  // Writes the continuous look of the stage for camera position `pos`.
+  const paintRef = useRef((pos: number) => {
+    const n = SCENES.length;
+    shotRefs.current.forEach((el, i) => {
+      if (!el) return;
+      const look = shotLook(pos, i, n);
+      el.style.opacity = String(look.opacity);
+      el.style.transform = look.transform;
+      el.style.filter = look.filter;
+    });
+    const flash = flashRef.current;
+    if (flash) {
+      const opacity = flashOpacity(pos, n);
+      flash.style.opacity = String(opacity);
+      // A blend layer costs a full-screen pass even when transparent.
+      flash.style.visibility = opacity > 0 ? '' : 'hidden';
+    }
+    captionRefs.current.forEach((el, i) => {
+      if (!el) return;
+      const look = captionLook(pos, i, n);
+      el.style.opacity = String(look.opacity);
+      el.style.transform = look.transform;
+    });
+    barRefs.current.forEach((el, i) => {
+      if (el) el.style.width = `${clamp(pos - i) * 100}%`;
+    });
+  });
+  // After every render (shots mount and unmount), repaint at the current position.
+  useLayoutEffect(() => {
+    paintRef.current(posRef.current);
+  });
 
   useEffect(() => {
     // The route between the gate and the finale is shuffled on every visit.
@@ -144,11 +245,27 @@ export function SiteJourney() {
       const el = sectionRef.current;
       if (!el) return;
       const rect = el.getBoundingClientRect();
-      const scrollable = rect.height - window.innerHeight;
-      setProgress(scrollable > 0 ? clamp(-rect.top / scrollable) : 0);
+      const h = window.innerHeight;
+      // Far from the stage: nothing to paint (the camera rests at 0 or n).
+      if (rect.top > h * 2 || rect.bottom < -h) {
+        setNear(false);
+        setOnStage(false);
+        return;
+      }
+      const scrollable = rect.height - h;
+      const progress = scrollable > 0 ? clamp(-rect.top / scrollable) : 0;
+      const n = SCENES.length;
+      const pos = progress * n;
+      posRef.current = pos;
+      el.style.setProperty('--journey', progress.toFixed(4));
+      paintRef.current(pos);
+      setStage((prev) => {
+        const next = stageOf(pos, n);
+        return sameStage(prev, next) ? prev : next;
+      });
       // Start fetching footage only when the stage is about to come in.
-      setNear(rect.top < window.innerHeight * 1.5 && rect.bottom > -window.innerHeight);
-      setOnStage(rect.top < window.innerHeight * 0.5 && rect.bottom > window.innerHeight * 0.5);
+      setNear(rect.top < h * 1.5 && rect.bottom > -h);
+      setOnStage(rect.top < h * 0.5 && rect.bottom > h * 0.5);
     };
     const onScroll = () => {
       if (!frame) frame = requestAnimationFrame(update);
@@ -166,18 +283,25 @@ export function SiteJourney() {
   // Scrubbing: while the visitor scrolls, each visible clip is paused and its
   // playhead eases towards the time that matches the scroll position; after
   // a short pause in scrolling the clip plays on at 0.7× from where it is.
+  // The loop runs only while the stage is on screen and the visitor scrolls
+  // (plus the frame that resumes playback); a clip that becomes ready wakes it.
   useEffect(() => {
     if (reduced) return;
+    const section = sectionRef.current;
     let raf = 0;
     let lastScroll = 0;
+    let inView = false;
     const heads: number[] = [];
-    const onScroll = () => {
-      lastScroll = performance.now();
-    };
-    const loop = () => {
-      raf = requestAnimationFrame(loop);
+    const seekedAt: number[] = [];
+    const pauseAll = () =>
+      videoRefs.current.forEach((video) => {
+        if (video && !video.paused) video.pause();
+      });
+    const loop = (now: number) => {
+      raf = 0;
+      if (!inView) return;
       const pos = posRef.current;
-      const scrolling = performance.now() - lastScroll < 220;
+      const scrolling = now - lastScroll < 220;
       videoRefs.current.forEach((video, i) => {
         if (!video || !video.duration || video.readyState < 2) return;
         if (pos < i - 0.3 || pos > i + 1.1) {
@@ -193,7 +317,12 @@ export function SiteJourney() {
           const head = heads[i] ?? video.currentTime;
           const next = head + (target - head) * 0.22;
           heads[i] = next;
-          if (!video.seeking && Math.abs(video.currentTime - next) > 0.03) {
+          if (
+            !video.seeking &&
+            now - (seekedAt[i] ?? 0) >= SEEK_EVERY_MS &&
+            Math.abs(video.currentTime - next) > SEEK_MIN_S
+          ) {
+            seekedAt[i] = now;
             video.currentTime = next;
           }
         } else {
@@ -204,10 +333,33 @@ export function SiteJourney() {
           }
         }
       });
+      if (scrolling) raf = requestAnimationFrame(loop);
     };
+    const kick = () => {
+      if (!raf && inView) raf = requestAnimationFrame(loop);
+    };
+    kickRef.current = kick;
+    const onScroll = () => {
+      lastScroll = performance.now();
+      kick();
+    };
+    const observer =
+      section && typeof IntersectionObserver !== 'undefined'
+        ? new IntersectionObserver(([entry]) => {
+            inView = !!entry?.isIntersecting;
+            // Off screen the stage's looping CSS animations pause too (globals.css).
+            section?.toggleAttribute('data-offscreen', !inView);
+            if (inView) kick();
+            else pauseAll();
+          })
+        : null;
+    if (observer && section) observer.observe(section);
+    else inView = true;
     window.addEventListener('scroll', onScroll, { passive: true });
-    raf = requestAnimationFrame(loop);
+    kick();
     return () => {
+      kickRef.current = () => {};
+      observer?.disconnect();
       window.removeEventListener('scroll', onScroll);
       cancelAnimationFrame(raf);
     };
@@ -215,7 +367,7 @@ export function SiteJourney() {
 
   // Sound (only when the visitor turned it on): each stop's machine while
   // the stage is on screen, cross-fading as the camera moves on.
-  const stop = scenes[Math.min(scenes.length - 1, Math.floor(progress * scenes.length))];
+  const stop = scenes[stage.index];
   useMachineSound('journey', stop?.type, onStage && !reduced);
 
   // Reduced motion: a plain list of the stops.
@@ -269,10 +421,10 @@ export function SiteJourney() {
   };
 
   const n = scenes.length;
-  const pos = progress * n; // 0…n
-  posRef.current = pos;
-  const index = Math.min(n - 1, Math.floor(pos));
-  const local = pos - index; // 0…1 inside the current stop
+  // Continuous values are painted from the ref (paintRef); the render reads
+  // the same position so its styles always match.
+  const pos = posRef.current; // 0…n
+  const index = stage.index;
 
   return (
     <section
@@ -283,24 +435,20 @@ export function SiteJourney() {
     >
       <div className="sticky top-0 h-[100svh] overflow-hidden bg-black text-white">
         {scenes.map((scene, i) => {
-          // Arrive: the previous stop's dive lands us deep inside this shot.
-          const arrive = i === 0 ? 1 : smooth(clamp((pos - i + 0.16) / 0.4));
-          // Leave: dive into the focal point during the last third.
-          const leave = i === n - 1 ? 0 : smooth(clamp((pos - i - 0.6) / 0.4));
-          const visible = pos > i - 0.2 && pos < i + 1.02;
-          if (!visible) return null;
-          const scale = (1 + (1 - arrive) * 1.8) * (1 + leave * 3);
-          const opacity = i === 0 ? 1 : Math.min(1, arrive * 1.4);
-          const blur = (1 - arrive) * 4 + leave * 5;
+          if (!(stage.shots & (1 << i))) return null;
+          const look = shotLook(pos, i, n);
           return (
             <div
               key={scene.type}
+              ref={(el) => {
+                shotRefs.current[i] = el;
+              }}
               className="absolute inset-0 will-change-transform"
               style={{
-                opacity,
-                transform: `scale(${scale})`,
+                opacity: look.opacity,
+                transform: look.transform,
                 transformOrigin: '50% 55%',
-                filter: blur > 0.3 ? `blur(${blur.toFixed(1)}px)` : undefined,
+                filter: look.filter || undefined,
                 zIndex: i,
               }}
             >
@@ -328,8 +476,10 @@ export function SiteJourney() {
                     loop
                     playsInline
                     // Load a clip fully only when the camera gets close to it.
-                    preload={near && pos > i - 1.5 ? 'auto' : 'none'}
+                    preload={near && stage.ahead & (1 << i) ? 'auto' : 'none'}
                     poster={`/video/${object.clips[scene.stop]}.webp`}
+                    // A clip that becomes ready while the visitor rests starts playing.
+                    onLoadedData={() => kickRef.current()}
                   >
                     {clipSources(object.clips[scene.stop]!, light)}
                   </video>
@@ -343,14 +493,11 @@ export function SiteJourney() {
 
         {/* Flash as the camera passes through a frame. */}
         <div
+          ref={flashRef}
           className="pointer-events-none absolute inset-0 z-20 bg-amber-100 mix-blend-overlay"
           style={{
-            opacity:
-              local > 0.9 && index < n - 1
-                ? (local - 0.9) * 6
-                : local < 0.08
-                  ? (0.08 - local) * 8
-                  : 0,
+            opacity: flashOpacity(pos, n),
+            visibility: flashOpacity(pos, n) > 0 ? undefined : 'hidden',
           }}
           aria-hidden
         />
@@ -396,17 +543,14 @@ export function SiteJourney() {
           <div className="mt-auto grid max-w-2xl">
             {scenes.map((scene, i) => {
               const shown = i === index;
-              const fade = shown
-                ? clamp(local < 0.5 ? (local - 0.12) / 0.2 : (0.7 - local) / 0.15)
-                : 0;
               return (
                 <div
                   key={scene.type}
-                  className={`[grid-area:1/1] ${shown ? '' : 'pointer-events-none invisible'} transition-none`}
-                  style={{
-                    opacity: i === n - 1 && shown ? clamp((local - 0.06) / 0.14) : fade,
-                    transform: `translateY(${(1 - (i === n - 1 && shown ? 1 : fade)) * 24}px)`,
+                  ref={(el) => {
+                    captionRefs.current[i] = el;
                   }}
+                  className={`[grid-area:1/1] ${shown ? '' : 'pointer-events-none invisible'} transition-none`}
+                  style={captionLook(pos, i, n)}
                   aria-hidden={!shown}
                 >
                   <>
@@ -433,7 +577,7 @@ export function SiteJourney() {
           <div className="mt-6 flex min-h-[4.5rem] justify-center sm:min-h-[3.5rem]">
             {(() => {
               const scene = scenes[index]!;
-              const on = index === n - 1 || (local > 0.05 && local < 0.92);
+              const on = stage.sub;
               return (
                 <div
                   key={scene.type}
@@ -468,6 +612,9 @@ export function SiteJourney() {
               <li key={scene.type} className="flex-1">
                 <div className="h-0.5 overflow-hidden rounded-full bg-white/15">
                   <div
+                    ref={(el) => {
+                      barRefs.current[i] = el;
+                    }}
                     className="h-full bg-amber-400"
                     style={{ width: `${clamp(pos - i) * 100}%` }}
                   />

@@ -72,10 +72,16 @@ export function HeroPhotos() {
     let frame = 0;
     let px = 0;
     let py = 0;
+    let written = '';
     const apply = () => {
       frame = 0;
       const rect = section.getBoundingClientRect();
       const scrolled = Math.min(1, Math.max(0, -rect.top / Math.max(1, rect.height)));
+      // Only real changes: each write restyles the whole hero, and below the
+      // hero every scroll frame would otherwise write the same values again.
+      const next = `${px.toFixed(3)} ${py.toFixed(3)} ${scrolled.toFixed(3)}`;
+      if (next === written) return;
+      written = next;
       section.style.setProperty('--hx', px.toFixed(3));
       section.style.setProperty('--hy', py.toFixed(3));
       section.style.setProperty('--hs', scrolled.toFixed(3));
@@ -136,6 +142,8 @@ export function HeroPhotos() {
               clip={video}
               poster={SITE_OBJECTS[0]!.hero}
               priority
+              // Not under the opening titles; on phones after the first touch.
+              deferred
               className="hero-drone absolute inset-0 h-full w-full"
             />
           </div>
