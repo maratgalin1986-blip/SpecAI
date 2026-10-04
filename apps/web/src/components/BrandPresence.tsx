@@ -38,6 +38,8 @@ export function BrandPresence() {
   }, [pathname]);
 
   useEffect(() => {
+    // Legal texts (consent, policy) are copied exactly as they are.
+    if (keepsTitle(pathname)) return;
     const onCopy = (event: ClipboardEvent) => {
       const target = event.target as Element | null;
       // The visitor's own text in a form field is theirs.
@@ -60,7 +62,7 @@ export function BrandPresence() {
     };
     document.addEventListener('copy', onCopy);
     return () => document.removeEventListener('copy', onCopy);
-  }, []);
+  }, [pathname]);
 
   return null;
 }

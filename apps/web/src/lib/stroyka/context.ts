@@ -16,6 +16,8 @@ export interface OrderContext {
   heardBy: SpeakerId[];
   /** The callback form went through. */
   sent?: boolean;
+  /** The visitor's name, once told (chat, form or consented memory). */
+  name?: string;
 }
 
 export type ContextSet = Partial<Pick<OrderContext, 'task' | 'machine' | 'when' | 'address'>>;
@@ -104,7 +106,8 @@ export interface RadioLine {
  */
 export function radioHandoff(from: SpeakerId, to: SpeakerId, ctx: OrderContext): RadioLine[] {
   const facts = contextFacts(ctx);
-  const call = `${CALL_NAME[to]}, приём! Тут человек${facts ? `: ${facts}` : ' — по технике'}.`;
+  const who = ctx.name ?? 'человек';
+  const call = `${CALL_NAME[to]}, приём! Тут ${who}${facts ? `: ${facts}` : ' — по технике'}.`;
   const first: RadioLine = { speaker: from, text: call };
   const gaps = missing(ctx);
   let answer: string;
@@ -172,7 +175,7 @@ export interface OrderStep {
   done: boolean;
 }
 
-/** «Наряд собран» progress: each known field fills a line of the work-order card. */
+/** «Заявка собрана» progress: each known field fills a line of the work-order card. */
 export function orderProgress(ctx: OrderContext): { steps: OrderStep[]; done: number } {
   const steps: OrderStep[] = [
     { key: 'task', label: 'Задача', value: ctx.task, done: !!ctx.task },

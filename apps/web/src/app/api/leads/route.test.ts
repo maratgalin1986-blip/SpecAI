@@ -10,12 +10,12 @@ vi.mock('@/lib/notify', () => ({ notifyTelegram }));
 const { POST } = await import('./route');
 
 let ip = 0;
-function request() {
+function request(fields: Record<string, unknown> = { name: 'Иван' }) {
   ip += 1;
   return new NextRequest('http://localhost/api/leads', {
     method: 'POST',
     headers: { 'x-forwarded-for': `10.0.0.${ip}` },
-    body: JSON.stringify({ name: 'Иван', phone: '+79270000000', consent: true, website: '' }),
+    body: JSON.stringify({ phone: '+79270000000', consent: true, website: '', ...fields }),
   });
 }
 
@@ -34,6 +34,23 @@ describe('POST /api/leads', () => {
     expect(create).toHaveBeenCalledOnce();
     expect(notifyTelegram.mock.calls[0]?.[0]).toContain('+79270000000');
     expect(notifyTelegram.mock.calls[0]?.[0]).toContain('Имя: Иван');
+  });
+
+  it('accepts a lead without a name: only the phone and the consent are required', async () => {
+    create.mockResolvedValue({});
+    notifyTelegram.mockResolvedValue(true);
+    for (const fields of [{}, { name: '' }, { name: '   ' }]) {
+      create.mockClear();
+      const response = await POST(request(fields));
+      expect(response.status).toBe(201);
+      expect(create.mock.calls[0]?.[0].data.name).toBe('Имя не указано');
+    }
+  });
+
+  it('still refuses a lead without the consent', async () => {
+    const response = await POST(request({ consent: false }));
+    expect(response.status).toBe(400);
+    expect(create).not.toHaveBeenCalled();
   });
 
   it('still delivers the lead to Telegram when the database is down', async () => {

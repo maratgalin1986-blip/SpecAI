@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { onIdle, whenIntroGone } from '@/lib/cinemaFx';
 
 // Background footage done the fast way. The server renders the clip's poster
 // frame as a plain image, so the first paint does not wait for any script;
@@ -9,14 +10,19 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 // after hydration), and there is no video at all with reduced motion, with
 // data saver on or on a 2G connection — the poster frame stays. Phones and 3G
 // get the light cut (<clip>-sm.mp4: 720p, ~1–1.5 Mbit/s); desktops get
-// <clip>-md.mp4 (1080p from the original Mixkit masters, ≤3.5 Mbit/s). The
-// scroll-scrubbed journey uses <clip>.mp4 (720p, a keyframe every second).
+// <clip>-md.mp4 (1080p from the original Mixkit masters, ≤3.5 Mbit/s), or
+// <clip>.mp4 (720p) when the frame is no wider than about 1400 device pixels,
+// where 1080p would only be scaled down. The scroll-scrubbed journey uses
+// <clip>.mp4 (720p, a keyframe every second).
 // H.264 only: every browser plays it, and a second webm copy of each clip
 // doubled the weight for little gain.
 //
 // The poster stays the page's LCP element: the video element is created only
 // after the page has loaded and gone idle, with preload="none", and starts
-// downloading only when it is within a screen of the viewport.
+// downloading only when it is within a screen of the viewport. A `deferred`
+// clip (the home hero) also waits until the opening titles are gone (nothing
+// is decoded under them), and on phones until the first touch or a few idle
+// seconds later; its poster frame shows until then.
 
 type Connection = { saveData?: boolean; effectiveType?: string };
 
@@ -37,24 +43,49 @@ export function lightFootage() {
   );
 }
 
+/** Device pixels up to which the 720p cut is as sharp as the 1080p one. */
+const HD_FROM = 1400;
+
+/**
+ * Whether a full-bleed (object-cover, 16:9) clip in `el` needs the 1080p cut:
+ * its covered width in device pixels.
+ */
+export function needsFullHd(el: HTMLElement | null): boolean {
+  // Layout size: a push-in or parallax transform on the frame does not count.
+  const width = el?.offsetWidth
+    ? Math.max(el.offsetWidth, (el.offsetHeight * 16) / 9)
+    : window.innerWidth;
+  return width * Math.min(2, window.devicePixelRatio || 1) > HD_FROM;
+}
+
 /**
  * The <source> list of a clip: the light mp4 alone, the desktop background
- * cut alone, or (for scrubbing) webm with an mp4 fallback.
+ * cut alone (1080p, or 720p for a small frame), or the scrubbing cut.
  */
-export function clipSources(clip: string, light: boolean, background = false): ReactNode {
+export function clipSources(
+  clip: string,
+  light: boolean,
+  background = false,
+  fullHd = true,
+): ReactNode {
   if (light) return <source src={`/video/${clip}-sm.mp4`} type="video/mp4" />;
-  return background ? (
+  return background && fullHd ? (
     <source src={`/video/${clip}-md.mp4`} type="video/mp4" />
   ) : (
     <source src={`/video/${clip}.mp4`} type="video/mp4" />
   );
 }
 
+const FIRST_INPUT = ['pointerdown', 'touchstart', 'keydown'] as const;
+/** Phones start a deferred clip this long after the titles, if not touched. */
+const PHONE_IDLE_MS = 2500;
+
 export function CinemaVideo({
   clip,
   poster = clip,
   className = '',
   priority = false,
+  deferred = false,
 }: {
   /** Name in public/video (…/<clip>.webp|.mp4). */
   clip: string;
@@ -68,9 +99,12 @@ export function CinemaVideo({
   className?: string;
   /** Load the poster first (the page's main picture). */
   priority?: boolean;
+  /** Wait for the opening titles to go, and on phones for a touch or idle. */
+  deferred?: boolean;
 }) {
   const [allowed, setAllowed] = useState(false);
   const [light, setLight] = useState(false);
+  const [fullHd, setFullHd] = useState(true);
   const [playing, setPlaying] = useState<string | null>(null);
   const [near, setNear] = useState(false);
   const posterRef = useRef<HTMLImageElement>(null);
@@ -79,28 +113,50 @@ export function CinemaVideo({
   // After load and idle: nothing competes with the poster and the scripts.
   useEffect(() => {
     if (!footageAllowed()) return;
-    let idle = 0;
-    let timer = 0;
+    const cancels: Array<() => void> = [];
+    let done = false;
+    const go = () => {
+      if (done) return;
+      done = true;
+      cancels.forEach((cancel) => cancel());
+      setLight(lightFootage());
+      setFullHd(needsFullHd(posterRef.current));
+      setAllowed(true);
+    };
+    const whenIdle = () => {
+      cancels.push(onIdle(go, 2500));
+    };
     const start = () => {
-      const w = window as Window & {
-        requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number;
-      };
-      const go = () => {
-        setLight(lightFootage());
-        setAllowed(true);
-      };
-      if (w.requestIdleCallback) idle = w.requestIdleCallback(go, { timeout: 2500 });
-      else timer = window.setTimeout(go, 300);
+      if (!deferred) {
+        whenIdle();
+        return;
+      }
+      cancels.push(
+        whenIntroGone(() => {
+          const phone = lightFootage() || window.matchMedia('(pointer: coarse)').matches;
+          if (!phone) {
+            whenIdle();
+            return;
+          }
+          // Phones: the first touch, or a few idle seconds later.
+          const opts = { passive: true, capture: true } as const;
+          FIRST_INPUT.forEach((type) => window.addEventListener(type, go, opts));
+          const timer = window.setTimeout(whenIdle, PHONE_IDLE_MS);
+          cancels.push(() => {
+            FIRST_INPUT.forEach((type) => window.removeEventListener(type, go, opts));
+            window.clearTimeout(timer);
+          });
+        }),
+      );
     };
     if (document.readyState === 'complete') start();
     else window.addEventListener('load', start, { once: true });
     return () => {
+      done = true;
       window.removeEventListener('load', start);
-      const w = window as Window & { cancelIdleCallback?: (id: number) => void };
-      if (idle) w.cancelIdleCallback?.(idle);
-      window.clearTimeout(timer);
+      cancels.forEach((cancel) => cancel());
     };
-  }, []);
+  }, [deferred]);
 
   // Download and play only within a screen of the viewport; pause off screen.
   useEffect(() => {
@@ -139,7 +195,7 @@ export function CinemaVideo({
       />
       {allowed && (
         <video
-          key={`${clip}${light ? '-sm' : ''}`}
+          key={`${clip}${light ? '-sm' : fullHd ? '' : '-720'}`}
           ref={videoRef}
           className={`object-cover transition-opacity duration-700 ${
             playing === clip ? 'opacity-100' : 'opacity-0'
@@ -151,7 +207,7 @@ export function CinemaVideo({
           aria-hidden
           onPlaying={() => setPlaying(clip)}
         >
-          {clipSources(clip, light, true)}
+          {clipSources(clip, light, true, fullHd)}
         </video>
       )}
     </>

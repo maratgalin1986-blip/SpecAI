@@ -63,7 +63,17 @@ export function emitDialog(
   emit<DialogEventDetail>(DIALOG_EVENT, { speaker, text, kind, ...(mood ? { mood } : {}) });
 }
 
+// The latest weather, kept like announcedMachines() in lib/sound.ts: the page
+// may emit it before the sound layer (a lazy chunk) listens.
+let lastNature: NatureEventDetail | null = null;
+
+/** The weather last sent with emitNature (null: no scene, or it closed). */
+export function currentNature(): NatureEventDetail | null {
+  return lastNature;
+}
+
 export function emitNature(detail: NatureEventDetail | null) {
+  lastNature = detail;
   emit<NatureEventDetail | null>(NATURE_EVENT, detail);
 }
 

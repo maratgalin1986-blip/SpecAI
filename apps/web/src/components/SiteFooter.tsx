@@ -6,7 +6,7 @@ const LINK = 'flex min-h-11 items-center hover:text-white sm:min-h-0';
 
 export function SiteFooter() {
   return (
-    <footer className="border-t border-slate-200 bg-slate-900 text-slate-300">
+    <footer data-site-footer className="border-t border-slate-200 bg-slate-900 text-slate-300">
       <div className="mx-auto grid max-w-6xl gap-6 px-6 py-10 pb-36 text-sm sm:grid-cols-3">
         <div>
           <div className="text-base font-semibold text-white">

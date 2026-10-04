@@ -10,7 +10,9 @@ import { COOKIE_CHOICE_EVENT, COOKIE_CONSENT_KEY, enableWebvisorIfQueued } from 
 // agrees («Согласен», Webvisor on) or hides it (✕, nothing changes: Metrika
 // keeps working without Webvisor, as before an answer). Refusing Metrika is on
 // /privacy. The choice is kept in localStorage; nothing is rendered on the
-// server, and the strip is fixed, so it cannot shift the page.
+// server, and the strip is fixed, so it cannot shift the page. Both buttons
+// are 44 px tap targets; while the strip is open on a phone the page gets
+// extra bottom padding and scroll padding (globals.css, data-cookie-strip).
 export function CookieNotice() {
   const pathname = usePathname();
   const [visible, setVisible] = useState(false);
@@ -104,15 +106,15 @@ export function CookieNotice() {
       }`}
     >
       <p className="min-w-0 flex-1 leading-snug">
-        Обработка персональных данных и cookie ·{' '}
-        <Link href="/privacy" className="text-amber-800 underline">
+        Персональные данные и cookie ·{' '}
+        <Link href="/privacy" className="font-medium text-amber-800 underline">
           Подробнее
         </Link>
       </p>
       <button
         type="button"
         onClick={() => choose('yes')}
-        className="min-h-9 shrink-0 rounded-full bg-slate-900 px-3 font-semibold text-white hover:bg-slate-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-600"
+        className="min-h-11 shrink-0 rounded-full bg-slate-900 px-4 font-semibold text-white hover:bg-slate-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-600"
       >
         Согласен
       </button>
@@ -121,7 +123,7 @@ export function CookieNotice() {
         onClick={() => choose('hidden')}
         aria-label="Скрыть сообщение"
         title="Скрыть"
-        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-base text-slate-500 hover:bg-slate-100 hover:text-slate-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-600"
+        className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-base text-slate-500 hover:bg-slate-100 hover:text-slate-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-600"
       >
         ✕
       </button>

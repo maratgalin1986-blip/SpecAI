@@ -24,6 +24,8 @@ export const SESSION_KEY = 'stroyka.session.v1';
 export const MAX_CHARS = 2048;
 /** The text version the visitor agreed to (/soglasie#zapominanie). */
 export const CONSENT_VERSION = 'memory-consent-v1';
+/** The consent lasts 12 months (stated on /soglasie#zapominanie); then everything personal goes. */
+export const CONSENT_DAYS = 365;
 /** After «Не сейчас» (or «Забыть меня») the offer waits this long. */
 export const OFFER_PAUSE_MS = 7 * 86_400_000;
 
@@ -53,9 +55,10 @@ export interface VisitorMemory {
   task?: string;
   /** The visitor's last few chat answers. */
   answers?: string[];
-  /** An order went through; `sentMachine` is what it was for. */
+  /** An order went through; `sentMachine` is what it was for, `sentAt` when (ms). */
   sent?: boolean;
   sentMachine?: MachineType;
+  sentAt?: number;
 }
 
 const PERSONAL = [
@@ -66,6 +69,7 @@ const PERSONAL = [
   'answers',
   'sent',
   'sentMachine',
+  'sentAt',
 ] as const satisfies readonly (keyof VisitorMemory)[];
 
 export function emptyMemory(): VisitorMemory {
@@ -91,8 +95,18 @@ const machineOf = (v: unknown) =>
     ? (v as MachineType)
     : undefined;
 
-/** Anything parsed from storage, made safe: unknown fields dropped, bad ones ignored. */
-export function sanitize(raw: unknown): VisitorMemory {
+/** Whether a consent given at `at` (ISO) is still within CONSENT_DAYS at `now`. */
+export function consentValid(at: string, now: number): boolean {
+  const t = Date.parse(at);
+  return !Number.isNaN(t) && now - t < CONSENT_DAYS * 86_400_000;
+}
+
+/**
+ * Anything parsed from storage, made safe: unknown fields dropped, bad ones
+ * ignored. A consent older than CONSENT_DAYS no longer counts, so the name,
+ * the job and the order status are dropped with it.
+ */
+export function sanitize(raw: unknown, now: number = Date.now()): VisitorMemory {
   const m = emptyMemory();
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return m;
   const r = raw as Record<string, unknown>;
@@ -115,12 +129,7 @@ export function sanitize(raw: unknown): VisitorMemory {
     m.declinedAt = r.declinedAt;
 
   const c = r.consent as Record<string, unknown> | undefined;
-  if (
-    c &&
-    c.version === CONSENT_VERSION &&
-    typeof c.at === 'string' &&
-    !Number.isNaN(Date.parse(c.at))
-  )
+  if (c && c.version === CONSENT_VERSION && typeof c.at === 'string' && consentValid(c.at, now))
     m.consent = { at: c.at, version: CONSENT_VERSION };
   if (!m.consent) return m;
   const name = cleanName(r.name);
@@ -140,6 +149,8 @@ export function sanitize(raw: unknown): VisitorMemory {
   if (r.sent === true) m.sent = true;
   const sentMachine = machineOf(r.sentMachine);
   if (sentMachine) m.sentMachine = sentMachine;
+  if (typeof r.sentAt === 'number' && Number.isFinite(r.sentAt) && r.sentAt > 0)
+    m.sentAt = r.sentAt;
   return m;
 }
 
@@ -173,8 +184,8 @@ export function nameFromText(text: string): string | null {
 }
 
 /** The JSON to store: nothing personal without consent, cut down until it fits MAX_CHARS. */
-export function serialize(mem: VisitorMemory): string {
-  const m = sanitize(JSON.parse(JSON.stringify(mem)));
+export function serialize(mem: VisitorMemory, now: number = Date.now()): string {
+  const m = sanitize(JSON.parse(JSON.stringify(mem)), now);
   let json = JSON.stringify(m);
   // Least important first.
   const drops: (() => void)[] = [
@@ -210,11 +221,11 @@ function session(): Store | null {
   }
 }
 
-export function loadMemory(store: Store | null = local()): VisitorMemory {
+export function loadMemory(store: Store | null = local(), now: number = Date.now()): VisitorMemory {
   try {
     const raw = store?.getItem(MEMORY_KEY);
     if (!raw || raw.length > MAX_CHARS * 4) return emptyMemory();
-    return sanitize(JSON.parse(raw));
+    return sanitize(JSON.parse(raw), now);
   } catch {
     return emptyMemory();
   }
@@ -276,7 +287,7 @@ export function declineOffer(mem: VisitorMemory, now: number): VisitorMemory {
 
 /** The personal facts of this visit, kept in memory (RAM) until consent. */
 export type PersonalFacts = Partial<
-  Pick<VisitorMemory, 'name' | 'machine' | 'task' | 'answers' | 'sent' | 'sentMachine'>
+  Pick<VisitorMemory, 'name' | 'machine' | 'task' | 'answers' | 'sent' | 'sentMachine' | 'sentAt'>
 >;
 
 /** «Да, запомни меня»: the consent record plus what is known already. */
@@ -309,4 +320,20 @@ export function rememberFacts(mem: VisitorMemory, facts: PersonalFacts): Visitor
 /** «Забыть меня»: the personal memory and the consent go; the offer pauses a week. */
 export function forget(mem: VisitorMemory, now: number): VisitorMemory {
   return { ...withoutPersonal(mem), declinedAt: now };
+}
+
+/**
+ * What a returning visitor told last time, to start this visit with (consented
+ * memory only): the job, the machine and the name, so the order and the form
+ * are not empty while the characters say they remember.
+ */
+export function seedFromMemory(
+  mem: VisitorMemory,
+): Pick<VisitorMemory, 'task' | 'machine' | 'name'> {
+  if (!hasConsent(mem)) return {};
+  const out: Pick<VisitorMemory, 'task' | 'machine' | 'name'> = {};
+  if (mem.task) out.task = mem.task;
+  if (mem.machine) out.machine = mem.machine;
+  if (mem.name) out.name = mem.name;
+  return out;
 }

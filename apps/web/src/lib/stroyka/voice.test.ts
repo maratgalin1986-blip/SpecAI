@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { LINES, RADIO_PAIRS } from './lines';
+import { LINES, lineTexts, RADIO_PAIRS } from './lines';
 import { RECORDED_SPEAKERS, spokenText, voiceKey } from './voice';
 import { VOICE_CLIPS } from './voiceClips';
 
@@ -17,7 +17,7 @@ describe('recorded /stroyka voices', () => {
   //   npx tsx scripts/stroyka-voice-lines.ts > /tmp/l.json && python3 scripts/stroyka-voices.py /tmp/l.json
   it('has a recording for every line of the recorded characters', () => {
     const texts = [
-      ...RECORDED_SPEAKERS.flatMap((s) => LINES[s].map((l) => l.text)),
+      ...RECORDED_SPEAKERS.flatMap((s) => LINES[s].flatMap(lineTexts)),
       ...RADIO_PAIRS.flatMap((p) => [
         ...((RECORDED_SPEAKERS as readonly string[]).includes(p.a) ? [p.aText] : []),
         ...((RECORDED_SPEAKERS as readonly string[]).includes(p.b) ? [p.bText] : []),

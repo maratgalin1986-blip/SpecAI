@@ -29,7 +29,7 @@ describe('moodOf', () => {
   it('jokes get 😄 or 😂', () => {
     const r = moodOf({
       speaker: 'rinat',
-      text: 'Он у меня как жена: ворчит, но копает.',
+      text: 'Мой JCB как старый друг: поворчит, но выкопает.',
       kind: 'joke',
     });
     expect(['happy', 'laugh']).toContain(r.mood);
@@ -47,10 +47,13 @@ describe('moodOf', () => {
     expect(r.emojis).toEqual(['🌫️']);
   });
 
-  it('the foreman greets with 👷 at the start', () => {
+  it('the foreman greets with 👷 (as a mood), business lines are shown without emoji', () => {
+    expect(
+      moodOf({ speaker: 'mihalych', text: 'Здравствуйте! Я прораб.', kind: 'business' }).emojis,
+    ).toEqual(['👷']);
     const r = moodLine({ speaker: 'mihalych', text: 'Здравствуйте! Я прораб.', kind: 'business' });
-    expect(r.emojis).toEqual(['👷']);
-    expect(r.text.startsWith('👷 ')).toBe(true);
+    expect(r.emojis).toEqual([]);
+    expect(r.text).toBe('Здравствуйте! Я прораб.');
     expect(
       moodOf({ speaker: 'sveta', text: 'Здравствуйте!', kind: 'business' }).emojis,
     ).not.toContain('👷');
@@ -150,6 +153,23 @@ describe('stripEmoji', () => {
         const spoken = stripEmoji(shown);
         expect(hasEmoji(spoken)).toBe(false);
         expect(spoken.replace(/\s/g, '')).toBe(stripEmoji(line.text).replace(/\s/g, ''));
+      }
+  });
+});
+
+describe('moodLine shows few emojis', () => {
+  it('none on business and plain lines, at most one on a joke', () => {
+    for (const speaker of Object.keys(LINES) as (keyof typeof LINES)[])
+      for (const line of LINES[speaker].slice(0, 200)) {
+        expect(moodLine({ speaker, text: line.text, kind: 'business', hour: 23 }).emojis).toEqual(
+          [],
+        );
+        expect(
+          moodLine({ speaker, text: line.text, kind: 'joke', hour: 23, plain: true }).emojis,
+        ).toEqual([]);
+        expect(
+          moodLine({ speaker, text: line.text, kind: 'joke', hour: 23 }).emojis.length,
+        ).toBeLessThanOrEqual(1);
       }
   });
 });

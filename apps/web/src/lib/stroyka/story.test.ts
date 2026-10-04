@@ -7,7 +7,11 @@ import {
   chapter,
   chapterSubtitle,
   credits,
+  forgetText,
   joinNames,
+  OFFER_TEXT,
+  offerSpeaker,
+  offerYesText,
   machineHand,
   mskMoment,
   timeSlot,
@@ -90,9 +94,11 @@ describe('chapter cards', () => {
 
   it('places the brand in some lines, not in every one', () => {
     const all = Object.values(CHAPTER_LINES).flatMap((l) => Object.values(l));
-    const share = all.filter((l) => l.includes('СпецПласт16')).length / all.length;
-    expect(share).toBeGreaterThan(0.12);
-    expect(share).toBeLessThan(0.35);
+    const branded = all.filter((l) => l.includes('СпецПласт16')).length;
+    expect(branded).toBeGreaterThan(0);
+    expect(branded).toBeLessThanOrEqual(3);
+    const days = Object.values(CHAPTER_LINES).map((l) => l.day);
+    expect(days.filter((l) => l.includes('СпецПласт16')).length).toBeLessThanOrEqual(3);
   });
 });
 
@@ -143,8 +149,9 @@ describe('end credits', () => {
       'rinat',
       'sveta',
     ]);
-    expect(c.starring).toEqual(['вы', 'Ринат', 'Света', 'Михалыч', 'Ильдар', 'Алсу']);
-    expect(joinNames(c.starring)).toBe('вы, Ринат, Света, Михалыч, Ильдар и Алсу');
+    expect(c.starring).toEqual(['Вы', 'Ринат', 'Света', 'Михалыч', 'Ильдар', 'Алсу']);
+    expect(joinNames(c.starring)).toBe('Вы, Ринат, Света, Михалыч, Ильдар и Алсу');
+    expect(credits(emptyContext(), [], 'Марат').starring[0]).toBe('Марат');
     // The address stays out of the titles.
     expect(c.story).toBe('По мотивам вашей заявки: котлован под фундамент.');
     expect(c.featuring).toContain('Николай Петрович');
@@ -175,12 +182,19 @@ describe('returning visitors', () => {
       expect(greeting('mihalych', 'Марат', first.id, () => i / 10).id).not.toBe(first.id);
     }
     expect(greeting('rinat', undefined, undefined, () => 0).text).toBe(
-      'Опять к нам? Свой человек на стройке уже.',
+      'Вы снова к нам — рад, честно.',
     );
+    // Nobody shares a greeting with another character.
+    const all = (['mihalych', 'rinat', 'ildar', 'sveta', 'alsu'] as const).flatMap((s) =>
+      [0, 0.99].map((r) => greeting(s, undefined, undefined, () => r).text),
+    );
+    expect(new Set(all).size).toBe(all.length);
   });
 
   it('keeps what changed but drops the second «С возвращением»', () => {
-    expect(awayTail('С возвращением! Работа идёт по плану.')).toBe('Работа идёт по плану.');
+    expect(awayTail('С возвращением! Работа идёт по плану.')).toBe('');
+    expect(awayTail('Вас не было 5 дней. С возвращением!')).toBe('Вас не было 5 дней.');
+    expect(awayTail('Вас не было 5 дней.', 'mihalych')).toBe('Тебя не было 5 дней.');
     expect(awayTail('С возвращением — ЖК «Кама» уже сдали.')).toBe('ЖК «Кама» уже сдали.');
     expect(awayTail('Вас не было 5 дней. За это время: залили фундамент.')).toBe(
       'Вас не было 5 дней. За это время: залили фундамент.',
@@ -268,5 +282,42 @@ describe('greeting before a zone line', () => {
       'Ты по делу? Говори, что строим.',
     );
     expect(withoutHello('Котлован под фундамент?')).toBe('Котлован под фундамент?');
+  });
+});
+
+describe('honest memory lines', () => {
+  it('«Забыть меня» says only this device forgets, the order stays with the dispatcher', () => {
+    const t = forgetText('Марат');
+    expect(t).toContain('на этом устройстве, Марат');
+    expect(t).toContain('Саму заявку диспетчер доведёт до конца');
+    expect(t).not.toMatch(/всё стёр|заявку — всё/);
+  });
+
+  it("the zone's own character offers, saying where it is kept, «ты» or «вы» by character", () => {
+    expect(offerSpeaker('rinat')).toBe('rinat');
+    for (const [speaker, text] of Object.entries(OFFER_TEXT)) {
+      expect(text).toContain('Хранится только в этом браузере');
+      const ty = speaker === 'mihalych' || speaker === 'ildar';
+      if (ty) expect(text).not.toMatch(/(^|\s)(вас|вы|ваше)(\s|[,.?!])/i);
+      else expect(text).not.toMatch(/(^|\s)(тебя|ты|твоё)(\s|[,.?!])/i);
+    }
+    expect(offerYesText('mihalych', 'Марат')).toBe(
+      'Договорились, Марат! Теперь узнаю тебя. Придёшь — продолжим с того же места.',
+    );
+  });
+
+  it('a sent order is «у Светы» for three days, then «как всё прошло?»', () => {
+    const sentAt = Date.parse('2026-10-01T10:00:00Z');
+    const mem = { sent: true, sentMachine: 'backhoe' as const, sentAt };
+    expect(orderStatusLine('rinat', mem, sentAt + 86_400_000)).toBe(
+      'Ваша заявка на JCB у Светы, она в курсе.',
+    );
+    expect(orderStatusLine('mihalych', mem, sentAt + 4 * 86_400_000)).toBe(
+      'В прошлый раз от тебя была заявка на JCB — как всё прошло?',
+    );
+    // After an order: no «понадобится снова» tail.
+    expect(lastTimeLine('rinat', { task: 'котлован под фундамент', sent: true })).toBe(
+      'В прошлый раз вы спрашивали про котлован под фундамент.',
+    );
   });
 });

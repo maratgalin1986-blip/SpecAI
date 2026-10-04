@@ -69,10 +69,20 @@ export function ShiftStory() {
     update();
     window.addEventListener('scroll', onScroll, { passive: true });
     window.addEventListener('resize', onScroll);
+    // Off screen the looping dust pauses (globals.css, [data-offscreen]).
+    const section = sectionRef.current;
+    const observer =
+      section && typeof IntersectionObserver !== 'undefined'
+        ? new IntersectionObserver(([entry]) =>
+            section.toggleAttribute('data-offscreen', !entry?.isIntersecting),
+          )
+        : null;
+    if (section) observer?.observe(section);
     return () => {
       window.removeEventListener('scroll', onScroll);
       window.removeEventListener('resize', onScroll);
       cancelAnimationFrame(frame);
+      observer?.disconnect();
     };
   }, []);
 
@@ -208,7 +218,10 @@ export function ShiftStory() {
               {SHIFT_HOURS} ч × {RATE.toLocaleString('ru-RU')} ₽ ={' '}
               {(SHIFT_HOURS * RATE).toLocaleString('ru-RU')} ₽ ·{' '}
             </span>
-            <a href="#callback" className="text-sm font-semibold text-amber-400 hover:underline">
+            <a
+              href="#callback"
+              className="inline-flex min-h-[44px] items-center text-sm font-semibold text-amber-400 hover:underline"
+            >
               Заказать такую смену →
             </a>
           </div>

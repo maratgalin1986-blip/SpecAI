@@ -6,6 +6,9 @@ type Result = { 0: { transcript: string }; length: 1; isFinal?: boolean };
 
 class FakeRecognition {
   static last: FakeRecognition;
+  /** Like iOS at times: stop() closes nothing and onend never comes. */
+  static silentStop = false;
+  static failStart = false;
   lang = '';
   continuous = true;
   interimResults = false;
@@ -18,10 +21,12 @@ class FakeRecognition {
   constructor() {
     FakeRecognition.last = this;
   }
-  start() {}
+  start() {
+    if (FakeRecognition.failStart) throw new Error('InvalidStateError');
+  }
   stop() {
     this.stopped++;
-    this.onend?.();
+    if (!FakeRecognition.silentStop) this.onend?.();
   }
   abort() {
     this.aborted++;
@@ -38,6 +43,8 @@ const events: boolean[] = [];
 beforeEach(() => {
   vi.useFakeTimers();
   events.length = 0;
+  FakeRecognition.silentStop = false;
+  FakeRecognition.failStart = false;
   const target = new EventTarget();
   vi.stubGlobal('window', {
     webkitSpeechRecognition: FakeRecognition,
@@ -87,5 +94,66 @@ describe('chat voice input', () => {
     FakeRecognition.last.say(['Кран на субботу', true]);
     expect(onText).toHaveBeenCalledTimes(1);
     expect(events).toEqual([true, false]);
+  });
+
+  it('finishes by itself, once, when onend never comes after a stop', () => {
+    FakeRecognition.silentStop = true;
+    const onText = vi.fn();
+    const onEnd = vi.fn();
+    const stop = listen(onText, onEnd)!;
+    const rec = FakeRecognition.last;
+    rec.say(['Нужен кран']);
+    stop();
+    expect(onEnd).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(1600);
+    expect(rec.aborted).toBe(1);
+    expect(onText).toHaveBeenCalledWith('Нужен кран');
+    expect(onEnd).toHaveBeenCalledTimes(1);
+    expect(events).toEqual([true, false]);
+    // A late onend after the abort changes nothing.
+    rec.onend?.();
+    vi.advanceTimersByTime(20_000);
+    expect(onEnd).toHaveBeenCalledTimes(1);
+    expect(onText).toHaveBeenCalledTimes(1);
+    expect(events).toEqual([true, false]);
+  });
+
+  it('gives the microphone back when start() throws', () => {
+    FakeRecognition.failStart = true;
+    const onEnd = vi.fn();
+    expect(listen(() => {}, onEnd)).toBeNull();
+    expect(events).toEqual([true, false]);
+    vi.advanceTimersByTime(20_000);
+    expect(FakeRecognition.last.stopped).toBe(0);
+    expect(onEnd).not.toHaveBeenCalled();
+    expect(events).toEqual([true, false]);
+  });
+
+  it('closes with no-speech when nothing is heard for six seconds', () => {
+    const onText = vi.fn();
+    const onEnd = vi.fn();
+    listen(onText, onEnd);
+    vi.advanceTimersByTime(5900);
+    expect(onEnd).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(200);
+    expect(FakeRecognition.last.stopped).toBe(1);
+    expect(onText).not.toHaveBeenCalled();
+    expect(onEnd).toHaveBeenCalledWith('no-speech');
+    expect(events).toEqual([true, false]);
+  });
+
+  it('shows the words so far through the interim callback', () => {
+    const onInterim = vi.fn();
+    listen(
+      () => {},
+      () => {},
+      onInterim,
+    );
+    FakeRecognition.last.say(['Нужен']);
+    FakeRecognition.last.say(['Нужен экскаватор']);
+    expect(onInterim).toHaveBeenLastCalledWith('Нужен экскаватор');
+    vi.advanceTimersByTime(6100);
+    // Words were heard: the no-speech timeout does not fire on top of the silence stop.
+    expect(FakeRecognition.last.stopped).toBe(1);
   });
 });
