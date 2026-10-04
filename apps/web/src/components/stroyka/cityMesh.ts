@@ -4,10 +4,17 @@
 // Data © участники OpenStreetMap (ODbL).
 import * as THREE from 'three';
 import { centroid, footprintRuns, points, type CityData, type Pt } from '@/lib/stroyka/city';
-import { Voxels } from './kit';
+import { PLAIN_BOX, Voxels } from './kit';
 import { onOuterPlot } from '@/lib/stroyka/plots';
 
-const FACADES = [0xcfc8bd, 0xd9d2c3, 0xbfc5cc, 0xe0d6c4, 0xb9b2a6, 0xc8bba8, 0xa9b4bf];
+// Facade tints of a Soviet and post-Soviet city: grey and cream panels,
+// sand-yellow plaster, red and buff brick, blue-grey and green-grey panels.
+const FACADES = [
+  0xcfc8bd, 0xd9d2c3, 0xbfc5cc, 0xe0d6c4, 0xb9b2a6, 0xc8bba8, 0xa9b4bf, 0xd8c08e, 0xb0745a,
+  0xc49a74, 0x9fb0bd, 0xa7b29b, 0xe2cfa8, 0x8f9aa6,
+];
+/** Roof units, lift rooms and parapets: grey metal and dark concrete. */
+const ROOF_PARTS = [0x6b7078, 0x5a5f66, 0x7d8189, 0x4b5057];
 const ROAD_WIDTH = [4, 7, 10, 14];
 const AREA_COLOR: Record<string, number> = {
   park: 0x4f7a34,
@@ -26,10 +33,11 @@ const SITE = { x: 72, zMin: -76, zMax: 84 };
  * flat roofs, a plinth. `uniforms.cityNight` is set by the engine.
  */
 export function facadeMaterial() {
-  const uniforms = { cityNight: { value: 0 } };
+  const uniforms = { cityNight: { value: 0 }, cityShare: { value: 0.38 } };
   const material = new THREE.MeshStandardMaterial({ roughness: 0.82, metalness: 0 });
   material.onBeforeCompile = (shader) => {
     shader.uniforms.cityNight = uniforms.cityNight;
+    shader.uniforms.cityShare = uniforms.cityShare;
     shader.vertexShader = shader.vertexShader
       .replace(
         '#include <common>',
@@ -52,6 +60,7 @@ export function facadeMaterial() {
         varying vec3 vCityPos;
         varying vec3 vCityNormal;
         uniform float cityNight;
+        uniform float cityShare;
         float cityHash(vec2 p) { return fract(sin(dot(p, vec2(41.3, 289.1))) * 43758.5453); }
         float cityWin;
         float cityLit;`,
@@ -63,7 +72,8 @@ export function facadeMaterial() {
         cityLit = 0.0;
         vec3 cn = normalize(vCityNormal);
         if (cn.y > 0.6) {
-          diffuseColor.rgb *= 0.55; // flat roofs: bitumen and gravel
+          // Flat roofs: dark bitumen and gravel, a little cool.
+          diffuseColor.rgb = diffuseColor.rgb * vec3(0.3, 0.31, 0.33) + vec3(0.02);
         } else if (abs(cn.y) < 0.4) {
           vec2 tan2 = normalize(vec2(-cn.z, cn.x));
           float u = dot(vCityPos.xz, tan2) / 1.7;
@@ -73,18 +83,21 @@ export function facadeMaterial() {
           float frame = step(0.17, f.x) * step(f.x, 0.83) * step(0.28, f.y) * step(f.y, 0.86);
           cityWin = frame * step(1.0, v); // no windows on the plinth
           float variant = cityHash(cell + floor(vCityPos.xz / 40.0));
-          vec3 glass = mix(vec3(0.07, 0.10, 0.14), vec3(0.16, 0.2, 0.24), variant);
+          // Dark blue-grey glass with curtains here and there: windows read by day.
+          vec3 glass = mix(vec3(0.035, 0.05, 0.075), vec3(0.11, 0.13, 0.15), variant);
           diffuseColor.rgb = mix(diffuseColor.rgb, glass, cityWin);
+          // Plaster and panels weathered a little: not paper-white in the sun.
+          diffuseColor.rgb *= 0.82;
           // Plinth and floor slabs a shade darker.
           diffuseColor.rgb *= mix(0.78, 1.0, step(1.0, v)) * (1.0 - 0.08 * step(f.y, 0.06));
-          cityLit = cityWin * step(variant, 0.38) * cityNight;
+          cityLit = cityWin * step(variant, cityShare) * cityNight;
         }`,
       )
       .replace(
         '#include <metalnessmap_fragment>',
         `#include <metalnessmap_fragment>
-        roughnessFactor = mix(roughnessFactor, 0.08, cityWin);
-        metalnessFactor = mix(metalnessFactor, 0.6, cityWin);`,
+        roughnessFactor = mix(roughnessFactor, 0.22, cityWin);
+        metalnessFactor = mix(metalnessFactor, 0.25, cityWin);`,
       )
       .replace(
         '#include <emissivemap_fragment>',
@@ -124,7 +137,10 @@ export function buildCity(data: CityData, offset: Pt, mobile: boolean) {
     .sort((a, b) => a.d - b.d);
   for (const b of list) {
     if (blocks.count > budget) break;
-    const h = Math.max(3, b.levels * 3);
+    // One storey is what OSM says when it does not know: 1–3 storeys then;
+    // every building a little taller or lower so the skyline is not flat.
+    const levels = b.levels <= 1 ? 1 + Math.floor(rand() * 3) : b.levels;
+    const h = Math.max(3, levels * 3 * (0.94 + rand() * 0.12));
     const color = FACADES[Math.floor(rand() * FACADES.length)]!;
     if (b.d > 380) {
       // Far away: one block for the whole footprint.
@@ -146,6 +162,18 @@ export function buildCity(data: CityData, offset: Pt, mobile: boolean) {
     for (const run of runs) {
       blocks.add((run[0] + run[1]) / 2, h / 2, run[2] + cell / 2, color, run[1] - run[0], h, cell);
       if (run[1] - run[0] > widest[1] - widest[0]) widest = run;
+    }
+    // Roof details in the same instanced mesh (no extra draw calls): a lift
+    // room or vent units on the widest part, a dark parapet strip.
+    const rw = widest[1] - widest[0];
+    if (rw > 5 && h > 5) {
+      const part = ROOF_PARTS[Math.floor(rand() * ROOF_PARTS.length)]!;
+      const rx = widest[0] + rw * (0.25 + rand() * 0.5);
+      const rz = widest[2] + cell / 2;
+      blocks.add(rx, h + 1.1, rz, part, Math.min(4, rw * 0.3), 2.2, Math.max(cell, 2.4));
+      if (rw > 14)
+        blocks.add(rx + rw * 0.3 * (rand() < 0.5 ? -1 : 1), h + 0.6, rz, part, 1.6, 1.2, 1.6);
+      blocks.add((widest[0] + widest[1]) / 2, h + 0.25, rz, 0x4b5057, rw, 0.5, 0.35);
     }
     // Lit windows at night: a few floors of the widest part glow.
     if (b.levels >= 2 && b.d < 460) {
@@ -234,14 +262,22 @@ export function buildCity(data: CityData, offset: Pt, mobile: boolean) {
   }
 
   const facade = facadeMaterial();
-  const built = blocks.build(facade.material, { cast: false, receive: true });
+  // Plain boxes (12 triangles): the bevelled block is ~25× more and is never
+  // seen at city distance.
+  const built = blocks.build(facade.material, {
+    cast: false,
+    receive: true,
+    geometry: PLAIN_BOX,
+  });
   const litBuilt = lit.build(new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true }), {
     cast: false,
     receive: false,
+    geometry: PLAIN_BOX,
   });
   const flatBuilt = flat.build(new THREE.MeshLambertMaterial({ color: 0xffffff }), {
     cast: false,
     receive: true,
+    geometry: PLAIN_BOX,
   });
   group.add(built.mesh, litBuilt.mesh, flatBuilt.mesh);
   // The painted lit-window strips are replaced by the facade's own windows.

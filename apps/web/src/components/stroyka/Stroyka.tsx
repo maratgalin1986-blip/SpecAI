@@ -153,7 +153,7 @@ interface DialogState {
 }
 
 const BUBBLE_CSS = `.stroyka-bubble{position:absolute;left:0;top:0;max-width:min(240px,60vw);padding:6px 10px;border-radius:12px;background:#fff;color:#0f172a;font-size:14px;line-height:1.3;font-weight:700;-webkit-font-smoothing:antialiased;box-shadow:0 6px 18px rgba(0,0,0,.35);transition:opacity .35s;opacity:0;will-change:transform}
-        .stroyka-bubble::after{content:'';position:absolute;left:50%;bottom:-6px;margin-left:-6px;border:6px solid transparent;border-top-color:#fff;border-bottom:0}
+        .stroyka-bubble::after{content:'';position:absolute;left:var(--tail,50%);bottom:-6px;margin-left:-6px;border:6px solid transparent;border-top-color:#fff;border-bottom:0}
         .stroyka-censor{color:#dc2626;font-weight:900}
         .crew-sub{animation:crew-sub 4.5s ease forwards}
         @keyframes crew-sub{0%{opacity:0;transform:translateY(4px)}8%{opacity:1;transform:none}80%{opacity:1}100%{opacity:0}}
@@ -406,7 +406,8 @@ export function Stroyka() {
   // Fake progress while the 3D chunk downloads, real progress after.
   useEffect(() => {
     if (phase !== '3d' || loadReal >= 1) return;
-    const timer = window.setInterval(() => setLoadSim((p) => Math.min(0.35, p + 0.015)), 120);
+    // Twice a second: each step re-renders the whole page.
+    const timer = window.setInterval(() => setLoadSim((p) => Math.min(0.35, p + 0.06)), 500);
     return () => window.clearInterval(timer);
   }, [phase, loadReal]);
 
@@ -564,6 +565,7 @@ export function Stroyka() {
       state: () => engine.state,
       toScreen: (x: number, y: number, z: number) => engine.toScreen(x, y, z),
       inspect: (...args: Parameters<StroykaEngine['inspect']>) => engine.inspect(...args),
+      say: (id: string, text: string) => engine.say(id, text, 30),
       standAt: (x: number, z: number, yaw: number, pitch?: number) => {
         setMode('free');
         engine.standAt(x, z, yaw, pitch);

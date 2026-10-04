@@ -1,29 +1,39 @@
 // The LED screen by the gate: the opening film (muted, looped) on a big
 // panel on two posts. The video starts once the opening film is over, so
 // the phone never decodes it twice; it pauses when the page is hidden.
+// Phones show the film's poster instead (64 KB, no 3.3 MB video stream and
+// no per-frame texture upload).
 import * as THREE from 'three';
-import { FILM_SRC } from './StroykaFilm';
+import { FILM_POSTER, FILM_SRC } from './StroykaFilm';
 
 export class LedScreen {
   readonly group = new THREE.Group();
-  private video: HTMLVideoElement;
+  private video: HTMLVideoElement | null = null;
+  private texture: THREE.Texture;
   private started = false;
   private onVisibility = () => {
+    if (!this.video) return;
     if (document.hidden) this.video.pause();
     else if (this.started) void this.video.play().catch(() => {});
   };
 
   constructor(materials: { dark: THREE.Material; steel: THREE.Material }, mobile: boolean) {
-    const video = document.createElement('video');
-    video.src = mobile ? FILM_SRC.sm : FILM_SRC.full;
-    video.muted = true;
-    video.loop = true;
-    video.playsInline = true;
-    video.preload = 'none';
-    video.crossOrigin = 'anonymous';
-    this.video = video;
-    const texture = new THREE.VideoTexture(video);
+    let texture: THREE.Texture;
+    if (mobile) {
+      texture = new THREE.TextureLoader().load(FILM_POSTER);
+    } else {
+      const video = document.createElement('video');
+      video.src = FILM_SRC.full;
+      video.muted = true;
+      video.loop = true;
+      video.playsInline = true;
+      video.preload = 'none';
+      video.crossOrigin = 'anonymous';
+      this.video = video;
+      texture = new THREE.VideoTexture(video);
+    }
     texture.colorSpace = THREE.SRGBColorSpace;
+    this.texture = texture;
     const W = 9;
     const H = W * (9 / 16);
     const panel = new THREE.Mesh(
@@ -47,7 +57,7 @@ export class LedScreen {
   }
 
   start() {
-    if (this.started) return;
+    if (this.started || !this.video) return;
     this.started = true;
     this.video.preload = 'auto';
     void this.video.play().catch(() => {});
@@ -55,6 +65,8 @@ export class LedScreen {
 
   dispose() {
     document.removeEventListener('visibilitychange', this.onVisibility);
+    this.texture.dispose();
+    if (!this.video) return;
     this.video.pause();
     this.video.removeAttribute('src');
     this.video.load();

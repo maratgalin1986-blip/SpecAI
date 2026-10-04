@@ -43,6 +43,9 @@ export const MASTS: { at: [number, number]; aim: [number, number] }[] = [
 ];
 export const MAST_HEIGHT = 11;
 
+/** Brightness lift of the ground photo per surface (see the ground shader). */
+const GROUND_GAIN = { dry: 3.6, wet: 2.6, snow: 8.5 };
+
 export interface World {
   group: THREE.Group;
   /** Dry, wet or snowy ground and heaps. */
@@ -51,6 +54,8 @@ export interface World {
   /** Things shown only at night (beams, light pools, lit windows). */
   night: THREE.Object3D[];
   nightMaterials: THREE.Material[];
+  /** The floodlight cones' strength and the dust drift clock. */
+  beamUniforms: { opacity: { value: number }; time: { value: number } };
   puddles: THREE.Group;
   /** Lamp head positions, for the moving night light. */
   lampHeads: THREE.Vector3[];
@@ -222,7 +227,16 @@ function bannerTexture() {
   return texture;
 }
 
-export function buildWorld(M: Materials, mobile: boolean): World {
+/**
+ * Builds the static site. `pause` is awaited between the sections (terrain,
+ * heaps, fence, props, lights, signs…) so a phone's main thread is never
+ * blocked by the whole build at once.
+ */
+export async function buildWorld(
+  M: Materials,
+  mobile: boolean,
+  pause: () => Promise<void> = async () => {},
+): Promise<World> {
   const group = new THREE.Group();
   const pixels = pixelTexture();
   const voxelMat = new THREE.MeshStandardMaterial({ map: pixels, roughness: 0.85 });
@@ -293,7 +307,11 @@ export function buildWorld(M: Materials, mobile: boolean): World {
   const groundMat = surfaceMaterial('brown_mud_02', 1, { vertexColors: true });
   // Break up the tiling like a real site: large patches of drier clay and
   // darker damp soil, by world position (two noise octaves, no texture).
+  // The mud photo is dark (albedo ~0.07): lifted to dry clay (~0.2) so the
+  // ground reads bright and warm in daylight; snow lifts it further.
+  const groundGain = { value: GROUND_GAIN.dry };
   groundMat.onBeforeCompile = (shader) => {
+    shader.uniforms.gGain = groundGain;
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', '#include <common>\nvarying vec2 vGroundXZ;')
       .replace(
@@ -305,6 +323,7 @@ export function buildWorld(M: Materials, mobile: boolean): World {
         '#include <common>',
         `#include <common>
         varying vec2 vGroundXZ;
+        uniform float gGain;
         float gHash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
         float gNoise(vec2 p) {
           vec2 i = floor(p); vec2 f = fract(p); f = f * f * (3.0 - 2.0 * f);
@@ -315,6 +334,7 @@ export function buildWorld(M: Materials, mobile: boolean): World {
       .replace(
         '#include <map_fragment>',
         `#include <map_fragment>
+        diffuseColor.rgb *= gGain;
         gPatch = gNoise(vGroundXZ / 23.0) * 0.65 + gNoise(vGroundXZ / 7.0) * 0.35;
         vec3 clay = diffuseColor.rgb * vec3(1.28, 1.16, 1.0);
         vec3 damp = diffuseColor.rgb * vec3(0.72, 0.7, 0.68);
@@ -366,11 +386,12 @@ export function buildWorld(M: Materials, mobile: boolean): World {
   }
   const farGround = new THREE.Mesh(
     mergeGeometries(frame)!,
-    surfaceMaterial('brown_mud_02', 1, { color: 0x6f8c46 }),
+    surfaceMaterial('brown_mud_02', 1, { color: new THREE.Color(0x6f8c46).multiplyScalar(3) }),
   );
   farGround.receiveShadow = false;
   group.add(farGround);
 
+  await pause();
   // ------------------------------------------------------------ heaps, stacks
   // Smooth mounds with their own photo textures: spoil, gravel, sand.
   const moundGeos: Record<'dirt' | 'gravel' | 'sand', THREE.BufferGeometry[]> = {
@@ -395,9 +416,10 @@ export function buildWorld(M: Materials, mobile: boolean): World {
   heap(9, 30, 2.6, 3, 'sand');
   heap(26, 6, 2.5, 2, 'dirt'); // the dozer's spoil
   const heapMats = {
-    dirt: surfaceMaterial('brown_mud_02', 1),
-    gravel: surfaceMaterial('bicolour_gravel', 1),
-    sand: surfaceMaterial('coast_sand_01', 1),
+    // Lifted like the ground (the photos are dark), so heaps read in the sun.
+    dirt: surfaceMaterial('brown_mud_02', 1, { color: new THREE.Color(2.7, 2.55, 2.4) }),
+    gravel: surfaceMaterial('bicolour_gravel', 1, { color: new THREE.Color(1.7, 1.7, 1.7) }),
+    sand: surfaceMaterial('coast_sand_01', 1, { color: new THREE.Color(1.35, 1.3, 1.25) }),
   };
   const heapBase = new Map<THREE.MeshStandardMaterial, THREE.Color>();
   for (const kind of ['dirt', 'gravel', 'sand'] as const) {
@@ -445,17 +467,19 @@ export function buildWorld(M: Materials, mobile: boolean): World {
     groundColors.needsUpdate = true;
     // Wet ground and heaps shine a little.
     groundMat.roughness = mode === 'wet' ? 0.8 : 1;
+    groundGain.value = GROUND_GAIN[mode];
     for (const [mat, base] of heapBase) {
       mat.color.copy(base);
-      if (mode === 'snow') mat.color.lerp(white, 0.6);
+      if (mode === 'snow') mat.color.lerp(white.clone().multiplyScalar(base.r * 2.4), 0.6);
       if (mode === 'wet') mat.color.multiplyScalar(0.7);
       mat.roughness = mode === 'wet' ? 0.85 : 1;
     }
-    (farGround.material as THREE.MeshStandardMaterial).color.setHex(
-      mode === 'snow' ? 0xe8eef4 : mode === 'wet' ? 0x4f6a34 : 0x6f8c46,
-    );
+    (farGround.material as THREE.MeshStandardMaterial).color
+      .setHex(mode === 'snow' ? 0xe8eef4 : mode === 'wet' ? 0x4f6a34 : 0x6f8c46)
+      .multiplyScalar(mode === 'snow' ? 8 : 3);
   };
 
+  await pause();
   // ------------------------------------------------------------ fence (1 m blocks)
   const fence = new Voxels();
   const fenceColor = (i: number) => (i % 4 === 0 ? 0x26374a : 0x2f4356);
@@ -521,6 +545,7 @@ export function buildWorld(M: Materials, mobile: boolean): World {
     group.add(board);
   }
 
+  await pause();
   // ------------------------------------------------------------ props (merged)
   const props = new Rig(M);
   const propsNode = node(group);
@@ -717,16 +742,61 @@ export function buildWorld(M: Materials, mobile: boolean): World {
   }
   props.bake({ cast: true, receive: true });
 
+  await pause();
   // ------------------------------------------------------------ night-only things
   const night: THREE.Object3D[] = [];
   const glow = dotTexture();
-  const beamMat = new THREE.MeshBasicMaterial({
-    color: 0xffe1a6,
+  // Floodlight cones: soft towards the silhouette (view angle), brightest at
+  // the lamp and fading to the ground, with slow drifting dust in the light.
+  const beamUniforms = {
+    opacity: { value: 0 },
+    time: { value: 0 },
+    color: { value: new THREE.Color(0xffe1a6) },
+  };
+  const beamMat = new THREE.ShaderMaterial({
+    uniforms: beamUniforms,
     transparent: true,
-    opacity: 0.08,
     blending: THREE.AdditiveBlending,
     depthWrite: false,
     side: THREE.DoubleSide,
+    vertexShader: /* glsl */ `
+      varying vec2 vBeamUv;
+      varying vec3 vBeamPos;
+      varying float vBeamEdge;
+      void main() {
+        vBeamUv = uv;
+        vec4 world = modelMatrix * vec4(position, 1.0);
+        vBeamPos = world.xyz;
+        vec3 n = normalize(mat3(modelMatrix) * normal);
+        vec3 v = normalize(cameraPosition - world.xyz);
+        vBeamEdge = abs(dot(n, v));
+        gl_Position = projectionMatrix * viewMatrix * world;
+      }`,
+    fragmentShader: /* glsl */ `
+      uniform float opacity;
+      uniform float time;
+      uniform vec3 color;
+      varying vec2 vBeamUv;
+      varying vec3 vBeamPos;
+      varying float vBeamEdge;
+      float bHash(vec3 p) { return fract(sin(dot(p, vec3(17.1, 113.7, 51.3))) * 43758.5453); }
+      float bNoise(vec3 p) {
+        vec3 i = floor(p); vec3 f = fract(p); f = f * f * (3.0 - 2.0 * f);
+        return mix(
+          mix(mix(bHash(i), bHash(i + vec3(1,0,0)), f.x), mix(bHash(i + vec3(0,1,0)), bHash(i + vec3(1,1,0)), f.x), f.y),
+          mix(mix(bHash(i + vec3(0,0,1)), bHash(i + vec3(1,0,1)), f.x), mix(bHash(i + vec3(0,1,1)), bHash(i + vec3(1,1,1)), f.x), f.y),
+          f.z);
+      }
+      void main() {
+        float along = vBeamUv.y; // 1 at the lamp, 0 on the ground
+        float core = pow(vBeamEdge, 2.2);
+        float fall = pow(along, 1.6) * 0.85 + 0.15;
+        float ground = smoothstep(0.0, 0.18, along);
+        vec3 p = vBeamPos * 0.45 + vec3(0.0, -time * 0.25, time * 0.12);
+        float dust = 0.6 + 0.55 * bNoise(p) + 0.25 * bNoise(p * 2.7);
+        float a = opacity * core * fall * ground * dust;
+        gl_FragColor = vec4(color * a, 1.0);
+      }`,
   });
   const poolMat = new THREE.MeshBasicMaterial({
     color: 0xffcf86,
@@ -736,7 +806,7 @@ export function buildWorld(M: Materials, mobile: boolean): World {
     blending: THREE.AdditiveBlending,
     depthWrite: false,
   });
-  const beamGeo = new THREE.CylinderGeometry(0.4, 6, 1, 4, 1, true);
+  const beamGeo = new THREE.CylinderGeometry(0.4, 6, 1, 24, 1, true);
   const poolGeos: THREE.BufferGeometry[] = [];
   const beamGeos: THREE.BufferGeometry[] = [];
   for (const mast of MASTS) {
@@ -818,6 +888,7 @@ export function buildWorld(M: Materials, mobile: boolean): World {
   puddles.visible = false;
   group.add(puddles);
 
+  await pause();
   // ------------------------------------------------------------ flags (cloth that flutters)
   // Each flag is a cloth of 12×4 cells: the vertices wave with the wind
   // every frame, the texture is the real flag.
@@ -872,6 +943,7 @@ export function buildWorld(M: Materials, mobile: boolean): World {
   };
   updateFlags(0, 3, 0);
 
+  await pause();
   // ------------------------------------------------------------ signs and billboards
   const clickables: THREE.Object3D[] = [];
   const signMesh = (
@@ -1159,6 +1231,7 @@ export function buildWorld(M: Materials, mobile: boolean): World {
     farGround,
     night,
     nightMaterials: [beamMat, poolMat, paneMat],
+    beamUniforms,
     puddles,
     lampHeads,
     updateFlags,

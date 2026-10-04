@@ -149,6 +149,47 @@ export function buildProject(
   }
   const height = floors * FLOOR_H;
 
+  // Scaffolding on the south and west faces while the frame rises and the
+  // facade goes on (poles, ledgers every 2 m, a deck per floor), with green
+  // safety netting over the top floors of the frame. Gone once the facade is done.
+  if (s >= 2 && s <= 4 && floors > 0) {
+    const H = height + (s === 2 ? 1 : 0.5);
+    const pole = 0x9aa1aa;
+    const deck = 0x9a6a33;
+    const faces: { along: 'x' | 'z'; from: number; to: number; at: number; out: number }[] = [
+      { along: 'x', from: minX - 1, to: maxX + 1, at: maxZ, out: 1 },
+      { along: 'z', from: minZ, to: maxZ + 1, at: minX, out: -1 },
+    ];
+    const put = (f: (typeof faces)[number], a: number, d: number, y: number, ...size: number[]) => {
+      const [sa, sy, sd] = size as [number, number, number];
+      const off = f.at + f.out * d;
+      if (f.along === 'x') add(a, y, off, pole, sa, sy, sd);
+      else add(off, y, a, pole, sd, sy, sa);
+    };
+    for (const f of faces) {
+      const len = f.to - f.from;
+      const mid = (f.from + f.to) / 2;
+      for (let a = f.from; a <= f.to + 0.01; a += 2)
+        for (const d of [0.5, 1.6]) put(f, a, d, H / 2, 0.12, H, 0.12);
+      for (let y = 2; y <= H; y += 2)
+        for (const d of [0.5, 1.6]) put(f, mid, d, y, len, 0.08, 0.08);
+      for (let k = 1; k <= floors; k++) {
+        const y = k * FLOOR_H - 0.05;
+        const off = f.at + f.out * 1.05;
+        if (f.along === 'x') add(mid, y, off, deck, len, 0.06, 1.1);
+        else add(off, y, mid, deck, 1.1, 0.06, len);
+      }
+      if (s === 2) {
+        // Netting over the two newest floors.
+        const y0 = Math.max(0, height - 2 * FLOOR_H);
+        const off = f.at + f.out * 1.68;
+        const hNet = H - y0;
+        if (f.along === 'x') add(mid, y0 + hNet / 2, off, 0x2f7d4a, len, hNet, 0.04);
+        else add(off, y0 + hNet / 2, mid, 0x2f7d4a, 0.04, hNet, len);
+      }
+    }
+  }
+
   // --- 4. Roof: parapet and units.
   if (s >= 3 && floors) {
     const yr = height + 0.5;
@@ -166,6 +207,8 @@ export function buildProject(
 
   // --- 5. Facade on the upper floors, bottom-up; 7. glazing and lights inside.
   const glassAmount = s === 6 ? f : s > 6 ? 1 : 0;
+  // Before the glazing, work lamps glow inside some open window holes at night.
+  const workLights = s === 4 || s === 5;
   const litAmount = s >= 6 ? (s === 6 ? f : 0.6) : 0;
   if (s >= 4) {
     const facadeFloors = s === 4 ? Math.ceil(f * (p.floors - 1)) : p.floors - 1;
@@ -182,6 +225,8 @@ export function buildProject(
             if (seq < glassAmount) add(x + 0.5, y0 + 2, z + 0.5, colors.glass, 0.98, 2, 0.98);
             if (seq < litAmount * glassAmount && (id * 13) % 5 < 3)
               lit.add(x + 0.5, y0 + 2, z + 0.5, 0xffc46b, 1.02, 1.9, 1.02);
+            else if (workLights && (id * 7) % 9 === 0)
+              lit.add(x + 0.5, y0 + 2, z + 0.5, 0xe6eeff, 0.9, 1.8, 0.9);
           } else add(x + 0.5, y0 + 2, z + 0.5, colors.wall, 1, 2, 1);
         }
     }

@@ -1,7 +1,7 @@
 // «Куда идём?»: what the visitor can choose in the 3D site — places (the
 // zones), people (the named characters and the crew) and sights. Pure data,
 // shared by the chooser (Stroyka.tsx) and the camera (engine.ts).
-import { BOUNDS, ZONES, type SpeakerId, type Vec3, type ZoneId } from '@/lib/stroyka';
+import { BOUNDS, ZONES, type Box, type SpeakerId, type Vec3, type ZoneId } from '@/lib/stroyka';
 import { CREW } from '@/lib/stroyka/crew';
 
 /** Where the camera goes: stand at x, z (plus `lift` metres up) and look at `look`. */
@@ -98,8 +98,49 @@ export interface NavSight {
   target: TravelTarget;
 }
 
+/**
+ * «Посмотреть: текущий объект»: the object under construction today — on
+ * the site plot (ЖК «Кама») or on one of the plots around it (the school,
+ * the kindergarten…). The engine re-aims it whenever the timeline moves
+ * (`aimCurrentObject`), so the chooser always flies to what the HUD names.
+ */
+export const CURRENT_OBJECT: NavSight = {
+  id: 'current',
+  name: 'Посмотреть: текущий объект',
+  icon: '🏗️',
+  target: { x: 24, z: -6, look: [24, 6, -29], lift: 4 },
+};
+
+/**
+ * Points CURRENT_OBJECT at an object on footprint `box`, `height` metres tall:
+ * from the south of the site plot, or from the nearest edge of the walkable
+ * area (lifted for a view over the fence and the street) for an outer plot.
+ */
+export function aimCurrentObject(box: Box, height: number) {
+  const cx = (box.minX + box.maxX) / 2;
+  const cz = (box.minZ + box.maxZ) / 2;
+  const lookY = Math.max(2, height * 0.45);
+  const insideSite = cx > BOUNDS.minX && cx < BOUNDS.maxX && cz > BOUNDS.minZ && cz < BOUNDS.maxZ;
+  if (insideSite) {
+    // Far enough back to see a 17-storey block whole.
+    const z = Math.min(BOUNDS.maxZ, box.maxZ + 34 + height * 0.7);
+    CURRENT_OBJECT.target = { x: cx, z, look: [cx, lookY, cz], lift: 2 + height * 0.1 };
+    return CURRENT_OBJECT.target;
+  }
+  const [x, z] = clampToBounds(cx, cz);
+  const dist = Math.hypot(cx - x, cz - z);
+  CURRENT_OBJECT.target = {
+    x,
+    z,
+    look: [cx, lookY, cz],
+    lift: Math.min(30, Math.max(10, dist * 0.3 + height * 0.3)),
+  };
+  return CURRENT_OBJECT.target;
+}
+
 /** Sights: where to stand and what to look at (positions from engine.ts / world.ts). */
 export const NAV_SIGHTS: NavSight[] = [
+  CURRENT_OBJECT,
   // The truck crane at (36, 22) lifting slabs onto the frame.
   {
     id: 'crane',

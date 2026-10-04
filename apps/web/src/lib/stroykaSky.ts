@@ -87,14 +87,18 @@ export interface SkyPalette {
 }
 
 // [elevation°, zenith, horizon, fog, sun colour, sun intensity, hemi sky, hemi ground, hemi intensity]
+// Deep night (−18°) is near black with a faint navy; −12…−6° is the blue
+// hour (a saturated deep blue, distinct from night); −3…2° the warm dusk
+// band on the horizon; daylight is bright (physically based lights).
 const SKY_KEYS: [number, number, number, number, number, number, number, number, number][] = [
-  [-18, 0x03050d, 0x0a1022, 0x090e1c, 0x9fb4ff, 0, 0x2a3a66, 0x0c0c12, 0.55],
-  [-8, 0x0a1430, 0x232a4a, 0x1d2238, 0xa9b8ff, 0, 0x34406c, 0x12101a, 0.6],
-  [-3, 0x1b2a58, 0x9a4f3e, 0x5e3f3e, 0xff7a3a, 0.15, 0x4a4f7a, 0x2a1d18, 0.65],
-  [2, 0x2c4a86, 0xf08848, 0xc98260, 0xff8a3d, 1.3, 0x6b78a8, 0x5a3a26, 0.75],
-  [8, 0x4672b4, 0xf5b47c, 0xe2b28a, 0xffb067, 2.2, 0x8fa6cc, 0x6a4a30, 0.85],
-  [20, 0x3c7ad6, 0xbcd6ee, 0xc8d9e6, 0xfff0d8, 2.6, 0xb8d0ee, 0x6e5a44, 0.95],
-  [50, 0x2e6cd4, 0xaecfee, 0xbcd3e6, 0xffffff, 2.8, 0xc6daf2, 0x726050, 1.0],
+  [-18, 0x02040b, 0x070b18, 0x060a14, 0x9fb4ff, 0, 0x26345c, 0x0a0a10, 0.5],
+  [-12, 0x061029, 0x141d3c, 0x111a33, 0xa9b8ff, 0, 0x2e3a66, 0x100e18, 0.55],
+  [-6, 0x0f2358, 0x34487f, 0x2b3a68, 0xa9b8ff, 0, 0x3f4e88, 0x18141e, 0.65],
+  [-3, 0x1b3068, 0x9c5c5c, 0x5e4652, 0xff7a3a, 0.2, 0x4f5684, 0x2a1d18, 0.7],
+  [2, 0x2c4a86, 0xf08848, 0xc98260, 0xff8a3d, 1.6, 0x6b78a8, 0x5a3a26, 0.85],
+  [8, 0x4672b4, 0xf5b47c, 0xe2b28a, 0xffb067, 2.9, 0x8fa6cc, 0x6a4a30, 1.0],
+  [20, 0x3c7ad6, 0xbcd6ee, 0xc8d9e6, 0xfff0d8, 3.4, 0xb8d0ee, 0x7a6448, 1.12],
+  [50, 0x2e6cd4, 0xaecfee, 0xbcd3e6, 0xffffff, 3.6, 0xc6daf2, 0x7e6a52, 1.18],
 ];
 
 function mixColor(a: number, b: number, k: number) {
@@ -127,6 +131,22 @@ export function skyPalette(elevation: number): SkyPalette {
     hemiIntensity: mix(a[8], b[8], k),
     night: Math.min(1, Math.max(0, (2 - elevation) / 8)),
   };
+}
+
+/**
+ * How lively the city is at this Moscow hour (fractional), 0…1: every window
+ * lit and the sky glowing over the streets in the evening, most windows dark
+ * after midnight. It tells 20:00 from 01:00 when the sun is far below the
+ * horizon at both.
+ */
+export function cityLife(hour: number) {
+  const h = ((hour % 24) + 24) % 24;
+  if (h >= 7 && h < 17) return 0.6;
+  if (h >= 17 && h < 22) return 0.6 + 0.4 * Math.min(1, (h - 17) / 1.5);
+  if (h >= 22) return 1 - 0.75 * ((h - 22) / 3);
+  if (h < 1) return 1 - 0.75 * ((h + 2) / 3);
+  if (h < 5) return 0.25;
+  return 0.25 + 0.35 * ((h - 5) / 2);
 }
 
 // ---------------------------------------------------------------- weather

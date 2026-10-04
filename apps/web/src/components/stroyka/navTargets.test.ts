@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { BOUNDS, ZONES } from '@/lib/stroyka';
+import { BOUNDS, BUILDING, ZONES } from '@/lib/stroyka';
+import { footprintOn } from '@/lib/stroyka/plots';
 import {
+  aimCurrentObject,
   clampToBounds,
+  CURRENT_OBJECT,
   easeInOut,
   NAV_PEOPLE,
   NAV_PLACES,
@@ -28,10 +31,33 @@ describe('«Куда идём?» targets', () => {
   });
 
   it('keeps sights inside the site', () => {
-    expect(NAV_SIGHTS.map((s) => s.id)).toEqual(['crane', 'excavator', 'led', 'flags', 'top']);
+    expect(NAV_SIGHTS.map((s) => s.id)).toEqual([
+      'current',
+      'crane',
+      'excavator',
+      'led',
+      'flags',
+      'top',
+    ]);
     for (const { target } of NAV_SIGHTS) {
       expect(clampToBounds(target.x, target.z)).toEqual([target.x, target.z]);
     }
+  });
+
+  it('aims «текущий объект» at the object on its plot', () => {
+    // ЖК «Кама» inside the site: from the south, looking at the building.
+    const kama = aimCurrentObject(BUILDING, 68);
+    expect(NAV_SIGHTS[0]).toBe(CURRENT_OBJECT);
+    expect(CURRENT_OBJECT.target).toBe(kama);
+    expect(kama.z).toBeGreaterThan(BUILDING.maxZ);
+    expect(kama.look[0]).toBe((BUILDING.minX + BUILDING.maxX) / 2);
+    // The school on plot 2, east of the site: from the east edge, lifted.
+    const box = footprintOn(2, 'school');
+    const school = aimCurrentObject(box, 16);
+    expect(clampToBounds(school.x, school.z)).toEqual([school.x, school.z]);
+    expect(school.x).toBe(BOUNDS.maxX);
+    expect(school.look[0]).toBe((box.minX + box.maxX) / 2);
+    expect(school.lift).toBeGreaterThanOrEqual(10);
   });
 
   it('clamps far taps to the bounds', () => {
