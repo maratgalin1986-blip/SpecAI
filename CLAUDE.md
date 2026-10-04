@@ -59,6 +59,9 @@ small so merges stay conflict-free.
   (`lib/smetaPrices.ts`). The platform is called «ИИСтройка24 от СпецПласт16» (owner, 2026-10-03; domains iistroyka24.ru and iistroyka.ru bought but not connected yet — the site stays on spec-ai-web.vercel.app, see owner-requests)
   (`SITE.platform`); prices live in `lib/prices.ts`. Details:
   `docs/owner-requests.md`. Do not bring the marketplace back without the owner.
+- Work plan and lessons: `tasks/todo.md` (checkable plan) and `tasks/lessons.md`
+  (read at session start; add a rule after every correction). How we work:
+  `docs/ai-office.md` → «Как работаем».
 - Shared memory lives in the repo: `docs/owner-requests.md` (the owner's
   requests and their status), `docs/ai-office.md` (how the sessions work
   together, lessons log), `docs/marketing.md`.
