@@ -466,6 +466,8 @@ export function DialogueBox({
                   setVoiceHint('Не расслышал — скажите ещё раз или напишите');
                 else setVoiceHint(null);
               },
+              // The words so far, so the visitor sees they are being heard.
+              (words) => setVoiceHint(`${words}…`),
             );
             chat.onEngage();
             if (stop) {

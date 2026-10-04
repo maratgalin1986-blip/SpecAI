@@ -173,7 +173,7 @@ export const StroykaFilm = memo(function StroykaFilm({
         aria-label={`Фильм ${SITE.platform}: стройки, техника и люди`}
       />
       <FilmLook />
-      {/* Phones: the corner belongs to «Убрать звук» and «Пропустить». */}
+      {/* Phones: the corner belongs to «Выключить звук» and «Пропустить». */}
       <ChannelBug corner="top-left" className="hidden sm:flex" />
       {/* The offers: a big headline that changes, and a button for each. It
         comes after the film's own title card, wholly in the black bar or
@@ -244,7 +244,7 @@ export const StroykaFilm = memo(function StroykaFilm({
             const v = video.current;
             if (!v) return;
             // Sound wanted but the browser still waits for a touch: the
-            // button already says «Убрать звук», so this press turns it off.
+            // button already says «Выключить звук», so this press turns it off.
             const next = autoMuted.current ? true : !v.muted;
             autoMuted.current = false;
             setWaiting(false);
@@ -254,7 +254,7 @@ export const StroykaFilm = memo(function StroykaFilm({
           }}
           className="min-h-11 rounded-full bg-white px-4 py-2 text-sm font-bold text-slate-950 shadow-lg hover:bg-amber-300"
         >
-          {muted && !waiting ? '🔊 Включить звук' : '🔇 Убрать звук'}
+          {muted && !waiting ? '🔊 Включить звук' : '🔇 Выключить звук'}
         </button>
         <button
           type="button"

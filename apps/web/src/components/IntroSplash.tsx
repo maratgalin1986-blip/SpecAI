@@ -268,7 +268,7 @@ export function IntroSplash() {
           aria-pressed={!soundOff}
           className="intro-sound-hint absolute bottom-6 left-4 flex min-h-11 items-center gap-2 rounded-full bg-white px-4 py-2.5 text-sm font-bold text-slate-950 shadow-lg ring-1 ring-white/40 hover:bg-amber-300 sm:left-6"
         >
-          {soundOff ? '🔊 Включить звук' : '🔇 Убрать звук'}
+          {soundOff ? '🔊 Включить звук' : '🔇 Выключить звук'}
         </button>
         <button
           type="button"
