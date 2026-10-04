@@ -1,0 +1,409 @@
+diff --git a/apps/web/src/app/api/guide/route.ts b/apps/web/src/app/api/guide/route.ts
+index 1ab228c..858051e 100644
+--- a/apps/web/src/app/api/guide/route.ts
++++ b/apps/web/src/app/api/guide/route.ts
+@@ -12,8 +12,9 @@ export const dynamic = 'force-dynamic';
+  */
+ export async function GET(request: NextRequest) {
+   const user = await getRequestUser(request);
+-  const guide = await guideFor(user);
++  // 'plain' is the mobile app (it still has accounts); the site gets no sign-up step.
+   const links = request.nextUrl.searchParams.get('links') === 'plain' ? 'plain' : 'markdown';
++  const guide = await guideFor(user, links);
+   return NextResponse.json(
+     { ...guide, reply: guideReply(guide, links) },
+     { headers: { 'Cache-Control': 'private, no-store' } },
+diff --git a/apps/web/src/app/globals.css b/apps/web/src/app/globals.css
+index 4d013b6..e3f94d0 100644
+--- a/apps/web/src/app/globals.css
++++ b/apps/web/src/app/globals.css
+@@ -1463,6 +1463,11 @@ html {
+ .chat-fab {
+   bottom: calc(4.75rem + env(safe-area-inset-bottom));
+ }
++/* The callback form is on screen (CallbackIris): the chat button steps aside. */
++html[data-callback-view] .chat-fab {
++  opacity: 0;
++  pointer-events: none;
++}
+ html[data-cookie-strip] .chat-fab,
+ html[data-tg-chip] .chat-fab {
+   bottom: calc(7.25rem + env(safe-area-inset-bottom));
+diff --git a/apps/web/src/app/page.tsx b/apps/web/src/app/page.tsx
+index c26317b..cab0a34 100644
+--- a/apps/web/src/app/page.tsx
++++ b/apps/web/src/app/page.tsx
+@@ -615,7 +615,9 @@ export default async function HomePage() {
+         <Faq items={HOME_FAQ} />
+       </div>
+ 
+-      <section id="callback" className="scroll-mt-24">
++      {/* The anchor sits on the form card itself (first on phones), so «Заказать
++          технику» lands with the phone field mid-screen, not on the heading. */}
++      <section>
+         <CallbackIris backdrop="/images/trench.jpg">
+           <div className="grid grid-cols-1 gap-8 p-6 sm:p-10 lg:grid-cols-2">
+             <div className="flex min-w-0 flex-col justify-center">
+@@ -645,7 +647,10 @@ export default async function HomePage() {
+                 </span>
+               </div>
+             </div>
+-            <div className="min-w-0 rounded-3xl bg-slate-950/50 p-4 ring-1 ring-white/10 backdrop-blur sm:p-6">
++            <div
++              id="callback"
++              className="order-first min-w-0 scroll-mt-28 rounded-3xl bg-slate-950/50 p-4 ring-1 ring-white/10 backdrop-blur sm:p-6 lg:order-none"
++            >
+               <CallbackForm source="home" dark />
+             </div>
+           </div>
+diff --git a/apps/web/src/components/CallbackIris.tsx b/apps/web/src/components/CallbackIris.tsx
+index 9c5e96f..6334589 100644
+--- a/apps/web/src/components/CallbackIris.tsx
++++ b/apps/web/src/components/CallbackIris.tsx
+@@ -7,6 +7,10 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
+ // from the centre and reveals the night-site backdrop with the request form.
+ // Without script, without IntersectionObserver or with reduced motion the
+ // block is simply shown (the CSS only hides it once `data-iris="armed"`).
++// A jump to the form (#callback: the hero CTA, the header button) opens it at
++// once, without the transition, so the phone field is usable straight away.
++// While the block is on screen the chat button hides (globals.css,
++// data-callback-view) so it does not sit over the form.
+ 
+ export function CallbackIris({
+   children,
+@@ -20,13 +24,57 @@ export function CallbackIris({
+ }) {
+   const ref = useRef<HTMLDivElement>(null);
+   const [state, setState] = useState<'idle' | 'armed' | 'open'>('idle');
++  const [instant, setInstant] = useState(false);
++
++  // A jump to #callback: open now. A repeat tap on the same hash fires no
++  // hashchange, hence the click listener as well.
++  useEffect(() => {
++    const openNow = () => {
++      setInstant(true);
++      setState('open');
++    };
++    if (window.location.hash === '#callback') openNow();
++    const onHash = () => {
++      if (window.location.hash === '#callback') openNow();
++    };
++    const onClick = (event: MouseEvent) => {
++      const target = event.target;
++      if (target instanceof Element && target.closest('a[href$="#callback"]')) openNow();
++    };
++    window.addEventListener('hashchange', onHash);
++    document.addEventListener('click', onClick, true);
++    return () => {
++      window.removeEventListener('hashchange', onHash);
++      document.removeEventListener('click', onClick, true);
++    };
++  }, []);
++
++  // The chat button steps aside while the form is on screen.
++  useEffect(() => {
++    const node = ref.current;
++    if (!node || typeof IntersectionObserver === 'undefined') return;
++    const root = document.documentElement;
++    const observer = new IntersectionObserver((entries) => {
++      const inView = entries.some((entry) => entry.isIntersecting);
++      if (inView) root.setAttribute('data-callback-view', '');
++      else root.removeAttribute('data-callback-view');
++    });
++    observer.observe(node);
++    return () => {
++      observer.disconnect();
++      root.removeAttribute('data-callback-view');
++    };
++  }, []);
+ 
+   useEffect(() => {
+     const node = ref.current;
+     if (!node || typeof IntersectionObserver === 'undefined') return;
+     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+     // Already on screen (anchor jump, reload mid-page): no need to hide it.
+-    if (node.getBoundingClientRect().top < window.innerHeight * 0.6) {
++    if (
++      window.location.hash === '#callback' ||
++      node.getBoundingClientRect().top < window.innerHeight * 0.6
++    ) {
+       setState('open');
+       return;
+     }
+@@ -50,6 +98,7 @@ export function CallbackIris({
+     <div ref={ref}>
+       <div
+         data-iris={state === 'idle' ? undefined : state}
++        style={instant ? { transition: 'none' } : undefined}
+         className={`cine-iris relative overflow-hidden rounded-[2rem] bg-slate-950 text-white ${className}`}
+       >
+         <Image
+@@ -58,6 +107,7 @@ export function CallbackIris({
+           fill
+           sizes="(min-width: 1280px) 1200px, 100vw"
+           className="cine-iris-bg object-cover"
++          style={instant ? { transition: 'none', transform: 'none' } : undefined}
+         />
+         <div className="absolute inset-0 bg-slate-950/75" />
+         <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-transparent to-slate-950/60" />
+diff --git a/apps/web/src/components/CookieNotice.tsx b/apps/web/src/components/CookieNotice.tsx
+index 9771200..b98a070 100644
+--- a/apps/web/src/components/CookieNotice.tsx
++++ b/apps/web/src/components/CookieNotice.tsx
+@@ -103,21 +103,40 @@ export function CookieNotice() {
+ 
+   if (!open) return null;
+ 
++  // /stroyka is a full-screen layer at z-80 with its order panel at z-95: the
++  // strip goes between them, at the top under the bar (the dialogue and the
++  // zone card live lower), in one compact line on phones.
++  const stroyka = pathname?.startsWith('/stroyka') ?? false;
++  const place = stroyka
++    ? 'inset-x-2 top-[calc(max(0.5rem,env(safe-area-inset-top))+3rem)] z-[90] sm:inset-x-auto sm:left-1/2 sm:w-[30rem] sm:-ml-[15rem]'
++    : 'inset-x-2 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-[45] sm:inset-x-auto sm:bottom-4 sm:right-6';
++  const hiddenShift = stroyka ? '-translate-y-4' : 'translate-y-4';
++
+   return (
+     <div
+       role="region"
+       aria-label="Согласие на обработку персональных данных"
+-      data-bottom-bar
+-      className={`fixed inset-x-2 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-[45] flex items-center gap-1.5 rounded-full border border-slate-200 bg-white/95 py-1 pl-3 pr-1 text-xs text-slate-700 shadow-md backdrop-blur motion-safe:transition motion-safe:duration-300 sm:inset-x-auto sm:bottom-4 sm:right-6 ${
+-        shown ? 'translate-y-0 opacity-100' : 'translate-y-4 opacity-0 motion-reduce:translate-y-0'
++      data-testid="cookie-strip"
++      data-bottom-bar={stroyka ? undefined : true}
++      className={`fixed ${place} flex items-center gap-1.5 rounded-full border border-slate-200 bg-white/95 py-1 pl-3 pr-1 text-xs text-slate-700 shadow-md backdrop-blur motion-safe:transition motion-safe:duration-300 ${
++        shown ? 'translate-y-0 opacity-100' : `${hiddenShift} opacity-0 motion-reduce:translate-y-0`
+       }`}
+     >
+-      <p className="min-w-0 flex-1 leading-snug">
+-        Cookie и Метрика — только после «Согласен» ·{' '}
+-        <Link href="/privacy" className="font-medium text-amber-800 underline">
+-          Подробнее
+-        </Link>
+-      </p>
++      {stroyka ? (
++        <p className="flex min-w-0 flex-1 items-center gap-1 whitespace-nowrap text-[11px] leading-snug sm:text-xs">
++          <span className="truncate">Cookie и Метрика — после «Согласен» ·</span>
++          <Link href="/privacy" className="shrink-0 font-medium text-amber-800 underline">
++            Подробнее
++          </Link>
++        </p>
++      ) : (
++        <p className="min-w-0 flex-1 leading-snug">
++          Cookie и Метрика — только после «Согласен» ·{' '}
++          <Link href="/privacy" className="font-medium text-amber-800 underline">
++            Подробнее
++          </Link>
++        </p>
++      )}
+       <button
+         type="button"
+         onClick={() => choose('yes')}
+diff --git a/apps/web/src/components/stroyka/DialogueBox.tsx b/apps/web/src/components/stroyka/DialogueBox.tsx
+index ab032ac..055b792 100644
+--- a/apps/web/src/components/stroyka/DialogueBox.tsx
++++ b/apps/web/src/components/stroyka/DialogueBox.tsx
+@@ -189,6 +189,12 @@ export function DialogueBox({
+   const inputRef = useRef<HTMLInputElement>(null);
+   useEffect(() => () => stopVoice.current?.(), []);
+   const [consent, setConsent] = useState(false);
++  // The phone consent appears at the bottom of a scrolling box: bring it in view.
++  const consentRef = useRef<HTMLDivElement>(null);
++  const waitingPhone = chat?.phone ?? null;
++  useEffect(() => {
++    if (waitingPhone) consentRef.current?.scrollIntoView({ block: 'nearest' });
++  }, [waitingPhone]);
+   useEffect(() => {
+     if (skipTyping) finish();
+   }, [skipTyping]);
+@@ -210,7 +216,7 @@ export function DialogueBox({
+             type="button"
+             onClick={onClose}
+             aria-label="Закрыть диалог"
+-            className="-mr-1 grid h-8 w-8 shrink-0 place-items-center rounded-full text-slate-400 hover:text-white"
++            className="-mr-1 grid h-11 w-11 shrink-0 place-items-center rounded-full text-slate-400 hover:text-white"
+           >
+             ✕
+           </button>
+@@ -303,7 +309,7 @@ export function DialogueBox({
+                     onClose();
+                   }}
+                   aria-label="Закрыть диалог"
+-                  className="grid h-9 min-w-9 place-items-center rounded-full px-2 text-slate-400 hover:text-white"
++                  className="grid h-11 min-w-11 place-items-center rounded-full px-2 text-slate-400 hover:text-white"
+                 >
+                   ✕
+                 </button>
+@@ -368,13 +374,17 @@ export function DialogueBox({
+           </div>
+         )}
+         {chat?.phone && (
+-          <div className="mt-3 rounded-xl bg-slate-900/80 p-3 text-sm" data-testid="phone-consent">
+-            <label className="flex items-start gap-2 text-xs text-slate-300">
++          <div
++            ref={consentRef}
++            className="mt-3 rounded-xl bg-slate-900/80 p-3 text-sm"
++            data-testid="phone-consent"
++          >
++            <label className="flex min-h-11 items-center gap-2 text-xs text-slate-300">
+               <input
+                 type="checkbox"
+                 checked={consent}
+                 onChange={(e) => setConsent(e.target.checked)}
+-                className="mt-0.5"
++                className="h-5 w-5 shrink-0"
+               />
+               <ConsentText />
+             </label>
+@@ -382,7 +392,7 @@ export function DialogueBox({
+               type="button"
+               disabled={!consent || chat.sending}
+               onClick={chat.onSendPhone}
+-              className="mt-2 rounded-full bg-amber-500 px-4 py-2 text-sm font-bold text-slate-950 disabled:opacity-50"
++              className="mt-2 min-h-11 rounded-full bg-amber-500 px-4 py-2 text-sm font-bold text-slate-950 disabled:opacity-50"
+             >
+               {chat.sending ? 'Отправляем…' : `Отправить заявку: ${chat.phone}`}
+             </button>
+@@ -423,16 +433,18 @@ export function DialogueBox({
+             </button>
+           );
+         })}
+-        {chat?.quick.map((q, i) => (
+-          <button
+-            key={`q-${q.label}`}
+-            type="button"
+-            onClick={() => chat.onQuick(i)}
+-            className="rounded-full border border-amber-400/50 px-3 py-2 text-sm font-semibold text-amber-200 hover:bg-amber-400/10"
+-          >
+-            {q.label}
+-          </button>
+-        ))}
++        {/* While a typed phone waits for consent, the quick replies step aside. */}
++        {!chat?.phone &&
++          chat?.quick.map((q, i) => (
++            <button
++              key={`q-${q.label}`}
++              type="button"
++              onClick={() => chat.onQuick(i)}
++              className="rounded-full border border-amber-400/50 px-3 py-2 text-sm font-semibold text-amber-200 hover:bg-amber-400/10"
++            >
++              {q.label}
++            </button>
++          ))}
+       </div>
+       {chat && (
+         <form
+diff --git a/apps/web/src/lib/guide.test.ts b/apps/web/src/lib/guide.test.ts
+index 68c0f09..11b6cf9 100644
+--- a/apps/web/src/lib/guide.test.ts
++++ b/apps/web/src/lib/guide.test.ts
+@@ -15,12 +15,19 @@ describe('guideRole', () => {
+ });
+ 
+ describe('nextSteps: guest', () => {
+-  it('asks to browse and then register', () => {
++  it('on the site: browse, then order, never register', () => {
+     const guide = nextSteps(null);
+     expect(guide.role).toBe('GUEST');
+     expect(guide.next.id).toBe('browse');
++    expect(guide.steps.map((s) => s.id)).toEqual(['browse', 'order']);
++    expect(guideReply(guide)).not.toMatch(/регистр/i);
++    expect(guide.progress).toEqual({ done: 0, total: 2 });
++  });
++
++  it('in the app (plain links) the sign-up step stays', () => {
++    const guide = nextSteps(null, {}, 'plain');
+     expect(guide.steps.map((s) => s.id)).toEqual(['browse', 'register', 'order']);
+-    expect(guide.steps.find((s) => s.id === 'register')?.action?.href).toBe('/register');
++    expect(guide.steps.find((s) => s.id === 'register')?.action?.app).toBe('/(auth)/register');
+     expect(guide.progress).toEqual({ done: 0, total: 3 });
+   });
+ });
+diff --git a/apps/web/src/lib/guide.ts b/apps/web/src/lib/guide.ts
+index f951088..6a751c6 100644
+--- a/apps/web/src/lib/guide.ts
++++ b/apps/web/src/lib/guide.ts
+@@ -85,8 +85,16 @@ export function guideRole(user: GuideUser | null | undefined): GuideRole {
+   return 'CUSTOMER';
+ }
+ 
+-function guestSteps(): GuideStep[] {
+-  return [
++/**
++ * How links are shown: 'markdown' for the site chat, 'plain' for the mobile
++ * app (GET /api/guide?links=plain), where buttons do the navigation.
++ */
++export type GuideLinks = 'markdown' | 'plain';
++
++// The public site has no sign-up (owner, 2026-10-03), so the web guest is not
++// asked to register; the mobile app still has accounts and keeps the step.
++function guestSteps(links: GuideLinks): GuideStep[] {
++  const steps: GuideStep[] = [
+     {
+       id: 'browse',
+       title: 'Посмотрите технику и цены',
+@@ -109,6 +117,7 @@ function guestSteps(): GuideStep[] {
+       action: { label: 'Оставить заявку', href: '/orders', app: '/orders/new' },
+     },
+   ];
++  return links === 'markdown' ? steps.filter((step) => step.id !== 'register') : steps;
+ }
+ 
+ function customerSteps(s: GuideState): GuideStep[] {
+@@ -304,11 +313,15 @@ function repeatStep(role: GuideRole, s: GuideState): GuideStep {
+   };
+ }
+ 
+-export function nextSteps(user: GuideUser | null | undefined, state: GuideState = {}): GuideResult {
++export function nextSteps(
++  user: GuideUser | null | undefined,
++  state: GuideState = {},
++  links: GuideLinks = 'markdown',
++): GuideResult {
+   const role = guideRole(user);
+   const steps =
+     role === 'GUEST'
+-      ? guestSteps()
++      ? guestSteps(links)
+       : role === 'PROVIDER'
+         ? providerSteps(state)
+         : customerSteps(state);
+@@ -336,7 +349,7 @@ export function asksWhatNext(text: string): boolean {
+  * The guide as a chat answer. `links: 'markdown'` makes [label](/path) for the
+  * site chat; 'plain' is for the app, where buttons do the navigation.
+  */
+-export function guideReply(result: GuideResult, links: 'markdown' | 'plain' = 'markdown'): string {
++export function guideReply(result: GuideResult, links: GuideLinks = 'markdown'): string {
+   const link = (action?: GuideLink) =>
+     action ? (links === 'markdown' ? ` → [${action.label}](${action.href})` : '') : '';
+   const lines = [
+diff --git a/apps/web/src/lib/guideState.ts b/apps/web/src/lib/guideState.ts
+index 2078991..26203a3 100644
+--- a/apps/web/src/lib/guideState.ts
++++ b/apps/web/src/lib/guideState.ts
+@@ -1,5 +1,11 @@
+ import { prisma } from '@specai/database';
+-import { guideRole, nextSteps, type GuideState, type GuideUser } from '@/lib/guide';
++import {
++  guideRole,
++  nextSteps,
++  type GuideLinks,
++  type GuideState,
++  type GuideUser,
++} from '@/lib/guide';
+ 
+ type StatusCounts = Partial<Record<string, number>>;
+ 
+@@ -93,6 +99,9 @@ export async function loadGuideState(
+ }
+ 
+ /** The guide for a signed-in user or a guest. */
+-export async function guideFor(user: (GuideUser & { id: string }) | null | undefined) {
+-  return nextSteps(user, await loadGuideState(user));
++export async function guideFor(
++  user: (GuideUser & { id: string }) | null | undefined,
++  links: GuideLinks = 'markdown',
++) {
++  return nextSteps(user, await loadGuideState(user), links);
+ }

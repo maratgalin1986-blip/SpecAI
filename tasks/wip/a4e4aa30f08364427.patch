@@ -1,0 +1,1988 @@
+diff --git a/apps/web/scripts/stroyka-voice-lines.ts b/apps/web/scripts/stroyka-voice-lines.ts
+index c6d86f0..4b9997a 100644
+--- a/apps/web/scripts/stroyka-voice-lines.ts
++++ b/apps/web/scripts/stroyka-voice-lines.ts
+@@ -1,5 +1,7 @@
+ // Lists the /stroyka lines that get a recorded voice, for
+-// scripts/stroyka-voices.py, and writes the clip manifest
++// scripts/stroyka-voices-hybrid.py (Qwen-designed voices spoken by
++// Chatterbox; scripts/stroyka-voices.py is the older Piper recorder whose
++// text preparation it reuses), and writes the clip manifest
+ // src/lib/stroyka/voiceClips.ts. Run from apps/web:
+ //   npx tsx scripts/stroyka-voice-lines.ts > /tmp/stroyka-lines.json
+ // Template lines (opener + remark) are recorded in two parts and played back
+@@ -17,6 +19,7 @@ import { WORKER_TEMPLATES } from '../src/lib/stroyka/lines/worker';
+ import { RECORDED_SPEAKERS, radioClipKey, voiceKey } from '../src/lib/stroyka/voice';
+ import { CREW, CREW_VOICE } from '../src/lib/stroyka/crew';
+ import { INNER_LINES } from '../src/lib/stroyka/lines/inner';
++import { moodOf } from '../src/lib/stroyka/mood';
+ 
+ const TEMPLATES = {
+   mihalych: MIHALYCH_TEMPLATES,
+@@ -28,40 +31,56 @@ const TEMPLATES = {
+ };
+ 
+ // `key` is the file name: the line id plus a fingerprint of its text, so an
+-// edited line gets a new recording and the old file is removed.
+-const out: { key: string; speaker: string; text: string }[] = [];
++// edited line gets a new recording and the old file is removed. `kind`, `tags`
++// and `mood` (lib/stroyka/mood.ts) set the emotion of the recording.
++type Kind = 'business' | 'joke' | 'radio' | 'inner' | 'opener';
++const out: {
++  key: string;
++  speaker: string;
++  text: string;
++  kind: Kind;
++  tags: string[];
++  mood: string;
++}[] = [];
+ const fileOf = (id: string, text: string) => `${id}-${voiceKey(text)}`;
+ const keyOf = new Map<string, string>();
+-const add = (id: string, speaker: string, text: string) => {
++const add = (id: string, speaker: string, text: string, kind: Kind, tags: string[] = []) => {
+   const key = fileOf(id, text);
+   keyOf.set(id, key);
+-  out.push({ key, speaker, text });
++  const said = kind === 'business' || kind === 'radio' ? kind : 'joke';
++  const { mood } = moodOf({ speaker, text, kind: said, tags });
++  out.push({ key, speaker, text, kind, tags, mood });
+ };
++const kindOf = (tags: string[]): Kind => (tags.includes('business') ? 'business' : 'joke');
+ for (const speaker of RECORDED_SPEAKERS) {
+   LINES[speaker]
+     .filter((line) => line.id.includes('-h'))
+-    .forEach((line) => add(line.id, speaker, line.text));
++    .forEach((line) => add(line.id, speaker, line.text, kindOf(line.tags), line.tags));
+   const t = TEMPLATES[speaker];
+-  t.openers.forEach((text, o) => add(`${speaker}-o${o}`, speaker, text));
+-  t.remarks.forEach(([text], r) => add(`${speaker}-r${r}`, speaker, text));
++  t.openers.forEach((text, o) => add(`${speaker}-o${o}`, speaker, text, 'opener'));
++  t.remarks.forEach(([text, tags], r) => {
++    const list = tags.split(' ');
++    add(`${speaker}-r${r}`, speaker, text, kindOf(list), list);
++  });
+ }
+ RADIO_PAIRS.forEach((pair, n) => {
+   for (const side of ['a', 'b'] as const) {
+     const speaker = pair[side];
+     if (!(RECORDED_SPEAKERS as readonly string[]).includes(speaker)) continue;
+     const text = side === 'a' ? pair.aText : pair.bText;
+-    add(radioClipKey(n, side), speaker, text);
++    add(radioClipKey(n, side), speaker, text, 'radio', pair.tags.split(' '));
+   }
+ });
+-// The crew by name, each in their own voice style (crew-<name> in the recorder).
++// The crew by name, each in their own voice (crew-<name> in the recorder).
+ for (const [id, member] of Object.entries(CREW)) {
+-  member.lines.forEach((text, n) => add(`${CREW_VOICE[id]}-${n}`, CREW_VOICE[id]!, text));
++  member.lines.forEach((text, n) =>
++    add(`${CREW_VOICE[id]}-${n}`, CREW_VOICE[id]!, text, 'joke', ['talk']),
++  );
+ }
+-// The characters' inner-life lines (lib/stroyka/lines/inner.ts), shown as text
+-// only (`voiced: false`) until recorded; flip `voiced` once the clips exist.
++// The characters' inner-life lines (lib/stroyka/lines/inner.ts).
+ for (const line of INNER_LINES) {
+   if ((RECORDED_SPEAKERS as readonly string[]).includes(line.speaker))
+-    add(line.id, line.speaker, line.text);
++    add(line.id, line.speaker, line.text, 'inner');
+ }
+ // Manifest: spoken text → clips. Hand and radio lines map to one clip; every
+ // template combination maps to its opener and remark.
+diff --git a/apps/web/scripts/stroyka-voices-hybrid.py b/apps/web/scripts/stroyka-voices-hybrid.py
+new file mode 100644
+index 0000000..3f1991f
+--- /dev/null
++++ b/apps/web/scripts/stroyka-voices-hybrid.py
+@@ -0,0 +1,394 @@
++#!/usr/bin/env python3
++"""Records the /stroyka characters' lines in their own synthetic voices.
++
++The hybrid the owner chose (2026-10-04): Qwen3-TTS VoiceDesign (Apache-2.0,
++https://huggingface.co/Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign) designed one
++voice per character from a text description, once, into a short reference
++clip (REFS/<speaker>.wav; the descriptions and seeds are in REFS/voices.json).
++Chatterbox Multilingual (MIT, https://huggingface.co/ResembleAI/chatterbox)
++then speaks every line in that voice, with the line's emotion set by
++`exaggeration` and `cfg_weight`. The voices are synthetic and belong to no
++real person; Chatterbox adds Resemble's inaudible PerTh «AI-made» watermark.
++
++Text preparation (STRESS, LETTERS, speakable) comes from stroyka-voices.py.
++Comic «#@%&!» runs stay a 1 kHz TV beep. Output: public/audio/stroyka/<key>.mp3,
++mono, 24 kHz, 48 kbit/s, lightly loudness-normalised, the same file names
++as before, so lib/stroyka/voiceClips.ts and the tests keep working.
++
++Quality control (--asr): every take is transcribed by an open Russian ASR
++(Vosk small-ru Zipformer through sherpa-onnx, Apache-2.0); a take with under
++80 % of the words heard (native words and names the ASR cannot know are not
++counted), or longer than 2.5x the expected length (a hallucination), is
++recorded again with another seed, up to 3 takes; the best one is kept.
++Every take is logged to a CSV.
++
++Run from apps/web (Python with chatterbox-tts, num2words; sherpa-onnx for
++--asr; ffmpeg):
++    npx tsx scripts/stroyka-voice-lines.ts > /tmp/stroyka-lines.json
++    OMP_WAIT_POLICY=PASSIVE python3 scripts/stroyka-voices-hybrid.py /tmp/stroyka-lines.json \
++        --refs <dir with <speaker>.wav> --asr --state <dir> [--force] [--threads 2] [--shard 0/2]
++Existing files are kept (a line that only moved reuses its file); --force
++records everything again. Progress is checkpointed in --state, so a run that
++was interrupted resumes where it stopped (also with --force).
++"""
++
++import argparse
++import csv
++import hashlib
++import importlib.util
++import json
++import os
++import re
++import shutil
++import subprocess
++import sys
++import tempfile
++import time
++
++os.environ.setdefault("OMP_WAIT_POLICY", "PASSIVE")
++
++HERE = os.path.dirname(os.path.abspath(__file__))
++_spec = importlib.util.spec_from_file_location("piper_voices", os.path.join(HERE, "stroyka-voices.py"))
++base = importlib.util.module_from_spec(_spec)
++_spec.loader.exec_module(base)
++STRESS, LETTERS, speakable, CENSORED = base.STRESS, base.LETTERS, base.speakable, base.CENSORED
++OUT_DIR = base.OUT_DIR
++SR = 24000
++
++# Emotion by mood (lib/stroyka/mood.ts): exaggeration, cfg_weight, temperature.
++# Higher exaggeration = livelier and faster; lower cfg = looser, slower pace.
++MOOD = {
++    "neutral": (0.55, 0.5, 0.8),
++    "happy": (0.7, 0.4, 0.8),
++    "laugh": (0.8, 0.35, 0.85),
++    "proud": (0.65, 0.45, 0.8),
++    "angry": (0.75, 0.4, 0.8),
++    "surprised": (0.75, 0.4, 0.85),
++    "worried": (0.5, 0.5, 0.75),
++    "tired": (0.3, 0.6, 0.7),
++    "thinking": (0.4, 0.55, 0.7),
++    "radio": (0.5, 0.5, 0.75),
++}
++# The character's temperament on top (the same idea as STYLE in stroyka-voices.py).
++TEMPER = {
++    "mihalych": -0.05,  # the foreman: unhurried
++    "ildar": -0.05,  # crane operator: calm
++    "rinat": 0.05,  # operator: quick, cheerful
++    "sveta": 0.05,  # logist: energetic
++    "crew-armen": 0.05,  # lively
++    "crew-elchin": 0.05,  # quick
++    "crew-nurlan": -0.05,  # measured
++    "crew-nikolai": -0.1,  # old, slow
++}
++
++
++def emotion(item: dict) -> tuple:
++    """Chatterbox settings for a line: its mood, its kind, the speaker."""
++    e, c, t = MOOD.get(item.get("mood") or "neutral", MOOD["neutral"])
++    kind = item.get("kind")
++    if kind == "business":  # clear and calm, a smile at most
++        e, c, t = min(e, 0.55), 0.5, 0.7
++    elif kind == "opener":  # joined to remarks of every kind: neutral
++        e, c, t = 0.5, 0.5, 0.75
++    elif kind == "inner":  # a bit of the character's own life: warm, personal
++        e, c, t = min(e, 0.6), 0.45, 0.8
++    e += TEMPER.get(item["speaker"], 0)
++    return round(min(max(e, 0.25), 0.9), 2), c, t
++
++
++# Words that read better spelled out (numbers that need a case).
++TEXT_FIX = {"2019-м": "две тысячи девятнадцатом"}
++GENITIVE = {"от", "до", "около", "свыше", "более", "менее", "из"}
++FEMININE = re.compile(r"^(тонн|минут|смен|машин|недел|тысяч)", re.I)
++
++
++def numbers(text: str) -> str:
++    """Digits to Russian words, in the case the neighbours want."""
++    from num2words import num2words
++
++    def say(m: re.Match) -> str:
++        before = text[: m.start()].split()
++        after = text[m.end():].split()
++        kw = {"lang": "ru"}
++        if before and before[-1].lower() in GENITIVE:
++            kw["case"] = "genitive"
++        if after and FEMININE.match(after[0]):
++            kw["gender"] = "f"
++        return num2words(int(m.group()), **kw)
++
++    return re.sub(r"\d+", say, text)
++
++
++def speech_text(text: str) -> str:
++    """What Chatterbox gets: speakable() plus numbers in words and pauses at dashes."""
++    for k, v in TEXT_FIX.items():
++        text = text.replace(k, v)
++    t = numbers(speakable(text))
++    t = t.replace(" — ", ", ").replace(" – ", ", ")
++    return t
++
++
++# ---------------------------------------------------------------- ASR check
++SHERPA = os.environ.get("SHERPA_PATH", "/usr/local/lib/python3.11/dist-packages")
++ASR_MODEL = os.environ.get("ASR_MODEL", "")
++# Native words and names the Russian ASR vocabulary cannot know: not counted.
++NAMES = {
++    "ринат", "ильдар", "алсу", "михалыч", "айдар", "нурлан", "эльчин", "рустам", "армен", "света",
++    "свету", "свете", "светы", "ринатака", "ака", "джан", "апа", "фергане", "мензелинском",
++    "елабуге", "нижнекамске", "челнах", "челнов", "челны", "боровецкое", "сидоровку", "тукаевский",
++    "спецпласт", "джей", "си", "би", "уфе", "ахпер", "ара", "гардаш", "армуды", "эчпочмак",
++    "чакчак", "казана", "джейсиби",
++}
++NATIVE = {w for v in STRESS.values() for w in re.findall(r"\w+", v.replace("\u0301", "").lower())}
++NATIVE -= {"без", "здорово", "бе", "эш", "мин", "сак", "сау"}
++
++
++def words(t: str) -> list:
++    t = t.lower().replace("ё", "е").replace("\u0301", "").replace("-", "")
++    return re.findall(r"[a-zа-я0-9]+", t)
++
++
++IGNORE = {w for x in NAMES | NATIVE for w in words(x)}
++
++
++class Asr:
++    def __init__(self, model_dir: str):
++        sys.path.append(SHERPA)
++        import sherpa_onnx  # noqa: E402
++
++        m = model_dir.rstrip("/") + "/"
++        self.rec = sherpa_onnx.OfflineRecognizer.from_transducer(
++            encoder=m + "am/encoder.int8.onnx", decoder=m + "am/decoder.onnx",
++            joiner=m + "am/joiner.int8.onnx", tokens=m + "lang/tokens.txt", num_threads=1,
++            sample_rate=16000, decoding_method="greedy_search")
++
++    def transcribe(self, samples) -> str:
++        s = self.rec.create_stream()
++        s.accept_waveform(16000, samples)
++        self.rec.decode_stream(s)
++        return s.result.text.lower()
++
++    @staticmethod
++    def score(ref: str, hyp: str) -> tuple:
++        """Words of ref heard in hyp, in order (LCS), native words left out."""
++        r = [w for w in words(ref) if w not in IGNORE]
++        h = words(hyp)
++        if not r:
++            return 1.0, 0, 0
++        L = [[0] * (len(h) + 1) for _ in range(len(r) + 1)]
++        for i in range(len(r)):
++            for j in range(len(h)):
++                L[i + 1][j + 1] = L[i][j] + 1 if r[i] == h[j] else max(L[i][j + 1], L[i + 1][j])
++        return L[-1][-1] / len(r), L[-1][-1], len(r)
++
++
++def expected_seconds(say: str, beeps: int) -> float:
++    """Rough length of a line: ~5 syllables a second, a beep is 0.4 s."""
++    syll = len(re.findall(r"[аеёиоуыэюяaeiou]", say.lower()))
++    return syll / 5.0 + 0.4 * beeps + 0.3
++
++
++# ---------------------------------------------------------------- recording
++def pieces(text: str) -> list:
++    out, pos = [], 0
++    for m in CENSORED.finditer(text):
++        out.append(("say", text[pos:m.start()]))
++        out.append(("beep", ""))
++        pos = m.end()
++    out.append(("say", text[pos:]))
++    return [(k, c) for k, c in out if k == "beep" or re.search(r"\w", c)]
++
++
++def beep_samples():
++    import numpy as np
++
++    n = int(0.38 * SR)
++    x = 0.25 * np.sin(2 * np.pi * 1000 * np.arange(n) / SR)
++    fade = int(0.01 * SR)
++    x[:fade] *= np.linspace(0, 1, fade)
++    x[-2 * fade:] *= np.linspace(1, 0, 2 * fade)
++    return x.astype("float32")
++
++
++def encode(wav_path: str, out: str) -> None:
++    """Trim the silence at the ends, light high-pass and loudness, mp3."""
++    trim = "silenceremove=start_periods=1:start_threshold=-50dB:start_silence=0.05"
++    af = f"{trim},areverse,{trim.replace('0.05', '0.12')},areverse,highpass=f=70,loudnorm=I=-18:TP=-2:LRA=11"
++    tmp = out + ".part.mp3"
++    subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-i", wav_path, "-af", af, "-ac", "1",
++                    "-ar", str(SR), "-b:a", "48k", tmp], check=True)
++    os.replace(tmp, out)
++
++
++def to16k(samples):
++    import numpy as np
++    import librosa
++
++    return librosa.resample(np.asarray(samples, dtype="float32"), orig_sr=SR, target_sr=16000)
++
++
++def group(key: str) -> str:
++    head = key.split("-")
++    return "-".join(head[:2]) if head[0] == "crew" else head[0]
++
++
++def main() -> None:
++    ap = argparse.ArgumentParser()
++    ap.add_argument("lines")
++    ap.add_argument("--refs", required=True, help="dir with <speaker>.wav reference clips")
++    ap.add_argument("--state", default=os.path.join(tempfile.gettempdir(), "stroyka-hybrid"))
++    ap.add_argument("--force", action="store_true")
++    ap.add_argument("--asr", default="", help="Vosk small-ru sherpa-onnx model dir (am/, lang/)")
++    ap.add_argument("--threads", type=int, default=2)
++    ap.add_argument("--shard", default="0/1")
++    ap.add_argument("--only", default="", help="comma-separated speakers or keys")
++    ap.add_argument("--limit", type=int, default=0)
++    ap.add_argument("--attempts", type=int, default=3)
++    ap.add_argument("--min-score", type=float, default=0.8)
++    args = ap.parse_args()
++
++    import numpy as np
++    import soundfile as sf
++    import torch
++
++    torch.set_num_threads(args.threads)
++    shard, shards = (int(x) for x in args.shard.split("/"))
++    items = json.load(open(args.lines))
++    os.makedirs(OUT_DIR, exist_ok=True)
++    os.makedirs(args.state, exist_ok=True)
++
++    # Clips done in this run (resume): key → text fingerprint, from every shard.
++    done = {}
++    for name in os.listdir(args.state):
++        if name.startswith("done-") and name.endswith(".jsonl"):
++            for row in open(os.path.join(args.state, name)):
++                if row.strip():
++                    r = json.loads(row)
++                    done[r["key"]] = r["fp"]
++    fp = lambda it: hashlib.sha1(f"{it['speaker']}|{it['text']}".encode()).hexdigest()[:12]  # noqa: E731
++
++    if shard == 0 and not args.only and not args.limit:
++        keys = {i["key"] for i in items}
++        # A line that only moved keeps its recording (same text, same speaker group).
++        if not args.force:
++            old = {}
++            for name in os.listdir(OUT_DIR):
++                if name.endswith(".mp3"):
++                    k = name[:-4]
++                    old.setdefault((group(k), k.rsplit("-", 1)[-1]), []).append(k)
++            for item in items:
++                out = os.path.join(OUT_DIR, f"{item['key']}.mp3")
++                if os.path.exists(out):
++                    continue
++                for prev in old.get((group(item["key"]), item["key"].rsplit("-", 1)[-1]), []):
++                    src = os.path.join(OUT_DIR, f"{prev}.mp3")
++                    if os.path.exists(src):
++                        shutil.copyfile(src, out)
++                        break
++        for name in os.listdir(OUT_DIR):  # drop clips of removed lines
++            if name.endswith(".mp3") and name[:-4] not in keys:
++                os.remove(os.path.join(OUT_DIR, name))
++
++    only = set(filter(None, args.only.split(",")))
++    todo = []
++    for n, item in enumerate(items):
++        if n % shards != shard:
++            continue
++        if only and item["speaker"] not in only and item["key"] not in only:
++            continue
++        out = os.path.join(OUT_DIR, f"{item['key']}.mp3")
++        if done.get(item["key"]) == fp(item) and os.path.exists(out):
++            continue
++        if not args.force and os.path.exists(out):
++            continue
++        todo.append(item)
++    todo.sort(key=lambda i: i["speaker"])  # one voice prompt per speaker
++    if args.limit:
++        todo = todo[: args.limit]
++    print(f"shard {args.shard}: {len(todo)} to record", flush=True)
++    if not todo:
++        return
++
++    from chatterbox.mtl_tts import ChatterboxMultilingualTTS
++
++    model = ChatterboxMultilingualTTS.from_pretrained("cpu")
++    asr = Asr(args.asr) if args.asr else None
++    beep = beep_samples()
++    gap = np.zeros(int(0.08 * SR), dtype="float32")
++    log_path = os.path.join(args.state, f"log-{shard}.csv")
++    new_log = not os.path.exists(log_path)
++    log = open(log_path, "a", newline="")
++    w = csv.writer(log)
++    if new_log:
++        w.writerow(["time", "key", "speaker", "kind", "mood", "attempt", "seed", "exaggeration", "cfg",
++                    "temperature", "gen_s", "dur_s", "expected_s", "asr_score", "heard", "counted",
++                    "verdict", "chosen", "text", "asr_text"])
++    done_log = open(os.path.join(args.state, f"done-{shard}.jsonl"), "a")
++    speaker = None
++    t_start = time.time()
++    for n, item in enumerate(todo, 1):
++        if item["speaker"] != speaker:
++            speaker = item["speaker"]
++            model.prepare_conditionals(os.path.join(args.refs, f"{speaker}.wav"), exaggeration=0.5)
++        parts = pieces(item["text"])
++        said = [speech_text(c) for k, c in parts if k == "say"]
++        ref_text = " ".join(said).replace("\u0301", "")
++        expected = expected_seconds(ref_text, sum(k == "beep" for k, _ in parts))
++        e0, c0, t0 = emotion(item)
++        seed0 = int(hashlib.sha1(item["key"].encode()).hexdigest()[:6], 16)
++        takes = []
++        for attempt in range(args.attempts):
++            e = round(max(e0 - 0.08 * attempt, 0.25), 2)
++            c = round(min(c0 + 0.05 * attempt, 0.7), 2)
++            t = round(max(t0 - 0.05 * attempt, 0.6), 2)
++            seed = seed0 + 1000 * attempt
++            torch.manual_seed(seed)
++            began = time.time()
++            chunks = []
++            for kind, chunk in parts:
++                if kind == "beep":
++                    chunks += [gap, beep, gap]
++                    continue
++                wav = model.generate(speech_text(chunk), language_id="ru", exaggeration=e,
++                                     cfg_weight=c, temperature=t)
++                chunks.append(wav.squeeze(0).numpy().astype("float32"))
++            audio = np.concatenate(chunks)
++            gen = time.time() - began
++            # Length without the silences Chatterbox sometimes leaves at the ends.
++            loud = np.flatnonzero(np.abs(audio) > 0.01)
++            dur = (loud[-1] - loud[0]) / SR if len(loud) else 0.0
++            score, heard, counted, hyp = 1.0, 0, 0, ""
++            if asr:
++                hyp = asr.transcribe(to16k(audio))
++                score, heard, counted = Asr.score(ref_text, hyp)
++            too_long = dur > 2.5 * expected
++            too_short = dur < 0.3 * expected
++            ok = score >= args.min_score and not too_long and not too_short
++            verdict = "ok" if ok else ("too_long" if too_long else "too_short" if too_short else "asr_low")
++            takes.append({"audio": audio, "ok": ok, "hyp": hyp, "score": score, "fits": not (too_long or too_short),
++                          "row": [time.strftime("%H:%M:%S"), item["key"], speaker, item.get("kind"),
++                                  item.get("mood"), attempt + 1, seed, e, c, t, round(gen, 1),
++                                  round(dur, 2), round(expected, 2), round(score, 3), heard, counted,
++                                  verdict]})
++            if ok:
++                break
++        best = max(takes, key=lambda k: (k["ok"], k["fits"], k["score"]))
++        for k in takes:
++            w.writerow(k["row"] + [k is best, item["text"], k["hyp"]])
++        log.flush()
++        with tempfile.TemporaryDirectory() as tmp:
++            wav_path = os.path.join(tmp, "line.wav")
++            sf.write(wav_path, best["audio"], SR)
++            encode(wav_path, os.path.join(OUT_DIR, f"{item['key']}.mp3"))
++        done_log.write(json.dumps({"key": item["key"], "fp": fp(item), "takes": len(takes),
++                                   "ok": best["ok"], "score": round(best["score"], 3)}) + "\n")
++        done_log.flush()
++        rate = (time.time() - t_start) / n
++        print(f"{n}/{len(todo)} {item['key']} takes={len(takes)} score={best['score']:.2f} "
++              f"{'ok' if best['ok'] else 'KEPT-BEST'} avg={rate:.0f}s eta={rate * (len(todo) - n) / 3600:.1f}h",
++              flush=True)
++    print(f"shard {args.shard}: done, {len(todo)} clips in {(time.time() - t_start) / 3600:.2f} h")
++
++
++if __name__ == "__main__":
++    main()
+diff --git a/apps/web/src/app/credits/page.tsx b/apps/web/src/app/credits/page.tsx
+index b7e6d0f..b37fd44 100644
+--- a/apps/web/src/app/credits/page.tsx
++++ b/apps/web/src/app/credits/page.tsx
+@@ -72,10 +72,13 @@ export default function CreditsPage() {
+         Вступительный фильм 3D-стройки смонтирован из роликов Mixkit (лицензия Mixkit), музыка —
+         «The Journey», Mixkit (лицензия Mixkit, бесплатная музыка). Звук включается с первого
+         касания страницы, выключить — кнопкой «🔊». Музыка, шум стройки, двигатели и гидравлика,
+-        щелчки, «удар» заставки и рация синтезируются прямо в браузере. Голоса мужчин на 3D-стройке
+-        записаны свободным нейросинтезом Piper (голоса «Дмитрий» и «Денис», данные CC0,
+-        rhasspy/piper-voices), остальные реплики — синтез речи браузера. Запись дизеля — с Wikimedia
+-        Commons, фрагмент пережат в моно:
++        щелчки, «удар» заставки и рация синтезируются прямо в браузере. Голоса героев 3D-стройки
++        синтетические и не принадлежат ни одному реальному человеку: голос каждого героя создан по
++        текстовому описанию нейросетью Qwen3-TTS VoiceDesign (Qwen, лицензия Apache-2.0), а все
++        реплики произнесены этим голосом с нужной эмоцией нейросетью Chatterbox Multilingual (Resemble
++        AI, лицензия MIT; в записи есть неслышимая метка «создано ИИ»). Ответы с вашим именем и
++        другие живые реплики — синтез речи браузера. Запись дизеля — с Wikimedia Commons, фрагмент
++        пережат в моно:
+       </p>
+       <ul className="flex flex-col gap-3">
+         {SOUND_CREDITS.map((credit) => (
+diff --git a/apps/web/src/lib/soundVoices.test.ts b/apps/web/src/lib/soundVoices.test.ts
+index 8b1e343..b05ce12 100644
+--- a/apps/web/src/lib/soundVoices.test.ts
++++ b/apps/web/src/lib/soundVoices.test.ts
+@@ -98,6 +98,11 @@ describe('voices', () => {
+     expect(voiceFor('rinat', voices)?.name).toBe('Yuri');
+   });
+ 
++  it('gives Alsu a female voice too (the fallback for unrecorded lines)', () => {
++    expect(voiceFor('alsu', voices)?.name).toBe('Microsoft Irina');
++    expect(asSpeaker('alsu')).toBe('alsu');
++  });
++
+   it('returns nothing without a Russian voice', () => {
+     expect(voiceFor('mihalych', [{ name: 'Samantha', lang: 'en-US' }])).toBeNull();
+   });
+diff --git a/apps/web/src/lib/soundVoices.ts b/apps/web/src/lib/soundVoices.ts
+index 775d3ae..0db3ef5 100644
+--- a/apps/web/src/lib/soundVoices.ts
++++ b/apps/web/src/lib/soundVoices.ts
+@@ -4,7 +4,7 @@
+ 
+ import { stripEmoji } from '@/lib/stripEmoji';
+ 
+-export type Speaker = 'mihalych' | 'rinat' | 'sveta' | 'ildar' | 'worker';
++export type Speaker = 'mihalych' | 'rinat' | 'sveta' | 'ildar' | 'alsu' | 'worker';
+ export type LineKind = 'business' | 'joke' | 'radio';
+ 
+ export type Line = {
+@@ -16,7 +16,10 @@ export type Line = {
+   reply?: Line;
+ };
+ 
+-/** How each character sounds when only pitch and rate can tell them apart. */
++/**
++ * How each character sounds when only pitch and rate can tell them apart: the
++ * browser-speech fallback for lines without a recording (lib/stroyka/voice.ts).
++ */
+ export const SPEAKER_STYLE: Record<
+   Speaker,
+   { pitch: [number, number]; rate: [number, number]; female?: boolean }
+@@ -25,6 +28,7 @@ export const SPEAKER_STYLE: Record<
+   rinat: { pitch: [0.95, 1.05], rate: [1.15, 1.25] }, // operator: quick
+   sveta: { pitch: [1.2, 1.3], rate: [1.0, 1.08], female: true }, // dispatcher
+   ildar: { pitch: [0.78, 0.82], rate: [0.82, 0.88] }, // crane operator: low and calm
++  alsu: { pitch: [1.08, 1.15], rate: [0.94, 1.0], female: true }, // warehouse: kind, homely
+   worker: { pitch: [0.8, 1.1], rate: [0.95, 1.15] },
+ };
+ 
+@@ -98,7 +102,7 @@ const FEMALE =
+ 
+ /**
+  * Picks a distinct Russian voice per character where the browser has
+- * several: Sveta takes a female voice, the men share the others in turn.
++ * several: Sveta and Alsu take a female voice, the men share the others in turn.
+  */
+ export function voiceFor<V extends VoiceLike>(
+   speaker: Speaker,
+@@ -110,8 +114,9 @@ export function voiceFor<V extends VoiceLike>(
+   const female = ru.filter((v) => FEMALE.test(v.name));
+   const male = ru.filter((v) => !FEMALE.test(v.name));
+   if (speaker === 'sveta') return female[0] ?? ru[ru.length - 1]!;
++  if (speaker === 'alsu') return female[1] ?? female[0] ?? ru[ru.length - 1]!;
+   const pool = male.length ? male : ru;
+-  const order: Record<Exclude<Speaker, 'sveta'>, number> = {
++  const order: Record<Exclude<Speaker, 'sveta' | 'alsu'>, number> = {
+     mihalych: 0,
+     rinat: 1,
+     ildar: 2,
+@@ -120,7 +125,7 @@ export function voiceFor<V extends VoiceLike>(
+   return pool[order[speaker] % pool.length]!;
+ }
+ 
+-/** Pitch and rate for a character; a female voice for Sveta needs no lift. */
++/** Pitch and rate for a character; a female voice for Sveta or Alsu needs no lift. */
+ export function styleFor(
+   speaker: Speaker,
+   femaleVoice: boolean,
+diff --git a/apps/web/src/lib/stroyka/crew.ts b/apps/web/src/lib/stroyka/crew.ts
+index 7ffbd4c..22a91e2 100644
+--- a/apps/web/src/lib/stroyka/crew.ts
++++ b/apps/web/src/lib/stroyka/crew.ts
+@@ -78,7 +78,7 @@ export const CREW: Record<string, CrewMember> = {
+   },
+ };
+ 
+-/** Who speaks how in the recordings (voice, pace, pitch): see scripts/stroyka-voices.py. */
++/** Whose voice each crew member speaks in: see scripts/stroyka-voices-hybrid.py. */
+ export const CREW_VOICE: Record<string, string> = {
+   'worker-pit': 'crew-rustam',
+   'worker-sling': 'crew-armen',
+diff --git a/apps/web/src/lib/stroyka/lines/inner.ts b/apps/web/src/lib/stroyka/lines/inner.ts
+index da75f49..d37caa8 100644
+--- a/apps/web/src/lib/stroyka/lines/inner.ts
++++ b/apps/web/src/lib/stroyka/lines/inner.ts
+@@ -4,16 +4,11 @@
+ // comes up rarely in the idle line under the business dialogue (Stroyka.tsx)
+ // and never while the visitor is busy with an order.
+ //
+-// Not in LINES on purpose: lib/stroyka/voice.test.ts requires a recording for
+-// every line of the recorded speakers (Михалыч, Ринат, Ильдар), and these are
+-// not recorded yet. Lines with `voiced: false` are shown as text only (no
+-// sp:dialog event, so no robotic browser voice next to the recorded ones).
+-// scripts/stroyka-voice-lines.ts already lists them for the recorder; once
+-// the clips exist, flip `voiced` to true.
+-//
+-// To record (voiced: false): every line of mihalych, rinat and ildar below.
+-// Света and Алсу have no recorded voice at all; their lines speak through the
+-// browser like the rest of theirs.
++// Not in LINES on purpose: the shuffle-bag banter stays separate. Every line
++// here is recorded too (scripts/stroyka-voice-lines.ts lists them for
++// scripts/stroyka-voices-hybrid.py), so all are `voiced`. A new line is text
++// only (`voiced: false`, no sp:dialog event, so no robotic browser voice next
++// to the recorded ones) until it is recorded: list its id in UNRECORDED.
+ 
+ import type { SpeakerId } from '@/lib/stroyka';
+ 
+@@ -29,7 +24,8 @@ export interface InnerLine {
+   when?: 'day' | 'morning' | 'friday' | 'not-friday';
+ }
+ 
+-const RECORDED: SpeakerId[] = ['mihalych', 'rinat', 'ildar'];
++/** Full ids (e.g. «sveta-inner-coffee-1») of lines written but not recorded yet. */
++const UNRECORDED = new Set<string>([]);
+ 
+ type Raw = [id: string, text: string, opts?: Pick<InnerLine, 'after' | 'when'>];
+ 
+@@ -158,7 +154,7 @@ export const INNER: Record<SpeakerId, InnerLine[]> = Object.fromEntries(
+       id: `${speaker}-inner-${id}`,
+       speaker,
+       text,
+-      voiced: !RECORDED.includes(speaker),
++      voiced: !UNRECORDED.has(`${speaker}-inner-${id}`),
+       ...(opts?.after ? { after: `${speaker}-inner-${opts.after}` } : {}),
+       ...(opts?.when ? { when: opts.when } : {}),
+     })),
+diff --git a/apps/web/src/lib/stroyka/voice.test.ts b/apps/web/src/lib/stroyka/voice.test.ts
+index b70b4a2..263c981 100644
+--- a/apps/web/src/lib/stroyka/voice.test.ts
++++ b/apps/web/src/lib/stroyka/voice.test.ts
+@@ -1,7 +1,9 @@
+ import { existsSync } from 'node:fs';
+ import { join } from 'node:path';
+ import { describe, expect, it } from 'vitest';
++import { CREW } from './crew';
+ import { LINES, lineTexts, RADIO_PAIRS } from './lines';
++import { INNER_LINES } from './lines/inner';
+ import { RECORDED_SPEAKERS, spokenText, voiceKey } from './voice';
+ import { VOICE_CLIPS } from './voiceClips';
+ 
+@@ -14,7 +16,8 @@ describe('recorded /stroyka voices', () => {
+   });
+ 
+   // Fails when a line was edited or added without re-recording:
+-  //   npx tsx scripts/stroyka-voice-lines.ts > /tmp/l.json && python3 scripts/stroyka-voices.py /tmp/l.json
++  //   npx tsx scripts/stroyka-voice-lines.ts > /tmp/l.json
++  //   python3 scripts/stroyka-voices-hybrid.py /tmp/l.json --refs <voices> --asr <model>
+   it('has a recording for every line of the recorded characters', () => {
+     const texts = [
+       ...RECORDED_SPEAKERS.flatMap((s) => LINES[s].flatMap(lineTexts)),
+@@ -29,4 +32,20 @@ describe('recorded /stroyka voices', () => {
+     const absent = [...files].filter((f) => !existsSync(join(audioDir, `${f}.mp3`)));
+     expect(absent).toEqual([]);
+   });
++
++  it('records the women too, so Света and Алсу never fall back to the browser voice', () => {
++    expect(RECORDED_SPEAKERS).toEqual(expect.arrayContaining(['sveta', 'alsu']));
++    for (const speaker of ['sveta', 'alsu'] as const) {
++      const texts = LINES[speaker].flatMap(lineTexts);
++      expect(texts.length).toBeGreaterThan(50);
++      expect(texts.filter((t) => !VOICE_CLIPS[voiceKey(t)])).toEqual([]);
++    }
++  });
++
++  it('has a recording for the crew by name and for every voiced inner line', () => {
++    const crew = Object.values(CREW).flatMap((m) => m.lines);
++    expect(crew.filter((t) => !VOICE_CLIPS[voiceKey(t)])).toEqual([]);
++    const inner = INNER_LINES.filter((l) => l.voiced).map((l) => l.text);
++    expect(inner.filter((t) => !VOICE_CLIPS[voiceKey(t)])).toEqual([]);
++  });
+ });
+diff --git a/apps/web/src/lib/stroyka/voice.ts b/apps/web/src/lib/stroyka/voice.ts
+index 80cf48c..37fc74c 100644
+--- a/apps/web/src/lib/stroyka/voice.ts
++++ b/apps/web/src/lib/stroyka/voice.ts
+@@ -1,14 +1,16 @@
+-// Recorded voices for the /stroyka characters. The male characters' written
+-// lines are pre-recorded with the free neural TTS Piper (voices «Дмитрий» and
+-// «Денис», CC0) by scripts/stroyka-voices.py into /audio/stroyka/<key>.mp3.
+-// A line is matched by its text, so any caller of sp:dialog gets the recording
+-// for free; lines without one (live answers, the women's lines) fall back to
++// Recorded voices for the /stroyka characters. Every written line is
++// pre-recorded by scripts/stroyka-voices-hybrid.py into
++// /audio/stroyka/<key>.mp3: Qwen3-TTS VoiceDesign (Apache-2.0) designed one
++// synthetic voice per character, and Chatterbox Multilingual (MIT) speaks
++// each line in that voice with the line's emotion. A line is matched by its
++// text, so any caller of sp:dialog gets the recording for free; lines without
++// one (live answers with the visitor's name, prices of the day) fall back to
+ // the browser's speechSynthesis in lib/soundEngine.ts.
+ 
+ import { stripEmoji } from '@/lib/stripEmoji';
+ 
+-/** Characters with recorded lines (the two CC0 Piper voices are male). */
+-export const RECORDED_SPEAKERS = ['mihalych', 'rinat', 'ildar', 'worker'] as const;
++/** Characters with recorded lines: all of them, Света and Алсу included. */
++export const RECORDED_SPEAKERS = ['mihalych', 'rinat', 'ildar', 'worker', 'sveta', 'alsu'] as const;
+ 
+ export const radioClipKey = (n: number, side: 'a' | 'b') => `radio-${n}-${side}`;
+ 
+diff --git a/apps/web/src/lib/stroyka/voiceClips.ts b/apps/web/src/lib/stroyka/voiceClips.ts
+index 83f3970..6292f41 100644
+--- a/apps/web/src/lib/stroyka/voiceClips.ts
++++ b/apps/web/src/lib/stroyka/voiceClips.ts
+@@ -3,30 +3,41 @@
+ export const VOICE_CLIPS: Record<string, string[]> = {
+   '1003pk7': ['ildar-o0-1y45009', 'ildar-r14-mzhz1h'],
+   '101amco': ['rinat-o1-mvr1ct', 'rinat-r11-1qcoee'],
++  '104o033': ['radio-6-a-104o033'],
+   '1066uv2': ['mihalych-o1-1nsychr', 'mihalych-r4-2h865y'],
+   '106i15c': ['radio-7-a-106i15c'],
++  '108lkma': ['alsu-o3-1nd6es0', 'alsu-r4-lglorf'],
+   '10b33fn': ['worker-o7-1nd6es0', 'worker-r6-8w9lv2'],
+   '10b6ajn': ['rinat-o0-ucd0f5', 'rinat-r14-14flwud'],
++  '10cgwiv': ['alsu-h18-10cgwiv'],
++  '10jozbc': ['alsu-o7-7n1nqy', 'alsu-r2-1j0v3sv'],
+   '10r1job': ['rinat-o2-10wjpuq', 'rinat-r0-fk22b6'],
+   '10udf30': ['ildar-o4-1tl6jzt', 'ildar-r4-1xmkv2e'],
++  '10wyxxm': ['sveta-h0-10wyxxm'],
+   '10yxvsv': ['worker-o5-1tl6jzt', 'worker-r1-86st91'],
+   '111ayx0': ['ildar-o4-1tl6jzt', 'ildar-r6-5j6b96'],
+   '111ibne': ['mihalych-h56-111ibne'],
+   '1138uef': ['rinat-o9-91qgst', 'rinat-r7-wbht6x'],
+   '113uxau': ['mihalych-o2-eoanpo', 'mihalych-r12-1amx9vn'],
++  '1157ujk': ['sveta-o5-186ymix', 'sveta-r9-1481gjm'],
+   '116h6ov': ['rinat-h59-116h6ov'],
++  '118ydnd': ['alsu-o3-1nd6es0', 'alsu-r11-2or4u8'],
+   '119gjbx': ['mihalych-h93-119gjbx'],
+   '11d32tj': ['ildar-o6-1mzi8jk', 'ildar-r9-1d9kb7k'],
+   '11df9ip': ['ildar-o9-184feto', 'ildar-r10-16gz1a8'],
+   '11fujzn': ['rinat-o0-ucd0f5', 'rinat-r7-wbht6x'],
+   '11fus6m': ['worker-o9-1sirt3x', 'worker-r9-1r2mxss'],
+   '11i6o80': ['ildar-o7-1dcmv0u', 'ildar-r0-1pnt39p'],
++  '11lcfph': ['alsu-o1-qucslo', 'alsu-r1-k0k0bm'],
+   '11no21k': ['rinat-h3-11no21k'],
+   '11qi5v1': ['rinat-h11-11qi5v1'],
+   '11y9f0l': ['worker-o0-hg7uhy', 'worker-r6-8w9lv2'],
++  '11zzltx': ['sveta-o7-1l4vr2k', 'sveta-r9-1481gjm'],
+   '120ivl9': ['worker-o9-1sirt3x', 'worker-r11-1txijaj'],
+   '120wj1i': ['ildar-h39-120wj1i'],
++  '124q8t1': ['sveta-h50-124q8t1'],
+   '125o2j3': ['worker-o6-h11gn3', 'worker-r2-wtd8bb'],
++  '127ixp5': ['alsu-h27-127ixp5'],
+   '128sw3u': ['mihalych-h45-128sw3u'],
+   '129pg7o': ['mihalych-o6-h6zhum', 'mihalych-r14-10m51kn'],
+   '12f39cf': ['rinat-h34-12f39cf'],
+@@ -37,84 +48,137 @@ export const VOICE_CLIPS: Record<string, string[]> = {
+   '137akb0': ['mihalych-o2-eoanpo', 'mihalych-r0-1wrtmyv'],
+   '137v9p9': ['ildar-o7-1dcmv0u', 'ildar-r9-1d9kb7k'],
+   '137wjs7': ['mihalych-h63-137wjs7'],
++  '13ae242': ['alsu-o2-1vx613y', 'alsu-r8-dyq99p'],
++  '13bz4fy': ['alsu-o1-qucslo', 'alsu-r4-lglorf'],
+   '13dv2f': ['worker-o2-ucd0f5', 'worker-r1-86st91'],
+   '13eczps': ['ildar-o5-h6zhum', 'ildar-r0-1pnt39p'],
+   '13f51wi': ['worker-o9-1sirt3x', 'worker-r8-192o54c'],
++  '13fljvw': ['sveta-o8-1n372ar', 'sveta-r6-a9ovc0'],
+   '13gozwj': ['mihalych-o4-1n372ar', 'mihalych-r13-l8wx6v'],
+   '13gy0rk': ['worker-h24-13gy0rk'],
+   '13h91g4': ['ildar-h22-13h91g4'],
+   '13i1y4b': ['mihalych-o4-1n372ar', 'mihalych-r10-3dzc07'],
++  '13idk1s': ['sveta-h20-13idk1s'],
++  '13imyn7': ['sveta-o6-1tbaiwq', 'sveta-r1-3tkv7o'],
++  '13jqsl9': ['sveta-o8-1n372ar', 'sveta-r3-135vosh'],
+   '13jrl9i': ['rinat-h30-13jrl9i'],
++  '13mz8lp': ['sveta-o1-1nd6es0', 'sveta-r6-a9ovc0'],
+   '13nfofe': ['radio-4-b-13nfofe'],
+   '13q0rof': ['mihalych-o1-1nsychr', 'mihalych-r13-l8wx6v'],
+   '13wk9rk': ['worker-o4-lzpitv', 'worker-r8-192o54c'],
+   '13xq2i5': ['rinat-o8-1d2gub8', 'rinat-r12-jac9gy'],
+   '13zcv8v': ['rinat-h58-13zcv8v'],
+   '140fvxy': ['worker-o10-az8s8p', 'worker-r8-192o54c'],
++  '140yp6p': ['sveta-o2-qucslo', 'sveta-r12-msq1jy'],
+   '1431ew2': ['rinat-h7-1431ew2'],
+   '143z1h3': ['ildar-o3-8lzr7d', 'ildar-r14-mzhz1h'],
+   '1450nmj': ['ildar-o5-h6zhum', 'ildar-r13-4nhh1e'],
+   '147nthc': ['crew-elchin-3-147nthc'],
+   '148zaxz': ['ildar-o1-1nsychr', 'ildar-r8-j1d1yn'],
+   '14at04d': ['mihalych-h89-14at04d'],
++  '14aya6a': ['alsu-h15-14aya6a'],
+   '14gwjso': ['ildar-h46-14gwjso'],
++  '14hxxz0': ['sveta-h52-14hxxz0'],
++  '14l00y': ['alsu-h10-14l00y'],
++  '14mi03e': ['sveta-h25-14mi03e'],
++  '14n9pwu': ['sveta-o3-1npz399', 'sveta-r0-lbfp8o'],
++  '14qg5b2': ['sveta-o8-1n372ar', 'sveta-r5-1ojikuy'],
++  '14rfe85': ['alsu-h21-14rfe85'],
+   '14rhkup': ['mihalych-h92-14rhkup'],
+   '14vkfj9': ['ildar-o3-8lzr7d', 'ildar-r1-m58yd3'],
+   '14y85vb': ['ildar-h14-14y85vb'],
++  '14yohs5': ['alsu-o3-1nd6es0', 'alsu-r0-40uuy6'],
+   '15011sk': ['worker-h18-15011sk'],
+   '152hf31': ['mihalych-h54-152hf31'],
+   '152rol6': ['mihalych-o7-1oj8mtx', 'mihalych-r1-aedt4k'],
++  '15643le': ['sveta-o7-1l4vr2k', 'sveta-r10-15qlcdf'],
+   '15aq3v3': ['rinat-o9-91qgst', 'rinat-r14-14flwud'],
++  '15cpg9k': ['sveta-o6-1tbaiwq', 'sveta-r3-135vosh'],
++  '15f1v0z': ['sveta-h8-15f1v0z'],
++  '15fs7s6': ['sveta-h15-15fs7s6'],
+   '15i8evj': ['ildar-o1-1nsychr', 'ildar-r3-1jnju6v'],
+   '15ikfyy': ['ildar-o0-1y45009', 'ildar-r9-1d9kb7k'],
+   '15j0xsf': ['ildar-h52-15j0xsf'],
+   '15j4y4d': ['rinat-h21-15j4y4d'],
+   '15jlchu': ['rinat-h31-15jlchu'],
+   '15m8jbz': ['worker-o2-ucd0f5', 'worker-r13-nw3g71'],
++  '15mcn9q': ['alsu-o3-1nd6es0', 'alsu-r12-133uzpx'],
+   '15q6l5u': ['ildar-o9-184feto', 'ildar-r8-j1d1yn'],
+   '15qlc4r': ['worker-o1-1nsychr', 'worker-r3-1qx79gz'],
+   '15roj2b': ['ildar-h0-15roj2b'],
++  '15wlhw8': ['sveta-o0-1eu0hv3', 'sveta-r6-a9ovc0'],
++  '15x9xwl': ['sveta-h32-15x9xwl'],
++  '15yoml7': ['alsu-o8-mpdhgu', 'alsu-r11-2or4u8'],
++  '162cqhx': ['sveta-o1-1nd6es0', 'sveta-r0-lbfp8o'],
+   '163qorn': ['ildar-h51-163qorn'],
+   '166r6j6': ['worker-h22-166r6j6'],
++  '1674orr': ['alsu-o0-1eu0hv3', 'alsu-r14-mv1s5r'],
+   '16b5oou': ['mihalych-o2-eoanpo', 'mihalych-r6-5ihaw1'],
+   '16cj5ph': ['mihalych-o4-1n372ar', 'mihalych-r5-1gh1t2x'],
+   '16eei7t': ['mihalych-o1-1nsychr', 'mihalych-r6-5ihaw1'],
++  '16es0ip': ['alsu-o8-mpdhgu', 'alsu-r7-1ef5ipm'],
++  '16fmyw': ['sveta-o8-1n372ar', 'sveta-r7-vbofw'],
++  '16j4330': ['alsu-o5-wy714o', 'alsu-r14-mv1s5r'],
+   '16sf6qe': ['mihalych-o5-1dcmv0u', 'mihalych-r2-13nl3t1'],
+   '16thj8l': ['mihalych-h75-16thj8l'],
+   '16tyoha': ['crew-armen-2-16tyoha'],
+   '16xj2nc': ['radio-8-a-16xj2nc'],
+   '16xtep9': ['ildar-o5-h6zhum', 'ildar-r9-1d9kb7k'],
+   '16yyjjn': ['mihalych-h83-16yyjjn'],
++  '16zrva3': ['sveta-h43-16zrva3'],
+   '171urnq': ['mihalych-h44-171urnq'],
++  '172ebu4': ['sveta-o4-17dgkre', 'sveta-r11-9z8t1'],
+   '174am7d': ['rinat-h14-174am7d'],
+   '174hd89': ['mihalych-o3-1tl6jzt', 'mihalych-r12-1amx9vn'],
+   '1767ofy': ['rinat-o9-91qgst', 'rinat-r6-1u0qbnw'],
+   '178eizh': ['worker-h33-178eizh'],
+   '1793prw': ['worker-o3-1d9cly0', 'worker-r1-86st91'],
++  '179u0ff': ['alsu-o2-1vx613y', 'alsu-r11-2or4u8'],
+   '17aunzz': ['mihalych-o3-1tl6jzt', 'mihalych-r2-13nl3t1'],
++  '17gldup': ['alsu-o5-wy714o', 'alsu-r11-2or4u8'],
++  '17h92kw': ['sveta-h47-17h92kw'],
+   '17iq8w0': ['ildar-o2-nojzei', 'ildar-r12-1mpdyfx'],
+   '17jnwic': ['mihalych-h79-17jnwic'],
++  '17ljqgh': ['alsu-o2-1vx613y', 'alsu-r7-1ef5ipm'],
+   '17qi2e7': ['crew-nikolai-4-17qi2e7'],
++  '17rvt1s': ['alsu-o1-qucslo', 'alsu-r5-1ihid7r'],
++  '17uuwgy': ['alsu-o5-wy714o', 'alsu-r2-1j0v3sv'],
+   '17uz4jp': ['ildar-h3-17uz4jp'],
+   '182m7bd': ['rinat-h6-182m7bd'],
+   '184guiy': ['worker-h11-184guiy'],
+   '186rdso': ['ildar-o5-h6zhum', 'ildar-r8-j1d1yn'],
++  '187iudx': ['sveta-h28-187iudx'],
++  '1885tix': ['sveta-o3-1npz399', 'sveta-r13-x2tyxb'],
+   '1894yy8': ['mihalych-inner-concrete-2-1894yy8'],
++  '18is8uh': ['sveta-h48-18is8uh'],
+   '18it4zd': ['rinat-o0-ucd0f5', 'rinat-r2-1uqwww7'],
+   '18k97g1': ['mihalych-o6-h6zhum', 'mihalych-r1-aedt4k'],
++  '18l1z74': ['alsu-o2-1vx613y', 'alsu-r6-bnvutv'],
+   '18p5b2v': ['worker-h13-18p5b2v'],
+   '18slleg': ['mihalych-h76-18slleg'],
++  '18ss5cw': ['sveta-o8-1n372ar', 'sveta-r1-3tkv7o'],
+   '18z0kuc': ['rinat-o0-ucd0f5', 'rinat-r12-jac9gy'],
++  '192yncn': ['sveta-o6-1tbaiwq', 'sveta-r7-vbofw'],
+   '19513b1': ['ildar-o5-h6zhum', 'ildar-r6-5j6b96'],
+   '195fnoa': ['mihalych-o6-h6zhum', 'mihalych-r3-1826bbd'],
++  '197cj5c': ['sveta-o8-1n372ar', 'sveta-r14-nne5h8'],
++  '19bic6j': ['sveta-o6-1tbaiwq', 'sveta-r2-1623hda'],
++  '19bnfm7': ['sveta-o7-1l4vr2k', 'sveta-r8-1lnqbdg'],
++  '19getn3': ['alsu-o4-1gvc7en', 'alsu-r5-1ihid7r'],
+   '19h8ro5': ['mihalych-o6-h6zhum', 'mihalych-r4-2h865y'],
+   '19i6el1': ['ildar-o6-1mzi8jk', 'ildar-r10-16gz1a8'],
+   '19j2f87': ['rinat-o1-mvr1ct', 'rinat-r7-wbht6x'],
++  '19l56p6': ['alsu-o2-1vx613y', 'alsu-r5-1ihid7r'],
+   '19lb09f': ['worker-o0-hg7uhy', 'worker-r9-1r2mxss'],
+   '19mzvma': ['worker-h50-19mzvma'],
+   '19o4py0': ['mihalych-h71-19o4py0'],
++  '19sppbl': ['sveta-o5-186ymix', 'sveta-r10-15qlcdf'],
++  '19volrb': ['alsu-h3-19volrb'],
++  '19vyrqm': ['sveta-o2-qucslo', 'sveta-r3-135vosh'],
++  '19ytlhd': ['alsu-o0-1eu0hv3', 'alsu-r9-1lkgmop'],
+   '19zpenp': ['worker-o1-1nsychr', 'worker-r13-nw3g71'],
+   '1a1b7x8': ['worker-h19-1a1b7x8'],
++  '1a1h01q': ['alsu-o2-1vx613y', 'alsu-r3-1q5grlv'],
+   '1a2kuit': ['worker-o10-az8s8p', 'worker-r2-wtd8bb'],
+   '1a5c920': ['mihalych-o2-eoanpo', 'mihalych-r5-1gh1t2x'],
+   '1a5wzi8': ['worker-h41-1a5wzi8'],
+@@ -122,35 +186,57 @@ export const VOICE_CLIPS: Record<string, string[]> = {
+   '1a7twxm': ['ildar-o0-1y45009', 'ildar-r5-qo8f98'],
+   '1abni9t': ['mihalych-o1-1nsychr', 'mihalych-r3-1826bbd'],
+   '1ahxtus': ['rinat-o3-1gvrviw', 'rinat-r4-1kymns5'],
++  '1aj7kjw': ['alsu-o2-1vx613y', 'alsu-r2-1j0v3sv'],
+   '1aj9c82': ['worker-o10-az8s8p', 'worker-r9-1r2mxss'],
+   '1al3vdn': ['mihalych-h42-1al3vdn'],
+   '1amca9w': ['ildar-o2-nojzei', 'ildar-r8-j1d1yn'],
+   '1an16ec': ['mihalych-o2-eoanpo', 'mihalych-r10-3dzc07'],
++  '1ar8la4': ['sveta-o0-1eu0hv3', 'sveta-r1-3tkv7o'],
+   '1ate640': ['rinat-h10-1ate640'],
++  '1atrvid': ['alsu-o7-7n1nqy', 'alsu-r7-1ef5ipm'],
+   '1au34ic': ['ildar-o7-1dcmv0u', 'ildar-r2-piwo3d'],
++  '1auz2d2': ['alsu-o1-qucslo', 'alsu-r2-1j0v3sv'],
+   '1b16ntv': ['rinat-o7-rknb0a', 'rinat-r13-1517gao'],
++  '1b1vjvz': ['alsu-o8-mpdhgu', 'alsu-r10-1rh4ky0'],
+   '1b3e4zk': ['mihalych-o5-1dcmv0u', 'mihalych-r13-l8wx6v'],
++  '1b9m2oa': ['alsu-h40-1b9m2oa'],
++  '1b9mpae': ['alsu-o7-7n1nqy', 'alsu-r5-1ihid7r'],
+   '1bakxqv': ['rinat-h46-1bakxqv'],
++  '1bb501o': ['sveta-h4-1bb501o'],
++  '1bbfh50': ['alsu-o3-1nd6es0', 'alsu-r5-1ihid7r'],
+   '1bhnt58': ['ildar-o0-1y45009', 'ildar-r4-1xmkv2e'],
+   '1bhpba6': ['mihalych-h95-1bhpba6'],
++  '1bhrh2h': ['sveta-h16-1bhrh2h'],
+   '1bk8x14': ['worker-o7-1nd6es0', 'worker-r4-1qvuoyr'],
+   '1bl4ulj': ['crew-aidar-4-1bl4ulj'],
+   '1bnzq8t': ['worker-o9-1sirt3x', 'worker-r0-1hn84or'],
++  '1bo8usj': ['alsu-o2-1vx613y', 'alsu-r0-40uuy6'],
+   '1bop6br': ['rinat-o5-daya21', 'rinat-r4-1kymns5'],
+   '1bp895x': ['mihalych-h52-1bp895x'],
+   '1bps7ev': ['mihalych-o3-1tl6jzt', 'mihalych-r5-1gh1t2x'],
+   '1bqafux': ['rinat-o2-10wjpuq', 'rinat-r6-1u0qbnw'],
++  '1bs11yu': ['alsu-o0-1eu0hv3', 'alsu-r0-40uuy6'],
+   '1bt9pwq': ['worker-o6-h11gn3', 'worker-r7-s4u7ia'],
+   '1bu5pdd': ['rinat-o6-1gg8lub', 'rinat-r4-1kymns5'],
+   '1bxuky7': ['rinat-o3-1gvrviw', 'rinat-r1-1hgqvlg'],
+   '1by7zfz': ['crew-nurlan-3-1by7zfz'],
++  '1byx0vq': ['sveta-h9-1byx0vq'],
+   '1bz67pn': ['rinat-o1-mvr1ct', 'rinat-r4-1kymns5'],
++  '1c0opf7': ['sveta-o2-qucslo', 'sveta-r5-1ojikuy'],
++  '1c1ifu4': ['sveta-o0-1eu0hv3', 'sveta-r8-1lnqbdg'],
+   '1c1v2yn': ['rinat-o6-1gg8lub', 'rinat-r10-1c4xck3'],
+   '1c6h2q4': ['ildar-o5-h6zhum', 'ildar-r12-1mpdyfx'],
++  '1c6vp8k': ['alsu-o3-1nd6es0', 'alsu-r13-16gqcr7'],
+   '1c8pnnh': ['ildar-o0-1y45009', 'ildar-r3-1jnju6v'],
++  '1cd1vem': ['alsu-h50-1cd1vem'],
+   '1ceyg0': ['worker-h1-1ceyg0'],
++  '1chvk7o': ['sveta-o8-1n372ar', 'sveta-r0-lbfp8o'],
++  '1cilenc': ['sveta-o7-1l4vr2k', 'sveta-r4-1xlmmor'],
++  '1ckt83c': ['alsu-o3-1nd6es0', 'alsu-r8-dyq99p'],
+   '1cluspp': ['rinat-o1-mvr1ct', 'rinat-r10-1c4xck3'],
++  '1cnk7dd': ['alsu-o4-1gvc7en', 'alsu-r9-1lkgmop'],
+   '1crysc0': ['worker-o3-1d9cly0', 'worker-r4-1qvuoyr'],
++  '1cshk4k': ['sveta-o0-1eu0hv3', 'sveta-r14-nne5h8'],
+   '1ctwfy7': ['ildar-o7-1dcmv0u', 'ildar-r7-ktrt0c'],
+   '1cuy830': ['worker-o5-1tl6jzt', 'worker-r14-1pjthaa'],
+   '1d015s5': ['mihalych-h88-1d015s5'],
+@@ -158,41 +244,65 @@ export const VOICE_CLIPS: Record<string, string[]> = {
+   '1d1mgcf': ['rinat-o2-10wjpuq', 'rinat-r11-1qcoee'],
+   '1d2fxsf': ['mihalych-o7-1oj8mtx', 'mihalych-r6-5ihaw1'],
+   '1d2ieuk': ['rinat-o9-91qgst', 'rinat-r8-1aldvsy'],
++  '1d35anh': ['sveta-h21-1d35anh'],
+   '1d3v7ui': ['ildar-o9-184feto', 'ildar-r0-1pnt39p'],
++  '1d5suso': ['alsu-o2-1vx613y', 'alsu-r12-133uzpx'],
+   '1d6uwr9': ['mihalych-o0-fypm9l', 'mihalych-r14-10m51kn'],
+   '1d745av': ['mihalych-o1-1nsychr', 'mihalych-r8-zyncpb'],
++  '1d77169': ['alsu-o5-wy714o', 'alsu-r1-k0k0bm'],
+   '1daj869': ['rinat-h32-1daj869'],
+   '1dct37x': ['rinat-o6-1gg8lub', 'rinat-r7-wbht6x'],
++  '1dd9mie': ['alsu-o2-1vx613y', 'alsu-r13-16gqcr7'],
++  '1delsu3': ['alsu-h26-1delsu3'],
+   '1dfqngv': ['mihalych-h8-1dfqngv'],
+   '1die9j9': ['rinat-h61-1die9j9'],
+   '1dju7gy': ['rinat-o2-10wjpuq', 'rinat-r10-1c4xck3'],
+   '1dlfpfu': ['mihalych-o5-1dcmv0u', 'mihalych-r3-1826bbd'],
+   '1dmorvx': ['ildar-o3-8lzr7d', 'ildar-r3-1jnju6v'],
++  '1dnc9cp': ['sveta-o0-1eu0hv3', 'sveta-r3-135vosh'],
+   '1dnuqpt': ['rinat-o8-1d2gub8', 'rinat-r8-1aldvsy'],
+   '1dquwav': ['mihalych-h46-1dquwav'],
+   '1dr7pmh': ['rinat-o8-1d2gub8', 'rinat-r3-crwyzi'],
+   '1ds02v9': ['worker-o5-1tl6jzt', 'worker-r12-22k7er'],
+   '1dudo60': ['ildar-o9-184feto', 'ildar-r14-mzhz1h'],
+   '1duylkv': ['mihalych-o1-1nsychr', 'mihalych-r14-10m51kn'],
++  '1dy2ps7': ['sveta-inner-phones-3-1dy2ps7'],
++  '1dyhbzy': ['sveta-o2-qucslo', 'sveta-r11-9z8t1'],
+   '1e5jkmb': ['mihalych-o0-fypm9l', 'mihalych-r3-1826bbd'],
+   '1e9pjyf': ['worker-h40-1e9pjyf'],
+   '1ea8e1s': ['rinat-h43-1ea8e1s'],
++  '1egu1n0': ['alsu-o1-qucslo', 'alsu-r8-dyq99p'],
++  '1egxqqf': ['alsu-o6-1l4vr2k', 'alsu-r7-1ef5ipm'],
++  '1ek88yv': ['sveta-o5-186ymix', 'sveta-r11-9z8t1'],
+   '1en150l': ['worker-o9-1sirt3x', 'worker-r5-r7udq3'],
+   '1enhwff': ['worker-o6-h11gn3', 'worker-r3-1qx79gz'],
++  '1enmn7b': ['sveta-h39-1enmn7b'],
++  '1enzx3i': ['alsu-h19-1enzx3i'],
++  '1eoiu3y': ['sveta-h33-1eoiu3y'],
+   '1eps80v': ['rinat-h19-1eps80v'],
+   '1es1dob': ['worker-o6-h11gn3', 'worker-r12-22k7er'],
+   '1esk53a': ['crew-nurlan-2-1esk53a'],
++  '1esza15': ['alsu-h54-1esza15'],
++  '1etda3b': ['sveta-o4-17dgkre', 'sveta-r7-vbofw'],
+   '1ev9jhn': ['rinat-o5-daya21', 'rinat-r7-wbht6x'],
+   '1evpl9r': ['mihalych-o1-1nsychr', 'mihalych-r10-3dzc07'],
++  '1ew0t25': ['sveta-o6-1tbaiwq', 'sveta-r8-1lnqbdg'],
+   '1ew5djx': ['ildar-h17-1ew5djx'],
++  '1f0fq0j': ['sveta-o0-1eu0hv3', 'sveta-r4-1xlmmor'],
+   '1f1gjom': ['ildar-o9-184feto', 'ildar-r12-1mpdyfx'],
+   '1f3e52j': ['worker-o6-h11gn3', 'worker-r4-1qvuoyr'],
+   '1f3t9m4': ['worker-o8-7n1nqy', 'worker-r2-wtd8bb'],
+   '1f4v3t9': ['ildar-o8-z6oox4', 'ildar-r10-16gz1a8'],
+   '1f8s3rk': ['rinat-inner-school-3-1f8s3rk'],
++  '1f92sjy': ['alsu-h6-1f92sjy'],
+   '1fdls57': ['ildar-o0-1y45009', 'ildar-r12-1mpdyfx'],
+   '1fh7w15': ['rinat-h8-1fh7w15'],
+   '1fjjdui': ['worker-o7-1nd6es0', 'worker-r5-r7udq3'],
++  '1fodeg8': ['sveta-o2-qucslo', 'sveta-r4-1xlmmor'],
++  '1fqppuc': ['alsu-o3-1nd6es0', 'alsu-r9-1lkgmop'],
++  '1ft16xt': ['sveta-h35-1ft16xt'],
++  '1fu80e3': ['alsu-h42-1fu80e3'],
++  '1fuftqi': ['alsu-h14-1fuftqi'],
+   '1fv5jzb': ['worker-h38-1fv5jzb'],
+   '1fvfy9d': ['mihalych-o7-1oj8mtx', 'mihalych-r13-l8wx6v'],
+   '1fw7lx': ['mihalych-h10-1fw7lx'],
+@@ -205,52 +315,82 @@ export const VOICE_CLIPS: Record<string, string[]> = {
+   '1gmccxr': ['crew-aidar-0-1gmccxr'],
+   '1gn04d2': ['worker-h28-1gn04d2'],
+   '1gooiaz': ['crew-elchin-0-1gooiaz'],
++  '1gpfn6m': ['alsu-h41-1gpfn6m'],
++  '1gqld7x': ['sveta-o2-qucslo', 'sveta-r14-nne5h8'],
+   '1gqs2b4': ['rinat-o4-1salm44', 'rinat-r4-1kymns5'],
+   '1gtadjx': ['rinat-o4-1salm44', 'rinat-r13-1517gao'],
++  '1gtptv0': ['sveta-o1-1nd6es0', 'sveta-r4-1xlmmor'],
++  '1gx2d6g': ['alsu-h13-1gx2d6g'],
++  '1gy88pv': ['sveta-h12-1gy88pv'],
+   '1gyb31j': ['ildar-h2-1gyb31j'],
+   '1gyrxtz': ['rinat-h40-1gyrxtz'],
++  '1gytvmx': ['sveta-h1-1gytvmx'],
+   '1h1zbyb': ['worker-o1-1nsychr', 'worker-r0-1hn84or'],
+   '1h2qkjx': ['mihalych-o7-1oj8mtx', 'mihalych-r10-3dzc07'],
+   '1h3esdo': ['rinat-o8-1d2gub8', 'rinat-r2-1uqwww7'],
+   '1h5ybnn': ['worker-h42-1h5ybnn'],
+   '1h6nfkw': ['worker-o8-7n1nqy', 'worker-r11-1txijaj'],
+   '1h6yo8c': ['worker-o5-1tl6jzt', 'worker-r6-8w9lv2'],
++  '1h77wv9': ['sveta-o7-1l4vr2k', 'sveta-r7-vbofw'],
+   '1hesc2s': ['ildar-inner-kama-2-1hesc2s'],
++  '1hf1mai': ['alsu-o8-mpdhgu', 'alsu-r5-1ihid7r'],
+   '1hfr870': ['crew-armen-3-1hfr870'],
+   '1hg8qi8': ['rinat-o1-mvr1ct', 'rinat-r12-jac9gy'],
+   '1hgbqly': ['crew-elchin-2-1hgbqly'],
+   '1hhmzgs': ['worker-h45-1hhmzgs'],
++  '1hmue3y': ['sveta-o7-1l4vr2k', 'sveta-r3-135vosh'],
++  '1hpg0ek': ['alsu-h34-1hpg0ek'],
+   '1hpn9m3': ['worker-o5-1tl6jzt', 'worker-r10-u29e9l'],
+   '1hrpf3v': ['ildar-o4-1tl6jzt', 'ildar-r0-1pnt39p'],
+   '1hswkeb': ['worker-h2-1hswkeb'],
+   '1hvzha9': ['worker-o8-7n1nqy', 'worker-r8-192o54c'],
++  '1hwtyij': ['sveta-o6-1tbaiwq', 'sveta-r12-msq1jy'],
+   '1hyaptr': ['ildar-o8-z6oox4', 'ildar-r9-1d9kb7k'],
++  '1hyrp2b': ['alsu-h31-1hyrp2b'],
++  '1i283o1': ['alsu-o3-1nd6es0', 'alsu-r10-1rh4ky0'],
++  '1i2j9q3': ['alsu-o0-1eu0hv3', 'alsu-r13-16gqcr7'],
++  '1i3t7h8': ['alsu-o5-wy714o', 'alsu-r5-1ihid7r'],
+   '1i7cgyp': ['worker-o9-1sirt3x', 'worker-r3-1qx79gz'],
++  '1i96j14': ['alsu-o1-qucslo', 'alsu-r13-16gqcr7'],
+   '1ia5gyz': ['ildar-o0-1y45009', 'ildar-r0-1pnt39p'],
+   '1iat86l': ['mihalych-o4-1n372ar', 'mihalych-r3-1826bbd'],
++  '1iffhba': ['sveta-o3-1npz399', 'sveta-r6-a9ovc0'],
+   '1igrla7': ['worker-o8-7n1nqy', 'worker-r9-1r2mxss'],
++  '1iky6df': ['alsu-h16-1iky6df'],
+   '1ilzbh6': ['ildar-o1-1nsychr', 'ildar-r13-4nhh1e'],
++  '1in32bv': ['sveta-o3-1npz399', 'sveta-r3-135vosh'],
+   '1io37k8': ['crew-nurlan-1-1io37k8'],
+   '1ioec5q': ['mihalych-o5-1dcmv0u', 'mihalych-r8-zyncpb'],
+   '1iuzd88': ['mihalych-o4-1n372ar', 'mihalych-r9-9m6pbo'],
+   '1ivu0qy': ['rinat-o0-ucd0f5', 'rinat-r13-1517gao'],
+   '1iw7ujn': ['ildar-o3-8lzr7d', 'ildar-r2-piwo3d'],
+   '1ix8vr3': ['ildar-o1-1nsychr', 'ildar-r1-m58yd3'],
++  '1iy5pgd': ['sveta-o4-17dgkre', 'sveta-r5-1ojikuy'],
++  '1iymr8i': ['alsu-o0-1eu0hv3', 'alsu-r7-1ef5ipm'],
+   '1izckx7': ['ildar-h40-1izckx7'],
++  '1j0ew2l': ['sveta-h41-1j0ew2l'],
+   '1j0gc91': ['mihalych-h26-1j0gc91'],
+   '1j1jt4s': ['worker-o3-1d9cly0', 'worker-r10-u29e9l'],
+   '1j20p7z': ['ildar-o5-h6zhum', 'ildar-r7-ktrt0c'],
+   '1j2catj': ['mihalych-o0-fypm9l', 'mihalych-r5-1gh1t2x'],
+   '1j2syjz': ['rinat-o4-1salm44', 'rinat-r6-1u0qbnw'],
+   '1j33twi': ['mihalych-h77-1j33twi'],
++  '1j3rceu': ['alsu-o2-1vx613y', 'alsu-r14-mv1s5r'],
++  '1j84kre': ['alsu-o4-1gvc7en', 'alsu-r1-k0k0bm'],
+   '1jaohr2': ['rinat-o6-1gg8lub', 'rinat-r8-1aldvsy'],
+   '1jbafsc': ['rinat-o9-91qgst', 'rinat-r5-6vo8nm'],
+   '1jc6f9c': ['mihalych-inner-houses-1jc6f9c'],
+   '1jenx88': ['worker-o9-1sirt3x', 'worker-r7-s4u7ia'],
++  '1jf1pm7': ['sveta-o1-1nd6es0', 'sveta-r5-1ojikuy'],
+   '1jiup41': ['ildar-o5-h6zhum', 'ildar-r5-qo8f98'],
+   '1jm9dob': ['ildar-h15-1jm9dob'],
++  '1joeut9': ['sveta-h18-1joeut9'],
+   '1jpwpg4': ['crew-nikolai-2-1jpwpg4'],
+   '1jxnwlh': ['worker-o10-az8s8p', 'worker-r12-22k7er'],
++  '1jycxjw': ['alsu-h25-1jycxjw'],
++  '1k2wuit': ['alsu-o6-1l4vr2k', 'alsu-r1-k0k0bm'],
++  '1k7qmch': ['sveta-h26-1k7qmch'],
++  '1kae08d': ['sveta-o0-1eu0hv3', 'sveta-r11-9z8t1'],
+   '1kaoybf': ['rinat-o9-91qgst', 'rinat-r4-1kymns5'],
+   '1kb596': ['mihalych-o4-1n372ar', 'mihalych-r7-34dl4u'],
+   '1kbi4a4': ['rinat-h4-1kbi4a4'],
+@@ -258,12 +398,18 @@ export const VOICE_CLIPS: Record<string, string[]> = {
+   '1kky97q': ['mihalych-o5-1dcmv0u', 'mihalych-r5-1gh1t2x'],
+   '1klb7rm': ['rinat-o2-10wjpuq', 'rinat-r2-1uqwww7'],
+   '1knanua': ['mihalych-o5-1dcmv0u', 'mihalych-r0-1wrtmyv'],
++  '1knt3gu': ['alsu-o8-mpdhgu', 'alsu-r9-1lkgmop'],
+   '1knw5lg': ['worker-o8-7n1nqy', 'worker-r13-nw3g71'],
+   '1kpv7hf': ['ildar-o9-184feto', 'ildar-r9-1d9kb7k'],
++  '1krig2o': ['alsu-o6-1l4vr2k', 'alsu-r14-mv1s5r'],
++  '1kssuyw': ['alsu-o6-1l4vr2k', 'alsu-r3-1q5grlv'],
++  '1kyi14f': ['alsu-o7-7n1nqy', 'alsu-r11-2or4u8'],
+   '1l68g2l': ['ildar-o1-1nsychr', 'ildar-r14-mzhz1h'],
++  '1l6qffb': ['alsu-o1-qucslo', 'alsu-r7-1ef5ipm'],
+   '1l9tknw': ['ildar-o3-8lzr7d', 'ildar-r4-1xmkv2e'],
+   '1la2yiu': ['crew-rustam-1-1la2yiu'],
+   '1lep170': ['worker-h26-1lep170'],
++  '1lfi0d': ['alsu-h36-1lfi0d'],
+   '1lldnjo': ['worker-o1-1nsychr', 'worker-r9-1r2mxss'],
+   '1lltpsb': ['mihalych-o0-fypm9l', 'mihalych-r6-5ihaw1'],
+   '1ln4ceo': ['rinat-o8-1d2gub8', 'rinat-r10-1c4xck3'],
+@@ -275,48 +421,70 @@ export const VOICE_CLIPS: Record<string, string[]> = {
+   '1m4f9gt': ['mihalych-o7-1oj8mtx', 'mihalych-r8-zyncpb'],
+   '1m9byu3': ['mihalych-o4-1n372ar', 'mihalych-r14-10m51kn'],
+   '1madmoc': ['rinat-o8-1d2gub8', 'rinat-r14-14flwud'],
++  '1mep113': ['sveta-o6-1tbaiwq', 'sveta-r9-1481gjm'],
+   '1meswqy': ['rinat-o7-rknb0a', 'rinat-r10-1c4xck3'],
+   '1mhprpt': ['rinat-o7-rknb0a', 'rinat-r6-1u0qbnw'],
++  '1mi764w': ['alsu-o6-1l4vr2k', 'alsu-r5-1ihid7r'],
++  '1mi9x6b': ['alsu-h8-1mi9x6b'],
+   '1mivo2p': ['ildar-o6-1mzi8jk', 'ildar-r7-ktrt0c'],
+   '1mj052d': ['rinat-o2-10wjpuq', 'rinat-r1-1hgqvlg'],
++  '1mj0rl2': ['alsu-o5-wy714o', 'alsu-r12-133uzpx'],
+   '1mk7kdq': ['ildar-h38-1mk7kdq'],
++  '1mlyxhq': ['alsu-o8-mpdhgu', 'alsu-r3-1q5grlv'],
+   '1mnegel': ['ildar-h11-1mnegel'],
+   '1moym3s': ['ildar-o1-1nsychr', 'ildar-r9-1d9kb7k'],
+   '1mpclyg': ['worker-o0-hg7uhy', 'worker-r2-wtd8bb'],
++  '1mpehf4': ['alsu-o0-1eu0hv3', 'alsu-r10-1rh4ky0'],
+   '1mqdwzs': ['mihalych-o3-1tl6jzt', 'mihalych-r4-2h865y'],
+   '1mttsp7': ['ildar-inner-kama-4-1mttsp7'],
+   '1mu4e75': ['rinat-h49-1mu4e75'],
+   '1mz9i8': ['ildar-o4-1tl6jzt', 'ildar-r13-4nhh1e'],
++  '1n052le': ['alsu-inner-echpochmak-4-1n052le'],
+   '1n17s03': ['rinat-o7-rknb0a', 'rinat-r0-fk22b6'],
+   '1n26p6v': ['ildar-o6-1mzi8jk', 'ildar-r6-5j6b96'],
+   '1n2cwjb': ['ildar-o6-1mzi8jk', 'ildar-r5-qo8f98'],
+   '1n2xzgi': ['rinat-o2-10wjpuq', 'rinat-r7-wbht6x'],
++  '1n3mgik': ['alsu-o8-mpdhgu', 'alsu-r2-1j0v3sv'],
+   '1n4atg6': ['rinat-o7-rknb0a', 'rinat-r14-14flwud'],
+   '1n71pdf': ['mihalych-o4-1n372ar', 'mihalych-r8-zyncpb'],
++  '1nb1b29': ['sveta-o2-qucslo', 'sveta-r1-3tkv7o'],
++  '1nbd4gy': ['sveta-o8-1n372ar', 'sveta-r12-msq1jy'],
+   '1njx551': ['rinat-o4-1salm44', 'rinat-r11-1qcoee'],
+   '1nkxeyf': ['rinat-h35-1nkxeyf'],
+   '1nl3yrf': ['ildar-o2-nojzei', 'ildar-r4-1xmkv2e'],
+   '1noasj4': ['rinat-o8-1d2gub8', 'rinat-r4-1kymns5'],
+   '1nowr3s': ['rinat-h27-1nowr3s'],
++  '1np0u2i': ['alsu-o6-1l4vr2k', 'alsu-r6-bnvutv'],
++  '1np6i7u': ['sveta-o1-1nd6es0', 'sveta-r11-9z8t1'],
+   '1npil8f': ['rinat-o4-1salm44', 'rinat-r5-6vo8nm'],
+   '1nqzopm': ['mihalych-h97-1nqzopm'],
++  '1nt7ot6': ['alsu-h1-1nt7ot6'],
+   '1nu5v3y': ['mihalych-o7-1oj8mtx', 'mihalych-r9-9m6pbo'],
+   '1nudkqh': ['mihalych-o3-1tl6jzt', 'mihalych-r10-3dzc07'],
+   '1nvvliv': ['ildar-h21-1nvvliv'],
++  '1nx73w': ['alsu-o5-wy714o', 'alsu-r9-1lkgmop'],
++  '1nxvyoe': ['sveta-o3-1npz399', 'sveta-r7-vbofw'],
+   '1ny63lw': ['rinat-o5-daya21', 'rinat-r11-1qcoee'],
+   '1nyriid': ['worker-o10-az8s8p', 'worker-r4-1qvuoyr'],
++  '1nziuc9': ['sveta-h55-1nziuc9'],
++  '1o5pbjk': ['sveta-o5-186ymix', 'sveta-r5-1ojikuy'],
+   '1o66h1i': ['rinat-o1-mvr1ct', 'rinat-r1-1hgqvlg'],
++  '1o68rjd': ['sveta-o1-1nd6es0', 'sveta-r9-1481gjm'],
+   '1o6osi6': ['radio-6-b-1o6osi6'],
++  '1o8t5m3': ['alsu-o0-1eu0hv3', 'alsu-r6-bnvutv'],
+   '1obmm4n': ['mihalych-o7-1oj8mtx', 'mihalych-r3-1826bbd'],
+   '1ocyrtt': ['worker-o10-az8s8p', 'worker-r5-r7udq3'],
+   '1og4v8q': ['ildar-o3-8lzr7d', 'ildar-r5-qo8f98'],
++  '1ohsst2': ['sveta-h23-1ohsst2'],
+   '1ojnjcy': ['ildar-o1-1nsychr', 'ildar-r6-5j6b96'],
+   '1ojpazw': ['worker-o10-az8s8p', 'worker-r6-8w9lv2'],
+   '1okmlc4': ['rinat-o6-1gg8lub', 'rinat-r9-few680'],
++  '1onv67j': ['sveta-o6-1tbaiwq', 'sveta-r6-a9ovc0'],
++  '1oys332': ['alsu-h44-1oys332'],
+   '1p19g7s': ['worker-h17-1p19g7s'],
+   '1p4e8fr': ['rinat-h52-1p4e8fr'],
+   '1p4yse1': ['rinat-o4-1salm44', 'rinat-r3-crwyzi'],
+-  '1p5gz83': ['ildar-h16-1p5gz83'],
++  '1p5gz83': ['sveta-h22-1p5gz83'],
+   '1p8h7cc': ['rinat-o4-1salm44', 'rinat-r2-1uqwww7'],
+   '1p93r0a': ['worker-o1-1nsychr', 'worker-r14-1pjthaa'],
+   '1pbnh8t': ['rinat-o9-91qgst', 'rinat-r10-1c4xck3'],
+@@ -337,6 +505,7 @@ export const VOICE_CLIPS: Record<string, string[]> = {
+   '1q39ka8': ['mihalych-h41-1q39ka8'],
+   '1q5seoq': ['rinat-h36-1q5seoq'],
+   '1q816cp': ['rinat-o7-rknb0a', 'rinat-r5-6vo8nm'],
++  '1q8989o': ['sveta-h5-1q8989o'],
+   '1q92c90': ['ildar-o3-8lzr7d', 'ildar-r6-5j6b96'],
+   '1q92sa6': ['rinat-o6-1gg8lub', 'rinat-r5-6vo8nm'],
+   '1qbf25s': ['mihalych-o2-eoanpo', 'mihalych-r3-1826bbd'],
+@@ -344,40 +513,56 @@ export const VOICE_CLIPS: Record<string, string[]> = {
+   '1qh535s': ['worker-o4-lzpitv', 'worker-r9-1r2mxss'],
+   '1qhqaby': ['mihalych-h30-1qhqaby'],
+   '1qlc3oq': ['worker-o1-1nsychr', 'worker-r7-s4u7ia'],
++  '1qm6cwn': ['sveta-h31-1qm6cwn'],
++  '1qonevg': ['alsu-h22-1qonevg'],
+   '1qp2sff': ['mihalych-h11-1qp2sff'],
+   '1qpsgke': ['ildar-o4-1tl6jzt', 'ildar-r7-ktrt0c'],
+   '1qrqlwx': ['crew-elchin-4-1qrqlwx'],
++  '1qrvaux': ['sveta-o1-1nd6es0', 'sveta-r14-nne5h8'],
+   '1qrzakd': ['rinat-o8-1d2gub8', 'rinat-r0-fk22b6'],
+   '1qyc4if': ['rinat-h60-1qyc4if'],
+   '1qyuljk': ['radio-4-a-1qyuljk'],
++  '1qzntng': ['alsu-o5-wy714o', 'alsu-r3-1q5grlv'],
+   '1r34c48': ['rinat-o6-1gg8lub', 'rinat-r1-1hgqvlg'],
++  '1r3mr7e': ['alsu-o1-qucslo', 'alsu-r6-bnvutv'],
+   '1r4jb48': ['rinat-o3-1gvrviw', 'rinat-r2-1uqwww7'],
+   '1r4m2r0': ['ildar-o4-1tl6jzt', 'ildar-r11-njzxo2'],
+   '1r4qvkc': ['worker-o7-1nd6es0', 'worker-r3-1qx79gz'],
+   '1r64dck': ['worker-o7-1nd6es0', 'worker-r10-u29e9l'],
+   '1r6bapi': ['rinat-o9-91qgst', 'rinat-r1-1hgqvlg'],
+   '1r6f7cz': ['worker-o4-lzpitv', 'worker-r2-wtd8bb'],
++  '1r6kgy1': ['alsu-o1-qucslo', 'alsu-r0-40uuy6'],
+   '1rbhe68': ['ildar-h8-1rbhe68'],
+   '1rboo4o': ['rinat-h53-1rboo4o'],
++  '1rdjttc': ['sveta-o3-1npz399', 'sveta-r12-msq1jy'],
+   '1rf26kf': ['mihalych-h13-1rf26kf'],
+   '1rf2u6l': ['ildar-o6-1mzi8jk', 'ildar-r11-njzxo2'],
++  '1rhiqay': ['alsu-h23-1rhiqay'],
+   '1rkifdu': ['mihalych-h94-1rkifdu'],
+   '1rlxge8': ['mihalych-o5-1dcmv0u', 'mihalych-r6-5ihaw1'],
++  '1rq78vi': ['sveta-o5-186ymix', 'sveta-r8-1lnqbdg'],
+   '1rqjbp4': ['worker-h16-1rqjbp4'],
++  '1rttjif': ['sveta-o5-186ymix', 'sveta-r3-135vosh'],
+   '1rwwk1r': ['ildar-o8-z6oox4', 'ildar-r6-5j6b96'],
+   '1ryffi7': ['mihalych-o1-1nsychr', 'mihalych-r0-1wrtmyv'],
++  '1s0594y': ['alsu-o8-mpdhgu', 'alsu-r8-dyq99p'],
++  '1s1mhig': ['sveta-o3-1npz399', 'sveta-r2-1623hda'],
+   '1s45lqb': ['crew-aidar-2-1s45lqb'],
+   '1s4chbn': ['crew-armen-0-1s4chbn'],
++  '1s4h38p': ['sveta-o2-qucslo', 'sveta-r2-1623hda'],
+   '1s4rswf': ['worker-o3-1d9cly0', 'worker-r8-192o54c'],
+   '1s4z7gh': ['mihalych-h90-1s4z7gh'],
+   '1s6x5ka': ['ildar-o4-1tl6jzt', 'ildar-r5-qo8f98'],
+   '1s6z4vc': ['ildar-o2-nojzei', 'ildar-r2-piwo3d'],
++  '1s8dguh': ['sveta-o7-1l4vr2k', 'sveta-r6-a9ovc0'],
+   '1s9stl9': ['crew-rustam-5-1s9stl9'],
+   '1saw4bx': ['worker-o1-1nsychr', 'worker-r1-86st91'],
++  '1scv8bo': ['alsu-o3-1nd6es0', 'alsu-r14-mv1s5r'],
+   '1se0a1d': ['mihalych-h69-1se0a1d'],
+   '1sfq7hw': ['mihalych-o2-eoanpo', 'mihalych-r8-zyncpb'],
+   '1sl9cee': ['ildar-h56-1sl9cee'],
+   '1sm1nfc': ['mihalych-h1-1sm1nfc'],
++  '1so2efw': ['alsu-o7-7n1nqy', 'alsu-r4-lglorf'],
+   '1so9gvb': ['mihalych-o4-1n372ar', 'mihalych-r12-1amx9vn'],
+   '1sp31ky': ['rinat-o6-1gg8lub', 'rinat-r11-1qcoee'],
+   '1spk9jo': ['worker-h46-1spk9jo'],
+@@ -388,6 +573,10 @@ export const VOICE_CLIPS: Record<string, string[]> = {
+   '1t3wgmu': ['ildar-o6-1mzi8jk', 'ildar-r3-1jnju6v'],
+   '1t3ym03': ['rinat-o8-1d2gub8', 'rinat-r1-1hgqvlg'],
+   '1t413d': ['worker-o9-1sirt3x', 'worker-r12-22k7er'],
++  '1tdqipy': ['sveta-o4-17dgkre', 'sveta-r4-1xlmmor'],
++  '1tfv9ys': ['alsu-h39-1tfv9ys'],
++  '1thl37w': ['sveta-h27-1thl37w'],
++  '1ti877q': ['alsu-inner-echpochmak-1-1ti877q'],
+   '1tks4y2': ['rinat-h18-1tks4y2'],
+   '1tle0ni': ['ildar-o8-z6oox4', 'ildar-r0-1pnt39p'],
+   '1tmrpaq': ['worker-o0-hg7uhy', 'worker-r3-1qx79gz'],
+@@ -399,16 +588,19 @@ export const VOICE_CLIPS: Record<string, string[]> = {
+   '1u18a70': ['rinat-o1-mvr1ct', 'rinat-r8-1aldvsy'],
+   '1u4d6l1': ['rinat-o3-1gvrviw', 'rinat-r8-1aldvsy'],
+   '1u5qntc': ['ildar-o0-1y45009', 'ildar-r13-4nhh1e'],
++  '1u8flnf': ['alsu-o7-7n1nqy', 'alsu-r10-1rh4ky0'],
+   '1u8leax': ['ildar-o2-nojzei', 'ildar-r9-1d9kb7k'],
+   '1u8tau6': ['mihalych-o5-1dcmv0u', 'mihalych-r10-3dzc07'],
+   '1u91mno': ['rinat-o0-ucd0f5', 'rinat-r3-crwyzi'],
+   '1ucd4ok': ['ildar-o2-nojzei', 'ildar-r0-1pnt39p'],
+   '1ud9ox7': ['mihalych-h61-1ud9ox7'],
++  '1uj6irh': ['sveta-o6-1tbaiwq', 'sveta-r5-1ojikuy'],
+   '1ujh9vw': ['worker-h29-1ujh9vw'],
+   '1ukibqv': ['ildar-o4-1tl6jzt', 'ildar-r14-mzhz1h'],
+   '1umzj4h': ['worker-o5-1tl6jzt', 'worker-r11-1txijaj'],
+   '1uqlq72': ['mihalych-h2-1uqlq72'],
+   '1uys8o': ['ildar-h30-1uys8o'],
++  '1uzjnq6': ['alsu-o3-1nd6es0', 'alsu-r6-bnvutv'],
+   '1v0qurn': ['crew-rustam-0-1v0qurn'],
+   '1v18mha': ['worker-o7-1nd6es0', 'worker-r2-wtd8bb'],
+   '1v2w9e2': ['rinat-o5-daya21', 'rinat-r1-1hgqvlg'],
+@@ -416,6 +608,7 @@ export const VOICE_CLIPS: Record<string, string[]> = {
+   '1vivdfh': ['rinat-o3-1gvrviw', 'rinat-r3-crwyzi'],
+   '1vn1lr3': ['rinat-o2-10wjpuq', 'rinat-r9-few680'],
+   '1vnegii': ['ildar-o8-z6oox4', 'ildar-r12-1mpdyfx'],
++  '1vqdop7': ['sveta-o4-17dgkre', 'sveta-r2-1623hda'],
+   '1vqro7t': ['rinat-h13-1vqro7t'],
+   '1vvbibx': ['mihalych-h34-1vvbibx'],
+   '1vxzkxr': ['mihalych-o4-1n372ar', 'mihalych-r11-b1jy77'],
+@@ -427,8 +620,11 @@ export const VOICE_CLIPS: Record<string, string[]> = {
+   '1wasglv': ['radio-13-a-1wasglv'],
+   '1wc4pl7': ['worker-h52-1wc4pl7'],
+   '1weguzw': ['mihalych-h6-1weguzw'],
++  '1wev487': ['sveta-o6-1tbaiwq', 'sveta-r0-lbfp8o'],
++  '1whytst': ['alsu-o6-1l4vr2k', 'alsu-r11-2or4u8'],
+   '1wi9zoe': ['crew-nurlan-4-1wi9zoe'],
+   '1wkilc5': ['ildar-o9-184feto', 'ildar-r7-ktrt0c'],
++  '1wo7ot9': ['alsu-o1-qucslo', 'alsu-r11-2or4u8'],
+   '1wq0x3u': ['rinat-o6-1gg8lub', 'rinat-r3-crwyzi'],
+   '1wvj50k': ['worker-o2-ucd0f5', 'worker-r6-8w9lv2'],
+   '1wyf3xt': ['worker-o6-h11gn3', 'worker-r10-u29e9l'],
+@@ -436,7 +632,10 @@ export const VOICE_CLIPS: Record<string, string[]> = {
+   '1x40j4j': ['worker-h8-1x40j4j'],
+   '1x5r6jd': ['worker-o4-lzpitv', 'worker-r1-86st91'],
+   '1x6f5rh': ['worker-o2-ucd0f5', 'worker-r12-22k7er'],
++  '1x6gu4f': ['alsu-o2-1vx613y', 'alsu-r10-1rh4ky0'],
+   '1x775fh': ['rinat-o3-1gvrviw', 'rinat-r9-few680'],
++  '1xdgbii': ['sveta-o3-1npz399', 'sveta-r8-1lnqbdg'],
++  '1xdvqgg': ['alsu-o6-1l4vr2k', 'alsu-r9-1lkgmop'],
+   '1xetvqc': ['rinat-o6-1gg8lub', 'rinat-r13-1517gao'],
+   '1xgdu3f': ['rinat-o2-10wjpuq', 'rinat-r13-1517gao'],
+   '1xgmhcm': ['rinat-o1-mvr1ct', 'rinat-r9-few680'],
+@@ -446,39 +645,55 @@ export const VOICE_CLIPS: Record<string, string[]> = {
+   '1xp7pqf': ['worker-o7-1nd6es0', 'worker-r8-192o54c'],
+   '1xpfrre': ['rinat-o7-rknb0a', 'rinat-r7-wbht6x'],
+   '1xps7ku': ['mihalych-o2-eoanpo', 'mihalych-r14-10m51kn'],
++  '1xr5pdu': ['sveta-o0-1eu0hv3', 'sveta-r5-1ojikuy'],
+   '1xttzrh': ['mihalych-o3-1tl6jzt', 'mihalych-r0-1wrtmyv'],
++  '1xxz4e6': ['sveta-o8-1n372ar', 'sveta-r9-1481gjm'],
+   '1xyxgn1': ['worker-o10-az8s8p', 'worker-r3-1qx79gz'],
+   '1y0sw6': ['ildar-o6-1mzi8jk', 'ildar-r0-1pnt39p'],
+   '1y1a2lj': ['crew-aidar-1-1y1a2lj'],
+   '1y3yxdz': ['worker-o0-hg7uhy', 'worker-r14-1pjthaa'],
+   '1y6gv7u': ['ildar-o4-1tl6jzt', 'ildar-r9-1d9kb7k'],
+   '1y8i0z0': ['crew-aidar-3-1y8i0z0'],
++  '1yeq3tb': ['sveta-o4-17dgkre', 'sveta-r6-a9ovc0'],
+   '1yfnjo5': ['mihalych-h4-1yfnjo5'],
+   '1yl6anm': ['mihalych-h33-1yl6anm'],
+   '1ymc5m8': ['worker-h0-1ymc5m8'],
++  '1yqqd70': ['alsu-o5-wy714o', 'alsu-r13-16gqcr7'],
+   '1yqvq06': ['ildar-o0-1y45009', 'ildar-r10-16gz1a8'],
+   '1yuk0t2': ['rinat-h22-1yuk0t2'],
++  '1yxjhv5': ['sveta-h44-1yxjhv5'],
++  '1yz4svi': ['sveta-o1-1nd6es0', 'sveta-r10-15qlcdf'],
+   '20hhnd': ['worker-h44-20hhnd'],
++  '22h2ci': ['sveta-o3-1npz399', 'sveta-r14-nne5h8'],
++  '249d9u': ['sveta-inner-phones-4-249d9u'],
+   '28nci9': ['ildar-h27-28nci9'],
+   '29djl4': ['worker-o7-1nd6es0', 'worker-r0-1hn84or'],
++  '29xrg7': ['alsu-o2-1vx613y', 'alsu-r1-k0k0bm'],
++  '2b5uek': ['alsu-h28-2b5uek'],
++  '2b64vy': ['alsu-o2-1vx613y', 'alsu-r9-1lkgmop'],
+   '2dszmt': ['radio-11-b-2dszmt'],
+   '2gagd8': ['ildar-o9-184feto', 'ildar-r1-m58yd3'],
+   '2mgnau': ['worker-o3-1d9cly0', 'worker-r2-wtd8bb'],
+   '2oazta': ['rinat-o1-mvr1ct', 'rinat-r6-1u0qbnw'],
++  '2osw0g': ['alsu-h5-2osw0g'],
+   '2ou2od': ['ildar-o7-1dcmv0u', 'ildar-r6-5j6b96'],
+   '2sifl9': ['radio-10-a-2sifl9'],
+   '2tnv5': ['ildar-o9-184feto', 'ildar-r4-1xmkv2e'],
+   '2u9fv7': ['rinat-o7-rknb0a', 'rinat-r8-1aldvsy'],
+   '2wtlgt': ['worker-o2-ucd0f5', 'worker-r2-wtd8bb'],
+   '318v15': ['worker-o5-1tl6jzt', 'worker-r0-1hn84or'],
++  '334hym': ['alsu-h37-334hym'],
++  '34czh3': ['alsu-h53-34czh3'],
+   '38v1q0': ['rinat-h17-38v1q0'],
+   '3d9ogm': ['mihalych-o0-fypm9l', 'mihalych-r1-aedt4k'],
+   '3e0de9': ['worker-o4-lzpitv', 'worker-r13-nw3g71'],
+   '3itotv': ['rinat-h2-3itotv'],
+   '3kb1a3': ['worker-o3-1d9cly0', 'worker-r6-8w9lv2'],
++  '3l4qms': ['alsu-h46-3l4qms'],
+   '3nurem': ['ildar-o8-z6oox4', 'ildar-r3-1jnju6v'],
+   '3po6t2': ['worker-o6-h11gn3', 'worker-r6-8w9lv2'],
+   '3qpgzp': ['ildar-o8-z6oox4', 'ildar-r11-njzxo2'],
++  '3s7hc9': ['sveta-o2-qucslo', 'sveta-r6-a9ovc0'],
+   '3v8y1w': ['mihalych-o0-fypm9l', 'mihalych-r7-34dl4u'],
+   '3vjz3a': ['ildar-o2-nojzei', 'ildar-r14-mzhz1h'],
+   '3vwf1x': ['ildar-o3-8lzr7d', 'ildar-r8-j1d1yn'],
+@@ -487,42 +702,64 @@ export const VOICE_CLIPS: Record<string, string[]> = {
+   '40x5ad': ['ildar-h43-40x5ad'],
+   '41bi5y': ['ildar-h26-41bi5y'],
+   '43n351': ['mihalych-h27-43n351'],
++  '47c5ym': ['sveta-h38-47c5ym'],
+   '4b22h4': ['mihalych-h80-4b22h4'],
+   '4f9mro': ['ildar-o1-1nsychr', 'ildar-r5-qo8f98'],
+   '4jy0fy': ['rinat-o6-1gg8lub', 'rinat-r12-jac9gy'],
++  '4k0xt8': ['sveta-o6-1tbaiwq', 'sveta-r10-15qlcdf'],
++  '4mev13': ['sveta-o4-17dgkre', 'sveta-r9-1481gjm'],
++  '4nqi6d': ['sveta-h29-4nqi6d'],
++  '4uab7': ['alsu-o8-mpdhgu', 'alsu-r0-40uuy6'],
+   '4umoyr': ['mihalych-h85-4umoyr'],
++  '4vn0o3': ['alsu-o4-1gvc7en', 'alsu-r4-lglorf'],
+   '4vpeuo': ['rinat-o3-1gvrviw', 'rinat-r7-wbht6x'],
+   '4xqaw5': ['worker-h43-4xqaw5'],
++  '4zqbth': ['alsu-o4-1gvc7en', 'alsu-r8-dyq99p'],
+   '51cdd2': ['rinat-o9-91qgst', 'rinat-r9-few680'],
+   '52x6ms': ['worker-h36-52x6ms'],
+   '53fov8': ['mihalych-o3-1tl6jzt', 'mihalych-r7-34dl4u'],
+   '54fjt4': ['ildar-o1-1nsychr', 'ildar-r10-16gz1a8'],
+   '55loym': ['ildar-o3-8lzr7d', 'ildar-r7-ktrt0c'],
+   '59r4bo': ['worker-o6-h11gn3', 'worker-r8-192o54c'],
++  '5auqyg': ['alsu-o4-1gvc7en', 'alsu-r11-2or4u8'],
+   '5cq91k': ['rinat-o9-91qgst', 'rinat-r0-fk22b6'],
+   '5h34p': ['mihalych-inner-sleep-5h34p'],
+   '5ht56s': ['worker-o0-hg7uhy', 'worker-r11-1txijaj'],
++  '5jkxv9': ['alsu-h17-5jkxv9'],
+   '5lb5cj': ['ildar-o9-184feto', 'ildar-r5-qo8f98'],
+   '5ns9qw': ['worker-o9-1sirt3x', 'worker-r14-1pjthaa'],
++  '5o0lie': ['sveta-h17-5o0lie'],
++  '5ow4do': ['alsu-o7-7n1nqy', 'alsu-r6-bnvutv'],
+   '5pjikb': ['rinat-o2-10wjpuq', 'rinat-r8-1aldvsy'],
+   '5pox3h': ['rinat-o7-rknb0a', 'rinat-r1-1hgqvlg'],
+   '5ttwea': ['ildar-o9-184feto', 'ildar-r3-1jnju6v'],
+   '5ut76z': ['radio-5-a-5ut76z'],
++  '5vciux': ['sveta-o1-1nd6es0', 'sveta-r7-vbofw'],
++  '5zdygz': ['alsu-h52-5zdygz'],
+   '5zon2t': ['worker-o3-1d9cly0', 'worker-r7-s4u7ia'],
+   '60hoaj': ['rinat-h42-60hoaj'],
+   '61u6m8': ['rinat-o0-ucd0f5', 'rinat-r8-1aldvsy'],
+   '63sj9g': ['mihalych-o5-1dcmv0u', 'mihalych-r14-10m51kn'],
++  '66o4jd': ['alsu-o5-wy714o', 'alsu-r10-1rh4ky0'],
+   '66oh0k': ['ildar-h31-66oh0k'],
++  '67wqr0': ['alsu-h43-67wqr0'],
++  '68zbj4': ['radio-10-b-68zbj4'],
++  '6c1dw4': ['sveta-h7-6c1dw4'],
++  '6gk254': ['alsu-o6-1l4vr2k', 'alsu-r13-16gqcr7'],
++  '6gqmy3': ['sveta-o1-1nd6es0', 'sveta-r8-1lnqbdg'],
+   '6kmapm': ['worker-o6-h11gn3', 'worker-r14-1pjthaa'],
+   '6m7934': ['mihalych-h0-6m7934'],
+   '6mvhxp': ['ildar-o2-nojzei', 'ildar-r5-qo8f98'],
+   '6nzeet': ['mihalych-h66-6nzeet'],
+   '6ocy27': ['radio-9-b-6ocy27'],
++  '6oso4r': ['alsu-o4-1gvc7en', 'alsu-r3-1q5grlv'],
+   '6rrbdu': ['worker-o3-1d9cly0', 'worker-r5-r7udq3'],
++  '6xtwo7': ['sveta-h54-6xtwo7'],
+   '6y3rhh': ['ildar-o4-1tl6jzt', 'ildar-r1-m58yd3'],
+   '71bps9': ['ildar-o8-z6oox4', 'ildar-r7-ktrt0c'],
+   '759vlf': ['mihalych-h25-759vlf'],
+   '76ub6h': ['ildar-h57-76ub6h'],
++  '77g2gd': ['sveta-o1-1nd6es0', 'sveta-r12-msq1jy'],
+   '78abi4': ['rinat-o5-daya21', 'rinat-r3-crwyzi'],
+   '78bflr': ['ildar-o7-1dcmv0u', 'ildar-r10-16gz1a8'],
+   '79pkn': ['crew-rustam-4-79pkn'],
+@@ -531,10 +768,15 @@ export const VOICE_CLIPS: Record<string, string[]> = {
+   '7e4bb9': ['worker-o5-1tl6jzt', 'worker-r2-wtd8bb'],
+   '7ea9s6': ['rinat-o6-1gg8lub', 'rinat-r0-fk22b6'],
+   '7fg029': ['mihalych-o5-1dcmv0u', 'mihalych-r7-34dl4u'],
++  '7fww4a': ['sveta-o5-186ymix', 'sveta-r0-lbfp8o'],
++  '7g13jb': ['alsu-o4-1gvc7en', 'alsu-r2-1j0v3sv'],
+   '7i1g6t': ['worker-o5-1tl6jzt', 'worker-r4-1qvuoyr'],
++  '7iq2dw': ['radio-11-a-7iq2dw'],
+   '7jhh0w': ['ildar-h7-7jhh0w'],
+   '7kye72': ['rinat-h33-7kye72'],
+   '7nsswo': ['ildar-o7-1dcmv0u', 'ildar-r3-1jnju6v'],
++  '7o4h7j': ['sveta-h19-7o4h7j'],
++  '7oe25g': ['alsu-h55-7oe25g'],
+   '7og0ib': ['worker-o1-1nsychr', 'worker-r5-r7udq3'],
+   '7oky7v': ['mihalych-o1-1nsychr', 'mihalych-r11-b1jy77'],
+   '7t28mt': ['worker-o6-h11gn3', 'worker-r13-nw3g71'],
+@@ -544,16 +786,23 @@ export const VOICE_CLIPS: Record<string, string[]> = {
+   '82mydn': ['worker-o9-1sirt3x', 'worker-r1-86st91'],
+   '83dqm4': ['rinat-o5-daya21', 'rinat-r12-jac9gy'],
+   '854qa0': ['rinat-h50-854qa0'],
++  '85gof8': ['sveta-h42-85gof8'],
+   '86fqqv': ['mihalych-h16-86fqqv'],
++  '88q6ci': ['sveta-h46-88q6ci'],
++  '899k99': ['alsu-inner-echpochmak-3-899k99'],
+   '8eir3k': ['worker-h12-8eir3k'],
+   '8k10mr': ['worker-o6-h11gn3', 'worker-r11-1txijaj'],
+   '8lu2xn': ['mihalych-o4-1n372ar', 'mihalych-r0-1wrtmyv'],
+   '8q4qfo': ['worker-o2-ucd0f5', 'worker-r14-1pjthaa'],
+   '8tfg33': ['rinat-o8-1d2gub8', 'rinat-r6-1u0qbnw'],
+   '8tqfbs': ['mihalych-h3-8tqfbs'],
++  '8v85ih': ['sveta-o3-1npz399', 'sveta-r4-1xlmmor'],
+   '8wdudn': ['ildar-o4-1tl6jzt', 'ildar-r12-1mpdyfx'],
++  '8y80r': ['alsu-o0-1eu0hv3', 'alsu-r3-1q5grlv'],
++  '91s3ur': ['alsu-o7-7n1nqy', 'alsu-r1-k0k0bm'],
+   '929tnx': ['rinat-o4-1salm44', 'rinat-r12-jac9gy'],
+   '94oaac': ['rinat-h1-94oaac'],
++  '95fy2q': ['alsu-o1-qucslo', 'alsu-r12-133uzpx'],
+   '964jwy': ['worker-o8-7n1nqy', 'worker-r4-1qvuoyr'],
+   '988pa6': ['mihalych-o6-h6zhum', 'mihalych-r8-zyncpb'],
+   '98v2wj': ['worker-o0-hg7uhy', 'worker-r7-s4u7ia'],
+@@ -563,17 +812,24 @@ export const VOICE_CLIPS: Record<string, string[]> = {
+   '9i09fa': ['mihalych-h47-9i09fa'],
+   '9iw69': ['worker-h21-9iw69'],
+   '9jphs0': ['ildar-h12-9jphs0'],
++  '9kjw6r': ['sveta-o7-1l4vr2k', 'sveta-r5-1ojikuy'],
+   '9lw3k1': ['rinat-o4-1salm44', 'rinat-r9-few680'],
+   '9wgoj7': ['worker-o2-ucd0f5', 'worker-r10-u29e9l'],
+   '9z23fk': ['worker-o3-1d9cly0', 'worker-r0-1hn84or'],
++  a1w8mk: ['sveta-o3-1npz399', 'sveta-r5-1ojikuy'],
++  a3g2on: ['alsu-o0-1eu0hv3', 'alsu-r2-1j0v3sv'],
++  a4d21a: ['alsu-inner-echpochmak-2-a4d21a'],
+   a4lz5h: ['ildar-o0-1y45009', 'ildar-r1-m58yd3'],
+   ae3y0y: ['rinat-o5-daya21', 'rinat-r6-1u0qbnw'],
+   alg8rn: ['worker-o9-1sirt3x', 'worker-r13-nw3g71'],
+   aljeso: ['mihalych-o4-1n372ar', 'mihalych-r1-aedt4k'],
+   amf897: ['mihalych-o3-1tl6jzt', 'mihalych-r6-5ihaw1'],
++  apz74l: ['sveta-o5-186ymix', 'sveta-r4-1xlmmor'],
+   aqkj18: ['ildar-h19-aqkj18'],
++  arzjgh: ['sveta-o7-1l4vr2k', 'sveta-r1-3tkv7o'],
+   auoyuf: ['worker-o4-lzpitv', 'worker-r5-r7udq3'],
+   axe0kz: ['rinat-h51-axe0kz'],
++  axxp6u: ['sveta-o0-1eu0hv3', 'sveta-r2-1623hda'],
+   aym88x: ['worker-o3-1d9cly0', 'worker-r14-1pjthaa'],
+   b191sv: ['ildar-o7-1dcmv0u', 'ildar-r4-1xmkv2e'],
+   b4tuew: ['rinat-h41-b4tuew'],
+@@ -584,20 +840,27 @@ export const VOICE_CLIPS: Record<string, string[]> = {
+   be45oh: ['rinat-o8-1d2gub8', 'rinat-r9-few680'],
+   be4a3: ['worker-o10-az8s8p', 'worker-r10-u29e9l'],
+   bea4l: ['worker-o2-ucd0f5', 'worker-r3-1qx79gz'],
++  bfufjh: ['sveta-h3-bfufjh'],
+   bhsryz: ['mihalych-o2-eoanpo', 'mihalych-r4-2h865y'],
+   bkke1y: ['ildar-o6-1mzi8jk', 'ildar-r2-piwo3d'],
+   bl30gt: ['mihalych-o7-1oj8mtx', 'mihalych-r12-1amx9vn'],
+   bli7kf: ['worker-h7-bli7kf'],
++  bt34uj: ['sveta-o0-1eu0hv3', 'sveta-r10-15qlcdf'],
+   bupg6k: ['worker-o10-az8s8p', 'worker-r14-1pjthaa'],
++  bymn59: ['sveta-o5-186ymix', 'sveta-r13-x2tyxb'],
+   c1pkeb: ['worker-o8-7n1nqy', 'worker-r14-1pjthaa'],
+   c2artr: ['worker-o4-lzpitv', 'worker-r11-1txijaj'],
+   c4p9tg: ['worker-o7-1nd6es0', 'worker-r1-86st91'],
++  cbcatr: ['sveta-o2-qucslo', 'sveta-r8-1lnqbdg'],
+   cd13so: ['ildar-h36-cd13so'],
++  cd6o2c: ['sveta-o3-1npz399', 'sveta-r9-1481gjm'],
+   cdc3ui: ['mihalych-o3-1tl6jzt', 'mihalych-r9-9m6pbo'],
++  cdxu9z: ['sveta-o8-1n372ar', 'sveta-r4-1xlmmor'],
+   cece17: ['mihalych-h24-cece17'],
+   cfh2gn: ['worker-o4-lzpitv', 'worker-r0-1hn84or'],
+   cfzovl: ['worker-o9-1sirt3x', 'worker-r4-1qvuoyr'],
+   cif2ch: ['mihalych-o7-1oj8mtx', 'mihalych-r11-b1jy77'],
++  cj4n6r: ['sveta-o3-1npz399', 'sveta-r11-9z8t1'],
+   cjeew9: ['mihalych-inner-concrete-4-cjeew9'],
+   co73z2: ['rinat-o1-mvr1ct', 'rinat-r13-1517gao'],
+   cpfc00: ['worker-h25-cpfc00'],
+@@ -605,24 +868,34 @@ export const VOICE_CLIPS: Record<string, string[]> = {
+   ct7jr3: ['mihalych-o0-fypm9l', 'mihalych-r2-13nl3t1'],
+   czbtlh: ['worker-h37-czbtlh'],
+   d42yoc: ['ildar-h4-d42yoc'],
++  d5h9ol: ['sveta-o1-1nd6es0', 'sveta-r1-3tkv7o'],
+   d6ohky: ['ildar-h5-d6ohky'],
+   d7mohn: ['rinat-o7-rknb0a', 'rinat-r3-crwyzi'],
++  d7zd87: ['sveta-o8-1n372ar', 'sveta-r10-15qlcdf'],
+   d87gbw: ['mihalych-h19-d87gbw'],
++  d8kteq: ['alsu-o7-7n1nqy', 'alsu-r14-mv1s5r'],
+   dbumcx: ['worker-o2-ucd0f5', 'worker-r0-1hn84or'],
++  dcoex3: ['alsu-h12-dcoex3'],
+   ddnhnh: ['rinat-h57-ddnhnh'],
++  df0w2u: ['alsu-o7-7n1nqy', 'alsu-r8-dyq99p'],
++  dg2imh: ['alsu-o3-1nd6es0', 'alsu-r1-k0k0bm'],
+   dh9l6v: ['mihalych-h14-dh9l6v'],
+   dlujzs: ['worker-h49-dlujzs'],
+   dvdj5i: ['mihalych-h86-dvdj5i'],
++  dwqa62: ['alsu-o7-7n1nqy', 'alsu-r9-1lkgmop'],
+   dxt16e: ['ildar-h33-dxt16e'],
+   dyc761: ['worker-o2-ucd0f5', 'worker-r11-1txijaj'],
+   dz42hh: ['mihalych-o0-fypm9l', 'mihalych-r11-b1jy77'],
+   dzb8mb: ['mihalych-o7-1oj8mtx', 'mihalych-r5-1gh1t2x'],
++  e08kds: ['sveta-o6-1tbaiwq', 'sveta-r13-x2tyxb'],
++  e17rjn: ['alsu-o3-1nd6es0', 'alsu-r7-1ef5ipm'],
+   e20h9m: ['rinat-o0-ucd0f5', 'rinat-r6-1u0qbnw'],
+   e3h8e2: ['mihalych-h62-e3h8e2'],
+   e3jqk: ['ildar-o3-8lzr7d', 'ildar-r11-njzxo2'],
+   e5t94y: ['mihalych-o4-1n372ar', 'mihalych-r4-2h865y'],
+   e64sac: ['ildar-o0-1y45009', 'ildar-r6-5j6b96'],
+   e7pzuy: ['ildar-o3-8lzr7d', 'ildar-r9-1d9kb7k'],
++  e8k3sv: ['alsu-h33-e8k3sv'],
+   eflph7: ['mihalych-o1-1nsychr', 'mihalych-r12-1amx9vn'],
+   egt9uy: ['ildar-o5-h6zhum', 'ildar-r14-mzhz1h'],
+   eh4xxo: ['worker-h47-eh4xxo'],
+@@ -630,17 +903,22 @@ export const VOICE_CLIPS: Record<string, string[]> = {
+   eigfyr: ['worker-o6-h11gn3', 'worker-r5-r7udq3'],
+   ekxnwj: ['ildar-h42-ekxnwj'],
+   elft18: ['mihalych-o1-1nsychr', 'mihalych-r9-9m6pbo'],
++  en8avr: ['alsu-o4-1gvc7en', 'alsu-r14-mv1s5r'],
++  eou4h1: ['sveta-o2-qucslo', 'sveta-r7-vbofw'],
+   eqs3h8: ['ildar-o7-1dcmv0u', 'ildar-r12-1mpdyfx'],
+   erfa0b: ['worker-o1-1nsychr', 'worker-r4-1qvuoyr'],
+   f22ywd: ['worker-o6-h11gn3', 'worker-r1-86st91'],
++  f714ec: ['sveta-inner-phones-2-f714ec'],
+   fbqx8i: ['mihalych-h57-fbqx8i'],
+   fc19xi: ['ildar-h10-fc19xi'],
+   ff68v6: ['worker-o5-1tl6jzt', 'worker-r9-1r2mxss'],
+   fmy874: ['worker-o9-1sirt3x', 'worker-r6-8w9lv2'],
+   fnwb8z: ['mihalych-h22-fnwb8z'],
+   frkgk: ['worker-o10-az8s8p', 'worker-r7-s4u7ia'],
++  ft0rx: ['radio-5-b-ft0rx'],
+   fu0s9w: ['mihalych-o6-h6zhum', 'mihalych-r11-b1jy77'],
+   fu2fy2: ['ildar-o7-1dcmv0u', 'ildar-r14-mzhz1h'],
++  fu76p5: ['sveta-o7-1l4vr2k', 'sveta-r2-1623hda'],
+   fx1dj7: ['rinat-o2-10wjpuq', 'rinat-r3-crwyzi'],
+   fzwyyk: ['mihalych-o6-h6zhum', 'mihalych-r12-1amx9vn'],
+   g1yv9e: ['worker-o0-hg7uhy', 'worker-r0-1hn84or'],
+@@ -648,48 +926,74 @@ export const VOICE_CLIPS: Record<string, string[]> = {
+   g3xobo: ['worker-o1-1nsychr', 'worker-r8-192o54c'],
+   g4xi01: ['ildar-o1-1nsychr', 'ildar-r2-piwo3d'],
+   g8n8ec: ['ildar-o8-z6oox4', 'ildar-r14-mzhz1h'],
++  g9thje: ['alsu-o3-1nd6es0', 'alsu-r2-1j0v3sv'],
+   gadwna: ['rinat-o7-rknb0a', 'rinat-r4-1kymns5'],
++  gbcumh: ['sveta-inner-phones-1-gbcumh'],
+   gde29y: ['worker-o8-7n1nqy', 'worker-r3-1qx79gz'],
+   gecqrj: ['mihalych-h29-gecqrj'],
++  geubhi: ['alsu-h11-geubhi'],
++  ggmg4l: ['alsu-h29-ggmg4l'],
++  gh8d41: ['alsu-h49-gh8d41'],
+   ghsul4: ['rinat-o9-91qgst', 'rinat-r11-1qcoee'],
+   gkbk4i: ['rinat-o5-daya21', 'rinat-r13-1517gao'],
++  gmj9b8: ['sveta-o0-1eu0hv3', 'sveta-r7-vbofw'],
+   gmnub: ['rinat-h55-gmnub'],
+   gtf9ji: ['ildar-o2-nojzei', 'ildar-r1-m58yd3'],
+   gtik35: ['rinat-o5-daya21', 'rinat-r2-1uqwww7'],
++  gvd78m: ['sveta-o6-1tbaiwq', 'sveta-r4-1xlmmor'],
+   gy51iu: ['ildar-o3-8lzr7d', 'ildar-r10-16gz1a8'],
+   gz0lfn: ['worker-o6-h11gn3', 'worker-r0-1hn84or'],
++  gzcykh: ['sveta-o7-1l4vr2k', 'sveta-r0-lbfp8o'],
++  gzziog: ['alsu-o5-wy714o', 'alsu-r8-dyq99p'],
++  h202ja: ['alsu-o5-wy714o', 'alsu-r6-bnvutv'],
+   h3oagw: ['rinat-h16-h3oagw'],
+   h3pk9e: ['radio-12-b-h3pk9e'],
+   h47id2: ['worker-o0-hg7uhy', 'worker-r4-1qvuoyr'],
+   h4o9kw: ['rinat-o1-mvr1ct', 'rinat-r3-crwyzi'],
++  h6hxbx: ['sveta-h34-h6hxbx'],
+   h86v3e: ['worker-h6-h86v3e'],
+   h9svwh: ['rinat-o4-1salm44', 'rinat-r8-1aldvsy'],
+   hadpbi: ['mihalych-h35-hadpbi'],
+   hdhgnv: ['rinat-o3-1gvrviw', 'rinat-r6-1u0qbnw'],
++  hfze2p: ['sveta-o7-1l4vr2k', 'sveta-r12-msq1jy'],
+   hgz74g: ['worker-o0-hg7uhy', 'worker-r12-22k7er'],
++  hi5ylx: ['radio-0-a-hi5ylx'],
+   hk1xgi: ['crew-nikolai-1-hk1xgi'],
+   hlg9wt: ['rinat-o1-mvr1ct', 'rinat-r2-1uqwww7'],
++  hoknj: ['sveta-h13-hoknj'],
++  hplpcb: ['alsu-h35-hplpcb'],
+   hqkthn: ['rinat-h62-hqkthn'],
+   hr4ggs: ['rinat-o1-mvr1ct', 'rinat-r5-6vo8nm'],
+   htt3vd: ['rinat-h44-htt3vd'],
+   hun5c5: ['mihalych-o5-1dcmv0u', 'mihalych-r4-2h865y'],
++  hv4q26: ['sveta-h45-hv4q26'],
+   hvkr2d: ['rinat-o8-1d2gub8', 'rinat-r11-1qcoee'],
+   i1y7ht: ['rinat-o3-1gvrviw', 'rinat-r12-jac9gy'],
+   i48n1g: ['crew-nikolai-0-i48n1g'],
++  i49izn: ['sveta-h10-i49izn'],
++  i6esay: ['alsu-h30-i6esay'],
+   i7ls6c: ['mihalych-h5-i7ls6c'],
+   i94x06: ['mihalych-h37-i94x06'],
+   i9df67: ['crew-armen-1-i9df67'],
++  ia8lvj: ['radio-1-b-ia8lvj'],
+   ib5elz: ['radio-1-a-ib5elz'],
++  ibve7q: ['sveta-o3-1npz399', 'sveta-r1-3tkv7o'],
++  idn36y: ['sveta-h6-idn36y'],
+   igrkbl: ['worker-o5-1tl6jzt', 'worker-r5-r7udq3'],
+   ih8drj: ['ildar-o8-z6oox4', 'ildar-r5-qo8f98'],
+   ihl3ik: ['rinat-o0-ucd0f5', 'rinat-r11-1qcoee'],
+   iio3p3: ['worker-o10-az8s8p', 'worker-r13-nw3g71'],
++  ijlh7q: ['alsu-o8-mpdhgu', 'alsu-r13-16gqcr7'],
++  ilm3w2: ['sveta-o2-qucslo', 'sveta-r10-15qlcdf'],
++  iohoxn: ['alsu-h4-iohoxn'],
+   ipjqj8: ['worker-o5-1tl6jzt', 'worker-r7-s4u7ia'],
+   is8kdf: ['ildar-o4-1tl6jzt', 'ildar-r2-piwo3d'],
++  it78sg: ['alsu-o8-mpdhgu', 'alsu-r6-bnvutv'],
+   itvklb: ['worker-h9-itvklb'],
+   iv27nm: ['mihalych-inner-concrete-3-iv27nm'],
+   ixs6r9: ['mihalych-h87-ixs6r9'],
+   j4dnf5: ['mihalych-o7-1oj8mtx', 'mihalych-r0-1wrtmyv'],
++  j70ict: ['sveta-o3-1npz399', 'sveta-r10-15qlcdf'],
+   ja3cms: ['worker-o6-h11gn3', 'worker-r9-1r2mxss'],
+   jficnc: ['mihalych-inner-helmet-jficnc'],
+   jfozrj: ['mihalych-o2-eoanpo', 'mihalych-r1-aedt4k'],
+@@ -700,19 +1004,25 @@ export const VOICE_CLIPS: Record<string, string[]> = {
+   jhucdc: ['mihalych-h36-jhucdc'],
+   jhv0bu: ['mihalych-o2-eoanpo', 'mihalych-r11-b1jy77'],
+   jklj5h: ['mihalych-h21-jklj5h'],
++  jlmduv: ['alsu-o8-mpdhgu', 'alsu-r1-k0k0bm'],
+   jnqkwp: ['mihalych-o4-1n372ar', 'mihalych-r2-13nl3t1'],
++  joqu30: ['alsu-o6-1l4vr2k', 'alsu-r8-dyq99p'],
+   joysj6: ['rinat-o0-ucd0f5', 'rinat-r9-few680'],
+   jq4dfe: ['ildar-o7-1dcmv0u', 'ildar-r1-m58yd3'],
++  jqyrlm: ['sveta-o0-1eu0hv3', 'sveta-r9-1481gjm'],
+   jtlaxr: ['mihalych-h72-jtlaxr'],
++  jucu6e: ['alsu-o8-mpdhgu', 'alsu-r14-mv1s5r'],
+   jwpwy3: ['ildar-h24-jwpwy3'],
+   jy1hfq: ['mihalych-inner-concrete-1-jy1hfq'],
+   jy5qh8: ['worker-o2-ucd0f5', 'worker-r7-s4u7ia'],
+   jygedi: ['worker-o8-7n1nqy', 'worker-r10-u29e9l'],
+   k1o8cu: ['worker-o4-lzpitv', 'worker-r7-s4u7ia'],
++  k52vqa: ['alsu-o7-7n1nqy', 'alsu-r3-1q5grlv'],
+   k7x426: ['mihalych-o6-h6zhum', 'mihalych-r10-3dzc07'],
+   k9o4my: ['ildar-h20-k9o4my'],
+   kby839: ['ildar-o4-1tl6jzt', 'ildar-r8-j1d1yn'],
+   ke7htr: ['mihalych-h91-ke7htr'],
++  kfb56j: ['sveta-o4-17dgkre', 'sveta-r14-nne5h8'],
+   kk5ged: ['ildar-o0-1y45009', 'ildar-r8-j1d1yn'],
+   kmhk44: ['mihalych-h51-kmhk44'],
+   kr2h1y: ['ildar-h55-kr2h1y'],
+@@ -726,19 +1036,30 @@ export const VOICE_CLIPS: Record<string, string[]> = {
+   kyyjqr: ['ildar-o0-1y45009', 'ildar-r2-piwo3d'],
+   kzgzc9: ['rinat-o3-1gvrviw', 'rinat-r11-1qcoee'],
+   l2bnee: ['ildar-o4-1tl6jzt', 'ildar-r10-16gz1a8'],
++  l2cwjb: ['sveta-o0-1eu0hv3', 'sveta-r13-x2tyxb'],
++  l447ct: ['alsu-o4-1gvc7en', 'alsu-r12-133uzpx'],
+   l5pimt: ['mihalych-o3-1tl6jzt', 'mihalych-r14-10m51kn'],
+   l6wk2t: ['ildar-o9-184feto', 'ildar-r13-4nhh1e'],
++  l8blqg: ['alsu-o1-qucslo', 'alsu-r3-1q5grlv'],
+   l8db5n: ['ildar-h54-l8db5n'],
++  l8j400: ['alsu-o8-mpdhgu', 'alsu-r4-lglorf'],
++  l91yw0: ['alsu-o1-qucslo', 'alsu-r14-mv1s5r'],
+   lcieo1: ['worker-o7-1nd6es0', 'worker-r9-1r2mxss'],
++  leygc6: ['sveta-o5-186ymix', 'sveta-r14-nne5h8'],
+   lk2a7: ['worker-h27-lk2a7'],
+   lkg62m: ['ildar-h25-lkg62m'],
+   llbobn: ['worker-h10-llbobn'],
++  llw6dq: ['alsu-h32-llw6dq'],
+   lm2lpb: ['worker-o4-lzpitv', 'worker-r12-22k7er'],
+   lusxgf: ['ildar-h28-lusxgf'],
+   lva3vi: ['mihalych-h59-lva3vi'],
++  lx6lx8: ['sveta-h40-lx6lx8'],
+   lxztj5: ['mihalych-h38-lxztj5'],
+   m1u169: ['worker-h39-m1u169'],
+   m2b1sz: ['ildar-h1-m2b1sz'],
++  m2ot2l: ['alsu-o0-1eu0hv3', 'alsu-r12-133uzpx'],
++  m6iow3: ['alsu-h48-m6iow3'],
++  m7w842: ['alsu-o4-1gvc7en', 'alsu-r7-1ef5ipm'],
+   m8nrjw: ['mihalych-o1-1nsychr', 'mihalych-r1-aedt4k'],
+   m8pvys: ['ildar-o1-1nsychr', 'ildar-r7-ktrt0c'],
+   m9oj4t: ['rinat-o8-1d2gub8', 'rinat-r13-1517gao'],
+@@ -746,7 +1067,12 @@ export const VOICE_CLIPS: Record<string, string[]> = {
+   mdfd7h: ['mihalych-o1-1nsychr', 'mihalych-r2-13nl3t1'],
+   mdw0d8: ['ildar-o0-1y45009', 'ildar-r11-njzxo2'],
+   me8sbu: ['mihalych-h49-me8sbu'],
++  mh4eoy: ['sveta-o5-186ymix', 'sveta-r1-3tkv7o'],
+   mkgwqr: ['rinat-o3-1gvrviw', 'rinat-r5-6vo8nm'],
++  mn6n9i: ['sveta-o0-1eu0hv3', 'sveta-r12-msq1jy'],
++  modq5h: ['alsu-h51-modq5h'],
++  mpntpl: ['sveta-o8-1n372ar', 'sveta-r11-9z8t1'],
++  n00pz6: ['sveta-o5-186ymix', 'sveta-r6-a9ovc0'],
+   n0qpmi: ['ildar-o1-1nsychr', 'ildar-r11-njzxo2'],
+   n0scb: ['ildar-o5-h6zhum', 'ildar-r11-njzxo2'],
+   n17cla: ['worker-o2-ucd0f5', 'worker-r8-192o54c'],
+@@ -756,37 +1082,53 @@ export const VOICE_CLIPS: Record<string, string[]> = {
+   n63czy: ['ildar-o8-z6oox4', 'ildar-r8-j1d1yn'],
+   n7c896: ['worker-o7-1nd6es0', 'worker-r11-1txijaj'],
+   na236u: ['mihalych-h68-na236u'],
++  nci2br: ['sveta-o4-17dgkre', 'sveta-r0-lbfp8o'],
+   nfnk23: ['ildar-h41-nfnk23'],
+   nfwhzc: ['mihalych-h23-nfwhzc'],
++  nicl84: ['sveta-h53-nicl84'],
+   nkknu2: ['worker-o7-1nd6es0', 'worker-r12-22k7er'],
+   nl2fc1: ['crew-rustam-2-nl2fc1'],
+   nmfbu9: ['mihalych-h39-nmfbu9'],
+   nn1sga: ['worker-o4-lzpitv', 'worker-r6-8w9lv2'],
+   nn4dr1: ['rinat-o9-91qgst', 'rinat-r2-1uqwww7'],
++  nr0yq0: ['alsu-o0-1eu0hv3', 'alsu-r11-2or4u8'],
+   nr1884: ['rinat-o0-ucd0f5', 'rinat-r0-fk22b6'],
+   nrfrj6: ['ildar-h48-nrfrj6'],
+   ntjy8f: ['rinat-o0-ucd0f5', 'rinat-r4-1kymns5'],
++  nu1qyg: ['sveta-o4-17dgkre', 'sveta-r3-135vosh'],
+   o2wxu1: ['ildar-o8-z6oox4', 'ildar-r13-4nhh1e'],
++  o4k7k5: ['sveta-o2-qucslo', 'sveta-r9-1481gjm'],
+   o8yuwa: ['mihalych-h58-o8yuwa'],
++  oai4ya: ['alsu-h7-oai4ya'],
+   oeq93w: ['mihalych-h20-oeq93w'],
++  ogbhak: ['alsu-o7-7n1nqy', 'alsu-r12-133uzpx'],
++  ogw1mg: ['sveta-h51-ogw1mg'],
++  oin2ct: ['sveta-o1-1nd6es0', 'sveta-r2-1623hda'],
+   oiqzsz: ['ildar-o2-nojzei', 'ildar-r7-ktrt0c'],
+   ojvv3a: ['mihalych-o6-h6zhum', 'mihalych-r2-13nl3t1'],
+   olc628: ['mihalych-o6-h6zhum', 'mihalych-r13-l8wx6v'],
++  olpadl: ['alsu-o6-1l4vr2k', 'alsu-r0-40uuy6'],
++  om4apm: ['sveta-o5-186ymix', 'sveta-r7-vbofw'],
+   onfql6: ['worker-o3-1d9cly0', 'worker-r13-nw3g71'],
++  ootjay: ['alsu-o5-wy714o', 'alsu-r4-lglorf'],
+   op7bfj: ['rinat-o1-mvr1ct', 'rinat-r14-14flwud'],
+   osf3l6: ['worker-o2-ucd0f5', 'worker-r9-1r2mxss'],
++  oslrkc: ['sveta-o6-1tbaiwq', 'sveta-r11-9z8t1'],
+   ozd09v: ['mihalych-h17-ozd09v'],
+   p4rynr: ['rinat-h47-p4rynr'],
+   p6702z: ['ildar-o7-1dcmv0u', 'ildar-r13-4nhh1e'],
+   p8dtb5: ['radio-7-b-p8dtb5'],
++  pb6fh7: ['sveta-o4-17dgkre', 'sveta-r12-msq1jy'],
+   pdxipx: ['mihalych-h28-pdxipx'],
+   pirh8w: ['rinat-o4-1salm44', 'rinat-r10-1c4xck3'],
++  pmpxim: ['radio-2-a-pmpxim'],
+   pndq10: ['ildar-o2-nojzei', 'ildar-r3-1jnju6v'],
+   poj7x3: ['ildar-o2-nojzei', 'ildar-r11-njzxo2'],
+   psrt6k: ['mihalych-h74-psrt6k'],
+   ptzf8f: ['worker-h35-ptzf8f'],
+   pxa30e: ['radio-3-a-pxa30e'],
+   pygkjb: ['worker-o8-7n1nqy', 'worker-r7-s4u7ia'],
++  q1y4y6: ['sveta-o7-1l4vr2k', 'sveta-r13-x2tyxb'],
+   q3o1gs: ['ildar-h35-q3o1gs'],
+   q48ec5: ['mihalych-h81-q48ec5'],
+   q9aio9: ['mihalych-h48-q9aio9'],
+@@ -798,31 +1140,42 @@ export const VOICE_CLIPS: Record<string, string[]> = {
+   qq1n1s: ['mihalych-o6-h6zhum', 'mihalych-r6-5ihaw1'],
+   qq4r5f: ['crew-nikolai-3-qq4r5f'],
+   qq5azr: ['worker-h23-qq5azr'],
++  qqcdqu: ['alsu-h0-qqcdqu'],
+   qswjlt: ['worker-h5-qswjlt'],
++  qttj8q: ['alsu-o0-1eu0hv3', 'alsu-r1-k0k0bm'],
+   quoevv: ['worker-h4-quoevv'],
++  qw1g2g: ['sveta-h56-qw1g2g'],
+   qxduug: ['worker-o0-hg7uhy', 'worker-r13-nw3g71'],
+   qy7lpd: ['rinat-o2-10wjpuq', 'rinat-r5-6vo8nm'],
+   qy838b: ['rinat-h38-qy838b'],
+   qycomv: ['rinat-h25-qycomv'],
+   qylvb8: ['worker-o0-hg7uhy', 'worker-r5-r7udq3'],
+   r28kie: ['mihalych-o3-1tl6jzt', 'mihalych-r1-aedt4k'],
++  r52jkg: ['sveta-o0-1eu0hv3', 'sveta-r0-lbfp8o'],
+   r9htuh: ['rinat-o3-1gvrviw', 'rinat-r0-fk22b6'],
++  rajb65: ['alsu-o6-1l4vr2k', 'alsu-r10-1rh4ky0'],
++  rcgk1p: ['sveta-o4-17dgkre', 'sveta-r8-1lnqbdg'],
+   rfso34: ['ildar-o8-z6oox4', 'ildar-r1-m58yd3'],
+   rg1tyx: ['mihalych-o0-fypm9l', 'mihalych-r12-1amx9vn'],
+   rh2dpx: ['worker-o0-hg7uhy', 'worker-r8-192o54c'],
+   rkwukn: ['worker-o4-lzpitv', 'worker-r4-1qvuoyr'],
+   roc2f4: ['rinat-h37-roc2f4'],
++  rorm57: ['sveta-h2-rorm57'],
+   roydaq: ['worker-o7-1nd6es0', 'worker-r13-nw3g71'],
+   rppqb: ['rinat-h45-rppqb'],
++  rv2ic2: ['alsu-h9-rv2ic2'],
+   rw1dme: ['worker-o1-1nsychr', 'worker-r6-8w9lv2'],
+   s1qhur: ['rinat-o2-10wjpuq', 'rinat-r12-jac9gy'],
+   s2yadi: ['ildar-o6-1mzi8jk', 'ildar-r8-j1d1yn'],
+   s3szxv: ['rinat-h5-s3szxv'],
++  s44246: ['sveta-h36-s44246'],
++  s59462: ['sveta-o8-1n372ar', 'sveta-r2-1623hda'],
+   s61amp: ['rinat-h26-s61amp'],
+   s69zdt: ['rinat-h39-s69zdt'],
+   s6cs3a: ['mihalych-o6-h6zhum', 'mihalych-r5-1gh1t2x'],
+   s8heji: ['rinat-o2-10wjpuq', 'rinat-r4-1kymns5'],
+   sbol02: ['worker-h15-sbol02'],
++  scav1e: ['sveta-h37-scav1e'],
+   scj40j: ['mihalych-h40-scj40j'],
+   se7d8r: ['ildar-o3-8lzr7d', 'ildar-r12-1mpdyfx'],
+   sfe3qy: ['rinat-o5-daya21', 'rinat-r9-few680'],
+@@ -830,12 +1183,17 @@ export const VOICE_CLIPS: Record<string, string[]> = {
+   si79qh: ['mihalych-h78-si79qh'],
+   sn90b4: ['rinat-o6-1gg8lub', 'rinat-r6-1u0qbnw'],
+   so7i7n: ['crew-rustam-3-so7i7n'],
++  sq75ap: ['alsu-h45-sq75ap'],
++  sqvgwd: ['alsu-h24-sqvgwd'],
++  srxb7l: ['sveta-o2-qucslo', 'sveta-r0-lbfp8o'],
+   srxw4a: ['mihalych-h31-srxw4a'],
+   stq3at: ['mihalych-o4-1n372ar', 'mihalych-r6-5ihaw1'],
+   stsj1t: ['worker-o1-1nsychr', 'worker-r10-u29e9l'],
++  svhd8i: ['alsu-o6-1l4vr2k', 'alsu-r12-133uzpx'],
+   sxjvz4: ['ildar-h50-sxjvz4'],
+   sxw9x0: ['mihalych-h67-sxw9x0'],
+   sywei1: ['worker-o2-ucd0f5', 'worker-r5-r7udq3'],
++  t024yi: ['sveta-o1-1nd6es0', 'sveta-r13-x2tyxb'],
+   t0k46x: ['mihalych-o7-1oj8mtx', 'mihalych-r14-10m51kn'],
+   t36rtt: ['ildar-o2-nojzei', 'ildar-r6-5j6b96'],
+   t7jhu7: ['worker-o1-1nsychr', 'worker-r2-wtd8bb'],
+@@ -845,71 +1203,111 @@ export const VOICE_CLIPS: Record<string, string[]> = {
+   tefwik: ['rinat-h12-tefwik'],
+   tfbwl6: ['mihalych-o0-fypm9l', 'mihalych-r9-9m6pbo'],
+   th7dy9: ['mihalych-h7-th7dy9'],
++  tih0el: ['alsu-o1-qucslo', 'alsu-r10-1rh4ky0'],
+   tiv6bo: ['worker-o8-7n1nqy', 'worker-r12-22k7er'],
+   tjhe0j: ['radio-3-b-tjhe0j'],
+   tjnvtl: ['mihalych-o2-eoanpo', 'mihalych-r9-9m6pbo'],
++  tke00: ['alsu-o4-1gvc7en', 'alsu-r10-1rh4ky0'],
+   tns9ck: ['rinat-o8-1d2gub8', 'rinat-r7-wbht6x'],
+   toru55: ['ildar-h32-toru55'],
+   trdxou: ['ildar-o0-1y45009', 'ildar-r7-ktrt0c'],
++  ty06w3: ['radio-0-b-ty06w3'],
+   u0ew3h: ['mihalych-h43-u0ew3h'],
++  u0nt4d: ['sveta-o7-1l4vr2k', 'sveta-r14-nne5h8'],
+   u1u501: ['ildar-o7-1dcmv0u', 'ildar-r5-qo8f98'],
++  u4735i: ['alsu-o6-1l4vr2k', 'alsu-r2-1j0v3sv'],
+   u9j8xg: ['crew-armen-4-u9j8xg'],
+   ub716x: ['mihalych-o0-fypm9l', 'mihalych-r8-zyncpb'],
+   ucfrnx: ['ildar-o8-z6oox4', 'ildar-r4-1xmkv2e'],
+   uewua4: ['rinat-h23-uewua4'],
++  ukzsxn: ['alsu-o4-1gvc7en', 'alsu-r6-bnvutv'],
++  umdx2r: ['alsu-o0-1eu0hv3', 'alsu-r4-lglorf'],
++  upk0vf: ['alsu-o4-1gvc7en', 'alsu-r13-16gqcr7'],
+   utkaw7: ['worker-o9-1sirt3x', 'worker-r10-u29e9l'],
+   uwkgo3: ['mihalych-o3-1tl6jzt', 'mihalych-r3-1826bbd'],
++  uzwjg4: ['sveta-o5-186ymix', 'sveta-r12-msq1jy'],
+   v1lxw4: ['worker-o3-1d9cly0', 'worker-r3-1qx79gz'],
++  v25i3r: ['alsu-o7-7n1nqy', 'alsu-r0-40uuy6'],
++  v2czwf: ['sveta-h49-v2czwf'],
+   v5dh1p: ['mihalych-o0-fypm9l', 'mihalych-r0-1wrtmyv'],
++  v69wpc: ['sveta-o4-17dgkre', 'sveta-r13-x2tyxb'],
+   vahw5u: ['ildar-o6-1mzi8jk', 'ildar-r12-1mpdyfx'],
++  vezqg1: ['sveta-h14-vezqg1'],
++  vhyj6y: ['alsu-o7-7n1nqy', 'alsu-r13-16gqcr7'],
++  vkftoy: ['sveta-o1-1nd6es0', 'sveta-r3-135vosh'],
+   vmyp0a: ['rinat-o7-rknb0a', 'rinat-r2-1uqwww7'],
++  vmz4ee: ['alsu-o4-1gvc7en', 'alsu-r0-40uuy6'],
+   vnc83v: ['rinat-o5-daya21', 'rinat-r14-14flwud'],
+   vo0wtv: ['worker-o1-1nsychr', 'worker-r11-1txijaj'],
+   vv7f7u: ['ildar-o5-h6zhum', 'ildar-r1-m58yd3'],
++  vwf0i4: ['sveta-o4-17dgkre', 'sveta-r10-15qlcdf'],
+   vxeb9x: ['ildar-o1-1nsychr', 'ildar-r12-1mpdyfx'],
+   vyirag: ['worker-o8-7n1nqy', 'worker-r5-r7udq3'],
+   vyyhxb: ['rinat-o8-1d2gub8', 'rinat-r5-6vo8nm'],
++  vz1c0r: ['alsu-o5-wy714o', 'alsu-r7-1ef5ipm'],
+   w2597f: ['mihalych-h82-w2597f'],
++  w57nfc: ['alsu-h38-w57nfc'],
++  w60v4e: ['sveta-o2-qucslo', 'sveta-r13-x2tyxb'],
+   wccgwq: ['mihalych-h18-wccgwq'],
++  wdjm3n: ['sveta-o8-1n372ar', 'sveta-r13-x2tyxb'],
+   wfm0bc: ['rinat-inner-school-1-wfm0bc'],
+   wh692n: ['mihalych-o6-h6zhum', 'mihalych-r9-9m6pbo'],
+   wla3hc: ['mihalych-o7-1oj8mtx', 'mihalych-r7-34dl4u'],
+   wlqnwb: ['ildar-h45-wlqnwb'],
++  woesec: ['sveta-o5-186ymix', 'sveta-r2-1623hda'],
+   wpiap7: ['ildar-o9-184feto', 'ildar-r6-5j6b96'],
++  wqqmnh: ['sveta-h30-wqqmnh'],
++  wsm2ku: ['sveta-h24-wsm2ku'],
++  x0qb4u: ['radio-9-a-x0qb4u'],
+   x1h6xo: ['rinat-o5-daya21', 'rinat-r0-fk22b6'],
++  x7301q: ['sveta-o7-1l4vr2k', 'sveta-r11-9z8t1'],
+   x7ylrj: ['rinat-h63-x7ylrj'],
+   x990xi: ['worker-o4-lzpitv', 'worker-r14-1pjthaa'],
++  xajlnd: ['alsu-h20-xajlnd'],
++  xan7cz: ['sveta-o4-17dgkre', 'sveta-r1-3tkv7o'],
+   xc12t5: ['mihalych-h64-xc12t5'],
+   xdozsm: ['ildar-h37-xdozsm'],
+   xen3lr: ['worker-o10-az8s8p', 'worker-r1-86st91'],
+   xexwo8: ['rinat-h64-xexwo8'],
++  xfx6pq: ['alsu-o6-1l4vr2k', 'alsu-r4-lglorf'],
++  xh8cds: ['alsu-o1-qucslo', 'alsu-r9-1lkgmop'],
+   ximpwo: ['worker-h14-ximpwo'],
+   xjiwxj: ['rinat-inner-school-2-xjiwxj'],
+   xksdzo: ['rinat-o3-1gvrviw', 'rinat-r10-1c4xck3'],
+   xmelym: ['ildar-o1-1nsychr', 'ildar-r4-1xmkv2e'],
+   xoxysb: ['mihalych-h50-xoxysb'],
+   xq3dld: ['mihalych-o1-1nsychr', 'mihalych-r5-1gh1t2x'],
++  xs6ksw: ['alsu-o2-1vx613y', 'alsu-r4-lglorf'],
+   xtgqk9: ['mihalych-o0-fypm9l', 'mihalych-r10-3dzc07'],
+   xw4xh2: ['worker-o8-7n1nqy', 'worker-r1-86st91'],
+   xxyz0y: ['rinat-o0-ucd0f5', 'rinat-r1-1hgqvlg'],
++  xz8jac: ['alsu-o3-1nd6es0', 'alsu-r3-1q5grlv'],
+   y2485e: ['worker-o3-1d9cly0', 'worker-r11-1txijaj'],
++  y3sw33: ['alsu-h47-y3sw33'],
+   ycpqfc: ['mihalych-o0-fypm9l', 'mihalych-r4-2h865y'],
+   ydf9dq: ['ildar-h34-ydf9dq'],
+   ydyj6r: ['rinat-o4-1salm44', 'rinat-r1-1hgqvlg'],
++  ye3n88: ['alsu-h2-ye3n88'],
+   yendoo: ['rinat-o5-daya21', 'rinat-r5-6vo8nm'],
++  yftp0j: ['sveta-h11-yftp0j'],
+   yggo3z: ['worker-h48-yggo3z'],
+   yhjb5l: ['rinat-o5-daya21', 'rinat-r10-1c4xck3'],
+   yhudx6: ['ildar-h9-yhudx6'],
++  yk1br9: ['alsu-o0-1eu0hv3', 'alsu-r8-dyq99p'],
+   ykkxql: ['crew-nurlan-0-ykkxql'],
++  ylh971: ['alsu-o5-wy714o', 'alsu-r0-40uuy6'],
+   yuvdh7: ['rinat-o6-1gg8lub', 'rinat-r2-1uqwww7'],
+   yuvrij: ['ildar-o7-1dcmv0u', 'ildar-r11-njzxo2'],
+   yv4o6s: ['worker-h32-yv4o6s'],
+   yxb7w8: ['ildar-o6-1mzi8jk', 'ildar-r1-m58yd3'],
++  yz6a94: ['sveta-o8-1n372ar', 'sveta-r8-1lnqbdg'],
+   yzmzv2: ['rinat-o9-91qgst', 'rinat-r13-1517gao'],
+   z19o7v: ['radio-2-b-z19o7v'],
+   z4iurz: ['mihalych-h65-z4iurz'],
+   z8d8cy: ['mihalych-h53-z8d8cy'],
+   z8toh6: ['ildar-o9-184feto', 'ildar-r2-piwo3d'],
++  zd9rk5: ['alsu-inner-echpochmak-5-zd9rk5'],
++  zfj7lk: ['alsu-o8-mpdhgu', 'alsu-r12-133uzpx'],
+   zgvkeg: ['rinat-o5-daya21', 'rinat-r8-1aldvsy'],
+   zhuoat: ['worker-h30-zhuoat'],
+   zikfgi: ['mihalych-o2-eoanpo', 'mihalych-r13-l8wx6v'],
+@@ -919,10 +1317,12 @@ export const VOICE_CLIPS: Record<string, string[]> = {
+   zm94ft: ['worker-o9-1sirt3x', 'worker-r2-wtd8bb'],
+   zndfls: ['rinat-o9-91qgst', 'rinat-r12-jac9gy'],
+   zobcfr: ['worker-h20-zobcfr'],
++  zop3dr: ['alsu-o0-1eu0hv3', 'alsu-r5-1ihid7r'],
+   zq2y9p: ['rinat-o4-1salm44', 'rinat-r0-fk22b6'],
+   zsmcmk: ['mihalych-h32-zsmcmk'],
+   ztep60: ['ildar-o5-h6zhum', 'ildar-r3-1jnju6v'],
+   zty67w: ['ildar-o6-1mzi8jk', 'ildar-r14-mzhz1h'],
+   zxup7u: ['worker-o0-hg7uhy', 'worker-r1-86st91'],
+   zy36yz: ['rinat-o7-rknb0a', 'rinat-r12-jac9gy'],
++  zypq3f: ['sveta-o6-1tbaiwq', 'sveta-r14-nne5h8'],
+ };
