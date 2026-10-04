@@ -164,11 +164,31 @@ export type Goal =
   | 'miniapp_open'
   | 'calc_done';
 
-/** The visitor pressed «Отказаться» in the cookie notice. */
+/**
+ * The cookie choice in localStorage: 'yes' («Согласен», Metrika on), 'no'
+ * («Отключить Метрику» on /privacy) or `later:<ms>` (✕ on the strip: not now,
+ * the strip comes back after COOKIE_SNOOZE_MS). Anything else, including the
+ * old 'hidden' value, means no answer.
+ */
 export const COOKIE_CONSENT_KEY = 'cookie-consent';
+
+/** ✕ on the strip hides it for a week. */
+export const COOKIE_SNOOZE_MS = 7 * 86_400_000;
 
 /** Dispatched on window when the choice is made elsewhere (/privacy): the notice hides. */
 export const COOKIE_CHOICE_EVENT = 'cookie-choice';
+
+/** The value ✕ stores: «not now», with the time it was pressed. */
+export function snoozeValue(now = Date.now()) {
+  return `later:${now}`;
+}
+
+/** Whether the strip should be shown for this stored value. */
+export function cookieStripDue(value: string | null, now = Date.now()): boolean {
+  if (value === 'yes' || value === 'no') return false;
+  const at = Number(/^later:(\d+)$/.exec(value ?? '')?.[1]);
+  return !(at && now - at >= 0 && now - at < COOKIE_SNOOZE_MS);
+}
 
 export function analyticsRefused(): boolean {
   try {
@@ -178,37 +198,102 @@ export function analyticsRefused(): boolean {
   }
 }
 
-type YmQueue = ((...args: unknown[]) => void) & { a?: unknown[][] };
-type MetrikaWindow = { ym?: YmQueue; __ymOff?: boolean; Ya?: unknown };
+type YmQueue = ((...args: unknown[]) => void) & { a?: unknown[][]; l?: number };
+/**
+ * What the inline script in YandexMetrika leaves on window: the `ym` queue
+ * stub, the boot calls (init with the landing page's url and referrer, then
+ * the A/B params) in `__ymBoot`, the tag.js address in `__ymSrc`, and
+ * `__ymStarted` once the boot calls are queued and tag.js is requested.
+ */
+export type MetrikaWindow = {
+  ym?: YmQueue;
+  __ymOff?: boolean;
+  __ymStarted?: boolean;
+  __ymBoot?: unknown[][];
+  __ymSrc?: string;
+  Ya?: unknown;
+};
+
+type ScriptDocument = Pick<Document, 'createElement' | 'getElementsByTagName' | 'head' | 'scripts'>;
+
+export function metrikaTagSrc(id: string) {
+  return `https://mc.yandex.ru/metrika/tag.js?id=${id}`;
+}
 
 /**
- * «Нет» in the cookie notice, on the current page: tag.js is not loaded if it
- * has not been yet (the loader in YandexMetrika checks `__ymOff`), the queued
+ * The inline script YandexMetrika puts in the page (plain ES5, no imports).
+ * It never loads anything: not on /admin; after a refusal it only keeps the
+ * boot calls for a later «Включить Метрику»; otherwise it creates the queue
+ * stub, and with consent stored it queues the boot calls and marks the
+ * counter started, so the idle loader fetches tag.js.
+ */
+export function metrikaInitScript(id: string) {
+  const init = `[${id},"init",{ssr:true,webvisor:true,clickmap:true,ecommerce:"dataLayer",referrer:document.referrer,url:location.href,accurateTrackBounce:true,trackLinks:true}]`;
+  return (
+    `(function(m,i){if(/^\\/admin/.test(location.pathname))return;` +
+    `var v=null;try{v=localStorage.getItem(${JSON.stringify(COOKIE_CONSENT_KEY)})}catch(e){}` +
+    `var b=[${init}];var c=/(?:^|;\\s*)sp_ab=(cine|calm)/.exec(document.cookie);` +
+    `if(c)b.push([${id},"params",{ab:c[1]}]);m.__ymBoot=b;m.__ymSrc=${JSON.stringify(metrikaTagSrc(id))};` +
+    `if(v==='no'){m.__ymOff=true;return}` +
+    `m[i]=m[i]||function(){(m[i].a=m[i].a||[]).push(arguments)};m[i].l=1*new Date();` +
+    `if(v==='yes'){for(var k=0;k<b.length;k++)m[i].apply(null,b[k]);m.__ymStarted=true}` +
+    `})(window,"ym");`
+  );
+}
+
+/** The tiny queue Metrika's own snippet creates: calls wait in `ym.a`. */
+function queueStub(): YmQueue {
+  const ym: YmQueue = (...args: unknown[]) => {
+    (ym.a = ym.a || []).push(args);
+  };
+  ym.a = [];
+  ym.l = Date.now();
+  return ym;
+}
+
+/**
+ * Starts Metrika after consent («Согласен» or «Включить Метрику»), on the same
+ * page: the boot calls go to the FRONT of the queue (so goals reached before
+ * consent are sent after init), tag.js is requested, and the counter is
+ * marked started, so a second call does nothing. Returns false when there is
+ * nothing to start: not production, /admin, or already started.
+ */
+export function startMetrika(
+  win: MetrikaWindow = window as unknown as MetrikaWindow,
+  doc: ScriptDocument = document,
+): boolean {
+  if (win.__ymStarted || !win.__ymBoot || !win.__ymSrc) return false;
+  // Refused earlier (this page or a previous one): the old queue is gone.
+  if (win.__ymOff || !win.ym) win.ym = queueStub();
+  win.__ymOff = false;
+  const ym = win.ym;
+  ym.a = [...win.__ymBoot.map((call) => [...call]), ...(ym.a ?? [])];
+  win.__ymStarted = true;
+  for (const script of Array.from(doc.scripts)) if (script.src === win.__ymSrc) return true;
+  const tag = doc.createElement('script');
+  tag.async = true;
+  tag.src = win.__ymSrc;
+  const first = doc.getElementsByTagName('script')[0];
+  if (first?.parentNode) first.parentNode.insertBefore(tag, first);
+  else doc.head.appendChild(tag);
+  return true;
+}
+
+/**
+ * «Отключить Метрику» on the current page: tag.js is not loaded if it has
+ * not been yet (the loader in YandexMetrika checks `__ymOff`), the queued
  * calls are dropped and later calls go nowhere. On the next page load the
- * init script sees the refusal and does not initialise the counter at all.
+ * init script sees the refusal and does not create the queue at all.
  */
 export function stopMetrika(win: MetrikaWindow = window as unknown as MetrikaWindow): boolean {
   // tag.js already running keeps its click map and link tracking until the
   // page is reloaded; the caller reloads when this returns true.
   const running = Boolean(win.Ya);
   win.__ymOff = true;
+  if (!running) win.__ymStarted = false;
   if (win.ym?.a) win.ym.a.length = 0;
   if (win.ym) win.ym = Object.assign(() => {}, { a: [] });
   return running;
-}
-
-/**
- * «OK» before tag.js has loaded: the queued init call still waits in `ym.a`,
- * so Webvisor is switched on for this very page. Once tag.js is running it
- * cannot be enabled any more, and it starts from the next page load.
- */
-export function enableWebvisorIfQueued(win: MetrikaWindow = window as unknown as MetrikaWindow) {
-  for (const call of win.ym?.a ?? []) {
-    const options = call[2];
-    if (call[1] === 'init' && options && typeof options === 'object') {
-      (options as { webvisor?: boolean }).webvisor = true;
-    }
-  }
 }
 
 export function reachGoal(goal: Goal) {

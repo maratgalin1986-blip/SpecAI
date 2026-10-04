@@ -1,14 +1,19 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { COOKIE_CHOICE_EVENT, COOKIE_CONSENT_KEY, stopMetrika } from '@/lib/marketing';
+import {
+  COOKIE_CHOICE_EVENT,
+  COOKIE_CONSENT_KEY,
+  startMetrika,
+  stopMetrika,
+} from '@/lib/marketing';
 
 type Choice = 'yes' | 'no' | null;
 
 // The cookie choice on /privacy, for visitors who closed the notice: shows
-// the current answer and changes it. «Отключить» stops Metrika right away
-// (lib/marketing.ts); «Включить» takes effect from the next page load, with
-// Webvisor, because Metrika is initialised only when a page loads.
+// the current answer and changes it. «Включить» starts Metrika with Webvisor
+// on this page, «Отключить» stops it right away (lib/marketing.ts). Without a
+// choice (or after ✕ on the strip) Metrika does not run.
 export function CookieChoiceButtons() {
   const [choice, setChoice] = useState<Choice>(null);
   const [ready, setReady] = useState(false);
@@ -30,7 +35,8 @@ export function CookieChoiceButtons() {
       // Ignore: the choice lasts until the page is closed.
     }
     // A running counter only stops for good on a reload (lib/marketing.ts).
-    if (value === 'no' && stopMetrika()) window.location.reload();
+    if (value === 'yes') startMetrika();
+    else if (stopMetrika()) window.location.reload();
     setChoice(value);
     window.dispatchEvent(new Event(COOKIE_CHOICE_EVENT));
   }
@@ -42,7 +48,7 @@ export function CookieChoiceButtons() {
       ? 'Метрика и Вебвизор включены.'
       : choice === 'no'
         ? 'Метрика отключена.'
-        : 'Вы ещё не сделали выбор: Метрика работает без Вебвизора.';
+        : 'Метрика не работает, пока вы не согласитесь.';
 
   return (
     <div className="not-prose my-4 flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm">

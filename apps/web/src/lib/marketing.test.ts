@@ -1,11 +1,17 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import {
   channelFrom,
+  COOKIE_SNOOZE_MS,
+  cookieStripDue,
   DIRECT,
-  enableWebvisorIfQueued,
   formLabel,
   goalOfHref,
+  metrikaInitScript,
+  metrikaTagSrc,
+  type MetrikaWindow,
+  snoozeValue,
   splitSource,
+  startMetrika,
   stopMetrika,
   withChannel,
 } from './marketing';
@@ -70,40 +76,152 @@ describe('formLabel', () => {
   });
 });
 
-function queuedYm() {
-  const ym = Object.assign(vi.fn(), { a: [] as unknown[][] });
-  ym.a.push([1, 'init', { webvisor: false }], [1, 'reachGoal', 'lead']);
-  return ym;
+const ID = '113179760';
+const SRC = metrikaTagSrc(ID);
+
+/** A minimal document: records the scripts startMetrika inserts. */
+function fakeDocument() {
+  const inserted: { src: string; async: boolean }[] = [];
+  const parentNode = {
+    insertBefore: (node: { src: string; async: boolean }) => inserted.push(node),
+  };
+  const doc = {
+    scripts: inserted as unknown as HTMLCollectionOf<HTMLScriptElement>,
+    createElement: () => ({ src: '', async: false }),
+    getElementsByTagName: () => [{ parentNode }],
+    head: { appendChild: (node: { src: string; async: boolean }) => inserted.push(node) },
+  };
+  return { doc: doc as unknown as Parameters<typeof startMetrika>[1], inserted };
 }
 
-describe('cookie choice and the Metrika queue', () => {
-  it('«Нет» drops queued calls, blocks the loader and silences later calls', () => {
-    const ym = queuedYm();
-    const win: { ym?: typeof ym; __ymOff?: boolean } = { ym };
-    stopMetrika(win);
-    expect(ym.a).toHaveLength(0);
-    expect(win.__ymOff).toBe(true);
-    expect(win.ym).not.toBe(ym);
-    win.ym?.(1, 'reachGoal', 'call');
-    expect(ym).not.toHaveBeenCalled();
+/** Runs the inline script of YandexMetrika in a fake page. */
+function bootPage({
+  consent = null as string | null,
+  path = '/',
+  cookie = '',
+}: { consent?: string | null; path?: string; cookie?: string } = {}) {
+  const win: MetrikaWindow & Record<string, unknown> = {};
+  const storage = { getItem: (key: string) => (key === 'cookie-consent' ? consent : null) };
+  const location = { pathname: path, href: `https://${HOST}${path}?yclid=42` };
+  const document = { referrer: 'https://yandex.ru/', cookie };
+  new Function('window', 'localStorage', 'location', 'document', metrikaInitScript(ID))(
+    win,
+    storage,
+    location,
+    document,
+  );
+  return win;
+}
+
+const calls = (win: MetrikaWindow) => (win.ym?.a ?? []).map((call) => Array.from(call));
+
+describe('Metrika before consent', () => {
+  it('only creates the queue: nothing is started or loaded', () => {
+    const win = bootPage();
+    expect(win.__ymStarted).toBeUndefined();
+    expect(win.ym).toBeTypeOf('function');
+    expect(calls(win)).toEqual([]);
+    expect(win.__ymSrc).toBe(SRC);
+    expect(win.__ymBoot?.[0]?.[1]).toBe('init');
   });
 
-  it('«OK» before tag.js loads switches Webvisor on in the queued init', () => {
-    const ym = queuedYm();
-    enableWebvisorIfQueued({ ym });
-    expect(ym.a[0]?.[2]).toEqual({ webvisor: true });
-    expect(ym.a[1]).toEqual([1, 'reachGoal', 'lead']);
+  it('buffers goals in memory without an init call', () => {
+    const win = bootPage();
+    win.ym?.(Number(ID), 'reachGoal', 'call');
+    expect(calls(win)).toEqual([[Number(ID), 'reachGoal', 'call']]);
   });
 
-  it('does nothing without a counter', () => {
-    expect(() => stopMetrika({})).not.toThrow();
-    expect(() => enableWebvisorIfQueued({})).not.toThrow();
+  it('starts at once when consent is stored, with Webvisor and the landing url', () => {
+    const win = bootPage({ consent: 'yes', cookie: 'sp_ab=calm' });
+    expect(win.__ymStarted).toBe(true);
+    const [init, params] = calls(win);
+    expect(init?.[1]).toBe('init');
+    expect(init?.[2]).toMatchObject({
+      webvisor: true,
+      url: `https://${HOST}/?yclid=42`,
+      referrer: 'https://yandex.ru/',
+    });
+    expect(params).toEqual([Number(ID), 'params', { ab: 'calm' }]);
+  });
+
+  it('a stored refusal creates no queue; the snoozed strip is no consent', () => {
+    const refused = bootPage({ consent: 'no' });
+    expect(refused.ym).toBeUndefined();
+    expect(refused.__ymOff).toBe(true);
+    const later = bootPage({ consent: snoozeValue() });
+    expect(later.__ymStarted).toBeUndefined();
+    expect(calls(later)).toEqual([]);
+  });
+
+  it('does nothing on /admin', () => {
+    const win = bootPage({ consent: 'yes', path: '/admin/leads' });
+    expect(win.ym).toBeUndefined();
+    const { doc, inserted } = fakeDocument();
+    expect(startMetrika(win, doc)).toBe(false);
+    expect(inserted).toHaveLength(0);
   });
 });
 
-describe('stopMetrika on a running counter', () => {
+describe('startMetrika on consent', () => {
+  it('puts init first, then the goals buffered earlier, and loads tag.js once', () => {
+    const win = bootPage({ cookie: 'sp_ab=cine' });
+    win.ym?.(Number(ID), 'reachGoal', 'lead');
+    const { doc, inserted } = fakeDocument();
+    expect(startMetrika(win, doc)).toBe(true);
+    const queued = calls(win);
+    expect(queued.map((call) => call[1])).toEqual(['init', 'params', 'reachGoal']);
+    expect(queued[0]?.[2]).toMatchObject({ webvisor: true });
+    expect(inserted).toEqual([{ src: SRC, async: true }]);
+    expect(win.__ymStarted).toBe(true);
+    // A second press does nothing.
+    expect(startMetrika(win, doc)).toBe(false);
+    expect(inserted).toHaveLength(1);
+    expect(calls(win).filter((call) => call[1] === 'init')).toHaveLength(1);
+  });
+
+  it('does not start where the counter is not rendered (dev, previews)', () => {
+    const { doc, inserted } = fakeDocument();
+    expect(startMetrika({}, doc)).toBe(false);
+    expect(inserted).toHaveLength(0);
+  });
+
+  it('after a refusal, «Включить» starts again with a fresh queue', () => {
+    const win = bootPage({ consent: 'no' });
+    const { doc, inserted } = fakeDocument();
+    expect(startMetrika(win, doc)).toBe(true);
+    expect(win.__ymOff).toBe(false);
+    expect(calls(win)[0]?.[1]).toBe('init');
+    expect(inserted).toHaveLength(1);
+  });
+});
+
+describe('stopMetrika', () => {
+  it('drops queued calls, blocks the loader and silences later calls', () => {
+    const win = bootPage({ consent: 'yes' });
+    const ym = win.ym;
+    stopMetrika(win);
+    expect(win.__ymOff).toBe(true);
+    expect(win.__ymStarted).toBe(false);
+    expect(ym?.a).toHaveLength(0);
+    expect(win.ym).not.toBe(ym);
+    win.ym?.(1, 'reachGoal', 'call');
+    expect(calls(win)).toEqual([]);
+  });
+
   it('tells the caller to reload when tag.js already runs', () => {
     expect(stopMetrika({ Ya: {} })).toBe(true);
     expect(stopMetrika({})).toBe(false);
+  });
+});
+
+describe('cookie strip', () => {
+  const now = 1_800_000_000_000;
+  it('shows until answered, hides for a week after ✕', () => {
+    expect(cookieStripDue(null, now)).toBe(true);
+    expect(cookieStripDue('hidden', now)).toBe(true);
+    expect(cookieStripDue('yes', now)).toBe(false);
+    expect(cookieStripDue('no', now)).toBe(false);
+    expect(cookieStripDue(snoozeValue(now - 1000), now)).toBe(false);
+    expect(cookieStripDue(snoozeValue(now - COOKIE_SNOOZE_MS), now)).toBe(true);
   });
 });
