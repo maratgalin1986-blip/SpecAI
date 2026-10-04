@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react';
 import { usePathname } from 'next/navigation';
-import { afterLoad, fxAllowed, hydrated } from '@/lib/cinemaFx';
+import { afterIntroIdle, fxAllowed, hydrated } from '@/lib/cinemaFx';
 
 // «Camera dolly»: big blocks (main > section, CinemaBand) tilt a little in 3D
 // as they enter and leave the viewport, tied to the scroll position, like a
@@ -98,7 +98,7 @@ export function CinemaDolly() {
 
     let mo: MutationObserver | null = null;
     let scanRaf = 0;
-    const cancel = afterLoad(() => {
+    const cancel = afterIntroIdle(() => {
       if (disposed) return;
       register(document);
       const main = document.querySelector('main');

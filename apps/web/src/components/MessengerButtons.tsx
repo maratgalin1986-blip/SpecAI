@@ -14,7 +14,8 @@ function WhatsAppIcon({ className = 'h-5 w-5' }: { className?: string }) {
   );
 }
 
-// Mobile: a sticky bar with the two most-used contact actions.
+// Mobile: a sticky bar with the most-used actions: call, WhatsApp and the
+// order form («Заявка» → the callback form of this page, or the home one).
 // Desktop: a round WhatsApp button above the AI assistant.
 export function MessengerButtons() {
   const pathname = usePathname();
@@ -59,14 +60,14 @@ export function MessengerButtons() {
       <nav
         aria-label="Быстрая связь"
         data-bottom-bar
-        className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-2 gap-2 border-t border-slate-200 bg-white/95 p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] backdrop-blur sm:hidden"
+        className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-3 gap-1.5 border-t border-slate-200 bg-white/95 p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] backdrop-blur sm:hidden"
       >
         <a
           href={SITE.phoneHref}
           className="flex min-h-12 flex-col items-center justify-center rounded-lg bg-amber-500 leading-tight text-slate-950"
         >
-          <span className="flex items-center gap-2 text-base font-bold">
-            <Icon name="phone" className="h-5 w-5" /> Позвонить
+          <span className="flex items-center gap-1.5 text-sm font-bold">
+            <Icon name="phone" className="h-4 w-4" /> Позвонить
           </span>
           {onShift !== null && (
             <span className="flex items-center gap-1 text-[0.65rem] font-medium">
@@ -82,9 +83,26 @@ export function MessengerButtons() {
           href={SITE.whatsappHref}
           target="_blank"
           rel="noopener"
-          className="flex min-h-12 items-center justify-center gap-2 rounded-lg bg-emerald-700 text-base font-semibold text-white"
+          className="flex min-h-12 items-center justify-center gap-1.5 rounded-lg bg-emerald-700 text-sm font-semibold text-white"
         >
-          <WhatsAppIcon /> WhatsApp
+          <WhatsAppIcon className="h-4 w-4" /> WhatsApp
+        </a>
+        <a
+          href={pathname === '/' ? '#callback' : '/#callback'}
+          onClick={(event) => {
+            // A page with its own callback form (landings, catalogue): go
+            // there instead of leaving for the home page.
+            const form =
+              document.getElementById('callback') ??
+              document.querySelector<HTMLElement>('[data-callback-form]');
+            if (!form) return;
+            event.preventDefault();
+            const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+            form.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'start' });
+          }}
+          className="flex min-h-12 items-center justify-center gap-1.5 rounded-lg bg-slate-900 text-sm font-bold text-white"
+        >
+          <Icon name="document" className="h-4 w-4" /> Заявка
         </a>
       </nav>
       <aside aria-label="WhatsApp">

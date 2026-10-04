@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 
 export const metadata: Metadata = {
   title: 'ИИ-подбор техники',
-  description: 'Опишите задачу — ИИ подберёт подходящую спецтехнику.',
+  description: 'Опишите задачу — ИИ подберёт подходящую спецтехнику из парка СпецПласт16.',
 };
 
 export default function Layout({ children }: { children: ReactNode }) {

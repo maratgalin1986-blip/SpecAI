@@ -1,7 +1,7 @@
 import type { Landing } from '@/lib/landings';
 import { LANDINGS } from '@/lib/landings';
 import { MACHINE_LABELS } from '@/lib/machinePhotos';
-import { fromPrice, rateOf, rub, SHIFT_HOURS } from '@/lib/prices';
+import { fromPerHour, rateOf, rub, SHIFT_HOURS } from '@/lib/prices';
 
 // Cities around the base in Набережные Челны where СпецПласт16 sends its own
 // machines (/arenda/<slug>/<city>). Only certain facts live here: the name,
@@ -110,9 +110,9 @@ export function cityPageText(landing: Landing, city: City): CityPageText {
       : `${city.name} — ${distanceText(city)}: ${lower(machine)} СпецПласт16 выезжает на объект ${city.inCity} из собственного парка.`;
   return {
     h1: `Аренда ${landing.title} ${city.inCity} с машинистом`,
-    title: `Аренда ${landing.title} ${city.inCity} — ${fromPrice(rate)} с машинистом`,
+    title: `Аренда ${landing.title} ${city.inCity} — ${fromPerHour(rate)}`,
     description:
-      `${landing.short} СпецПласт16 ${city.around}: ${fromPrice(rate)} с машинистом, ` +
+      `${landing.short} СпецПласт16 ${city.around}: ${fromPerHour(rate)}, ` +
       `смена ${SHIFT_HOURS} ч — от ${rub(rate * SHIFT_HOURS)} ₽. ${DELIVERY_NOTE}`,
     intro: `${where} Например: ${tasks}. ${DELIVERY_NOTE}`,
   };

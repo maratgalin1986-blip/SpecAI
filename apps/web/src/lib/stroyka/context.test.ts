@@ -10,7 +10,7 @@ import {
   renderLine,
   wizardHref,
 } from '@/lib/stroyka/context';
-import { LINES, LinePicker, RADIO_PAIRS } from '@/lib/stroyka/lines';
+import { LINES, LinePicker, lineTexts, RADIO_PAIRS, sayLine } from '@/lib/stroyka/lines';
 import { ShuffleBag } from '@/lib/stroyka/shuffleBag';
 import { CENSOR } from '@/lib/stroykaJokes';
 
@@ -42,11 +42,45 @@ describe('shuffle-bag', () => {
 });
 
 describe('voice lines', () => {
-  it('has about 200 lines per character, unique ids', () => {
+  it('has about 200 ways to speak per character, unique ids', () => {
     for (const pool of Object.values(LINES)) {
-      expect(pool.length).toBeGreaterThanOrEqual(190);
+      expect(pool.flatMap(lineTexts).length).toBeGreaterThanOrEqual(150);
       expect(new Set(pool.map((l) => l.id)).size).toBe(pool.length);
     }
+  });
+
+  // A template remark is one entry of the shuffle-bag, whatever the opener:
+  // the same remark does not come back until the rest of the pool was said.
+  it('counts a template remark once, with a random opener', () => {
+    const remarks = LINES.mihalych.filter((l) => l.openers);
+    expect(remarks.length).toBeGreaterThan(5);
+    remarks.forEach((l, r) => expect(l.id).toBe(`mihalych-t-${r}`));
+    const first = remarks[0]!;
+    const a = sayLine(first, () => 0);
+    const b = sayLine(first, () => 0.99);
+    expect(a.id).toBe(first.id);
+    expect(b.id).toBe(first.id);
+    expect(a.text).toBe(first.openers![0] + first.text);
+    expect(b.text).toBe(first.openers![first.openers!.length - 1] + first.text);
+    expect(lineTexts(first)).toHaveLength(first.openers!.length);
+    // Through the picker: a remark (any opener) does not come back until the
+    // whole pool of remarks was said.
+    const picker = new LinePicker();
+    const said: string[] = [];
+    const pool = LINES.mihalych.filter(
+      (l) => !l.tags.includes('ad') && l.tags.some((t) => ['joke', 'talk', 'business'].includes(t)),
+    );
+    for (let i = 0; i < pool.length; i++) {
+      const line = picker.pick('mihalych', [], false);
+      if (line?.id.includes('-t-')) said.push(line.id);
+      if (line?.id.includes('-t-'))
+        expect(first.openers!.some((o) => line.text.startsWith(o))).toBe(true);
+    }
+    expect(new Set(said).size).toBe(said.length);
+    // No opener clashes with what follows (no «Между нами:» before advice).
+    expect(LINES.sveta.find((l) => l.openers)?.openers).not.toContain('Между нами: ');
+    expect(LINES.alsu.find((l) => l.openers)?.openers).not.toContain('Чтобы не переплатить: ');
+    expect(LINES.worker.find((l) => l.openers)?.openers).not.toContain('Эх, ');
   });
 
   it('keeps Света and Ринат clean, comic swearing only as symbols', () => {
@@ -59,9 +93,12 @@ describe('voice lines', () => {
   it('rotates company mentions rarely', () => {
     let ads = 0;
     const picker = new LinePicker();
-    for (let i = 0; i < 600; i++) if (picker.pick('worker')?.tags.includes('ad')) ads++;
+    for (let i = 0; i < 600; i++) if (picker.pick('mihalych')?.tags.includes('ad')) ads++;
     expect(ads / 600).toBeLessThanOrEqual(1 / 6);
     expect(ads).toBeGreaterThan(0);
+    // The crew advertise nothing, and still always have a line.
+    const crew = new LinePicker([], () => 0);
+    for (let i = 0; i < 20; i++) expect(crew.pick('worker')?.tags).not.toContain('ad');
   });
 
   it('picks lines for the conditions', () => {

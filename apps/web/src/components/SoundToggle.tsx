@@ -1,7 +1,14 @@
 'use client';
 
+import { usePathname } from 'next/navigation';
 import { useEffect, useState, useSyncExternalStore } from 'react';
-import { setSoundEnabled, soundEnabled, subscribeSound, SOUND_HINT_KEY } from '@/lib/sound';
+import {
+  DOCUMENT_PAGES,
+  setSoundEnabled,
+  soundEnabled,
+  subscribeSound,
+  SOUND_HINT_KEY,
+} from '@/lib/sound';
 
 const HINT_MS = 5000;
 
@@ -11,18 +18,25 @@ const HINT_MS = 5000;
  * remembered (lib/sound.ts). The button says what it does (owner,
  * 2026-10-03): «Выключить звук» while the sound is on — the default, which
  * starts at the first touch of the page — and «Включить звук» once it is off.
- * Shows a one-time hint per session, after the opening titles.
+ * Shows a one-time hint per session, after the opening titles. Hidden on the
+ * document pages, which have no sound director (CinemaLayer): a press there
+ * would do nothing.
  */
 export function SoundToggle({
   className = '',
   iconOnPhone = false,
+  large = false,
 }: {
   className?: string;
   /** The site header on a phone has room for the icon only. */
   iconOnPhone?: boolean;
+  /** A 44 px tap target (the site header); 36 px with a 44 px hit area on desktop. */
+  large?: boolean;
 }) {
-  // On by default: the server render shows «Выключить звук» too, so no flicker.
+  // On by default: the server render shows «Выключить звук» too, and the
+  // client store starts from the saved choice (lib/sound.ts), so no flicker.
   const on = useSyncExternalStore(subscribeSound, soundEnabled, () => true);
+  const documentPage = DOCUMENT_PAGES.test(usePathname() ?? '');
   const [hint, setHint] = useState(false);
 
   useEffect(() => {
@@ -68,6 +82,8 @@ export function SoundToggle({
     if (on) setHint(false);
   }, [on]);
 
+  if (documentPage) return null;
+
   return (
     <span className={`relative inline-flex ${className}`}>
       <button
@@ -77,7 +93,11 @@ export function SoundToggle({
         aria-pressed={on}
         aria-label={on ? 'Выключить звук' : 'Включить звук'}
         title={on ? 'Выключить звук' : 'Включить звук — как в кино'}
-        className={`inline-flex h-9 min-w-9 items-center justify-center gap-1 whitespace-nowrap rounded-full px-2.5 text-xs sm:text-sm font-semibold ring-1 transition ${
+        className={`${
+          large
+            ? "relative h-11 min-w-11 lg:h-9 lg:min-w-9 lg:before:absolute lg:before:-inset-1 lg:before:content-['']"
+            : 'h-9 min-w-9'
+        } inline-flex items-center justify-center gap-1 whitespace-nowrap rounded-full px-2.5 text-xs sm:text-sm font-semibold ring-1 transition ${
           on
             ? 'bg-amber-500 text-slate-950 ring-amber-500'
             : 'text-slate-600 ring-slate-300 hover:bg-slate-100'

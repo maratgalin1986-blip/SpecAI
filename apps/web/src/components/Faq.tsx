@@ -27,15 +27,16 @@ export function Faq({
         {items.map((item) => (
           <details
             key={item.q}
-            className="group rounded-2xl border border-slate-200 bg-white p-5 transition open:border-amber-300"
+            className="group rounded-2xl border border-slate-200 bg-white transition open:border-amber-300"
           >
-            <summary className="flex cursor-pointer list-none items-center justify-between gap-4 font-semibold marker:hidden [&::-webkit-details-marker]:hidden">
+            {/* The whole padded row is the tap target (44 px and more). */}
+            <summary className="flex min-h-[44px] cursor-pointer list-none items-center rounded-2xl p-5 justify-between gap-4 font-semibold marker:hidden [&::-webkit-details-marker]:hidden">
               {item.q}
               <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-700 transition group-open:rotate-45 group-open:bg-amber-500 group-open:text-slate-950">
                 <Icon name="plus" className="h-4 w-4" />
               </span>
             </summary>
-            <p className="mt-3 text-sm leading-relaxed text-slate-600">{item.a}</p>
+            <p className="-mt-2 px-5 pb-5 text-sm leading-relaxed text-slate-600">{item.a}</p>
           </details>
         ))}
       </div>

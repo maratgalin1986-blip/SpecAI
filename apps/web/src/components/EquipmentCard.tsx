@@ -1,5 +1,6 @@
 import { isDisplayableImage } from '@/lib/providerMap';
 import { isHouseEquipment } from '@/lib/fleet';
+import { SITE } from '@/lib/site';
 import type { EquipmentStatus } from '@specai/ui';
 import { AvailabilityChip } from '@/components/AvailabilityChip';
 import { Icon, type IconName } from '@/components/Icon';
@@ -78,7 +79,11 @@ export function EquipmentCard({ item }: { item: EquipmentCardItem }) {
             <>
               <img
                 src={photo}
-                alt={item.name}
+                alt={
+                  ownPhoto && isHouseEquipment(item)
+                    ? `${item.name} — техника ${SITE.name}`
+                    : item.name
+                }
                 loading="lazy"
                 className="tilt-zoom h-full w-full object-cover"
               />

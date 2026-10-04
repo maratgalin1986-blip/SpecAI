@@ -5,7 +5,8 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { MachineType } from '@/lib/machinePhotos';
 import { BUILDING, FENCE, GATE_HALF, PIT, PRICES, rub } from '@/lib/stroyka';
-import { STAGES, type WorldProgress } from '@/lib/stroyka/progress';
+import { formatDate, formatMonth, STAGES, type WorldProgress } from '@/lib/stroyka/progress';
+import { onOuterPlot, PLOTS } from '@/lib/stroyka/plots';
 import { SITE } from '@/lib/site';
 import {
   dotTexture,
@@ -42,6 +43,9 @@ export const MASTS: { at: [number, number]; aim: [number, number] }[] = [
 ];
 export const MAST_HEIGHT = 11;
 
+/** Brightness lift of the ground photo per surface (see the ground shader). */
+const GROUND_GAIN = { dry: 3.6, wet: 2.6, snow: 8.5 };
+
 export interface World {
   group: THREE.Group;
   /** Dry, wet or snowy ground and heaps. */
@@ -50,6 +54,8 @@ export interface World {
   /** Things shown only at night (beams, light pools, lit windows). */
   night: THREE.Object3D[];
   nightMaterials: THREE.Material[];
+  /** The floodlight cones' strength and the dust drift clock. */
+  beamUniforms: { opacity: { value: number }; time: { value: number } };
   puddles: THREE.Group;
   /** Lamp head positions, for the moving night light. */
   lampHeads: THREE.Vector3[];
@@ -62,6 +68,8 @@ export interface World {
   updateAds(time: number, night: number): void;
   /** Placeholder skyline, hidden once the real OSM city is loaded. */
   procCity: THREE.Object3D;
+  /** Trees of the finished plots, drawn by the same instanced trees as the rest. */
+  setPlotTrees(spots: [number, number, number][]): void;
 }
 
 /** What a tap on an ad opens: the order panel with a machine, or an estimate. */
@@ -85,15 +93,15 @@ export const AD_MESSAGES: { title: string; sub: string; machine: AdTarget }[] = 
   { title: 'Подача в день заявки', sub: 'свой парк · свои машинисты', machine: 'truck' },
   {
     title: 'Автокран 25 т',
-    sub: `от ${rub(PRICES.crane)} ₽/ч · 32 т — ${rub(PRICES.crane32)} ₽/ч`,
+    sub: `от ${rub(PRICES.crane)} ₽/ч с машинистом · есть и 32 т`,
     machine: 'crane',
   },
   {
     title: 'Самосвал',
-    sub: `от ${rub(PRICES.truck)} ₽/ч · щебень, песок, грунт`,
+    sub: `от ${rub(PRICES.truck)} ₽/ч с машинистом`,
     machine: 'truck',
   },
-  { title: 'Автовышка', sub: `от ${rub(PRICES.agp)} ₽/ч · фасады, окна, вывески`, machine: 'agp' },
+  { title: 'Автовышка', sub: `от ${rub(PRICES.agp)} ₽/ч с машинистом`, machine: 'agp' },
 ];
 
 /** A canvas texture drawn by `draw`. */
@@ -219,7 +227,16 @@ function bannerTexture() {
   return texture;
 }
 
-export function buildWorld(M: Materials, mobile: boolean): World {
+/**
+ * Builds the static site. `pause` is awaited between the sections (terrain,
+ * heaps, fence, props, lights, signs…) so a phone's main thread is never
+ * blocked by the whole build at once.
+ */
+export async function buildWorld(
+  M: Materials,
+  mobile: boolean,
+  pause: () => Promise<void> = async () => {},
+): Promise<World> {
   const group = new THREE.Group();
   const pixels = pixelTexture();
   const voxelMat = new THREE.MeshStandardMaterial({ map: pixels, roughness: 0.85 });
@@ -290,7 +307,11 @@ export function buildWorld(M: Materials, mobile: boolean): World {
   const groundMat = surfaceMaterial('brown_mud_02', 1, { vertexColors: true });
   // Break up the tiling like a real site: large patches of drier clay and
   // darker damp soil, by world position (two noise octaves, no texture).
+  // The mud photo is dark (albedo ~0.07): lifted to dry clay (~0.2) so the
+  // ground reads bright and warm in daylight; snow lifts it further.
+  const groundGain = { value: GROUND_GAIN.dry };
   groundMat.onBeforeCompile = (shader) => {
+    shader.uniforms.gGain = groundGain;
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', '#include <common>\nvarying vec2 vGroundXZ;')
       .replace(
@@ -302,6 +323,7 @@ export function buildWorld(M: Materials, mobile: boolean): World {
         '#include <common>',
         `#include <common>
         varying vec2 vGroundXZ;
+        uniform float gGain;
         float gHash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
         float gNoise(vec2 p) {
           vec2 i = floor(p); vec2 f = fract(p); f = f * f * (3.0 - 2.0 * f);
@@ -312,6 +334,7 @@ export function buildWorld(M: Materials, mobile: boolean): World {
       .replace(
         '#include <map_fragment>',
         `#include <map_fragment>
+        diffuseColor.rgb *= gGain;
         gPatch = gNoise(vGroundXZ / 23.0) * 0.65 + gNoise(vGroundXZ / 7.0) * 0.35;
         vec3 clay = diffuseColor.rgb * vec3(1.28, 1.16, 1.0);
         vec3 damp = diffuseColor.rgb * vec3(0.72, 0.7, 0.68);
@@ -328,15 +351,31 @@ export function buildWorld(M: Materials, mobile: boolean): World {
   terrainMesh.receiveShadow = true;
   group.add(terrainMesh);
 
-  // Ground beyond the site: a frame around it, so it never covers the pits.
+  // Ground beyond the site: a frame around it, so it never covers the pits,
+  // with holes where the district plots draw their own ground (and pits).
   const frame: THREE.BufferGeometry[] = [];
   const R = 700;
-  for (const [x0, x1, z0, z1] of [
-    [-R, R, -R, T.minZ],
-    [-R, R, T.maxZ, R],
-    [-R, T.minX, T.minZ, T.maxZ],
-    [T.maxX, R, T.minZ, T.maxZ],
-  ] as [number, number, number, number][]) {
+  const holes = [T, ...PLOTS.slice(1)];
+  const xs = [...new Set([-R, R, ...holes.flatMap((h) => [h.minX, h.maxX])])].sort((a, b) => a - b);
+  const zs = [...new Set([-R, R, ...holes.flatMap((h) => [h.minZ, h.maxZ])])].sort((a, b) => a - b);
+  const quads: [number, number, number, number][] = [];
+  for (let j = 0; j + 1 < zs.length; j++) {
+    let run: [number, number, number, number] | null = null;
+    for (let k = 0; k + 1 < xs.length; k++) {
+      const [x0, x1, z0, z1] = [xs[k]!, xs[k + 1]!, zs[j]!, zs[j + 1]!];
+      const mx = (x0 + x1) / 2;
+      const mz = (z0 + z1) / 2;
+      const hole = holes.some((h) => mx > h.minX && mx < h.maxX && mz > h.minZ && mz < h.maxZ);
+      if (!hole && run) run[1] = x1;
+      else if (!hole) run = [x0, x1, z0, z1];
+      if (hole && run) {
+        quads.push(run);
+        run = null;
+      }
+    }
+    if (run) quads.push(run);
+  }
+  for (const [x0, x1, z0, z1] of quads) {
     const g = new THREE.PlaneGeometry(x1 - x0, z1 - z0);
     g.rotateX(-Math.PI / 2);
     const uv = g.attributes.uv!;
@@ -347,11 +386,12 @@ export function buildWorld(M: Materials, mobile: boolean): World {
   }
   const farGround = new THREE.Mesh(
     mergeGeometries(frame)!,
-    surfaceMaterial('brown_mud_02', 1, { color: 0x6f8c46 }),
+    surfaceMaterial('brown_mud_02', 1, { color: new THREE.Color(0x6f8c46).multiplyScalar(3) }),
   );
   farGround.receiveShadow = false;
   group.add(farGround);
 
+  await pause();
   // ------------------------------------------------------------ heaps, stacks
   // Smooth mounds with their own photo textures: spoil, gravel, sand.
   const moundGeos: Record<'dirt' | 'gravel' | 'sand', THREE.BufferGeometry[]> = {
@@ -376,9 +416,10 @@ export function buildWorld(M: Materials, mobile: boolean): World {
   heap(9, 30, 2.6, 3, 'sand');
   heap(26, 6, 2.5, 2, 'dirt'); // the dozer's spoil
   const heapMats = {
-    dirt: surfaceMaterial('brown_mud_02', 1),
-    gravel: surfaceMaterial('bicolour_gravel', 1),
-    sand: surfaceMaterial('coast_sand_01', 1),
+    // Lifted like the ground (the photos are dark), so heaps read in the sun.
+    dirt: surfaceMaterial('brown_mud_02', 1, { color: new THREE.Color(2.7, 2.55, 2.4) }),
+    gravel: surfaceMaterial('bicolour_gravel', 1, { color: new THREE.Color(1.7, 1.7, 1.7) }),
+    sand: surfaceMaterial('coast_sand_01', 1, { color: new THREE.Color(1.35, 1.3, 1.25) }),
   };
   const heapBase = new Map<THREE.MeshStandardMaterial, THREE.Color>();
   for (const kind of ['dirt', 'gravel', 'sand'] as const) {
@@ -426,17 +467,19 @@ export function buildWorld(M: Materials, mobile: boolean): World {
     groundColors.needsUpdate = true;
     // Wet ground and heaps shine a little.
     groundMat.roughness = mode === 'wet' ? 0.8 : 1;
+    groundGain.value = GROUND_GAIN[mode];
     for (const [mat, base] of heapBase) {
       mat.color.copy(base);
-      if (mode === 'snow') mat.color.lerp(white, 0.6);
+      if (mode === 'snow') mat.color.lerp(white.clone().multiplyScalar(base.r * 2.4), 0.6);
       if (mode === 'wet') mat.color.multiplyScalar(0.7);
       mat.roughness = mode === 'wet' ? 0.85 : 1;
     }
-    (farGround.material as THREE.MeshStandardMaterial).color.setHex(
-      mode === 'snow' ? 0xe8eef4 : mode === 'wet' ? 0x4f6a34 : 0x6f8c46,
-    );
+    (farGround.material as THREE.MeshStandardMaterial).color
+      .setHex(mode === 'snow' ? 0xe8eef4 : mode === 'wet' ? 0x4f6a34 : 0x6f8c46)
+      .multiplyScalar(mode === 'snow' ? 8 : 3);
   };
 
+  await pause();
   // ------------------------------------------------------------ fence (1 m blocks)
   const fence = new Voxels();
   const fenceColor = (i: number) => (i % 4 === 0 ? 0x26374a : 0x2f4356);
@@ -502,6 +545,7 @@ export function buildWorld(M: Materials, mobile: boolean): World {
     group.add(board);
   }
 
+  await pause();
   // ------------------------------------------------------------ props (merged)
   const props = new Rig(M);
   const propsNode = node(group);
@@ -583,6 +627,7 @@ export function buildWorld(M: Materials, mobile: boolean): World {
     const h = 6 + Math.floor(rand() * 9) * 3;
     const w = 8 + Math.floor(rand() * 3) * 4;
     const shade = 0x8a8f98 + Math.floor(rand() * 3) * 0x0a0a0a;
+    if (onOuterPlot(Math.cos(a) * r, Math.sin(a) * r, w / 2 + 2)) continue;
     city.add(Math.cos(a) * r, h / 2, Math.sin(a) * r, shade, w, h, w);
   }
   // Until the real map loads: the same windowed facades as the city.
@@ -609,18 +654,21 @@ export function buildWorld(M: Materials, mobile: boolean): World {
       z = (rand() - 0.5) * 210;
     } while (Math.abs(x) < 68 && Math.abs(z - 2) < 72);
     if (Math.abs(x) < 9 && z > 64) continue;
+    if (onOuterPlot(x, z, 3)) continue;
     const h = 2 + Math.floor(rand() * 3);
     treeSpots.push([x, z, h]);
   }
+  // Room for the trees of the finished district plots (same draw calls).
+  const PLOT_TREES = 200;
   const trunks = new THREE.InstancedMesh(
     trunkGeo,
     new THREE.MeshStandardMaterial({ color: 0x5b3d22, roughness: 0.95 }),
-    treeSpots.length,
+    treeSpots.length + PLOT_TREES,
   );
   const crowns = new THREE.InstancedMesh(
     crownGeo,
     new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9 }),
-    treeSpots.length * 3,
+    (treeSpots.length + PLOT_TREES) * 3,
   );
   const tm = new THREE.Matrix4();
   treeSpots.forEach(([x, z, h], n) => {
@@ -643,11 +691,48 @@ export function buildWorld(M: Materials, mobile: boolean): World {
       crowns.setColorAt(n * 3 + c, tint(0x3f6a2a, 0.15));
     }
   });
+  const placeTree = ([x, z, h]: [number, number, number], n: number, k: number) => {
+    trunks.setMatrixAt(
+      n,
+      tm.compose(
+        new THREE.Vector3(x, h / 2, z),
+        new THREE.Quaternion(),
+        new THREE.Vector3(1, h, 1),
+      ),
+    );
+    for (let c = 0; c < 3; c++) {
+      // Deterministic jitter (not rand(): the plot trees change with the timeline).
+      const j = Math.sin((n * 3 + c) * 12.9898 + k) * 0.5;
+      const r = 1.1 + (j + 0.5) * 0.6;
+      tm.compose(
+        new THREE.Vector3(x + j * 1.2, h + 0.6 + c * 0.55, z - j * 1.1),
+        new THREE.Quaternion(),
+        new THREE.Vector3(r, r * 0.85, r),
+      );
+      crowns.setMatrixAt(n * 3 + c, tm);
+      crowns.setColorAt(
+        n * 3 + c,
+        new THREE.Color(0x3f6a2a).multiplyScalar(0.9 + (j + 0.5) * 0.25),
+      );
+    }
+  };
+  const setPlotTrees = (spots: [number, number, number][]) => {
+    const list = spots.slice(0, PLOT_TREES);
+    list.forEach((spot, i) => placeTree(spot, treeSpots.length + i, 7));
+    trunks.count = treeSpots.length + list.length;
+    crowns.count = trunks.count * 3;
+    trunks.instanceMatrix.needsUpdate = true;
+    crowns.instanceMatrix.needsUpdate = true;
+    if (crowns.instanceColor) crowns.instanceColor.needsUpdate = true;
+    trunks.computeBoundingSphere();
+    crowns.computeBoundingSphere();
+  };
+  setPlotTrees([]);
   group.add(trunks, crowns);
-  // A couple of tower cranes on neighbouring sites.
+  // A couple of tower cranes on neighbouring sites (clear of the district plots).
   for (const [x, z, rot] of [
     [-120, -90, 0.6],
-    [140, 30, 2.2],
+    [205, 40, 0.15],
   ] as [number, number, number][]) {
     const tower = node(propsNode, [x, 0, z]);
     tower.rotation.y = rot;
@@ -657,16 +742,61 @@ export function buildWorld(M: Materials, mobile: boolean): World {
   }
   props.bake({ cast: true, receive: true });
 
+  await pause();
   // ------------------------------------------------------------ night-only things
   const night: THREE.Object3D[] = [];
   const glow = dotTexture();
-  const beamMat = new THREE.MeshBasicMaterial({
-    color: 0xffe1a6,
+  // Floodlight cones: soft towards the silhouette (view angle), brightest at
+  // the lamp and fading to the ground, with slow drifting dust in the light.
+  const beamUniforms = {
+    opacity: { value: 0 },
+    time: { value: 0 },
+    color: { value: new THREE.Color(0xffe1a6) },
+  };
+  const beamMat = new THREE.ShaderMaterial({
+    uniforms: beamUniforms,
     transparent: true,
-    opacity: 0.08,
     blending: THREE.AdditiveBlending,
     depthWrite: false,
     side: THREE.DoubleSide,
+    vertexShader: /* glsl */ `
+      varying vec2 vBeamUv;
+      varying vec3 vBeamPos;
+      varying float vBeamEdge;
+      void main() {
+        vBeamUv = uv;
+        vec4 world = modelMatrix * vec4(position, 1.0);
+        vBeamPos = world.xyz;
+        vec3 n = normalize(mat3(modelMatrix) * normal);
+        vec3 v = normalize(cameraPosition - world.xyz);
+        vBeamEdge = abs(dot(n, v));
+        gl_Position = projectionMatrix * viewMatrix * world;
+      }`,
+    fragmentShader: /* glsl */ `
+      uniform float opacity;
+      uniform float time;
+      uniform vec3 color;
+      varying vec2 vBeamUv;
+      varying vec3 vBeamPos;
+      varying float vBeamEdge;
+      float bHash(vec3 p) { return fract(sin(dot(p, vec3(17.1, 113.7, 51.3))) * 43758.5453); }
+      float bNoise(vec3 p) {
+        vec3 i = floor(p); vec3 f = fract(p); f = f * f * (3.0 - 2.0 * f);
+        return mix(
+          mix(mix(bHash(i), bHash(i + vec3(1,0,0)), f.x), mix(bHash(i + vec3(0,1,0)), bHash(i + vec3(1,1,0)), f.x), f.y),
+          mix(mix(bHash(i + vec3(0,0,1)), bHash(i + vec3(1,0,1)), f.x), mix(bHash(i + vec3(0,1,1)), bHash(i + vec3(1,1,1)), f.x), f.y),
+          f.z);
+      }
+      void main() {
+        float along = vBeamUv.y; // 1 at the lamp, 0 on the ground
+        float core = pow(vBeamEdge, 2.2);
+        float fall = pow(along, 1.6) * 0.85 + 0.15;
+        float ground = smoothstep(0.0, 0.18, along);
+        vec3 p = vBeamPos * 0.45 + vec3(0.0, -time * 0.25, time * 0.12);
+        float dust = 0.6 + 0.55 * bNoise(p) + 0.25 * bNoise(p * 2.7);
+        float a = opacity * core * fall * ground * dust;
+        gl_FragColor = vec4(color * a, 1.0);
+      }`,
   });
   const poolMat = new THREE.MeshBasicMaterial({
     color: 0xffcf86,
@@ -676,7 +806,7 @@ export function buildWorld(M: Materials, mobile: boolean): World {
     blending: THREE.AdditiveBlending,
     depthWrite: false,
   });
-  const beamGeo = new THREE.CylinderGeometry(0.4, 6, 1, 4, 1, true);
+  const beamGeo = new THREE.CylinderGeometry(0.4, 6, 1, 24, 1, true);
   const poolGeos: THREE.BufferGeometry[] = [];
   const beamGeos: THREE.BufferGeometry[] = [];
   for (const mast of MASTS) {
@@ -758,6 +888,7 @@ export function buildWorld(M: Materials, mobile: boolean): World {
   puddles.visible = false;
   group.add(puddles);
 
+  await pause();
   // ------------------------------------------------------------ flags (cloth that flutters)
   // Each flag is a cloth of 12×4 cells: the vertices wave with the wind
   // every frame, the texture is the real flag.
@@ -812,6 +943,7 @@ export function buildWorld(M: Materials, mobile: boolean): World {
   };
   updateFlags(0, 3, 0);
 
+  await pause();
   // ------------------------------------------------------------ signs and billboards
   const clickables: THREE.Object3D[] = [];
   const signMesh = (
@@ -856,7 +988,11 @@ export function buildWorld(M: Materials, mobile: boolean): World {
       ctx.font = '22px Arial, sans-serif';
       ctx.fillText(`Генподрядчик и техника: ${SITE.name}`, 20, 148);
       ctx.fillText(`Квартал ${SITE.name} · объект № ${p.projectIndex + 1}`, 20, 180);
-      ctx.fillText('Старт квартала: 01.10.2026', 20, 212);
+      ctx.fillText(
+        `Начало работ: ${formatDate(p.startedAt)} · сдача ≈ ${formatMonth(p.finishAt)}`,
+        20,
+        212,
+      );
       ctx.fillText(`Сейчас: ${p.stageName} · ${p.totalPercent}%`, 20, 252);
       const step = 472 / STAGES.length;
       STAGES.forEach((stage, i) => {
@@ -1095,6 +1231,7 @@ export function buildWorld(M: Materials, mobile: boolean): World {
     farGround,
     night,
     nightMaterials: [beamMat, poolMat, paneMat],
+    beamUniforms,
     puddles,
     lampHeads,
     updateFlags,
@@ -1102,6 +1239,7 @@ export function buildWorld(M: Materials, mobile: boolean): World {
     clickables,
     updateAds,
     procCity: cityBuilt.mesh,
+    setPlotTrees,
   };
 }
 

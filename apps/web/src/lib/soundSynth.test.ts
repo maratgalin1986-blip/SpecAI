@@ -58,10 +58,11 @@ function check(buffer: AudioBuffer, maxPeak = 1) {
 
 describe('procedural sounds', () => {
   it('renders a seamless music loop of whole chords', () => {
-    const t0 = performance.now();
+    // CPU time, not wall time: other jobs on a busy machine must not fail it.
+    const t0 = process.cpuUsage();
     const music = renderMusic(ctx);
-    // Rendered once in the browser, off the click handler; keep it quick.
-    expect(performance.now() - t0).toBeLessThan(1500);
+    // Rendered once in the browser (in a worker); keep it quick.
+    expect(process.cpuUsage(t0).user / 1000).toBeLessThan(1500);
     check(music);
     expect(music.duration).toBeGreaterThan(20);
     expect(music.duration).toBeLessThan(30);

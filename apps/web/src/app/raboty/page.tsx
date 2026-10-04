@@ -3,12 +3,12 @@ import { CallbackForm } from '@/components/CallbackForm';
 import { TelegramButton } from '@/components/TelegramButton';
 import { DELIVERY_NOTE, shiftExample } from '@/lib/cities';
 import { JOBS, jobMachineLabel, jobRate } from '@/lib/jobs';
-import { fromPrice, MIN_RATE } from '@/lib/prices';
+import { fromPerHour, fromPrice, MIN_RATE } from '@/lib/prices';
 import { SITE } from '@/lib/site';
 
 export const metadata: Metadata = {
   title: 'Работы спецтехникой в Набережных Челнах — цены с машинистом',
-  description: `Траншеи, котлованы, септики, вывоз снега, демонтаж, планировка, краны и автовышки: техника ${SITE.name} ${fromPrice(MIN_RATE)} с машинистом. ${DELIVERY_NOTE}`,
+  description: `Траншеи, котлованы, септики, вывоз снега, демонтаж, планировка, краны и автовышки: техника ${SITE.name} ${fromPerHour(MIN_RATE)}. ${DELIVERY_NOTE}`,
   alternates: { canonical: '/raboty' },
 };
 

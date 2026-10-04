@@ -73,9 +73,12 @@ const GradeShader = {
     void main() {
       vec4 c = texture2D(tDiffuse, vUv);
       vec3 col = c.rgb;
-      // Lens fringing: red and blue slightly apart towards the corners.
+      // Lens fringing: red and blue slightly apart, only towards the corners
+      // (none in the middle third of the frame).
       if (fringe > 0.0) {
-        vec2 off = (vUv - 0.5) * fringe * dot(vUv - 0.5, vUv - 0.5) * 4.0;
+        vec2 q0 = vUv - 0.5;
+        float r2 = dot(q0, q0);
+        vec2 off = q0 * fringe * r2 * 4.0 * smoothstep(0.03, 0.2, r2);
         col.r = texture2D(tDiffuse, vUv + off).r;
         col.b = texture2D(tDiffuse, vUv - off).b;
       }
@@ -94,20 +97,27 @@ const GradeShader = {
         }
         col += shaft * vec3(1.0, 0.86, 0.62) * rays * flare * 0.22;
       }
-      // Filmic contrast: deeper shadows, a soft shoulder, a touch more colour.
-      col = clamp(col, 0.0, 1.0);
-      col = mix(col, col * col * (3.0 - 2.0 * col), 0.35);
-      float l = dot(col, vec3(0.2126, 0.7152, 0.0722));
-      col = mix(vec3(l), col, 1.08);
+      // Filmic contrast on a compressed copy (x / (1 + x)), so the HDR
+      // highlights survive into the tone mapping instead of clipping at 1.
+      col = max(col, 0.0);
+      vec3 x = col / (1.0 + col);
+      x = mix(x, x * x * (3.0 - 2.0 * x), 0.3);
+      col = x / max(1.0 - x, 0.002);
+      float l = dot(x, vec3(0.2126, 0.7152, 0.0722)) * 2.0;
+      col = mix(vec3(dot(col, vec3(0.2126, 0.7152, 0.0722))), col, 1.08);
       // Teal-and-orange split toning, kept subtle.
       col = mix(col, col * vec3(0.94, 1.0, 1.07), (1.0 - smoothstep(0.0, 0.5, l)) * 0.35);
       col = mix(col, col * vec3(1.06, 1.0, 0.92), smoothstep(0.4, 1.2, l) * 0.35);
       // Vignette.
       vec2 q = vUv - 0.5;
       col *= 1.0 - vignette * smoothstep(0.25, 0.85, length(q * vec2(1.1, 1.0)));
-      // Film grain, stronger in the shadows.
-      float g = hash(vUv * 1000.0 + fract(time) * 31.0) - 0.5;
-      col += g * grain * (1.2 - l);
+      // Film grain: per pixel (fine, not blotchy), multiplicative so it sits
+      // in the image, strongest in the mid-shadows and nearly gone in the
+      // bright sky and highlights.
+      float g = hash(gl_FragCoord.xy + fract(time * 7.0) * 113.0) +
+        hash(gl_FragCoord.xy * 1.37 + fract(time * 5.0) * 71.0) - 1.0;
+      float grainW = (1.0 - smoothstep(0.15, 0.85, l)) * (0.35 + 0.65 * smoothstep(0.0, 0.12, l));
+      col *= 1.0 + g * grain * 2.2 * grainW;
       // Lens flare: a soft glow round the sun and ghosts along the lens axis.
       if (flare > 0.001) {
         vec2 asp = vec2(aspect, 1.0);
@@ -128,7 +138,7 @@ const GradeShader = {
 };
 
 /** Lens fringing strength on computers. */
-const FRINGE = 0.004;
+const FRINGE = 0.002;
 
 export class Cinema {
   private pmrem: THREE.PMREMGenerator;

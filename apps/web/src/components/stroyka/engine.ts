@@ -19,6 +19,7 @@ import {
 import {
   moonPhase,
   moonPosition,
+  cityLife,
   skyPalette,
   sunPosition,
   weatherScene,
@@ -35,8 +36,22 @@ import { emitNature, emitSteps, emitThunder } from '@/lib/sceneEvents';
 import { cullProps, loadProps } from './props3d';
 import { LedScreen } from './ledScreen';
 import { Wildlife } from './wildlife';
-import { buildDistrict, buildProject, buildTowerCrane, type ProjectBuild } from './project';
+import {
+  buildDistrict,
+  buildProject,
+  buildTowerCrane,
+  type DistrictBuild,
+  type ProjectBuild,
+} from './project';
+import { footprintOn } from '@/lib/stroyka/plots';
 import { buildCity } from './cityMesh';
+import {
+  aimCurrentObject,
+  clampToBounds,
+  easeInOut,
+  turnBetween,
+  type TravelTarget,
+} from './navTargets';
 import { placeSite, type CityData } from '@/lib/stroyka/city';
 import {
   CRANE,
@@ -101,6 +116,8 @@ export interface Telemetry {
   tourStop: ZoneId | null;
   ready: boolean;
   drawCalls: number;
+  /** Triangles drawn in the last frame (all passes). */
+  triangles?: number;
   pixelRatio: number;
   cityInstances?: number;
   /** People drawn in full detail / as one-mesh stand-ins, last frame. */
@@ -122,6 +139,8 @@ export interface EngineOptions {
   onDog?(): void;
   /** The opening fly-over (the «game cinematic») ended or was skipped. */
   onIntroEnd?(): void;
+  /** The camera arrived next to a character the visitor chose (tap or «Куда идём?»). */
+  onPerson?(id: string, zone?: ZoneId): void;
 }
 
 interface Character {
@@ -176,10 +195,40 @@ const LOOKS: Record<SpeakerId, Partial<PersonLook>> = {
   },
 };
 
+interface Rect {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+/** Urban sky glow (sodium and LED light scattered in the air) and the evening navy. */
+const SODIUM = new THREE.Color(0x5a3a3a);
+const EVENING_ZENITH = new THREE.Color(0x0d1838);
+const EVENING_HORIZON = new THREE.Color(0x26294a);
+
+/** How far ahead of the visitor the dog sits in free walk, metres. */
+const DOG_AHEAD = 4.8;
+/** Eye height of the visitor in first person, metres. */
+const EYE_HEIGHT = 1.72;
+/** Upward tilt of the lens in walk and tour (radians): ~5°, ~6.5° on a portrait phone. */
+const FRAME_TILT = 0.087;
+const FRAME_TILT_PORTRAIT = 0.113;
+
 /** Detailed people beyond this distance become one-mesh stand-ins. */
 const DETAIL_DISTANCE = 25;
 
 const nextFrame = () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+/**
+ * Gives the main thread back between build steps (a macrotask, not a frame:
+ * no 16 ms wait), so the page stays responsive while the world is built.
+ */
+const yieldNow = () =>
+  new Promise<void>((resolve) => {
+    const channel = new MessageChannel();
+    channel.port1.onmessage = () => resolve();
+    channel.port2.postMessage(0);
+  });
 const damp = (k: number, dt: number) => 1 - Math.exp(-k * dt);
 
 /** Direction vector for an azimuth (from north, clockwise) and elevation, degrees. */
@@ -244,8 +293,14 @@ export class StroykaEngine {
   private obstacles = obstaclesFor(false);
   private voxelMat = new THREE.MeshStandardMaterial({ map: pixelTexture(), roughness: 0.85 });
   private project: ProjectBuild | null = null;
-  private district: { group: THREE.Group; lit: THREE.InstancedMesh } | null = null;
+  /** ЖК «Кама» standing finished on the site once the next object is under way. */
+  private home: ProjectBuild | null = null;
+  private district: DistrictBuild | null = null;
   private tower: ReturnType<typeof buildTowerCrane> | null = null;
+  private towerPlot = -1;
+  private towerHeight = -1;
+  /** Centre and top of the current object (fireworks at its handover). */
+  private projectTop = new THREE.Vector3(24, 36, -29);
   private progress: WorldProgress | null = null;
   private agpRoot: THREE.Object3D | null = null;
   private reveal: { from: number; t: number; dur: number } | null = null;
@@ -255,10 +310,12 @@ export class StroykaEngine {
   private fireworks: Debris | null = null;
   private nextFirework = 0;
   private cityLit: THREE.InstancedMesh | null = null;
-  private cityFacade: { cityNight: { value: number } } | null = null;
+  private cityFacade: { cityNight: { value: number }; cityShare: { value: number } } | null = null;
 
   // Camera state
-  private mode: Mode = 'tour';
+  // The visitor leads (owner, 2026-10-03: «сам выбирал, куда идти»); the
+  // guided walk runs only after «Экскурсия».
+  private mode: Mode = 'free';
   private view: View = 'fp';
   private hold = false;
   private curve!: THREE.CatmullRomCurve3;
@@ -276,6 +333,24 @@ export class StroykaEngine {
   private pitch = 0;
   private lookOffset = 0;
   private keys = new Set<string>();
+  /** A move the visitor asked for (a chosen place, a tapped person or spot), eased. */
+  private travel: {
+    from: THREE.Vector3;
+    to: THREE.Vector3;
+    yaw0: number;
+    yaw1: number;
+    pitch0: number;
+    pitch1: number;
+    rise0: number;
+    rise1: number;
+    hop: number;
+    t: number;
+    dur: number;
+    walk: boolean;
+    onArrive?: () => void;
+  } | null = null;
+  /** Extra eye height (the view from the top); eases back down once the visitor walks. */
+  private rise = 0;
   private blend: { from: THREE.Vector3; fromQ: THREE.Quaternion; t: number; dur: number } | null =
     null;
   private zone: ZoneId | null = null;
@@ -297,6 +372,7 @@ export class StroykaEngine {
     moonPhase: 0.5,
     moonUp: 0,
     sunUp: 1,
+    life: 0.6,
   };
   private env = {
     zenith: new THREE.Color(),
@@ -314,6 +390,7 @@ export class StroykaEngine {
     rain: 0,
     snow: 0,
     fog_: 0,
+    life: 0.6,
   };
   private weather: WeatherScene = weatherScene(null);
   private lift: LiftStop = { stop: false, reason: null };
@@ -340,18 +417,27 @@ export class StroykaEngine {
 
   // ------------------------------------------------------------------ build
 
+  /** Build progress for the loader, and a performance mark per step (profiling). */
+  private step(p: number) {
+    this.opts.onProgress(p);
+    performance.mark?.(`stroyka:build:${p}`);
+  }
+
   private async build() {
     const { canvas, mobile } = this.opts;
-    this.opts.onProgress(0.05);
+    this.step(0.05);
     this.renderer = new THREE.WebGLRenderer({
       canvas,
       antialias: !mobile,
       powerPreference: 'high-performance',
       alpha: false,
     });
-    this.maxPixelRatio = Math.min(window.devicePixelRatio || 1, mobile ? 1.5 : 2);
+    // Phones start (and stay) at 1: 1.5 cost twice the fragments for little.
+    this.maxPixelRatio = Math.min(window.devicePixelRatio || 1, mobile ? 1 : 2);
     this.pixelRatio = this.maxPixelRatio;
     this.renderer.setPixelRatio(this.pixelRatio);
+    // Count the whole frame (scene, shadows and post passes), not the last pass.
+    this.renderer.info.autoReset = false;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.shadowMap.enabled = true;
@@ -365,8 +451,10 @@ export class StroykaEngine {
     this.scene.add(this.hemi);
     this.sun = new THREE.DirectionalLight(0xffffff, 2.5);
     this.sun.castShadow = true;
-    const size = mobile ? 1024 : 2048;
+    // Phones: a small shadow map, re-rendered every few frames (see loop).
+    const size = mobile ? 512 : 2048;
     this.sun.shadow.mapSize.set(size, size);
+    if (mobile) this.renderer.shadowMap.autoUpdate = false;
     const cam = this.sun.shadow.camera;
     cam.left = cam.bottom = -36;
     cam.right = cam.top = 36;
@@ -378,26 +466,29 @@ export class StroykaEngine {
     this.nightLight = new THREE.PointLight(0xffc477, 0, 46, 1.2);
     this.nightLight.position.set(0, MAST_HEIGHT, 40);
     this.scene.add(this.nightLight);
-    this.opts.onProgress(0.15);
+    this.step(0.15);
     await nextFrame();
 
-    this.world = buildWorld(this.M, mobile);
+    this.world = await buildWorld(this.M, mobile, yieldNow);
     this.scene.add(this.world.group);
-    this.opts.onProgress(0.4);
+    this.step(0.4);
     await nextFrame();
 
-    this.buildMachines();
-    this.opts.onProgress(0.65);
-    await nextFrame();
+    await this.buildMachines();
+    this.step(0.6);
+    await yieldNow();
 
-    this.buildPeople();
+    await this.buildPeople();
+    this.step(0.7);
+    await yieldNow();
     this.wildlife = new Wildlife(mobile);
     this.scene.add(this.wildlife.group);
-    this.opts.onProgress(0.8);
+    this.step(0.8);
     await nextFrame();
 
     this.atmosphere = new Atmosphere(mobile);
     this.scene.add(this.atmosphere.group);
+    await yieldNow();
     this.cinema = new Cinema(
       this.renderer,
       this.scene,
@@ -415,24 +506,63 @@ export class StroykaEngine {
     // Opening shot: an aerial fly-over of the district, landing at the gate.
     this.introPose(0);
     this.setEnvironment(new Date(), null, undefined, true);
+    await yieldNow();
     this.cinema.updateEnvironment(0, true);
-    this.opts.onProgress(0.9);
+    this.step(0.9);
     await nextFrame();
 
-    this.renderer.compile(this.scene, this.camera);
+    // Shaders compile and link group by group, with the main thread given
+    // back in between, instead of all at once in the first frame.
+    const parts = this.scene.children.flatMap((c) => (c.children.length > 8 ? c.children : [c]));
+    for (const child of parts) {
+      this.warm(child);
+      await yieldNow();
+      if (this.disposed) return;
+    }
+    performance.mark?.('stroyka:compiled');
     this.bindInput();
     void this.loadCity();
     void loadProps(this.scene, this.opts.mobile, () => this.disposed).then(([root]) => {
+      performance.mark?.('stroyka:props');
       this.props = root ?? null;
     });
     // The film screen by the gate, facing the entrance.
     this.led = new LedScreen(this.M, this.opts.mobile);
     this.place(this.led.group, -38, 53, 1.41);
-    this.opts.onProgress(1);
+    this.step(1);
     this.opts.telemetry.ready = true;
     this.running = true;
     this.clock.start();
     this.loop();
+  }
+
+  private warmed = new Set<unknown>();
+  /**
+   * Compiles the programs `obj` needs (with the scene's lights) and forces
+   * the link now: three.js otherwise waits for the program at its first draw.
+   */
+  private warm(obj: THREE.Object3D) {
+    this.renderer.compile(obj, this.camera, this.scene);
+    // Upload the textures now too (decode, mipmaps) rather than in the first frame.
+    obj.traverse((o) => {
+      const mat = (o as THREE.Mesh).material as THREE.Material | THREE.Material[] | undefined;
+      for (const m of Array.isArray(mat) ? mat : mat ? [mat] : [])
+        for (const value of Object.values(m))
+          if (
+            value instanceof THREE.Texture &&
+            !(value instanceof THREE.VideoTexture) &&
+            !this.warmed.has(value) &&
+            ((value.image as { width?: number } | null)?.width ?? 0) > 0
+          ) {
+            this.warmed.add(value);
+            this.renderer.initTexture(value);
+          }
+    });
+    for (const program of this.renderer.info.programs ?? []) {
+      if (this.warmed.has(program)) continue;
+      this.warmed.add(program);
+      (program as unknown as { getUniforms(): unknown }).getUniforms();
+    }
   }
 
   /** The real city around (OSM, fetched lazily); the placeholder skyline stays if it fails. */
@@ -442,7 +572,14 @@ export class StroykaEngine {
       if (!response.ok) return;
       const data = (await response.json()) as CityData;
       if (this.disposed || !data.b || data.b.length < 20) return;
+      await yieldNow();
+      performance.mark?.('stroyka:city');
       const city = buildCity(data, placeSite(data), this.opts.mobile);
+      await yieldNow();
+      if (this.disposed) return;
+      this.warm(city.group);
+      await yieldNow();
+      performance.mark?.('stroyka:city:built');
       this.scene.add(city.group);
       this.cityLit = city.lit;
       this.cityFacade = city.facade;
@@ -500,7 +637,8 @@ export class StroykaEngine {
     this.headBeams.push(mesh);
   }
 
-  private buildMachines() {
+  /** The machines; the main thread is given back between them. */
+  private async buildMachines() {
     const M = this.M;
     const rig = new Rig(M);
     const dirt = new Debris(this.opts.mobile ? 60 : 120, 0x7a5434, 0.16, 1.9);
@@ -516,6 +654,7 @@ export class StroykaEngine {
     this.place(backhoe.root, -23, 22);
     this.updaters.push(backhoe.update);
 
+    await yieldNow();
     // Монтаж: truck crane between a slab stack and the frame it builds.
     const tip = craneTip();
     const pivot = new THREE.Vector3(38, 0, 22);
@@ -538,6 +677,7 @@ export class StroykaEngine {
       crane.update(this.clocks.crane, dt);
     });
 
+    await yieldNow();
     // Корпус: aerial platform at the north facade.
     const agp = makeAgp(rig);
     this.place(agp.root, 25.5, -42.5);
@@ -548,6 +688,7 @@ export class StroykaEngine {
       agp.update(this.clocks.agp, dt);
     });
 
+    await yieldNow();
     // Дорога: roller back and forth, a truck reversing in through the back gate.
     const roller = makeRoller(rig);
     this.place(roller.root, -20, -12);
@@ -583,6 +724,7 @@ export class StroykaEngine {
       truck2.root.visible = t < 29;
     });
 
+    await yieldNow();
     // Склад: KMU unloading pallets, a front loader at the sand.
     const kmu = makeKmu(rig, palletBuilder(rig));
     this.place(kmu.root, -27.5, -43.8);
@@ -599,6 +741,7 @@ export class StroykaEngine {
       loader.update(time, 0);
     });
 
+    await yieldNow();
     // Планировка: dozer pushing spoil, a tractor doing circles.
     const dozer = makeDozer(rig);
     this.place(dozer.root, 11, 5.2);
@@ -628,6 +771,7 @@ export class StroykaEngine {
       tractor.root.rotation.y = -a - Math.PI;
     });
 
+    await yieldNow();
     // Our branded van on the road outside the fence, passing the gate now and then.
     const van = node(null);
     rig.box(van, [4.6, 1.5, 2.0], 'white', [0, 1.25, 0]);
@@ -648,12 +792,14 @@ export class StroykaEngine {
       van.position.x = -140 + 280 * (t / 30);
     });
 
+    await yieldNow();
     rig.bake({ cast: true });
   }
 
-  private buildPeople() {
+  /** The characters, one per macrotask (each person is a few hundred parts). */
+  private async buildPeople() {
     this.face = new MoodFace();
-    const add = (
+    const add = async (
       id: string,
       speaker: BanterSpeaker,
       look: PersonLook,
@@ -662,6 +808,7 @@ export class StroykaEngine {
       yaw: number,
       extra: Partial<Character> = {},
     ) => {
+      await yieldNow();
       const person = makePerson(look, id);
       this.place(person.root, x, z, yaw);
       const c: Character = {
@@ -682,7 +829,7 @@ export class StroykaEngine {
     for (const zone of ZONES) {
       const [x, z] = zone.npc;
       const yaw = Math.atan2(zone.stand[0] - x, zone.stand[1] - z);
-      add(
+      await add(
         `npc-${zone.id}`,
         zone.speaker,
         lookFor(`npc-${zone.id}`, LOOKS[zone.speaker]),
@@ -696,14 +843,14 @@ export class StroykaEngine {
     }
     // The crew: seeded skin, hats (orange or yellow), build and height.
     const crew = (id: string) => lookFor(id);
-    add('worker-pit', 'worker', crew('worker-pit'), -31, 28.2, 0.4, { sitter: true });
-    add('worker-sling', 'worker', crew('worker-sling'), 27.5, 17.5, -2.2);
-    add('worker-yard', 'worker', crew('worker-yard'), -20, -48.5, 1.2, { sitter: true });
-    add('worker-road', 'worker', crew('worker-road'), -12, -8.3, 2.6, { sitter: true });
-    add('worker-walk', 'worker', crew('worker-walk'), 7, 36, Math.PI, {
+    await add('worker-pit', 'worker', crew('worker-pit'), -31, 28.2, 0.4, { sitter: true });
+    await add('worker-sling', 'worker', crew('worker-sling'), 27.5, 17.5, -2.2);
+    await add('worker-yard', 'worker', crew('worker-yard'), -20, -48.5, 1.2, { sitter: true });
+    await add('worker-road', 'worker', crew('worker-road'), -12, -8.3, 2.6, { sitter: true });
+    await add('worker-walk', 'worker', crew('worker-walk'), 7, 36, Math.PI, {
       patrol: [new THREE.Vector3(7, 0, 36), new THREE.Vector3(7, 0, -8)],
     });
-    add('guard', 'worker', lookFor('guard', { hat: HAT.dark, vest: VEST.dark }), -8, 58, 0, {
+    await add('guard', 'worker', lookFor('guard', { hat: HAT.dark, vest: VEST.dark }), -8, 58, 0, {
       guard: true,
       patrol: [
         new THREE.Vector3(-8, 0, 58),
@@ -712,6 +859,7 @@ export class StroykaEngine {
         new THREE.Vector3(-8, 0, 30),
       ],
     });
+    await yieldNow();
     this.avatar = makePerson(lookFor('avatar', { hat: HAT.yellow }), 'avatar');
     this.scene.add(this.avatar.root);
     // The guard's flashlight.
@@ -722,6 +870,7 @@ export class StroykaEngine {
     this.guardBeam = new THREE.Mesh(geo, this.headBeamMat);
     g.person.root.add(this.guardBeam);
     // «Бетон», the site dog.
+    await yieldNow();
     this.dog = makeDog();
     this.dog.hit.userData.dog = true;
     this.clickables.push(this.dog.hit);
@@ -742,6 +891,8 @@ export class StroykaEngine {
       this.yaw = Math.atan2(dir.x, dir.z);
       this.pitch = 0;
     } else {
+      this.travel = null;
+      this.rise = 0;
       // Rejoin the tour at the nearest point of the route.
       let best = 0;
       let bestD = Infinity;
@@ -788,12 +939,82 @@ export class StroykaEngine {
         this.tourPhase = 'stop';
         this.tourTimer = 0;
       }
+      this.startBlend(1.8);
     } else {
-      this.player.set(zone.stand[0], 0, zone.stand[1]);
-      this.yaw = Math.atan2(zone.focus[0] - zone.stand[0], zone.focus[2] - zone.stand[1]);
-      this.pitch = 0;
+      this.travelTo({ x: zone.stand[0], z: zone.stand[1], look: zone.focus, how: 'fly' });
     }
-    this.startBlend(1.8);
+  }
+
+  /**
+   * Moves the visitor's camera to a target with eased motion: a low cinematic
+   * arc ('fly', the default) or a walk on the ground around obstacles. Only
+   * ever called for the visitor's own choice — nothing moves the camera by itself.
+   */
+  travelTo(target: TravelTarget, onArrive?: () => void) {
+    if (this.mode !== 'free') {
+      this.setMode('free');
+      this.opts.onWantFree();
+    }
+    this.skipIntro();
+    const [x, z] = clampToBounds(target.x, target.z);
+    const to = new THREE.Vector3(x, 0, z);
+    const dist = to.distanceTo(this.player);
+    const walk = target.how === 'walk';
+    const rise1 = target.lift ?? 0;
+    const eyeY = EYE_HEIGHT + rise1;
+    const [lx, ly, lz] = target.look;
+    const yaw1 = Math.atan2(lx - x, lz - z);
+    const flat = Math.hypot(lx - x, lz - z);
+    const pitch1 = Math.max(-1.05, Math.min(0.6, Math.atan2(ly - eyeY, Math.max(0.5, flat))));
+    this.travel = {
+      from: this.player.clone(),
+      to,
+      yaw0: this.yaw,
+      yaw1: this.yaw + turnBetween(this.yaw, yaw1),
+      pitch0: this.pitch,
+      pitch1,
+      rise0: this.rise,
+      rise1,
+      hop: walk ? 0 : Math.min(14, Math.max(1.5, dist * 0.18)),
+      t: 0,
+      dur: walk
+        ? Math.min(12, Math.max(0.8, dist / 4.4))
+        : Math.min(4.2, Math.max(1.4, 1.3 + dist / 24)),
+      walk,
+      onArrive,
+    };
+  }
+
+  /** Walks (near) or flies (far) to a character and faces them; `onPerson` on arrival. */
+  walkToPerson(id: string) {
+    const c = this.characters.find((ch) => ch.id === id);
+    if (!c) return;
+    const p = c.person.root.position;
+    const zone = c.zone ? zoneById(c.zone) : null;
+    let x: number;
+    let z: number;
+    if (zone) [x, z] = zone.stand;
+    else {
+      // Two metres in front of a crew member, on the visitor's side.
+      const dx = this.player.x - p.x;
+      const dz = this.player.z - p.z;
+      const d = Math.hypot(dx, dz) || 1;
+      [x, z] = resolveCollision(
+        p.x + (dx / d) * 2.2,
+        p.z + (dz / d) * 2.2,
+        PLAYER_RADIUS,
+        this.obstacles,
+      );
+    }
+    const near = Math.hypot(x - this.player.x, z - this.player.z) < 16;
+    this.travelTo({ x, z, look: [p.x, 1.55, p.z], how: near ? 'walk' : 'fly' }, () =>
+      this.opts.onPerson?.(c.id, c.zone),
+    );
+  }
+
+  /** True while a chosen move is under way (tests). */
+  get traveling() {
+    return this.travel !== null;
   }
 
   /** Screen position (CSS px) of a world point, or null behind the camera (tests). */
@@ -805,9 +1026,22 @@ export class StroykaEngine {
   }
 
   /** Free walk: stand at x, z looking along yaw (tests and screenshots). */
+  /**
+   * Debug (window.__stroyka.inspect): look at the district from any point,
+   * e.g. from above to check the plots; null gives the camera back.
+   */
+  inspect(from: [number, number, number] | null, at: [number, number, number] = [0, 0, 0]) {
+    this.inspectView = from
+      ? { pos: new THREE.Vector3(...from), look: new THREE.Vector3(...at) }
+      : null;
+  }
+  private inspectView: { pos: THREE.Vector3; look: THREE.Vector3 } | null = null;
+
   standAt(x: number, z: number, yaw: number, pitch = 0) {
     this.setMode('free');
     this.blend = null;
+    this.travel = null;
+    this.rise = 0;
     this.player.set(x, 0, z);
     this.yaw = yaw;
     this.pitch = pitch;
@@ -817,7 +1051,12 @@ export class StroykaEngine {
     this.activeZone = zone;
   }
 
-  /** The district's real progress: rebuilds the object on the plot (optionally as a time-lapse). */
+  /**
+   * The district's state from the timeline: the current object at its stage
+   * on its own plot (optionally as a time-lapse), ЖК «Кама» finished on the
+   * site once it is handed over, the finished objects and the fenced future
+   * plots around (lib/stroyka/progress.ts, lib/stroyka/plots.ts).
+   */
   setProgress(p: WorldProgress, timelapse = false) {
     const same =
       this.progress &&
@@ -825,25 +1064,66 @@ export class StroykaEngine {
       this.progress.stage === p.stage &&
       this.progress.stagePercent === p.stagePercent;
     if (same) return;
+    const plot = p.plot ?? 0;
     this.progress = p;
-    if (this.project) {
-      this.scene.remove(this.project.group);
-      this.project.mesh.dispose();
-      this.project.lit.dispose();
+    for (const old of [this.project, this.home]) {
+      if (!old) continue;
+      this.scene.remove(old.group);
+      old.mesh.dispose();
+      old.lit.dispose();
     }
-    this.project = buildProject(this.M, p, this.voxelMat, this.opts.mobile);
+    const box = footprintOn(plot, p.projectType);
+    this.project = buildProject(this.M, p, this.voxelMat, this.opts.mobile, { box });
     this.scene.add(this.project.group);
-    this.obstacles = obstaclesFor(this.project.hasWalls);
+    this.projectTop.set((box.minX + box.maxX) / 2, p.floors * 4 + 4, (box.minZ + box.maxZ) / 2);
+    // Height standing today: the frame rises floor by floor.
+    const builtHeight = (p.stage < 2 ? 0 : p.stage === 2 ? p.floorsBuilt : p.floors) * 4;
+    aimCurrentObject(box, Math.max(6, builtHeight));
+    const kama = p.finishedProjects.find((f) => f.plot === 0);
+    this.home =
+      plot !== 0 && kama
+        ? buildProject(
+            this.M,
+            {
+              projectType: kama.type,
+              floors: kama.floors,
+              stage: 8,
+              stagePercent: 100,
+              floorsBuilt: kama.floors,
+            },
+            this.voxelMat,
+            this.opts.mobile,
+            { done: true },
+          )
+        : null;
+    if (this.home) this.scene.add(this.home.group);
+    this.obstacles = obstaclesFor(plot === 0 ? this.project.hasWalls : true);
     this.reveal = timelapse ? { from: Math.floor(this.project.total * 0.55), t: 0, dur: 5 } : null;
     if (this.reveal) this.project.mesh.count = this.reveal.from;
-    // Finished objects around the site.
-    if (this.district) this.scene.remove(this.district.group);
-    this.district = buildDistrict(p.finishedProjects, this.voxelMat);
+    // Finished objects and the plots around the site.
+    if (this.district) {
+      this.scene.remove(this.district.group);
+      for (const o of this.district.group.children) (o as THREE.InstancedMesh).dispose();
+    }
+    this.district = buildDistrict(p, this.voxelMat);
+    this.district.setGround(this.ground ?? 'dry');
     this.scene.add(this.district.group);
+    this.world.setPlotTrees(this.district.trees);
     // Machines follow the stage: the tower crane from foundation to facade, the platform for the facade.
     const towerNeeded = p.stage >= 1 && p.stage <= 4;
+    // The tower crane climbs with the frame (its mast is rebuilt taller).
+    if (this.tower && (this.towerPlot !== plot || this.towerHeight !== builtHeight)) {
+      this.scene.remove(this.tower.root);
+      const parts = new Set<THREE.Object3D>();
+      this.tower.root.traverse((o) => parts.add(o));
+      this.clickables = this.clickables.filter((o) => !parts.has(o));
+      this.tower = null;
+    }
     if (towerNeeded && !this.tower) {
-      this.tower = buildTowerCrane(this.M, p.floors * 4);
+      const at: [number, number] = plot === 0 ? [38, -30] : [box.maxX + 3, box.minZ + 6];
+      this.tower = buildTowerCrane(this.M, builtHeight, at, plot === 0);
+      this.towerPlot = plot;
+      this.towerHeight = builtHeight;
       this.scene.add(this.tower.root);
       const banner = new THREE.Mesh(new THREE.PlaneGeometry(8, 2), this.brandMat);
       banner.position.set(8, 0.6, 0.47);
@@ -856,7 +1136,8 @@ export class StroykaEngine {
       this.clickables.push(banner, back);
     }
     if (this.tower) this.tower.root.visible = towerNeeded;
-    if (this.agpRoot) this.agpRoot.visible = p.stage >= 4 && p.stage <= 6;
+    // The aerial platform works on the site plot only.
+    if (this.agpRoot) this.agpRoot.visible = plot === 0 && p.stage >= 4 && p.stage <= 6;
     this.world.setPassport(p);
     if (p.stage === 8 && !this.fireworks) {
       this.fireworks = new Debris(this.opts.mobile ? 160 : 320, 0xffd36b, 0.5, -5);
@@ -1089,6 +1370,19 @@ export class StroykaEngine {
     T.sunIntensity = palette.sunIntensity * Math.max(0.15, dim);
     T.hemiIntensity = palette.hemiIntensity * (1 + w.clouds * 0.25);
     T.night = palette.night;
+    // The city's own light: a warm sodium glow over the horizon in the
+    // evening (stronger under clouds, which reflect it), fading after
+    // midnight as the windows go dark; it is what tells 20:00 from 01:00.
+    const minutes = date.getUTCMinutes() / 60;
+    T.life = cityLife(this.hour + minutes);
+    // The evening sky stays a deep navy over a warm band; at 01:00 it is near black.
+    const evening = palette.night * T.life;
+    T.zenith.lerp(EVENING_ZENITH, evening * 0.45 * (1 - w.clouds * 0.6));
+    T.horizon.lerp(EVENING_HORIZON, evening * 0.35 * (1 - w.clouds * 0.6));
+    const glow = evening * (0.2 + 0.4 * w.clouds);
+    T.horizon.lerp(SODIUM, glow);
+    T.fog.lerp(SODIUM, glow * 0.6);
+    T.zenith.lerp(SODIUM, glow * 0.06);
     skyDir(sun.azimuth, Math.max(sun.elevation, -4), T.sunDir);
     skyDir(moon.azimuth, moon.elevation, T.moonDir);
     T.moonPhase = moonPhase(date);
@@ -1105,6 +1399,7 @@ export class StroykaEngine {
       E.sunIntensity = T.sunIntensity;
       E.hemiIntensity = T.hemiIntensity;
       E.night = T.night;
+      E.life = T.life;
       E.sunDir.copy(T.sunDir);
       E.moonDir.copy(T.moonDir);
       E.clouds = w.clouds;
@@ -1328,8 +1623,11 @@ export class StroykaEngine {
     };
     let downAt = { x: 0, y: 0, t: 0 };
     const raycaster = new THREE.Raycaster();
+    let tapDuringIntro = false;
     const tapStart = (e: PointerEvent) => {
-      downAt = { x: e.clientX, y: e.clientY, t: performance.now() };
+      downAt = { x: e.clientX, y: e.clientY, t: e.timeStamp };
+      // A tap that only skips the opening shot does not also walk somewhere.
+      tapDuringIntro = this.intro.active;
       this.skipIntro();
     };
     canvas.addEventListener('pointerdown', tapStart);
@@ -1337,7 +1635,8 @@ export class StroykaEngine {
     const up = (e: PointerEvent) => {
       if (drag?.id === e.pointerId) drag = null;
       const moved = Math.hypot(e.clientX - downAt.x, e.clientY - downAt.y);
-      if (moved > 8 || performance.now() - downAt.t > 450) return;
+      if (moved > 8 || e.timeStamp - downAt.t > 450 || tapDuringIntro) return;
+      // Raycasting happens only here, on a tap — never per frame.
       const rect = canvas.getBoundingClientRect();
       const ndc = new THREE.Vector2(
         ((e.clientX - rect.left) / rect.width) * 2 - 1,
@@ -1353,12 +1652,40 @@ export class StroykaEngine {
         return visible && o.visible;
       });
       const hit = raycaster.intersectObjects(targets, false)[0];
+      // People: a tap on a character walks there and starts the conversation.
+      const roots: THREE.Object3D[] = this.characters
+        .filter((c) => c.person.root.visible)
+        .map((c) => c.person.root);
+      const personHit = raycaster.intersectObjects(roots, true)[0];
+      if (personHit && (!hit || personHit.distance < hit.distance)) {
+        let o: THREE.Object3D | null = personHit.object;
+        while (o && !roots.includes(o)) o = o.parent;
+        const c = this.characters.find((ch) => ch.person.root === o);
+        if (c) {
+          this.walkToPerson(c.id);
+          return;
+        }
+      }
       if (hit?.object.userData.dog) {
         this.opts.onDog?.();
         return;
       }
       const target = hit?.object.userData.machine as AdTarget | undefined;
-      if (target) this.opts.onAdClick(target);
+      if (target) {
+        this.opts.onAdClick(target);
+        return;
+      }
+      // The ground: walk to that point (inside the site's bounds).
+      const ground = raycaster.ray.intersectPlane(this.groundPlane, this.tmpTap);
+      if (!ground || ground.distanceTo(this.camera.position) > 70) return;
+      const [gx, gz] = clampToBounds(ground.x, ground.z);
+      const dir = Math.atan2(gx - this.player.x, gz - this.player.z);
+      this.travelTo({
+        x: gx,
+        z: gz,
+        look: [gx + Math.sin(dir) * 10, 1.6, gz + Math.cos(dir) * 10],
+        how: this.rise > 3 ? 'fly' : 'walk',
+      });
     };
     canvas.addEventListener('pointerdown', down);
     canvas.addEventListener('pointermove', move);
@@ -1425,10 +1752,18 @@ export class StroykaEngine {
     const dt = Math.min(raw, 0.05);
     this.time += dt;
     this.tick(dt, Math.min(raw, 0.5));
+    if (this.inspectView) {
+      this.camera.position.copy(this.inspectView.pos);
+      this.camera.lookAt(this.inspectView.look);
+    }
+    this.renderer.info.reset();
+    // Phones: the shadow map follows the machines every 4th frame.
+    if (this.opts.mobile && this.frameNo++ % 4 === 0) this.renderer.shadowMap.needsUpdate = true;
     this.cinema!.render(this.time);
     this.measure();
   };
 
+  private frameNo = 0;
   private lastMeasure = performance.now();
   private measure() {
     this.frames++;
@@ -1441,6 +1776,7 @@ export class StroykaEngine {
     const t = this.opts.telemetry;
     t.fps = Math.round(fps);
     t.drawCalls = this.renderer.info.render.calls;
+    t.triangles = this.renderer.info.render.triangles;
     // Adaptive resolution: step down when slow for a few seconds.
     if (fps < 26) this.slowWindows++;
     else this.slowWindows = 0;
@@ -1492,6 +1828,8 @@ export class StroykaEngine {
   }
 
   private desired = { pos: new THREE.Vector3(), look: new THREE.Vector3() };
+  private groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+  private tmpTap = new THREE.Vector3();
   private tmpA = new THREE.Vector3();
   private tmpB = new THREE.Vector3();
 
@@ -1578,14 +1916,60 @@ export class StroykaEngine {
         fwd /= len;
         side /= len;
       }
-      const speed = (k.has('shift') ? 7 : 4.2) * dt;
-      const sin = Math.sin(this.yaw);
-      const cos = Math.cos(this.yaw);
-      const nx = this.player.x + (sin * fwd - cos * side) * speed;
-      const nz = this.player.z + (cos * fwd + sin * side) * speed;
-      const [rx, rz] = resolveCollision(nx, nz, PLAYER_RADIUS, this.obstacles);
-      moving = Math.min(1, len);
-      this.player.set(rx, 0, rz);
+      // The visitor's own keys or joystick take over from a chosen move at once.
+      if (len > 0.05 || k.has('arrowleft') || k.has('arrowright')) this.travel = null;
+      const tr = this.travel;
+      if (tr) {
+        tr.t += dt;
+        const e = easeInOut(tr.t / tr.dur);
+        const nx = tr.from.x + (tr.to.x - tr.from.x) * e;
+        const nz = tr.from.z + (tr.to.z - tr.from.z) * e;
+        if (tr.walk) {
+          const [rx, rz] = resolveCollision(nx, nz, PLAYER_RADIUS, this.obstacles);
+          // Blocked by a stack or a fence: stop where we are, facing the goal.
+          if (Math.hypot(rx - nx, rz - nz) > 1.2) tr.t = tr.dur;
+          this.player.set(rx, 0, rz);
+          moving = Math.sin(Math.PI * Math.min(1, tr.t / tr.dur)) > 0.15 ? 1 : 0;
+        } else this.player.set(nx, 0, nz);
+        // Turn toward the goal early, settle the gaze on the way in.
+        const ey = easeInOut(Math.min(1, (tr.t / tr.dur) * 1.4));
+        this.yaw = tr.yaw0 + (tr.yaw1 - tr.yaw0) * ey;
+        this.pitch = tr.pitch0 + (tr.pitch1 - tr.pitch0) * ey;
+        this.rise = tr.rise0 + (tr.rise1 - tr.rise0) * e + tr.hop * Math.sin(Math.PI * e);
+        if (tr.t >= tr.dur) {
+          this.travel = null;
+          this.rise = tr.rise1;
+          const [rx, rz] = resolveCollision(
+            this.player.x,
+            this.player.z,
+            PLAYER_RADIUS,
+            this.obstacles,
+          );
+          this.player.set(rx, 0, rz);
+          // Zones first (the zone's conversation), then the arrival callback.
+          const zone = detectZone(rx, rz, this.zone);
+          if (zone !== this.zone) {
+            this.zone = zone;
+            t.zone = zone;
+            this.opts.onZone(zone);
+          }
+          tr.onArrive?.();
+        }
+      } else {
+        const speed = (k.has('shift') ? 7 : 4.2) * dt;
+        const sin = Math.sin(this.yaw);
+        const cos = Math.cos(this.yaw);
+        const nx = this.player.x + (sin * fwd - cos * side) * speed;
+        const nz = this.player.z + (cos * fwd + sin * side) * speed;
+        const [rx, rz] = resolveCollision(nx, nz, PLAYER_RADIUS, this.obstacles);
+        moving = Math.min(1, len);
+        this.player.set(rx, 0, rz);
+        // Walking off a high viewpoint brings the eye back down to the ground.
+        if (moving > 0.05 && this.rise > 0) {
+          this.rise *= 1 - damp(2.5, dt);
+          if (this.rise < 0.02) this.rise = 0;
+        }
+      }
       heading = this.yaw;
       this.tp += ((this.view === 'tp' ? 1 : 0) - this.tp) * damp(4, dt);
       t.tourStop = null;
@@ -1605,7 +1989,12 @@ export class StroykaEngine {
     const fz = Math.cos(h);
     const bob = moving * Math.sin(this.walkPhase * 2) * 0.045;
     const sway = moving * Math.sin(this.walkPhase) * 0.03;
-    const eye = this.tmpA.set(this.player.x - fz * sway, 1.65 + bob, this.player.z + fx * sway);
+    const rise = this.mode === 'free' ? this.rise : 0;
+    const eye = this.tmpA.set(
+      this.player.x - fz * sway,
+      EYE_HEIGHT + bob + rise,
+      this.player.z + fx * sway,
+    );
     const fpLook =
       this.mode === 'tour' && Math.abs(this.lookOffset) < 0.01
         ? this.lookTarget.clone()
@@ -1616,12 +2005,12 @@ export class StroykaEngine {
           );
     const tpPos = new THREE.Vector3(
       this.player.x - fx * 3.4 - fz * 0.75,
-      2.35 - pitch * 1.2,
+      2.35 - pitch * 1.2 + rise,
       this.player.z - fz * 3.4 + fx * 0.75,
     );
     const tpLook = new THREE.Vector3(
       this.player.x + fx * 6,
-      1.4 + Math.sin(pitch) * 6,
+      1.4 + Math.sin(pitch) * 6 + rise,
       this.player.z + fz * 6,
     );
     const s = smooth(0, 1, this.tp);
@@ -1629,6 +2018,9 @@ export class StroykaEngine {
     this.desired.look.copy(fpLook).lerp(tpLook, s);
     this.camera.position.copy(this.desired.pos);
     this.camera.lookAt(this.desired.look);
+    // Framing: the lens tilted up a few degrees, so the horizon sits below the
+    // middle and the frame holds the buildings and cranes, not mostly ground.
+    this.camera.rotateX(this.camera.aspect < 1 ? FRAME_TILT_PORTRAIT : FRAME_TILT);
     // A camera operator's breathing: a tiny slow drift, never seasick (the
     // 3D scene does not open under reduced motion at all).
     {
@@ -1653,8 +2045,8 @@ export class StroykaEngine {
     av.rotation.y = heading;
     walk(this.avatar, this.walkPhase, moving);
 
-    // Zones.
-    const zone = detectZone(this.player.x, this.player.z, this.zone);
+    // Zones (not while flying over them to a chosen place).
+    const zone = this.travel ? this.zone : detectZone(this.player.x, this.player.z, this.zone);
     if (zone !== this.zone) {
       this.zone = zone;
       t.zone = zone;
@@ -1771,7 +2163,40 @@ export class StroykaEngine {
   }
 
   /** Bubbles placed this frame (centre x, bottom y, size), for the overlap check. */
-  private bubbleRects: { x: number; y: number; w: number; h: number }[] = [];
+  private bubbleRects: Rect[] = [];
+  /** HUD chips and panels over the canvas (overlay px), refreshed twice a second. */
+  private hudRects: Rect[] = [];
+  private hudAt = -1e9;
+
+  /**
+   * Rectangles of the HUD over the 3D view (buttons, chips, the mini-map,
+   * cards), so speech bubbles never slide under «Фото с бригадой» and co.
+   * Read from the DOM, not hard-coded: the HUD differs on phones.
+   */
+  private refreshHud() {
+    // Wall-clock time: the HUD changes with the page, not with the scene clock.
+    const now = performance.now();
+    if (now - this.hudAt < 400) return;
+    this.hudAt = now;
+    const overlay = this.opts.overlay;
+    const root = overlay.parentElement?.parentElement ?? document.body;
+    const box = overlay.getBoundingClientRect();
+    const area = box.width * box.height;
+    this.hudRects.length = 0;
+    root
+      .querySelectorAll<HTMLElement>(
+        'button, a, [data-hud], [role="dialog"], .backdrop-blur, [class*="rounded"]',
+      )
+      .forEach((el) => {
+        if (overlay.contains(el)) return;
+        const r = el.getBoundingClientRect();
+        if (r.width < 4 || r.height < 4 || r.width * r.height > area * 0.6) return;
+        if (r.right < box.left || r.left > box.right || r.bottom < box.top || r.top > box.bottom)
+          return;
+        if (getComputedStyle(el).visibility === 'hidden') return;
+        this.hudRects.push({ x: r.left - box.left, y: r.top - box.top, w: r.width, h: r.height });
+      });
+  }
 
   private placeBubble(
     el: HTMLDivElement,
@@ -1790,34 +2215,66 @@ export class StroykaEngine {
     project.copy(root.position).setY(height).project(this.camera);
     const behind = project.z > 1;
     const far = root.position.distanceTo(this.camera.position) > 45;
-    if (behind || far) el.style.opacity = '0';
-    else {
-      el.style.opacity = '1';
-      // Keep the bubble on screen and below the HUD (mission card, mini-map,
-      // menu button): on a phone they take the top ~third of the screen.
-      const bw = Number(el.dataset.w) || 0;
-      const bh = Number(el.dataset.h) || 0;
-      const safeTop = w < 640 ? Math.min(290, h * 0.36) : 72;
-      const x = Math.min(Math.max(((project.x + 1) / 2) * w, bw / 2 + 8), w - bw / 2 - 8);
-      let y = Math.max(((1 - project.y) / 2) * h, safeTop + bh);
-      // Two bubbles never cover each other: a later one moves below, and is
-      // hidden for now if that would push it down into the dialogue area.
-      let pushed = false;
-      for (const r of this.bubbleRects) {
-        const overlapX = Math.abs(r.x - x) < (r.w + bw) / 2;
-        const overlapY = y > r.y - r.h && y - bh < r.y;
-        if (overlapX && overlapY) {
-          y = r.y + bh + 6;
-          pushed = true;
-        }
-      }
-      if (pushed && y > h * (w < 640 ? 0.46 : 0.6)) {
-        el.style.opacity = '0';
-        return;
-      }
-      this.bubbleRects.push({ x, y, w: bw, h: bh });
-      el.style.transform = `translate(${x}px, ${y}px) translate(-50%, -100%)`;
+    // The speaker's head on screen; off screen the bubble would point at nobody.
+    const ax = ((project.x + 1) / 2) * w;
+    const ay = ((1 - project.y) / 2) * h;
+    if (behind || far || ax < 4 || ax > w - 4 || ay < 0 || ay > h) {
+      el.style.opacity = '0';
+      return;
     }
+    this.refreshHud();
+    const bw = Number(el.dataset.w) || 0;
+    const bh = Number(el.dataset.h) || 0;
+    // The mission card, mini-map and menu take the top of the screen (a third on a phone).
+    const safeTop = w < 640 ? Math.min(290, h * 0.36) : 72;
+    const lowest = h * (w < 640 ? 0.62 : 0.72);
+    const TAIL = 7;
+    const PAD = 6;
+    // Candidate spots, best first: right over the head, then shifted sideways,
+    // then higher up (the tail still points down at the speaker).
+    const shifts: [number, number][] = [
+      [0, 0],
+      [0.55, 0],
+      [-0.55, 0],
+      [0, 1],
+      [0.55, 1],
+      [-0.55, 1],
+      [0, 2],
+    ];
+    const last = Number(el.dataset.spot ?? 0);
+    const order = [last, ...shifts.keys()].filter((v, i, a) => a.indexOf(v) === i);
+    const hits = (x: number, y: number, list: Rect[]) =>
+      list.some(
+        (r) =>
+          x < r.x + r.w + PAD && x + bw + PAD > r.x && y < r.y + r.h + PAD && y + bh + PAD > r.y,
+      );
+    let spot = -1;
+    let left = 0;
+    let top = 0;
+    for (const i of order) {
+      const [sx, sy] = shifts[i]!;
+      const x = Math.min(Math.max(ax - bw / 2 + sx * bw, 8), w - bw - 8);
+      const y = Math.max(ay - bh - TAIL - sy * (bh + PAD), safeTop);
+      // Never far below the head (it would cover the speaker) or in the dialogue area.
+      if (y + bh > Math.min(lowest, ay + bh * 0.5)) continue;
+      if (hits(x, y, this.bubbleRects) || hits(x, y, this.hudRects)) continue;
+      spot = i;
+      left = x;
+      top = y;
+      break;
+    }
+    if (spot < 0) {
+      el.style.opacity = '0';
+      return;
+    }
+    el.dataset.spot = String(spot);
+    el.style.opacity = '1';
+    this.bubbleRects.push({ x: left, y: top, w: bw, h: bh });
+    // Whole pixels: a bubble on a half pixel renders blurry. The tail follows
+    // the speaker along the bubble's bottom edge when it had to move aside.
+    const tail = Math.min(Math.max(ax - left, 14), bw - 14);
+    el.style.setProperty('--tail', `${Math.round(tail)}px`);
+    el.style.transform = `translate(${Math.round(left)}px, ${Math.round(top)}px)`;
   }
 
   /**
@@ -1835,12 +2292,13 @@ export class StroykaEngine {
       rest = 'sleep';
       restYaw = 1.2;
     } else if (this.mode === 'free' && !this.intro.active) {
-      // At the visitor's side, a little ahead: in view in both cameras.
-      const side = this.yaw - 0.3;
+      // Ahead and a little to the side, far enough to be whole in the frame
+      // (closer, the low tilted lens cut its head off at the bottom edge).
+      const side = this.yaw - (this.camera.aspect < 1 ? 0.15 : 0.32);
       target = this.tmpB.set(
-        this.player.x + Math.sin(side) * 2.3,
+        this.player.x + Math.sin(side) * DOG_AHEAD,
         0,
-        this.player.z + Math.cos(side) * 2.3,
+        this.player.z + Math.cos(side) * DOG_AHEAD,
       );
       rest = 'sit';
       restYaw = Math.atan2(this.player.x - d.pos.x, this.player.z - d.pos.z);
@@ -1893,6 +2351,7 @@ export class StroykaEngine {
     E.sunIntensity += (T.sunIntensity - E.sunIntensity) * k;
     E.hemiIntensity += (T.hemiIntensity - E.hemiIntensity) * k;
     E.night += (T.night - E.night) * k;
+    E.life += (T.life - E.life) * k;
     E.sunDir.lerp(T.sunDir, k).normalize();
     E.moonDir.lerp(T.moonDir, k).normalize();
     const w = this.weather;
@@ -1931,13 +2390,14 @@ export class StroykaEngine {
     this.hemi.color.copy(E.hemiSky);
     this.hemi.groundColor.copy(E.hemiGround);
     this.hemi.intensity = E.hemiIntensity + flash * 3;
-    this.renderer.toneMappingExposure = 1 + nightK * 0.45;
+    // Night opens the exposure: more in the lively evening than at 01:00.
+    this.renderer.toneMappingExposure = 1.06 + nightK * (0.08 + 0.38 * E.life);
 
     // Fog distance: weather and night.
     const mobileFar = this.opts.mobile ? 0.85 : 1;
     // A clear day sees the city (with its windows) through a light haze;
     // rain, snow and fog close it in.
-    const far = (430 - 360 * E.fog_ - 200 * E.rain - 170 * E.snow) * mobileFar;
+    const far = (540 - 450 * E.fog_ - 290 * E.rain - 260 * E.snow) * mobileFar;
     // The aerial opening shot sees farther.
     const aerial = this.intro.active
       ? 1 + 1.6 * (1 - smooth(0.6, 1, this.intro.t / this.intro.dur))
@@ -1950,8 +2410,9 @@ export class StroykaEngine {
     // Night lights.
     const n = smooth(0.25, 0.75, nightK);
     for (const o of this.world.night) o.visible = n > 0.02;
-    const [beamMat, poolMat, paneMat] = this.world.nightMaterials as THREE.MeshBasicMaterial[];
-    beamMat!.opacity = 0.07 * n * (1 + E.fog_ * 1.5 + E.rain);
+    const [, poolMat, paneMat] = this.world.nightMaterials as THREE.MeshBasicMaterial[];
+    this.world.beamUniforms.opacity.value = 0.2 * n * (1 + E.fog_ * 1.5 + E.rain);
+    this.world.beamUniforms.time.value = this.time;
     poolMat!.opacity = 0.5 * n;
     paneMat!.opacity = 0.95 * n;
     if (this.headBeamMat) this.headBeamMat.opacity = 0.11 * n;
@@ -1969,7 +2430,8 @@ export class StroykaEngine {
     const mast = MASTS[this.world.lampHeads.indexOf(best)]!;
     this.tmpB.set((best.x + mast.aim[0]) / 2, MAST_HEIGHT - 3, (best.z + mast.aim[1]) / 2);
     this.nightLight.position.lerp(this.tmpB, damp(1.5, dt));
-    this.nightLight.intensity = 140 * n;
+    // The ground albedo is ~3× what it was (world.ts GROUND_GAIN): less light for the same look.
+    this.nightLight.intensity = 60 * n;
     // Beacons blink.
     const blink = Math.sin(this.time * 7) > 0.2;
     this.M.beacon.color.setHex(blink ? 0xffa21a : 0x5a3200);
@@ -1979,6 +2441,7 @@ export class StroykaEngine {
     if (ground !== this.ground) {
       this.ground = ground;
       this.world.setGround(ground);
+      this.district?.setGround(ground);
       this.world.puddles.visible = ground === 'wet';
     }
 
@@ -1994,6 +2457,10 @@ export class StroykaEngine {
     const wz = -Math.cos(toward) * w.wind;
     this.world.updateFlags(this.time, w.wind, Math.atan2(wx, wz));
     this.world.updateAds(this.time, n);
+    if (this.home) {
+      (this.home.lit.material as THREE.MeshBasicMaterial).opacity = 0.95 * n;
+      this.home.lit.visible = n > 0.02;
+    }
     if (this.project) {
       (this.project.lit.material as THREE.MeshBasicMaterial).opacity = 0.95 * n;
       this.project.lit.visible = n > 0.02;
@@ -2007,14 +2474,18 @@ export class StroykaEngine {
       }
     }
     // City windows light up in the facades at dusk.
-    if (this.cityFacade) this.cityFacade.cityNight.value = n;
-    else if (this.cityLit) {
+    // They come on gradually over the dusk (wider than the floodlights), and
+    // the share of lit windows follows the city's evening and its night.
+    if (this.cityFacade) {
+      this.cityFacade.cityNight.value = smooth(0.08, 0.95, nightK);
+      this.cityFacade.cityShare.value = 0.1 + 0.32 * E.life;
+    } else if (this.cityLit) {
       (this.cityLit.material as THREE.MeshBasicMaterial).opacity = 0.85 * n;
       this.cityLit.visible = n > 0.02;
     }
     if (this.district) {
       (this.district.lit.material as THREE.MeshBasicMaterial).opacity = 0.9 * n;
-      this.district.lit.visible = n > 0.02;
+      this.district.lit.visible = n > 0.02 && this.district.lit.count > 0;
     }
     if (this.tower?.root.visible) {
       this.tower.jib.rotation.y = Math.sin(this.time * 0.07) * 1.4 + 0.6;
@@ -2036,9 +2507,9 @@ export class StroykaEngine {
       if (n > 0.4 && this.time > this.nextFirework) {
         this.nextFirework = this.time + 1.2 + Math.random() * 2;
         const at = new THREE.Vector3(
-          18 + Math.random() * 12,
-          30 + Math.random() * 12,
-          -30 + Math.random() * 6,
+          this.projectTop.x - 6 + Math.random() * 12,
+          this.projectTop.y + Math.random() * 12,
+          this.projectTop.z - 1 + Math.random() * 6,
         );
         this.fireworks.emit(at, 0.3, 40);
         (this.fireworks.points.material as THREE.PointsMaterial).color.setHSL(

@@ -87,6 +87,19 @@ function Pill({
   );
 }
 
+/**
+ * A catalogue query that never takes the page down: without a database the
+ * list is empty (logged) and the page shows its empty state with the form.
+ */
+async function orEmpty<T>(label: string, query: Promise<T[]>): Promise<T[]> {
+  try {
+    return await query;
+  } catch (error) {
+    console.error(`[equipment] failed to load ${label}`, error);
+    return [];
+  }
+}
+
 export default async function EquipmentCatalogPage({
   searchParams: rawSearchParams,
 }: {
@@ -113,8 +126,11 @@ export default async function EquipmentCatalogPage({
   };
 
   const [categories, countsByCategory] = await Promise.all([
-    prisma.equipmentCategory.findMany({ orderBy: { name: 'asc' } }),
-    prisma.equipment.groupBy({ by: ['categoryId'], where: baseWhere, _count: { _all: true } }),
+    orEmpty('categories', prisma.equipmentCategory.findMany({ orderBy: { name: 'asc' } })),
+    orEmpty(
+      'category counts',
+      prisma.equipment.groupBy({ by: ['categoryId'], where: baseWhere, _count: { _all: true } }),
+    ),
   ]);
 
   const countOf = new Map(countsByCategory.map((row) => [row.categoryId, row._count._all]));
@@ -150,17 +166,23 @@ export default async function EquipmentCatalogPage({
           : undefined,
   };
 
-  const total = await prisma.equipment.count({ where });
+  const total = await prisma.equipment.count({ where }).catch((error: unknown) => {
+    console.error('[equipment] failed to count equipment', error);
+    return 0;
+  });
   const totalPages = totalPagesFor(total, PAGE_SIZE);
   const page = Math.min(requestedPage, totalPages);
 
-  const equipment = await prisma.equipment.findMany({
-    where,
-    include: { category: true, location: true, company: { select: { name: true } } },
-    orderBy: EQUIPMENT_ORDER_BY[sort],
-    skip: (page - 1) * PAGE_SIZE,
-    take: PAGE_SIZE,
-  });
+  const equipment = await orEmpty(
+    'equipment',
+    prisma.equipment.findMany({
+      where,
+      include: { category: true, location: true, company: { select: { name: true } } },
+      orderBy: EQUIPMENT_ORDER_BY[sort],
+      skip: (page - 1) * PAGE_SIZE,
+      take: PAGE_SIZE,
+    }),
+  );
 
   const hasFilters = Boolean(
     searchParams.q ||
@@ -356,7 +378,7 @@ export default async function EquipmentCatalogPage({
           <div className="flex flex-col justify-center gap-3 rounded-3xl border border-slate-200 bg-white p-8">
             <div className="eyebrow text-amber-700">Ничего не нашлось</div>
             <h2 className="text-2xl font-bold tracking-tight">
-              {hasFilters ? 'По этим фильтрам техника не найдена' : 'Каталог пополняется'}
+              {hasFilters ? 'По этим фильтрам техника не найдена' : `Парк ${SITE.name} пополняется`}
             </h2>
             <p className="text-sm text-slate-600">
               {hasFilters && (

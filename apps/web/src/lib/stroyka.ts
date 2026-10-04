@@ -272,26 +272,49 @@ export const CALL: Reply = {
 };
 const NEXT: Reply = { label: 'Дальше по объекту', action: { kind: 'next' } };
 
-/** «Оформить заявку» for a machine: the wizard on the home page, with its jobs. */
+/** The wizard on the home page for a machine, with its jobs («Подробнее о технике»). */
 export function orderHref(type: MachineType): string {
   return `/?m=${type}#podbor`;
 }
-function order(type: MachineType, label: string): Reply {
-  return {
-    label,
-    action: { kind: 'link', href: orderHref(type) },
-    primary: true,
-    set: { machine: type },
-  };
+
+/**
+ * The amber order button of a zone: Света takes the order right here, in the
+ * film (the form under her line), with the machine already filled in.
+ */
+export function orderReply(type: MachineType, label = ORDER_LABEL): Reply {
+  return { label, action: { kind: 'form' }, primary: true, set: { machine: type } };
 }
-const TO_SVETA: Reply = { label: 'Передать Свете — оформить', action: { kind: 'form' } };
+export const ORDER_LABEL = 'Оформить у Светы';
+
+/** A second machine of the zone: also to Света, not amber. */
+function alsoOrder(type: MachineType, label: string): Reply {
+  return { label, action: { kind: 'form' }, set: { machine: type } };
+}
+
+/** The wizard (another page) as the secondary way: «Подробнее о технике». */
+function moreAbout(type: MachineType): Reply {
+  return { label: 'Подробнее о технике', action: { kind: 'link', href: orderHref(type) } };
+}
 const when = (node: string): Reply[] => [
   { label: 'Сегодня', action: { kind: 'goto', node }, set: { when: 'сегодня' } },
   { label: 'Завтра', action: { kind: 'goto', node }, set: { when: 'завтра' } },
   { label: 'На этой неделе', action: { kind: 'goto', node }, set: { when: 'эту неделю' } },
 ];
 
-const P = (value: number) => `${rub(value)}\u00a0₽/ч`;
+/**
+ * A price as the site says it everywhere on /stroyka: «от 4 000 ₽/ч с
+ * машинистом» (no-break spaces, so it never splits after «от» or the digits).
+ */
+export const P = (value: number) => `от\u00a0${rub(value)}\u00a0₽/ч с\u00a0машинистом`;
+
+/** «От 3 500 ₽/ч с машинистом» at the start of a sentence. */
+const capitalP = (value: number) => `О${P(value).slice(1)}`;
+
+/** The next stop of the walk (the order of ZONES, round). */
+export function nextZone(zone: ZoneId): ZoneId {
+  const i = ZONES.findIndex((z) => z.id === zone);
+  return ZONES[(i + 1) % ZONES.length]!.id;
+}
 
 export const DIALOGUE: Record<string, DialogNode> = {
   gate: {
@@ -308,7 +331,7 @@ export const DIALOGUE: Record<string, DialogNode> = {
   'gate-dig': {
     id: 'gate-dig',
     speaker: 'mihalych',
-    text: `Под фундамент или под трубы? Экскаватор-погрузчик — от ${P(PRICES.other)}, для большого котлована есть гусеничный.`,
+    text: `Под фундамент или под трубы? Экскаватор-погрузчик — ${P(PRICES.other)}, для большого котлована есть гусеничный.`,
     replies: [
       {
         label: 'Котлован под фундамент',
@@ -330,7 +353,7 @@ export const DIALOGUE: Record<string, DialogNode> = {
   'gate-lift': {
     id: 'gate-lift',
     speaker: 'mihalych',
-    text: `Плиты и фермы — автокран, от ${P(PRICES.crane)}. Фасад, окна, вывески — автовышка, от ${P(PRICES.agp)}. Блоки с машины — манипулятор.`,
+    text: `Плиты и фермы — автокран, ${P(PRICES.crane)}. Фасад, окна, вывески — автовышка, ${P(PRICES.agp)}. Блоки с машины — манипулятор.`,
     replies: [
       {
         label: 'Плиты, фермы',
@@ -380,7 +403,7 @@ export const DIALOGUE: Record<string, DialogNode> = {
   'gate-next': {
     id: 'gate-next',
     speaker: 'mihalych',
-    text: 'Значит так: {facts}. У СпецПласт16 такая машина есть — покажу её в работе или сразу передам Свете, она оформит.',
+    text: 'Значит, так: {facts}. У СпецПласт16 такая машина есть — покажу её в работе или сразу передам Свете, она оформит.',
     replies: [
       { label: 'Показать технику', action: { kind: 'show' } },
       { label: 'Передать Свете', action: { kind: 'form' }, primary: true },
@@ -390,68 +413,59 @@ export const DIALOGUE: Record<string, DialogNode> = {
   kotlovan: {
     id: 'kotlovan',
     speaker: 'rinat',
-    text: `Котлован под фундамент? Траншея под трубы? Мой JCB за смену сделает. От ${rub(PRICES.other)} ₽/ч с машинистом.`,
-    replies: [order('backhoe', 'Нужен такой — оформить заявку'), CALL, NEXT, TO_SVETA],
+    text: `Котлован под фундамент? Траншея под трубы? Мой JCB за смену сделает. Экскаватор-погрузчик — ${P(PRICES.other)}.`,
+    replies: [orderReply('backhoe'), moreAbout('backhoe'), CALL, NEXT],
   },
   planirovka: {
     id: 'planirovka',
     speaker: 'mihalych',
-    text: `Площадку выровнять, грунт растолкать — бульдозер, от ${P(PRICES.other)}. Снег, покос, прицеп — трактор, от ${P(PRICES.tractor)}.`,
-    replies: [
-      order('dozer', 'Заявка на бульдозер'),
-      order('tractor', 'Заявка на трактор'),
-      NEXT,
-      TO_SVETA,
-    ],
+    text: `Площадку выровнять, грунт растолкать — бульдозер, ${P(PRICES.other)}. Снег, покос, прицеп — трактор, ${P(PRICES.tractor)}.`,
+    replies: [orderReply('dozer'), alsoOrder('tractor', 'Нужен трактор'), moreAbout('dozer'), NEXT],
   },
   doroga: {
     id: 'doroga',
     speaker: 'rinat',
-    text: `Щебень самосвалом подвезём — ${P(PRICES.truck)}, катком прикатаем — ${P(PRICES.other)}. Слышишь, пищит? Это самосвал сдаёт задом.`,
-    replies: [order('roller', 'Заявка на каток'), order('truck', 'Нужен самосвал'), NEXT, TO_SVETA],
+    text: `Щебень самосвалом подвезём — ${P(PRICES.truck)}, катком прикатаем — ${P(PRICES.other)}. Слышите, пищит? Это самосвал сдаёт задом.`,
+    replies: [
+      orderReply('roller'),
+      alsoOrder('truck', 'Нужен самосвал'),
+      moreAbout('roller'),
+      NEXT,
+    ],
   },
   sklad: {
     id: 'sklad',
     speaker: 'ildar',
-    text: `Блоки с машины снять, поддоны раскидать — манипулятор КМУ или фронтальный погрузчик. Оба от ${P(PRICES.other)}, смена — ${SHIFT_HOURS} часов.`,
-    replies: [
-      order('kmu', 'Заявка на манипулятор'),
-      order('loader', 'Заявка на погрузчик'),
-      NEXT,
-      TO_SVETA,
-    ],
+    text: `Блоки с машины снять, поддоны раскидать — манипулятор КМУ или фронтальный погрузчик. Оба — ${P(PRICES.other)}, смена — ${SHIFT_HOURS} часов.`,
+    replies: [orderReply('kmu'), alsoOrder('loader', 'Нужен погрузчик'), moreAbout('kmu'), NEXT],
   },
   korpus: {
     id: 'korpus',
     speaker: 'mihalych',
-    text: `Глянь в окно — люлька поднимается. Автовышка: фасад, окна, вывески, кровля. От ${P(PRICES.agp)} с оператором.`,
-    replies: [order('agp', 'Нужна автовышка — оформить заявку'), CALL, NEXT, TO_SVETA],
+    text: `Глянь в окно — люлька поднимается. Автовышка: фасад, окна, вывески, кровля. ${capitalP(PRICES.agp)}.`,
+    replies: [orderReply('agp'), moreAbout('agp'), CALL, NEXT],
   },
   montazh: {
     id: 'montazh',
     speaker: 'ildar',
-    text: `Плиту на место — аккуратно, без рывков. Автокран 25 т — от ${P(PRICES.crane)}, 32 т — ${P(PRICES.crane32)}. Гидромолот, если надо, — ${P(PRICES.hammer)}.`,
-    replies: [order('crane', 'Заявка на кран'), CALL, NEXT, TO_SVETA],
+    text: `Плиту на место — аккуратно, без рывков. Тут я на башенном, а к тебе приедет автокран: 25 т — ${P(PRICES.crane)}, 32 т — ${P(PRICES.crane32)}. Гидромолот, если надо, — ${P(PRICES.hammer)}.`,
+    replies: [orderReply('crane'), moreAbout('crane'), CALL, NEXT],
   },
   smeta: {
     id: 'smeta',
     speaker: 'alsu',
-    text: 'Я Алсу, снабжение СпецПласт16. Бетон, песок, щебень, блоки — всё у нас, с доставкой нашими самосвалами. Скажите объём — посчитаю комплект под ключ.',
+    text: 'Я Алсу, снабжение СпецПласт16. Бетон, песок, щебень, блоки — всё у нас, с доставкой нашими самосвалами. Скажите объём — посчитаю весь комплект.',
     replies: [
-      {
-        label: '📦 Смета для снабженца',
-        action: { kind: 'link', href: '/smeta?mode=snab' },
-        primary: true,
-      },
-      { label: '🧮 Смета для прораба', action: { kind: 'link', href: '/smeta' } },
-      { label: 'Доставка — передать Свете', action: { kind: 'form' }, set: { machine: 'truck' } },
+      orderReply('truck', 'Доставка — оформить у Светы'),
+      { label: 'Смета для снабженца', action: { kind: 'link', href: '/smeta?mode=snab' } },
+      { label: 'Смета для прораба', action: { kind: 'link', href: '/smeta' } },
       NEXT,
     ],
   },
   sveta: {
     id: 'sveta',
     speaker: 'sveta',
-    text: 'Давай адрес и когда нужно — поставлю машину в график. Подача обычно в день заявки.',
+    text: 'Давайте адрес и когда нужно — поставлю машину в график. Обычно подаём в день заявки, если машина свободна.',
     form: true,
     replies: [CALL, NEXT],
   },
@@ -484,12 +498,12 @@ export const LIFT_STOP_LINES: Record<
   Record<NonNullable<LiftStop['reason']>, string>
 > = {
   montazh: {
-    wind: `Ветер сильный, кран не поднимаем — запишу на завтра. Автокран 25 т — от ${P(PRICES.crane)}, 32 т — ${P(PRICES.crane32)}.`,
+    wind: `Ветер сильный, кран не поднимаем — запишу на завтра. Автокран 25 т — ${P(PRICES.crane)}, 32 т — ${P(PRICES.crane32)}.`,
     thunder: 'Гроза — кран не поднимаем, переждём. Запишу на ближайшее окно, как утихнет.',
     other: 'Погода не для подъёма — кран стоит. Запишу на ближайший нормальный день.',
   },
   korpus: {
-    wind: `Ветер сильный — люльку не поднимаем, это безопасность. Автовышку запишу на завтра, от ${P(PRICES.agp)}.`,
+    wind: `Ветер сильный — люльку не поднимаем, это безопасность. Автовышку запишу на завтра, ${P(PRICES.agp)}.`,
     thunder: 'Гроза — в люльку никто не полезет. Переждём и поставим на окно.',
     other: 'Погода не для работы на высоте — вышка стоит. Запишу на ближайший день.',
   },
