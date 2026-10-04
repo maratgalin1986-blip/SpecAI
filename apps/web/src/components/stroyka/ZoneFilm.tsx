@@ -57,6 +57,15 @@ export function ZoneFilm({
     mq.addEventListener('change', onChange);
     return () => mq.removeEventListener('change', onChange);
   }, []);
+  // Phones held upright get the vertical reframes (-v), not a sliver of the wide frame.
+  const [portrait, setPortrait] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia('(orientation: portrait)');
+    setPortrait(mq.matches);
+    const onChange = () => setPortrait(mq.matches);
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
+  }, []);
 
   // ------------------------------------------------------------ video slots
   const [slots, setSlots] = useState<[ZoneId | null, ZoneId | null]>([target, null]);
@@ -197,9 +206,10 @@ export function ZoneFilm({
           picture with reduced motion or a missing clip. */}
       {posterOk && (
         <img
-          src={zoneFilmPoster(shown)}
+          src={zoneFilmPoster(shown, portrait)}
           alt={reduced ? ZONE_FILMS[shown].alt : ''}
           aria-hidden={reduced ? undefined : true}
+          style={portrait ? undefined : { objectPosition: ZONE_FILMS[shown].focus }}
           className="absolute inset-0 h-full w-full object-cover"
           onError={() => setPosterOk(false)}
         />
@@ -216,8 +226,9 @@ export function ZoneFilm({
               ref={(el) => {
                 videos.current[idx] = el;
               }}
-              src={zoneFilmSrc(zone, small)}
-              poster={zoneFilmPoster(zone)}
+              src={zoneFilmSrc(zone, small, portrait)}
+              poster={zoneFilmPoster(zone, portrait)}
+              style={portrait ? undefined : { objectPosition: ZONE_FILMS[zone].focus }}
               muted
               loop
               playsInline

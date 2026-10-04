@@ -10,7 +10,12 @@ import { setSoundEnabled, storedSoundChoice } from '@/lib/sound';
 // «Войти на стройку» appears as soon as the site is ready; the film also
 // closes by itself at the end, or with «Пропустить».
 
-export const FILM_SRC = { full: '/film/stroyka-film.mp4', sm: '/film/stroyka-film-sm.mp4' };
+export const FILM_SRC = {
+  full: '/film/stroyka-film.mp4',
+  sm: '/film/stroyka-film-sm.mp4',
+  /** 720×1280, reframed shot by shot, same soundtrack: for phones held upright. */
+  v: '/film/stroyka-film-v.mp4',
+};
 export const FILM_POSTER = '/film/stroyka-film.webp';
 
 /** What the site offers, over the film (owner, 2026-10-03: «чтобы привлечь больше людей»). */
@@ -47,6 +52,8 @@ export function StroykaFilm({
   onClose: () => void;
 }) {
   const video = useRef<HTMLVideoElement>(null);
+  // Read once (the film mounts on the client only): a change of source would restart it.
+  const [portrait] = useState(() => window.matchMedia('(orientation: portrait)').matches);
   const [muted, setMuted] = useState(false);
   // Muted only by the browser (not by the visitor): the first touch turns it on.
   const autoMuted = useRef(false);
@@ -99,8 +106,8 @@ export function StroykaFilm({
     >
       <video
         ref={video}
-        className="absolute inset-0 h-full w-full object-contain"
-        src={small ? FILM_SRC.sm : FILM_SRC.full}
+        className={`absolute inset-0 h-full w-full ${portrait ? 'object-cover' : 'object-contain'}`}
+        src={portrait ? FILM_SRC.v : small ? FILM_SRC.sm : FILM_SRC.full}
         poster={FILM_POSTER}
         playsInline
         preload="auto"
