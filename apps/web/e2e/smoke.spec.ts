@@ -148,7 +148,7 @@ test('stroyka shaders compile', async ({ page }, testInfo) => {
 });
 
 // The default tour plays real footage per zone; the strip switches zones and
-// the order button stays on top of the film.
+// the one order button («К заказу» in the top bar) stays on top of the film.
 test('stroyka film tour', async ({ page }) => {
   const errors = await guard(page);
   await page.route('**/film/zones/*.mp4', (route) => route.abort());
@@ -158,9 +158,9 @@ test('stroyka film tour', async ({ page }) => {
   await expect(strip).toBeVisible();
   await strip.locator('button').nth(1).click();
   await page.waitForTimeout(800);
-  await expect(page.getByTestId('film-order')).toBeVisible();
-  await page.getByTestId('film-order').click();
-  await page.waitForTimeout(500);
+  await expect(page.getByTestId('skip-to-order')).toBeVisible();
+  await page.getByTestId('skip-to-order').click();
+  await expect(page.getByTestId('order-panel')).toBeVisible();
   expect(errors, 'page errors').toEqual([]);
 });
 
@@ -192,9 +192,16 @@ test('stroyka order stays in the film', async ({ page }) => {
   await page.route('**/film/zones/*.mp4', (route) => route.abort());
   await page.goto('/stroyka?nointro=1', { waitUntil: 'load' });
   await expect(page.getByTestId('dialogue')).toBeVisible({ timeout: 15_000 });
+  // Phones show a subtitle bar: the replies are behind «Ответить».
+  const expand = async () => {
+    const button = page.getByTestId('dialogue-expand');
+    if (await button.isVisible()) await button.click();
+  };
+  await expand();
   await page.getByRole('button', { name: 'Копать котлован или траншею' }).click();
   await page.getByTestId('zone-strip').getByRole('tab', { name: 'Котлован', exact: true }).click();
   await expect(page.getByTestId('dialogue')).toContainText('Ринат');
+  await expand();
   await page.getByTestId('replies').getByRole('button', { name: 'Оформить у Светы' }).click();
   await expect(page.getByTestId('dialogue').locator('input[name="phone"]')).toBeVisible();
   expect(new URL(page.url()).pathname).toBe('/stroyka');

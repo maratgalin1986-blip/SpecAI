@@ -7,10 +7,12 @@ import { mskToday } from '@/lib/weather';
 // 2026-10-03): small type in an acid colour that changes every 5 s, and an
 // offer to check the weather on the object for any day of the forecast.
 //
-// The colour cycle is a CSS animation (.acid-cycle in globals.css: #39ff14,
-// #f5ff00, #00f0ff, #ff2bd6, #ff8a00, a 0.7 s fade every 5 s). It used to be a
-// React timer, which re-rendered the badge every 5 s; the badge is also
-// memoised, so the busy /stroyka page around it does not re-render it.
+// The film review (2026-10-03) asked for calm small caps instead of a colour
+// carousel; it stays acid and bright, but the change is subtle: a slow
+// cross-fade between three acid tones (.acid-cycle in globals.css: #39ff14,
+// #d7ff1f, #3cf2ff, about 5 s each), with no glow on the type. On phones the
+// line wraps to two rows instead of being cut, and the tap target is 44 px.
+// The badge is memoised, so the busy /stroyka page does not re-render it.
 
 type Note = { level: 'ok' | 'caution' | 'stop'; title: string; advice: string };
 type Forecast = {
@@ -85,10 +87,10 @@ export const WeatherBadge = memo(function WeatherBadge({
         type="button"
         data-testid="conditions"
         onClick={() => setOpen((v) => !v)}
-        className="acid-cycle flex max-w-full items-center gap-1.5 truncate rounded-full bg-black/55 px-2.5 py-1 font-mono text-[11px] font-bold sm:text-xs"
+        className="acid-cycle flex min-h-11 max-w-full flex-wrap items-center gap-x-1.5 rounded-2xl bg-slate-950/80 px-3 py-1 text-left font-mono text-[11px] font-bold uppercase leading-snug tracking-wide antialiased sm:flex-nowrap sm:rounded-full sm:text-xs"
         aria-expanded={open}
       >
-        <span className="truncate">{line}</span>
+        <span className="sm:truncate">{line}</span>
         <span className="shrink-0 underline decoration-dotted underline-offset-2">· на дату ▾</span>
       </button>
       {open && (

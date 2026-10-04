@@ -4,9 +4,10 @@ import { SITE } from '@/lib/site';
 // semi-transparent, like a broadcast channel's mark, so the films read as
 // «СпецПласт16 on air» without a word of advertising. Never takes a tap.
 const CORNERS = {
-  // The /stroyka tour: under the weather line on phones, above the dialogue
-  // box on wider screens (corners there belong to the top bar and the box).
-  tour: 'right-3 top-[calc(max(0.5rem,env(safe-area-inset-top))+6.75rem)] sm:bottom-[42%] sm:right-5 sm:top-auto',
+  // The /stroyka tour: under the weather line on phones (the top corners are
+  // the top bar's, the bottom the subtitle bar's); a true bottom-right corner
+  // on wider screens, beside the centred dialogue box.
+  tour: 'right-3 top-[calc(max(0.5rem,env(safe-area-inset-top))+6.25rem)] sm:bottom-5 sm:right-5 sm:top-auto',
   'top-left': 'left-3 top-[max(0.75rem,env(safe-area-inset-top))] sm:left-5 sm:top-5',
   'top-right': 'right-3 top-[max(0.75rem,env(safe-area-inset-top))] sm:right-5 sm:top-5',
   'bottom-left': 'bottom-[max(0.75rem,env(safe-area-inset-bottom))] left-3 sm:bottom-5 sm:left-5',

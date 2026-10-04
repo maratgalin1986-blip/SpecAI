@@ -1,6 +1,6 @@
 'use client';
 
-import { memo, useEffect, useRef, useState } from 'react';
+import { memo, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { SITE } from '@/lib/site';
 import { setSoundEnabled, storedSoundChoice } from '@/lib/sound';
 import { ChannelBug } from './ChannelBug';
@@ -33,6 +33,43 @@ const OFFERS = [
 ];
 /** Seconds each headline stays on screen. */
 const LINE_SECONDS = 4;
+/** The burned-in title card («СпецПласт16 представляет») plays this long. */
+const TITLE_SECONDS = 4;
+/** The landscape cut carries its own 2.39:1 matte: the picture is rows 92–628 of 720. */
+const BAKED = { top: 92 / 720, height: 536 / 720 };
+/** The top row of buttons (sound, skip) ends about here. */
+const CHROME_PX = 64;
+
+type Place = { head: number; offersBottom: number };
+
+/**
+ * Where the headline and the offers go: wholly inside the black bar when it
+ * is tall enough, otherwise wholly inside the picture, never across its edge.
+ */
+function placeOver(v: HTMLVideoElement, small: boolean, offersH: number): Place {
+  const vw = v.videoWidth || 1280;
+  const vh = v.videoHeight || 720;
+  const bw = v.clientWidth || window.innerWidth;
+  const bh = v.clientHeight || window.innerHeight;
+  const cover = getComputedStyle(v).objectFit === 'cover';
+  const scale = cover ? Math.max(bw / vw, bh / vh) : Math.min(bw / vw, bh / vh);
+  const frameH = vh * scale;
+  const frameTop = (bh - frameH) / 2;
+  // A vertical cut has no matte of its own.
+  const baked = vw > vh ? BAKED : { top: 0, height: 1 };
+  const picTop = Math.max(0, frameTop + baked.top * frameH);
+  const picBottom = Math.min(bh, frameTop + (baked.top + baked.height) * frameH);
+  const headH = small ? 72 : 52;
+  const topBar = picTop - CHROME_PX;
+  const head =
+    topBar >= headH + 16
+      ? CHROME_PX + (topBar - headH) / 2
+      : Math.max(picTop, CHROME_PX) + (small ? 20 : 28);
+  const bottomBar = bh - picBottom;
+  const offersBottom = bottomBar >= offersH + 8 ? 0 : bottomBar + 12;
+  // Whole pixels: no fractional offset on a text layer.
+  return { head: Math.round(head), offersBottom: Math.round(offersBottom) };
+}
 
 // Memoised: the /stroyka page around it updates often (radio, dialogue,
 // loading), and the film should re-render only when its own props change.
@@ -58,6 +95,27 @@ export const StroykaFilm = memo(function StroykaFilm({
   const [waiting, setWaiting] = useState(false);
   const [ended, setEnded] = useState(false);
   const [line, setLine] = useState(0);
+  // The HTML headline waits for the film's own title card to finish.
+  const [titled, setTitled] = useState(false);
+  useEffect(() => {
+    const timer = window.setTimeout(() => setTitled(true), (TITLE_SECONDS + 2) * 1000);
+    return () => window.clearTimeout(timer);
+  }, []);
+  const offers = useRef<HTMLDivElement>(null);
+  const [place, setPlace] = useState<Place | null>(null);
+  // Before the first paint, so the offers never jump.
+  useLayoutEffect(() => {
+    const v = video.current;
+    if (!v) return;
+    const measure = () => setPlace(placeOver(v, small, offers.current?.offsetHeight ?? 140));
+    measure();
+    v.addEventListener('loadedmetadata', measure);
+    window.addEventListener('resize', measure);
+    return () => {
+      v.removeEventListener('loadedmetadata', measure);
+      window.removeEventListener('resize', measure);
+    };
+  }, [small, ready]);
   useEffect(() => {
     const timer = window.setInterval(
       () => setLine((k) => (k + 1) % OFFERS.length),
@@ -109,20 +167,35 @@ export const StroykaFilm = memo(function StroykaFilm({
         playsInline
         preload="auto"
         onEnded={() => setEnded(true)}
+        onTimeUpdate={(e) => {
+          if (!titled && e.currentTarget.currentTime >= TITLE_SECONDS) setTitled(true);
+        }}
         aria-label={`Фильм ${SITE.platform}: стройки, техника и люди`}
       />
       <FilmLook />
-      <ChannelBug corner="top-left" />
-      {/* The offers: a big headline that changes, and a button for each. */}
-      <div className="pointer-events-none absolute inset-x-0 top-[18%] flex justify-center px-4 sm:top-[14%]">
-        <p
-          key={line}
-          className="intro-offer text-center text-2xl font-extrabold text-white drop-shadow-[0_1px_0_rgba(0,0,0,0.9)] sm:text-4xl"
+      {/* Phones: the corner belongs to «Убрать звук» and «Пропустить». */}
+      <ChannelBug corner="top-left" className="hidden sm:flex" />
+      {/* The offers: a big headline that changes, and a button for each. It
+        comes after the film's own title card, wholly in the black bar or
+        wholly in the picture (placeOver). */}
+      {titled && place && (
+        <div
+          className="pointer-events-none absolute inset-x-0 flex justify-center px-4"
+          style={{ top: place.head }}
         >
-          {OFFERS[line]!.line}
-        </p>
-      </div>
-      <div className="absolute inset-x-0 bottom-0 flex flex-col items-center gap-3 px-4 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
+          <p
+            key={line}
+            className="sf-headline text-center text-2xl font-extrabold text-white antialiased drop-shadow-[0_1px_0_rgba(0,0,0,0.9)] sm:text-4xl"
+          >
+            {OFFERS[line]!.line}
+          </p>
+        </div>
+      )}
+      <div
+        ref={offers}
+        className="absolute inset-x-0 bottom-0 flex flex-col items-center gap-3 px-4 pb-[max(1.25rem,env(safe-area-inset-bottom))]"
+        style={place?.offersBottom ? { bottom: place.offersBottom } : undefined}
+      >
         <nav
           aria-label="Что можно сделать на сайте"
           className="flex w-full max-w-2xl flex-wrap justify-center gap-2"

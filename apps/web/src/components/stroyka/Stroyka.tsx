@@ -11,6 +11,7 @@ import {
   type DialogEventDetail,
 } from '@/lib/sceneEvents';
 import { SITE } from '@/lib/site';
+import { stripEmoji } from '@/lib/stripEmoji';
 import {
   DIALOGUE,
   dialogueNode,
@@ -44,6 +45,7 @@ import {
   progressAt,
   progressFromUnits,
   progressLine,
+  STAGES,
   worldProgress,
   type WorldProgress,
 } from '@/lib/stroyka/progress';
@@ -106,6 +108,7 @@ import {
   withoutHello,
   lastTimeLine,
   mskMoment,
+  timeSlot,
   OFFER_TEXT,
   offerNoText,
   offerSpeaker,
@@ -136,7 +139,7 @@ import {
   type VisitorMemory,
 } from '@/lib/stroyka/visitorMemory';
 import { ChapterCard } from './ChapterCard';
-import { MemoryOffer, type MemoryNote } from './MemoryOffer';
+import { MemoryChip, MemoryOffer, type MemoryNote } from './MemoryOffer';
 import { EndCredits } from './EndCredits';
 import { WeatherBadge } from './WeatherBadge';
 
@@ -163,6 +166,7 @@ const BUBBLE_CSS = `.stroyka-bubble{position:absolute;left:0;top:0;max-width:min
         .stroyka-bubble::after{content:'';position:absolute;left:50%;bottom:-6px;margin-left:-6px;border:6px solid transparent;border-top-color:#fff;border-bottom:0}
         .stroyka-censor{color:#dc2626;font-weight:900}
         .crew-sub{animation:crew-sub 4.5s linear forwards}
+        .crew-sub-text{text-shadow:0 1px 2px rgba(0,0,0,.9)}
         @keyframes crew-sub{0%{opacity:0}4%{opacity:1}95%{opacity:1}100%{opacity:0}}
         @media (prefers-reduced-motion:reduce){.crew-sub{animation:none}}`;
 
@@ -205,6 +209,11 @@ export function Stroyka() {
   const [filmOn, setFilmOn] = useState(false);
   const [reduced, setReduced] = useState(false);
   const [mobile, setMobile] = useState(false);
+  // Phone layout (below sm): the dialogue is a subtitle bar until «Ответить».
+  const [phone, setPhone] = useState(false);
+  const [replyOpen, setReplyOpen] = useState(false);
+  // The memory offer folded into its chip «Запомнить меня?».
+  const [memoryFolded, setMemoryFolded] = useState(false);
   const [overrides, setOverrides] = useState<SceneOverrides>({});
   const [loadReal, setLoadReal] = useState(0);
   const [loadSim, setLoadSim] = useState(0.04);
@@ -370,6 +379,9 @@ export function Stroyka() {
   useEffect(() => setBadges(loadBadges()), []);
   // A badge earned while the end credits roll waits until they close.
   const creditsOn = useRef(false);
+  // The 3D opening cinematic: badges wait for its end too (a toast over the
+  // fly-over would catch the first tap).
+  const introHold = useRef(false);
   const heldBadges = useRef<string[]>([]);
   const earn = useCallback((event: BadgeEvent) => {
     const { state, earned } = applyBadge(badgesRef.current, event);
@@ -379,7 +391,7 @@ export function Stroyka() {
     saveBadges(state);
     for (const b of earned) {
       const text = `🏅 Новый значок: ${b.icon} «${b.title}»`;
-      if (creditsOn.current) heldBadges.current.push(text);
+      if (creditsOn.current || introHold.current) heldBadges.current.push(text);
       else setToast(text);
     }
   }, []);
@@ -392,6 +404,7 @@ export function Stroyka() {
     const prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     setReduced(prefersReduced);
     setMobile(window.matchMedia('(pointer: coarse)').matches || window.innerWidth < 768);
+    setPhone(window.matchMedia('(max-width: 639px)').matches);
     const force2d = params.get('2d') === '1';
     const force3d = params.get('3d') === '1';
     // Real footage per zone is the default tour (owner, 2026-10-03: «не рисовать
@@ -765,6 +778,7 @@ export function Stroyka() {
             return;
           }
           const who = offerSpeaker(dialogSpeaker.current ?? zn.speaker);
+          setMemoryFolded(false);
           setMemoryNote({ mode: 'offer', speaker: who, text: OFFER_TEXT[who] });
         }, 3000);
       }
@@ -789,6 +803,7 @@ export function Stroyka() {
     (z: ZoneId) => {
       chatFocus.current = false;
       setTyping(false);
+      setReplyOpen(false);
       if (zone === z) {
         openZoneDialog(z);
         return;
@@ -1156,15 +1171,21 @@ export function Stroyka() {
   const momentRef = useRef(moment);
   momentRef.current = moment;
 
-  // A chapter title over the footage each time a zone opens (not under the
-  // opening film, not with reduced motion).
+  // A chapter title over the footage on each cut to a zone (ZoneFilm's onCut:
+  // the new shot is already on screen). Not under the opening film, not with
+  // reduced motion, and never over an expanded phone dialogue, an open memory
+  // offer, the order or a visitor who is typing.
+  const cardBlocked = useRef(false);
+  const onCut = useCallback(
+    (z: ZoneId) => {
+      if (phase !== 'film' || filmOn || reduced || cardBlocked.current) return;
+      setChapterCard((c) => ({ chapter: chapter(z, momentRef.current), n: (c?.n ?? 0) + 1 }));
+    },
+    [phase, filmOn, reduced],
+  );
   useEffect(() => {
-    if (phase !== 'film' || !zone || filmOn || reduced) {
-      setChapterCard(null);
-      return;
-    }
-    setChapterCard((c) => ({ chapter: chapter(zone, momentRef.current), n: (c?.n ?? 0) + 1 }));
-  }, [phase, zone, filmOn, reduced]);
+    if (phase !== 'film' || filmOn || reduced) setChapterCard(null);
+  }, [phase, filmOn, reduced]);
   const closeChapter = useCallback(() => setChapterCard(null), []);
 
   // Consented memory follows the conversation (what is built, the machine, answers).
@@ -1445,6 +1466,24 @@ export function Stroyka() {
     earn({ type: 'dog' });
   }, [engine, earn]);
 
+  // The 3D opening cinematic lasts at most ~6 s; badges earned meanwhile wait.
+  const introOnScreen = phase === '3d' && !!engine && introOn && !filmOn;
+  useEffect(() => {
+    introHold.current = phase === '3d' && introOn;
+    if (introHold.current || creditsOn.current) return;
+    const held = heldBadges.current;
+    heldBadges.current = [];
+    if (held.length) setToast(held.join(' · '));
+  }, [phase, introOn]);
+  useEffect(() => {
+    if (!introOnScreen || !engine) return;
+    const timer = window.setTimeout(() => {
+      engine.skipIntro();
+      setIntroOn(false);
+    }, 6000);
+    return () => window.clearTimeout(timer);
+  }, [introOnScreen, engine]);
+
   // After the opening shot, once: how to lead the walk (nothing moves by itself).
   const navHinted = useRef(false);
   useEffect(() => {
@@ -1515,8 +1554,58 @@ export function Stroyka() {
 
   const node = dialog ? nodeFor(dialog.nodeId, ctx) : null;
   const formOpen = !!node?.form && !chat;
+  // Phones: the dialogue is a lower-third subtitle bar; «Ответить», the form,
+  // a phone number or typing open the full box. From sm up it is always full.
+  const expanded = !!dialog && (!phone || replyOpen || formOpen || typing || !!pendingPhone);
+  const phoneBar = phone && phase === 'film';
   const showNote =
-    !!memoryNote && !(memoryNote.mode === 'offer' && (typing || order.open || formOpen));
+    !!memoryNote &&
+    !(memoryNote.mode === 'offer' && (typing || order.open || formOpen || memoryFolded)) &&
+    !(phone && expanded);
+  const showChip =
+    memoryNote?.mode === 'offer' && memoryFolded && !(phone && expanded) && !order.open;
+  const clean = !!chapterCard;
+  cardBlocked.current =
+    (phone && expanded) || (showNote && memoryNote?.mode === 'offer') || order.open || typing;
+  // The offer folds into its chip after ~8 s on screen (not counting the clean frame).
+  const offerVisible = showNote && memoryNote?.mode === 'offer' && !clean;
+  useEffect(() => {
+    if (!offerVisible) return;
+    const timer = window.setTimeout(() => setMemoryFolded(true), 8000);
+    return () => window.clearTimeout(timer);
+  }, [offerVisible]);
+  // The height of what the bottom block shows (the subtitle bar or the box),
+  // for the strip above it. The block itself is full height and never moves
+  // (a growing bottom-anchored block counts as a layout shift); its children
+  // sit at its bottom, and the topmost one sets --sp-bottom. On phones the
+  // subtitle bar's height is reserved (data-min) before it mounts.
+  const bottomRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const col = bottomRef.current;
+    const root = rootRef.current;
+    if (!col || !root || typeof ResizeObserver === 'undefined') return;
+    const update = () => {
+      let top = col.clientHeight;
+      for (const child of Array.from(col.children) as HTMLElement[])
+        if (child.offsetHeight) top = Math.min(top, child.offsetTop);
+      const used = Math.max(col.clientHeight - top, Number(col.dataset.min || 0));
+      root.style.setProperty('--sp-bottom', `${Math.round(used)}px`);
+    };
+    const ro = new ResizeObserver(update);
+    const watch = () => {
+      ro.disconnect();
+      ro.observe(col);
+      for (const child of Array.from(col.children)) ro.observe(child);
+      update();
+    };
+    const mo = new MutationObserver(watch);
+    mo.observe(col, { childList: true, attributes: true, attributeFilter: ['data-min'] });
+    watch();
+    return () => {
+      ro.disconnect();
+      mo.disconnect();
+    };
+  }, []);
   const gateAway =
     dialog && welcome.current?.key === dialog.key ? `${welcomeText(welcome.current)} ` : '';
   const shownLine = chat
@@ -1538,11 +1627,14 @@ export function Stroyka() {
   const badgeMachine = ctx.machine ?? (zone ? zoneById(zone).order : null);
   const chip =
     phase === 'boot' ? 'Челны' : conditionsLine(now, point || overrides.weather ? weather : null);
+  // The footage is always shot by day: grade it by the site's clock.
+  const slot = timeSlot(hour);
+  const tint = slot === 'night' ? 'night' : slot === 'evening' ? 'evening' : null;
 
   return (
     <div
       ref={rootRef}
-      className="fixed inset-0 z-[80] overflow-hidden bg-slate-950 text-white"
+      className={`fixed inset-0 z-[80] overflow-hidden bg-slate-950 text-white ${clean ? 'sp-clean' : ''}`}
       data-testid="stroyka"
     >
       <style dangerouslySetInnerHTML={{ __html: BUBBLE_CSS }} />
@@ -1568,7 +1660,7 @@ export function Stroyka() {
         />
       )}
       {/* The opening fly-over as a game cinematic: letterbox bars and titles. */}
-      {phase === '3d' && engine && introOn && !filmOn && (
+      {introOnScreen && (
         <button
           type="button"
           data-testid="stroyka-cinematic"
@@ -1597,11 +1689,14 @@ export function Stroyka() {
       {phase === 'film' && (
         <ZoneFilm
           active={zone}
-          progress={progress}
           onZone={onFallbackZone}
           small={mobile}
           onForce3d={hasWebGL() ? () => setPhase('3d') : undefined}
-          onOrder={() => skipToOrder()}
+          onCut={onCut}
+          matte={chapterCard?.n ?? 0}
+          tint={tint}
+          shade={expanded ? 'high' : 'low'}
+          expanded={phone && expanded}
           paused={filmOn}
         />
       )}
@@ -1619,12 +1714,16 @@ export function Stroyka() {
       )}
 
       {/* Phones: the date, time and weather get their own row under the top bar. */}
-      <div className="pointer-events-none absolute inset-x-3 top-[calc(max(0.5rem,env(safe-area-inset-top))+3rem)] z-[65] sm:hidden">
+      <div className="sp-cleanable pointer-events-none absolute inset-x-3 top-[calc(max(0.5rem,env(safe-area-inset-top))+3rem)] z-[65] sm:hidden">
         <WeatherBadge line={chip} machine={badgeMachine} />
       </div>
 
       {/* ---------------- top bar */}
-      <header className="pointer-events-none absolute inset-x-0 top-0 z-[65] flex items-center gap-2 bg-gradient-to-b from-slate-950/90 to-transparent px-3 pb-6 pt-[max(0.5rem,env(safe-area-inset-top))] sm:px-4">
+      <header
+        className={`pointer-events-none absolute inset-x-0 top-0 ${
+          introOnScreen ? 'z-[72]' : 'z-[65]'
+        } flex items-center gap-2 bg-gradient-to-b from-slate-950/90 to-transparent px-3 pb-6 pt-[max(0.5rem,env(safe-area-inset-top))] sm:px-4`}
+      >
         <a
           href="/"
           className="pointer-events-auto flex shrink-0 items-center gap-2 font-extrabold"
@@ -1662,9 +1761,9 @@ export function Stroyka() {
       </header>
 
       {/* ---------------- mission card (left) and map (right) */}
-      {phase !== 'boot' && (
+      {phase !== 'boot' && !introOnScreen && (
         <div
-          className={`pointer-events-none absolute inset-x-0 top-[calc(5.25rem+env(safe-area-inset-top))] sm:top-[calc(3.5rem+env(safe-area-inset-top))] ${
+          className={`sp-cleanable pointer-events-none absolute inset-x-0 top-[calc(5.25rem+env(safe-area-inset-top))] sm:top-[calc(3.5rem+env(safe-area-inset-top))] ${
             // The open phone menu lies over the dialogue, like any menu.
             hudOpen ? 'z-30' : 'z-10'
           } ${
@@ -1687,6 +1786,27 @@ export function Stroyka() {
               <div className="truncate text-xs text-slate-200" data-testid="progress-line">
                 {progressLine(progress)}
               </div>
+              {/* The object's passport, folded into this card (one «Объект: … этап»). */}
+              {phase === 'film' && (
+                <div
+                  className="mt-1.5 flex gap-0.5"
+                  aria-label={`Этап ${progress.stage + 1} из ${STAGES.length}`}
+                >
+                  {STAGES.map((stage, i) => (
+                    <span
+                      key={stage.key}
+                      title={stage.name}
+                      className={`h-1.5 flex-1 rounded-sm ${
+                        i < progress.stage
+                          ? 'bg-emerald-500'
+                          : i === progress.stage
+                            ? 'bg-amber-400'
+                            : 'bg-slate-600'
+                      }`}
+                    />
+                  ))}
+                </div>
+              )}
               <div className="mt-1.5 flex flex-wrap items-center gap-2">
                 <button
                   type="button"
@@ -1866,7 +1986,7 @@ export function Stroyka() {
       {toast && (
         <div
           data-testid="toast"
-          className="pointer-events-none absolute inset-x-0 top-[calc(env(safe-area-inset-top)+3.25rem)] z-[66] mx-auto w-[min(90vw,30rem)] rounded-xl bg-slate-950 px-4 py-3 text-center text-sm font-semibold text-white shadow-xl sm:top-[38%] sm:z-30"
+          className="sp-cleanable pointer-events-none absolute inset-x-0 top-[calc(env(safe-area-inset-top)+3.25rem)] z-[66] mx-auto w-[min(90vw,30rem)] rounded-xl bg-slate-950 px-4 py-3 text-center text-sm font-semibold text-white shadow-xl sm:top-[38%] sm:z-30"
         >
           {toast}
         </div>
@@ -1875,10 +1995,47 @@ export function Stroyka() {
       {/* ---------------- bottom: dialogue, joystick, talk */}
       {/* An open conversation is the main thing on screen: above the header,
           the mission card, the map, the bubbles and the toasts. */}
+      {/* Phones, film: the crew's chatter, the memory offer and its chip sit
+        just above the zone strip, out of the bottom block, so nothing in it
+        moves when they come and go. */}
+      {phoneBar && crewSub && !showNote && !(phone && expanded) && (
+        <p
+          key={crewSub.key}
+          data-testid="crew-subtitle"
+          aria-live="off"
+          className={`crew-sub sp-cleanable pointer-events-none absolute inset-x-3 z-[61] text-center ${
+            showChip
+              ? 'bottom-[calc(var(--sp-bottom,10rem)+7rem)]'
+              : 'bottom-[calc(var(--sp-bottom,10rem)+3.75rem)]'
+          }`}
+        >
+          <span className="crew-sub-text inline rounded-md bg-black/60 px-2 py-1 text-[15px] font-bold leading-relaxed text-white antialiased [box-decoration-break:clone]">
+            <b className="font-extrabold text-amber-300">{crewSub.name}:</b>{' '}
+            <Censored text={stripEmoji(crewSub.text)} />
+          </span>
+        </p>
+      )}
+      {phone && (showNote || showChip) && memoryNote && (
+        <div className="sp-cleanable absolute inset-x-2 bottom-[calc(var(--sp-bottom,10rem)+3.5rem)] z-[61] flex">
+          {showNote ? (
+            <MemoryOffer
+              note={memoryNote}
+              onYes={onMemoryYes}
+              onNo={onMemoryNo}
+              onFold={() => setMemoryFolded(true)}
+            />
+          ) : (
+            <MemoryChip onOpen={() => setMemoryFolded(false)} />
+          )}
+        </div>
+      )}
       <div
-        className={`pointer-events-none absolute inset-x-0 bottom-0 ${
+        ref={bottomRef}
+        // The subtitle bar (9.25rem) and the bottom padding, reserved from the first frame.
+        data-min={phoneBar ? 156 : 0}
+        className={`pointer-events-none absolute inset-0 ${
           dialog ? 'z-[60]' : 'z-20'
-        } flex flex-col gap-2 px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:px-4`}
+        } flex flex-col justify-end gap-2 px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:px-4`}
       >
         {phase === '3d' && !(dialog && mobile) && !order.open && (
           <div className="flex items-end justify-between">
@@ -1907,15 +2064,17 @@ export function Stroyka() {
             </div>
           </div>
         )}
-        {phase === 'film' && crewSub && (
+        {phase === 'film' && !phone && crewSub && (
           <p
             key={crewSub.key}
             data-testid="crew-subtitle"
             aria-live="off"
-            className="crew-sub max-w-[min(26rem,85vw)] self-start rounded-lg bg-slate-950 px-3 py-1.5 text-[15px] font-semibold leading-snug text-white antialiased"
+            className="crew-sub sp-cleanable max-w-[min(40rem,90vw)] self-center text-center"
           >
-            <b className="font-semibold text-amber-300">{crewSub.name}:</b>{' '}
-            <Censored text={crewSub.text} />
+            <span className="crew-sub-text inline rounded-md bg-black/60 px-2.5 py-1 text-[17px] font-bold leading-relaxed text-white antialiased [box-decoration-break:clone]">
+              <b className="font-extrabold text-amber-300">{crewSub.name}:</b>{' '}
+              <Censored text={stripEmoji(crewSub.text)} />
+            </span>
           </p>
         )}
         {phase !== '3d'
@@ -1931,8 +2090,20 @@ export function Stroyka() {
               </button>
             )
           : null}
-        {showNote && memoryNote && (
-          <MemoryOffer note={memoryNote} onYes={onMemoryYes} onNo={onMemoryNo} />
+        {!phone && showNote && memoryNote && (
+          <div className="sp-cleanable">
+            <MemoryOffer
+              note={memoryNote}
+              onYes={onMemoryYes}
+              onNo={onMemoryNo}
+              onFold={() => setMemoryFolded(true)}
+            />
+          </div>
+        )}
+        {!phone && showChip && (
+          <div className="sp-cleanable mx-auto flex w-full max-w-2xl">
+            <MemoryChip onOpen={() => setMemoryFolded(false)} />
+          </div>
         )}
         {dialog && node && (
           <DialogueBox
@@ -1956,7 +2127,11 @@ export function Stroyka() {
             extra={extra}
             instant={reduced}
             skipTyping={skipTyping}
-            compact={showNote}
+            collapsed={phone && !expanded}
+            onExpand={() => setReplyOpen(true)}
+            onCollapse={
+              phone && !formOpen && !pendingPhone && !typing ? () => setReplyOpen(false) : undefined
+            }
             onReply={(reply) => onReply(reply)}
             onClose={closeDialog}
             form={

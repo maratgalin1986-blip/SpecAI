@@ -11,18 +11,17 @@
 // «Как в кино» (owner, 2026-10-03): the footage sits in a slow Ken Burns
 // camera (.zf-cam), a zone change is a cinematic cut (the old shot whips out,
 // a dip toward black under a warm light-leak swipe, the new shot settles in),
-// each zone opens in a 2.39:1 letterbox that eases back to full frame, and
-// FilmLook lays grain, vignette and halation over the picture. All of it is
+// the chapter card's 2.39:1 letterbox closes on the cut (onCut) and opens as
+// the card fades, and FilmLook lays grain, vignette and halation (and a
+// day-for-night grade after dark) over the picture. All of it is
 // CSS transform/opacity (globals.css, «/stroyka film tour» section) and sits
 // under every text layer; nothing here filters or moves text.
 
 import { useCallback, useEffect, useRef, useState, type TouchEvent } from 'react';
 import { ZONES, type ZoneId } from '@/lib/stroyka';
-import type { WorldProgress } from '@/lib/stroyka/progress';
 import { ZONE_FILMS, zoneFilmPoster, zoneFilmSrc } from '@/lib/stroyka/zoneFilms';
-import { Passport } from './FallbackMap';
 import { ChannelBug } from './ChannelBug';
-import { FilmLook } from './FilmLook';
+import { FilmLook, type FilmTint } from './FilmLook';
 
 /** The cut between zones (zf-in / zf-out / zf-dip in globals.css). */
 const FADE_MS = 720;
@@ -44,19 +43,31 @@ function play(video: HTMLVideoElement | null) {
 
 export function ZoneFilm({
   active,
-  progress,
   onZone,
   small,
   onForce3d,
-  onOrder,
+  onCut,
+  matte = 0,
+  tint = null,
+  shade = 'low',
+  expanded = false,
   paused = false,
 }: {
   active: ZoneId | null;
-  progress: WorldProgress;
   onZone: (zone: ZoneId) => void;
   small: boolean;
   onForce3d?: () => void;
-  onOrder?: () => void;
+  /** The actual cut to a zone's shot (and the first shot once the film shows):
+   *  the chapter card starts here, not on the zone change. */
+  onCut?: (zone: ZoneId) => void;
+  /** Non-zero while a chapter card is up: keys the letterbox so it plays with the card. */
+  matte?: number;
+  /** Day for night or dusk over the (always daytime) footage. */
+  tint?: FilmTint;
+  /** 'high' while a full dialogue box needs the dark bottom; 'low' otherwise. */
+  shade?: 'low' | 'high';
+  /** The phone's expanded dialogue is up: «Пройтись в 3D» steps aside (the strip rides above the box). */
+  expanded?: boolean;
   /** Held still (no playback) while something opaque covers it, e.g. the opening film. */
   paused?: boolean;
 }): JSX.Element {
@@ -64,6 +75,15 @@ export function ZoneFilm({
   const pausedRef = useRef(paused);
   pausedRef.current = paused;
   const live = () => !document.hidden && !pausedRef.current;
+  const onCutRef = useRef(onCut);
+  onCutRef.current = onCut;
+  /** The zone whose shot was last announced by onCut. */
+  const announced = useRef<ZoneId | null>(null);
+  const announce = useCallback((zone: ZoneId | null) => {
+    if (!zone || pausedRef.current) return;
+    announced.current = zone;
+    onCutRef.current?.(zone);
+  }, []);
 
   // null until the media query has been read, so no clip starts by mistake.
   const [reduced, setReduced] = useState<boolean | null>(null);
@@ -79,7 +99,7 @@ export function ZoneFilm({
   const [slots, setSlots] = useState<[ZoneId | null, ZoneId | null]>([target, null]);
   const [front, setFront] = useState<Slot>(0);
   /** The slot whose shot is whipping out during a cut, and a count of cuts
-   *  (keys the dip, the light leak and the letterbox so they replay). */
+   *  (keys the dip and the light leak so they replay). */
   const [leaving, setLeaving] = useState<Slot | null>(null);
   const [cuts, setCuts] = useState(0);
   /** Whether each slot's current clip has a decoded frame. */
@@ -97,20 +117,24 @@ export function ZoneFilm({
     setReady((r) => (idx === 0 ? [false, r[1]] : [r[0], false]));
   }, []);
 
-  const swapTo = useCallback((idx: Slot) => {
-    if (pending.current === null || slotsRef.current[idx] !== pending.current) return;
-    pending.current = null;
-    const old = frontRef.current;
-    setFront(idx);
-    setLeaving(old);
-    setCuts((n) => n + 1);
-    if (live()) play(videos.current[idx]);
-    // Pause the old clip once it has faded out.
-    window.setTimeout(() => {
-      if (frontRef.current !== old) videos.current[old]?.pause();
-      setLeaving((l) => (l === old ? null : l));
-    }, FADE_MS);
-  }, []);
+  const swapTo = useCallback(
+    (idx: Slot) => {
+      if (pending.current === null || slotsRef.current[idx] !== pending.current) return;
+      pending.current = null;
+      const old = frontRef.current;
+      setFront(idx);
+      setLeaving(old);
+      setCuts((n) => n + 1);
+      announce(slotsRef.current[idx]);
+      if (live()) play(videos.current[idx]);
+      // Pause the old clip once it has faded out.
+      window.setTimeout(() => {
+        if (frontRef.current !== old) videos.current[old]?.pause();
+        setLeaving((l) => (l === old ? null : l));
+      }, FADE_MS);
+    },
+    [announce],
+  );
 
   // A new stop: load it into the idle slot (unless it is already preloaded
   // there) and swap once it has a frame, or after a timeout.
@@ -131,15 +155,32 @@ export function ZoneFilm({
     return () => window.clearTimeout(timer);
   }, [target, setSlot, swapTo]);
 
-  // Once the current clip is showing, preload the next stop into the idle slot.
+  // Once the current clip is showing, preload the next stop into the idle slot
+  // (not under the opening film: the phone would fetch two clips beside it).
   useEffect(() => {
-    if (reduced !== false || !ready[front] || pending.current) return;
+    if (paused || reduced !== false || !ready[front] || pending.current) return;
     const back: Slot = front === 0 ? 1 : 0;
     const timer = window.setTimeout(() => {
       if (!pending.current) setSlot(back, neighbour(target, 1));
     }, FADE_MS + 100);
     return () => window.clearTimeout(timer);
-  }, [reduced, ready, front, target, setSlot]);
+  }, [paused, reduced, ready, front, target, setSlot]);
+
+  // The first shot (and a shot that changed under the opening film) has no
+  // cut: announce it once the film is showing and the shot has a frame.
+  useEffect(() => {
+    const zone = slots[front];
+    if (paused || !zone || announced.current === zone || pending.current) return;
+    if (ready[front] || reduced) {
+      announce(zone);
+      return;
+    }
+    const timer = window.setTimeout(
+      () => announce(slotsRef.current[frontRef.current]),
+      SWAP_TIMEOUT_MS,
+    );
+    return () => window.clearTimeout(timer);
+  }, [paused, slots, front, ready, reduced, announce]);
 
   const onLoaded = (idx: Slot) => {
     setReady((r) => (idx === 0 ? [true, r[1]] : [r[0], true]));
@@ -148,6 +189,9 @@ export function ZoneFilm({
   };
   const onFailed = (idx: Slot) => {
     setReady((r) => (idx === 0 ? [false, r[1]] : [r[0], false]));
+    // The shot on screen has no clip: its poster is the shot, announce it now.
+    if (idx === frontRef.current && !pending.current && announced.current !== slotsRef.current[idx])
+      announce(slotsRef.current[idx]);
     swapTo(idx);
   };
 
@@ -221,6 +265,9 @@ export function ZoneFilm({
   };
   const [posterOk, setPosterOk] = useState(true);
   useEffect(() => setPosterOk(true), [shown]);
+  // During a cut the new clip already has a frame: no poster underneath, or
+  // the gap in the whip would flash a frozen still of the new shot.
+  const posterHidden = reduced === false && leaving !== null && ready[front];
 
   return (
     <div
@@ -235,7 +282,7 @@ export function ZoneFilm({
       <div className="zf-cam absolute inset-0">
         {/* Poster underneath: the first frame before the clip loads, the whole
           picture with reduced motion or a missing clip. */}
-        {posterOk && (
+        {posterOk && !posterHidden && (
           <img
             src={zoneFilmPoster(shown)}
             alt={reduced ? ZONE_FILMS[shown].alt : ''}
@@ -274,15 +321,17 @@ export function ZoneFilm({
           })}
       </div>
 
-      <FilmLook grain={reduced === false} />
+      <FilmLook grain={reduced === false} tint={tint} />
 
       {reduced === false && (
         <>
-          {/* Each zone opens in a 2.39:1 letterbox that eases back to full frame. */}
-          <div key={`matte-${cuts}`} aria-hidden className="pointer-events-none">
-            <div className="zf-matte zf-matte-top absolute inset-x-0 top-0 bg-black" />
-            <div className="zf-matte zf-matte-bottom absolute inset-x-0 bottom-0 bg-black" />
-          </div>
+          {/* The only letterbox: in on the cut, out as the chapter card fades. */}
+          {matte > 0 && (
+            <div key={`matte-${matte}`} aria-hidden className="pointer-events-none">
+              <div className="zf-matte zf-matte-top absolute inset-x-0 top-0 bg-black" />
+              <div className="zf-matte zf-matte-bottom absolute inset-x-0 bottom-0 bg-black" />
+            </div>
+          )}
           {cuts > 0 && (
             <div
               key={`cut-${cuts}`}
@@ -298,15 +347,24 @@ export function ZoneFilm({
 
       {/* Cinematic shading so the top bar and the dialogue box read. */}
       <div className="pointer-events-none absolute inset-x-0 top-0 h-48 bg-gradient-to-b from-black/70 via-black/30 to-transparent" />
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-[45%] bg-gradient-to-t from-black/80 via-black/35 to-transparent" />
-      <ChannelBug corner="tour" />
+      {/* The bottom shade is deep only under a full dialogue box; under the
+        subtitle bar a quarter of the frame is enough. */}
+      <div
+        // Scaled, not resized: a height change would count as a layout shift.
+        className={`pointer-events-none absolute inset-x-0 bottom-0 h-[45%] origin-bottom bg-gradient-to-t from-black/80 via-black/35 to-transparent transition-transform duration-300 ${
+          shade === 'high' ? '' : 'scale-y-[0.56]'
+        }`}
+      />
+      <ChannelBug corner="tour" className="sp-cleanable" />
 
       <div
         ref={strip}
         data-testid="zone-strip"
         role="tablist"
         aria-label="Зоны стройки"
-        className="absolute inset-x-0 top-[calc(max(0.5rem,env(safe-area-inset-top))+12.75rem)] z-10 flex gap-2 overflow-x-auto overscroll-x-contain px-3 [scrollbar-width:none] sm:top-[calc(max(0.5rem,env(safe-area-inset-top))+3.75rem)] sm:pl-[26rem] [&::-webkit-scrollbar]:hidden"
+        // Phones: just above the subtitle bar (--sp-bottom is the height of
+        // the bottom block, set by Stroyka); from sm up under the top bar.
+        className={`sp-cleanable absolute inset-x-0 bottom-[calc(var(--sp-bottom,10rem)+0.25rem)] z-10 flex gap-2 overflow-x-auto overscroll-x-contain px-3 [scrollbar-width:none] sm:bottom-auto sm:top-[calc(max(0.5rem,env(safe-area-inset-top))+3.75rem)] sm:pl-[26rem] [&::-webkit-scrollbar]:hidden`}
       >
         {ZONES.map((zone) => {
           const on = zone.id === target;
@@ -318,8 +376,8 @@ export function ZoneFilm({
               aria-selected={on}
               data-zone={zone.id}
               onClick={() => onZone(zone.id)}
-              className={`min-h-10 shrink-0 whitespace-nowrap rounded-full px-4 text-sm font-semibold shadow backdrop-blur ${
-                on ? 'bg-amber-500 text-slate-950' : 'bg-black/55 text-white hover:bg-black/70'
+              className={`min-h-11 shrink-0 whitespace-nowrap rounded-full px-4 text-sm font-bold shadow ${
+                on ? 'bg-amber-500 text-slate-950' : 'bg-slate-950/80 text-white hover:bg-slate-900'
               }`}
             >
               {zone.name}
@@ -328,30 +386,18 @@ export function ZoneFilm({
         })}
       </div>
 
-      <div className="absolute right-3 top-[calc(max(0.5rem,env(safe-area-inset-top))+16rem)] z-10 flex flex-col items-end gap-2 sm:top-[calc(max(0.5rem,env(safe-area-inset-top))+7rem)]">
-        {onOrder && (
-          <button
-            type="button"
-            data-testid="film-order"
-            onClick={onOrder}
-            className="rounded-full bg-amber-500 px-5 py-3 text-base font-black text-slate-950 shadow-xl shadow-amber-600/40 ring-2 ring-amber-300/60 hover:bg-amber-400 sm:text-lg"
-          >
-            🚜 Заказать технику
-          </button>
-        )}
-        {onForce3d && (
-          <button
-            type="button"
-            onClick={onForce3d}
-            className="rounded-full bg-white/90 px-3 py-1.5 text-xs font-bold text-slate-950 shadow hover:bg-white"
-          >
-            🎮 Пройтись в 3D
-          </button>
-        )}
-        <div className="hidden w-64 sm:block">
-          <Passport progress={progress} compact />
-        </div>
-      </div>
+      {/* The one order button is «К заказу» in the top bar (Stroyka.tsx): one
+        tap from every frame, and the picture stays clean. */}
+      {onForce3d && !expanded && (
+        <button
+          type="button"
+          data-testid="force-3d"
+          onClick={onForce3d}
+          className="sp-cleanable absolute right-3 top-[calc(max(0.5rem,env(safe-area-inset-top))+8rem)] z-10 min-h-11 rounded-full bg-slate-950/80 px-3 text-xs font-bold text-white shadow hover:bg-slate-900 sm:right-5 sm:top-[calc(max(0.5rem,env(safe-area-inset-top))+7rem)]"
+        >
+          🎮 Пройтись в 3D
+        </button>
+      )}
     </div>
   );
 }

@@ -50,7 +50,64 @@ function useTypewriter(text: string, instant: boolean) {
     return () => window.clearInterval(timer);
   }, [text, instant, total]);
   const n = Math.min(shown, total);
-  return { shown: n, total, text: chars.slice(0, n).join(''), finish: () => setShown(total) };
+  return {
+    shown: n,
+    total,
+    text: chars.slice(0, n).join(''),
+    rest: chars.slice(n).join(''),
+    finish: () => setShown(total),
+  };
+}
+
+/** About two lines of a 390 px phone at 17 px bold. */
+const PAGE_CHARS = 58;
+
+/**
+ * A line cut into film subtitles of at most ~two lines: whole sentences
+ * where they fit, otherwise at a space.
+ */
+export function subtitlePages(text: string, max = PAGE_CHARS): string[] {
+  const pieces: string[] = [];
+  // No lookbehind: older iPhones cannot parse it.
+  const sentences = (text.trim().match(/[^.!?…]+(?:[.!?…]+»?)?/g) ?? [text]).map((x) => x.trim());
+  for (const sentence of sentences.filter(Boolean)) {
+    if (sentence.length <= max) {
+      pieces.push(sentence);
+      continue;
+    }
+    let cur = '';
+    for (const w of sentence.split(/\s+/).filter(Boolean)) {
+      if (cur && `${cur} ${w}`.length > max) {
+        pieces.push(cur);
+        cur = w;
+      } else cur = cur ? `${cur} ${w}` : w;
+    }
+    if (cur) pieces.push(cur);
+  }
+  const pages: string[] = [];
+  for (const piece of pieces) {
+    const last = pages[pages.length - 1];
+    if (last && `${last} ${piece}`.length <= max) pages[pages.length - 1] = `${last} ${piece}`;
+    else pages.push(piece);
+  }
+  return pages.length ? pages : [''];
+}
+
+/** Subtitle pages that advance at a reading pace and stop on the last one. */
+function usePages(text: string, still: boolean) {
+  const pages = subtitlePages(text);
+  const [page, setPage] = useState(0);
+  useEffect(() => setPage(0), [text]);
+  const index = Math.min(page, pages.length - 1);
+  const current = pages[index] ?? '';
+  const last = index >= pages.length - 1;
+  useEffect(() => {
+    if (still || last) return;
+    const ms = Math.min(6000, Math.max(2400, current.length * 70));
+    const timer = window.setTimeout(() => setPage((p) => p + 1), ms);
+    return () => window.clearTimeout(timer);
+  }, [still, last, current]);
+  return { current, index, count: pages.length };
 }
 
 export interface DialogueChat {
@@ -90,7 +147,9 @@ export function DialogueBox({
   chat,
   instant,
   skipTyping,
-  compact = false,
+  collapsed = false,
+  onExpand,
+  onCollapse,
   onReply,
   onClose,
 }: {
@@ -107,12 +166,20 @@ export function DialogueBox({
   instant: boolean;
   /** Bumped by «Пропустить»: finishes the typewriter at once. */
   skipTyping: number;
-  /** Something sits on top (the memory offer): the box gives up height, the zone strip stays reachable. */
-  compact?: boolean;
+  /**
+   * Phones: a lower-third subtitle bar (the speaker's name plate and the line
+   * in two-line pages); the replies and the input wait behind «Ответить».
+   */
+  collapsed?: boolean;
+  /** «Ответить»: open the full box. */
+  onExpand?: () => void;
+  /** «Свернуть»: back to the subtitle bar (phones). */
+  onCollapse?: () => void;
   onReply: (reply: Reply) => void;
   onClose: () => void;
 }) {
-  const { shown, total, text: typed, finish } = useTypewriter(text, instant);
+  const { text: typed, rest, finish } = useTypewriter(text, instant || collapsed);
+  const pages = usePages(text, instant || !collapsed);
   const [address, setAddress] = useState('');
   const [message, setMessage] = useState('');
   // «🎤 Сказать» with an empty field: speech to text, then sent as typed.
@@ -126,12 +193,65 @@ export function DialogueBox({
     if (skipTyping) finish();
   }, [skipTyping]);
   const name = speaker === 'worker' ? BANTER_NAMES.worker : SPEAKERS[speaker].name;
+  if (collapsed)
+    return (
+      <section
+        data-testid="dialogue"
+        aria-live="polite"
+        aria-label={`Говорит: ${name}`}
+        className="ym-hide-content pointer-events-auto mx-auto flex h-[9.25rem] w-full max-w-2xl flex-col rounded-2xl bg-slate-950/95 px-3 pb-2 pt-2.5 text-white antialiased shadow-2xl"
+      >
+        <div className="flex items-center justify-between gap-2">
+          {/* A simple name plate instead of the pixel portrait. */}
+          <div className="min-w-0 truncate border-l-[3px] border-amber-400 pl-2 text-xs font-extrabold uppercase tracking-[0.14em] text-amber-300">
+            {name}
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Закрыть диалог"
+            className="-mr-1 grid h-8 w-8 shrink-0 place-items-center rounded-full text-slate-400 hover:text-white"
+          >
+            ✕
+          </button>
+        </div>
+        <p
+          onClick={onExpand}
+          aria-hidden
+          data-testid="dialogue-text"
+          className="mt-1 h-[2.7em] overflow-hidden text-[17px] font-bold leading-[1.35] text-white [-webkit-box-orient:vertical] [-webkit-line-clamp:2] [display:-webkit-box]"
+        >
+          {pages.current}
+        </p>
+        <span className="sr-only">{text}</span>
+        <div className="mt-auto flex items-center gap-2">
+          <button
+            type="button"
+            data-testid="dialogue-expand"
+            onClick={onExpand}
+            className="min-h-11 flex-1 rounded-full bg-white px-4 text-sm font-extrabold text-slate-950 hover:bg-amber-100"
+          >
+            Ответить ▴
+          </button>
+          {pages.count > 1 && (
+            <span aria-hidden className="flex shrink-0 gap-1 pr-1">
+              {Array.from({ length: pages.count }, (_, i) => (
+                <span
+                  key={i}
+                  className={`h-1.5 w-1.5 rounded-full ${i === pages.index ? 'bg-amber-400' : 'bg-white/30'}`}
+                />
+              ))}
+            </span>
+          )}
+        </div>
+      </section>
+    );
   return (
     <section
       data-testid="dialogue"
       aria-live="polite"
       aria-label={`Говорит: ${name}`}
-      className={`ym-hide-content pointer-events-auto mx-auto flex ${compact ? 'max-h-[34dvh]' : 'max-h-[52dvh]'} w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-amber-500/50 bg-slate-950 text-white antialiased shadow-2xl`}
+      className="ym-hide-content pointer-events-auto mx-auto flex max-h-[52dvh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-amber-500/50 bg-slate-950 text-white antialiased shadow-2xl"
     >
       <div className="flex-1 overflow-y-auto overscroll-contain p-3 sm:p-4">
         {radio.length > 0 && (
@@ -161,24 +281,46 @@ export function DialogueBox({
               <div className="font-mono text-sm font-bold uppercase tracking-wider text-amber-400">
                 {name}
               </div>
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onClose();
-                }}
-                aria-label="Закрыть диалог"
-                className="-mr-1 -mt-1 rounded-full px-2 text-slate-400 hover:text-white"
-              >
-                ✕
-              </button>
+              <div className="-mr-1 -mt-1 flex shrink-0 items-center">
+                {onCollapse && (
+                  <button
+                    type="button"
+                    data-testid="dialogue-collapse"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onCollapse();
+                    }}
+                    aria-label="Свернуть диалог"
+                    className="grid h-9 min-w-9 place-items-center rounded-full px-2 text-sm font-bold text-slate-300 hover:text-white"
+                  >
+                    ▾
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onClose();
+                  }}
+                  aria-label="Закрыть диалог"
+                  className="grid h-9 min-w-9 place-items-center rounded-full px-2 text-slate-400 hover:text-white"
+                >
+                  ✕
+                </button>
+              </div>
             </div>
+            {/* The whole line is laid out from the first frame and the untyped
+              part is only transparent, so the box never grows while typing. */}
             <p
               className="mt-1 text-base font-semibold leading-relaxed sm:text-[17px]"
               data-testid="dialogue-text"
             >
               {typed}
-              {shown < total && <span className="animate-pulse text-amber-400">▌</span>}
+              {rest && (
+                <span aria-hidden className="text-transparent">
+                  {rest}
+                </span>
+              )}
             </p>
           </div>
         </div>

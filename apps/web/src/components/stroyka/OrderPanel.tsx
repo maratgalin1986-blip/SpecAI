@@ -17,7 +17,9 @@ function priceNote(type: MachineType) {
   return null;
 }
 
-// The order panel: every machine with its price and three ways to order.
+// The order panel: every machine with its price, one primary «Оставить
+// заявку» (the inline form, right here) and a quiet «Подробнее о технике»
+// (the full order page). Calling and the estimate live once, at the bottom.
 // Pure DOM, works without WebGL — the impatient visitor's one-tap exit.
 export function OrderPanel({
   open,
@@ -77,7 +79,7 @@ export function OrderPanel({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-full bg-white/10 px-3 py-1.5 text-sm font-semibold hover:bg-white/20"
+            className="grid min-h-11 min-w-11 place-items-center rounded-full bg-white/10 text-sm font-semibold hover:bg-white/20"
             aria-label="Закрыть заказ"
           >
             ✕
@@ -102,33 +104,22 @@ export function OrderPanel({
                   </span>
                 </div>
                 {note && <div className="text-xs text-slate-400">{note}</div>}
-                <div className="mt-2 flex flex-wrap gap-2">
-                  <a
-                    href={orderHref(type)}
-                    className="rounded-full bg-amber-500 px-3 py-1.5 text-sm font-bold text-slate-950 hover:bg-amber-400"
-                  >
-                    Оформить заявку
-                  </a>
-                  <a
-                    href={SITE.phoneHref}
-                    className="rounded-full bg-white/10 px-3 py-1.5 text-sm font-semibold hover:bg-white/20"
-                  >
-                    Позвонить
-                  </a>
-                  <a
-                    href={smetaHref(null, type)}
-                    className="rounded-full bg-white/10 px-3 py-1.5 text-sm font-semibold hover:bg-white/20"
-                  >
-                    🧮 Смета
-                  </a>
+                <div className="mt-2 flex flex-wrap items-center gap-2">
                   <button
                     type="button"
+                    data-testid="order-lead"
                     onClick={() => setFormFor(formFor === type ? null : type)}
                     aria-expanded={formFor === type}
-                    className="rounded-full bg-white/10 px-3 py-1.5 text-sm font-semibold hover:bg-white/20"
+                    className="min-h-11 rounded-full bg-amber-500 px-5 text-sm font-extrabold text-slate-950 hover:bg-amber-400"
                   >
-                    Заявка
+                    Оставить заявку
                   </button>
+                  <a
+                    href={orderHref(type)}
+                    className="flex min-h-11 items-center rounded-full px-3 text-sm font-bold text-slate-200 underline decoration-dotted underline-offset-4 hover:text-white"
+                  >
+                    Подробнее о технике
+                  </a>
                 </div>
                 {formFor === type && (
                   <div
@@ -154,19 +145,22 @@ export function OrderPanel({
         <a
           href={smetaHref(ctx.task, machine ?? ctx.machine)}
           data-testid="order-smeta"
-          className="mx-4 mb-2 mt-1 rounded-full border border-amber-400/60 px-4 py-2 text-center text-sm font-bold text-amber-300 hover:bg-amber-400/10"
+          className="mx-4 mb-2 mt-1 flex min-h-11 items-center justify-center rounded-full border border-amber-400/60 px-4 text-center text-sm font-bold text-amber-300 hover:bg-amber-400/10"
         >
           🧮 Рассчитать смету — примерно, за минуту
         </a>
         <a
           href="/smeta?mode=snab"
           data-testid="order-snab"
-          className="mx-4 mb-2 rounded-full border border-sky-400/60 px-4 py-2 text-center text-sm font-bold text-sky-200 hover:bg-sky-400/10"
+          className="mx-4 mb-2 flex min-h-11 items-center justify-center rounded-full border border-sky-400/60 px-4 text-center text-sm font-bold text-sky-200 hover:bg-sky-400/10"
         >
           📦 Смета для снабженца — материалы и доставка
         </a>
         <div className="border-t border-white/10 px-4 py-2 text-center text-xs text-slate-400">
-          Цены с машинистом, смена — {SHIFT_HOURS} ч. Диспетчер: {SITE.phone}
+          Цены с машинистом, смена — {SHIFT_HOURS} ч. Диспетчер:{' '}
+          <a href={SITE.phoneHref} className="font-bold text-white underline underline-offset-2">
+            {SITE.phone}
+          </a>
         </div>
       </div>
     </div>

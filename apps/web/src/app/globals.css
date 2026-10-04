@@ -538,58 +538,33 @@ html {
 }
 
 /* ---- Acid date/time/weather badge on /stroyka (WeatherBadge) -----------
-   Five acid colours, a new one every 5 s with a 0.7 s fade (the old React
-   timer + transition-colors, now without re-rendering). The colour animation
-   starts at 5 s, the first change; until then the 0% frame holds the first
-   colour. The glow switches at once at each change, as before. */
+   The owner's «кислотный цвет, меняется каждые 5 с», made calm for the film
+   (review, 2026-10-03): three acid tones on a dark plate, each held about
+   5 s and cross-faded over 1.5 s. No glow on the text: it stays crisp. */
 .acid-cycle {
   color: #39ff14;
-  text-shadow: 0 0 8px #39ff1488;
-  animation:
-    acid-color 25s cubic-bezier(0.4, 0, 0.2, 1) 5s infinite both,
-    acid-glow 25s step-end infinite;
+  animation: acid-color 19.5s ease-in-out infinite;
 }
 @keyframes acid-color {
-  0% {
+  0%,
+  25.6% {
     color: #39ff14;
   }
-  2.8%,
-  20% {
-    color: #f5ff00;
+  33.3%,
+  59% {
+    color: #d7ff1f;
   }
-  22.8%,
-  40% {
-    color: #00f0ff;
+  66.6%,
+  92.3% {
+    color: #3cf2ff;
   }
-  42.8%,
-  60% {
-    color: #ff2bd6;
-  }
-  62.8%,
-  80% {
-    color: #ff8a00;
-  }
-  82.8%,
   100% {
     color: #39ff14;
   }
 }
-@keyframes acid-glow {
-  0% {
-    text-shadow: 0 0 8px #39ff1488;
-  }
-  20% {
-    text-shadow: 0 0 8px #f5ff0088;
-  }
-  40% {
-    text-shadow: 0 0 8px #00f0ff88;
-  }
-  60% {
-    text-shadow: 0 0 8px #ff2bd688;
-  }
-  80%,
-  100% {
-    text-shadow: 0 0 8px #ff8a0088;
+@media (prefers-reduced-motion: reduce) {
+  .acid-cycle {
+    animation: none;
   }
 }
 
@@ -2169,7 +2144,7 @@ body:has(#intro:not([hidden])) .stroyka-ping::after {
       rgba(0, 170, 190, 0.05) 90%,
       transparent 100%
     ),
-    radial-gradient(ellipse 90% 85% at 50% 45%, transparent 52%, rgba(0, 0, 0, 0.5) 100%),
+    radial-gradient(ellipse 90% 85% at 50% 45%, transparent 52%, rgba(0, 0, 0, 0.35) 100%),
     radial-gradient(circle at 92% 6%, rgba(255, 176, 96, 0.2), transparent 38%),
     radial-gradient(circle at 4% 96%, rgba(0, 92, 104, 0.22), transparent 45%);
 }
@@ -2210,11 +2185,14 @@ body:has(#intro:not([hidden])) .stroyka-ping::after {
   }
 }
 
-/* 2.39:1 letterbox for the opening seconds of each zone, easing back to full
-   frame. Bars never exceed 14vh (a true 2.39 matte would bury a phone). */
+/* 2.39:1 letterbox, timed with the chapter card (CHAPTER_MS = 2.6 s): the
+   bars close in on the cut, hold while the title is up and open as it fades.
+   It is the only matte on screen (the card has none of its own). Bars never
+   exceed 14vh (a true 2.39 matte would bury a phone); the top bar is then
+   at least as tall as the top bar of buttons, so no button straddles it. */
 .zf-matte {
   height: min(14vh, max(0px, calc((100vh - 100vw / 2.39) / 2)));
-  animation: zf-matte 3.6s cubic-bezier(0.6, 0, 0.2, 1) both;
+  animation: zf-matte 2.6s cubic-bezier(0.4, 0, 0.2, 1) both;
 }
 .zf-matte-top {
   transform-origin: top;
@@ -2223,13 +2201,55 @@ body:has(#intro:not([hidden])) .stroyka-ping::after {
   transform-origin: bottom;
 }
 @keyframes zf-matte {
-  0%,
-  58% {
+  0% {
+    transform: scaleY(0);
+  }
+  12%,
+  80% {
     transform: scaleY(1);
   }
   100% {
     transform: scaleY(0);
   }
+}
+
+/* Day for night (the footage is always shot by day): a blue multiply and
+   lower exposure at night, a soft amber dusk in the evening. Two static
+   layers over the picture, under every text layer. */
+.zf-night {
+  background: linear-gradient(180deg, #24346e 0%, #31458a 55%, #3a4b80 100%);
+  mix-blend-mode: multiply;
+}
+.zf-night-exposure {
+  background: radial-gradient(
+    ellipse 80% 70% at 50% 40%,
+    rgba(2, 6, 23, 0.25),
+    rgba(2, 6, 23, 0.55)
+  );
+}
+.zf-dusk {
+  background: linear-gradient(180deg, #ffb070 0%, #f4a77a 50%, #b98a9a 100%);
+  mix-blend-mode: multiply;
+  opacity: 0.55;
+}
+
+/* The clean frame: while a chapter title is up, everything but the top bar,
+   the subtitle bar and the title itself steps out (opacity only). */
+.sp-cleanable {
+  transition: opacity 0.35s ease-out;
+}
+.sp-clean .sp-cleanable {
+  opacity: 0;
+  pointer-events: none;
+}
+.sp-clean .sp-cleanable * {
+  pointer-events: none;
+}
+
+/* The opening film's headline: opacity only, so the type is never scaled. */
+.sf-headline {
+  opacity: 0;
+  animation: zf-fade 0.6s ease-out forwards;
 }
 
 /* Held still while the opening film covers the tour (ZoneFilm paused). */
@@ -2253,5 +2273,11 @@ body:has(#intro:not([hidden])) .stroyka-ping::after {
   .zf-dip,
   .zf-leak {
     display: none;
+  }
+  .sp-cleanable,
+  .sf-headline {
+    transition: none;
+    animation: none;
+    opacity: 1;
   }
 }
