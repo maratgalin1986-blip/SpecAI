@@ -1,11 +1,10 @@
-// Nature around the 3D site (owner, 2026-10-03): recordings from Mixkit
-// (free licence, see SOUND_CREDITS) mixed by the real weather — light or
-// heavy rain, wind by its speed, birds by day when it is dry, the town by day
-// and by night — plus chirps, a crow, dogs and cats now and then, thunder
-// after a lightning flash, and footsteps on snow, mud or gravel while the
-// visitor walks. Loops load only when the weather first calls for them.
+// Nature under the /stroyka film tour (owner, 2026-10-03): recordings from
+// Mixkit (free licence, see SOUND_CREDITS) mixed by the real weather — light
+// or heavy rain, wind by its speed, birds by day when it is dry, the town by
+// day and by night — plus chirps, a crow, dogs and cats now and then. Loops
+// load only when the weather first calls for them.
 
-import type { Ground, NatureEventDetail } from '@/lib/sceneEvents';
+import type { NatureEventDetail } from '@/lib/sceneEvents';
 import type { SampleName } from '@/lib/soundAssets';
 
 type Loop = { src: AudioBufferSourceNode; gain: GainNode; name: SampleName };
@@ -22,12 +21,6 @@ type LoopName = (typeof LOOPS)[number];
 
 /** A loop faded to silence is stopped (and its buffer let go) after this long. */
 const IDLE_STOP_MS = 5000;
-
-export const STEP_LOOP: Record<Ground, SampleName> = {
-  snow: 'step-snow',
-  wet: 'step-mud',
-  dry: 'step-gravel',
-};
 
 const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
 const smooth = (a: number, b: number, x: number) => {
@@ -78,10 +71,6 @@ export class NatureLayer {
   private loading = new Set<LoopName>();
   private state: NatureEventDetail | null = null;
   private timer = 0;
-  private steps: Loop | null = null;
-  private stepsWanted: { moving: boolean; ground: Ground } = { moving: false, ground: 'dry' };
-  private splashAt = 0;
-  private token = 0;
   /** Loops at zero gain, waiting to be stopped. */
   private idle = new Map<LoopName, number>();
 
@@ -99,7 +88,6 @@ export class NatureLayer {
     if (!state) {
       for (const name of LOOPS) this.level(name, 0);
       this.pause();
-      this.setSteps(false, 'dry');
       return;
     }
     const mix = natureMix(state);
@@ -107,7 +95,7 @@ export class NatureLayer {
     this.resume();
   }
 
-  /** Stops the random chirps, dogs and splashes (mic open, sound off, page hidden). */
+  /** Stops the random chirps and dogs (mic open, sound off, page hidden). */
   pause() {
     window.clearTimeout(this.timer);
     this.timer = 0;
@@ -118,48 +106,12 @@ export class NatureLayer {
     if (this.state && !this.timer && this.active()) this.schedule();
   }
 
-  /** Thunder a moment after the flash, like a storm a few kilometres away. */
-  thunder() {
-    if (!this.state || !this.active()) return;
-    void this.load('thunder').then((buffer) =>
-      window.setTimeout(
-        () => {
-          if (!this.active()) return;
-          this.oneShot(buffer, 0.8, (Math.random() - 0.5) * 0.8, 0.9 + Math.random() * 0.2);
-        },
-        600 + Math.random() * 1800,
-      ),
-    );
-  }
-
-  setSteps(moving: boolean, ground: Ground) {
-    this.stepsWanted = { moving, ground };
-    const want = moving && this.state ? STEP_LOOP[ground] : null;
-    const now = this.ctx.currentTime;
-    if (this.steps && this.steps.name !== want) {
-      const old = this.steps;
-      this.steps = null;
-      old.gain.gain.setTargetAtTime(0, now, 0.12);
-      window.setTimeout(() => stopLoop(old), 600);
-    }
-    if (!want || this.steps) return;
-    const token = ++this.token;
-    void this.load(want).then((buffer) => {
-      const wanted = this.stepsWanted;
-      if (!buffer || token !== this.token || !wanted.moving) return;
-      if (STEP_LOOP[wanted.ground] !== want) return;
-      this.steps = this.startLoop(buffer, want, 0.42);
-    });
-  }
-
   dispose() {
     this.pause();
     this.idle.forEach((timer) => window.clearTimeout(timer));
     this.idle.clear();
     for (const loop of this.loops.values()) stopLoop(loop);
     this.loops.clear();
-    if (this.steps) stopLoop(this.steps);
-    this.steps = null;
   }
 
   private level(name: LoopName, value: number) {
@@ -238,14 +190,6 @@ export class NatureLayer {
             (Math.random() - 0.5) * 1.6,
             0.94 + Math.random() * 0.12,
           );
-        }
-        // A splash now and then when walking through puddles.
-        const w = this.stepsWanted;
-        if (w.moving && w.ground === 'wet' && performance.now() > this.splashAt) {
-          this.splashAt = performance.now() + 2500 + Math.random() * 3000;
-          const splash = await this.load('step-puddle');
-          if (!mine()) return this.drop(timer);
-          this.oneShot(splash, 0.35, 0, 0.95 + Math.random() * 0.1);
         }
         if (this.timer === timer) this.schedule();
       },
