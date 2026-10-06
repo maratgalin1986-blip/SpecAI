@@ -1,14 +1,16 @@
-// Recorded voices for the /stroyka characters. The male characters' written
-// lines are pre-recorded with the free neural TTS Piper (voices «Дмитрий» and
-// «Денис», CC0) by scripts/stroyka-voices.py into /audio/stroyka/<key>.mp3.
-// A line is matched by its text, so any caller of sp:dialog gets the recording
-// for free; lines without one (live answers, the women's lines) fall back to
+// Recorded voices for the /stroyka characters. Every written line is
+// pre-recorded by scripts/stroyka-voices-hybrid.py into
+// /audio/stroyka/<key>.mp3: Qwen3-TTS VoiceDesign (Apache-2.0) designed one
+// synthetic voice per character, and Chatterbox Multilingual (MIT) speaks
+// each line in that voice with the line's emotion. A line is matched by its
+// text, so any caller of sp:dialog gets the recording for free; lines without
+// one (live answers with the visitor's name, prices of the day) fall back to
 // the browser's speechSynthesis in lib/soundEngine.ts.
 
 import { stripEmoji } from '@/lib/stripEmoji';
 
-/** Characters with recorded lines (the two CC0 Piper voices are male). */
-export const RECORDED_SPEAKERS = ['mihalych', 'rinat', 'ildar', 'worker'] as const;
+/** Characters with recorded lines: all of them, Света and Алсу included. */
+export const RECORDED_SPEAKERS = ['mihalych', 'rinat', 'ildar', 'worker', 'sveta', 'alsu'] as const;
 
 export const radioClipKey = (n: number, side: 'a' | 'b') => `radio-${n}-${side}`;
 

@@ -4,16 +4,11 @@
 // comes up rarely in the idle line under the business dialogue (Stroyka.tsx)
 // and never while the visitor is busy with an order.
 //
-// Not in LINES on purpose: lib/stroyka/voice.test.ts requires a recording for
-// every line of the recorded speakers (Михалыч, Ринат, Ильдар), and these are
-// not recorded yet. Lines with `voiced: false` are shown as text only (no
-// sp:dialog event, so no robotic browser voice next to the recorded ones).
-// scripts/stroyka-voice-lines.ts already lists them for the recorder; once
-// the clips exist, flip `voiced` to true.
-//
-// To record (voiced: false): every line of mihalych, rinat and ildar below.
-// Света and Алсу have no recorded voice at all; their lines speak through the
-// browser like the rest of theirs.
+// Not in LINES on purpose: the shuffle-bag banter stays separate. Every line
+// here is recorded too (scripts/stroyka-voice-lines.ts lists them for
+// scripts/stroyka-voices-hybrid.py), so all are `voiced`. A new line is text
+// only (`voiced: false`, no sp:dialog event, so no robotic browser voice next
+// to the recorded ones) until it is recorded: list its id in UNRECORDED.
 
 import type { SpeakerId } from '@/lib/stroyka';
 
@@ -29,7 +24,8 @@ export interface InnerLine {
   when?: 'day' | 'morning' | 'friday' | 'not-friday';
 }
 
-const RECORDED: SpeakerId[] = ['mihalych', 'rinat', 'ildar'];
+/** Full ids (e.g. «sveta-inner-coffee-1») of lines written but not recorded yet. */
+const UNRECORDED = new Set<string>([]);
 
 type Raw = [id: string, text: string, opts?: Pick<InnerLine, 'after' | 'when'>];
 
@@ -158,7 +154,7 @@ export const INNER: Record<SpeakerId, InnerLine[]> = Object.fromEntries(
       id: `${speaker}-inner-${id}`,
       speaker,
       text,
-      voiced: !RECORDED.includes(speaker),
+      voiced: !UNRECORDED.has(`${speaker}-inner-${id}`),
       ...(opts?.after ? { after: `${speaker}-inner-${opts.after}` } : {}),
       ...(opts?.when ? { when: opts.when } : {}),
     })),
