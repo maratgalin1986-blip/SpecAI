@@ -243,6 +243,8 @@ def main() -> None:
     ap.add_argument("--shard", default="0/1")
     ap.add_argument("--only", default="", help="comma-separated speakers or keys")
     ap.add_argument("--limit", type=int, default=0)
+    ap.add_argument("--priority", default="", help="JSON list of keys to record first, in order")
+    ap.add_argument("--until", default="", help="UTC time like 2026-10-07T02:30: start no new clip after it")
     ap.add_argument("--attempts", type=int, default=3)
     ap.add_argument("--min-score", type=float, default=0.8)
     args = ap.parse_args()
@@ -257,14 +259,18 @@ def main() -> None:
     os.makedirs(OUT_DIR, exist_ok=True)
     os.makedirs(args.state, exist_ok=True)
 
-    # Clips done in this run (resume): key → text fingerprint, from every shard.
-    done = {}
-    for name in os.listdir(args.state):
-        if name.startswith("done-") and name.endswith(".jsonl"):
-            for row in open(os.path.join(args.state, name)):
-                if row.strip():
-                    r = json.loads(row)
-                    done[r["key"]] = r["fp"]
+    def read_done() -> dict:
+        """Clips done in this run (resume): key → text fingerprint, from every shard."""
+        got = {}
+        for name in os.listdir(args.state):
+            if name.startswith("done-") and name.endswith(".jsonl"):
+                for row in open(os.path.join(args.state, name)):
+                    if row.strip():
+                        r = json.loads(row)
+                        got[r["key"]] = r["fp"]
+        return got
+
+    done = read_done()
     fp = lambda it: hashlib.sha1(f"{it['speaker']}|{it['text']}".encode()).hexdigest()[:12]  # noqa: E731
 
     if shard == 0 and not args.only and not args.limit:
@@ -291,9 +297,7 @@ def main() -> None:
 
     only = set(filter(None, args.only.split(",")))
     todo = []
-    for n, item in enumerate(items):
-        if n % shards != shard:
-            continue
+    for item in items:
         if only and item["speaker"] not in only and item["key"] not in only:
             continue
         out = os.path.join(OUT_DIR, f"{item['key']}.mp3")
@@ -302,7 +306,11 @@ def main() -> None:
         if not args.force and os.path.exists(out):
             continue
         todo.append(item)
-    todo.sort(key=lambda i: i["speaker"])  # one voice prompt per speaker
+    # Priority keys first (in their order), then the rest grouped by speaker;
+    # the shards split the sorted list, so both work on the important lines first.
+    rank = {k: n for n, k in enumerate(json.load(open(args.priority)))} if args.priority else {}
+    todo.sort(key=lambda i: (rank.get(i["key"], len(rank)), i["speaker"]))
+    todo = todo[shard::shards]
     if args.limit:
         todo = todo[: args.limit]
     print(f"shard {args.shard}: {len(todo)} to record", flush=True)
@@ -324,12 +332,35 @@ def main() -> None:
                     "temperature", "gen_s", "dur_s", "expected_s", "asr_score", "heard", "counted",
                     "verdict", "chosen", "text", "asr_text"])
     done_log = open(os.path.join(args.state, f"done-{shard}.jsonl"), "a")
-    speaker = None
+    def claim(key: str) -> bool:
+        """Marks a clip as taken by this process; a claim of a dead process is void."""
+        path = os.path.join(args.state, f"claim-{key}")
+        try:
+            pid = int(open(path).read() or 0)
+            if pid != os.getpid() and os.path.exists(f"/proc/{pid}"):
+                return False
+        except (OSError, ValueError):
+            pass
+        with open(path, "w") as f:
+            f.write(str(os.getpid()))
+        return True
+
+    conds = {}  # speaker → voice prompt, prepared once
     t_start = time.time()
     for n, item in enumerate(todo, 1):
-        if item["speaker"] != speaker:
-            speaker = item["speaker"]
+        if args.until and time.strftime("%Y-%m-%dT%H:%M", time.gmtime()) >= args.until:
+            print(f"shard {args.shard}: stopped at {args.until} UTC, {n - 1} of {len(todo)} recorded")
+            return
+        if os.path.exists(os.path.join(args.state, "STOP")):
+            print(f"shard {args.shard}: STOP file, {n - 1} of {len(todo)} recorded")
+            return
+        if read_done().get(item["key"]) == fp(item) or not claim(item["key"]):
+            continue  # another shard recorded it or is recording it now
+        speaker = item["speaker"]
+        if speaker not in conds:
             model.prepare_conditionals(os.path.join(args.refs, f"{speaker}.wav"), exaggeration=0.5)
+            conds[speaker] = model.conds
+        model.conds = conds[speaker]
         parts = pieces(item["text"])
         said = [speech_text(c) for k, c in parts if k == "say"]
         ref_text = " ".join(said).replace("\u0301", "")
