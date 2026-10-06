@@ -1,6 +1,5 @@
-// The «Стройка» walk-through (/stroyka): zones, characters, dialogue graph,
-// the tour route and the collision boxes. Pure data and maths, no three.js,
-// so the same module drives the 3D world, the 2D fallback map and the tests.
+// The «Стройка» walk-through (/stroyka): zones, characters and the dialogue
+// graph. Pure data, shared by the film tour and the tests.
 
 import { MACHINE_LABELS, type MachineType } from '@/lib/machinePhotos';
 import { SITE } from '@/lib/site';
@@ -67,7 +66,7 @@ export interface Zone {
   radius: number;
   /** Machines working in the zone (for the sound layer). */
   machines: MachineType[];
-  /** The machine «Оформить заявку» orders from this zone. */
+  /** The machine «Оформить у Светы» orders from this zone. */
   order?: MachineType;
   /** Where the NPC stands. */
   npc: Vec2;
@@ -209,32 +208,6 @@ export function zoneById(id: ZoneId): Zone {
   const zone = ZONES.find((z) => z.id === id);
   if (!zone) throw new Error(`Unknown zone ${id}`);
   return zone;
-}
-
-/** How much farther than its radius a zone keeps you once you are in it. */
-export const ZONE_HYSTERESIS = 3;
-
-/**
- * The zone the point (x, z) belongs to. The current zone holds a little
- * beyond its radius, so standing on the edge does not flicker the dialogue.
- */
-export function detectZone(x: number, z: number, current: ZoneId | null = null): ZoneId | null {
-  if (current) {
-    const zone = zoneById(current);
-    if (Math.hypot(x - zone.center[0], z - zone.center[1]) <= zone.radius + ZONE_HYSTERESIS) {
-      return current;
-    }
-  }
-  let best: ZoneId | null = null;
-  let bestDistance = Infinity;
-  for (const zone of ZONES) {
-    const distance = Math.hypot(x - zone.center[0], z - zone.center[1]);
-    if (distance <= zone.radius && distance < bestDistance) {
-      best = zone.id;
-      bestDistance = distance;
-    }
-  }
-  return best;
 }
 
 // ---------------------------------------------------------------- dialogue
@@ -413,7 +386,7 @@ export const DIALOGUE: Record<string, DialogNode> = {
   kotlovan: {
     id: 'kotlovan',
     speaker: 'rinat',
-    text: `Котлован под фундамент? Траншея под трубы? Мой JCB за смену сделает. Экскаватор-погрузчик — ${P(PRICES.other)}.`,
+    text: `Котлован под фундамент? Траншея под трубы? Обычно управляемся за смену, если грунт без сюрпризов. Экскаватор-погрузчик — ${P(PRICES.other)}.`,
     replies: [orderReply('backhoe'), moreAbout('backhoe'), CALL, NEXT],
   },
   planirovka: {
@@ -534,162 +507,4 @@ export function zoneDialogue(id: ZoneId): DialogNode {
 /** Text the callback form starts with, so the dispatcher knows what was looked at. */
 export function orderMessage(machine: MachineType | null | undefined): string {
   return machine ? `Нужен: ${MACHINE_LABELS[machine]}. ` : '';
-}
-
-// ---------------------------------------------------------------- world
-
-/** Where the visitor can walk (the fence is just outside). */
-export const BOUNDS = { minX: -60, maxX: 60, minZ: -63, maxZ: 74 } as const;
-/** The fence line; the gate is a gap in the south side at |x| < GATE_HALF. */
-export const FENCE = { minX: -62, maxX: 62, minZ: -66, maxZ: 64 } as const;
-export const GATE_HALF = 7;
-
-/** Axis-aligned rectangles on the ground that block walking. */
-export interface Box {
-  minX: number;
-  maxX: number;
-  minZ: number;
-  maxZ: number;
-}
-
-export const BUILDING: Box = { minX: 14, maxX: 34, minZ: -36, maxZ: -22 };
-export const DOOR = { minX: 23, maxX: 25 } as const;
-export const PIT: Box = { minX: -44, maxX: -27.4, minZ: 11, maxZ: 24 };
-
-const wall = (minX: number, maxX: number, minZ: number, maxZ: number): Box => ({
-  minX,
-  maxX,
-  minZ,
-  maxZ,
-});
-
-export const STATIC_OBSTACLES: Box[] = [
-  PIT,
-  // Backhoe and its dump truck.
-  wall(-28.5, -19.5, 20.6, 23.4),
-  wall(-30, -19.8, 24.6, 27.6),
-  // Crane with outriggers, slab stack and the frame it builds.
-  wall(30, 42, 18, 26),
-  wall(27.3, 33.3, 24.5, 28.9),
-  wall(31.5, 37.9, 10.4, 16.8),
-  // Bulldozer lane and the tractor circle.
-  wall(8.5, 27, 3, 7.5),
-  wall(37.5, 50.5, -8.5, 4.5),
-  // Roller lane, the gravel pile and the truck lane.
-  wall(-35, -6, -13.7, -10.3),
-  wall(-42, -33, -19, -14.6),
-  // KMU truck, block stacks, front loader lane.
-  wall(-34, -21, -46, -41.6),
-  wall(-32, -24, -52.5, -48),
-  wall(-14.5, -9.5, -60, -45),
-  // Aerial platform behind the building.
-  wall(20, 31, -45, -38),
-  // Site cabin and the estimates office.
-  wall(15, 22, 50.6, 53.6),
-  wall(-23.3, -16.7, 48.6, 51.4),
-  // Tower crane base by the plot.
-  wall(36.8, 39.2, -31.2, -28.8),
-];
-
-/** Walls of the ground floor once the frame stands (1 m blocks, door gap in the south wall). */
-export const BUILDING_WALLS: Box[] = [
-  wall(BUILDING.minX, DOOR.minX, -23, -22),
-  wall(DOOR.maxX, BUILDING.maxX, -23, -22),
-  wall(BUILDING.minX, BUILDING.maxX, -36, -35),
-  wall(BUILDING.minX, BUILDING.minX + 1, BUILDING.minZ, BUILDING.maxZ),
-  wall(BUILDING.maxX - 1, BUILDING.maxX, BUILDING.minZ, BUILDING.maxZ),
-];
-
-/** The open pit / foundation: the whole plot except the walkway to the stand. */
-export const PLOT_BLOCKS: Box[] = [
-  wall(BUILDING.minX, 22, BUILDING.minZ, BUILDING.maxZ),
-  wall(26, BUILDING.maxX, BUILDING.minZ, BUILDING.maxZ),
-  wall(22, 26, BUILDING.minZ, -30),
-];
-
-/** Obstacles for the current stage: walls once there is a frame, the pit before. */
-export function obstaclesFor(hasWalls: boolean): Box[] {
-  return [...STATIC_OBSTACLES, ...(hasWalls ? BUILDING_WALLS : PLOT_BLOCKS)];
-}
-
-export const OBSTACLES: Box[] = obstaclesFor(true);
-
-export const PLAYER_RADIUS = 0.4;
-
-/** Pushes a walker of `radius` at (x, z) out of the boxes and keeps it inside the bounds. */
-export function resolveCollision(
-  x: number,
-  z: number,
-  radius = PLAYER_RADIUS,
-  boxes: Box[] = OBSTACLES,
-  bounds: Box = BOUNDS,
-): Vec2 {
-  for (let pass = 0; pass < 3; pass++) {
-    let moved = false;
-    for (const box of boxes) {
-      const cx = Math.min(Math.max(x, box.minX), box.maxX);
-      const cz = Math.min(Math.max(z, box.minZ), box.maxZ);
-      const dx = x - cx;
-      const dz = z - cz;
-      const d2 = dx * dx + dz * dz;
-      if (d2 >= radius * radius) continue;
-      moved = true;
-      if (d2 > 1e-9) {
-        // Outside the box but closer than the radius: step back along the normal.
-        const d = Math.sqrt(d2);
-        x = cx + (dx / d) * radius;
-        z = cz + (dz / d) * radius;
-      } else {
-        // The centre is inside: leave through the nearest side.
-        const exits = [
-          { d: x - box.minX, x: box.minX - radius, z },
-          { d: box.maxX - x, x: box.maxX + radius, z },
-          { d: z - box.minZ, x, z: box.minZ - radius },
-          { d: box.maxZ - z, x, z: box.maxZ + radius },
-        ].sort((a, b) => a.d - b.d);
-        x = exits[0]!.x;
-        z = exits[0]!.z;
-      }
-    }
-    if (!moved) break;
-  }
-  x = Math.min(Math.max(x, bounds.minX), bounds.maxX);
-  z = Math.min(Math.max(z, bounds.minZ), bounds.maxZ);
-  return [x, z];
-}
-
-/**
- * The tour route: a closed spline through these points. A point with `stop`
- * is where the camera halts at that zone's stand.
- */
-export const TOUR_PATH: { p: Vec2; stop?: ZoneId }[] = [
-  { p: [0, 58], stop: 'gate' },
-  { p: [-11.5, 41.5], stop: 'smeta' },
-  { p: [-12, 30] },
-  { p: [-15, 16], stop: 'kotlovan' },
-  { p: [-13, 4] },
-  { p: [-18, -1] },
-  { p: [-24, -3], stop: 'doroga' },
-  { p: [-17, -9] },
-  { p: [-8, -22] },
-  { p: [-14, -34], stop: 'sklad' },
-  { p: [-2, -34] },
-  { p: [12, -19] },
-  { p: [23.4, -20] },
-  { p: [24, -27.5], stop: 'korpus' },
-  { p: [24.6, -20] },
-  { p: [14, -6] },
-  { p: [14, 15], stop: 'planirovka' },
-  { p: [17, 33], stop: 'montazh' },
-  { p: [12, 40] },
-  { p: [10, 45], stop: 'office' },
-  { p: [4, 54] },
-];
-
-/** Seconds the tour stays at a zone (longer while the visitor is talking). */
-export const TOUR_STOP_SECONDS = 7;
-
-/** Tour stops in route order. */
-export function tourStops(): { index: number; zone: ZoneId }[] {
-  return TOUR_PATH.flatMap((point, index) => (point.stop ? [{ index, zone: point.stop }] : []));
 }

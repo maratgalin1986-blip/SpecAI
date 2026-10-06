@@ -329,17 +329,33 @@ const GREETINGS: Record<SpeakerId, string[]> = {
   alsu: ['С возвращением! Чай как раз горячий.', 'Снова к нам? Проходите, я как раз считаю.'],
 };
 
-/** A greeting by the zone's character, never the same one twice in a row. */
+// After «Забыть меня» or «Не сейчас»: a plain hello, no «узнал», «помню».
+const GREETINGS_PLAIN: Record<SpeakerId, string[]> = {
+  mihalych: ['Здорово! Заходи, каска в будке.', 'Здорово! Гостям всегда рады.'],
+  rinat: ['Здравствуйте! Рад гостям.', 'Здравствуйте! Ковш как раз свободен.'],
+  ildar: ['Привет снизу! Заходи.', 'Привет! Сверху помашу.'],
+  sveta: ['Здравствуйте! Проходите.', 'Здравствуйте! Рада гостям.'],
+  alsu: ['Здравствуйте! Чай как раз горячий.', 'Здравствуйте! Проходите, я как раз считаю.'],
+};
+
+/**
+ * A greeting by the zone's character, never the same one twice in a row.
+ * `plain`: the visitor asked to be forgotten (or declined): no «узнал».
+ */
 export function greeting(
   speaker: SpeakerId,
   name: string | undefined,
   avoid: string | undefined,
   random: () => number = Math.random,
+  plain = false,
 ): { id: string; text: string } {
-  const pool = (name ? GREETINGS_NAMED : GREETINGS)[speaker].map((text, i) => ({
-    id: `${speaker}-${name ? 'n' : 'a'}${i}`,
-    text: name ? text.replace('{name}', name) : text,
-  }));
+  const kind = name ? 'n' : plain ? 'p' : 'a';
+  const pool = (name ? GREETINGS_NAMED : plain ? GREETINGS_PLAIN : GREETINGS)[speaker].map(
+    (text, i) => ({
+      id: `${speaker}-${kind}${i}`,
+      text: name ? text.replace('{name}', name) : text,
+    }),
+  );
   const fresh = pool.filter((g) => g.id !== avoid);
   const from = fresh.length ? fresh : pool;
   return from[Math.floor(random() * from.length) % from.length]!;
@@ -504,17 +520,21 @@ export function hookLine(
 /** The zone's own character offers (Михалыч and Ильдар with «ты», the others with «вы»). */
 export const offerSpeaker = (zoneSpeaker: SpeakerId): SpeakerId => zoneSpeaker;
 
-/** Every offer says where it is kept: in this browser only, never on the server. */
+const VY_OFFER =
+  'Хотите, я вас запомню? Запомню имя, что вы строите и что заказывали. Хранится только в этом браузере, на сервер не уходит. Нужно ваше согласие.';
+
+/**
+ * Every offer names what is kept (the name, the job, the order) and where: in
+ * this browser only, never on the server.
+ */
 export const OFFER_TEXT: Record<SpeakerId, string> = {
   mihalych:
-    'Слушай, давай я тебя запомню? Буду узнавать, помнить, что ты строишь и что было в заявке. Хранится только в этом браузере, никуда не отправляется. Нужно твоё согласие.',
-  rinat:
-    'Хотите, я вас запомню? Буду узнавать, помнить, что вы строите и что вы заказывали. Хранится только в этом браузере, на сервер не уходит. Нужно ваше согласие.',
+    'Слушай, давай я тебя запомню? Запомню имя, что ты строишь и что было в заявке. Хранится только в этом браузере, на сервер не уходит. Нужно твоё согласие.',
+  rinat: VY_OFFER,
   ildar:
-    'Давай я тебя запомню? Буду узнавать, помнить, что ты строишь и что было в заявке. Хранится только в этом браузере, никуда не отправляется. Нужно твоё согласие.',
-  sveta:
-    'Хотите, я вас запомню? Буду узнавать, помнить, что вы строите и что вы заказывали, — в следующий раз не придётся рассказывать заново. Хранится только в этом браузере, на сервер не уходит. Нужно ваше согласие.',
-  alsu: 'Хотите, я вас запомню? Буду помнить, что вы строите и что вы заказывали, — в следующий раз не придётся рассказывать заново. Хранится только в этом браузере, на сервер не уходит. Нужно ваше согласие.',
+    'Давай я тебя запомню? Запомню имя, что ты строишь и что было в заявке. Хранится только в этом браузере, на сервер не уходит. Нужно твоё согласие.',
+  sveta: VY_OFFER,
+  alsu: VY_OFFER,
 };
 
 export function offerYesText(speaker: SpeakerId, name?: string): string {
@@ -542,5 +562,5 @@ export function offerNoText(speaker: SpeakerId): string {
  * order itself already went to the dispatcher and is not undone here.
  */
 export function forgetText(name?: string): string {
-  return `Всё, забыла на этом устройстве${name ? `, ${name}` : ''}: имя, задачу, что вы заказывали. Саму заявку диспетчер доведёт до конца — если нужно её отменить или удалить ваши данные, позвоните или напишите нам. Зайдёте снова — всё равно обрадуюсь.`;
+  return `Всё, забыла на этом устройстве${name ? `, ${name}` : ''}: имя, задачу, что вы заказывали. Саму заявку диспетчер доведёт до конца — если нужно её отменить или удалить ваши данные, позвоните диспетчеру по номеру ниже или напишите на почту из раздела «Согласие». Зайдёте снова — всё равно обрадуюсь.`;
 }

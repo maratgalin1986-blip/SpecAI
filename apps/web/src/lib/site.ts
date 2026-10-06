@@ -1,7 +1,7 @@
 // Company branding and contacts, in one place so they're easy to update.
 export const SITE = {
   name: 'СпецПласт16',
-  // The platform's own name (estimates, design, 3D site); the company that
+  // The platform's own name (estimates, design, site tour); the company that
   // does the work is always `name`.
   platform: 'ИИСтройка24',
   tagline: 'Аренда спецтехники и строительные услуги в Татарстане',

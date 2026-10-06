@@ -243,12 +243,11 @@ export function decorate(text: string, emojis: string[]): string {
 }
 
 /**
- * moodOf + decorate in one call. What is shown stays calm: no emoji on a
- * business line or a plain one (inner lines, crew subtitles), at most one on
- * a joke or a radio line. The mood (portrait, voice) is computed either way.
+ * The line as shown in a subtitle, a bubble or the radio log: no emoji at all
+ * (even one written into the line), crisp text only. The mood is computed
+ * for the portrait and the voice; `emojis` stays empty for the callers.
  */
 export function moodLine(input: MoodInput): { text: string; mood: Mood; emojis: string[] } {
   const result = moodOf(input);
-  const shown = input.plain || input.kind === 'business' ? [] : result.emojis.slice(0, 1);
-  return { ...result, emojis: shown, text: decorate(input.text, shown) };
+  return { mood: result.mood, emojis: [], text: stripEmoji(input.text) };
 }

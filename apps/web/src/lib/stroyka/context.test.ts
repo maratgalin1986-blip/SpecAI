@@ -132,11 +132,8 @@ describe('conversation context and radio handoff', () => {
       'Света, приём! Тут человек: котлован под фундамент, нужен JCB на завтра.',
     );
     expect(answer!.speaker).toBe('sveta');
-    expect(answer!.text).toContain('Котлован под фундамент, JCB, на завтра — записала');
-    expect(answer!.text).toContain('Адрес точный скажете и телефон?');
-    expect(answer!.text).not.toMatch(/когда|какой день/);
-    const withAddress = applyReply(job(), 'адрес', { address: 'Тукаевский район' });
-    expect(radioHandoff('mihalych', 'sveta', withAddress)[1]!.text).toContain('Оставьте телефон');
+    // Short on the radio: the questions come once, in Света's own line.
+    expect(answer!.text).toBe('Приняла, Михалыч. Здравствуйте!');
     const heard = { ...job(), heardBy: ['mihalych' as const] };
     expect(contextIntro(heard, 'rinat')).toBe(
       'Михалыч передал по рации: котлован под фундамент, нужен JCB на завтра.',

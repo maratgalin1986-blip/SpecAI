@@ -291,6 +291,29 @@ describe('honest memory lines', () => {
     expect(t).toContain('на этом устройстве, Марат');
     expect(t).toContain('Саму заявку диспетчер доведёт до конца');
     expect(t).not.toMatch(/всё стёр|заявку — всё/);
+    // A way to reach the operator: the dispatcher's phone and the consent page's e-mail.
+    expect(t).toContain('позвоните диспетчеру');
+    expect(t).toContain('напишите на почту из раздела «Согласие»');
+  });
+
+  it('every offer names what is kept: the name, the job and the order', () => {
+    for (const text of Object.values(OFFER_TEXT)) {
+      expect(text).toMatch(
+        /Запомню имя, что (вы строите|ты строишь) и что (заказывали|было в заявке)/,
+      );
+      expect(text).toContain('Нужно');
+    }
+    expect(OFFER_TEXT.sveta).toBe(
+      'Хотите, я вас запомню? Запомню имя, что вы строите и что заказывали. Хранится только в этом браузере, на сервер не уходит. Нужно ваше согласие.',
+    );
+  });
+
+  it('after «Забыть меня» the greeting does not claim to recognise the visitor', () => {
+    for (const speaker of ['mihalych', 'rinat', 'sveta', 'ildar', 'alsu'] as const)
+      for (let i = 0; i < 4; i++) {
+        const g = greeting(speaker, undefined, undefined, () => i / 4, true);
+        expect(g.text).not.toMatch(/узна|возвращ|снова|помн/i);
+      }
   });
 
   it("the zone's own character offers, saying where it is kept, «ты» or «вы» by character", () => {

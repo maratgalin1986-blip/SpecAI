@@ -11,6 +11,7 @@
 //             night 0…1, ground 'dry' | 'wet' | 'snow'.
 //   sp:steps  { moving, ground } — the visitor walks (or stops) on that ground.
 //   sp:thunder {} — a lightning flash: the thunder follows.
+//   (Nothing sends sp:steps or sp:thunder since the 3D world went, 2026-10-06.)
 import type { MachineType } from '@/lib/machinePhotos';
 import type { Mood } from '@/lib/stroyka/mood';
 import type { BanterSpeaker } from '@/lib/stroykaJokes';
@@ -75,12 +76,4 @@ export function currentNature(): NatureEventDetail | null {
 export function emitNature(detail: NatureEventDetail | null) {
   lastNature = detail;
   emit<NatureEventDetail | null>(NATURE_EVENT, detail);
-}
-
-export function emitSteps(moving: boolean, ground: Ground) {
-  emit<StepsEventDetail>(STEPS_EVENT, { moving, ground });
-}
-
-export function emitThunder() {
-  emit<Record<string, never>>(THUNDER_EVENT, {});
 }

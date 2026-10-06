@@ -2,34 +2,23 @@ import { describe, expect, it } from 'vitest';
 import { HAMMER_RATE, MACHINE_WORKS } from '@/lib/machineWorks';
 import { CRANE_HEAVY_RATE } from '@/lib/smeta';
 import {
-  BOUNDS,
   DIALOGUE,
   FORM_NODE,
   nextZone,
-  OBSTACLES,
   ORDER_LABEL,
   orderReply,
   P,
-  PIT,
   PRICES,
-  PLAYER_RADIUS,
   SPEAKERS,
-  TOUR_PATH,
   ZONES,
-  detectZone,
   hourlyRate,
   orderMessage,
-  resolveCollision,
   rub,
-  tourStops,
   zoneById,
   zoneDialogue,
 } from '@/lib/stroyka';
 import { stageNode } from '@/lib/stroyka/stage';
 import { STAGES, worldProgress } from '@/lib/stroyka/progress';
-
-const inside = (x: number, z: number) =>
-  OBSTACLES.some((b) => x > b.minX && x < b.maxX && z > b.minZ && z < b.maxZ);
 
 describe('dialogue graph', () => {
   it('every zone opens an existing line spoken by its NPC', () => {
@@ -142,53 +131,5 @@ describe('dialogue graph', () => {
     expect(rub(24000)).toBe((24000).toLocaleString('ru-RU'));
     expect(orderMessage('crane')).toBe('Нужен: Автокран. ');
     expect(orderMessage(null)).toBe('');
-  });
-});
-
-describe('zones', () => {
-  it('detects the zone around a point, with hysteresis at the edge', () => {
-    const kotlovan = zoneById('kotlovan');
-    const [cx, cz] = kotlovan.center;
-    expect(detectZone(cx, cz)).toBe('kotlovan');
-    const edge = cx + kotlovan.radius + 1;
-    expect(detectZone(edge, cz)).toBe(null);
-    expect(detectZone(edge, cz, 'kotlovan')).toBe('kotlovan');
-    expect(detectZone(0, 0)).toBe(null);
-  });
-
-  it('stands and NPCs are reachable and inside their zones', () => {
-    for (const zone of ZONES) {
-      expect(inside(...zone.stand)).toBe(false);
-      expect(inside(...zone.npc)).toBe(false);
-      expect(detectZone(...zone.stand)).toBe(zone.id);
-    }
-  });
-
-  it('the tour stops at every zone once', () => {
-    const stops = tourStops().map((s) => s.zone);
-    expect([...stops].sort()).toEqual(ZONES.map((z) => z.id).sort());
-    for (const { index, zone } of tourStops()) {
-      expect(TOUR_PATH[index]!.p).toEqual(zoneById(zone).stand);
-    }
-  });
-});
-
-describe('collisions', () => {
-  it('pushes the walker out of a box', () => {
-    const [x, z] = resolveCollision((PIT.minX + PIT.maxX) / 2, PIT.maxZ - 0.5);
-    expect(z).toBeCloseTo(PIT.maxZ + PLAYER_RADIUS);
-    expect(x).toBeCloseTo((PIT.minX + PIT.maxX) / 2);
-  });
-
-  it('keeps a free point and clamps to the site bounds', () => {
-    expect(resolveCollision(0, 30)).toEqual([0, 30]);
-    expect(resolveCollision(500, -500)).toEqual([BOUNDS.maxX, BOUNDS.minZ]);
-  });
-
-  it('lets you through the door but not through the wall', () => {
-    const [, zDoor] = resolveCollision(24, -22.5);
-    expect(zDoor).toBe(-22.5);
-    const [, zWall] = resolveCollision(18, -22.5);
-    expect(Math.abs(zWall + 22.5)).toBeGreaterThan(0.85);
   });
 });

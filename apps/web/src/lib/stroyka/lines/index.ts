@@ -1,5 +1,5 @@
 // Voice lines for /stroyka, about 200 per character, loaded lazily with the
-// 3D page. Hand-written lines plus opener × remark templates; a shuffle-bag
+// page. Hand-written lines plus opener × remark templates; a shuffle-bag
 // per character so nothing repeats until the pool is used up.
 //
 // Tags: joke, talk, business, ad, greet, return, idle, night, morning, day,

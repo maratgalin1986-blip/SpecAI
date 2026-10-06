@@ -9,18 +9,10 @@
 // it under «уменьшение движения».
 
 import { useEffect } from 'react';
-import { Playfair_Display } from 'next/font/google';
 import type { Chapter } from '@/lib/stroyka/story';
+import { displayFont as display } from './displayFont';
 
 export const CHAPTER_MS = 2600;
-
-// A Cyrillic display serif for the chapter name only (no Times fallback).
-const display = Playfair_Display({
-  subsets: ['cyrillic'],
-  weight: ['700', '800'],
-  display: 'swap',
-  preload: false,
-});
 
 const CSS = `
 @keyframes sp-ch-fade{0%{opacity:0}15%,80%{opacity:1}100%{opacity:0}}

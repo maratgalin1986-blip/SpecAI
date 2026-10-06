@@ -1,4 +1,4 @@
-// The crew of the 3D site by name (owner, 2026-10-03: «люди многонациональные,
+// The crew of the site by name (owner, 2026-10-03: «люди многонациональные,
 // говорят по-русски с акцентом, всё реалистично»). Like a real site in
 // Naberezhnye Chelny: Tatars, Russians, Bashkirs, Chuvash, Uzbeks, Kazakhs,
 // Armenians, Azerbaijanis. The «accent» is the words people really slip into
@@ -69,7 +69,7 @@ export const CREW: Record<string, CrewMember> = {
     name: 'Николай Петрович',
     from: 'Набережные Челны',
     lines: [
-      'Стой, кто идёт? А, гость. Каску возьми в будке, сынок.',
+      'Стой, кто идёт? А, гость. Каску возьмите в будке.',
       'Двадцать лет на КамАЗе отъездил, теперь объект охраняю. Технику по звуку узнаю.',
       'Ночью тут тихо. Только прожектор гудит да кошка наша ходит.',
       'Ворота в шесть открываю — первым всегда Ринат.',

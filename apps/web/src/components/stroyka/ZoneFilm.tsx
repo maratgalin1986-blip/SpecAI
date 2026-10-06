@@ -45,18 +45,15 @@ export function ZoneFilm({
   active,
   onZone,
   small,
-  onForce3d,
   onCut,
   matte = 0,
   tint = null,
   shade = 'low',
-  expanded = false,
   paused = false,
 }: {
   active: ZoneId | null;
   onZone: (zone: ZoneId) => void;
   small: boolean;
-  onForce3d?: () => void;
   /** The actual cut to a zone's shot (and the first shot once the film shows):
    *  the chapter card starts here, not on the zone change. */
   onCut?: (zone: ZoneId) => void;
@@ -66,8 +63,6 @@ export function ZoneFilm({
   tint?: FilmTint;
   /** 'high' while a full dialogue box needs the dark bottom; 'low' otherwise. */
   shade?: 'low' | 'high';
-  /** The phone's expanded dialogue is up: «Пройтись в 3D» steps aside (the strip rides above the box). */
-  expanded?: boolean;
   /** Held still (no playback) while something opaque covers it, e.g. the opening film. */
   paused?: boolean;
 }): JSX.Element {
@@ -399,16 +394,6 @@ export function ZoneFilm({
 
       {/* The one order button is «К заказу» in the top bar (Stroyka.tsx): one
         tap from every frame, and the picture stays clean. */}
-      {onForce3d && !expanded && (
-        <button
-          type="button"
-          data-testid="force-3d"
-          onClick={onForce3d}
-          className="sp-cleanable absolute right-3 top-[calc(max(0.5rem,env(safe-area-inset-top))+8rem)] z-10 min-h-11 rounded-full bg-slate-950/80 px-3 text-xs font-bold text-white shadow hover:bg-slate-900 sm:right-5 sm:top-[calc(max(0.5rem,env(safe-area-inset-top))+7rem)]"
-        >
-          🎮 Пройтись в 3D
-        </button>
-      )}
     </div>
   );
 }
