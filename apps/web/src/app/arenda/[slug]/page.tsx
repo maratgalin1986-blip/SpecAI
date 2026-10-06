@@ -11,7 +11,8 @@ import { siteUrl } from '@/lib/siteUrl';
 import { CinemaBand } from '@/components/CinemaBand';
 import { CinemaLayer } from '@/components/CinemaHero';
 import { fromPrice, houseRate, rateOf, rub } from '@/lib/prices';
-import { PUBLIC_FLEET } from '@/lib/fleet';
+import { HOUSE_FIRST_ORDER, PUBLIC_FLEET, isHouseEquipment } from '@/lib/fleet';
+import { customerRates } from '@/lib/equipmentCatalog';
 import { MachineAmbience } from '@/components/MachineAmbience';
 import { TelegramButton } from '@/components/TelegramButton';
 import { cityPath, NEARBY_CITIES } from '@/lib/cities';
@@ -28,7 +29,8 @@ async function loadEquipment(categorySlug: string) {
     return await prisma.equipment.findMany({
       where: { ...PUBLIC_FLEET, category: { slug: categorySlug }, status: { not: 'RETIRED' } },
       include: { location: true },
-      orderBy: { hourlyRate: 'asc' },
+      // СпецПласт16's machines first, then other providers'.
+      orderBy: [HOUSE_FIRST_ORDER, { hourlyRate: 'asc' }],
     });
   } catch (error) {
     console.error('Failed to load equipment for landing', error);
@@ -163,10 +165,16 @@ export default async function LandingPage({ params }: { params: { slug: string }
                     <StatusBadge status={item.status} />
                   </div>
                   {item.location && <p className="text-sm text-slate-500">{item.location.city}</p>}
-                  {/* Never below the site price list (lib/prices.ts). */}
+                  {/* The house fleet never below the site price list (lib/prices.ts);
+                      other providers show their own rate. */}
                   <p className="mt-auto text-lg font-semibold" data-testid="fleet-card-price">
-                    от {rub(houseRate(item.hourlyRate, machine))} ₽
-                    <span className="text-sm font-normal text-slate-500">/ч</span>
+                    от{' '}
+                    {rub(
+                      isHouseEquipment(item)
+                        ? houseRate(item.hourlyRate, machine)
+                        : customerRates({ ...item, categoryName: landing.title }).hourlyRate,
+                    )}{' '}
+                    ₽<span className="text-sm font-normal text-slate-500">/ч</span>
                   </p>
                   <span className="text-sm font-medium text-amber-700">Рассчитать стоимость →</span>
                 </Card>

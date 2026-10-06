@@ -89,22 +89,22 @@ function guestSteps(): GuideStep[] {
   return [
     {
       id: 'browse',
-      title: 'Посмотрите технику и цены',
-      hint: 'Каталог парка СпецПласт16 с ценами и карта открыты без входа.',
+      title: 'Посмотрите технику и исполнителей',
+      hint: 'Каталог с ценами и карта открыты без входа. Парк СпецПласт16 — первым в списке.',
       done: false,
       action: { label: 'Открыть каталог', href: '/equipment', app: '/(tabs)' },
     },
     {
       id: 'register',
       title: 'Зарегистрируйтесь',
-      hint: 'Чтобы видеть свои заявки и брони в личном кабинете. Можно и без аккаунта — просто позвонить.',
+      hint: 'Заказчику — чтобы оставить заявку и бронировать, исполнителю — чтобы разместить технику. Бесплатно.',
       done: false,
       action: { label: 'Зарегистрироваться', href: '/register', app: '/(auth)/register' },
     },
     {
       id: 'order',
       title: 'Оставьте заявку или выберите технику',
-      hint: 'Наш парк, наши машинисты: диспетчер СпецПласт16 назовёт одну цену с подачей.',
+      hint: 'Исполнители, включая парк СпецПласт16, пришлют предложения с ценой, вы выберете лучшее.',
       done: false,
       action: { label: 'Оставить заявку', href: '/orders', app: '/orders/new' },
     },
@@ -126,17 +126,17 @@ function customerSteps(s: GuideState): GuideStep[] {
     {
       id: 'order',
       title: 'Оставьте заявку или выберите технику',
-      hint: 'Опишите задачу — диспетчер СпецПласт16 назовёт цену. Или выберите машину в каталоге.',
+      hint: 'Опишите задачу — исполнители пришлют цены. Или выберите машину в каталоге и на карте.',
       done: n(s.orders) > 0 || bookings > 0,
       action: { label: 'Оставить заявку', href: '/orders', app: '/orders/new' },
     },
     {
       id: 'offers',
-      title: 'Дождитесь цены',
+      title: 'Дождитесь предложений',
       hint:
         n(s.openOrdersWithoutBids) > 0
-          ? 'Заявка у диспетчера СпецПласт16. Обычно цену называют в течение рабочего дня.'
-          : 'Диспетчер СпецПласт16 называет цену и машину в ответ на заявку.',
+          ? 'Заявка опубликована, исполнители её видят. Предложения появятся на странице заявки.'
+          : 'Исполнители присылают цену и машину в ответ на заявку.',
       done: hasOffers,
       action: s.waitingOrderId
         ? {
@@ -148,13 +148,13 @@ function customerSteps(s: GuideState): GuideStep[] {
     },
     {
       id: 'choose',
-      title: 'Примите цену',
-      hint: 'Проверьте цену и машину и нажмите «Принять» — бронь создастся сама.',
+      title: 'Выберите исполнителя',
+      hint: 'Сравните цены и нажмите «Принять» — бронь создастся сама.',
       // Offers waiting on an open order reopen the step.
       done: chose && n(s.ordersWithBids) === 0,
       action: s.choiceOrderId
         ? {
-            label: 'Посмотреть цену',
+            label: 'Выбрать предложение',
             href: `/orders/${s.choiceOrderId}`,
             app: `/orders/${s.choiceOrderId}`,
           }
@@ -163,21 +163,21 @@ function customerSteps(s: GuideState): GuideStep[] {
     {
       id: 'confirmed',
       title: confirmedOrLater > 0 ? 'Бронь подтверждена' : 'Дождитесь подтверждения брони',
-      hint: 'Диспетчер СпецПласт16 подтверждает бронь и звонит вам.',
+      hint: 'Исполнитель подтверждает бронь — после этого вы увидите его телефон.',
       done: confirmedOrLater > 0,
       action: { label: 'Мои брони', href: '/dashboard#bookings', app: '/(tabs)/bookings' },
     },
     {
       id: 'work',
       title: n(s.bookingsCompleted) > 0 ? 'Работа выполнена' : 'Дождитесь окончания работ',
-      hint: 'Когда техника отработает, диспетчер завершит бронь.',
+      hint: 'Когда техника отработает, исполнитель завершит бронь.',
       done: n(s.bookingsCompleted) > 0,
       action: { label: 'Мои брони', href: '/dashboard#bookings', app: '/(tabs)/bookings' },
     },
     {
       id: 'feedback',
       title: 'Оставьте отзыв или комментарий',
-      hint: 'Расскажите, как прошла работа: это помогает нам и другим заказчикам.',
+      hint: 'Расскажите, как прошла работа: это помогает другим заказчикам выбрать исполнителя.',
       done: n(s.commentsWritten) > 0 || n(s.reviewsWritten) > 0,
       action: { label: 'Мои брони', href: '/dashboard#bookings', app: '/(tabs)/bookings' },
     },
@@ -298,7 +298,7 @@ function repeatStep(role: GuideRole, s: GuideState): GuideStep {
   return {
     id: 'repeat',
     title: 'Нужна ещё техника?',
-    hint: 'Все шаги пройдены. Оставьте новую заявку — диспетчер СпецПласт16 назовёт цену.',
+    hint: 'Все шаги пройдены. Оставьте новую заявку — исполнители пришлют цены.',
     done: false,
     action: { label: 'Новая заявка', href: '/orders', app: '/orders/new' },
   };

@@ -51,14 +51,19 @@ small so merges stay conflict-free.
 
 ## Project facts
 
-- **Business model (owner's later decision, 2026-10-02, replaces the aggregator):
-  only СпецПласт16.** Customers see only the house fleet (`PUBLIC_FLEET` in
-  `apps/web/src/lib/fleet.ts`), provider sign-up is closed
-  (`PROVIDER_SIGNUP_OPEN` in `app/api/auth/register/route.ts`), there are no links
-  to other websites, and construction materials are sold by СпецПласт16 itself
-  (`lib/smetaPrices.ts`). The platform is called «ИИСтройка24 от СпецПласт16» (owner, 2026-10-03; domains iistroyka24.ru and iistroyka.ru bought but not connected yet — the site stays on spec-ai-web.vercel.app, see owner-requests)
+- **Business model (owner's decision, 2026-10-06, replaces the 2026-10-02
+  own-fleet note): an aggregator, "Yandex Taxi for heavy machinery".** Any
+  provider company signs up, publishes its fleet with its own prices and bids on
+  orders; СпецПласт16's fleet takes part alongside them and is always listed
+  first (`apps/web/src/lib/fleet.ts`: `PUBLIC_FLEET`, `houseFirst`,
+  `HOUSE_FIRST_ORDER`). The house price floor (`customerRates`) applies only to
+  СпецПласт16's machines. Providers see only their own bids and the customer as
+  «Анна П.» (`lib/customerPrivacy.ts`); contacts only once the booking is
+  CONFIRMED/ACTIVE/COMPLETED. Chat-imported contacts are shown masked and
+  revealed only through «Показать телефон» (logged, rate-limited). Construction
+  materials are sold by СпецПласт16 itself (`lib/smetaPrices.ts`). The platform is called «ИИСтройка24 от СпецПласт16» (owner, 2026-10-03; domains iistroyka24.ru and iistroyka.ru bought but not connected yet — the site stays on spec-ai-web.vercel.app, see owner-requests)
   (`SITE.platform`); prices live in `lib/prices.ts`. Details:
-  `docs/owner-requests.md`. Do not bring the marketplace back without the owner.
+  `docs/owner-requests.md`. Do not switch to a single executor without the owner.
 - Shared memory lives in the repo: `docs/owner-requests.md` (the owner's
   requests and their status), `docs/ai-office.md` (how the sessions work
   together, lessons log), `docs/marketing.md`.

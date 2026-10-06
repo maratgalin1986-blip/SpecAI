@@ -23,7 +23,7 @@ import {
 import { formatMoney, formatRate } from '@/lib/money';
 import { pluralizeRu } from '@/lib/pluralize';
 import { SITE } from '@/lib/site';
-import { PUBLISHED_FLEET, PUBLIC_FLEET } from '@/lib/fleet';
+import { HOUSE_FIRST_ORDER, PUBLISHED_FLEET, PUBLIC_FLEET, isHouseEquipment } from '@/lib/fleet';
 import { isDisplayableImage } from '@/lib/providerMap';
 import { shortAuthorName } from '@/lib/comments';
 import { maskContactsAndLinks } from '@/lib/privacy';
@@ -57,6 +57,7 @@ export async function generateMetadata({ params }: { params: { id: string } }): 
       currency: true,
       status: true,
       imageUrls: true,
+      companyId: true,
       category: { select: { name: true } },
       company: { select: { name: true } },
     },
@@ -135,8 +136,10 @@ export default async function EquipmentDetailPage({ params }: { params: { id: st
     numericSpec(specs, /гидромолот.*₽/i) ??
     (/гидромолот/i.test(item.name) ? HAMMER_RATE : undefined);
   const illustration = machineTypeOf(item.category.name, item.name);
-  const ownFleet = item.company.name === SITE.legalName;
-  const executor = 'Парк СпецПласт16 · машинист в штате';
+  const ownFleet = isHouseEquipment(item);
+  const executor = ownFleet
+    ? 'Парк СпецПласт16 · машинист в штате'
+    : `${item.company.name} · с машинистом`;
   const photos = item.imageUrls.filter(isDisplayableImage);
   // No own photo yet: photos of the same model, labelled as such.
   const modelPhotos = photos.length ? [] : modelPhotosOf(item.name);
@@ -147,8 +150,8 @@ export default async function EquipmentDetailPage({ params }: { params: { id: st
   // Same category first; if it has nothing else, the same task group.
   let similar = await prisma.equipment.findMany({
     where: { ...PUBLISHED_FLEET, categoryId: item.categoryId, id: { not: item.id } },
-    include: { category: true, location: true },
-    orderBy: [{ status: 'asc' }, { createdAt: 'desc' }],
+    include: { category: true, location: true, company: { select: { name: true } } },
+    orderBy: [HOUSE_FIRST_ORDER, { status: 'asc' }, { createdAt: 'desc' }],
     take: 3,
   });
   if (similar.length === 0) {
@@ -159,8 +162,8 @@ export default async function EquipmentDetailPage({ params }: { params: { id: st
     const groupIds = categories.filter((c) => taskGroupOf(c.name) === group).map((c) => c.id);
     similar = await prisma.equipment.findMany({
       where: { ...PUBLISHED_FLEET, categoryId: { in: groupIds }, id: { not: item.id } },
-      include: { category: true, location: true },
-      orderBy: [{ status: 'asc' }, { createdAt: 'desc' }],
+      include: { category: true, location: true, company: { select: { name: true } } },
+      orderBy: [HOUSE_FIRST_ORDER, { status: 'asc' }, { createdAt: 'desc' }],
       take: 3,
     });
   }
@@ -404,7 +407,8 @@ export default async function EquipmentDetailPage({ params }: { params: { id: st
           <section id="comments" className="scroll-mt-24">
             <div className="eyebrow text-amber-700">Комментарии заказчиков</div>
             <p className="mt-2 text-sm text-slate-500">
-              О работе {SITE.name}. Публикуются после проверки.
+              О работе {ownFleet ? SITE.name : `«${item.company.name}»`}. Публикуются после
+              проверки.
             </p>
             <div className="mt-4 flex flex-col gap-4">
               <CommentList comments={comments} empty="Комментариев пока нет." />
@@ -417,7 +421,7 @@ export default async function EquipmentDetailPage({ params }: { params: { id: st
               ) : (
                 <p className="text-xs text-slate-500">
                   {session?.user ? (
-                    'Комментарий можно оставить после брони этой техники или ответа диспетчера по вашей заявке.'
+                    'Комментарий можно оставить после брони этой техники или предложения исполнителя по вашей заявке.'
                   ) : (
                     <>
                       <a

@@ -29,7 +29,7 @@ describe('newBidReceived', () => {
       currency: 'RUB',
       message: 'Готовы <сразу>',
     });
-    expect(tpl.subject).toContain('цена по заявке');
+    expect(tpl.subject).toContain('новое предложение');
     expect(tpl.subject).toContain('JCB 3CX');
     expect(tpl.html).toContain('https://specai.example.com/orders/ord_1');
     expect(tpl.text).toContain('https://specai.example.com/orders/ord_1');

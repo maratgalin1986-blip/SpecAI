@@ -5,7 +5,7 @@ import { recommendEquipment } from '@specai/ai-service';
 import { getRequestUser } from '@/lib/requestUser';
 import { checkRateLimit } from '@/lib/rateLimit';
 import { clientIpFrom } from '@/lib/loginErrors';
-import { PUBLIC_FLEET } from '@/lib/fleet';
+import { HOUSE_FIRST_ORDER, PUBLIC_FLEET } from '@/lib/fleet';
 import { matchTask } from '@/lib/dispatcher';
 import { customerRates } from '@/lib/equipmentCatalog';
 
@@ -46,6 +46,7 @@ export async function POST(request: NextRequest) {
   const available = await prisma.equipment.findMany({
     where: { ...PUBLIC_FLEET, status: 'AVAILABLE' },
     include: { category: true },
+    orderBy: HOUSE_FIRST_ORDER,
     take: 50,
   });
 

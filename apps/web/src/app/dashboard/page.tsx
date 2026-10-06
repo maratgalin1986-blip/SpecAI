@@ -237,8 +237,8 @@ export default async function DashboardPage({
         <h2 className="mb-3 text-lg font-semibold">Мои бронирования</h2>
         {!paymentsEnabled && myBookings.length > 0 && (
           <p className="mb-3 text-sm text-slate-600">
-            Бронирование без предоплаты. Работа техники — по цене диспетчера {SITE.name}, расчёт
-            после смены. Вопросы:{' '}
+            Бронирование бесплатное: без предоплаты и комиссий. Работа техники — по цене
+            исполнителя, расчёт с исполнителем после смены. Вопросы по сервису:{' '}
             <a href={SITE.phoneHref} className="font-medium text-amber-700">
               {SITE.phone}
             </a>
@@ -273,7 +273,7 @@ export default async function DashboardPage({
                       {formatMoney(booking.totalPrice, booking.currency)}
                     </p>
                     <p className="text-sm text-slate-600">
-                      Кто работает: {provider.name}
+                      Исполнитель: {provider.name}
                       {provider.phone ? (
                         <>
                           {' · '}
@@ -294,7 +294,9 @@ export default async function DashboardPage({
                       )}
                     </p>
                     {!paymentsEnabled && booking.status !== 'CANCELLED' && (
-                      <p className="text-xs text-slate-500">Расчёт с {SITE.name} после смены.</p>
+                      <p className="text-xs text-slate-500">
+                        Расчёт с исполнителем «{provider.name}» после смены.
+                      </p>
                     )}
                     {booking.payment?.refundRequired ? (
                       <div className="mt-2">

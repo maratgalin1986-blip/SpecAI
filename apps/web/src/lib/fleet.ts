@@ -1,6 +1,6 @@
-// Owner's decision (2026-10-02): customers see and order only СпецПласт16's
-// own fleet; provider accounts remain in the data model but are not public.
-// Kept free of Prisma
+// Owner's decision (2026-10-06): an aggregator, «такси для спецтехники». Any
+// provider company publishes its fleet and bids on orders; СпецПласт16's own
+// fleet takes part alongside them and always comes first. Kept free of Prisma
 // imports so client components can use it; a test checks the id against
 // @specai/database.
 export const HOUSE_COMPANY_ID = 'specplast16-house';
@@ -8,12 +8,15 @@ export const HOUSE_COMPANY_ID = 'specplast16-house';
 /** СпецПласт16's own fleet (house badge, owner-only views). */
 export const OWN_FLEET = { companyId: HOUSE_COMPANY_ID } as const;
 
-/** Prisma `where` fragment for public equipment queries: СпецПласт16's own fleet only. */
-export const PUBLIC_FLEET = { companyId: HOUSE_COMPANY_ID } as const;
+/**
+ * Prisma `where` fragment for public equipment queries: every provider
+ * company's fleet (СпецПласт16 is one of them).
+ */
+export const PUBLIC_FLEET = { company: { isProvider: true } } as const;
 
 /**
- * The catalog, the map and «Похожая техника»: СпецПласт16's machinery except
- * what was taken off the site (RETIRED, «Снять с публикации»).
+ * The catalog, the map and «Похожая техника»: every provider's machinery
+ * except what was taken off the site (RETIRED, «Снять с публикации»).
  */
 export const PUBLISHED_FLEET = { ...PUBLIC_FLEET, status: { not: 'RETIRED' as const } };
 
@@ -36,6 +39,17 @@ export function isHouseManager<T extends MaybeUser>(
 /** Whether a piece of equipment belongs to СпецПласт16 (for the «Парк СпецПласт16» badge). */
 export function isHouseEquipment(item: { companyId?: string | null }): boolean {
   return item.companyId === HOUSE_COMPANY_ID;
+}
+
+/**
+ * Whether customers may see and order a machine: it belongs to a provider
+ * company (the same rule as PUBLIC_FLEET, for rows already loaded with their
+ * company).
+ */
+export function isPublicEquipment(
+  item: { company?: { isProvider?: boolean | null } | null } | null | undefined,
+): boolean {
+  return Boolean(item?.company?.isProvider);
 }
 
 /**

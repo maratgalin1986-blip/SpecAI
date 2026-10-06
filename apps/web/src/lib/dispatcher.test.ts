@@ -53,6 +53,12 @@ describe('faqAnswers and wantsPrice', () => {
     expect(faqAnswers('сколько часов смена').join(' ')).toContain('8 часов');
     expect(faqAnswers('привет')).toEqual([]);
   });
+  it('explains the aggregator: providers bid, the house fleet among them', () => {
+    const answer = faqAnswers('Вы посредник или своя техника?').join(' ');
+    expect(answer).toContain('исполнители');
+    expect(answer).toContain('СпецПласт16');
+    expect(answer).not.toContain('единственный');
+  });
   it('detects price questions', () => {
     expect(wantsPrice('Сколько стоит самосвал?')).toBe(true);
     expect(wantsPrice('нужен кран')).toBe(false);

@@ -17,7 +17,7 @@ import { orderPrefill } from '@/lib/quickOrder';
 export const metadata: Metadata = {
   title: 'Заявка на технику',
   description:
-    'Опишите задачу — диспетчер СпецПласт16 подберёт технику из своего парка и назовёт одну цену с подачей.',
+    'Опишите задачу — исполнители со своей техникой и машинистами, включая парк СпецПласт16, пришлют предложения с ценой. Сервис бесплатный.',
 };
 
 export const dynamic = 'force-dynamic';
@@ -107,8 +107,8 @@ export default async function OrdersPage({ searchParams }: { searchParams: Order
           </p>
         ) : (
           <p>
-            Опишите задачу — диспетчер {SITE.name} подберёт технику из нашего парка и назовёт одну
-            цену с подачей. Наши машинисты, без посредников.
+            Опишите задачу — её увидят исполнители со своей техникой и машинистами, включая парк{' '}
+            {SITE.name}. Они пришлют цены, вы выберете лучшее. Сервис бесплатный.
           </p>
         )}
       </CinemaHero>
@@ -120,7 +120,7 @@ export default async function OrdersPage({ searchParams }: { searchParams: Order
           </h2>
           {forProvider && (
             <p className="mb-3 max-w-xl text-sm text-slate-600">
-              Заявку получит диспетчер {SITE.name} — он назовёт цену и время подачи.
+              Заявку увидит «{forProvider.name}» и другие исполнители — сравните предложения.
             </p>
           )}
           {viewerId ? (

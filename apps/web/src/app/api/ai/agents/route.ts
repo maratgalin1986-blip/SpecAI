@@ -12,7 +12,7 @@ import { formatRate } from '@/lib/money';
 import { customerRates } from '@/lib/equipmentCatalog';
 import { maskContacts, maskMessagesForAi } from '@/lib/privacy';
 import { LEAD_RATE_LIMIT, checkRateLimit } from '@/lib/rateLimit';
-import { PUBLIC_FLEET, isProvider, isHouseEquipment } from '@/lib/fleet';
+import { HOUSE_FIRST_ORDER, PUBLIC_FLEET, isProvider, isPublicEquipment } from '@/lib/fleet';
 import { notifyTelegram } from '@/lib/notify';
 import { acceptLead } from '@/lib/leadIntake';
 import { phoneLimitMessage, prismaRecentLeads } from '@/lib/leadLimit';
@@ -194,7 +194,8 @@ export async function POST(request: NextRequest) {
             : undefined,
         },
         include: { category: true, location: true },
-        orderBy: { dailyRate: 'asc' },
+        // СпецПласт16's machines first, then the cheapest.
+        orderBy: [HOUSE_FIRST_ORDER, { dailyRate: 'asc' }],
         take: 10,
       });
       return items.map((item) => ({
@@ -214,7 +215,7 @@ export async function POST(request: NextRequest) {
         where: { id: requireString(input, 'equipmentId') },
         include: { category: true, location: true, reviews: true, company: true },
       });
-      if (!item || !isHouseEquipment(item)) {
+      if (!item || !isPublicEquipment(item)) {
         throw new ToolError('Техника не найдена');
       }
       const ratings = item.reviews.map((r) => r.rating);
@@ -247,7 +248,7 @@ export async function POST(request: NextRequest) {
         where: { id: requireString(input, 'equipmentId') },
         include: { company: true, category: true },
       });
-      if (!item || !isHouseEquipment(item)) {
+      if (!item || !isPublicEquipment(item)) {
         throw new ToolError('Техника не найдена');
       }
       const rates = customerRates({ ...item, categoryName: item.category.name });

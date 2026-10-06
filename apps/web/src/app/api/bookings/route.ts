@@ -10,7 +10,7 @@ import {
 import { findOverlappingBooking, lockEquipment } from '@/lib/bookingConflicts';
 import { INVALID_JSON_MESSAGE, prismaErrorCode, readJson, zodErrorMessage } from '@/lib/apiInput';
 import { isOnlinePaymentEnabled } from '@/lib/stripe';
-import { isHouseEquipment, isProvider } from '@/lib/fleet';
+import { isProvider, isPublicEquipment } from '@/lib/fleet';
 import { customerForProvider, providerForCustomer } from '@/lib/customerPrivacy';
 import { HOUSE_COMPANY_ID } from '@/lib/fleet';
 import { SITE } from '@/lib/site';
@@ -138,10 +138,13 @@ export async function POST(request: NextRequest) {
 
       const equipment = await tx.equipment.findUnique({
         where: { id: equipmentId },
-        include: { category: { select: { name: true } } },
+        include: {
+          category: { select: { name: true } },
+          company: { select: { isProvider: true } },
+        },
       });
-      // Only СпецПласт16's own machines can be booked.
-      if (!equipment || !isHouseEquipment(equipment)) {
+      // Any provider company's machine can be booked (the aggregator).
+      if (!equipment || !isPublicEquipment(equipment)) {
         return { status: 404, error: 'Техника не найдена' } as const;
       }
       const unavailable = unavailableEquipmentMessage(equipment.status);
