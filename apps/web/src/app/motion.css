@@ -1,0 +1,313 @@
+/* ---- Motion language -------------------------------------------------------
+   One set of durations and easings for the whole site (owner, 2026-10-06:
+   «оживи сайт новыми анимациями и видео»). Rules of the house:
+   - only transform and opacity move, so scrolling stays on the compositor;
+   - reveals are fired once by IntersectionObserver (lib/inView.ts);
+   - nothing loops off screen ([data-offscreen] pauses it);
+   - no blur, no scaled 3D layer under text: type stays crisp;
+   - prefers-reduced-motion: everything below is at rest. */
+
+:root {
+  --motion-fast: 160ms;
+  --motion-base: 320ms;
+  --motion-slow: 700ms;
+  --motion-ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --motion-ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --motion-stagger: 70ms;
+}
+
+/* Staggered children: a Reveal with `stagger` lets its direct children rise
+   one after another (up to the 8th; later ones come with the 8th). */
+.reveal-stagger {
+  opacity: 1;
+  transform: none;
+}
+.reveal-stagger > * {
+  opacity: 0;
+  transform: translate3d(0, 18px, 0);
+  transition:
+    opacity var(--motion-slow) var(--motion-ease-out),
+    transform var(--motion-slow) var(--motion-ease-out);
+  transition-delay: calc(var(--i, 7) * var(--motion-stagger));
+}
+.reveal-stagger > :nth-child(1) {
+  --i: 0;
+}
+.reveal-stagger > :nth-child(2) {
+  --i: 1;
+}
+.reveal-stagger > :nth-child(3) {
+  --i: 2;
+}
+.reveal-stagger > :nth-child(4) {
+  --i: 3;
+}
+.reveal-stagger > :nth-child(5) {
+  --i: 4;
+}
+.reveal-stagger > :nth-child(6) {
+  --i: 5;
+}
+.reveal-stagger > :nth-child(7) {
+  --i: 6;
+}
+.reveal-stagger.reveal-visible > * {
+  opacity: 1;
+  transform: none;
+}
+
+/* Links: an underline that draws from the left, and an arrow that nudges. */
+.link-draw {
+  position: relative;
+}
+.link-draw::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0.55em;
+  height: 2px;
+  border-radius: 2px;
+  background: currentColor;
+  transform: scaleX(0);
+  transform-origin: right;
+  transition: transform var(--motion-base) var(--motion-ease-out);
+}
+.link-draw:hover::after,
+.link-draw:focus-visible::after {
+  transform: scaleX(1);
+  transform-origin: left;
+}
+
+.nudge {
+  display: inline-block;
+  transition: transform var(--motion-base) var(--motion-ease-out);
+}
+:is(a, button):hover .nudge,
+:is(a, button):focus-visible .nudge,
+.group:hover .nudge {
+  animation: nudge 0.9s var(--motion-ease-in-out) infinite;
+}
+@keyframes nudge {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  50% {
+    transform: translateX(5px);
+  }
+}
+
+/* A slow light sweep for secondary main buttons (the hero «Заказать технику»
+   keeps .cta-shine). The highlight is a transformed pseudo-element. */
+.sweep {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+.sweep::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: linear-gradient(
+    110deg,
+    transparent 35%,
+    rgba(255, 255, 255, 0.45) 50%,
+    transparent 65%
+  );
+  transform: translateX(-120%);
+  animation: sweep 6s var(--motion-ease-in-out) 1.5s infinite;
+  pointer-events: none;
+}
+@keyframes sweep {
+  0%,
+  70% {
+    transform: translateX(-120%);
+  }
+  100% {
+    transform: translateX(120%);
+  }
+}
+[data-offscreen] .sweep::before,
+[data-offscreen].marquee,
+[data-offscreen] .marquee,
+[data-offscreen] .cta-shine {
+  animation-play-state: paused;
+}
+
+/* Press feedback on touch: the card sinks a little under the finger. */
+.press {
+  transition: transform var(--motion-fast) var(--motion-ease-out);
+}
+.press:active,
+.press[data-pressed] {
+  transform: scale(0.975);
+}
+
+/* The machine marquee fades out at both edges and pauses on hover. */
+.marquee-mask {
+  mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent);
+}
+.marquee-mask:hover .marquee {
+  animation-play-state: paused;
+}
+
+/* Skeleton shimmer for loading placeholders: a light band slides across. */
+.skeleton {
+  position: relative;
+  overflow: hidden;
+}
+.skeleton::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    100deg,
+    transparent 20%,
+    rgba(255, 255, 255, 0.55) 50%,
+    transparent 80%
+  );
+  transform: translateX(-100%);
+  animation: skeleton-shimmer 1.4s var(--motion-ease-in-out) infinite;
+}
+.skeleton-dark::after {
+  background: linear-gradient(
+    100deg,
+    transparent 20%,
+    rgba(148, 163, 184, 0.18) 50%,
+    transparent 80%
+  );
+}
+@keyframes skeleton-shimmer {
+  to {
+    transform: translateX(100%);
+  }
+}
+
+/* Background loops (LoopVideo): the clip fades in over its poster. */
+.loop-video {
+  opacity: 0;
+  transition: opacity var(--motion-slow) var(--motion-ease-out);
+}
+.loop-video[data-playing] {
+  opacity: 1;
+}
+
+/* «Как это работает» (HowItWorks): a route line fills to the active step and
+   a marker rides along it; the step film cross-fades. */
+.route-track {
+  position: absolute;
+  left: calc(1.5rem - 1px);
+  width: 2px;
+  background: rgb(226 232 240);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.route-fill {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(rgb(245 158 11), rgb(234 88 12));
+  transform: scaleY(var(--route, 0));
+  transform-origin: top;
+  transition: transform var(--motion-slow) var(--motion-ease-in-out);
+}
+.route-step-dot {
+  transition:
+    transform var(--motion-base) var(--motion-ease-out),
+    background-color var(--motion-base),
+    color var(--motion-base);
+}
+.route-step[data-active] .route-step-dot {
+  transform: scale(1.12);
+}
+.route-step-body {
+  transition:
+    transform var(--motion-base) var(--motion-ease-out),
+    border-color var(--motion-base),
+    box-shadow var(--motion-base);
+}
+.route-step[data-active] .route-step-body {
+  transform: translateX(4px);
+}
+.route-progress {
+  transform: scaleX(0);
+  transform-origin: left;
+}
+.route-step[data-active] .route-progress {
+  animation: route-progress var(--step-ms, 5000ms) linear forwards;
+}
+[data-offscreen] .route-progress,
+[data-held] .route-progress {
+  animation-play-state: paused;
+}
+@keyframes route-progress {
+  to {
+    transform: scaleX(1);
+  }
+}
+.step-film {
+  opacity: 0;
+  transition: opacity var(--motion-slow) var(--motion-ease-out);
+}
+.step-film[data-active] {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal-stagger > * {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+  .link-draw::after,
+  .nudge,
+  .press,
+  .route-fill,
+  .route-step-dot,
+  .route-step-body,
+  .step-film,
+  .loop-video {
+    transition: none;
+  }
+  :is(a, button):hover .nudge,
+  :is(a, button):focus-visible .nudge,
+  .group:hover .nudge,
+  .sweep::before,
+  .skeleton::after,
+  .route-step[data-active] .route-progress {
+    animation: none;
+  }
+  .press:active,
+  .press[data-pressed],
+  .route-step[data-active] .route-step-dot,
+  .route-step[data-active] .route-step-body {
+    transform: none;
+  }
+}
+
+/* Cards that rise a little under the mouse and sink under the finger. */
+.lift {
+  transition:
+    transform var(--motion-base) var(--motion-ease-out),
+    border-color var(--motion-base),
+    box-shadow var(--motion-base);
+}
+@media (hover: hover) and (pointer: fine) {
+  .lift:hover {
+    transform: translate3d(0, -4px, 0);
+    box-shadow: 0 18px 40px -18px rgba(217, 119, 6, 0.35);
+  }
+}
+.lift:active {
+  transform: scale(0.98);
+  transition-duration: var(--motion-fast);
+}
+@media (prefers-reduced-motion: reduce) {
+  .lift,
+  .lift:hover,
+  .lift:active {
+    transform: none;
+    transition: none;
+  }
+}

@@ -1,16 +1,21 @@
 'use client';
 
 import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { onceInView } from '@/lib/inView';
 
-// Fades and flips its children into place the first time they scroll into view.
+// Fades its children into place the first time they scroll into view. With
+// `stagger`, the direct children rise one after another instead (motion.css,
+// .reveal-stagger). Opacity and transform only.
 export function Reveal({
   children,
   delay = 0,
   className = '',
+  stagger = false,
 }: {
   children: ReactNode;
   delay?: number;
   className?: string;
+  stagger?: boolean;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const [isVisible, setIsVisible] = useState(false);
@@ -18,24 +23,16 @@ export function Reveal({
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry?.isIntersecting) {
-          setIsVisible(true);
-          observer.disconnect();
-        }
-      },
-      { threshold: 0.15 },
-    );
-    observer.observe(el);
-    return () => observer.disconnect();
+    return onceInView(el, () => setIsVisible(true), { threshold: 0.15 });
   }, []);
 
   return (
     <div
       ref={ref}
-      style={{ transitionDelay: `${delay}ms` }}
-      className={`reveal ${isVisible ? 'reveal-visible' : ''} ${className}`}
+      style={delay ? { transitionDelay: `${delay}ms` } : undefined}
+      className={`reveal ${stagger ? 'reveal-stagger' : ''} ${
+        isVisible ? 'reveal-visible' : ''
+      } ${className}`}
     >
       {children}
     </div>

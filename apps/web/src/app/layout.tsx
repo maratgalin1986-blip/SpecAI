@@ -18,6 +18,7 @@ import { BrandPresence } from '@/components/BrandPresence';
 import { SITE } from '@/lib/site';
 import { siteUrl } from '@/lib/siteUrl';
 import './globals.css';
+import './motion.css';
 import { fromPrice, MIN_RATE } from '@/lib/prices';
 
 // Cyrillic-capable fonts: Manrope for text and headings, a mono for labels and figures.
