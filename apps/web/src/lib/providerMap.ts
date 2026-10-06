@@ -193,7 +193,8 @@ export function toMapPins(rows: readonly ProviderMapRow[]): ProviderMapPin[] {
       imageUrl: isDisplayableImage(row.pinImageUrl) ? row.pinImageUrl : null,
       equipmentCount: Math.max(0, Math.floor(row.equipmentCount)),
       isHouse: row.id === HOUSE_COMPANY_ID,
-      catalogUrl: `/equipment?company=${encodeURIComponent(row.id)}`,
+      // The catalogue shows only the house fleet.
+      catalogUrl: '/equipment',
     });
   }
   // The own fleet first, then the providers with the most machinery.

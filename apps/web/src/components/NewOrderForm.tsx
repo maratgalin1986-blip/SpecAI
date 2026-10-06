@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import { ConditionsPreview } from '@/components/ConditionsPreview';
+import { PointPicker } from '@/components/PointPicker';
+import { pointAddress, type MapPoint } from '@/lib/mapPoint';
 import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { Button } from '@specai/ui';
@@ -36,6 +38,7 @@ export function NewOrderForm({
   const [startDate, setStartDate] = useState(initial?.startDate ?? '');
   const [endDate, setEndDate] = useState(initial?.endDate ?? '');
   const [address, setAddress] = useState(initial?.address ?? '');
+  const [point, setPoint] = useState<MapPoint | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -93,11 +96,12 @@ export function NewOrderForm({
     setStartDate('');
     setEndDate('');
     setAddress('');
+    setPoint(null);
     router.refresh();
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+    <form onSubmit={handleSubmit} className="ym-hide-content flex flex-col gap-3">
       <label className="flex flex-col gap-1 text-sm">
         Что нужно
         <textarea
@@ -165,6 +169,19 @@ export function NewOrderForm({
           По адресу покажем погоду на день работ и вид места сверху.
         </span>
       </label>
+      <PointPicker
+        value={point}
+        onPick={(next) => {
+          setPoint(next);
+          // The street part stays as a label; the point is what gets located.
+          const street = (address.split(' · Точка на карте:')[0] ?? '')
+            .replace(/^Точка на карте:.*$/, '')
+            .trim();
+          setAddress(
+            next ? (street ? `${street} · ${pointAddress(next)}` : pointAddress(next)) : street,
+          );
+        }}
+      />
 
       <ConditionsPreview
         date={startDate}
@@ -172,7 +189,11 @@ export function NewOrderForm({
         categoryName={categories.find((category) => category.id === categoryId)?.name}
       />
 
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {error && (
+        <p role="alert" className="text-sm text-red-700">
+          {error}
+        </p>
+      )}
       <Button type="submit" disabled={isSubmitting}>
         {isSubmitting ? 'Публикация…' : 'Опубликовать заявку'}
       </Button>

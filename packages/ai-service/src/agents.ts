@@ -134,7 +134,11 @@ const COMPANY_CONTEXT =
   '8-hour shift. ' +
   'Base every fact about equipment, prices, bookings and orders on tool results only — ' +
   'never invent listings, ids or prices. When you mention a listing, include its link. ' +
-  'If a tool says the user must sign in, tell them to sign in at /login.';
+  'If a tool says the user must sign in, tell them to sign in at /login. ' +
+  'Contacts: phone +7 (927) 242-80-88 (calls and WhatsApp, https://wa.me/79272428088), ' +
+  'dispatcher hours Mon–Sat 8:00–20:00 (Moscow time); the site chat answers around the clock. ' +
+  'A phone number the customer types into the chat becomes a callback request automatically, ' +
+  'after they tick the personal-data consent box.';
 
 interface AgentDefinition {
   system: string;

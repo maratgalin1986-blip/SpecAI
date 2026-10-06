@@ -14,6 +14,7 @@ import { Pagination } from '@/components/Pagination';
 import { parsePage, totalPagesFor } from '@/lib/pagination';
 import { isHouseManager, isProvider } from '@/lib/fleet';
 import { GuideCard } from '@/components/GuideCard';
+import { PhotoShare } from '@/components/PhotoShare';
 import { CommentForm, CommentList } from '@/components/Comments';
 import { guideFor } from '@/lib/guideState';
 import { toPublicComment } from '@/lib/comments';
@@ -332,6 +333,9 @@ export default async function ProviderPage({
       <NoOrdersChecklist items={checklist} />
 
       <GuideCard guide={guide} />
+      <section className="rounded-2xl border border-slate-200 bg-white p-4">
+        <PhotoShare role="executor" />
+      </section>
 
       {pinCompany && (
         <section id="base" className="flex flex-col gap-3">

@@ -2,11 +2,52 @@
 
 import { useEffect } from 'react';
 import { parseAbCookie } from '@/lib/ab';
+import { playCue } from '@/lib/sound';
 
 // Every press on the site gets a film-style response: a ring of light spreads
 // from the finger or cursor, and the pressed button "clicks" like a clapper.
 // Pure decoration: no layout change, off with reduced motion.
+const SPARK_TARGET =
+  "a[href^='tel:'][class*='rounded'], a[href*='#podbor'][class*='rounded-full'], form button[type='submit']";
+
+// 6-8 sparks fly out of the press point (CSS only: --dx/--dy are the targets).
+function burst(x: number, y: number) {
+  const n = 6 + Math.floor(Math.random() * 3);
+  for (let i = 0; i < n; i++) {
+    const a = (i / n) * Math.PI * 2 + Math.random() * 0.6;
+    const d = 46 + Math.random() * 54;
+    const s = document.createElement('span');
+    s.className = 'cine-spark';
+    s.style.left = `${x}px`;
+    s.style.top = `${y}px`;
+    s.style.setProperty('--dx', `${(Math.cos(a) * d).toFixed(0)}px`);
+    s.style.setProperty('--dy', `${(Math.sin(a) * d - 14).toFixed(0)}px`);
+    document.body.appendChild(s);
+    window.setTimeout(() => s.remove(), 850);
+  }
+}
+
+// Heavier «thunk» for «Позвонить», «Наряд» and «Отправить».
+const THUNK_TARGET = "a[href^='tel:'], a[href*='#podbor'], button[type='submit']";
+
 export function CinemaClicks() {
+  // Sound: a light mechanical tick on every press, a thunk on the main
+  // actions. Silent unless the visitor turned sound on (SoundDirector), and
+  // independent of the visual effects below (it works with reduced motion).
+  useEffect(() => {
+    const onDown = (event: PointerEvent) => {
+      if (event.button > 0) return;
+      const target = (event.target as Element | null)?.closest?.(
+        'a[href], button, [role="button"], summary',
+      );
+      if (!target || (target as HTMLButtonElement).disabled) return;
+      if (target.matches('[data-sound-toggle]')) return;
+      playCue(target.matches(THUNK_TARGET) ? 'thunk' : 'click');
+    };
+    document.addEventListener('pointerdown', onDown, { passive: true });
+    return () => document.removeEventListener('pointerdown', onDown);
+  }, []);
+
   useEffect(() => {
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
     // A/B group «calm»: no click effects.
@@ -25,6 +66,8 @@ export function CinemaClicks() {
         document.body.appendChild(ring);
         window.setTimeout(() => ring.remove(), 1000);
       });
+      // The call / «Наряд» / submit buttons also throw sparks.
+      if (target.matches(SPARK_TARGET)) burst(event.clientX, event.clientY);
       // Restart the animation on repeated presses without a forced reflow.
       target.classList.remove('cine-press');
       requestAnimationFrame(() =>

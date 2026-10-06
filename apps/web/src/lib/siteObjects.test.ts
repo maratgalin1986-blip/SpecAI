@@ -1,4 +1,4 @@
-import { existsSync } from 'node:fs';
+import { existsSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { nextDeck, SITE_OBJECTS } from './siteObjects';
@@ -9,10 +9,26 @@ describe('SITE_OBJECTS', () => {
   it('only uses clips that exist in every format', () => {
     for (const item of SITE_OBJECTS) {
       for (const clip of [item.hero, ...Object.values(item.clips)]) {
-        for (const ext of ['webm', 'mp4', 'webp']) {
+        for (const ext of ['mp4', 'webp']) {
           expect(existsSync(join(VIDEO_DIR, `${clip}.${ext}`)), `${clip}.${ext}`).toBe(true);
         }
       }
+    }
+  });
+
+  it('has the light, desktop and scrub cuts of every clip (CinemaVideo)', () => {
+    const clips = readdirSync(VIDEO_DIR)
+      .filter((f) => f.endsWith('.webp'))
+      .map((f) => f.slice(0, -5));
+    expect(clips.length).toBeGreaterThan(0);
+    for (const clip of clips) {
+      for (const cut of ['-sm.mp4', '-md.mp4', '.mp4']) {
+        expect(existsSync(join(VIDEO_DIR, `${clip}${cut}`)), `${clip}${cut}`).toBe(true);
+      }
+      // The phone cut stays lighter than the desktop one.
+      expect(statSync(join(VIDEO_DIR, `${clip}-sm.mp4`)).size).toBeLessThan(
+        statSync(join(VIDEO_DIR, `${clip}-md.mp4`)).size,
+      );
     }
   });
 

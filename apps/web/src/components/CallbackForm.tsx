@@ -2,8 +2,12 @@
 
 import { useEffect, useState } from 'react';
 import { SITE } from '@/lib/site';
-import { readLeadDraft, submitLead } from '@/lib/submitLead';
+import { readLeadDraft, submitLead, leadErrorText } from '@/lib/submitLead';
 import { LeadSuccess } from '@/components/LeadSuccess';
+import { PointPicker } from '@/components/PointPicker';
+import { POINT_LINE_PREFIX, withPointLine, type MapPoint } from '@/lib/mapPoint';
+import { ConsentText } from '@/components/ConsentText';
+import { useHydrated } from '@/lib/useHydrated';
 
 // "Call me back" form. Works without an account and without the AI features.
 export function CallbackForm({
@@ -22,10 +26,12 @@ export function CallbackForm({
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [message, setMessage] = useState(defaultMessage);
+  const [point, setPoint] = useState<MapPoint | null>(null);
   const [consent, setConsent] = useState(false);
   const [website, setWebsite] = useState('');
   const [status, setStatus] = useState<'idle' | 'sending' | 'sent'>('idle');
   const [error, setError] = useState<string | null>(null);
+  const hydrated = useHydrated();
 
   // A lead that did not go through last time (bad connection) comes back.
   useEffect(() => {
@@ -45,9 +51,7 @@ export function CallbackForm({
       setStatus('sent');
     } catch (err) {
       setStatus('idle');
-      setError(
-        `${err instanceof Error ? err.message : 'Не удалось отправить'}. Или позвоните: ${SITE.phone}`,
-      );
+      setError(leadErrorText(err, SITE.phone));
     }
   }
 
@@ -62,7 +66,7 @@ export function CallbackForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+    <form method="post" onSubmit={handleSubmit} className="ym-hide-content flex flex-col gap-3">
       <div>
         <h2 className={`text-lg font-semibold ${dark ? 'text-white' : ''}`}>{title}</h2>
         <p className={`mt-1 text-sm ${dark ? 'text-slate-300' : 'text-slate-600'}`}>{subtitle}</p>
@@ -70,6 +74,7 @@ export function CallbackForm({
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <input
           required
+          name="name"
           value={name}
           onChange={(e) => setName(e.target.value)}
           maxLength={100}
@@ -81,9 +86,12 @@ export function CallbackForm({
         <input
           required
           type="tel"
+          name="phone"
           value={phone}
           onChange={(e) => setPhone(e.target.value)}
           maxLength={30}
+          pattern="(?:\D*\d){10,15}\D*"
+          title="Номер телефона: от 10 цифр"
           placeholder="+7 (___) ___-__-__"
           autoComplete="tel"
           inputMode="tel"
@@ -92,6 +100,7 @@ export function CallbackForm({
         />
       </div>
       <textarea
+        name="message"
         value={message}
         onChange={(e) => setMessage(e.target.value)}
         maxLength={1000}
@@ -99,6 +108,22 @@ export function CallbackForm({
         placeholder="Что нужно сделать? Например: траншея под водопровод, Набережные Челны, на следующей неделе"
         aria-label="Комментарий"
         className={input}
+      />
+      <PointPicker
+        value={point}
+        dark={dark}
+        label="📍 Объекта нет на карте? Отметьте место точкой"
+        onPick={(next) => {
+          setPoint(next);
+          setMessage((current) =>
+            next
+              ? withPointLine(current, next)
+              : current
+                  .split('\n')
+                  .filter((line) => !line.startsWith(POINT_LINE_PREFIX))
+                  .join('\n'),
+          );
+        }}
       />
       {/* Honeypot for bots — hidden from people and screen readers. */}
       <input
@@ -116,21 +141,21 @@ export function CallbackForm({
         <input
           type="checkbox"
           required
+          name="consent"
           checked={consent}
           onChange={(e) => setConsent(e.target.checked)}
           className="mt-0.5"
         />
-        <span>
-          Согласен(на) на обработку персональных данных в соответствии с{' '}
-          <a href="/privacy" className="underline" target="_blank">
-            политикой конфиденциальности
-          </a>
-        </span>
+        <ConsentText />
       </label>
-      {error && <p className="text-sm text-red-500">{error}</p>}
+      {error && (
+        <p role="alert" className={`text-sm ${dark ? 'text-red-300' : 'text-red-700'}`}>
+          {error}
+        </p>
+      )}
       <button
         type="submit"
-        disabled={status === 'sending'}
+        disabled={!hydrated || status === 'sending'}
         className="rounded-md bg-amber-500 px-5 py-2.5 text-sm font-semibold text-slate-950 shadow-lg shadow-amber-600/30 transition hover:bg-amber-400 disabled:opacity-60"
       >
         {status === 'sending' ? 'Отправляем…' : 'Жду звонка'}

@@ -7,6 +7,7 @@ import { MachinePhoto } from '@/components/MachinePhoto';
 import { QuickOrder } from '@/components/QuickOrder';
 import { TiltCard } from '@/components/TiltCard';
 import {
+  customerRates,
   headlinePrices,
   keySpecs,
   machineTypeOf,
@@ -14,6 +15,7 @@ import {
   specChip,
   taskGroupOf,
 } from '@/lib/equipmentCatalog';
+import { modelPhotosOf } from '@/lib/modelPhotos';
 
 type Amount = number | string | { toString(): string } | null;
 
@@ -49,10 +51,15 @@ export function categoryIcon(categoryName: string): IconName {
 // hourly and per-shift price, and the quick-order / details actions.
 export function EquipmentCard({ item }: { item: EquipmentCardItem }) {
   const href = `/equipment/${item.id}`;
-  const { hour, shift } = headlinePrices(item);
+  const { hour, shift } = headlinePrices(
+    customerRates({ ...item, categoryName: item.category.name }),
+  );
   const chips = keySpecs(item.specs, 3).map(specChip);
   // Only https photos or the site's own paths (never javascript: or data:).
-  const photo = item.imageUrls.find(isDisplayableImage);
+  const ownPhoto = item.imageUrls.find(isDisplayableImage);
+  // No own photo yet: a photo of the same model, labelled «Фото модели».
+  const modelPhoto = ownPhoto ? undefined : modelPhotosOf(item.name)[0];
+  const photo = ownPhoto ?? modelPhoto;
   const illustration = photo ? null : machineTypeOf(item.category.name, item.name);
   const priceSummary = [hour !== null && `${rub(hour)}/ч`, shift !== null && `${rub(shift)}/смена`]
     .filter(Boolean)
@@ -68,12 +75,19 @@ export function EquipmentCard({ item }: { item: EquipmentCardItem }) {
           tabIndex={-1}
         >
           {photo ? (
-            <img
-              src={photo}
-              alt={item.name}
-              loading="lazy"
-              className="tilt-zoom h-full w-full object-cover"
-            />
+            <>
+              <img
+                src={photo}
+                alt={item.name}
+                loading="lazy"
+                className="tilt-zoom h-full w-full object-cover"
+              />
+              {modelPhoto && (
+                <span className="absolute bottom-2 right-3 rounded bg-slate-950/50 px-1.5 text-[0.6rem] text-white/85">
+                  Фото модели
+                </span>
+              )}
+            </>
           ) : illustration ? (
             <>
               <MachinePhoto

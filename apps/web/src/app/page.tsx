@@ -1,12 +1,15 @@
 import dynamic from 'next/dynamic';
+import Link from 'next/link';
 import { prisma } from '@specai/database';
 import { Button } from '@specai/ui';
 import { PUBLIC_AGENT_PROFILES } from '@specai/shared';
 import { CallbackForm } from '@/components/CallbackForm';
 import { CallbackIris } from '@/components/CallbackIris';
+import { TelegramButton } from '@/components/TelegramButton';
 import { CinemaBand } from '@/components/CinemaBand';
 import { CountUp } from '@/components/CountUp';
 import { Faq } from '@/components/Faq';
+import { ObjectPhotos } from '@/components/ObjectPhotos';
 import { HeroPhotos } from '@/components/HeroPhotos';
 import { Icon, type IconName } from '@/components/Icon';
 import { IntroSplash } from '@/components/IntroSplash';
@@ -16,6 +19,7 @@ import { TiltCard } from '@/components/TiltCard';
 import type { MachineType } from '@/lib/machinePhotos';
 import { pluralizeRu } from '@/lib/pluralize';
 import { SITE } from '@/lib/site';
+import { fromPrice, HAMMER_RATE, MIN_RATE, priceFaqAnswer, SHIFT_HOURS } from '@/lib/prices';
 
 // Big interactive blocks below the fold: separate chunks, so the browser
 // hydrates them in their own short tasks instead of one long one.
@@ -35,70 +39,70 @@ const SERVICES: {
     title: 'Экскаваторы-погрузчики',
     photo: 'backhoe',
     text: 'JCB 4CX, CASE 570, Hidromek 102B, LGCE B877F — траншеи, котлованы, планировка.',
-    price: 'от 3 000 ₽/ч',
+    price: fromPrice('backhoe'),
   },
   {
     icon: 'excavator',
     title: 'Гусеничные экскаваторы',
     photo: 'excavator',
     text: 'Котлованы, карьеры и большие объёмы грунта — ковш под задачу.',
-    price: 'от 3 000 ₽/ч',
+    price: fromPrice('excavator'),
   },
   {
     icon: 'hammer',
     title: 'Гидромолот',
     photo: 'trench',
     text: 'Демонтаж, вскрытие асфальта и бетона, работа по мёрзлому грунту.',
-    price: 'от 3 500 ₽/ч',
+    price: fromPrice(HAMMER_RATE),
   },
   {
     icon: 'hammer',
     title: 'Колёсный экскаватор с гидромолотом',
     photo: 'wheeled-excavator',
     text: 'Дробление бетона и асфальта в городе — своим ходом, без трала.',
-    price: 'от 3 000 ₽/ч',
+    price: fromPrice('wheeled-excavator'),
   },
   {
     icon: 'crane',
     title: 'Автокраны',
     photo: 'crane',
     text: 'До 32 т — монтаж конструкций, погрузка и подъём грузов.',
-    price: 'от 3 500 ₽/ч',
+    price: fromPrice('crane'),
   },
   {
     icon: 'crane',
     title: 'Манипулятор КМУ 7 т',
     photo: 'kmu',
     text: 'Погрузка, перевозка и разгрузка одной машиной: блоки, плиты, бытовки.',
-    price: 'от 3 000 ₽/ч',
+    price: fromPrice('kmu'),
   },
   {
     icon: 'lift',
     title: 'Автовышка АГП',
     photo: 'agp',
     text: 'Работы на высоте: фасады, кровля, освещение, вывески, обрезка деревьев.',
-    price: 'от 2 500 ₽/ч',
+    price: fromPrice('agp'),
   },
   {
     icon: 'loader',
     title: 'Фронтальные погрузчики',
     photo: 'loader',
     text: 'Погрузка грунта, щебня и песка, уборка снега на объектах.',
-    price: 'от 3 000 ₽/ч',
+    price: fromPrice('loader'),
   },
   {
     icon: 'roller',
     title: 'Виброкаток',
     photo: 'roller',
     text: 'Уплотнение грунта, щебня и асфальта на дорогах и благоустройстве.',
-    price: 'от 3 000 ₽/ч',
+    price: fromPrice('roller'),
   },
   {
     icon: 'tractor',
     title: 'Тракторы',
     photo: 'tractor',
     text: 'МТЗ «Беларус» для вспомогательных и коммунальных работ.',
-    price: 'от 2 500 ₽/ч',
+    price: fromPrice('tractor'),
   },
   {
     icon: 'helmet',
@@ -124,10 +128,13 @@ const ADVANTAGES = [
     title: 'С машинистом',
     text: 'Опытный оператор на каждой машине — вам не нужно искать своего.',
   },
-  { title: 'Цена видна сразу', text: 'Почасовая ставка без скрытых доплат, смена — 8 часов.' },
   {
-    title: 'Несколько предложений',
-    text: 'Исполнители отвечают на заявку ценой — вы выбираете, сервис бесплатный.',
+    title: 'Цена видна сразу',
+    text: `Почасовая ставка на сайте, смена — ${SHIFT_HOURS} часов. Подачу техники диспетчер назовёт заранее.`,
+  },
+  {
+    title: 'Одна цена от диспетчера',
+    text: `Наш парк и наши машинисты: диспетчер ${SITE.name} называет одну цену с подачей — без посредников и торгов.`,
   },
   { title: 'Круглосуточно', text: 'ИИ-агенты подберут технику и примут заявку даже ночью.' },
 ];
@@ -136,11 +143,11 @@ const STEPS = [
   { title: 'Опишите задачу', text: 'Своими словами — в чате ИИ-агенту или в форме заявки.' },
   {
     title: 'Получите варианты',
-    text: 'Исполнители пришлют цены, агент подберёт технику из каталога и посчитает стоимость.',
+    text: 'Диспетчер СпецПласт16 перезвонит, подберёт машину из нашего парка и назовёт цену.',
   },
   {
     title: 'Забронируйте',
-    text: 'Примите предложение — исполнитель подтвердит бронь и закрепит машину и машиниста.',
+    text: 'Подтвердите — мы закрепим за вами машину и машиниста из штата СпецПласт16.',
   },
   { title: 'Работайте', text: 'Следите за статусом в личном кабинете, оставьте отзыв.' },
 ];
@@ -186,12 +193,17 @@ const SERVICE_LANDING: Record<string, string> = {
   Автокраны: 'avtokran',
   'Фронтальные погрузчики': 'frontalnyj-pogruzchik',
   Тракторы: 'traktor',
+  'Гусеничные экскаваторы': 'gusenichnyj-ekskavator',
+  'Колёсный экскаватор с гидромолотом': 'kolyosnyj-ekskavator-gidromolot',
+  'Манипулятор КМУ 7 т': 'manipulyator-kmu',
+  'Автовышка АГП': 'avtovyshka-agp',
+  Виброкаток: 'vibrokatok',
 };
 
 const HOME_FAQ = [
   {
     q: 'Сколько стоит аренда спецтехники?',
-    a: 'Экскаватор-погрузчик, фронтальный погрузчик, гусеничный и колёсный экскаватор, манипулятор КМУ, бульдозер и каток — от 3 000 ₽/ч, с гидромолотом — от 3 500 ₽/ч, автокраны — от 3 500 ₽/ч, трактор и автовышка — от 2 500 ₽/ч, самосвал — от 2 300 ₽/ч. Все цены — с машинистом, смена 8 часов.',
+    a: priceFaqAnswer(),
   },
   {
     q: 'Как быстро приедет техника?',
@@ -217,8 +229,8 @@ export default async function HomePage() {
     ...(available > 0
       ? [{ prefix: '', value: available, suffix: '', label: 'единиц техники свободно' }]
       : []),
-    { prefix: 'от ', value: 2300, suffix: ' ₽', label: 'час работы с машинистом' },
-    { prefix: '', value: 8, suffix: ' ч', label: 'смена, оплата по факту' },
+    { prefix: 'от ', value: MIN_RATE, suffix: ' ₽', label: 'час работы с машинистом' },
+    { prefix: '', value: SHIFT_HOURS, suffix: ' ч', label: 'смена, оплата по факту' },
     { prefix: '', value: 15, suffix: ' мин', label: 'перезвоним в рабочее время' },
   ];
 
@@ -249,31 +261,89 @@ export default async function HomePage() {
               style={{ animationDelay: '240ms' }}
             >
               Экскаваторы-погрузчики, автокраны и погрузчики с машинистами в Набережных Челнах и по
-              Татарстану — от 2 300 ₽/ч. Оставьте заявку: исполнители со своей техникой, включая
-              парк {SITE.name}, пришлют цены, вы выберете лучшее. Сервис бесплатный.
+              Татарстану — {fromPrice(MIN_RATE)}. Свой парк и свои машинисты {SITE.name}, без
+              посредников: подача в день заявки, работаем с НДС.
             </p>
-            <div className="float-in mt-8 flex flex-wrap gap-3" style={{ animationDelay: '360ms' }}>
-              <a
-                href={SITE.phoneHref}
-                className="inline-flex w-full items-center justify-center gap-2.5 rounded-full bg-amber-500 px-6 py-3.5 font-mono text-lg font-bold tabular-nums text-slate-950 shadow-lg shadow-amber-500/30 transition hover:bg-amber-400 sm:w-auto"
-              >
-                <Icon name="phone" className="h-5 w-5" />
-                {SITE.phone}
-              </a>
+            {/* Owner, 2026-10-03: order, estimate and design as real buttons,
+                «Заказать технику» the biggest and brightest; then the phone and
+                the 3D site; the other ways in stay quiet links. */}
+            <div
+              className="float-in mt-8 flex max-w-xl flex-col gap-3"
+              style={{ animationDelay: '360ms' }}
+            >
               <a
                 href="#callback"
-                className="group inline-flex items-center gap-2 rounded-full bg-white px-6 py-3.5 text-base font-semibold text-slate-950 transition hover:bg-slate-100"
+                className="group relative inline-flex w-full items-center justify-center gap-3 overflow-hidden rounded-2xl bg-gradient-to-r from-amber-400 via-amber-500 to-orange-500 px-7 py-5 text-xl font-extrabold text-slate-950 shadow-2xl shadow-amber-500/40 ring-2 ring-amber-200/70 transition hover:brightness-110 sm:text-2xl"
               >
+                <span className="cta-shine pointer-events-none absolute inset-0" aria-hidden />
+                <span aria-hidden className="text-2xl sm:text-3xl">
+                  🚜
+                </span>
                 Заказать технику
-                <Icon name="arrow" className="h-4 w-4 transition group-hover:translate-x-1" />
+                <Icon name="arrow" className="h-5 w-5 transition group-hover:translate-x-1" />
               </a>
+              <div className="grid grid-cols-2 gap-3">
+                {[
+                  { href: '/smeta', icon: '🧮', label: 'Рассчитать смету' },
+                  { href: '/dizain', icon: '🏠', label: 'Создать дизайн' },
+                ].map((item) => (
+                  <a
+                    key={item.href}
+                    href={item.href}
+                    className="inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-white/10 px-3 py-3 text-center text-sm font-bold text-white ring-1 ring-white/40 backdrop-blur-md transition hover:bg-white hover:text-slate-950 sm:text-base"
+                  >
+                    <span aria-hidden className="text-lg">
+                      {item.icon}
+                    </span>
+                    {item.label}
+                  </a>
+                ))}
+              </div>
+              <div className="flex flex-wrap gap-3">
+                <a
+                  href={SITE.phoneHref}
+                  className="inline-flex flex-1 items-center justify-center gap-2.5 rounded-full bg-white px-5 py-3 font-mono text-base font-bold tabular-nums text-slate-950 shadow-lg transition hover:bg-amber-100 sm:flex-none"
+                >
+                  <Icon name="phone" className="h-5 w-5" />
+                  {SITE.phone}
+                </a>
+                {/* The 3D site: a glass pill with a softly pulsing play button. A
+                    client-side link, so the tap that started the sound here keeps
+                    it playing on the site (a full page load would need a new tap). */}
+                <Link
+                  href="/stroyka"
+                  className="group inline-flex flex-1 items-center justify-center gap-3 rounded-full bg-white/10 py-2 pl-2 pr-5 text-base font-semibold text-white ring-1 ring-white/30 backdrop-blur-sm transition hover:bg-white/20 hover:ring-white/60 sm:flex-none"
+                >
+                  <span className="stroyka-ping relative grid h-9 w-9 place-items-center rounded-full bg-amber-400 text-slate-950 transition group-hover:scale-110">
+                    <svg viewBox="0 0 16 16" aria-hidden className="ml-0.5 h-4 w-4 fill-current">
+                      <path d="M4 2.5v11l9-5.5z" />
+                    </svg>
+                  </span>
+                  Войти на стройку
+                  <span className="rounded bg-white/15 px-1.5 py-0.5 text-[11px] font-bold uppercase tracking-wider text-amber-200">
+                    3D
+                  </span>
+                </Link>
+              </div>
+            </div>
+            <nav
+              aria-label="Ещё на сайте"
+              className="float-in mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm font-semibold text-slate-200"
+              style={{ animationDelay: '420ms' }}
+            >
               <a
                 href="#podbor"
-                className="inline-flex items-center gap-2 rounded-full px-6 py-3.5 text-base font-semibold text-white ring-1 ring-white/30 backdrop-blur transition hover:bg-white/10"
+                className="inline-flex min-h-10 items-center underline-offset-4 hover:text-white hover:underline"
               >
-                Подобрать технику
+                Подобрать технику →
               </a>
-            </div>
+              <a
+                href="/kalkulyator"
+                className="inline-flex min-h-10 items-center underline-offset-4 hover:text-white hover:underline"
+              >
+                Калькулятор работ →
+              </a>
+            </nav>
             <p className="float-in mt-5 text-sm text-slate-400" style={{ animationDelay: '480ms' }}>
               Свой парк · Свои машинисты · Без посредников · Работаем с НДС и ЭДО
             </p>
@@ -321,7 +391,7 @@ export default async function HomePage() {
           <div className="eyebrow text-amber-700">Техника и цены</div>
           <div className="mt-3 flex flex-wrap items-end justify-between gap-4">
             <h2 className="max-w-2xl text-4xl font-extrabold tracking-[-0.03em] sm:text-5xl">
-              Цена видна сразу, без скрытых доплат
+              Цена видна сразу. Подачу техники диспетчер назовёт заранее
             </h2>
             <a
               href="/equipment"
@@ -334,11 +404,14 @@ export default async function HomePage() {
               href="/map"
               className="group inline-flex items-center gap-2 rounded-full border border-slate-300 px-5 py-2.5 text-sm font-semibold transition hover:border-slate-900"
             >
-              Исполнители на карте
+              Заказать на карте
               <Icon name="arrow" className="h-4 w-4 transition group-hover:translate-x-1" />
             </a>
           </div>
-          <p className="mt-3 text-slate-600">Все цены — с машинистом, смена 8 часов.</p>
+          <p className="mt-3 text-slate-600">
+            Все цены — с машинистом, смена {SHIFT_HOURS} часов. Подача зависит от расстояния до
+            объекта.
+          </p>
         </Reveal>
         <div className="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
           {SERVICES.map((service, index) => {
@@ -418,7 +491,7 @@ export default async function HomePage() {
       <CinemaBand
         machine="excavator"
         eyebrow="Свой парк"
-        phrase="Котлован к утру — не обещание, а наряд"
+        phrase="Котлован к утру — не обещание, а принятая заявка"
       />
 
       <ShiftStory />
@@ -428,12 +501,12 @@ export default async function HomePage() {
           <Reveal>
             <div className="eyebrow text-amber-700">Почему мы</div>
             <h2 className="mt-3 text-4xl font-extrabold tracking-[-0.03em] sm:text-5xl">
-              Исполнители с техникой и машинистами
+              Наш парк, наши машинисты
             </h2>
             <p className="mt-4 text-slate-600">
-              {SITE.name} — сервис заказа спецтехники в{' '}
+              {SITE.name} — аренда спецтехники в{' '}
               {SITE.city === 'Набережные Челны' ? 'Набережных Челнах' : SITE.city}: собственный парк
-              и проверенные исполнители. Подберём машину под задачу и покажем цены с подачей.
+              и машинисты в штате. Одна цена от диспетчера {SITE.name} — с подачей, без посредников.
             </p>
           </Reveal>
         </div>
@@ -511,7 +584,7 @@ export default async function HomePage() {
             <li key={step.title}>
               <Reveal delay={index * 100} className="h-full">
                 <div className="h-full rounded-3xl border border-slate-200 bg-white p-6 transition hover:-translate-y-1 hover:border-amber-300">
-                  <div className="font-mono text-4xl font-bold text-amber-500">0{index + 1}</div>
+                  <div className="font-mono text-4xl font-bold text-amber-600">0{index + 1}</div>
                   <h3 className="mt-4 text-lg font-bold">{step.title}</h3>
                   <p className="mt-1 text-sm text-slate-600">{step.text}</p>
                 </div>
@@ -526,6 +599,8 @@ export default async function HomePage() {
         eyebrow="Подача сегодня"
         phrase="Техника уже едет. Осталось сказать куда"
       />
+
+      <ObjectPhotos />
 
       <div className="depth">
         <Faq items={HOME_FAQ} />
@@ -551,6 +626,15 @@ export default async function HomePage() {
                 <Icon name="phone" className="h-6 w-6" />
                 {SITE.phone}
               </a>
+              <div className="mt-5 flex flex-wrap items-center gap-3">
+                <TelegramButton page="home" dark />
+                <span className="text-xs text-slate-400">
+                  Цены и свободная техника — в Telegram ·{' '}
+                  <a href="/privacy" className="underline">
+                    политика
+                  </a>
+                </span>
+              </div>
             </div>
             <div className="min-w-0 rounded-3xl bg-slate-950/50 p-4 ring-1 ring-white/10 backdrop-blur sm:p-6">
               <CallbackForm source="home" dark />
@@ -562,14 +646,13 @@ export default async function HomePage() {
       <Reveal>
         <section className="grid gap-6 rounded-[2rem] border border-amber-200 bg-gradient-to-br from-amber-50 to-orange-100 p-6 sm:grid-cols-2 sm:p-10">
           <div>
-            <div className="eyebrow text-amber-700">Как «такси» для спецтехники</div>
+            <div className="eyebrow text-amber-700">Наш парк — наши машинисты</div>
             <h2 className="mt-3 text-3xl font-extrabold tracking-tight">
-              Одна заявка — несколько предложений
+              Одна заявка — и техника едет
             </h2>
             <p className="mt-3 text-slate-700">
-              Опишите задачу — её увидят исполнители со своей техникой и машинистами, включая парк{' '}
-              {SITE.name}. Сравните цены, выберите предложение и договоритесь напрямую. Сервис
-              бесплатный, без комиссий.
+              Опишите задачу — диспетчер {SITE.name} подберёт машину из нашего парка, назовёт цену и
+              поставит её в график. Машинисты в штате, без посредников и перекупщиков.
             </p>
             <a href="/orders" className="mt-5 inline-block">
               <Button>Оставить заявку</Button>

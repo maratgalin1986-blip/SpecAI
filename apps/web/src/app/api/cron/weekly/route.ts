@@ -20,7 +20,8 @@ export async function GET(request: NextRequest) {
   const since = new Date(Date.now() - 14 * 86_400_000);
   const [leads, orders] = await Promise.all([
     prisma.lead.findMany({
-      where: { createdAt: { gte: since } },
+      // Bot drafts without a phone are not leads yet.
+      where: { createdAt: { gte: since }, NOT: { phone: '' } },
       select: { createdAt: true, source: true, status: true, outcome: true, amount: true },
     }),
     prisma.order.findMany({

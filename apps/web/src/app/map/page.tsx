@@ -1,33 +1,17 @@
 import type { Metadata } from 'next';
-import { prisma } from '@specai/database';
-import { ProviderMap } from '@/components/ProviderMap';
-import { loadMapPins } from '@/lib/providerMapData';
-import type { ProviderMapPin } from '@/lib/providerMap';
+import { OrderMap } from '@/components/OrderMap';
 import { SITE } from '@/lib/site';
 
-export const dynamic = 'force-dynamic';
-
 export const metadata: Metadata = {
-  title: `Карта исполнителей — ${SITE.name}`,
+  // The layout's template adds «· ИИСтройка24 · СпецПласт16».
+  title: 'Где нужна техника — отметьте на карте',
   description:
-    'Где стоит спецтехника в Набережных Челнах и по Татарстану: поставщики на карте, их цены и ' +
-    'условия. Выберите ближайшего и оставьте заявку — это бесплатно.',
+    'Отметьте на карте объект в Набережных Челнах или по Татарстану, выберите технику — ' +
+    'диспетчер СпецПласт16 перезвонит и назовёт цену с подачей до этого места.',
   alternates: { canonical: '/map' },
 };
 
-export default async function ProviderMapPage({
-  searchParams,
-}: {
-  searchParams: { embed?: string };
-}) {
-  let pins: ProviderMapPin[] = [];
-  let unavailable = false;
-  try {
-    pins = await loadMapPins(prisma);
-  } catch (error) {
-    console.error('[map] failed to load providers', error);
-    unavailable = true;
-  }
+export default function OrderMapPage({ searchParams }: { searchParams: { embed?: string } }) {
   // ?embed=1 — the app's «Карта» screen shows the page without the intro.
   const embed = searchParams.embed === '1';
 
@@ -42,36 +26,14 @@ main { max-width: none !important; padding: 0 0 16px !important; }`}</style>
       {!embed && (
         <header className="flex flex-col gap-2">
           <p className="eyebrow text-amber-700">Карта · {SITE.city} и Татарстан</p>
-          <h1 className="text-3xl font-extrabold tracking-tight sm:text-4xl">
-            Исполнители на карте
-          </h1>
+          <h1 className="text-3xl font-extrabold tracking-tight sm:text-4xl">Где нужна техника?</h1>
           <p className="max-w-2xl text-slate-600">
-            Где стоит техника поставщиков: выберите ближайшего — подача быстрее и дешевле. Нажмите
-            на значок, чтобы увидеть условия, технику поставщика и оставить заявку.
+            Отметьте объект на карте, выберите технику и оставьте телефон — диспетчер {SITE.name}{' '}
+            перезвонит и назовёт точную цену с подачей до этого места.
           </p>
-          <div className="flex flex-wrap gap-2 text-sm font-semibold">
-            <a
-              href="/equipment"
-              className="rounded-full border border-slate-300 px-4 py-2 hover:border-slate-900"
-            >
-              Каталог техники
-            </a>
-            <a
-              href="/register?type=provider"
-              className="rounded-full border border-slate-300 px-4 py-2 hover:border-slate-900"
-            >
-              Я сдаю технику — добавить себя на карту
-            </a>
-          </div>
         </header>
       )}
-      {unavailable ? (
-        <p className="rounded-2xl bg-white p-6 text-slate-600 ring-1 ring-slate-200">
-          Карта временно недоступна, попробуйте обновить страницу через минуту.
-        </p>
-      ) : (
-        <ProviderMap pins={pins} embed={embed} />
-      )}
+      <OrderMap embed={embed} />
     </div>
   );
 }

@@ -3,8 +3,10 @@
 import { useId, useRef, useState } from 'react';
 import { Icon } from '@/components/Icon';
 import { SITE } from '@/lib/site';
-import { submitLead } from '@/lib/submitLead';
+import { submitLead, leadErrorText } from '@/lib/submitLead';
 import { LeadSuccess } from '@/components/LeadSuccess';
+import { ConsentText } from '@/components/ConsentText';
+import { useHydrated } from '@/lib/useHydrated';
 
 // Card actions: «Заказать» opens a short inline order form (phone, optional
 // name, consent) that sends a lead without leaving the catalog; «Подробнее»
@@ -29,6 +31,7 @@ export function QuickOrder({
   const [consent, setConsent] = useState(false);
   const [website, setWebsite] = useState('');
   const [status, setStatus] = useState<'idle' | 'sending' | 'sent'>('idle');
+  const hydrated = useHydrated();
   const [error, setError] = useState<string | null>(null);
 
   function toggle() {
@@ -53,9 +56,7 @@ export function QuickOrder({
       setStatus('sent');
     } catch (err) {
       setStatus('idle');
-      setError(
-        `${err instanceof Error ? err.message : 'Не удалось отправить'}. Или позвоните: ${SITE.phone}`,
-      );
+      setError(leadErrorText(err, SITE.phone));
     }
   }
 
@@ -64,7 +65,7 @@ export function QuickOrder({
   }
 
   const input =
-    'w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm outline-none transition placeholder:text-slate-400 focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20';
+    'w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm outline-none transition placeholder:text-slate-400 focus:border-amber-700 focus:ring-2 focus:ring-amber-700';
 
   return (
     <div className="flex flex-col gap-3">
@@ -93,18 +94,22 @@ export function QuickOrder({
 
       {open && (
         <form
+          method="post"
           id={formId}
           onSubmit={handleSubmit}
-          className="flex flex-col gap-2.5 rounded-2xl border border-slate-200 bg-slate-50 p-3"
+          className="ym-hide-content flex flex-col gap-2.5 rounded-2xl border border-slate-200 bg-slate-50 p-3"
         >
           <p className="text-xs text-slate-600">{SITE.callbackPromise}.</p>
           <input
             ref={phoneRef}
             required
             type="tel"
+            name="phone"
             value={phone}
             onChange={(e) => setPhone(e.target.value)}
             maxLength={30}
+            pattern="(?:\D*\d){10,15}\D*"
+            title="Номер телефона: от 10 цифр"
             placeholder="Телефон, +7 (___) ___-__-__"
             autoComplete="tel"
             inputMode="tel"
@@ -112,6 +117,7 @@ export function QuickOrder({
             className={input}
           />
           <input
+            name="name"
             value={name}
             onChange={(e) => setName(e.target.value)}
             maxLength={100}
@@ -133,21 +139,21 @@ export function QuickOrder({
             <input
               type="checkbox"
               required
+              name="consent"
               checked={consent}
               onChange={(e) => setConsent(e.target.checked)}
               className="mt-0.5 accent-amber-600"
             />
-            <span>
-              Согласен(на) на обработку персональных данных по{' '}
-              <a href="/privacy" className="underline" target="_blank">
-                политике конфиденциальности
-              </a>
-            </span>
+            <ConsentText />
           </label>
-          {error && <p className="text-xs text-red-600">{error}</p>}
+          {error && (
+            <p role="alert" className="text-xs text-red-700">
+              {error}
+            </p>
+          )}
           <button
             type="submit"
-            disabled={status === 'sending'}
+            disabled={!hydrated || status === 'sending'}
             className="group inline-flex items-center justify-center gap-2 rounded-full bg-amber-500 px-4 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-amber-400 disabled:opacity-60"
           >
             {status === 'sending' ? 'Отправляем…' : 'Жду звонка'}

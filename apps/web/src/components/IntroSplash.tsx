@@ -5,18 +5,28 @@ import { flushSync } from 'react-dom';
 import { CinemaVideo } from '@/components/CinemaVideo';
 import { SITE } from '@/lib/site';
 import { reachGoal } from '@/lib/marketing';
+import { setSoundEnabled, soundEnabled, storedSoundChoice, subscribeSound } from '@/lib/sound';
 
-// Opening titles of the home page, about 3 seconds: a drone shot descends over
-// a construction site, «ООО «СпецПласт 16» представляет», then the partner card
-// turns towards the viewer and the camera dives into the site. Shown once per
-// browser session; a click or any key skips it; off with reduced motion.
+// Opening titles of the home page, about 6 seconds, cut like a TV channel
+// ident: light beams over a drone shot, «ООО «СпецПласт 16» представляет»,
+// a brass hit with a flash and the gold «ИИСтройка24» logo, then the bright
+// partner card under a spotlight for about three seconds, and the camera
+// dives into the site. Shown once per browser session; «Пропустить» or Esc
+// skips it (a tap only switches the sound on); off with reduced motion.
 //
 // It is plain CSS (globals.css, .intro-*), so it runs and ends on time even
 // before hydration. The inline script hides it before the first paint for
 // visitors who have already seen it.
 
 const SEEN_KEY = 'sp16_intro_seen';
-const DURATION_MS = 2800;
+const DURATION_MS = 7800;
+
+/** What the site offers, under the card (owner, 2026-10-03: «чтобы привлечь больше людей»). */
+const OFFERS = [
+  { href: '/equipment', icon: '🚜', label: 'Аренда спецтехники' },
+  { href: '/smeta', icon: '🧮', label: 'Составьте смету онлайн' },
+  { href: '/dizain', icon: '🏠', label: 'Дизайн-проект онлайн' },
+];
 
 // `?intro=0` in the address skips the titles too (ad landings, QA, links
 // sent to someone who has already seen them), and so does a «Наряд» deep link
@@ -31,6 +41,8 @@ const LIVE_CLASS = 'intro-live';
 
 export function IntroSplash() {
   const [done, setDone] = useState(false);
+  // The visitor switched the sound off earlier: no «tap for sound» hint.
+  const [soundOff, setSoundOff] = useState(false);
   const finishing = useRef(false);
   const finish = () => {
     if (finishing.current) return;
@@ -69,12 +81,15 @@ export function IntroSplash() {
       setDone(true);
       return;
     }
+    setSoundOff(!storedSoundChoice());
+    const offSound = subscribeSound(() => setSoundOff(!soundEnabled()));
     try {
       sessionStorage.setItem(SEEN_KEY, '1');
     } catch {
       // Storage blocked: the titles just play on every visit.
     }
-    const onKey = () => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' && event.key !== 'Enter') return;
       reachGoal('intro_skip');
       finish();
     };
@@ -82,10 +97,11 @@ export function IntroSplash() {
       reachGoal('intro_full');
       finish();
     }, DURATION_MS);
-    window.addEventListener('keydown', onKey, { once: true });
+    window.addEventListener('keydown', onKey);
     return () => {
       window.clearTimeout(timer);
       window.removeEventListener('keydown', onKey);
+      offSound();
     };
   }, []);
 
@@ -96,7 +112,6 @@ export function IntroSplash() {
       <div
         id="intro"
         className="intro fixed inset-0 z-[100] overflow-hidden bg-black text-white"
-        onClick={skip}
         role="presentation"
         suppressHydrationWarning
       >
@@ -105,8 +120,11 @@ export function IntroSplash() {
         <div className="intro-drone absolute inset-0">
           <CinemaVideo clip="site-aerial" priority className="absolute inset-0 h-full w-full" />
         </div>
-        <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-black/10 to-black/70" />
-        <div className="journey-scanlines pointer-events-none absolute inset-0 opacity-40" />
+        <div className="absolute inset-0 bg-gradient-to-b from-black/70 via-black/20 to-black/80" />
+        {/* Darkens the footage when the card arrives, so the card stands out. */}
+        <div className="intro-dim absolute inset-0 bg-black" aria-hidden />
+        <div className="intro-rays pointer-events-none absolute inset-0" aria-hidden />
+        <div className="intro-flash pointer-events-none absolute inset-0" aria-hidden />
 
         {/* Drone HUD */}
         <div className="absolute left-4 top-4 font-mono text-[0.6rem] uppercase tracking-[0.25em] text-white/60 sm:left-8 sm:top-8">
@@ -114,39 +132,55 @@ export function IntroSplash() {
           Аэросъёмка · {SITE.city}
         </div>
 
-        <div className="relative flex h-full flex-col items-center justify-center px-6 text-center">
+        {/* 1. «… представляет» */}
+        <div className="intro-stage-1 absolute inset-0 flex flex-col items-center justify-center px-6 text-center">
           <div className="intro-presents font-mono text-sm font-semibold uppercase tracking-[0.35em] text-amber-400 sm:text-xl">
             {SITE.legalName}
           </div>
           <div className="intro-presents-2 mt-2 text-sm uppercase tracking-[0.4em] text-white/80">
             представляет
           </div>
+        </div>
 
-          {/* Partner card */}
-          <div className="intro-card-wrap mt-8">
-            <div className="intro-card relative aspect-[1.586] w-[min(86vw,420px)] overflow-hidden rounded-2xl p-5 text-left shadow-[0_30px_80px_rgba(0,0,0,0.6)] ring-1 ring-white/15 sm:p-7">
+        {/* 2. The logo hit */}
+        <div className="intro-stage-2 absolute inset-0 flex flex-col items-center justify-center px-6 text-center">
+          <div className="intro-logo text-6xl font-black tracking-[-0.04em] sm:text-8xl">
+            {SITE.platform}
+          </div>
+          <div className="mt-3 font-mono text-sm font-bold uppercase tracking-[0.45em] text-amber-100 drop-shadow sm:text-lg">
+            от {SITE.name}
+          </div>
+        </div>
+
+        {/* 3. Partner card under a spotlight, the three offers under it */}
+        <div className="intro-stage-3 absolute inset-0 flex flex-col items-center justify-center gap-5 px-4">
+          <div className="intro-spot absolute inset-0" aria-hidden />
+          <div className="intro-card-wrap relative">
+            <div className="intro-card relative aspect-[1.586] w-[min(90vw,480px)] overflow-hidden rounded-[1.4rem] p-5 text-left text-slate-950 shadow-[0_40px_120px_rgba(245,158,11,0.35),0_20px_60px_rgba(0,0,0,0.7)] ring-1 ring-amber-200/60 sm:p-7">
               <div className="intro-card-shine absolute inset-0" aria-hidden />
               <div className="relative flex h-full flex-col">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2.5">
-                    <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-amber-500 font-bold text-slate-950">
+                    <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-950 font-black text-amber-400">
                       16
                     </span>
-                    <span className="text-lg font-extrabold tracking-tight">{SITE.name}</span>
+                    <span className="text-xl font-black tracking-tight sm:text-2xl">
+                      {SITE.name}
+                    </span>
                   </div>
-                  <span className="rounded-full bg-white/10 px-2.5 py-1 font-mono text-[0.55rem] uppercase tracking-[0.2em] ring-1 ring-white/20">
+                  <span className="rounded-full bg-slate-950/85 px-2.5 py-1 font-mono text-[0.6rem] font-bold uppercase tracking-[0.18em] text-amber-300">
                     Карта партнёра
                   </span>
                 </div>
                 <div className="mt-auto">
-                  <div className="intro-chip mb-3 h-7 w-10 rounded-md" aria-hidden />
+                  <div className="intro-chip mb-3 h-8 w-11 rounded-md" aria-hidden />
                   <div
-                    className="font-mono text-base tracking-[0.18em] text-white/90 sm:text-lg"
+                    className="intro-emboss font-mono text-xl font-bold tracking-[0.12em] sm:text-2xl"
                     style={{ viewTransitionName: 'sp-phone' }}
                   >
                     {SITE.phone}
                   </div>
-                  <div className="mt-2 flex items-end justify-between gap-3 text-[0.65rem] uppercase tracking-[0.15em] text-white/60">
+                  <div className="mt-2 flex items-end justify-between gap-3 text-[0.7rem] font-semibold uppercase tracking-[0.14em] text-slate-900/80">
                     <span>Аренда спецтехники с машинистом</span>
                     <span className="shrink-0">{SITE.city}</span>
                   </div>
@@ -154,11 +188,40 @@ export function IntroSplash() {
               </div>
             </div>
           </div>
+          <nav
+            aria-label="Что можно сделать на сайте"
+            className="relative flex w-[min(92vw,560px)] flex-col gap-2.5 sm:flex-row"
+          >
+            {OFFERS.map((offer, i) => (
+              <a
+                key={offer.href}
+                href={offer.href}
+                onClick={() => reachGoal('intro_offer')}
+                className="intro-offer flex min-h-12 flex-1 items-center justify-center gap-2 rounded-2xl bg-slate-950/90 px-4 py-3 text-center text-base font-bold text-white shadow-xl ring-2 ring-amber-400/80 transition hover:bg-amber-400 hover:text-slate-950 sm:text-sm"
+                style={{ animationDelay: `${3.4 + i * 0.35}s` }}
+              >
+                <span aria-hidden>{offer.icon}</span>
+                {offer.label}
+              </a>
+            ))}
+          </nav>
         </div>
 
+        {/* Sound is on by default (it starts at the first touch where the
+            browser asks for one); this button takes it away, or brings it back. */}
         <button
           type="button"
-          className="absolute bottom-6 right-6 rounded-full bg-white/10 px-4 py-2 text-xs font-semibold text-white/80 ring-1 ring-white/20 backdrop-blur hover:bg-white/20"
+          onClick={(event) => {
+            event.stopPropagation();
+            setSoundEnabled(soundOff);
+          }}
+          className="intro-sound-hint absolute bottom-6 left-4 flex min-h-11 items-center gap-2 rounded-full bg-white px-4 py-2.5 text-sm font-bold text-slate-950 shadow-lg ring-1 ring-white/40 hover:bg-amber-300 sm:left-6"
+        >
+          {soundOff ? '🔊 Включить звук' : '🔇 Убрать звук'}
+        </button>
+        <button
+          type="button"
+          className="absolute bottom-6 right-6 rounded-full bg-white px-5 py-2.5 text-sm font-bold text-slate-950 shadow-lg ring-1 ring-white/40 hover:bg-amber-300"
           onClick={skip}
         >
           Пропустить →

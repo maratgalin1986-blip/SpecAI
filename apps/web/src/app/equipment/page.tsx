@@ -15,7 +15,14 @@ import {
 import { pluralizeRu } from '@/lib/pluralize';
 import { SITE } from '@/lib/site';
 import { CinemaHero } from '@/components/CinemaHero';
+import { TelegramButton } from '@/components/TelegramButton';
 import { PUBLISHED_FLEET } from '@/lib/fleet';
+import {
+  cleanSearchParams,
+  FILTER_KEYS,
+  priceParam,
+  type EquipmentSearchParams,
+} from '@/lib/catalogParams';
 
 export const metadata = {
   title: 'Каталог спецтехники',
@@ -26,21 +33,6 @@ export const metadata = {
 export const dynamic = 'force-dynamic';
 
 const PAGE_SIZE = 12;
-
-interface EquipmentSearchParams {
-  category?: string;
-  group?: string;
-  city?: string;
-  minPrice?: string;
-  maxPrice?: string;
-  q?: string;
-  sort?: string;
-  page?: string;
-  /** One provider's machinery (link «Техника этого поставщика» on /map). */
-  company?: string;
-}
-
-const FILTER_KEYS = ['q', 'city', 'minPrice', 'maxPrice', 'sort', 'company'] as const;
 
 /** Catalog link that keeps the search filters and replaces the category/group. */
 function catalogHref(
@@ -96,27 +88,19 @@ function Pill({
 }
 
 export default async function EquipmentCatalogPage({
-  searchParams,
+  searchParams: rawSearchParams,
 }: {
-  searchParams: EquipmentSearchParams;
+  searchParams: Record<string, string | string[] | undefined>;
 }) {
-  const minPrice = searchParams.minPrice ? Number(searchParams.minPrice) : undefined;
-  const maxPrice = searchParams.maxPrice ? Number(searchParams.maxPrice) : undefined;
+  const searchParams = cleanSearchParams(rawSearchParams);
+  const minPrice = priceParam(searchParams.minPrice);
+  const maxPrice = priceParam(searchParams.maxPrice);
   const sort = parseEnumParam(searchParams.sort, EQUIPMENT_SORT_OPTIONS, 'newest');
   const requestedPage = parsePage(searchParams.page);
 
   // Filters other than the category: the tab counts are computed against these.
-  const companyFilter =
-    searchParams.company && /^[\w-]{1,64}$/.test(searchParams.company)
-      ? await prisma.company.findFirst({
-          where: { id: searchParams.company, isProvider: true },
-          select: { id: true, name: true },
-        })
-      : null;
-
+  // Only the house fleet; PUBLISHED_FLEET goes last so no filter can override it.
   const baseWhere = {
-    ...PUBLISHED_FLEET,
-    companyId: companyFilter?.id,
     location: searchParams.city
       ? { city: { equals: searchParams.city, mode: 'insensitive' as const } }
       : undefined,
@@ -125,6 +109,7 @@ export default async function EquipmentCatalogPage({
         ? { gte: minPrice, lte: maxPrice }
         : undefined,
     name: searchParams.q ? { contains: searchParams.q, mode: 'insensitive' as const } : undefined,
+    ...PUBLISHED_FLEET,
   };
 
   const [categories, countsByCategory] = await Promise.all([
@@ -191,7 +176,7 @@ export default async function EquipmentCatalogPage({
   );
 
   const field =
-    'w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none transition placeholder:text-slate-400 focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20';
+    'w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none transition placeholder:text-slate-400 focus:border-amber-700 focus:ring-2 focus:ring-amber-700';
 
   return (
     <div className="flex flex-col gap-8">
@@ -216,28 +201,15 @@ export default async function EquipmentCatalogPage({
           href="/map"
           className="ml-2 mt-5 inline-flex w-fit items-center gap-2 rounded-full border border-white/40 px-5 py-2.5 text-sm font-semibold text-white transition hover:border-white"
         >
-          Исполнители на карте
+          Заказать на карте
         </a>
-      </CinemaHero>
-
-      {companyFilter && (
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm">
-          <span>
-            Техника поставщика <strong className="break-words">{companyFilter.name}</strong>
-          </span>
-          <span className="flex gap-3 font-semibold">
-            <a href="/map" className="text-amber-800 underline">
-              На карте
-            </a>
-            <a
-              href={catalogHref({ ...searchParams, company: undefined }, {})}
-              className="text-amber-800 underline"
-            >
-              Вся техника
-            </a>
-          </span>
+        <div className="mt-3 flex flex-wrap items-center gap-3">
+          <TelegramButton page="equipment" />
+          <a href="/privacy" className="text-xs text-white/60 underline">
+            Политика конфиденциальности
+          </a>
         </div>
-      )}
+      </CinemaHero>
 
       <nav aria-label="Категории техники" className="flex flex-col gap-3">
         <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0">
@@ -285,7 +257,6 @@ export default async function EquipmentCatalogPage({
         {searchParams.category && (
           <input type="hidden" name="category" value={searchParams.category} />
         )}
-        {companyFilter && <input type="hidden" name="company" value={companyFilter.id} />}
         {!searchParams.category && activeGroup && (
           <input type="hidden" name="group" value={activeGroup} />
         )}

@@ -3,7 +3,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { Icon } from '@/components/Icon';
 import { WhatsAppIcon } from '@/components/MessengerButtons';
+import { PhotoShare } from '@/components/PhotoShare';
 import { isOnShift, SHIFT, SITE } from '@/lib/site';
+import { TelegramButton } from '@/components/TelegramButton';
 
 // «Принято»: the screen after a lead is sent. A stamp lands once, the text
 // says honestly when we call back, and the next step is right there.
@@ -53,6 +55,16 @@ export function LeadSuccess({ dark = false, summary }: { dark?: boolean; summary
         >
           <WhatsAppIcon className="h-4 w-4" /> WhatsApp
         </a>
+        <TelegramButton page="zayavka-prinyata" className="min-h-12" dark />
+      </div>
+      <p className="mt-2 text-xs text-white/60">
+        В Telegram — цены и свободная техника.{' '}
+        <a href="/privacy" className="underline">
+          Политика конфиденциальности
+        </a>
+      </p>
+      <div className="mt-5 border-t border-white/10 pt-4">
+        <PhotoShare role="client" dark />
       </div>
     </div>
   );

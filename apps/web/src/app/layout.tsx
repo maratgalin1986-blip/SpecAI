@@ -9,14 +9,15 @@ import { SiteFooter } from '@/components/SiteFooter';
 import { AgentChatWidget } from '@/components/AgentChatWidget';
 import { YandexMetrika } from '@/components/YandexMetrika';
 import { MarketingTracker } from '@/components/MarketingTracker';
-import { CinemaClicks } from '@/components/CinemaClicks';
 import { VtMorph } from '@/components/VtMorph';
-import { Cinema3D } from '@/components/Cinema3D';
+import { CinemaLayer } from '@/components/CinemaLayer';
 import { MessengerButtons } from '@/components/MessengerButtons';
+import { TelegramChip } from '@/components/TelegramChip';
 import { CookieNotice } from '@/components/CookieNotice';
 import { SITE } from '@/lib/site';
 import { siteUrl } from '@/lib/siteUrl';
 import './globals.css';
+import { fromPrice, MIN_RATE } from '@/lib/prices';
 
 // Cyrillic-capable fonts: Manrope for text and headings, a mono for labels and figures.
 const sans = Manrope({ subsets: ['latin', 'cyrillic'], variable: '--font-sans', display: 'swap' });
@@ -24,11 +25,16 @@ const mono = JetBrains_Mono({
   subsets: ['latin', 'cyrillic'],
   variable: '--font-mono',
   display: 'swap',
+  // Small labels only: not preloaded, so it does not compete with the hero poster (LCP).
+  preload: false,
 });
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl()),
-  title: { default: `${SITE.name} — ${SITE.tagline}`, template: `%s · ${SITE.name}` },
+  title: {
+    default: `${SITE.platform} от ${SITE.name} — ${SITE.tagline}`,
+    template: `%s · ${SITE.platform} · ${SITE.name}`,
+  },
   description: SITE.description,
   applicationName: SITE.name,
   keywords: [
@@ -39,12 +45,13 @@ export const metadata: Metadata = {
     'аренда самосвала',
     'спецтехника Татарстан',
     SITE.name,
+    SITE.platform,
   ],
   openGraph: {
     type: 'website',
     locale: 'ru_RU',
-    siteName: SITE.name,
-    title: `${SITE.name} — ${SITE.tagline}`,
+    siteName: `${SITE.platform} от ${SITE.name}`,
+    title: `${SITE.platform} от ${SITE.name} — ${SITE.tagline}`,
     description: SITE.description,
   },
   manifest: '/manifest.webmanifest',
@@ -83,7 +90,7 @@ const ORGANIZATION_JSON_LD = {
   areaServed: SITE.region,
   // Shown by Yandex and Google in the business card of the search results.
   image: `${siteUrl()}/opengraph-image.png`,
-  priceRange: 'от 2 300 ₽/ч',
+  priceRange: fromPrice(MIN_RATE),
   openingHoursSpecification: {
     '@type': 'OpeningHoursSpecification',
     dayOfWeek: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'],
@@ -103,6 +110,12 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="ru" className={`${sans.variable} ${mono.variable}`} suppressHydrationWarning>
       <body className="flex min-h-screen flex-col bg-[#f7f7f5] font-sans text-slate-900 antialiased grain">
+        <a
+          href="#content"
+          className="sr-only z-[100] rounded-md bg-amber-700 px-4 py-2 font-semibold text-white focus:not-sr-only focus:fixed focus:left-3 focus:top-3"
+        >
+          К содержимому
+        </a>
         {/* Black bars open on every page load, like the start of a scene. */}
         <div className="cine-curtain" aria-hidden />
         <script
@@ -117,22 +130,28 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         />
         <Providers>
           <SiteHeader />
-          <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 sm:px-6 sm:py-8">
+          <main
+            id="content"
+            tabIndex={-1}
+            className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 outline-none sm:px-6 sm:py-8"
+          >
             {children}
           </main>
           <SiteFooter />
           {/* Multi-agent assistant (works for guests too). The streaming single
-              assistant in ChatWidget stays available to API/mobile clients. */}
+              assistant (/api/ai/chat) stays available to API/mobile clients. */}
           <AgentChatWidget />
           <MessengerButtons />
+          <TelegramChip />
           <InstallPrompt />
           <TelegramMiniApp />
           <CookieNotice />
           <YandexMetrika />
           <MarketingTracker />
-          <CinemaClicks />
+          {/* Cross-document view transitions must listen from the first render. */}
           <VtMorph />
-          <Cinema3D />
+          {/* The other cinema effects load lazily (components/CinemaLayer.tsx). */}
+          <CinemaLayer />
         </Providers>
       </body>
     </html>

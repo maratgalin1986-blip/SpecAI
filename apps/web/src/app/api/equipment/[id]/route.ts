@@ -1,3 +1,4 @@
+import { PUBLISHED_FLEET } from '@/lib/fleet';
 import { NextRequest, NextResponse } from 'next/server';
 import { Prisma, prisma } from '@specai/database';
 import { updateEquipmentSchema } from '@specai/shared';
@@ -5,13 +6,43 @@ import { getRequestUser } from '@/lib/requestUser';
 import { isProvider } from '@/lib/fleet';
 import { INVALID_JSON_MESSAGE, readJson, zodErrorMessage } from '@/lib/apiInput';
 import { listingPhoto } from '@/lib/equipmentPhoto';
+import { customerRates } from '@/lib/equipmentCatalog';
 
 export const dynamic = 'force-dynamic';
 
-/** Публичная карточка техники (используется мобильным приложением). */
+/**
+ * Карточка техники (мобильное приложение). Заказчик видит только
+ * опубликованный парк СпецПласт16 с ценами по прайсу; поставщик свою машину —
+ * в любом статусе и с сохранёнными ценами (?mine=1, форма правки).
+ */
 export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
-  const equipment = await prisma.equipment.findUnique({
-    where: { id: params.id },
+  const currentUser = await getRequestUser(request);
+  const mine = request.nextUrl.searchParams.get('mine') === '1';
+  const owner = mine && isProvider(currentUser) ? currentUser.companyId : null;
+  const own = owner
+    ? await prisma.equipment.findFirst({
+        where: { id: params.id, companyId: owner },
+        include: {
+          category: true,
+          location: true,
+          company: { select: { id: true, name: true } },
+        },
+      })
+    : null;
+  if (own) {
+    return NextResponse.json({
+      // The edit form saves imageUrls back: keep them as stored, add only the cover.
+      equipment: {
+        ...own,
+        ...listingPhoto(own, request.nextUrl.origin),
+        imageUrls: own.imageUrls,
+      },
+    });
+  }
+
+  // Only СпецПласт16's own machinery is public (owner's decision, 2026-10-02).
+  const equipment = await prisma.equipment.findFirst({
+    where: { id: params.id, ...PUBLISHED_FLEET },
     include: {
       category: true,
       location: true,
@@ -24,7 +55,12 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
   }
 
   return NextResponse.json({
-    equipment: { ...equipment, ...listingPhoto(equipment, request.nextUrl.origin) },
+    equipment: {
+      ...equipment,
+      // Prices as on the site: never below lib/prices.ts.
+      ...customerRates({ ...equipment, categoryName: equipment.category.name }),
+      ...listingPhoto(equipment, request.nextUrl.origin),
+    },
   });
 }
 

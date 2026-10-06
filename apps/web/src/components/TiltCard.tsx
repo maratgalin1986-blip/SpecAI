@@ -25,6 +25,12 @@ export function TiltCard({
   function lean(event: React.PointerEvent<HTMLDivElement>, amount: number) {
     const el = ref.current;
     if (!el) return;
+    // A card with an open order form holds still, so the fields stay under the pointer.
+    if (el.querySelector('form')) {
+      el.style.setProperty('--rx', '0deg');
+      el.style.setProperty('--ry', '0deg');
+      return;
+    }
     const rect = el.getBoundingClientRect();
     const x = (event.clientX - rect.left) / rect.width;
     const y = (event.clientY - rect.top) / rect.height;

@@ -10,7 +10,7 @@ import { AcceptBidButton } from '@/components/AcceptBidButton';
 import { formatMoney } from '@/lib/money';
 import { isAdminRequest } from '@/lib/admin';
 import { SiteConditions } from '@/components/SiteConditions';
-import { isProvider, isHouseManager } from '@/lib/fleet';
+import { houseFirst, isProvider, isHouseManager } from '@/lib/fleet';
 import { isSafeHttpUrl } from '@/lib/privacy';
 import { approvedComments } from '@/lib/commentAccess';
 import { CommentForm, CommentList } from '@/components/Comments';
@@ -25,6 +25,7 @@ import { providerPath } from '@/lib/providerSeo';
 import { pluralizeRu } from '@/lib/pluralize';
 import { EraseOrderButton, RevealPhoneButton } from '@/components/ChatOrderContact';
 import { maskPhone } from '@/lib/chatOrders';
+import { SITE } from '@/lib/site';
 
 export const dynamic = 'force-dynamic';
 
@@ -61,9 +62,12 @@ export default async function OrderDetailPage({ params }: { params: { id: string
   if (!isOwner && !isAdmin && !isProvider(session?.user)) {
     notFound();
   }
-  const visibleBids = seesAllBids
-    ? order.bids
-    : order.bids.filter((bid) => bid.equipment.companyId === session?.user.companyId);
+  const visibleBids = houseFirst(
+    seesAllBids
+      ? order.bids
+      : order.bids.filter((bid) => bid.equipment.companyId === session?.user.companyId),
+    (bid) => bid.equipment.companyId,
+  );
 
   // A provider sees what other providers wrote about this customer (no name).
   const viewerIsProvider = !isOwner && isProvider(session?.user);
@@ -111,7 +115,7 @@ export default async function OrderDetailPage({ params }: { params: { id: string
       {isOwner && order.status === 'OPEN' && <CancelOrderButton orderId={order.id} />}
       {isOwner && order.status === 'MATCHED' && (
         <p className="rounded-md border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
-          Бронь создана — исполнитель подтвердит её и свяжется с вами.{' '}
+          Бронь создана — диспетчер {SITE.name} подтвердит её и свяжется с вами.{' '}
           <a href="/dashboard#bookings" className="font-semibold underline">
             Мои брони
           </a>
@@ -213,12 +217,18 @@ export default async function OrderDetailPage({ params }: { params: { id: string
 
       <section id="offers" className="scroll-mt-24">
         <h2 className="mb-3 text-lg font-semibold">
-          {seesAllBids
-            ? `Предложения исполнителей · ${order.bids.length}`
-            : `Ваши предложения (всего по заявке: ${order.bids.length})`}
+          {isOwner
+            ? `Цена от ${SITE.name}`
+            : seesAllBids
+              ? `Предложения исполнителей · ${order.bids.length}`
+              : `Ваши предложения (всего по заявке: ${order.bids.length})`}
         </h2>
         {visibleBids.length === 0 ? (
-          <p className="text-sm text-slate-600">Пока никто не предложил технику.</p>
+          <p className="text-sm text-slate-600">
+            {isOwner
+              ? `Диспетчер ${SITE.name} ещё не назвал цену — обычно в течение рабочего дня. Срочно: ${SITE.phone}.`
+              : 'Пока никто не предложил технику.'}
+          </p>
         ) : (
           <div className="flex flex-col gap-3">
             {visibleBids.map((bid) => (
@@ -244,7 +254,7 @@ export default async function OrderDetailPage({ params }: { params: { id: string
                   <CommentForm
                     compact
                     targetCompanyId={bid.equipment.companyId}
-                    label="Комментарий об исполнителе"
+                    label="Комментарий о работе"
                   />
                 )}
                 {bid.status === 'ACCEPTED' && (

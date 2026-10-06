@@ -1,11 +1,17 @@
 import type { Metadata } from 'next';
 import { CinemaHero } from '@/components/CinemaHero';
 import { PHOTO_CREDITS } from '@/lib/photoCredits';
+import { SOUND_CREDITS } from '@/lib/soundAssets';
 import { SITE } from '@/lib/site';
+import { ZONE_FILMS } from '@/lib/stroyka/zoneFilms';
+
+const filmIds = [...new Set(Object.values(ZONE_FILMS).flatMap((f) => f.sources))]
+  .map((id) => `#${id}`)
+  .join(', ');
 
 export const metadata: Metadata = {
-  title: 'Авторы фото и видео',
-  description: `Источники иллюстраций на сайте ${SITE.name}.`,
+  title: 'Авторы фото, видео и звука',
+  description: `Источники иллюстраций и звуков на сайте ${SITE.name}.`,
   robots: { index: false },
 };
 
@@ -14,7 +20,7 @@ export default function CreditsPage() {
     <div className="mx-auto flex max-w-3xl flex-col gap-6 py-6">
       <CinemaHero
         eyebrow="Документы"
-        title="Авторы фото и видео"
+        title="Авторы фото, видео и звука"
         clips={['site-aerial']}
         camera={7}
         still
@@ -36,21 +42,54 @@ export default function CreditsPage() {
               className="h-[68px] w-[120px] shrink-0 rounded-md object-cover"
             />
             <div className="min-w-0 text-sm">
-              <a href={credit.url} target="_blank" rel="noopener" className="font-medium underline">
-                {credit.title}
-              </a>
+              <span className="font-medium">{credit.title}</span>
               <div className="text-slate-500">
                 Автор: {credit.author} · {credit.license}
               </div>
+              <div className="break-all text-xs text-slate-400">{credit.url}</div>
             </div>
           </li>
         ))}
       </ul>
+      <p className="text-sm text-slate-600">
+        3D-стройка (/stroyka): техника, здания и люди построены процедурно; фототекстуры грунта,
+        щебня, песка и бетона и 3D-модели бетонных блоков, покрышек, бочек, генератора, газовых
+        баллонов, мешков с цементом, мусорного контейнера и электрощитов, фото неба (днём, в
+        пасмурную погоду, на закате) — Poly Haven (CC0). Карта города под ней — данные{' '}
+        <span>© участники OpenStreetMap</span> (лицензия ODbL). Погода — MET Norway (CC BY 4.0).
+      </p>
+      <p className="text-slate-600">
+        Прогулка по стройке (/stroyka) показывает на каждой остановке короткий ролик из настоящих
+        съёмок Mixkit (лицензия Mixkit): {filmIds}. Изменения: фрагмент, цветокоррекция,
+        зацикливание, без звука.
+      </p>
       <p className="text-sm text-slate-500">
-        Mixkit:{' '}
-        <a href="https://mixkit.co/license/" target="_blank" rel="noopener" className="underline">
-          mixkit.co/license
-        </a>
+        Mixkit: <span>mixkit.co/license</span>
+      </p>
+
+      <h2 className="mt-4 text-xl font-bold">Звук</h2>
+      <p className="text-slate-600">
+        Вступительный фильм 3D-стройки смонтирован из роликов Mixkit (лицензия Mixkit), музыка —
+        «The Journey», Mixkit (лицензия Mixkit, бесплатная музыка). Звук включается с первого
+        касания страницы, выключить — кнопкой «🔊». Музыка, шум стройки, двигатели и гидравлика,
+        щелчки, «удар» заставки и рация синтезируются прямо в браузере. Голоса мужчин на 3D-стройке
+        записаны свободным нейросинтезом Piper (голоса «Дмитрий» и «Денис», данные CC0,
+        rhasspy/piper-voices), остальные реплики — синтез речи браузера. Запись дизеля — с Wikimedia
+        Commons, фрагмент пережат в моно:
+      </p>
+      <ul className="flex flex-col gap-3">
+        {SOUND_CREDITS.map((credit) => (
+          <li key={credit.name} className="rounded-xl border border-slate-200 p-3 text-sm">
+            <span className="font-medium">{credit.title}</span>
+            <div className="text-slate-500">
+              Автор: {credit.author} · {credit.license} · {credit.use}
+            </div>
+            <div className="break-all text-xs text-slate-400">{credit.url}</div>
+          </li>
+        ))}
+      </ul>
+      <p className="text-sm text-slate-500">
+        Лицензия: <span>CC0</span>. Изменения: фрагмент, моно, сжатие.
       </p>
     </div>
   );

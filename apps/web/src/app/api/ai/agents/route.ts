@@ -9,18 +9,21 @@ import {
 import { routeToAgent, runAgent, type AgentToolHandlers } from '@specai/ai-service';
 import { getRequestUser } from '@/lib/requestUser';
 import { formatRate } from '@/lib/money';
-import { maskContacts } from '@/lib/privacy';
-import { checkRateLimit } from '@/lib/rateLimit';
-import { PUBLIC_FLEET, isProvider } from '@/lib/fleet';
+import { customerRates } from '@/lib/equipmentCatalog';
+import { maskContacts, maskMessagesForAi } from '@/lib/privacy';
+import { LEAD_RATE_LIMIT, checkRateLimit } from '@/lib/rateLimit';
+import { PUBLIC_FLEET, isProvider, isHouseEquipment } from '@/lib/fleet';
 import { notifyTelegram } from '@/lib/notify';
+import { acceptLead } from '@/lib/leadIntake';
+import { phoneLimitMessage, prismaRecentLeads } from '@/lib/leadLimit';
 import { zodErrorMessage } from '@/lib/apiInput';
 import { asksWhatNext, guideReply } from '@/lib/guide';
 import { guideFor } from '@/lib/guideState';
 import { isOnShift, SITE } from '@/lib/site';
+import { CHAT_CONSENT_NEEDED, chatLeadRecord, chatLeadStep } from '@/lib/chatLead';
 import {
   ASK_FOR_PHONE,
   faqAnswers,
-  findPhone,
   leadAcceptedText,
   matchTask,
   wantsPrice,
@@ -84,6 +87,65 @@ export async function POST(request: NextRequest) {
     }
   }
 
+  // A phone number in the latest message is a callback request in every mode
+  // (with or without an AI key), caught before any AI call so no guest lead is
+  // lost. It is saved only with the visitor's consent (152-ФЗ).
+  const userTexts = messages.filter((m) => m.role === 'user').map((m) => m.content);
+  const leadStep = chatLeadStep(messages.at(-1)?.content ?? '', parsed.data.consent);
+  if (leadStep.kind !== 'none') {
+    const agentId: AgentId = parsed.data.agentId === 'auto' ? 'dispatcher' : parsed.data.agentId;
+    if (leadStep.kind === 'consent') {
+      return NextResponse.json({
+        agentId,
+        reply: CHAT_CONSENT_NEEDED,
+        toolsUsed: [],
+        needConsent: true,
+        phone: leadStep.phone,
+      });
+    }
+    // The same per-IP lead limit as the site's forms (/api/leads).
+    if (!checkRateLimit(`leads:${ip}`, LEAD_RATE_LIMIT).ok) {
+      return NextResponse.json(
+        {
+          agentId,
+          reply: `Слишком много заявок. Позвоните нам: ${SITE.phone}.`,
+          // The chat shows `error` for non-2xx answers.
+          error: `Слишком много заявок. Позвоните нам: ${SITE.phone}.`,
+          toolsUsed: [],
+        },
+        { status: 429 },
+      );
+    }
+    const lead = chatLeadRecord({ phone: leadStep.phone, userName: user?.name, userTexts });
+    // The same intake as the site's forms (lib/leadIntake.ts): database first,
+    // then Telegram; with the database down Telegram gets only the phone.
+    const outcome = await acceptLead(lead, {
+      save: (data) => prisma.lead.create({ data }),
+      notify: notifyTelegram,
+      siteName: SITE.name,
+      phoneLimit: prismaRecentLeads(prisma),
+      onSaveError: (error, data) =>
+        console.error('[agents] failed to save chat lead', error, JSON.stringify(data)),
+    });
+    if (outcome === 'limited') {
+      // A friendly answer, not an error: the earlier leads already reached us.
+      return NextResponse.json({ agentId, reply: phoneLimitMessage(SITE.phone), toolsUsed: [] });
+    }
+    if (outcome === 'lost') {
+      return NextResponse.json({
+        agentId,
+        reply: `Не получилось передать номер диспетчеру. Позвоните, пожалуйста: ${SITE.phone}.`,
+        toolsUsed: [],
+      });
+    }
+    return NextResponse.json({
+      agentId,
+      reply: leadAcceptedText(isOnShift()),
+      toolsUsed: [],
+      lead: true,
+    });
+  }
+
   // «Что дальше?» — the assistant's checklist from the database, the same with
   // or without an AI key, so the answer is exact and free.
   if (asksWhatNext(messages.at(-1)?.content ?? '')) {
@@ -140,8 +202,7 @@ export async function POST(request: NextRequest) {
         name: item.name,
         category: item.category.name,
         city: item.location?.city ?? null,
-        dailyRate: Number(item.dailyRate),
-        hourlyRate: item.hourlyRate ? Number(item.hourlyRate) : null,
+        ...customerRates({ ...item, categoryName: item.category.name }),
         currency: item.currency,
         status: item.status,
         link: `/equipment/${item.id}`,
@@ -153,7 +214,7 @@ export async function POST(request: NextRequest) {
         where: { id: requireString(input, 'equipmentId') },
         include: { category: true, location: true, reviews: true, company: true },
       });
-      if (!item || !item.company?.isProvider) {
+      if (!item || !isHouseEquipment(item)) {
         throw new ToolError('Техника не найдена');
       }
       const ratings = item.reviews.map((r) => r.rating);
@@ -166,10 +227,7 @@ export async function POST(request: NextRequest) {
         category: item.category.name,
         status: item.status,
         city: item.location?.city ?? null,
-        dailyRate: Number(item.dailyRate),
-        hourlyRate: item.hourlyRate ? Number(item.hourlyRate) : null,
-        weeklyRate: item.weeklyRate ? Number(item.weeklyRate) : null,
-        monthlyRate: item.monthlyRate ? Number(item.monthlyRate) : null,
+        ...customerRates({ ...item, categoryName: item.category.name }),
         currency: item.currency,
         specs: item.specs,
         description: item.description,
@@ -187,22 +245,23 @@ export async function POST(request: NextRequest) {
       }
       const item = await prisma.equipment.findUnique({
         where: { id: requireString(input, 'equipmentId') },
-        include: { company: true },
+        include: { company: true, category: true },
       });
-      if (!item || !item.company?.isProvider) {
+      if (!item || !isHouseEquipment(item)) {
         throw new ToolError('Техника не найдена');
       }
-      const daily = Number(item.dailyRate);
+      const rates = customerRates({ ...item, categoryName: item.category.name });
+      const daily = rates.dailyRate;
       const options = [{ plan: 'посуточно', total: daily * days }];
-      if (item.weeklyRate) {
-        const weekly = Number(item.weeklyRate);
+      if (rates.weeklyRate) {
+        const weekly = rates.weeklyRate;
         options.push({
           plan: 'понедельно + посуточно',
           total: Math.floor(days / 7) * weekly + (days % 7) * daily,
         });
       }
-      if (item.monthlyRate) {
-        const monthly = Number(item.monthlyRate);
+      if (rates.monthlyRate) {
+        const monthly = rates.monthlyRate;
         options.push({ plan: 'помесячно', total: Math.ceil(days / 30) * monthly });
       }
       const best = options.reduce((a, b) => (b.total < a.total ? b : a));
@@ -310,8 +369,8 @@ export async function POST(request: NextRequest) {
 
   // Without an API key (or if the AI service fails) the agents still help in
   // the rule-based dispatcher (lib/dispatcher.ts): the machine for the job,
-  // common questions, the user's bookings, and a phone number typed into the
-  // chat becomes a callback request for the owner.
+  // common questions and the user's bookings. A phone number typed into the
+  // chat is handled above, before any AI call.
   async function offlineReply(agentId: AgentId) {
     const text = (messages.at(-1)?.content ?? '').toLowerCase();
     const lines: string[] = [];
@@ -342,39 +401,11 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const userText = messages
-      .filter((m) => m.role === 'user')
-      .map((m) => m.content)
-      .join('\n');
-    const phone = findPhone(messages.at(-1)?.content ?? '');
-    if (phone) {
-      const lead = {
-        name: user?.name?.trim() || 'Имя не указано',
-        phone,
-        message: `Из чата на сайте:\n${userText}`.slice(0, 1000),
-        source: 'agents-chat',
-      };
-      const summary = [`Имя: ${lead.name}`, `Телефон: ${phone}`, lead.message];
-      try {
-        await prisma.lead.create({ data: lead });
-        await notifyTelegram([`💬 Заявка из чата — ${SITE.name}`, ...summary].join('\n'));
-      } catch (error) {
-        console.error('[agents] failed to save chat lead', error);
-        await notifyTelegram(
-          ['⚠️ Заявка из чата — БАЗА НЕДОСТУПНА, заявка только здесь', ...summary].join('\n'),
-        );
-      }
-      return {
-        agentId,
-        reply: leadAcceptedText(isOnShift()),
-        toolsUsed: [],
-        offline: true,
-        lead: true,
-      };
-    }
-
-    const task = matchTask(text) ?? matchTask(userText);
+    const userText = userTexts.join('\n');
     const faq = faqAnswers(text);
+    // Earlier messages only help when this one is not a plain question,
+    // otherwise «Работаете с НДС?» drags in the machine from the last answer.
+    const task = matchTask(text) ?? (faq.length === 0 ? matchTask(userText) : null);
     if (lines.length === 0) {
       lines.push(...faq);
       const categories = (await handlers.list_categories({})) as { id: string; name: string }[];
@@ -421,13 +452,17 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(await offlineReply(fallbackAgent));
   }
 
+  // Phones and e-mails never reach the external AI provider (152-ФЗ): the
+  // callback lead above already used the raw number.
+  const aiMessages = maskMessagesForAi(messages);
   try {
     const agentId =
-      parsed.data.agentId === 'auto' ? await routeToAgent(messages) : parsed.data.agentId;
-    const result = await runAgent(agentId, messages, handlers, {
+      parsed.data.agentId === 'auto' ? await routeToAgent(aiMessages) : parsed.data.agentId;
+    const result = await runAgent(agentId, aiMessages, handlers, {
       today: new Date().toISOString().slice(0, 10),
       userDescription: user
-        ? `${user.name ?? user.email} (role ${user.role})`
+        ? // No e-mail: contacts never go to the AI provider.
+          `${user.name?.trim() || 'signed-in user'} (role ${user.role})`
         : 'not signed in (guest)',
     });
     return NextResponse.json(result);

@@ -1,11 +1,17 @@
 // Linking a user's Telegram to their account: the site gives a deep link
-// https://t.me/<bot>?start=<one-time token>; the bot webhook receives
-// "/start <token>" in the private chat and stores the chat id. Only the
+// https://t.me/<bot>?start=n_<one-time token>; the bot webhook receives
+// "/start n_<token>" in the private chat and stores the chat id. Only the
 // sha256 of the token is kept, and it expires after LINK_TTL_MS.
 import { createHash, randomBytes } from 'node:crypto';
 import { prisma } from '@specai/database';
 
 export const LINK_TTL_MS = 15 * 60_000;
+
+/**
+ * Marks the notification deep link, so other /start payloads (the bot funnel's
+ * page and campaign source) are never taken for a token.
+ */
+const LINK_PREFIX = 'n_';
 
 /** A fresh token: 32 url-safe characters (Telegram allows A-Z a-z 0-9 _ - up to 64). */
 export function newLinkToken(): string {
@@ -17,11 +23,11 @@ export function hashLinkToken(token: string): string {
 }
 
 /**
- * The token of "/start <token>" (also "/start@bot <token>"), or null for a
+ * The token of "/start n_<token>" (also "/start@bot n_<token>"), or null for a
  * plain /start, a deep link of another kind, or any other message.
  */
 export function parseStartToken(text: string): string | null {
-  const match = /^\/start(?:@\w+)?\s+([A-Za-z0-9_-]{16,64})\s*$/.exec(text.trim());
+  const match = /^\/start(?:@\w+)?\s+n_([A-Za-z0-9_-]{16,62})\s*$/.exec(text.trim());
   return match ? match[1]! : null;
 }
 
@@ -31,7 +37,7 @@ export function isStopCommand(text: string): boolean {
 }
 
 export function deepLink(botUsername: string, token: string): string {
-  return `https://t.me/${botUsername.replace(/^@/, '')}?start=${token}`;
+  return `https://t.me/${botUsername.replace(/^@/, '')}?start=${LINK_PREFIX}${token}`;
 }
 
 let cachedBotUsername: string | null = null;

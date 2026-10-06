@@ -1,6 +1,9 @@
 // Company branding and contacts, in one place so they're easy to update.
 export const SITE = {
   name: 'СпецПласт16',
+  // The platform's own name (estimates, design, 3D site); the company that
+  // does the work is always `name`.
+  platform: 'ИИСтройка24',
   tagline: 'Аренда спецтехники и строительные услуги в Татарстане',
   description:
     'СпецПласт16 — аренда спецтехники с оператором в Набережных Челнах и по Татарстану: ' +
@@ -15,7 +18,8 @@ export const SITE = {
   // Yandex.Metrika counter (created 2026-09-29); the env var can override it.
   metrikaId: process.env.NEXT_PUBLIC_YANDEX_METRIKA_ID || '113179760',
   // Telegram bot username without "@", once the bot exists (NEXT_PUBLIC_TELEGRAM_BOT).
-  telegramBot: process.env.NEXT_PUBLIC_TELEGRAM_BOT ?? '',
+  // The bot is @specplast16_zayavki_bot; NEXT_PUBLIC_TELEGRAM_BOT can override it.
+  telegramBot: process.env.NEXT_PUBLIC_TELEGRAM_BOT || 'specplast16_zayavki_bot',
   // Promise shown next to callback forms. Keep it realistic.
   callbackPromise: 'Перезвоним в течение 15 минут в рабочее время',
   workingHours: 'Пн–Сб, 8:00–20:00 · ИИ-агенты — круглосуточно',

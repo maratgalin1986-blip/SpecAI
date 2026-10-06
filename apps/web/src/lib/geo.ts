@@ -30,10 +30,27 @@ export async function geocodeAddress(query: string): Promise<GeoPoint | null> {
   return result.status === 'found' ? result.place : null;
 }
 
+/**
+ * A point typed or picked on the map instead of an address: «55.7431, 52.3981»
+ * or «Точка на карте: 55.7431° с. ш., 52.3981° в. д.». Null for anything else.
+ */
+export function parseCoordinates(query: string): { lat: number; lon: number } | null {
+  const match = query.match(
+    /(-?\d{1,2}\.\d{3,})°?\s*(?:с\.\s*ш\.)?\s*[,;\s]\s*(-?\d{1,3}\.\d{3,})/,
+  );
+  if (!match) return null;
+  const lat = Number(match[1]);
+  const lon = Number(match[2]);
+  return Math.abs(lat) <= 90 && Math.abs(lon) <= 180 ? { lat, lon } : null;
+}
+
 /** Like geocodeAddress, with the reason when there is no place. */
 export async function lookupAddress(query: string): Promise<GeocodeResult> {
   const q = query.trim().replace(/\s+/g, ' ').slice(0, 200);
   if (q.length < 3) return { status: 'not_found' };
+  // A point from the map needs no geocoder.
+  const point = parseCoordinates(q);
+  if (point) return { status: 'found', place: { ...point, label: 'Точка на карте' } };
   const params = new URLSearchParams({
     q,
     format: 'jsonv2',

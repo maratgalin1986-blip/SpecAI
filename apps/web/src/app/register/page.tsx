@@ -5,7 +5,9 @@ import { signIn } from 'next-auth/react';
 import { Button, Card } from '@specai/ui';
 import { CinemaBackdrop } from '@/components/CinemaHero';
 import { BasePicker, type BaseValue } from '@/components/BasePicker';
+import { ConsentText } from '@/components/ConsentText';
 import { normalizeReferralCode } from '@/lib/referral';
+import { useHydrated } from '@/lib/useHydrated';
 
 type AccountType = 'CUSTOMER' | 'PROVIDER';
 
@@ -31,6 +33,7 @@ export default function RegisterPage() {
   const [base, setBase] = useState<BaseValue>({ address: '', lat: null, lon: null });
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const hydrated = useHydrated();
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -112,7 +115,7 @@ export default function RegisterPage() {
           ))}
         </div>
 
-        <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+        <form method="post" onSubmit={handleSubmit} className="ym-hide-content flex flex-col gap-3">
           {accountType === 'PROVIDER' && (
             <label className="flex flex-col gap-1 text-sm">
               Название компании или ИП
@@ -186,15 +189,14 @@ export default function RegisterPage() {
               onChange={(e) => setConsent(e.target.checked)}
               className="mt-0.5"
             />
-            <span>
-              Согласен(на) на обработку персональных данных в соответствии с{' '}
-              <a href="/privacy" target="_blank" className="text-amber-700 underline">
-                политикой конфиденциальности
-              </a>
-            </span>
+            <ConsentText />
           </label>
-          {error && <p className="text-sm text-red-600">{error}</p>}
-          <Button type="submit" disabled={isSubmitting}>
+          {error && (
+            <p role="alert" className="text-sm text-red-700">
+              {error}
+            </p>
+          )}
+          <Button type="submit" disabled={!hydrated || isSubmitting}>
             {isSubmitting ? 'Создание аккаунта…' : 'Создать аккаунт'}
           </Button>
         </form>

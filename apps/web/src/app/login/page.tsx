@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Button, Card } from '@specai/ui';
 import { CinemaBackdrop } from '@/components/CinemaHero';
 import { homeForRole, loginErrorMessage } from '@/lib/loginErrors';
+import { useHydrated } from '@/lib/useHydrated';
 
 // Where to go after signing in: the page that sent the user here (same site
 // only, to avoid open redirects), otherwise null — then the user's own cabinet.
@@ -49,6 +50,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const hydrated = useHydrated();
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -83,7 +85,7 @@ export default function LoginPage() {
         <Suspense fallback={null}>
           <VerifiedNotice />
         </Suspense>
-        <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+        <form method="post" onSubmit={handleSubmit} className="ym-hide-content flex flex-col gap-3">
           <label className="flex flex-col gap-1 text-sm">
             E-mail
             <input
@@ -104,8 +106,12 @@ export default function LoginPage() {
               className="rounded-md border border-slate-300 px-3 py-2"
             />
           </label>
-          {error && <p className="text-sm text-red-600">{error}</p>}
-          <Button type="submit" disabled={isSubmitting}>
+          {error && (
+            <p role="alert" className="text-sm text-red-700">
+              {error}
+            </p>
+          )}
+          <Button type="submit" disabled={!hydrated || isSubmitting}>
             {isSubmitting ? 'Выполняется вход…' : 'Войти'}
           </Button>
         </form>

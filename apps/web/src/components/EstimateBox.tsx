@@ -4,8 +4,10 @@ import { useState } from 'react';
 import { Icon } from '@/components/Icon';
 import { rub, SHIFT_HOURS } from '@/lib/equipmentCatalog';
 import { SITE } from '@/lib/site';
-import { submitLead } from '@/lib/submitLead';
+import { submitLead, leadErrorText } from '@/lib/submitLead';
 import { LeadSuccess } from '@/components/LeadSuccess';
+import { ConsentText } from '@/components/ConsentText';
+import { useHydrated } from '@/lib/useHydrated';
 
 type Mode = 'hours' | 'shifts';
 
@@ -59,6 +61,7 @@ export function EstimateBox({
   const [consent, setConsent] = useState(false);
   const [website, setWebsite] = useState('');
   const [status, setStatus] = useState<'idle' | 'sending' | 'sent'>('idle');
+  const hydrated = useHydrated();
   const [error, setError] = useState<string | null>(null);
 
   const qty = quantity[mode];
@@ -104,9 +107,7 @@ export function EstimateBox({
       setStatus('sent');
     } catch (err) {
       setStatus('idle');
-      setError(
-        `${err instanceof Error ? err.message : 'Не удалось отправить'}. Или позвоните: ${SITE.phone}`,
-      );
+      setError(leadErrorText(err, SITE.phone));
     }
   }
 
@@ -189,7 +190,7 @@ export function EstimateBox({
                 max={LIMITS[mode].max}
                 value={qty}
                 onChange={(e) => setQty(Number(e.target.value))}
-                className="w-full bg-transparent text-center font-mono text-3xl font-bold tabular-nums outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"
+                className="w-full rounded-lg bg-transparent text-center font-mono text-3xl font-bold tabular-nums outline-none [appearance:textfield] focus-visible:ring-2 focus-visible:ring-amber-700 focus-visible:ring-offset-2 [&::-webkit-inner-spin-button]:appearance-none"
               />
               <span className="eyebrow text-[0.6rem] text-slate-500">
                 {mode === 'hours' ? 'часов работы' : `${unitLabel(mode, qty)} по 8 ч`}
@@ -223,7 +224,7 @@ export function EstimateBox({
 
           <div className="rounded-2xl bg-slate-950 p-4 text-white">
             <div className="flex items-baseline justify-between gap-3">
-              <span className="eyebrow text-[0.6rem] text-slate-400">Итого</span>
+              <span className="eyebrow text-[0.6rem] text-slate-400">Итого примерно</span>
               <span className="font-mono text-xs text-slate-400">{breakdown}</span>
             </div>
             <div
@@ -245,18 +246,21 @@ export function EstimateBox({
           summary={`${equipmentName}${total !== null ? `, расчёт ${rub(total)}` : ''}`}
         />
       ) : (
-        <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+        <form method="post" onSubmit={handleSubmit} className="ym-hide-content flex flex-col gap-3">
           <input
             required
             type="tel"
+            name="phone"
             value={phone}
             onChange={(e) => setPhone(e.target.value)}
             maxLength={30}
+            pattern="(?:\D*\d){10,15}\D*"
+            title="Номер телефона: от 10 цифр"
             placeholder="Телефон, +7 (___) ___-__-__"
             autoComplete="tel"
             inputMode="tel"
             aria-label="Телефон"
-            className="w-full rounded-xl border border-slate-300 bg-white px-3.5 py-3 text-sm outline-none transition placeholder:text-slate-400 focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20"
+            className="w-full rounded-xl border border-slate-300 bg-white px-3.5 py-3 text-sm outline-none transition placeholder:text-slate-400 focus:border-amber-700 focus:ring-2 focus:ring-amber-700"
           />
           <input
             tabIndex={-1}
@@ -271,21 +275,21 @@ export function EstimateBox({
             <input
               type="checkbox"
               required
+              name="consent"
               checked={consent}
               onChange={(e) => setConsent(e.target.checked)}
               className="mt-0.5 accent-amber-600"
             />
-            <span>
-              Согласен(на) на обработку персональных данных по{' '}
-              <a href="/privacy" className="underline" target="_blank">
-                политике конфиденциальности
-              </a>
-            </span>
+            <ConsentText />
           </label>
-          {error && <p className="text-xs text-red-600">{error}</p>}
+          {error && (
+            <p role="alert" className="text-xs text-red-700">
+              {error}
+            </p>
+          )}
           <button
             type="submit"
-            disabled={status === 'sending'}
+            disabled={!hydrated || status === 'sending'}
             className="group inline-flex items-center justify-center gap-2 rounded-full bg-amber-500 px-5 py-3.5 text-base font-semibold text-slate-950 shadow-lg shadow-amber-500/30 transition hover:bg-amber-400 disabled:opacity-60"
           >
             {status === 'sending'

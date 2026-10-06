@@ -1,6 +1,8 @@
 import type { MetadataRoute } from 'next';
 import { prisma } from '@specai/database';
 import { LANDINGS } from '@/lib/landings';
+import { cityPages, cityPath } from '@/lib/cities';
+import { JOBS } from '@/lib/jobs';
 import { siteUrl } from '@/lib/siteUrl';
 import { PUBLIC_FLEET } from '@/lib/fleet';
 import { providerPath } from '@/lib/providerSeo';
@@ -12,9 +14,19 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const staticPages = [
     '',
     ...LANDINGS.map((landing) => `/arenda/${landing.slug}`),
+    // Chelny pages point their canonical at /arenda/<slug>, so they stay out.
+    ...cityPages()
+      .filter((page) => page.city !== 'naberezhnye-chelny')
+      .map((page) => cityPath(page.slug, page.city)),
+    '/raboty',
+    ...JOBS.map((job) => `/raboty/${job.slug}`),
     '/equipment',
+    '/smeta',
+    '/kalkulyator',
+    '/dizain',
     '/map',
     '/providers',
+    '/stroyka',
     '/agents',
     '/contacts',
     '/privacy',

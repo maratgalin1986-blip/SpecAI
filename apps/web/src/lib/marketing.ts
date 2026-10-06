@@ -68,9 +68,15 @@ const FORM_LABELS: Record<string, string> = {
   'catalog-card': 'Заказ из каталога',
   'catalog-empty': 'Каталог, ничего не нашли',
   landing: 'Страница вида техники',
+  job: 'Страница работы',
   contacts: 'Контакты',
   orders: 'Страница заявки',
   'agents-chat': 'Чат с ИИ-агентами',
+  smeta: 'Смета',
+  'smeta-app': 'Полная смета (ранний доступ к приложению)',
+  'smeta-snab': 'Смета для снабженца, заказ материалов',
+  stroyka: '3D-стройка',
+  dizain: 'Дизайн-проект',
   provider: 'Поставщикам (старая форма)',
 };
 
@@ -86,14 +92,37 @@ export function splitSource(source: string | null | undefined) {
   return { form: form || '—', channel: rest.join(' · ') || DIRECT };
 }
 
+const YCLID_KEY = 'sp16_yclid';
+
 /** Call once per page load in the browser. */
 export function rememberVisit() {
   try {
     const channel = channelFrom(location.href, document.referrer, location.hostname);
     if (channel) localStorage.setItem(STORAGE_KEY, JSON.stringify({ channel, at: Date.now() }));
+    // The Direct click id, so a lead can be matched to the ad click (30 days).
+    const yclid = new URLSearchParams(location.search).get('yclid')?.replace(/\D/g, '');
+    if (yclid)
+      localStorage.setItem(
+        YCLID_KEY,
+        JSON.stringify({ yclid: yclid.slice(0, 24), at: Date.now() }),
+      );
   } catch {
     // Storage blocked: the lead just says "direct".
   }
+}
+
+/** The remembered yclid of the last Direct click, if still fresh. */
+export function currentYclid(): string {
+  try {
+    const saved = JSON.parse(localStorage.getItem(YCLID_KEY) ?? 'null') as {
+      yclid?: string;
+      at?: number;
+    } | null;
+    if (saved?.yclid && saved.at && Date.now() - saved.at < TTL_MS) return saved.yclid;
+  } catch {
+    // Fall through.
+  }
+  return '';
 }
 
 export function currentChannel(): string {
@@ -122,23 +151,63 @@ export type Goal =
   | 'email'
   | 'intro_skip'
   | 'intro_full'
+  | 'intro_offer'
   | 'hero_call'
   | 'geo_search'
   | 'geo_found'
   | 'geo_fail'
   | 'window_book'
-  | 'card_open'
   | 'lead_retry'
-  | 'lead_offline_call';
+  | 'lead_offline_call'
+  // Telegram funnel (2026-10-03): deep link taps, the Mini App, the calculator.
+  | 'telegram_click'
+  | 'miniapp_open'
+  | 'calc_done';
 
 /** The visitor pressed «Отказаться» in the cookie notice. */
 export const COOKIE_CONSENT_KEY = 'cookie-consent';
+
+/** Dispatched on window when the choice is made elsewhere (/privacy): the notice hides. */
+export const COOKIE_CHOICE_EVENT = 'cookie-choice';
 
 export function analyticsRefused(): boolean {
   try {
     return localStorage.getItem(COOKIE_CONSENT_KEY) === 'no';
   } catch {
     return false;
+  }
+}
+
+type YmQueue = ((...args: unknown[]) => void) & { a?: unknown[][] };
+type MetrikaWindow = { ym?: YmQueue; __ymOff?: boolean; Ya?: unknown };
+
+/**
+ * «Нет» in the cookie notice, on the current page: tag.js is not loaded if it
+ * has not been yet (the loader in YandexMetrika checks `__ymOff`), the queued
+ * calls are dropped and later calls go nowhere. On the next page load the
+ * init script sees the refusal and does not initialise the counter at all.
+ */
+export function stopMetrika(win: MetrikaWindow = window as unknown as MetrikaWindow): boolean {
+  // tag.js already running keeps its click map and link tracking until the
+  // page is reloaded; the caller reloads when this returns true.
+  const running = Boolean(win.Ya);
+  win.__ymOff = true;
+  if (win.ym?.a) win.ym.a.length = 0;
+  if (win.ym) win.ym = Object.assign(() => {}, { a: [] });
+  return running;
+}
+
+/**
+ * «OK» before tag.js has loaded: the queued init call still waits in `ym.a`,
+ * so Webvisor is switched on for this very page. Once tag.js is running it
+ * cannot be enabled any more, and it starts from the next page load.
+ */
+export function enableWebvisorIfQueued(win: MetrikaWindow = window as unknown as MetrikaWindow) {
+  for (const call of win.ym?.a ?? []) {
+    const options = call[2];
+    if (call[1] === 'init' && options && typeof options === 'object') {
+      (options as { webvisor?: boolean }).webvisor = true;
+    }
   }
 }
 

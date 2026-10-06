@@ -6,6 +6,7 @@ import { EQUIPMENT_ORDER_BY, totalPagesFor } from '@/lib/pagination';
 import { PUBLIC_FLEET, PUBLISHED_FLEET, isProvider } from '@/lib/fleet';
 import { INVALID_JSON_MESSAGE, readJson, zodErrorMessage } from '@/lib/apiInput';
 import { listingPhoto } from '@/lib/equipmentPhoto';
+import { customerRates } from '@/lib/equipmentCatalog';
 
 export async function GET(request: NextRequest) {
   const { mine, ...params } = Object.fromEntries(request.nextUrl.searchParams.entries());
@@ -50,10 +51,10 @@ export async function GET(request: NextRequest) {
     categoryId,
     // The provider's own list shows everything, including listings taken off
     // the site; public lists never show RETIRED.
-    ...(ownFleet ? PUBLIC_FLEET : PUBLISHED_FLEET),
-    // ?companyId= — one provider's machinery (the map's «Техника этого
-    // поставщика»); with ?mine=1 it is the signed-in provider's own company.
-    companyId,
+    // With ?mine=1 a provider sees its own company's machinery. Public lists
+    // are always СпецПласт16's published fleet: the house filter comes last so
+    // ?companyId= is ignored there (owner's decision, 2026-10-02).
+    ...(ownFleet ? { ...PUBLIC_FLEET, companyId } : PUBLISHED_FLEET),
     ...(status ? { status: ownFleet || status !== 'RETIRED' ? status : { in: [] } } : {}),
     location: city ? { city: { equals: city, mode: 'insensitive' } } : undefined,
     dailyRate:
@@ -77,7 +78,13 @@ export async function GET(request: NextRequest) {
   // The app shows photoUrl: the machine's own photo or an example one.
   const origin = request.nextUrl.origin;
   return NextResponse.json({
-    equipment: equipment.map((item) => ({ ...item, ...listingPhoto(item, origin) })),
+    equipment: equipment.map((item) => ({
+      ...item,
+      // Customers see prices as on the site (never below lib/prices.ts); the
+      // provider's own list keeps the stored ones, which its edit form saves.
+      ...(ownFleet ? {} : customerRates({ ...item, categoryName: item.category.name })),
+      ...listingPhoto(item, origin),
+    })),
     total,
     page,
     pageSize,

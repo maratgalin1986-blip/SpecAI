@@ -9,8 +9,10 @@ import {
   type SearchEquipmentInput,
 } from '@specai/ai-service';
 import { getRequestUser } from '@/lib/requestUser';
+import { customerRates } from '@/lib/equipmentCatalog';
 import { checkRateLimit } from '@/lib/rateLimit';
 import { PUBLIC_FLEET } from '@/lib/fleet';
+import { maskMessagesForAi } from '@/lib/privacy';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -78,7 +80,7 @@ async function searchEquipment(input: SearchEquipmentInput) {
     model: item.model,
     category: item.category.name,
     city: item.location?.city ?? null,
-    dailyRate: Number(item.dailyRate),
+    dailyRate: customerRates({ ...item, categoryName: item.category.name }).dailyRate,
     currency: item.currency,
   }));
 }
@@ -171,7 +173,8 @@ export async function POST(request: NextRequest) {
 
       try {
         const reply = streamAssistantReply({
-          history,
+          // Phones and e-mails never reach the AI provider.
+          history: maskMessagesForAi(history),
           signal: request.signal,
           onToolCall: async (name, input) => {
             if (name === SEARCH_EQUIPMENT_TOOL_NAME) {

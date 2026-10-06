@@ -4,9 +4,11 @@ vi.mock('@/lib/marketing', () => ({
   currentChannel: () => 'direct',
   withChannel: (source: string) => source,
   reachGoal: vi.fn(),
+  analyticsRefused: () => false,
+  currentYclid: () => '',
 }));
 
-const { submitLead } = await import('./submitLead');
+const { submitLead, messageWithYclid } = await import('./submitLead');
 const payload = { phone: '+79270000000', source: 'home', consent: true };
 
 describe('submitLead', () => {
@@ -48,5 +50,29 @@ describe('submitLead', () => {
     vi.stubGlobal('fetch', fetch);
     await expect(submitLead(payload)).rejects.toThrow('Проверьте телефон');
     expect(fetch).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('leads already received', () => {
+  it('treats a repeat from the same number as done, not an error', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ error: 'уже получили', alreadyReceived: true }), {
+          status: 429,
+        }),
+      ),
+    );
+    await expect(submitLead(payload)).resolves.toBeUndefined();
+    vi.unstubAllGlobals();
+  });
+});
+
+describe('messageWithYclid', () => {
+  it('appends the Direct click id within the 1000-character limit', () => {
+    expect(messageWithYclid('Нужен самосвал', '123')).toBe('Нужен самосвал\nyclid: 123');
+    expect(messageWithYclid('', '123')).toBe('yclid: 123');
+    expect(messageWithYclid('а'.repeat(1200), '123')!.length).toBeLessThanOrEqual(1000);
+    expect(messageWithYclid('текст', '')).toBe('текст');
   });
 });

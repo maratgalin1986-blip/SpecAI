@@ -82,7 +82,7 @@ export function commentTargetError(
   if (!author) return 'Войдите в аккаунт, чтобы оставить комментарий';
   const toCompany = Boolean(target.targetCompanyId);
   const toUser = Boolean(target.targetUserId);
-  if (toCompany === toUser) return 'Укажите, о ком комментарий: об исполнителе или о заказчике';
+  if (toCompany === toUser) return 'Укажите, о ком комментарий: о компании или о заказчике';
   const isProviderAuthor = author.role === 'PROVIDER_ADMIN' && Boolean(author.companyId);
   if (toCompany) {
     if (author.companyId && author.companyId === target.targetCompanyId) {

@@ -21,7 +21,7 @@ describe('telegram link tokens', () => {
 
   it('build the deep link', () => {
     expect(deepLink('@specplast16_zayavki_bot', 'abcdefghijklmnop1234')).toBe(
-      'https://t.me/specplast16_zayavki_bot?start=abcdefghijklmnop1234',
+      'https://t.me/specplast16_zayavki_bot?start=n_abcdefghijklmnop1234',
     );
   });
 });
@@ -29,13 +29,15 @@ describe('telegram link tokens', () => {
 describe('parseStartToken', () => {
   it('reads the token of /start', () => {
     const token = newLinkToken();
-    expect(parseStartToken(`/start ${token}`)).toBe(token);
-    expect(parseStartToken(`/start@my_bot ${token}`)).toBe(token);
+    expect(parseStartToken(`/start n_${token}`)).toBe(token);
+    expect(parseStartToken(`/start@my_bot n_${token}`)).toBe(token);
   });
 
   it('ignores a plain /start and other text', () => {
     expect(parseStartToken('/start')).toBeNull();
     expect(parseStartToken('/start short')).toBeNull();
+    // The bot funnel's source payload is not a token.
+    expect(parseStartToken('/start arenda-samosval__direct-kran')).toBeNull();
     expect(parseStartToken('Нужен экскаватор завтра')).toBeNull();
     expect(parseStartToken('/start abc def ghi jkl mno pqr')).toBeNull();
   });

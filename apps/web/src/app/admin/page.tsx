@@ -56,7 +56,12 @@ export default async function AdminPage() {
     );
   }
 
-  const leads = await prisma.lead.findMany({ orderBy: { createdAt: 'desc' }, take: 200 });
+  // Bot drafts without a phone are not leads yet (lib/botDrafts.ts).
+  const leads = await prisma.lead.findMany({
+    where: { NOT: { phone: '' } },
+    orderBy: { createdAt: 'desc' },
+    take: 200,
+  });
   const [pendingOrders, importedStats] = await Promise.all([
     prisma.order.findMany({
       where: { status: 'PENDING_REVIEW' },

@@ -40,7 +40,7 @@ export function WorkOrderPreview({ machine, when, task, weather, price, phone, c
       <div className="flex items-start justify-between gap-3">
         <div>
           <div className="font-mono text-[0.65rem] font-bold uppercase tracking-[0.2em] text-amber-400">
-            Наряд на смену · СпецПласт16
+            Заявка на смену · СпецПласт16
           </div>
           <div className="mt-1 font-mono text-[0.6rem] text-slate-500">
             {ready ? 'Все поля заполнены' : 'Заполняется по вашим ответам'}

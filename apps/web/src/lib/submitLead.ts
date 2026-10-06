@@ -2,7 +2,13 @@
 // catalog quick order and the estimate box on the machine page. The visitor's
 // marketing channel is appended to the source (see marketing.ts).
 
-import { currentChannel, reachGoal, withChannel } from '@/lib/marketing';
+import {
+  analyticsRefused,
+  currentChannel,
+  currentYclid,
+  reachGoal,
+  withChannel,
+} from '@/lib/marketing';
 
 export interface LeadPayload {
   name?: string;
@@ -43,12 +49,22 @@ function saveDraft(payload: LeadPayload | null) {
 
 /** Metrika's ClientID from the _ym_uid cookie, if the counter has set it. */
 function readYmClientId(): string | undefined {
+  // The visitor refused analytics: do not tie the lead to a Metrika visit.
+  if (analyticsRefused()) return undefined;
   try {
     const match = document.cookie.match(/(?:^|;\s*)_ym_uid=(\d{1,40})(?:;|$)/);
     return match?.[1];
   } catch {
     return undefined;
   }
+}
+
+/** The message with the Direct click id appended («yclid: …»), within 1000 chars. */
+export function messageWithYclid(message: string | undefined | null, yclid: string) {
+  if (!yclid) return message ? message.slice(0, 1000) : message;
+  const tail = `yclid: ${yclid}`;
+  const base = (message ?? '').slice(0, 1000 - tail.length - 1);
+  return base ? `${base}\n${tail}` : tail;
 }
 
 async function post(payload: LeadPayload) {
@@ -59,6 +75,8 @@ async function post(payload: LeadPayload) {
       ...payload,
       source: withChannel(payload.source, currentChannel()),
       name: payload.name?.trim() || ANONYMOUS_LEAD_NAME,
+      // The API takes up to 1000 characters; a long estimate must not fail the lead.
+      message: messageWithYclid(payload.message, analyticsRefused() ? '' : currentYclid()),
       website: payload.website ?? '',
       ymClientId: readYmClientId(),
     }),
@@ -80,8 +98,20 @@ export async function submitLead(payload: LeadPayload): Promise<void> {
   if (!response) throw new Error('Нет связи с сервером');
   if (!response.ok) {
     const body = await response.json().catch(() => null);
+    // The same number already sent leads a few minutes ago: they are with the
+    // dispatcher, so this is a success for the visitor, not an error.
+    if (body?.alreadyReceived) {
+      saveDraft(null);
+      return;
+    }
     throw new Error(typeof body?.error === 'string' ? body.error : 'Не удалось отправить');
   }
   saveDraft(null);
   reachGoal('lead');
+}
+
+/** A form's error text, with the phone added only if the server did not give it. */
+export function leadErrorText(error: unknown, phone: string): string {
+  const message = error instanceof Error ? error.message : 'Не удалось отправить';
+  return message.includes(phone) ? message : `${message}. Или позвоните: ${phone}`;
 }

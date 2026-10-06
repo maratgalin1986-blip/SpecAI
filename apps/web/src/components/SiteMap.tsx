@@ -2,8 +2,8 @@ import { formatCoords, tilesAround, TILE_SIZE } from '@/lib/geo';
 
 // «Вид с квадрокоптера» on the work site: OpenStreetMap tiles around the
 // point at street level (houses and numbers are visible at zoom 17–18), a
-// crosshair and a pulsing marker, and links to open the place or a route in
-// Yandex Maps. Plain images — no map library, nothing to hydrate.
+// crosshair and a pulsing marker, and the coordinates for a navigator. Plain
+// images — no map library, nothing to hydrate.
 
 export function SiteMap({
   lat,
@@ -19,7 +19,6 @@ export function SiteMap({
   caption?: string;
 }) {
   const tiles = tilesAround(lat, lon, zoom);
-  const point = `${lon.toFixed(6)},${lat.toFixed(6)}`;
 
   return (
     <figure className="site-map relative overflow-hidden rounded-3xl bg-slate-900 text-white ring-1 ring-white/10">
@@ -65,9 +64,7 @@ export function SiteMap({
           Вид с квадрокоптера
         </div>
         <a
-          href="https://www.openstreetmap.org/copyright"
-          target="_blank"
-          rel="noopener"
+          href="/credits"
           className="absolute bottom-2 right-3 rounded bg-white/80 px-1.5 text-[0.6rem] text-slate-700"
         >
           © участники OpenStreetMap
@@ -82,24 +79,10 @@ export function SiteMap({
           <div className="mt-1 font-semibold">{label}</div>
           <div className="mt-0.5 font-mono text-xs text-white/50">{formatCoords(lat, lon)}</div>
         </div>
-        <div className="flex flex-wrap gap-2 text-sm">
-          <a
-            href={`https://yandex.ru/maps/?pt=${point}&z=18&l=map`}
-            target="_blank"
-            rel="noopener"
-            className="rounded-full bg-white/10 px-4 py-2 font-semibold ring-1 ring-white/20 hover:bg-white/20"
-          >
-            Открыть в Яндекс Картах
-          </a>
-          <a
-            href={`https://yandex.ru/maps/?rtext=~${lat.toFixed(6)},${lon.toFixed(6)}&rtt=auto`}
-            target="_blank"
-            rel="noopener"
-            className="rounded-full bg-amber-500 px-4 py-2 font-semibold text-slate-950 hover:bg-amber-400"
-          >
-            Маршрут
-          </a>
-        </div>
+        {/* No outbound links (owner's rule): the coordinates go into any navigator. */}
+        <p className="max-w-xs text-xs text-white/60">
+          Координаты можно вставить в любой навигатор — машинист приедет по ним.
+        </p>
       </figcaption>
     </figure>
   );

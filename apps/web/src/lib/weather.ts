@@ -219,8 +219,10 @@ export function assessWork(w: ShiftWeather, group: MachineGroup): WorkNote[] {
     );
   }
   if (lifting && w.windMax >= LIFT_WIND_STOP) {
+    // Without a chosen machine this is a warning for lifting work only, not a
+    // «перенести» for an excavator customer.
     add(
-      'stop',
+      group === 'any' ? 'caution' : 'stop',
       `Ветер ${wind} м/с`,
       'Для автокрана, манипулятора и автовышки это выше рабочих ограничений с учётом порывов — работы с подъёмом лучше перенести.',
     );
@@ -327,6 +329,20 @@ export function symbolLabel(symbol: string) {
   if (symbol.includes('fair')) return 'малооблачно';
   if (symbol.includes('clearsky')) return 'ясно';
   return 'без данных';
+}
+
+/** A weather icon for a Met Norway symbol; clear and fair skies get a moon at night. */
+export function symbolIcon(symbol: string, night = false) {
+  if (symbol.includes('thunder')) return '⛈️';
+  if (symbol.includes('snow')) return '🌨️';
+  if (symbol.includes('sleet')) return '🌨️';
+  if (symbol.includes('rain')) return '🌧️';
+  if (symbol.includes('fog')) return '🌫️';
+  if (symbol.includes('partlycloudy')) return night ? '☁️' : '⛅';
+  if (symbol.includes('cloudy')) return '☁️';
+  if (symbol.includes('fair')) return night ? '🌙' : '🌤️';
+  if (symbol.includes('clearsky')) return night ? '🌙' : '☀️';
+  return '🌡️';
 }
 
 /** Compass point of a «wind from» direction. */
