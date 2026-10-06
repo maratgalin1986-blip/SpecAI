@@ -63,7 +63,7 @@ export const WORKER: RawLine[] = [
 
 export const WORKER_TEMPLATES: Template = {
   openers: [
-    'Слышь, ',
+    'Слушайте, ',
     'Слушай, ',
     'Короче, ',
     'Мужики, ',

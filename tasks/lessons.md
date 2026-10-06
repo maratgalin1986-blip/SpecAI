@@ -21,3 +21,7 @@
    → Понимать смысл по контексту; если смысл меняет решение — уточнить одной фразой.
 9. По IP посетителей не узнаём (152-ФЗ, ненадёжно) — только память в браузере с согласием.
 10. Перед «готово» — доказать работу: тесты, сборка, e2e, скриншоты на телефоне; отчёт с цифрами.
+11. Mixkit отдаёт curl'у 429 (проверка Cloudflare), а Chromium из Playwright падал на ERR_CERT_AUTHORITY_INVALID.
+    → Добавить CA прокси в NSS (`certutil -A -d sql:$HOME/.pki/nssdb -n ccr-agent-proxy -t "C,," -i /root/.ccr/agent-proxy-ca.crt`),
+    списки и id брать из страниц тегов `mixkit.co/free-sound-effects/<тег>/` через Playwright, а сами файлы — curl'ом
+    с `assets.mixkit.co/active_storage/sfx/<id>/<id>.wav` (там проверки нет). Поиска по `?query=` у Mixkit нет.

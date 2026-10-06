@@ -17,24 +17,18 @@ import {
 import type { SoundEngine } from '@/lib/soundEngine';
 import { asSpeaker } from '@/lib/soundVoices';
 import { stripEmoji } from '@/lib/stripEmoji';
-import {
-  currentNature,
-  NATURE_EVENT,
-  STEPS_EVENT,
-  THUNDER_EVENT,
-  type NatureEventDetail,
-  type StepsEventDetail,
-} from '@/lib/sceneEvents';
+import { currentNature, NATURE_EVENT, type NatureEventDetail } from '@/lib/sceneEvents';
 
 // The cinematic sound layer, mounted once in the layout. On by default; it
 // wakes at the visitor's first real gesture (or the SoundToggle press), as
 // browsers require: no AudioContext exists before that. Until then it
-// downloads nothing: the engine, its synthesis code and the recordings load
-// with import()/fetch on demand.
+// downloads nothing: the engine and the recordings load with import()/fetch
+// on demand (the beds after the gesture, a machine when it is announced).
 //
 // Components only announce what is on screen (lib/sound.ts: playCue,
-// announceMachine, useMachineSound); a 3D scene can also dispatch
-// `sp:scene` {machine, active} and `sp:dialog` {speaker, text, kind, mood}.
+// announceMachine, useMachineSound); a page can also dispatch
+// `sp:scene` {machine, active} and `sp:dialog` {speaker, text, kind, mood},
+// and the /stroyka film tour sends its weather (`sp:nature`).
 
 const GESTURES = ['pointerdown', 'keydown', 'touchend', 'click', 'scroll', 'wheel'] as const;
 const FIELD =
@@ -308,9 +302,9 @@ export function SoundDirector() {
       engine?.setFilm(on);
       if (!on) natureSync();
     };
-    // A light poll rather than a MutationObserver: the 3D page changes its DOM
-    // all the time and renders slowly in software, so nothing is added to each
-    // change. The film exists only on /stroyka.
+    // A light poll rather than a MutationObserver: /stroyka changes its DOM
+    // all the time, so nothing is added to each change. The film exists only
+    // on /stroyka.
     const filmPoll = window.setInterval(() => {
       if (filmOn || location.pathname.startsWith('/stroyka')) syncFilm();
     }, 400);
@@ -360,7 +354,7 @@ export function SoundDirector() {
       applyMachine(true);
     });
 
-    // Events from the 3D construction-site page.
+    // A page that shows a machine in a scene of its own (`sp:scene`).
     const onScene = (event: Event) => {
       const detail = (event as CustomEvent<{ machine?: MachineType; active?: boolean }>).detail;
       if (!detail?.machine) return;
@@ -390,30 +384,19 @@ export function SoundDirector() {
       });
     };
 
-    // Nature on the 3D site and the film tour: the latest state is kept, so an
+    // Nature under the film tour: the latest state is kept, so an
     // engine that wakes later (the first tap) starts with the right weather.
     // The page may have sent it before this lazy chunk listened: start from it.
     let nature: NatureEventDetail | null = currentNature();
-    let steps: StepsEventDetail = { moving: false, ground: 'dry' };
     const onNature = (event: Event) => {
       nature = (event as CustomEvent<NatureEventDetail | null>).detail;
       if (live()) engine!.setNature(nature);
     };
-    const onSteps = (event: Event) => {
-      steps = (event as CustomEvent<StepsEventDetail>).detail;
-      if (live()) engine!.setSteps(steps.moving, steps.ground);
-    };
-    const onThunder = () => {
-      if (live() && !filmOn) engine!.thunder();
-    };
     natureSync = () => {
       if (!live()) return;
       engine!.setNature(nature);
-      engine!.setSteps(steps.moving, steps.ground);
     };
     window.addEventListener(NATURE_EVENT, onNature);
-    window.addEventListener(STEPS_EVENT, onSteps);
-    window.addEventListener(THUNDER_EVENT, onThunder);
 
     document.addEventListener('visibilitychange', onVisibility);
     window.addEventListener(MIC_EVENT, onMic);
@@ -442,8 +425,6 @@ export function SoundDirector() {
       window.removeEventListener('sp:scene', onScene);
       window.removeEventListener('sp:dialog', onDialog);
       window.removeEventListener(NATURE_EVENT, onNature);
-      window.removeEventListener(STEPS_EVENT, onSteps);
-      window.removeEventListener(THUNDER_EVENT, onThunder);
       setAudioSession('auto');
       if (engine) engine.dispose();
       else void ctx?.close().catch(() => {});

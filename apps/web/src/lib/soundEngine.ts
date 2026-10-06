@@ -1,18 +1,31 @@
-// The audio engine of the cinematic sound layer. Loaded with import() only
-// after the visitor turns sound on; nothing here runs on the server.
+// The audio engine of the sound layer. Loaded with import() only after the
+// visitor turns sound on; nothing here runs on the server.
+//
+// Every sound is a real recording (soundAssets.ts), fetched when first needed:
+// the beds after the first gesture, a machine when it is announced, a cue the
+// first time it plays (the small interface cues are fetched with the beds).
+// «По-людски» (owner, 2026-10-06): a little random pitch, level and variant
+// on every play so nothing repeats like a robot; repeated cues get quieter
+// over the session; everything fades in and out.
 //
 // Buses (all into one compressor):
-//   music  -20 dB under the effects   ┐
-//   site   ambience (recording + synth)├─ beds: ducked while typing
-//   machine  what is on screen         ┘
+//   music  ≈ -20 dB under the effects ┐
+//   site   ambience + distant events  ├─ beds: ducked while typing
+//   machine  what is on screen        ┘
 //   fx     one-shot cues
 //   reverb a shared «open yard» send
 
-import { MACHINE_VOICES, soundEnabled, type SoundCue } from '@/lib/sound';
+import { MACHINE_LEVELS, soundEnabled, type SoundCue } from '@/lib/sound';
 import type { MachineType } from '@/lib/machinePhotos';
-import { SITE_SAMPLES, MACHINE_SAMPLES, type SampleName } from '@/lib/soundAssets';
-import { SITE_EVENTS } from '@/lib/soundSynth';
-import { renderJob, type SynthJob, type SynthResult } from '@/lib/soundSynthJobs';
+import {
+  CITY_BED,
+  CUE_SAMPLES,
+  MACHINE_SOUNDS,
+  MUSIC_BED,
+  SITE_BEDS,
+  SITE_EVENTS,
+  type SampleName,
+} from '@/lib/soundAssets';
 import {
   isFemaleVoice,
   moodVoice,
@@ -24,8 +37,8 @@ import {
   type Speaker,
 } from '@/lib/soundVoices';
 import { clipsFor } from '@/lib/stroyka/voice';
-import type { Ground, NatureEventDetail } from '@/lib/sceneEvents';
-import { LOOPS, NatureLayer, STEP_LOOP } from '@/lib/soundNature';
+import type { NatureEventDetail } from '@/lib/sceneEvents';
+import { LOOPS, NatureLayer } from '@/lib/soundNature';
 
 const ARRIVAL_GAP_S = 20;
 
@@ -35,25 +48,51 @@ const ARRIVAL_GAP_S = 20;
  * playing loop keeps its own reference) and decoded again when needed.
  */
 const NATURE_BUFFERS_KEPT = 4;
-const NATURE_LOOPS = new Set<SampleName>([...LOOPS, ...Object.values(STEP_LOOP)]);
+const NATURE_LOOPS = new Set<SampleName>(LOOPS);
 /** Recorded voice clips kept decoded; the rest are fetched again (from the HTTP cache). */
 const CLIP_BUFFERS_KEPT = 24;
 
 const LEVEL = {
   master: 0.85,
-  fx: 0.7,
-  music: 0.07, // ≈ -20 dB under fx
-  site: 0.22,
-  machine: 0.28, // owner: machines a little quieter under the voices
-  reverb: 0.35,
-  nature: 0.6, // rain, wind, birds, steps around the 3D site
+  fx: 0.5,
+  music: 0.1, // the files are at one loudness: ≈ -20 dB under the effects
+  site: 0.26,
+  city: 0.45, // the light town under the site bed (relative to it)
+  machine: 0.3, // owner: machines a little quieter under the voices
+  reverb: 0.3,
+  nature: 0.6, // rain, wind, birds and the town under the film tour
 };
+
+/** How loud each cue plays (before the session fatigue below), and how often at most. */
+const CUE_LEVEL: Record<SoundCue, { gain: number; gapMs: number }> = {
+  click: { gain: 0.32, gapMs: 120 },
+  thunk: { gain: 0.5, gapMs: 250 },
+  whoosh: { gain: 0.38, gapMs: 800 },
+  stamp: { gain: 0.6, gapMs: 1500 },
+  chime: { gain: 0.3, gapMs: 1500 },
+  boom: { gain: 0.55, gapMs: 4000 },
+  start: { gain: 0.45, gapMs: 3000 },
+};
+
+/**
+ * Repeated cues get quieter: a burst (several presses within seconds) fades
+ * fast and recovers in ~20 s; over the session each cue settles at no less
+ * than half its level.
+ */
+export function cueFatigue(burst: number, total: number): number {
+  const short = 1 / (1 + 0.35 * burst);
+  const session = Math.max(0.5, 1 - 0.012 * Math.max(0, total - 10));
+  return Math.max(0.25, short * session);
+}
+
+/** A random value in [1 - spread, 1 + spread]. */
+const jitter = (spread: number) => 1 + (Math.random() * 2 - 1) * spread;
 
 type Queued = { line: Line; radio: boolean; volume: number };
 
 const wait = (ms: number) => new Promise<void>((resolve) => window.setTimeout(resolve, ms));
 
-type SourceOptions = { gain?: number; rate?: number; pan?: number; when?: number };
+type SourceOptions = { gain?: number; rate?: number; pan?: number; when?: number; offset?: number };
 
 type Voice = { source: AudioBufferSourceNode; gain: GainNode; type: MachineType };
 
@@ -68,10 +107,6 @@ export class SoundEngine {
   private fx: GainNode;
   private reverb: ConvolverNode;
   private buffers = new Map<string, Promise<AudioBuffer | null>>();
-  /** The synthesis worker (null: none, render in place; undefined: not started yet). */
-  private worker: Worker | null | undefined;
-  private jobs = new Map<number, (result: SynthResult) => void>();
-  private lastJob = 0;
   private bedSources: AudioBufferSourceNode[] = [];
   private bedsOn = false;
   private voice: Voice | null = null;
@@ -92,6 +127,10 @@ export class SoundEngine {
   private film = false;
   /** Most recently used cache keys, per group with a cap (oldest first). */
   private recent = new Map<string, string[]>();
+  /** The variant each group played last (the next one avoids it). */
+  private lastVariant = new Map<string, string>();
+  /** Per cue: recent presses (decaying), presses this session, last time. */
+  private fatigue = new Map<SoundCue, { burst: number; total: number; at: number }>();
 
   /** `ctx` is created by the director inside the visitor's gesture. */
   constructor(ctx: AudioContext) {
@@ -105,11 +144,7 @@ export class SoundEngine {
     this.master = this.gain(0, comp);
     this.master.gain.setTargetAtTime(LEVEL.master, ctx.currentTime, 0.4);
     this.reverb = ctx.createConvolver();
-    // The impulse arrives from the synthesis worker a moment later; until then
-    // the reverb send is simply silent.
-    void this.synth('impulse', { name: 'impulse' }).then((buffer) => {
-      if (buffer && !this.disposed) this.reverb.buffer = buffer;
-    });
+    this.reverb.buffer = yardImpulse(ctx);
     this.reverb.connect(this.gain(LEVEL.reverb, this.master));
     this.beds = this.gain(1, this.master);
     this.music = this.gain(0, this.beds);
@@ -135,7 +170,7 @@ export class SoundEngine {
   }
 
   /**
-   * One-shots (cues, site events, chirps, thunder) play only now: while the
+   * One-shots (cues, site events, chirps) play only now: while the
    * context is suspended (mic open, page hidden, before a gesture) or the sound
    * is off, a started source would wait and then go off together with all the
    * others at the next resume.
@@ -184,17 +219,9 @@ export class SoundEngine {
     this.bedVerb.gain.setTargetAtTime(level, now, timeConstant);
   }
 
-  /** The weather around the visitor on the 3D site (null: the scene closed). */
+  /** The weather of the film tour (null: the tour closed). */
   setNature(state: NatureEventDetail | null): void {
     if (!this.disposed) this.nature.set(state);
-  }
-
-  setSteps(moving: boolean, ground: Ground): void {
-    if (!this.disposed) this.nature.setSteps(moving, ground);
-  }
-
-  thunder(): void {
-    if (!this.disposed) this.nature.thunder();
   }
 
   private gain(value: number, to: AudioNode): GainNode {
@@ -253,66 +280,6 @@ export class SoundEngine {
     return this.cached(key, () => this.fetchClip(url));
   }
 
-  /**
-   * A procedural sound, rendered in the synthesis worker so the opening titles
-   * and films keep their frame rate; in place (after a yield, so a long render
-   * never lands inside a click handler) where workers are unavailable.
-   */
-  private synth(key: string, job: SynthJob) {
-    return this.cached(key, async () => (await this.renderOffThread(job)) ?? this.renderHere(job));
-  }
-
-  private renderHere(job: SynthJob) {
-    return new Promise<AudioBuffer>((resolve) =>
-      window.setTimeout(() => resolve(renderJob(this.ctx, job)), 0),
-    );
-  }
-
-  private renderOffThread(job: SynthJob): Promise<AudioBuffer | null> {
-    const worker = this.synthWorker();
-    if (!worker) return Promise.resolve(null);
-    const id = ++this.lastJob;
-    return new Promise((resolve) => {
-      this.jobs.set(id, ({ channels, rate }) => {
-        if (!channels?.length) return resolve(null);
-        try {
-          const buffer = this.ctx.createBuffer(channels.length, channels[0]!.length, rate);
-          channels.forEach((ch, c) => buffer.copyToChannel(ch, c));
-          resolve(buffer);
-        } catch {
-          resolve(null);
-        }
-      });
-      worker.postMessage({ id, job, sampleRate: this.ctx.sampleRate });
-    });
-  }
-
-  private synthWorker(): Worker | null {
-    if (this.worker !== undefined) return this.worker;
-    this.worker = null;
-    if (typeof Worker === 'undefined') return null;
-    try {
-      const worker = new Worker(new URL('./soundSynth.worker.ts', import.meta.url));
-      worker.onmessage = (event: MessageEvent<SynthResult>) => {
-        const done = this.jobs.get(event.data.id);
-        this.jobs.delete(event.data.id);
-        done?.(event.data);
-      };
-      // The worker did not load: what is pending, and everything later, renders here.
-      worker.onerror = () => {
-        worker.terminate();
-        this.worker = null;
-        const pending = [...this.jobs.values()];
-        this.jobs.clear();
-        pending.forEach((done) => done({ id: 0, channels: null, rate: 0 }));
-      };
-      this.worker = worker;
-    } catch {
-      /* no worker: render in place */
-    }
-    return this.worker;
-  }
-
   /** A recording from /public/audio: Opus first, MP3 where Opus fails. */
   private sample(name: SampleName) {
     return this.cached(`file:${name}`, async () => {
@@ -343,7 +310,7 @@ export class SoundEngine {
   private source(
     buffer: AudioBuffer | null,
     bus: AudioNode,
-    { gain = 1, rate = 1, pan = 0, when = 0 }: SourceOptions = {},
+    { gain = 1, rate = 1, pan = 0, when = 0, offset = 0 }: SourceOptions = {},
   ) {
     if (!buffer || this.disposed) return null;
     const src = this.ctx.createBufferSource();
@@ -360,7 +327,7 @@ export class SoundEngine {
     }
     src.connect(g);
     node.connect(bus);
-    src.start(this.ctx.currentTime + when);
+    src.start(this.ctx.currentTime + when, offset);
     src.onended = () => {
       src.disconnect();
       node.disconnect();
@@ -377,51 +344,62 @@ export class SoundEngine {
     this.music.gain.cancelScheduledValues(now);
     this.site.gain.cancelScheduledValues(now);
     this.natureBus.gain.cancelScheduledValues(now);
-    this.music.gain.setTargetAtTime(LEVEL.music, now, 1.2);
-    this.site.gain.setTargetAtTime(LEVEL.site, now, 1.2);
+    // Slow fades in: the sound arrives like a door opening onto the yard.
+    this.music.gain.setTargetAtTime(LEVEL.music, now, 2);
+    this.site.gain.setTargetAtTime(LEVEL.site, now, 1.5);
     this.natureBus.gain.setTargetAtTime(LEVEL.nature, now, 0.8);
-    const [music, bed, ...recordings] = await Promise.all([
-      this.synth('music', { name: 'music' }),
-      this.synth('site', { name: 'site' }),
-      ...SITE_SAMPLES.map((s) => this.sample(s.name)),
+    // The small interface cues come along (a few KB each), so the first press
+    // is heard at once.
+    for (const name of [...CUE_SAMPLES.click, ...CUE_SAMPLES.thunk, ...CUE_SAMPLES.whoosh]) {
+      void this.sample(name);
+    }
+    const bedName = SITE_BEDS[Math.floor(Math.random() * SITE_BEDS.length)]!;
+    const [music, bed, city] = await Promise.all([
+      this.sample(MUSIC_BED),
+      this.sample(bedName),
+      this.sample(CITY_BED),
     ]);
     if (!this.bedsOn || this.disposed) return;
-    const loop = (buffer: AudioBuffer | null | undefined, bus: GainNode, gain: number, pan = 0) => {
-      const src = this.source(buffer ?? null, bus, { gain, pan });
+    const loop = (buffer: AudioBuffer | null, bus: GainNode, gain: number, pan = 0) => {
+      if (!buffer) return;
+      // A random point of the loop: no two visits start the same way.
+      const src = this.source(buffer, bus, { gain, pan, offset: Math.random() * buffer.duration });
       if (!src) return;
       src.loop = true;
       this.bedSources.push(src);
     };
     loop(music, this.music, 1);
-    loop(bed, this.site, recordings.some(Boolean) ? 0.55 : 1);
-    recordings.forEach((buffer, i) =>
-      loop(buffer, this.site, SITE_SAMPLES[i]!.gain, SITE_SAMPLES[i]!.pan),
-    );
+    loop(bed, this.site, 1, -0.15);
+    loop(city, this.site, LEVEL.city, 0.25);
     this.resumeTimers();
   }
 
-  /** Hammer, grinder, back-up alarm, clank or horn somewhere on the site. */
+  /** Distant work somewhere on the site: a hammer, a shovel, a back-up alarm… */
   private scheduleSiteEvent() {
     window.clearTimeout(this.eventTimer);
     const timer = window.setTimeout(
       async () => {
         if (!this.bedsOn || this.disposed) return;
         if (this.running && document.visibilityState === 'visible') {
-          const kind = SITE_EVENTS[Math.floor(Math.random() * SITE_EVENTS.length)]!;
-          const buffer = await this.synth(`event:${kind}`, { name: 'event', arg: kind });
-          // Paused (mic, hidden page, film, sound off) while it rendered: drop it.
+          const event = this.pick(
+            'event',
+            SITE_EVENTS.map((e) => e.name),
+          );
+          const meta = SITE_EVENTS.find((e) => e.name === event)!;
+          const buffer = await this.sample(event);
+          // Paused (mic, hidden page, film, sound off) while it loaded: drop it.
           if (this.eventTimer !== timer) return;
           if (this.bedsOn) {
             this.play(buffer, this.site, {
-              gain: (this.ducked ? 0.25 : 0.55) * (kind === 'reverse' ? 0.5 : 1),
-              pan: (Math.random() - 0.5) * 1.6,
-              rate: 0.92 + Math.random() * 0.16,
+              gain: meta.gain * (this.ducked ? 0.4 : 1) * jitter(0.15),
+              pan: (Math.random() - 0.5) * 1.4,
+              rate: jitter(0.04),
             });
           }
         }
         this.scheduleSiteEvent();
       },
-      5000 + Math.random() * 7000,
+      9000 + Math.random() * 9000,
     );
     this.eventTimer = timer;
   }
@@ -554,9 +532,9 @@ export class SoundEngine {
     const style = moodVoice(styleFor(line.speaker, isFemaleVoice(voice)), line.mood);
     const pan = Math.random() - 0.5;
     const [squelch, beep, hiss] = await Promise.all([
-      this.synth('squelch', { name: 'squelch' }),
-      this.synth('beep', { name: 'beep' }),
-      line.kind === 'radio' ? this.synth('hiss', { name: 'hiss' }) : null,
+      this.sample('radio-squelch'),
+      this.sample('radio-beep'),
+      line.kind === 'radio' ? this.sample('radio-hiss') : null,
     ]);
     const alive = () => token === this.speechToken && this.speakable();
     if (!alive()) return;
@@ -702,8 +680,8 @@ export class SoundEngine {
    */
   async setMachine(type: MachineType | null, { arrive = false, quiet = false } = {}) {
     const token = ++this.machineToken;
-    // The arrival cue (a rev, a winch…) at most every 20 s: the hero changes
-    // machines every few seconds and a rev each time gets tiring.
+    // The arrival (a bucket of earth, a brake, a boom…) at most every 20 s:
+    // the hero changes machines every few seconds and one each time tires.
     if (arrive && this.ctx.currentTime - this.lastArrival < ARRIVAL_GAP_S) arrive = false;
     if (arrive) this.lastArrival = this.ctx.currentTime;
     const old = this.voice;
@@ -714,82 +692,103 @@ export class SoundEngine {
     const now = this.ctx.currentTime;
     if (old) {
       old.gain.gain.cancelScheduledValues(now);
-      old.gain.gain.setTargetAtTime(0, now, 0.35);
+      old.gain.gain.setTargetAtTime(0, now, 0.5);
       const src = old.source;
-      window.setTimeout(() => stopSafely(src), 2000);
+      window.setTimeout(() => stopSafely(src), 2500);
       this.voice = null;
     }
     if (!type) return;
-    const [idle, arrival, recording] = await Promise.all([
-      this.synth(`machine:${type}`, { name: 'machine', arg: type }),
-      arrive ? this.synth(`arrive:${type}`, { name: 'arrive', arg: type }) : null,
-      MACHINE_SAMPLES[type] ? this.sample(MACHINE_SAMPLES[type]!.name) : null,
+    // Fetched only now, when the machine is announced.
+    const sound = MACHINE_SOUNDS[type];
+    const arrival = arrive ? this.pick(`arrive:${type}`, sound.arrive) : null;
+    const [idle, arrivalBuffer] = await Promise.all([
+      this.sample(sound.idle),
+      arrival ? this.variant(arrival, sound.arrive) : null,
     ]);
-    if (token !== this.machineToken || this.disposed || !idle) return;
-    const t = this.ctx.currentTime;
-    const gain = this.ctx.createGain();
-    gain.gain.value = 0;
-    gain.connect(this.machine);
-    const source = this.ctx.createBufferSource();
-    source.buffer = idle;
-    source.loop = true;
-    source.playbackRate.value = 0.97 + Math.random() * 0.06;
-    source.connect(gain);
-    source.start(t, Math.random() * idle.duration);
-    gain.gain.setTargetAtTime(this.machineLevel(type, quiet), t, 0.6);
-    source.onended = () => {
-      source.disconnect();
-      gain.disconnect();
-    };
-    this.voice = { source, gain, type };
-    if (arrival) this.play(arrival, this.machine, { gain: 0.9 });
-    // A real recording of this kind of machine on top, once.
-    const meta = MACHINE_SAMPLES[type];
-    if (recording && meta && arrive) {
-      this.play(recording, this.machine, { gain: meta.gain, pan: meta.pan ?? 0 });
+    if (token !== this.machineToken || this.disposed) return;
+    if (idle) {
+      const t = this.ctx.currentTime;
+      const gain = this.ctx.createGain();
+      gain.gain.value = 0;
+      gain.connect(this.machine);
+      const source = this.ctx.createBufferSource();
+      source.buffer = idle;
+      source.loop = true;
+      source.playbackRate.value = sound.rate * jitter(0.03);
+      source.connect(gain);
+      source.start(t, Math.random() * idle.duration);
+      // The engine fades in under the arrival rather than starting at once.
+      gain.gain.setTargetAtTime(this.machineLevel(type, quiet), t + (arrivalBuffer ? 1 : 0), 0.8);
+      source.onended = () => {
+        source.disconnect();
+        gain.disconnect();
+      };
+      this.voice = { source, gain, type };
+    }
+    if (arrivalBuffer) {
+      this.play(arrivalBuffer, this.machine, {
+        gain: 0.8 * jitter(0.1),
+        rate: sound.rate * jitter(0.03),
+        pan: (Math.random() - 0.5) * 0.5,
+      });
     }
   }
 
   private machineLevel(type: MachineType | null, quiet: boolean) {
     if (!type) return 0;
-    return MACHINE_VOICES[type].level * (quiet ? 0.35 : 0.75);
+    return MACHINE_LEVELS[type] * (quiet ? 0.35 : 0.75);
   }
 
   // ---- Cues ---------------------------------------------------------------
 
-  async cue(cue: SoundCue, machine?: MachineType | null): Promise<void> {
-    if (!this.running) return;
-    switch (cue) {
-      case 'click':
-        this.play(await this.synth('click', { name: 'click' }), this.fx, {
-          gain: 0.18,
-          rate: 0.9 + Math.random() * 0.2,
-        });
-        break;
-      case 'thunk':
-        this.play(await this.synth('thunk', { name: 'thunk' }), this.fx, { gain: 0.5 });
-        break;
-      case 'stamp':
-        this.play(await this.synth('stamp', { name: 'stamp' }), this.fx, {
-          gain: 0.6,
-        });
-        break;
-      case 'whoosh':
-        this.play(await this.synth('whoosh', { name: 'whoosh' }), this.fx, {
-          gain: 0.3,
-        });
-        break;
-      case 'boom':
-        this.play(await this.synth('boom', { name: 'boom' }), this.fx, { gain: 0.65 });
-        break;
-      case 'start': {
-        const type = machine ?? 'backhoe';
-        this.play(await this.synth(`start:${type}`, { name: 'start', arg: type }), this.fx, {
-          gain: 0.4,
-        });
-        break;
-      }
+  /** One of `names`, at random, never the one this group played last. */
+  private pick<T extends string>(group: string, names: readonly T[]): T {
+    const last = this.lastVariant.get(group);
+    const pool = names.length > 1 ? names.filter((n) => n !== last) : names;
+    const name = pool[Math.floor(Math.random() * pool.length)]!;
+    this.lastVariant.set(group, name);
+    return name;
+  }
+
+  /** `name`, or another of `names` when its file does not load. */
+  private async variant(name: SampleName, names: readonly SampleName[]) {
+    const buffer = await this.sample(name);
+    if (buffer) return buffer;
+    for (const other of names) {
+      if (other === name) continue;
+      const fallback = await this.sample(other);
+      if (fallback) return fallback;
     }
+    return null;
+  }
+
+  /** The level factor for this press of `cue`, or 0 when it came too soon after the last. */
+  private fatigueFor(cue: SoundCue): number {
+    const now = performance.now();
+    const f = this.fatigue.get(cue) ?? { burst: 0, total: 0, at: -Infinity };
+    if (now - f.at < CUE_LEVEL[cue].gapMs) return 0;
+    // Recent presses count less as time goes by (half-life 8 s).
+    f.burst = f.burst * Math.pow(0.5, (now - f.at) / 8000);
+    const factor = cueFatigue(f.burst, f.total);
+    f.burst += 1;
+    f.total += 1;
+    f.at = now;
+    this.fatigue.set(cue, f);
+    return factor;
+  }
+
+  async cue(cue: SoundCue, _machine?: MachineType | null): Promise<void> {
+    if (!this.running) return;
+    const factor = this.fatigueFor(cue);
+    if (!factor) return;
+    const names = CUE_SAMPLES[cue];
+    const buffer = await this.variant(this.pick(`cue:${cue}`, names), names);
+    this.play(buffer, this.fx, {
+      gain: CUE_LEVEL[cue].gain * factor * jitter(0.08),
+      rate: jitter(0.03),
+    });
+    // A finished order: the stamp, then a quiet chime.
+    if (cue === 'stamp') window.setTimeout(() => void this.cue('chime'), 320);
   }
 
   /** Music, ambience and machines step back while the visitor types. */
@@ -805,8 +804,6 @@ export class SoundEngine {
     this.nature.dispose();
     this.stopBeds();
     window.clearTimeout(this.voiceTimer);
-    this.worker?.terminate();
-    this.worker = null;
     void this.ctx.close().catch(() => {});
   }
 }
@@ -836,4 +833,22 @@ export function cancelSpeech(): void {
   } catch {
     /* speech is optional */
   }
+}
+
+/**
+ * The «open yard» reverb: a short stereo impulse of decaying noise (made once,
+ * ~1.4 s, a few milliseconds of work). It is a room, not a sound of its own.
+ */
+function yardImpulse(ctx: BaseAudioContext): AudioBuffer {
+  const length = Math.floor(ctx.sampleRate * 1.4);
+  const buffer = ctx.createBuffer(2, length, ctx.sampleRate);
+  for (let c = 0; c < 2; c++) {
+    const data = buffer.getChannelData(c);
+    // Early reflections from the fence and the cabins, then a soft tail.
+    for (let i = 0; i < length; i++) {
+      const t = i / ctx.sampleRate;
+      data[i] = (Math.random() * 2 - 1) * Math.exp(-t * 4.2) * (t < 0.012 ? t / 0.012 : 1) * 0.5;
+    }
+  }
+  return buffer;
 }

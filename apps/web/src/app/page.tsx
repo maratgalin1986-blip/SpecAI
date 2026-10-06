@@ -275,7 +275,7 @@ export default async function HomePage() {
             </p>
             {/* Owner, 2026-10-03: order, estimate and design as real buttons,
                 «Заказать технику» the biggest and brightest; then the phone and
-                the 3D site; the other ways in stay quiet links. */}
+                the film tour; the other ways in stay quiet links. */}
             <div
               className="float-in mt-5 flex max-w-xl flex-col gap-3 sm:mt-8"
               style={{ animationDelay: '360ms' }}
@@ -316,7 +316,7 @@ export default async function HomePage() {
                   <Icon name="phone" className="h-5 w-5" />
                   {SITE.phone}
                 </a>
-                {/* The 3D site: a glass pill with a softly pulsing play button. A
+                {/* The film tour: a glass pill with a softly pulsing play button. A
                     client-side link, so the tap that started the sound here keeps
                     it playing on the site (a full page load would need a new tap). */}
                 <Link
@@ -329,9 +329,6 @@ export default async function HomePage() {
                     </svg>
                   </span>
                   Войти на стройку
-                  <span className="rounded bg-white/15 px-1.5 py-0.5 text-[11px] font-bold uppercase tracking-wider text-amber-200">
-                    3D
-                  </span>
                 </Link>
               </div>
             </div>
@@ -615,7 +612,10 @@ export default async function HomePage() {
         <Faq items={HOME_FAQ} />
       </div>
 
-      <section id="callback" className="scroll-mt-24">
+      {/* The anchor sits on the form card itself (first on phones), so «Заказать
+          технику» lands with the phone field mid-screen, not on the heading. No
+          dolly tilt here: a tilted form is harder to tap and skews the jump. */}
+      <section data-no-dolly>
         <CallbackIris backdrop="/images/trench.jpg">
           <div className="grid grid-cols-1 gap-8 p-6 sm:p-10 lg:grid-cols-2">
             <div className="flex min-w-0 flex-col justify-center">
@@ -645,7 +645,10 @@ export default async function HomePage() {
                 </span>
               </div>
             </div>
-            <div className="min-w-0 rounded-3xl bg-slate-950/50 p-4 ring-1 ring-white/10 backdrop-blur sm:p-6">
+            <div
+              id="callback"
+              className="order-first min-w-0 scroll-mt-28 rounded-3xl bg-slate-950/50 p-4 ring-1 ring-white/10 backdrop-blur sm:p-6 lg:order-none"
+            >
               <CallbackForm source="home" dark />
             </div>
           </div>

@@ -9,8 +9,6 @@
 //   sp:nature { rain, snow, wind, night, ground } or null — the weather around the
 //             visitor (null when the scene closes): rain and snow 0…1, wind m/s,
 //             night 0…1, ground 'dry' | 'wet' | 'snow'.
-//   sp:steps  { moving, ground } — the visitor walks (or stops) on that ground.
-//   sp:thunder {} — a lightning flash: the thunder follows.
 import type { MachineType } from '@/lib/machinePhotos';
 import type { Mood } from '@/lib/stroyka/mood';
 import type { BanterSpeaker } from '@/lib/stroykaJokes';
@@ -18,8 +16,6 @@ import type { BanterSpeaker } from '@/lib/stroykaJokes';
 export const SCENE_EVENT = 'sp:scene';
 export const DIALOG_EVENT = 'sp:dialog';
 export const NATURE_EVENT = 'sp:nature';
-export const STEPS_EVENT = 'sp:steps';
-export const THUNDER_EVENT = 'sp:thunder';
 
 export type Ground = 'dry' | 'wet' | 'snow';
 export interface NatureEventDetail {
@@ -75,12 +71,4 @@ export function currentNature(): NatureEventDetail | null {
 export function emitNature(detail: NatureEventDetail | null) {
   lastNature = detail;
   emit<NatureEventDetail | null>(NATURE_EVENT, detail);
-}
-
-export function emitSteps(moving: boolean, ground: Ground) {
-  emit<StepsEventDetail>(STEPS_EVENT, { moving, ground });
-}
-
-export function emitThunder() {
-  emit<Record<string, never>>(THUNDER_EVENT, {});
 }

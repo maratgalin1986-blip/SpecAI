@@ -189,6 +189,12 @@ export function DialogueBox({
   const inputRef = useRef<HTMLInputElement>(null);
   useEffect(() => () => stopVoice.current?.(), []);
   const [consent, setConsent] = useState(false);
+  // The phone consent appears at the bottom of a scrolling box: bring it in view.
+  const consentRef = useRef<HTMLDivElement>(null);
+  const waitingPhone = chat?.phone ?? null;
+  useEffect(() => {
+    if (waitingPhone) consentRef.current?.scrollIntoView({ block: 'nearest' });
+  }, [waitingPhone]);
   useEffect(() => {
     if (skipTyping) finish();
   }, [skipTyping]);
@@ -210,7 +216,7 @@ export function DialogueBox({
             type="button"
             onClick={onClose}
             aria-label="Закрыть диалог"
-            className="-mr-1 grid h-8 w-8 shrink-0 place-items-center rounded-full text-slate-400 hover:text-white"
+            className="-mr-1 grid h-11 w-11 shrink-0 place-items-center rounded-full text-slate-400 hover:text-white"
           >
             ✕
           </button>
@@ -303,7 +309,7 @@ export function DialogueBox({
                     onClose();
                   }}
                   aria-label="Закрыть диалог"
-                  className="grid h-9 min-w-9 place-items-center rounded-full px-2 text-slate-400 hover:text-white"
+                  className="grid h-11 min-w-11 place-items-center rounded-full px-2 text-slate-400 hover:text-white"
                 >
                   ✕
                 </button>
@@ -368,13 +374,17 @@ export function DialogueBox({
           </div>
         )}
         {chat?.phone && (
-          <div className="mt-3 rounded-xl bg-slate-900/80 p-3 text-sm" data-testid="phone-consent">
-            <label className="flex items-start gap-2 text-xs text-slate-300">
+          <div
+            ref={consentRef}
+            className="mt-3 rounded-xl bg-slate-900/80 p-3 text-sm"
+            data-testid="phone-consent"
+          >
+            <label className="flex min-h-11 items-center gap-2 text-xs text-slate-300">
               <input
                 type="checkbox"
                 checked={consent}
                 onChange={(e) => setConsent(e.target.checked)}
-                className="mt-0.5"
+                className="h-5 w-5 shrink-0"
               />
               <ConsentText />
             </label>
@@ -382,7 +392,7 @@ export function DialogueBox({
               type="button"
               disabled={!consent || chat.sending}
               onClick={chat.onSendPhone}
-              className="mt-2 rounded-full bg-amber-500 px-4 py-2 text-sm font-bold text-slate-950 disabled:opacity-50"
+              className="mt-2 min-h-11 rounded-full bg-amber-500 px-4 py-2 text-sm font-bold text-slate-950 disabled:opacity-50"
             >
               {chat.sending ? 'Отправляем…' : `Отправить заявку: ${chat.phone}`}
             </button>
@@ -423,16 +433,18 @@ export function DialogueBox({
             </button>
           );
         })}
-        {chat?.quick.map((q, i) => (
-          <button
-            key={`q-${q.label}`}
-            type="button"
-            onClick={() => chat.onQuick(i)}
-            className="rounded-full border border-amber-400/50 px-3 py-2 text-sm font-semibold text-amber-200 hover:bg-amber-400/10"
-          >
-            {q.label}
-          </button>
-        ))}
+        {/* While a typed phone waits for consent, the quick replies step aside. */}
+        {!chat?.phone &&
+          chat?.quick.map((q, i) => (
+            <button
+              key={`q-${q.label}`}
+              type="button"
+              onClick={() => chat.onQuick(i)}
+              className="rounded-full border border-amber-400/50 px-3 py-2 text-sm font-semibold text-amber-200 hover:bg-amber-400/10"
+            >
+              {q.label}
+            </button>
+          ))}
       </div>
       {chat && (
         <form

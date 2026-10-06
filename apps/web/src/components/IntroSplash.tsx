@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 import { CinemaVideo } from '@/components/CinemaVideo';
+import { AB_INLINE } from '@/lib/ab';
 import { SITE } from '@/lib/site';
 import { reachGoal } from '@/lib/marketing';
 import { setSoundEnabled, soundEnabled, storedSoundChoice, subscribeSound } from '@/lib/sound';
@@ -33,7 +34,7 @@ const OFFERS = [
 // order form or the wizard (`/#callback`, `?m=<machine>#podbor`): the visitor
 // asked for the form, not the titles. Hiding also marks them seen, so the
 // next home page visit in this session does not play them either.
-const HIDE_IF_SEEN = `try{if(/(?:^|;\\s*)sp_ab=calm/.test(document.cookie)||sessionStorage.getItem('${SEEN_KEY}')||/[?&](intro=0|m=|yclid|gclid|utm_medium=cpc)/.test(location.search)||/^#(callback|podbor)/.test(location.hash)||matchMedia('(prefers-reduced-motion: reduce)').matches){document.getElementById('intro').hidden=true;sessionStorage.setItem('${SEEN_KEY}','1')}}catch(e){}`;
+const HIDE_IF_SEEN = `(function(){${AB_INLINE};try{if(ab==='calm'||sessionStorage.getItem('${SEEN_KEY}')||/[?&](intro=0|m=|yclid|gclid|utm_medium=cpc)/.test(location.search)||/^#(callback|podbor)/.test(location.hash)||matchMedia('(prefers-reduced-motion: reduce)').matches){document.getElementById('intro').hidden=true;sessionStorage.setItem('${SEEN_KEY}','1')}}catch(e){}})()`;
 
 /** The address asks for the order form or the wizard. */
 const FORM_HASH = /^#(callback|podbor)/;
@@ -216,7 +217,7 @@ export function IntroSplash() {
                     </span>
                   </div>
                   <span className="rounded-full bg-slate-950/85 px-2.5 py-1 font-mono text-[0.6rem] font-bold uppercase tracking-[0.18em] text-amber-300">
-                    Карта партнёра
+                    Аренда с машинистом
                   </span>
                 </div>
                 <div className="mt-auto">

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
-import { parseAbCookie } from '@/lib/ab';
+import { abVariant } from '@/lib/ab';
 import { playCue } from '@/lib/sound';
 
 // Every press on the site gets a film-style response: a ring of light spreads
@@ -31,27 +31,31 @@ function burst(x: number, y: number) {
 const THUNK_TARGET = "a[href^='tel:'], a[href*='#podbor'], button[type='submit']";
 
 export function CinemaClicks() {
-  // Sound: a light mechanical tick on every press, a thunk on the main
-  // actions. Silent unless the visitor turned sound on (SoundDirector), and
-  // independent of the visual effects below (it works with reduced motion).
+  // Sound, «по-людски» (owner, 2026-10-06): only for a finished press (a
+  // click, not the pointerdown that also starts every scroll), only on real
+  // controls — a soft tap for buttons, a wooden thunk for «Позвонить»,
+  // «Наряд», «Отправить». Ordinary links stay silent: a page change gets its
+  // whoosh from SoundDirector. The engine makes repeated presses quieter.
+  // Silent unless sound is on, and independent of the visual effects below.
   useEffect(() => {
-    const onDown = (event: PointerEvent) => {
+    const onClick = (event: MouseEvent) => {
       if (event.button > 0) return;
       const target = (event.target as Element | null)?.closest?.(
         'a[href], button, [role="button"], summary',
       );
       if (!target || (target as HTMLButtonElement).disabled) return;
       if (target.matches('[data-sound-toggle]')) return;
-      playCue(target.matches(THUNK_TARGET) ? 'thunk' : 'click');
+      if (target.matches(THUNK_TARGET)) playCue('thunk');
+      else if (!target.matches('a[href]')) playCue('click');
     };
-    document.addEventListener('pointerdown', onDown, { passive: true });
-    return () => document.removeEventListener('pointerdown', onDown);
+    document.addEventListener('click', onClick, { passive: true });
+    return () => document.removeEventListener('click', onClick);
   }, []);
 
   useEffect(() => {
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
     // A/B group «calm»: no click effects.
-    if (parseAbCookie(document.cookie) === 'calm') return;
+    if (abVariant() === 'calm') return;
     const onDown = (event: PointerEvent) => {
       const target = (event.target as Element | null)?.closest?.(
         'a[href], button, [role="button"], summary',

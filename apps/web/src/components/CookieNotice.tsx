@@ -3,13 +3,20 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { COOKIE_CHOICE_EVENT, COOKIE_CONSENT_KEY, enableWebvisorIfQueued } from '@/lib/marketing';
+import {
+  COOKIE_CHOICE_EVENT,
+  COOKIE_CONSENT_KEY,
+  cookieStripDue,
+  snoozeValue,
+  startMetrika,
+} from '@/lib/marketing';
 
 // A small strip at the bottom on arrival: consent to the processing of
-// personal data and cookies (owner's request, 2026-10-03). The visitor either
-// agrees («Согласен», Webvisor on) or hides it (✕, nothing changes: Metrika
-// keeps working without Webvisor, as before an answer). Refusing Metrika is on
-// /privacy. The choice is kept in localStorage; nothing is rendered on the
+// personal data and cookies (owner's request, 2026-10-03). Yandex.Metrika
+// starts only after «Согласен» (2026-10-04), on the same page (startMetrika).
+// ✕ means «not now»: Metrika stays off and the strip comes back after a week
+// (COOKIE_SNOOZE_MS). A firm refusal is on /privacy. The choice is kept in
+// localStorage; nothing is rendered on the
 // server, and the strip is fixed, so it cannot shift the page. Both buttons
 // are 44 px tap targets; while the strip is open on a phone the page gets
 // extra bottom padding and scroll padding (globals.css, data-cookie-strip).
@@ -19,13 +26,13 @@ export function CookieNotice() {
   const [shown, setShown] = useState(false);
 
   useEffect(() => {
-    let chosen = false;
+    let due = true;
     try {
-      chosen = !!localStorage.getItem(COOKIE_CONSENT_KEY);
+      due = cookieStripDue(localStorage.getItem(COOKIE_CONSENT_KEY));
     } catch {
       // Storage blocked: the notice is shown on every visit.
     }
-    if (chosen) return;
+    if (!due) return;
     // Soon after arrival, once the intro has ended; scrolling shows it at once.
     let scrolled = false;
     let timedOut = false;
@@ -41,7 +48,7 @@ export function CookieNotice() {
       window.clearInterval(poll);
       // Chosen meanwhile on /privacy (CookieChoiceButtons): stay hidden.
       try {
-        if (localStorage.getItem(COOKIE_CONSENT_KEY)) return;
+        if (!cookieStripDue(localStorage.getItem(COOKIE_CONSENT_KEY))) return;
       } catch {
         // Storage blocked: show the notice.
       }
@@ -83,34 +90,54 @@ export function CookieNotice() {
     return () => document.documentElement.removeAttribute('data-cookie-strip');
   }, [open]);
 
-  function choose(value: 'yes' | 'hidden') {
+  function choose(value: 'yes' | 'later') {
     try {
-      localStorage.setItem(COOKIE_CONSENT_KEY, value);
+      localStorage.setItem(COOKIE_CONSENT_KEY, value === 'yes' ? 'yes' : snoozeValue());
     } catch {
       // Ignore: the choice just lasts until the page is closed.
     }
-    // «Согласен» switches Webvisor on when the counter has not started yet.
-    if (value === 'yes') enableWebvisorIfQueued();
+    // «Согласен» starts Metrika right here; ✕ leaves it off.
+    if (value === 'yes') startMetrika();
     setVisible(false);
   }
 
   if (!open) return null;
 
+  // /stroyka is a full-screen layer at z-80 with its order panel at z-95: the
+  // strip goes between them, at the top under the bar (the dialogue and the
+  // zone card live lower), in one compact line on phones; on wide screens the
+  // zone tabs take the top, so it goes to the free bottom-left corner.
+  const stroyka = pathname?.startsWith('/stroyka') ?? false;
+  const place = stroyka
+    ? 'inset-x-2 top-[calc(max(0.5rem,env(safe-area-inset-top))+3rem)] z-[90] sm:inset-x-auto sm:left-1/2 sm:w-[30rem] sm:-ml-[15rem] lg:bottom-4 lg:left-4 lg:top-auto lg:ml-0 lg:w-[17rem] lg:rounded-2xl'
+    : 'inset-x-2 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-[45] sm:inset-x-auto sm:bottom-4 sm:right-6';
+  const hiddenShift = stroyka ? '-translate-y-4' : 'translate-y-4';
+
   return (
     <div
       role="region"
       aria-label="Согласие на обработку персональных данных"
-      data-bottom-bar
-      className={`fixed inset-x-2 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-[45] flex items-center gap-1.5 rounded-full border border-slate-200 bg-white/95 py-1 pl-3 pr-1 text-xs text-slate-700 shadow-md backdrop-blur motion-safe:transition motion-safe:duration-300 sm:inset-x-auto sm:bottom-4 sm:right-6 ${
-        shown ? 'translate-y-0 opacity-100' : 'translate-y-4 opacity-0 motion-reduce:translate-y-0'
+      data-testid="cookie-strip"
+      data-bottom-bar={stroyka ? undefined : true}
+      className={`fixed ${place} flex items-center gap-1.5 rounded-full border border-slate-200 bg-white/95 py-1 pl-3 pr-1 text-xs text-slate-700 shadow-md backdrop-blur motion-safe:transition motion-safe:duration-300 ${
+        shown ? 'translate-y-0 opacity-100' : `${hiddenShift} opacity-0 motion-reduce:translate-y-0`
       }`}
     >
-      <p className="min-w-0 flex-1 leading-snug">
-        Персональные данные и cookie ·{' '}
-        <Link href="/privacy" className="font-medium text-amber-800 underline">
-          Подробнее
-        </Link>
-      </p>
+      {stroyka ? (
+        <p className="flex min-w-0 flex-1 items-center gap-1 whitespace-nowrap text-[11px] leading-snug sm:text-xs lg:flex-wrap lg:whitespace-normal">
+          <span className="truncate lg:whitespace-normal">Cookie — после «Согласен» ·</span>
+          <Link href="/privacy" className="shrink-0 font-medium text-amber-800 underline">
+            Подробнее
+          </Link>
+        </p>
+      ) : (
+        <p className="min-w-0 flex-1 leading-snug">
+          Cookie и Метрика — только после «Согласен» ·{' '}
+          <Link href="/privacy" className="font-medium text-amber-800 underline">
+            Подробнее
+          </Link>
+        </p>
+      )}
       <button
         type="button"
         onClick={() => choose('yes')}
@@ -120,9 +147,9 @@ export function CookieNotice() {
       </button>
       <button
         type="button"
-        onClick={() => choose('hidden')}
-        aria-label="Скрыть сообщение"
-        title="Скрыть"
+        onClick={() => choose('later')}
+        aria-label="Не сейчас: скрыть, Метрика останется выключенной"
+        title="Не сейчас"
         className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-base text-slate-500 hover:bg-slate-100 hover:text-slate-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-600"
       >
         ✕

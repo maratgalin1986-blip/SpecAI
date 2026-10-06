@@ -1,7 +1,7 @@
 // Company branding and contacts, in one place so they're easy to update.
 export const SITE = {
   name: 'СпецПласт16',
-  // The platform's own name (estimates, design, 3D site); the company that
+  // The platform's own name (estimates, design, site tour); the company that
   // does the work is always `name`.
   platform: 'ИИСтройка24',
   tagline: 'Аренда спецтехники и строительные услуги в Татарстане',
@@ -28,6 +28,10 @@ export const SITE = {
   legalName: 'ООО «СПЕЦПЛАСТ 16»' as string,
   inn: '1650412557' as string,
   kpp: '165001001' as string,
+  // PLACEHOLDER — the owner must supply the operator's legal address (from the
+  // ЕГРЮЛ extract). /privacy and /soglasie show it once it is filled in; until
+  // then they show nothing in its place. Never invent it.
+  legalAddress: '' as string,
 };
 
 /** Working hours for calls: Mon–Sat, 8:00–20:00 Moscow time. */
@@ -40,4 +44,31 @@ export function isOnShift(date: Date = new Date()): boolean {
   const day = msk.getUTCDay();
   const hour = msk.getUTCHours();
   return (SHIFT.days as readonly number[]).includes(day) && hour >= SHIFT.from && hour < SHIFT.to;
+}
+
+const ON_DAY = [
+  'в воскресенье',
+  'в понедельник',
+  'во вторник',
+  'в среду',
+  'в четверг',
+  'в пятницу',
+  'в субботу',
+];
+
+/**
+ * When the dispatcher is next on the phone, for an off-shift promise:
+ * «сегодня с 8:00», «завтра с 8:00» or «в понедельник с 8:00».
+ */
+export function nextShiftText(date: Date = new Date()): string {
+  const msk = new Date(date.getTime() + 3 * 3600 * 1000);
+  const days = SHIFT.days as readonly number[];
+  for (let ahead = 0; ahead < 8; ahead += 1) {
+    const day = (msk.getUTCDay() + ahead) % 7;
+    if (!days.includes(day)) continue;
+    if (ahead === 0 && msk.getUTCHours() >= SHIFT.from) continue;
+    const when = ahead === 0 ? 'сегодня' : ahead === 1 ? 'завтра' : ON_DAY[day];
+    return `${when} с ${SHIFT.from}:00`;
+  }
+  return `с ${SHIFT.from}:00`;
 }

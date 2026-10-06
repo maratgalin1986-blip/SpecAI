@@ -1,15 +1,12 @@
+import { abVariant } from './ab';
+
 // Shared guards for the extra «cinema» effect layers (dolly, particles, titles).
 
 /** False for reduced motion and for the A/B group «calm». */
 export function fxAllowed(): boolean {
   if (typeof window === 'undefined') return false;
   if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return false;
-  try {
-    if (/(?:^|;\s*)sp_ab=calm/.test(document.cookie)) return false;
-  } catch {
-    /* cookies are optional */
-  }
-  return true;
+  return abVariant() !== 'calm';
 }
 
 export function saveDataOn(): boolean {

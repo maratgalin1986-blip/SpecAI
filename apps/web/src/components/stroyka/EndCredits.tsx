@@ -8,6 +8,7 @@
 import { useEffect, useState } from 'react';
 import { SITE } from '@/lib/site';
 import { joinNames, type Credits } from '@/lib/stroyka/story';
+import { displayFont } from './displayFont';
 
 export const CREDITS_MS = 6000;
 const FADE_MS = 700;
@@ -63,7 +64,7 @@ export function EndCredits({ credits, onDone }: { credits: Credits; onDone: () =
             <div
               className={
                 item.big
-                  ? 'mt-1.5 font-serif text-2xl font-bold leading-snug sm:text-4xl'
+                  ? `${displayFont.className} mt-1.5 text-2xl font-bold leading-snug sm:text-4xl`
                   : 'mt-1 text-[15px] font-semibold leading-snug text-white sm:text-base'
               }
             >

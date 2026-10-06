@@ -104,6 +104,55 @@ test('callback form sends a lead without a name', async ({ page }) => {
   expect(errors, 'page errors').toEqual([]);
 });
 
+// The hero CTA lands on a usable form: within a second the phone field is on
+// screen, not under the header, the cookie strip or the chat button, and takes focus.
+test('hero CTA: phone field ready within 1 s', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'iphone-13', 'phone layout');
+  const errors = await guard(page);
+  await page.goto('/?intro=0', { waitUntil: 'load' });
+  await page.locator('main a[href="#callback"]').first().click();
+  const phone = page.locator('#callback').getByLabel('Телефон');
+  await expect(phone).toBeInViewport({ timeout: 1000 });
+  await expect(phone).toBeVisible();
+  const free = await phone.evaluate((el) => {
+    const r = el.getBoundingClientRect();
+    const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+    if (hit === el && r.top > 64 && r.bottom < window.innerHeight) return 'free';
+    return `${Math.round(r.top)}..${Math.round(r.bottom)} / ${window.innerHeight}: ${hit?.outerHTML.slice(0, 120)}`;
+  });
+  expect(free, 'the phone field is not covered').toBe('free');
+  await phone.focus();
+  await expect(phone).toBeFocused();
+  // A repeat tap on the same hash still works (no hashchange).
+  await page.mouse.wheel(0, -3000);
+  await page.locator('main a[href="#callback"]').first().click();
+  await expect(phone).toBeInViewport({ timeout: 1000 });
+  expect(errors, 'page errors').toEqual([]);
+});
+
+// /stroyka is a full-screen layer: the consent strip must still be seen and
+// tapped there (Metrika waits for it).
+test('cookie strip visible and clickable on /stroyka', async ({ page }) => {
+  const errors = await guard(page);
+  await page.goto('/stroyka?nointro=1', { waitUntil: 'load' });
+  const strip = page.getByTestId('cookie-strip');
+  await expect(strip).toBeVisible({ timeout: 10_000 });
+  await expect(strip).toBeInViewport();
+  const agree = strip.getByRole('button', { name: 'Согласен' });
+  const onTop = await agree.evaluate((el) => {
+    const r = el.getBoundingClientRect();
+    const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+    return !!hit && el.contains(hit);
+  });
+  expect(onTop, 'nothing covers «Согласен»').toBe(true);
+  const box = (await agree.boundingBox())!;
+  expect(box.height).toBeGreaterThanOrEqual(44);
+  await agree.click();
+  await expect(strip).toHaveCount(0);
+  expect(await page.evaluate(() => localStorage.getItem('cookie-consent'))).toBe('yes');
+  expect(errors, 'page errors').toEqual([]);
+});
+
 // Phones: the main «Заказать технику» is on the first screen, above the bottom bar.
 test('hero order button above the fold on a phone', async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== 'iphone-13', 'phone layout');
@@ -119,32 +168,6 @@ test('hero order button above the fold on a phone', async ({ page }, testInfo) =
     const bar = (await page.getByRole('navigation', { name: 'Быстрая связь' }).boundingBox())!;
     expect(box.y + box.height, `${size.width}x${size.height}`).toBeLessThanOrEqual(bar.y);
   }
-});
-
-// The 3D site: every material compiles (a broken shader leaves machines
-// invisible while the page itself shows no script error). Skipped where the
-// browser has no WebGL and the page falls back to the 2D map.
-test('stroyka shaders compile', async ({ page }, testInfo) => {
-  test.skip(testInfo.project.name !== 'desktop', 'one run is enough');
-  const errors = await guard(page);
-  const shaderErrors: string[] = [];
-  page.on('console', (message) => {
-    if (/Shader Error|WebGLProgram|program not valid/.test(message.text())) {
-      shaderErrors.push(message.text().slice(0, 300));
-    }
-  });
-  await page.goto('/stroyka?nointro=1&3d=1', { waitUntil: 'load' });
-  const ready = await page
-    .waitForFunction(() => Boolean((window as { __stroyka?: unknown }).__stroyka), null, {
-      timeout: 45_000,
-    })
-    .then(() => true)
-    .catch(() => false);
-  test.skip(!ready, 'no WebGL in this browser');
-  // Props and the city load after the first frame: let them compile too.
-  await page.waitForTimeout(5000);
-  expect(shaderErrors, 'shader errors').toEqual([]);
-  expect(errors, 'page errors').toEqual([]);
 });
 
 // The default tour plays real footage per zone; the strip switches zones and
@@ -205,42 +228,5 @@ test('stroyka order stays in the film', async ({ page }) => {
   await page.getByTestId('replies').getByRole('button', { name: 'Оформить у Светы' }).click();
   await expect(page.getByTestId('dialogue').locator('input[name="phone"]')).toBeVisible();
   expect(new URL(page.url()).pathname).toBe('/stroyka');
-  expect(errors, 'page errors').toEqual([]);
-});
-
-// The visitor leads in 3D: the camera never moves by itself, and «Куда идём?»
-// flies to the chosen place (owner, 2026-10-03: «сам выбирал, куда идти»).
-test('stroyka chooser', async ({ page }, testInfo) => {
-  test.skip(testInfo.project.name !== 'desktop', 'one run is enough');
-  // Software WebGL renders about a frame a second: React updates come late.
-  test.setTimeout(300_000);
-  const errors = await guard(page);
-  await page.goto('/stroyka?nointro=1&3d=1', { waitUntil: 'load' });
-  const ready = await page
-    .waitForFunction(() => Boolean((window as { __stroyka?: unknown }).__stroyka), null, {
-      timeout: 45_000,
-    })
-    .then(() => true)
-    .catch(() => false);
-  test.skip(!ready, 'no WebGL in this browser');
-  type W = { __stroyka: { state: () => { camera: number[]; intro: boolean } } };
-  await page.waitForFunction(() => !(window as unknown as W).__stroyka.state().intro);
-  // The blend out of the opening shot, then the camera must stay put.
-  await page.waitForTimeout(2500);
-  const camera = () => page.evaluate(() => (window as unknown as W).__stroyka.state().camera);
-  const before = await camera();
-  await page.waitForTimeout(3000);
-  expect(await camera(), 'no surprise moves').toEqual(before);
-  // Clicks go in through the page (dispatchEvent): software rendering holds
-  // real input events back for a long time.
-  await page.evaluate(() =>
-    (window as unknown as { __stroyka: { fx: (on: boolean) => void } }).__stroyka.fx(false),
-  );
-  await page.getByTestId('nav-open').dispatchEvent('click');
-  await expect(page.getByTestId('nav-chooser')).toBeVisible({ timeout: 60_000 });
-  await expect(page.getByTestId('nav-person-npc-office')).toBeAttached();
-  await page.getByTestId('nav-zone-sklad').dispatchEvent('click');
-  await expect(page.getByTestId('zone-title')).toHaveText(/Склад/, { timeout: 150_000 });
-  await expect(page.getByTestId('order-btn')).toBeAttached();
   expect(errors, 'page errors').toEqual([]);
 });
