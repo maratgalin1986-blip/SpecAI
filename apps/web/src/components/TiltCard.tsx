@@ -2,10 +2,13 @@
 
 import { useRef, type ReactNode } from 'react';
 
-// Card that tilts in 3D towards the pointer, with a moving light glare. An
-// element inside marked `tilt-zoom` (usually the photo) zooms in on hover.
-// `className` replaces the default look (border, background, padding);
-// `max` is the tilt at the card's edge, in degrees.
+// Card that tilts gently towards the mouse on desktop, with a moving light
+// glare; an element inside marked `tilt-zoom` (usually the photo) drifts
+// closer on hover. On touch screens there is no tilt (it rasterised the text
+// soft and cost frames while scrolling): the card sinks a little under the
+// finger instead (globals.css, .tilt-card[data-pressed]). `className` replaces the default look
+// (border, background, padding); `max` is the tilt at the card's edge, in
+// degrees.
 export function TiltCard({
   children,
   dark = false,
@@ -18,45 +21,40 @@ export function TiltCard({
   max?: number;
 }) {
   const ref = useRef<HTMLDivElement>(null);
+  const frame = useRef(0);
 
-  // Stronger lean than before; a touch press leans about 5 degrees.
-  const boost = 1.5;
-
-  function lean(event: React.PointerEvent<HTMLDivElement>, amount: number) {
+  function onPointerMove(event: React.PointerEvent<HTMLDivElement>) {
+    if (event.pointerType !== 'mouse') return;
     const el = ref.current;
     if (!el) return;
     // A card with an open order form holds still, so the fields stay under the pointer.
-    if (el.querySelector('form')) {
-      el.style.setProperty('--rx', '0deg');
-      el.style.setProperty('--ry', '0deg');
-      return;
-    }
-    const rect = el.getBoundingClientRect();
-    const x = (event.clientX - rect.left) / rect.width;
-    const y = (event.clientY - rect.top) / rect.height;
-    el.style.setProperty('--rx', `${(0.5 - y) * amount}deg`);
-    el.style.setProperty('--ry', `${(x - 0.5) * amount}deg`);
-    el.style.setProperty('--gx', `${x * 100}%`);
-    el.style.setProperty('--gy', `${y * 100}%`);
-  }
-
-  function onPointerMove(event: React.PointerEvent<HTMLDivElement>) {
-    if (event.pointerType === 'mouse') lean(event, max * boost);
-    else if (event.pointerType === 'touch' && ref.current?.hasAttribute('data-touch')) {
-      lean(event, 10);
-    }
+    if (el.querySelector('form')) return;
+    const { clientX, clientY } = event;
+    // One style write per frame, however fast the mouse moves.
+    cancelAnimationFrame(frame.current);
+    frame.current = requestAnimationFrame(() => {
+      const rect = el.getBoundingClientRect();
+      const x = (clientX - rect.left) / rect.width;
+      const y = (clientY - rect.top) / rect.height;
+      el.style.setProperty('--rx', `${(0.5 - y) * max}deg`);
+      el.style.setProperty('--ry', `${(x - 0.5) * max}deg`);
+      el.style.setProperty('--gx', `${x * 100}%`);
+      el.style.setProperty('--gy', `${y * 100}%`);
+    });
   }
 
   function onPointerDown(event: React.PointerEvent<HTMLDivElement>) {
-    if (event.pointerType !== 'touch') return;
-    ref.current?.setAttribute('data-touch', '1');
-    lean(event, 10);
+    if (event.pointerType === 'mouse') return;
+    ref.current?.setAttribute('data-pressed', '');
   }
 
-  function onPointerLeave() {
-    ref.current?.removeAttribute('data-touch');
-    ref.current?.style.setProperty('--rx', '0deg');
-    ref.current?.style.setProperty('--ry', '0deg');
+  function release() {
+    cancelAnimationFrame(frame.current);
+    const el = ref.current;
+    if (!el) return;
+    el.removeAttribute('data-pressed');
+    el.style.setProperty('--rx', '0deg');
+    el.style.setProperty('--ry', '0deg');
   }
 
   const look =
@@ -73,9 +71,9 @@ export function TiltCard({
         ref={ref}
         onPointerMove={onPointerMove}
         onPointerDown={onPointerDown}
-        onPointerUp={onPointerLeave}
-        onPointerCancel={onPointerLeave}
-        onPointerLeave={onPointerLeave}
+        onPointerUp={release}
+        onPointerCancel={release}
+        onPointerLeave={release}
         className={`tilt-card relative h-full overflow-hidden ${look}`}
       >
         <div className="tilt-content relative h-full">{children}</div>

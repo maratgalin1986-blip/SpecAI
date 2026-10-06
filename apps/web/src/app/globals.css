@@ -15,8 +15,9 @@ html {
 
 /* ---- «Воронка»: page-to-page vortex transition ---------------------------
    Cross-document View Transitions (Chromium 126+, Safari 18.2+): the old page
-   is sucked into the centre, turning and blurring, and the new page rises out
-   of the depth. Browsers without support simply navigate. The header keeps
+   is sucked into the centre, turning and fading, and the new page rises out
+   of the depth. Transform and opacity only (2026-10-06): the blur made the
+   type soft and cost the phone frames mid-swirl. Browsers without support simply navigate. The header keeps
    its own name so it stays put while the page swirls underneath. */
 
 @view-transition {
@@ -50,13 +51,10 @@ html {
   from {
     opacity: 1;
     transform: none;
-    filter: none;
   }
   to {
     opacity: 0;
     transform: perspective(1200px) translateZ(-600px) rotate(-9deg) scale(0.55);
-    filter: blur(10px) brightness(0.6);
-    border-radius: 48px;
   }
 }
 
@@ -64,16 +62,13 @@ html {
   from {
     opacity: 0;
     transform: perspective(1200px) translateZ(-900px) rotate(12deg) scale(0.35);
-    filter: blur(14px);
   }
   60% {
     opacity: 1;
-    filter: blur(0);
   }
   to {
     opacity: 1;
     transform: none;
-    filter: none;
   }
 }
 
@@ -141,11 +136,16 @@ html {
   --gx: 50%;
   --gy: 50%;
   transform: rotateX(var(--rx)) rotateY(var(--ry));
-  transform-style: preserve-3d;
   transition:
-    transform 0.2s ease-out,
+    transform var(--motion-base, 0.32s) var(--motion-ease-out, ease-out),
     box-shadow 0.3s,
     border-color 0.3s;
+}
+
+/* Touch: no tilt, the card sinks a little under the finger (TiltCard). */
+.tilt-card[data-pressed] {
+  transform: scale(0.975);
+  transition-duration: var(--motion-fast, 0.16s);
 }
 
 .tilt-card:hover {
@@ -153,9 +153,15 @@ html {
   box-shadow: 0 25px 50px -12px rgba(217, 119, 6, 0.35);
 }
 
-.tilt-content {
-  transform: translateZ(30px);
-  backface-visibility: hidden;
+/* The content lifts off the card only while the mouse is on it: at rest it
+   is a flat 2D layer, so the type is rasterised pixel-sharp. */
+@media (hover: hover) and (pointer: fine) {
+  .tilt-card:hover {
+    transform-style: preserve-3d;
+  }
+  .tilt-card:hover .tilt-content {
+    transform: translateZ(18px);
+  }
 }
 
 .tilt-glare {
@@ -237,12 +243,10 @@ html {
   from {
     opacity: 0;
     transform: perspective(1000px) translateZ(-240px) rotateX(6deg);
-    filter: blur(6px);
   }
   to {
     opacity: 1;
     transform: none;
-    filter: none;
   }
 }
 
@@ -252,8 +256,8 @@ html {
   opacity: 0;
   transform: translateY(24px);
   transition:
-    opacity 0.7s cubic-bezier(0.22, 1, 0.36, 1),
-    transform 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+    opacity var(--motion-slow, 0.7s) var(--motion-ease-out, ease-out),
+    transform var(--motion-slow, 0.7s) var(--motion-ease-out, ease-out);
 }
 
 .reveal-visible {
@@ -524,12 +528,13 @@ html {
     transparent 66%
   );
   transform: translateX(-120%);
-  animation: cta-shine 3.6s ease-in-out 1.2s infinite;
+  /* Slow and calm: one pass every six seconds. */
+  animation: cta-shine 6s var(--motion-ease-in-out, ease-in-out) 1.2s infinite;
 }
 
 @keyframes cta-shine {
   0%,
-  55% {
+  70% {
     transform: translateX(-120%);
   }
   100% {

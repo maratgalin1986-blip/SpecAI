@@ -18,7 +18,10 @@ function topLevelKeyframes(css: string): string[] {
 
 describe('globals.css', () => {
   it('has no two top-level keyframes with the same name', () => {
-    const css = readFileSync(fileURLToPath(new URL('./globals.css', import.meta.url)), 'utf8');
+    // motion.css is loaded right after globals.css: one namespace.
+    const css = ['./globals.css', './motion.css']
+      .map((file) => readFileSync(fileURLToPath(new URL(file, import.meta.url)), 'utf8'))
+      .join('\n');
     const names = topLevelKeyframes(css.replace(/\/\*[\s\S]*?\*\//g, ''));
     const dupes = names.filter((n, i) => names.indexOf(n) !== i);
     expect(dupes).toEqual([]);

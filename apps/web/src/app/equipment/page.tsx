@@ -15,6 +15,7 @@ import {
 import { pluralizeRu } from '@/lib/pluralize';
 import { SITE } from '@/lib/site';
 import { CinemaHero } from '@/components/CinemaHero';
+import { Reveal } from '@/components/Reveal';
 import { TelegramButton } from '@/components/TelegramButton';
 import { PUBLISHED_FLEET } from '@/lib/fleet';
 import {
@@ -402,11 +403,11 @@ export default async function EquipmentCatalogPage({
           </div>
         </div>
       ) : (
-        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+        <Reveal stagger className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
           {equipment.map((item) => (
             <EquipmentCard key={item.id} item={item} />
           ))}
-        </div>
+        </Reveal>
       )}
 
       <Pagination

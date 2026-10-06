@@ -10,6 +10,7 @@ import { CountUp } from '@/components/CountUp';
 import { Faq } from '@/components/Faq';
 import { ObjectPhotos } from '@/components/ObjectPhotos';
 import { HeroPhotos } from '@/components/HeroPhotos';
+import { HowItWorks } from '@/components/HowItWorks';
 import { Icon, type IconName } from '@/components/Icon';
 import { IntroSplash } from '@/components/IntroSplash';
 import { MachinePhoto } from '@/components/MachinePhoto';
@@ -289,7 +290,9 @@ export default async function HomePage() {
                   🚜
                 </span>
                 Заказать технику
-                <Icon name="arrow" className="h-5 w-5 transition group-hover:translate-x-1" />
+                <span className="nudge">
+                  <Icon name="arrow" className="h-5 w-5" />
+                </span>
               </a>
               <div className="grid grid-cols-2 gap-3">
                 {[
@@ -342,15 +345,15 @@ export default async function HomePage() {
             >
               <a
                 href="#podbor"
-                className="inline-flex min-h-[44px] items-center underline-offset-4 hover:text-white hover:underline"
+                className="link-draw group inline-flex min-h-[44px] items-center hover:text-white"
               >
-                Подобрать технику →
+                Подобрать технику&nbsp;<span className="nudge">→</span>
               </a>
               <a
                 href="/kalkulyator"
-                className="inline-flex min-h-[44px] items-center underline-offset-4 hover:text-white hover:underline"
+                className="link-draw group inline-flex min-h-[44px] items-center hover:text-white"
               >
-                Калькулятор работ →
+                Калькулятор работ&nbsp;<span className="nudge">→</span>
               </a>
             </nav>
             <p className="float-in mt-5 text-sm text-slate-400" style={{ animationDelay: '480ms' }}>
@@ -378,7 +381,10 @@ export default async function HomePage() {
         ))}
       </section>
 
-      <div className="depth -my-10 overflow-hidden border-y border-slate-200 py-4" aria-hidden>
+      <div
+        className="marquee-mask depth -my-10 overflow-hidden border-y border-slate-200 py-4"
+        aria-hidden
+      >
         <div className="marquee">
           {[...MARQUEE, ...MARQUEE].map((item, index) => (
             <span key={index} className="eyebrow flex items-center gap-8 pr-8 text-slate-500">
@@ -407,14 +413,18 @@ export default async function HomePage() {
               className="group inline-flex min-h-[44px] items-center gap-2 rounded-full border border-slate-300 px-5 py-2.5 text-sm font-semibold transition hover:border-slate-900"
             >
               Весь каталог
-              <Icon name="arrow" className="h-4 w-4 transition group-hover:translate-x-1" />
+              <span className="nudge">
+                <Icon name="arrow" className="h-4 w-4" />
+              </span>
             </a>
             <a
               href="/map"
               className="group inline-flex min-h-[44px] items-center gap-2 rounded-full border border-slate-300 px-5 py-2.5 text-sm font-semibold transition hover:border-slate-900"
             >
               Заказать на карте
-              <Icon name="arrow" className="h-4 w-4 transition group-hover:translate-x-1" />
+              <span className="nudge">
+                <Icon name="arrow" className="h-4 w-4" />
+              </span>
             </a>
           </div>
           <p className="mt-3 text-slate-600">
@@ -465,10 +475,9 @@ export default async function HomePage() {
                         <span className="font-mono text-sm font-semibold text-slate-900">
                           {service.price ?? 'по договору'}
                         </span>
-                        <Icon
-                          name="arrow"
-                          className="h-5 w-5 text-amber-700 transition group-hover:translate-x-1"
-                        />
+                        <span className="nudge text-amber-700">
+                          <Icon name="arrow" className="h-5 w-5" />
+                        </span>
                       </div>
                     </div>
                   </a>
@@ -489,7 +498,9 @@ export default async function HomePage() {
                 </p>
                 <span className="relative mt-auto inline-flex w-fit items-center gap-2 rounded-full bg-amber-500 px-5 py-2.5 text-sm font-semibold text-slate-950 transition group-hover:bg-amber-400">
                   Подобрать технику
-                  <Icon name="arrow" className="h-4 w-4 transition group-hover:translate-x-1" />
+                  <span className="nudge">
+                    <Icon name="arrow" className="h-4 w-4" />
+                  </span>
                 </span>
               </a>
             </TiltCard>
@@ -499,6 +510,7 @@ export default async function HomePage() {
 
       <CinemaBand
         machine="excavator"
+        clip="excavator-gold"
         eyebrow="Свой парк"
         phrase="Котлован к утру — не обещание, а принятая заявка"
       />
@@ -588,23 +600,14 @@ export default async function HomePage() {
             </h2>
           </Reveal>
         </div>
-        <ol className="grid gap-4 sm:grid-cols-2 lg:col-span-7">
-          {STEPS.map((step, index) => (
-            <li key={step.title}>
-              <Reveal delay={index * 100} className="h-full">
-                <div className="h-full rounded-3xl border border-slate-200 bg-white p-6 transition hover:-translate-y-1 hover:border-amber-300">
-                  <div className="font-mono text-4xl font-bold text-amber-600">0{index + 1}</div>
-                  <h3 className="mt-4 text-lg font-bold">{step.title}</h3>
-                  <p className="mt-1 text-sm text-slate-600">{step.text}</p>
-                </div>
-              </Reveal>
-            </li>
-          ))}
-        </ol>
+        <Reveal className="lg:col-span-7">
+          <HowItWorks steps={STEPS} />
+        </Reveal>
       </section>
 
       <CinemaBand
         machine="crane"
+        clip="crane-dusk"
         eyebrow="Подача сегодня"
         phrase="Техника уже едет. Осталось сказать куда"
       />

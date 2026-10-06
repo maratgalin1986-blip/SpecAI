@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { CinemaHero } from '@/components/CinemaHero';
+import { LOOPS } from '@/lib/loops';
 import { PHOTO_CREDITS } from '@/lib/photoCredits';
 import { SOUND_CREDITS } from '@/lib/soundAssets';
 import { SITE } from '@/lib/site';
@@ -63,6 +64,18 @@ export default function CreditsPage() {
         съёмок Mixkit (лицензия Mixkit): {filmIds}. Изменения: фрагмент, цветокоррекция,
         зацикливание, без звука.
       </p>
+      <p className="text-slate-600">
+        Короткие зацикленные ролики на страницах техники (/arenda), в блоке «Как это работает», в
+        кино-вставках и в шапке «Работы и цены» — тоже настоящие съёмки Mixkit (лицензия Mixkit).
+        Изменения: фрагмент, цветокоррекция, зацикливание, без звука:
+      </p>
+      <ul className="flex flex-col gap-1 text-sm text-slate-600">
+        {Object.entries(LOOPS).map(([name, loop]) => (
+          <li key={name}>
+            {loop.alt} — Mixkit #{loop.mixkit}
+          </li>
+        ))}
+      </ul>
       <p className="text-sm text-slate-500">
         Mixkit: <span>mixkit.co/license</span>
       </p>
