@@ -157,19 +157,24 @@ describe('stripEmoji', () => {
   });
 });
 
-describe('moodLine shows few emojis', () => {
-  it('none on business and plain lines, at most one on a joke', () => {
+describe('moodLine shows no emoji', () => {
+  it('no emoji in subtitles, bubbles or the radio log, the mood stays for the portrait', () => {
+    const kinds = ['business', 'joke', 'radio'] as const;
     for (const speaker of Object.keys(LINES) as (keyof typeof LINES)[])
-      for (const line of LINES[speaker].slice(0, 200)) {
-        expect(moodLine({ speaker, text: line.text, kind: 'business', hour: 23 }).emojis).toEqual(
-          [],
-        );
-        expect(
-          moodLine({ speaker, text: line.text, kind: 'joke', hour: 23, plain: true }).emojis,
-        ).toEqual([]);
-        expect(
-          moodLine({ speaker, text: line.text, kind: 'joke', hour: 23 }).emojis.length,
-        ).toBeLessThanOrEqual(1);
-      }
+      for (const line of LINES[speaker].slice(0, 200))
+        for (const kind of kinds) {
+          const shown = moodLine({ speaker, text: line.text, kind, hour: 23 });
+          expect(shown.emojis).toEqual([]);
+          expect(hasEmoji(shown.text)).toBe(false);
+        }
+  });
+
+  it('strips an emoji written into the line and keeps the mood', () => {
+    const shown = moodLine({ speaker: 'rinat', text: 'С праздником! Ковш помыл 🚜', kind: 'joke' });
+    expect(shown.text).toBe('С праздником! Ковш помыл');
+    expect(shown.mood).not.toBe('neutral');
+    const angry = moodLine({ speaker: 'mihalych', text: 'Опять %#@&! бетон', kind: 'joke' });
+    expect(angry.mood).toBe('angry');
+    expect(angry.text).toBe('Опять %#@&! бетон');
   });
 });

@@ -18,6 +18,7 @@ import {
   FORM_NODE,
   MACHINE_ZONE,
   nextZone,
+  ORDER_LABEL,
   SPEAKERS,
   ZONES,
   zoneById,
@@ -139,6 +140,7 @@ import {
   type VisitorMemory,
 } from '@/lib/stroyka/visitorMemory';
 import { ChapterCard } from './ChapterCard';
+import { noteDuration, noteVisible } from '@/lib/stroyka/memoryNote';
 import { MemoryChip, MemoryOffer, type MemoryNote } from './MemoryOffer';
 import { EndCredits } from './EndCredits';
 import { WeatherBadge } from './WeatherBadge';
@@ -160,6 +162,12 @@ interface DialogState {
    */
   engaged: boolean;
   key: number;
+  /**
+   * The zone line may start with «Ринат передал по рации: …». Each character
+   * says it once a visit (and never right after a welcome that already named
+   * the job), so the visitor does not hear the job again in every zone.
+   */
+  intro?: boolean;
 }
 
 const BUBBLE_CSS = `.stroyka-bubble{position:absolute;left:0;top:0;max-width:min(240px,60vw);padding:6px 10px;border-radius:12px;background:#fff;color:#0f172a;font-size:14px;line-height:1.3;font-weight:700;-webkit-font-smoothing:antialiased;box-shadow:0 6px 18px rgba(0,0,0,.35);transition:opacity .35s;opacity:0;will-change:transform}
@@ -194,7 +202,7 @@ function hasWebGL() {
   }
 }
 
-/** Every voice on the site, for «Поговорил со всеми». */
+/** Every voice on the site, for «Знакомство со всеми». */
 const ALL_SPEAKERS = [...new Set(ZONES.map((z) => z.speaker))];
 const ALL_ZONES = ZONES.map((z) => z.id);
 
@@ -296,6 +304,7 @@ export function Stroyka() {
   const innerSaid = useRef(new Set<string>());
   const innerAt = useRef<number | null>(null);
   const calledBack = useRef(new Set<SpeakerId>());
+  const introSaid = useRef(new Set<SpeakerId>());
   // What the crew remember (lib/stroyka/visitorMemory.ts): read once on mount,
   // written on events only. Personal facts wait in `facts` until consent.
   const memory = useRef<VisitorMemory>(emptyMemory());
@@ -578,7 +587,7 @@ export function Stroyka() {
     engine?.setEnvironment(now, point, lift);
   }, [engine, season, now, point, lift]);
 
-  // «Собрал заявку»: every point of the order filled in, or the order sent.
+  // «Заявка собрана»: every point of the order filled in, or the order sent.
   useEffect(() => {
     if (ctx.sent || orderProgress(ctx).done >= 5) earn({ type: 'order' });
   }, [ctx, earn]);
@@ -627,7 +636,7 @@ export function Stroyka() {
 
   // ------------------------------------------------------------ dialogue
   const nodeFor = useCallback(
-    (nodeId: string, c: OrderContext): DialogNode | null => {
+    (nodeId: string, c: OrderContext, intro = true): DialogNode | null => {
       let node: DialogNode | null;
       if (nodeId === 'korpus') {
         node =
@@ -639,7 +648,7 @@ export function Stroyka() {
       let text = renderLine(node.text, c);
       const zoneRoot =
         ZONES.some((z) => z.root === node!.id) && node.id !== 'gate' && node.id !== FORM_NODE;
-      if (zoneRoot && contextFacts(c) && c.heardBy.includes(node.speaker))
+      if (intro && zoneRoot && contextFacts(c) && c.heardBy.includes(node.speaker))
         text = `${contextIntro(c, node.speaker)} ${text}`;
       if (node.id === 'gate-next') {
         // The foreman offers a rough estimate for the job (the /smeta calculator).
@@ -694,23 +703,43 @@ export function Stroyka() {
 
   const openNode = useCallback(
     (nodeId: string, radio: RadioLine[], engaged: boolean, c: OrderContext = ctxRef.current) => {
-      const node = nodeFor(nodeId, c);
-      if (!node) return;
-      let text = node.text;
+      const bare = nodeFor(nodeId, c, false);
+      if (!bare) return;
       const key = ++keyRef.current;
       // A returning visitor: the first zone character greets them, by name
       // with consent, and says what changed and what was agreed last time.
-      const zoneRoot = ZONES.some((z) => z.root === node.id) && node.id !== FORM_NODE;
+      const zoneRoot = ZONES.some((z) => z.root === bare.id) && bare.id !== FORM_NODE;
       if (!welcome.current && zoneRoot && (returning.current || away)) {
         const m = memory.current;
         const ok = hasConsent(m);
-        const g = pickGreeting(node.speaker, ok ? m.name : undefined, m.greeting);
+        // After «Забыть меня» (or «Не сейчас») nobody claims to recognise the visitor.
+        const g = pickGreeting(
+          bare.speaker,
+          ok ? m.name : undefined,
+          m.greeting,
+          Math.random,
+          !ok && m.declinedAt !== undefined,
+        );
         const known = ok
-          ? [lastTimeLine(node.speaker, m), orderStatusLine(node.speaker, m)].filter(Boolean)
+          ? [lastTimeLine(bare.speaker, m), orderStatusLine(bare.speaker, m)].filter(Boolean)
           : [];
-        welcome.current = { key, greeting: g.text, known: known.join(' '), speaker: node.speaker };
+        welcome.current = { key, greeting: g.text, known: known.join(' '), speaker: bare.speaker };
         commitMemory({ ...m, greeting: g.id });
+        if (known.length) {
+          // The greeting already named the job: this character has «heard» it,
+          // so no «Слышал-слышал…» five seconds later and no «передал по рации».
+          c = { ...c, heardBy: uniq([...c.heardBy, bare.speaker]) };
+          ctxRef.current = c;
+          setCtx(c);
+          calledBack.current.add(bare.speaker);
+          introSaid.current.add(bare.speaker);
+        }
       }
+      const intro = welcome.current?.key !== key && !introSaid.current.has(bare.speaker);
+      if (intro && contextFacts(c) && c.heardBy.includes(bare.speaker))
+        introSaid.current.add(bare.speaker);
+      const node = nodeFor(nodeId, c, intro) ?? bare;
+      let text = node.text;
       if (welcome.current?.key === key)
         text = `${welcomeText(welcome.current)} ${withoutHello(text)}`;
       const shown = moodLine({
@@ -732,7 +761,7 @@ export function Stroyka() {
       setExtra(null);
       setChat(null);
       setPendingPhone(null);
-      setDialog({ nodeId, radio, engaged, key });
+      setDialog({ nodeId, radio, engaged, key, intro });
     },
     [nodeFor, away, engine, earn, commitMemory, welcomeText],
   );
@@ -980,8 +1009,9 @@ export function Stroyka() {
             okLabel = `${d.getUTCDate()}.${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
           }
         }
-        const story = mod.weatherStory(hazard, machine, okLabel, Date.now());
-        sayAs(speaker === 'sveta' ? 'mihalych' : speaker, story.text, story.quick, 'joke');
+        const teller = speaker === 'sveta' ? 'mihalych' : speaker;
+        const story = mod.weatherStory(hazard, machine, okLabel, Date.now(), teller);
+        sayAs(teller, story.text, story.quick, 'joke');
       } catch {
         // No forecast: the order goes on as usual.
       }
@@ -1284,12 +1314,16 @@ export function Stroyka() {
     facts.current = {};
     setMemoryNote({ mode: 'bye', speaker: 'sveta', text: forgetText(name) });
   }, [commitMemory]);
-  // The short answers fade by themselves.
+  // The short answers fade by themselves (the long «Забыть меня» one stays
+  // at least 10 s) or go on a tap.
   useEffect(() => {
-    if (!memoryNote || memoryNote.mode === 'offer') return;
-    const timer = window.setTimeout(() => setMemoryNote(null), 5500);
+    if (!memoryNote) return;
+    const ms = noteDuration(memoryNote.mode, memoryNote.text);
+    if (ms === null) return;
+    const timer = window.setTimeout(() => setMemoryNote(null), ms);
     return () => window.clearTimeout(timer);
   }, [memoryNote]);
+  const dismissNote = useCallback(() => setMemoryNote(null), []);
 
   // When the object moves on next (for the hooks), through the progress API only.
   const progressRef = useRef(progress);
@@ -1545,7 +1579,7 @@ export function Stroyka() {
     const zoneMachine = zone ? zoneById(zone).order : undefined;
     onReply(
       {
-        label: 'Оформить заявку',
+        label: ORDER_LABEL,
         action: { kind: 'form' },
         set: !ctx.machine && zoneMachine ? { machine: zoneMachine } : undefined,
       },
@@ -1554,16 +1588,20 @@ export function Stroyka() {
   };
   const onFallbackZone = (z: ZoneId) => pickZone(z);
 
-  const node = dialog ? nodeFor(dialog.nodeId, ctx) : null;
+  const node = dialog ? nodeFor(dialog.nodeId, ctx, dialog.intro ?? true) : null;
   const formOpen = !!node?.form && !chat;
   // Phones: the dialogue is a lower-third subtitle bar; «Ответить», the form,
   // a phone number or typing open the full box. From sm up it is always full.
   const expanded = !!dialog && (!phone || replyOpen || formOpen || typing || !!pendingPhone);
   const phoneBar = phone && phase === 'film';
-  const showNote =
-    !!memoryNote &&
-    !(memoryNote.mode === 'offer' && (typing || order.open || formOpen || memoryFolded)) &&
-    !(phone && expanded);
+  const showNote = noteVisible(memoryNote?.mode, {
+    typing,
+    orderOpen: order.open,
+    formOpen,
+    folded: memoryFolded,
+    phone,
+    expanded,
+  });
   const showChip =
     memoryNote?.mode === 'offer' && memoryFolded && !(phone && expanded) && !order.open;
   const clean = !!chapterCard;
@@ -1816,7 +1854,7 @@ export function Stroyka() {
                   onClick={orderInWorld}
                   className="whitespace-nowrap rounded-full bg-amber-500 px-3 py-1 text-xs font-bold text-slate-950 hover:bg-amber-400"
                 >
-                  Оформить заявку
+                  {ORDER_LABEL}
                 </button>
                 <a
                   href={smetaHref(
@@ -2025,6 +2063,7 @@ export function Stroyka() {
               onYes={onMemoryYes}
               onNo={onMemoryNo}
               onFold={() => setMemoryFolded(true)}
+              onDismiss={dismissNote}
             />
           ) : (
             <MemoryChip onOpen={() => setMemoryFolded(false)} />
@@ -2099,6 +2138,7 @@ export function Stroyka() {
               onYes={onMemoryYes}
               onNo={onMemoryNo}
               onFold={() => setMemoryFolded(true)}
+              onDismiss={dismissNote}
             />
           </div>
         )}
@@ -2124,7 +2164,14 @@ export function Stroyka() {
               onEngage: engageDialog,
               onRelease: releaseDialog,
             }}
-            replies={node.replies}
+            // One call button in the row: the chat's own «Позвонить» replaces the line's.
+            replies={
+              chat?.quick.some((q) => q.action === 'call')
+                ? node.replies.filter(
+                    (r) => !(r.action.kind === 'link' && r.action.href.startsWith('tel:')),
+                  )
+                : node.replies
+            }
             radio={dialog.radio}
             extra={extra}
             instant={reduced}

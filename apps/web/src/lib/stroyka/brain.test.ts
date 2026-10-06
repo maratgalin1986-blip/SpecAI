@@ -12,7 +12,7 @@ import {
   understand,
   weatherStory,
 } from '@/lib/stroyka/brain';
-import { emptyContext, radioHandoff, whenPhrase } from '@/lib/stroyka/context';
+import { contextIntro, emptyContext, radioHandoff, whenPhrase } from '@/lib/stroyka/context';
 import { STORIES } from '@/lib/stroyka/lines/stories';
 import { CENSOR } from '@/lib/stroykaJokes';
 
@@ -166,7 +166,7 @@ describe('brain: rough estimate (lib/smeta)', () => {
     expect(est?.line).toContain('точную цену назовёт диспетчер СпецПласт16');
     expect(roughEstimate('без размеров', 'котлован', 'backhoe')).toBe(null);
     const reply = respond('траншея 30 метров глубина 1.5', 'rinat', emptyContext(), NOW);
-    expect(reply.text).toContain('Прикинул');
+    expect(reply.text).toContain('Прикидка:');
     expect(reply.quick.map((q) => q.action)).toContain('smeta');
   });
 
@@ -210,7 +210,7 @@ describe('the visitor tells their name', () => {
   it("answers with the name, in each character's voice", () => {
     const ctx = emptyContext();
     expect(respond('меня зовут Марат', 'mihalych', ctx, NOW).text).toBe(
-      'Марат — понял, запомню. Ну, Марат, что строим?',
+      'Марат, будем знакомы. Ну, Марат, что строим?',
     );
     expect(respond('Меня зовут Марат', 'rinat', ctx, NOW).text).toBe(
       'Очень приятно, Марат. Что копаем?',
@@ -250,5 +250,92 @@ describe('the visitor tells their name', () => {
   it("puts the visitor's name on the radio", () => {
     const [call] = radioHandoff('mihalych', 'sveta', { ...emptyContext(), name: 'Марат' });
     expect(call!.text).toBe('Света, приём! Тут Марат — по технике.');
+  });
+});
+
+describe('round-2 story fixes', () => {
+  const known = { ...emptyContext(), task: 'котлован под фундамент' };
+
+  it('never promises to remember without consent', () => {
+    expect(nameReply('mihalych', 'Марат')).not.toMatch(/запомн/);
+  });
+
+  it('says the name back with the job it already knows', () => {
+    expect(nameReply('rinat', 'Марат', known)).toBe(
+      'Очень приятно, Марат. Котлован под фундамент — помню. Что именно сделать — копать, поднять, вывезти?',
+    );
+    const withMachine = { ...known, machine: 'backhoe' as const };
+    expect(nameReply('sveta', 'Марат', withMachine)).toBe(
+      'Очень приятно, Марат. Котлован под фундамент, нужен JCB — помню. Когда нужна машина?',
+    );
+    expect(respond('меня зовут Марат', 'rinat', withMachine, NOW).text).toContain('— помню.');
+  });
+
+  it('«привет, как дела?» is small talk, not a plain greeting', () => {
+    const r = respond('привет, как дела?', 'rinat', emptyContext(), NOW);
+    expect(r.text).not.toBe('Здравствуйте! Что копаем?');
+    expect(r.text).toMatch(/как обычно|Работаем/);
+  });
+
+  it('Света and Алсу speak in the feminine', () => {
+    expect(respond('нужна доставка щебня на завтра', 'alsu', emptyContext(), NOW).text).not.toMatch(
+      /записал\b|Понял\b/,
+    );
+    const sveta = respond('на завтра, Тукаевский район', 'sveta', emptyContext(), NOW).text;
+    expect(sveta).toContain('записала');
+    expect(sveta).toContain('Поняла:');
+    expect(sveta).not.toMatch(/записал\.|Понял:/);
+    expect(respond('на завтра', 'rinat', emptyContext(), NOW).text).toContain('записал.');
+    expect(roughEstimate('котлован 10 на 8, глубина 2', 'котлован', 'backhoe')?.line).toMatch(
+      /^Прикидка:/,
+    );
+    const job = { ...emptyContext(), task: 'котлован', machine: 'backhoe' as const };
+    expect(contextIntro({ ...job, heardBy: ['sveta'] }, 'rinat')).toMatch(/^Света передала/);
+    expect(contextIntro({ ...job, heardBy: ['alsu'] }, 'rinat')).toMatch(/^Алсу передала/);
+    expect(contextIntro(job, 'sveta')).toMatch(/^Поняла задачу/);
+    expect(contextIntro(job, 'rinat')).toMatch(/^Понял задачу/);
+  });
+
+  it('Света never hands the visitor to herself', () => {
+    const r = respond('нужен экскаватор завтра', 'sveta', emptyContext(), NOW);
+    expect(r.text).not.toMatch(/Передаю Свете/);
+    expect(r.text).toContain('Ставлю машину в график — осталось адрес и телефон.');
+    expect(r.text).toContain('записала');
+    expect(r.handoff).toBeUndefined();
+    // Passed on by Михалыч, the reply is said in Света's voice: the same words.
+    const m = respond('нужен экскаватор завтра', 'mihalych', emptyContext(), NOW);
+    expect(m.handoff).toBe('sveta');
+    expect(m.text).toContain('Ставлю машину в график');
+    expect(m.text).not.toMatch(/записал\./);
+  });
+
+  it('keeps «ты» for Михалыч and Ильдар and «вы» for the others', () => {
+    expect(respond('посчитать смету', 'mihalych', emptyContext(), NOW).text).toContain(
+      'Скажи размеры — прикину, а материалы посчитает Алсу.',
+    );
+    expect(respond('посчитать смету', 'alsu', emptyContext(), NOW).text).toContain(
+      'Скажите размеры — посчитаю примерно, материалы — в смете для снабженца.',
+    );
+    expect(respond('нужен экскаватор', 'ildar', emptyContext(), NOW).text).toContain(
+      'гусеничный — скажи.',
+    );
+    expect(weatherStory('wind', 'crane', '5.10', 1, 'ildar').text).toContain('давай на этот день?');
+    expect(weatherStory('wind', 'crane', '5.10', 1, 'rinat').text).toContain(
+      'давайте на этот день?',
+    );
+  });
+
+  it('labels the order button «Оформить у Светы»', () => {
+    for (const text of ['сколько стоит', 'спасибо'])
+      expect(respond(text, 'rinat', emptyContext(), NOW).quick.map((q) => q.label)).toContain(
+        'Оформить у Светы',
+      );
+  });
+
+  it('weather stories carry no invented figures', () => {
+    for (const list of Object.values(STORIES))
+      for (const story of list) {
+        expect(story).not.toMatch(/\d|м\/с|Елабуг|доволен/);
+      }
   });
 });

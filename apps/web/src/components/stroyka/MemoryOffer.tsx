@@ -8,6 +8,7 @@
 // brings it back from there. The consent text is /soglasie#zapominanie. The
 // same card carries the short answer after «Да», «Не сейчас» or «Забыть меня».
 
+import { SITE } from '@/lib/site';
 import { SPEAKERS, type SpeakerId } from '@/lib/stroyka';
 import { Portrait } from './Portraits';
 
@@ -22,12 +23,15 @@ export function MemoryOffer({
   onYes,
   onNo,
   onFold,
+  onDismiss,
 }: {
   note: MemoryNote;
   onYes: () => void;
   onNo: () => void;
   /** Fold the offer into the chip (it can be brought back). */
   onFold?: () => void;
+  /** An answer goes on a tap. */
+  onDismiss?: () => void;
 }) {
   const offer = note.mode === 'offer';
   return (
@@ -35,6 +39,7 @@ export function MemoryOffer({
       data-testid={offer ? 'memory-consent' : 'memory-note'}
       aria-label={offer ? 'Предложение запомнить вас' : undefined}
       aria-live="polite"
+      onClick={offer ? undefined : onDismiss}
       className="pointer-events-auto mx-auto w-full max-w-2xl rounded-2xl border border-amber-500/50 bg-slate-950 p-3 text-white antialiased shadow-2xl"
     >
       <div className="flex items-start gap-3">
@@ -50,6 +55,25 @@ export function MemoryOffer({
             {SPEAKERS[note.speaker].name}
           </b>
           {note.text}
+          {note.mode === 'bye' && (
+            <span className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm font-bold">
+              <a
+                href={SITE.phoneHref}
+                data-testid="memory-bye-call"
+                className="text-amber-300 underline underline-offset-2"
+              >
+                {SITE.phone}
+              </a>
+              <a
+                href="/soglasie"
+                target="_blank"
+                rel="noopener"
+                className="text-white underline decoration-dotted underline-offset-2"
+              >
+                Раздел «Согласие»
+              </a>
+            </span>
+          )}
         </p>
         {offer && onFold && (
           <button
