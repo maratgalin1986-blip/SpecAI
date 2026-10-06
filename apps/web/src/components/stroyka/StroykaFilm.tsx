@@ -7,10 +7,10 @@ import { ChannelBug } from './ChannelBug';
 import { FilmLook } from './FilmLook';
 
 // The opening film of /stroyka: a 44 s montage of open-licence footage
-// (Mixkit, see /credits) with music, shown while the 3D site loads. With
-// sound when the browser allows it, muted otherwise (a tap turns it on).
-// «Войти на стройку» appears as soon as the site is ready; the film also
-// closes by itself at the end, or with «Пропустить».
+// (Mixkit, see /credits) with music, before the film tour. With sound when
+// the browser allows it, muted otherwise (a tap turns it on). «Войти на
+// стройку» enters the tour; the film also closes by itself at the end, or
+// with «Пропустить».
 
 export const FILM_SRC = {
   full: '/film/stroyka-film.mp4',
@@ -79,15 +79,9 @@ function placeOver(v: HTMLVideoElement, small: boolean, offersH: number): Place 
 // Memoised: the /stroyka page around it updates often (radio, dialogue,
 // loading), and the film should re-render only when its own props change.
 export const StroykaFilm = memo(function StroykaFilm({
-  ready,
-  progress,
   small,
   onClose,
 }: {
-  /** The 3D site is loaded. */
-  ready: boolean;
-  /** Loading progress, 0–100. */
-  progress: number;
   /** Phones and slow connections get the lighter cut. */
   small: boolean;
   onClose: () => void;
@@ -122,7 +116,7 @@ export const StroykaFilm = memo(function StroykaFilm({
       v.removeEventListener('loadedmetadata', measure);
       window.removeEventListener('resize', measure);
     };
-  }, [small, ready]);
+  }, [small]);
   useEffect(() => {
     const timer = window.setInterval(
       () => setLine((k) => (k + 1) % OFFERS.length),
@@ -148,10 +142,10 @@ export const StroykaFilm = memo(function StroykaFilm({
     });
   }, []);
 
-  // The film is over (or could not play) and the site is ready: go in.
+  // The film is over (or could not play): go in.
   useEffect(() => {
-    if (ended && ready) onClose();
-  }, [ended, ready, onClose]);
+    if (ended) onClose();
+  }, [ended, onClose]);
 
   return (
     <div
@@ -222,24 +216,18 @@ export const StroykaFilm = memo(function StroykaFilm({
             </a>
           ))}
         </nav>
-        {ready ? (
-          <button
-            type="button"
-            onClick={onClose}
-            className="group inline-flex items-center gap-3 rounded-full bg-amber-500 py-2 pl-2 pr-6 text-lg font-extrabold text-slate-950 shadow-xl shadow-amber-600/40 transition hover:bg-amber-400"
-          >
-            <span className="stroyka-ping relative grid h-10 w-10 place-items-center rounded-full bg-slate-950 text-amber-400">
-              <svg viewBox="0 0 16 16" aria-hidden className="ml-0.5 h-4 w-4 fill-current">
-                <path d="M4 2.5v11l9-5.5z" />
-              </svg>
-            </span>
-            Войти на стройку
-          </button>
-        ) : (
-          <p className="font-mono text-xs text-white/70" data-testid="film-loading">
-            {ended ? 'Заезжаем на объект…' : 'Стройка загружается…'} {progress}%
-          </p>
-        )}
+        <button
+          type="button"
+          onClick={onClose}
+          className="group inline-flex items-center gap-3 rounded-full bg-amber-500 py-2 pl-2 pr-6 text-lg font-extrabold text-slate-950 shadow-xl shadow-amber-600/40 transition hover:bg-amber-400"
+        >
+          <span className="stroyka-ping relative grid h-10 w-10 place-items-center rounded-full bg-slate-950 text-amber-400">
+            <svg viewBox="0 0 16 16" aria-hidden className="ml-0.5 h-4 w-4 fill-current">
+              <path d="M4 2.5v11l9-5.5z" />
+            </svg>
+          </span>
+          Войти на стройку
+        </button>
       </div>
       <div className="absolute right-3 top-3 flex gap-2 sm:right-5 sm:top-5">
         <button
@@ -267,8 +255,7 @@ export const StroykaFilm = memo(function StroykaFilm({
           type="button"
           onClick={() => {
             video.current?.pause();
-            if (ready) onClose();
-            else setEnded(true);
+            onClose();
           }}
           className="min-h-11 rounded-full bg-white px-4 py-2 text-sm font-bold text-slate-950 shadow-lg hover:bg-amber-300"
         >

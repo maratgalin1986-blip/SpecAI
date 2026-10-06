@@ -1,7 +1,6 @@
-// The sound of the film tour (/stroyka, phase 'film'): the 3D engine is not
-// running there, so the page itself tells the sound layer about the weather
-// (sp:nature) and lets the crew talk in the background now and then. Pure
-// helpers, so the same rules as the engine can be tested.
+// The sound of the film tour (/stroyka): the page itself tells the sound
+// layer about the weather (sp:nature) and lets the crew talk in the
+// background now and then. Pure helpers, so the rules can be tested.
 
 import type { ZoneId } from '@/lib/stroyka';
 import type { NatureEventDetail } from '@/lib/sceneEvents';
@@ -11,10 +10,10 @@ import { skyPalette, sunPosition, weatherScene, type WeatherPoint } from '@/lib/
 const round2 = (v: number) => Math.round(v * 100) / 100;
 
 /**
- * The weather around the visitor, as the 3D engine reports it: rain and snow
+ * The weather around the visitor: rain and snow
  * from the forecast point, wind in m/s, night from the sun over Челны at this
  * time, the ground dry, wet or under snow. `seasonSnow` is the New Year snow
- * that falls whatever the forecast (as in the engine).
+ * that falls whatever the forecast.
  */
 export function filmNature(
   date: Date,

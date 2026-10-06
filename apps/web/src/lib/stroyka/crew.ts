@@ -1,4 +1,4 @@
-// The crew of the 3D site by name (owner, 2026-10-03: «люди многонациональные,
+// The crew of the site by name (owner, 2026-10-03: «люди многонациональные,
 // говорят по-русски с акцентом, всё реалистично»). Like a real site in
 // Naberezhnye Chelny: Tatars, Russians, Bashkirs, Chuvash, Uzbeks, Kazakhs,
 // Armenians, Azerbaijanis. The «accent» is the words people really slip into
