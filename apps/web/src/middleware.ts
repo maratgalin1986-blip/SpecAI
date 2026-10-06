@@ -1,15 +1,15 @@
 import { NextResponse, type NextFetchEvent, type NextRequest } from 'next/server';
 import authMiddleware from 'next-auth/middleware';
-import { AB_COOKIE, AB_MAX_AGE, parseAbVariant } from '@/lib/ab';
+import { AB_KEY } from '@/lib/ab';
 
 type AuthMiddleware = (
   request: NextRequest,
   event: NextFetchEvent,
 ) => Promise<Response | undefined>;
 
-// Two jobs: /dashboard needs a signed-in user (next-auth), and every page
-// visitor gets the `sp_ab` A/B cookie («кино или спокойно», docs/marketing.md).
-// `?ab=cine|calm` forces a variant for testing.
+// /dashboard needs a signed-in user (next-auth). The A/B variant («кино или
+// спокойно») no longer is a cookie set before consent: it lives in localStorage
+// (lib/ab.ts); a stale `sp_ab` cookie from earlier visits is removed here.
 export default async function middleware(request: NextRequest, event: NextFetchEvent) {
   let response: NextResponse | undefined;
   if (request.nextUrl.pathname.startsWith('/dashboard')) {
@@ -18,18 +18,7 @@ export default async function middleware(request: NextRequest, event: NextFetchE
   }
   response ??= NextResponse.next();
 
-  const forced = parseAbVariant(request.nextUrl.searchParams.get('ab'));
-  const current = parseAbVariant(request.cookies.get(AB_COOKIE)?.value);
-  // The owner wants the cinema for every visitor: the calm variant is only
-  // reachable with ?ab=calm (for comparison), and stored «calm» cookies reset.
-  const variant = forced ?? 'cine';
-  if (variant !== current) {
-    response.cookies.set(AB_COOKIE, variant, {
-      path: '/',
-      maxAge: AB_MAX_AGE,
-      sameSite: 'lax',
-    });
-  }
+  if (request.cookies.has(AB_KEY)) response.cookies.delete(AB_KEY);
   return response;
 }
 

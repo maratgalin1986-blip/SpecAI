@@ -57,7 +57,7 @@ export function MemoryOffer({
             data-testid="memory-fold"
             onClick={onFold}
             aria-label="Свернуть"
-            className="-mr-1 -mt-1 grid h-9 w-9 shrink-0 place-items-center rounded-full text-slate-300 hover:text-white"
+            className="-mr-2 -mt-2 grid h-11 w-11 shrink-0 place-items-center rounded-full text-slate-300 hover:text-white"
           >
             ✕
           </button>

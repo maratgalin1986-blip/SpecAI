@@ -1463,6 +1463,11 @@ html {
 .chat-fab {
   bottom: calc(4.75rem + env(safe-area-inset-bottom));
 }
+/* The callback form is on screen (CallbackIris): the chat button steps aside. */
+html[data-callback-view] .chat-fab {
+  opacity: 0;
+  pointer-events: none;
+}
 html[data-cookie-strip] .chat-fab,
 html[data-tg-chip] .chat-fab {
   bottom: calc(7.25rem + env(safe-area-inset-bottom));

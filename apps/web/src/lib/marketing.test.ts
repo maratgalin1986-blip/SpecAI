@@ -98,12 +98,15 @@ function fakeDocument() {
 function bootPage({
   consent = null as string | null,
   path = '/',
-  cookie = '',
-}: { consent?: string | null; path?: string; cookie?: string } = {}) {
+  ab = null as string | null,
+}: { consent?: string | null; path?: string; ab?: string | null } = {}) {
   const win: MetrikaWindow & Record<string, unknown> = {};
-  const storage = { getItem: (key: string) => (key === 'cookie-consent' ? consent : null) };
-  const location = { pathname: path, href: `https://${HOST}${path}?yclid=42` };
-  const document = { referrer: 'https://yandex.ru/', cookie };
+  const storage = {
+    getItem: (key: string) => (key === 'cookie-consent' ? consent : key === 'sp_ab' ? ab : null),
+    setItem: () => {},
+  };
+  const location = { pathname: path, search: '?yclid=42', href: `https://${HOST}${path}?yclid=42` };
+  const document = { referrer: 'https://yandex.ru/', cookie: '' };
   new Function('window', 'localStorage', 'location', 'document', metrikaInitScript(ID))(
     win,
     storage,
@@ -132,7 +135,7 @@ describe('Metrika before consent', () => {
   });
 
   it('starts at once when consent is stored, with Webvisor and the landing url', () => {
-    const win = bootPage({ consent: 'yes', cookie: 'sp_ab=calm' });
+    const win = bootPage({ consent: 'yes', ab: 'calm' });
     expect(win.__ymStarted).toBe(true);
     const [init, params] = calls(win);
     expect(init?.[1]).toBe('init');
@@ -164,7 +167,7 @@ describe('Metrika before consent', () => {
 
 describe('startMetrika on consent', () => {
   it('puts init first, then the goals buffered earlier, and loads tag.js once', () => {
-    const win = bootPage({ cookie: 'sp_ab=cine' });
+    const win = bootPage();
     win.ym?.(Number(ID), 'reachGoal', 'lead');
     const { doc, inserted } = fakeDocument();
     expect(startMetrika(win, doc)).toBe(true);

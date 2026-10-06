@@ -58,7 +58,7 @@ export function CallbackForm({
     }
   }
 
-  const input = `w-full rounded-md border px-3 py-2 text-sm ${
+  const input = `min-h-11 w-full rounded-md border px-3 py-2 text-base sm:text-sm ${
     dark
       ? 'border-slate-600 bg-slate-900/60 text-white placeholder:text-slate-400'
       : 'border-slate-300 bg-white'

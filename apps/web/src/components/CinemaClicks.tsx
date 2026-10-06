@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
-import { parseAbCookie } from '@/lib/ab';
+import { abVariant } from '@/lib/ab';
 import { playCue } from '@/lib/sound';
 
 // Every press on the site gets a film-style response: a ring of light spreads
@@ -51,7 +51,7 @@ export function CinemaClicks() {
   useEffect(() => {
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
     // A/B group «calm»: no click effects.
-    if (parseAbCookie(document.cookie) === 'calm') return;
+    if (abVariant() === 'calm') return;
     const onDown = (event: PointerEvent) => {
       const target = (event.target as Element | null)?.closest?.(
         'a[href], button, [role="button"], summary',

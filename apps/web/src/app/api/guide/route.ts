@@ -12,8 +12,9 @@ export const dynamic = 'force-dynamic';
  */
 export async function GET(request: NextRequest) {
   const user = await getRequestUser(request);
-  const guide = await guideFor(user);
+  // 'plain' is the mobile app (it still has accounts); the site gets no sign-up step.
   const links = request.nextUrl.searchParams.get('links') === 'plain' ? 'plain' : 'markdown';
+  const guide = await guideFor(user, links);
   return NextResponse.json(
     { ...guide, reply: guideReply(guide, links) },
     { headers: { 'Cache-Control': 'private, no-store' } },
