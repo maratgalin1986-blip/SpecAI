@@ -275,7 +275,7 @@ export default async function HomePage() {
             </p>
             {/* Owner, 2026-10-03: order, estimate and design as real buttons,
                 «Заказать технику» the biggest and brightest; then the phone and
-                the 3D site; the other ways in stay quiet links. */}
+                the film tour; the other ways in stay quiet links. */}
             <div
               className="float-in mt-5 flex max-w-xl flex-col gap-3 sm:mt-8"
               style={{ animationDelay: '360ms' }}
@@ -316,7 +316,7 @@ export default async function HomePage() {
                   <Icon name="phone" className="h-5 w-5" />
                   {SITE.phone}
                 </a>
-                {/* The 3D site: a glass pill with a softly pulsing play button. A
+                {/* The film tour: a glass pill with a softly pulsing play button. A
                     client-side link, so the tap that started the sound here keeps
                     it playing on the site (a full page load would need a new tap). */}
                 <Link
@@ -329,9 +329,6 @@ export default async function HomePage() {
                     </svg>
                   </span>
                   Войти на стройку
-                  <span className="rounded bg-white/15 px-1.5 py-0.5 text-[11px] font-bold uppercase tracking-wider text-amber-200">
-                    3D
-                  </span>
                 </Link>
               </div>
             </div>

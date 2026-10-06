@@ -1,10 +1,10 @@
 // Real footage for each stop of /stroyka (owner, 2026-10-03: «не рисовать
 // графику — склеить ролик из настоящих съёмок и вставить, чтобы не грузить
 // движок»). Each zone plays a short graded loop of open-licence footage
-// (Mixkit, see /credits) instead of the 3D scene: files in
+// (Mixkit, see /credits): files in
 // public/film/zones/<zone>.mp4 (1280×720), <zone>-sm.mp4 (854×480) and
 // <zone>.webp (poster); phones held upright get <zone>-v.mp4 / -v.webp, a
-// 720×1280 reframe centred on the subject. The 3D scene stays one tap away.
+// 720×1280 reframe centred on the subject.
 
 import type { ZoneId } from '@/lib/stroyka';
 

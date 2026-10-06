@@ -9,7 +9,6 @@ import {
   saveBadges,
   type BadgeState,
 } from '@/lib/stroyka/badges';
-import { photoCaption, photoFileName, photoLayout } from '@/lib/stroyka/photo';
 
 // Noon in Moscow on a given day.
 const msk = (y: number, m: number, d: number, h = 12) => new Date(Date.UTC(y, m - 1, d, h - 3));
@@ -123,23 +122,5 @@ describe('badges', () => {
     expect(loadBadges(store).earned).toEqual(['night']);
     mem.set(BADGES_KEY, 'not json');
     expect(loadBadges(store)).toEqual(emptyBadges());
-  });
-});
-
-describe('photo', () => {
-  it('caption with the brand, Moscow date and host as text', () => {
-    const c = photoCaption(msk(2026, 10, 2), 'https://spec-ai-web.vercel.app/stroyka');
-    expect(c.title).toBe('Я на стройке ИИСтройка24 · СпецПласт16');
-    expect(c.date).toBe('2 октября 2026');
-    expect(c.site).toBe('spec-ai-web.vercel.app');
-    expect(photoFileName(msk(2026, 10, 2, 23))).toBe('specplast16-stroyka-2026-10-02.png');
-  });
-  it('layout fits the photo and a caption band', () => {
-    const l = photoLayout(2560, 1440);
-    expect(l.photo.w).toBe(1600);
-    expect(l.photo.h).toBe(900);
-    expect(l.width).toBe(1600 + l.pad * 2);
-    expect(l.height).toBe(900 + l.pad * 2 + l.band);
-    expect(photoLayout(390, 664).photo.w).toBe(390);
   });
 });
