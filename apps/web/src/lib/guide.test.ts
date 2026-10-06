@@ -15,12 +15,19 @@ describe('guideRole', () => {
 });
 
 describe('nextSteps: guest', () => {
-  it('asks to browse and then register', () => {
+  it('on the site: browse, then order, never register', () => {
     const guide = nextSteps(null);
     expect(guide.role).toBe('GUEST');
     expect(guide.next.id).toBe('browse');
+    expect(guide.steps.map((s) => s.id)).toEqual(['browse', 'order']);
+    expect(guideReply(guide)).not.toMatch(/регистр/i);
+    expect(guide.progress).toEqual({ done: 0, total: 2 });
+  });
+
+  it('in the app (plain links) the sign-up step stays', () => {
+    const guide = nextSteps(null, {}, 'plain');
     expect(guide.steps.map((s) => s.id)).toEqual(['browse', 'register', 'order']);
-    expect(guide.steps.find((s) => s.id === 'register')?.action?.href).toBe('/register');
+    expect(guide.steps.find((s) => s.id === 'register')?.action?.app).toBe('/(auth)/register');
     expect(guide.progress).toEqual({ done: 0, total: 3 });
   });
 });

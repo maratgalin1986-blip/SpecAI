@@ -87,11 +87,13 @@ export const WeatherBadge = memo(function WeatherBadge({
         type="button"
         data-testid="conditions"
         onClick={() => setOpen((v) => !v)}
-        className="acid-cycle flex min-h-11 max-w-full flex-wrap items-center gap-x-1.5 rounded-2xl bg-slate-950/80 px-3 py-1 text-left font-mono text-[11px] font-bold uppercase leading-snug tracking-wide antialiased sm:flex-nowrap sm:rounded-full sm:text-xs"
+        className="acid-cycle flex min-h-11 max-w-full flex-nowrap items-center gap-x-1.5 rounded-2xl bg-slate-950/80 px-3 py-1 text-left font-mono text-[11px] font-bold uppercase leading-snug tracking-wide antialiased sm:flex-nowrap sm:rounded-full sm:text-xs"
         aria-expanded={open}
       >
-        <span className="sm:truncate">{line}</span>
-        <span className="shrink-0 underline decoration-dotted underline-offset-2">· на дату ▾</span>
+        <span className="min-w-0 sm:truncate">{line}</span>
+        <span className="shrink-0 underline decoration-dotted underline-offset-2">
+          <span className="sr-only sm:not-sr-only">· на дату </span>▾
+        </span>
       </button>
       {open && (
         <div className="absolute left-0 top-full z-40 mt-2 w-[min(88vw,340px)] rounded-2xl bg-slate-950/95 p-4 text-sm text-white shadow-2xl ring-1 ring-white/15 backdrop-blur">

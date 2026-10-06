@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Icon } from '@/components/Icon';
 import { WhatsAppIcon } from '@/components/MessengerButtons';
 import { PhotoShare } from '@/components/PhotoShare';
-import { isOnShift, SHIFT, SITE } from '@/lib/site';
+import { isOnShift, nextShiftText, SITE } from '@/lib/site';
 import { TelegramButton } from '@/components/TelegramButton';
 
 // «Принято»: the screen after a lead is sent. A stamp lands once, the text
@@ -12,9 +12,15 @@ import { TelegramButton } from '@/components/TelegramButton';
 export function LeadSuccess({ dark = false, summary }: { dark?: boolean; summary?: string }) {
   const ref = useRef<HTMLDivElement>(null);
   const [onShift, setOnShift] = useState<boolean | null>(null);
+  const [nextShift, setNextShift] = useState('');
   useEffect(() => {
     setOnShift(isOnShift());
-    ref.current?.focus();
+    setNextShift(nextShiftText());
+    // Focus without the browser's jump, then centre it: «Принято» never
+    // ends up under the sticky header.
+    const node = ref.current;
+    node?.focus({ preventScroll: true });
+    node?.scrollIntoView({ block: 'center' });
   }, []);
   const whatsapp = `${SITE.whatsappHref}?text=${encodeURIComponent(
     `Здравствуйте! Оставил заявку на сайте${summary ? `: ${summary}` : ''}.`,
@@ -25,7 +31,7 @@ export function LeadSuccess({ dark = false, summary }: { dark?: boolean; summary
       ref={ref}
       tabIndex={-1}
       role="status"
-      className={`relative overflow-hidden rounded-2xl p-6 outline-none ${
+      className={`relative scroll-mt-28 overflow-hidden rounded-2xl p-6 outline-none ${
         dark ? 'bg-slate-900 text-white ring-1 ring-white/10' : 'bg-slate-950 text-white'
       }`}
     >
@@ -36,7 +42,7 @@ export function LeadSuccess({ dark = false, summary }: { dark?: boolean; summary
       <h2 className="mt-4 text-lg font-semibold">Заявка у диспетчера {SITE.name}</h2>
       <p className="mt-1 text-sm text-white/70">
         {onShift === false
-          ? `Сейчас нерабочее время — перезвоним утром, с ${SHIFT.from}:00.`
+          ? `Сейчас нерабочее время — перезвоним ${nextShift}.`
           : 'Перезвоним в течение 15 минут и назовём цену.'}{' '}
         Не хотите ждать — позвоните или напишите сами.
       </p>

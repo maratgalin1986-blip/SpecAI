@@ -104,6 +104,55 @@ test('callback form sends a lead without a name', async ({ page }) => {
   expect(errors, 'page errors').toEqual([]);
 });
 
+// The hero CTA lands on a usable form: within a second the phone field is on
+// screen, not under the header, the cookie strip or the chat button, and takes focus.
+test('hero CTA: phone field ready within 1 s', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'iphone-13', 'phone layout');
+  const errors = await guard(page);
+  await page.goto('/?intro=0', { waitUntil: 'load' });
+  await page.locator('main a[href="#callback"]').first().click();
+  const phone = page.locator('#callback').getByLabel('Телефон');
+  await expect(phone).toBeInViewport({ timeout: 1000 });
+  await expect(phone).toBeVisible();
+  const free = await phone.evaluate((el) => {
+    const r = el.getBoundingClientRect();
+    const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+    if (hit === el && r.top > 64 && r.bottom < window.innerHeight) return 'free';
+    return `${Math.round(r.top)}..${Math.round(r.bottom)} / ${window.innerHeight}: ${hit?.outerHTML.slice(0, 120)}`;
+  });
+  expect(free, 'the phone field is not covered').toBe('free');
+  await phone.focus();
+  await expect(phone).toBeFocused();
+  // A repeat tap on the same hash still works (no hashchange).
+  await page.mouse.wheel(0, -3000);
+  await page.locator('main a[href="#callback"]').first().click();
+  await expect(phone).toBeInViewport({ timeout: 1000 });
+  expect(errors, 'page errors').toEqual([]);
+});
+
+// /stroyka is a full-screen layer: the consent strip must still be seen and
+// tapped there (Metrika waits for it).
+test('cookie strip visible and clickable on /stroyka', async ({ page }) => {
+  const errors = await guard(page);
+  await page.goto('/stroyka?nointro=1', { waitUntil: 'load' });
+  const strip = page.getByTestId('cookie-strip');
+  await expect(strip).toBeVisible({ timeout: 10_000 });
+  await expect(strip).toBeInViewport();
+  const agree = strip.getByRole('button', { name: 'Согласен' });
+  const onTop = await agree.evaluate((el) => {
+    const r = el.getBoundingClientRect();
+    const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+    return !!hit && el.contains(hit);
+  });
+  expect(onTop, 'nothing covers «Согласен»').toBe(true);
+  const box = (await agree.boundingBox())!;
+  expect(box.height).toBeGreaterThanOrEqual(44);
+  await agree.click();
+  await expect(strip).toHaveCount(0);
+  expect(await page.evaluate(() => localStorage.getItem('cookie-consent'))).toBe('yes');
+  expect(errors, 'page errors').toEqual([]);
+});
+
 // Phones: the main «Заказать технику» is on the first screen, above the bottom bar.
 test('hero order button above the fold on a phone', async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== 'iphone-13', 'phone layout');

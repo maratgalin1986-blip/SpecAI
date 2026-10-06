@@ -1341,7 +1341,7 @@ export function Stroyka() {
       <header className="pointer-events-none absolute inset-x-0 top-0 z-[65] flex items-center gap-2 bg-gradient-to-b from-slate-950/90 to-transparent px-3 pb-6 pt-[max(0.5rem,env(safe-area-inset-top))] sm:px-4">
         <a
           href="/"
-          className="pointer-events-auto flex shrink-0 items-center gap-2 font-extrabold"
+          className="pointer-events-auto flex min-h-11 shrink-0 items-center gap-2 font-extrabold"
           aria-label={`${SITE.platform} от ${SITE.name} — на главную`}
         >
           <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-500 font-mono text-sm text-slate-950">
@@ -1355,11 +1355,11 @@ export function Stroyka() {
           <WeatherBadge line={chip} machine={badgeMachine} />
         </div>
         <div className="ml-auto flex shrink-0 items-center gap-2">
-          <SoundToggle className="pointer-events-auto" />
+          <SoundToggle large className="pointer-events-auto" />
           <a
             href={SITE.phoneHref}
             data-testid="call-btn"
-            className="pointer-events-auto rounded-full bg-white/10 px-3 py-2 text-sm font-semibold backdrop-blur hover:bg-white/20"
+            className="pointer-events-auto inline-flex min-h-11 items-center rounded-full bg-white/10 px-3 text-sm font-semibold backdrop-blur hover:bg-white/20"
           >
             Позвонить
           </a>
@@ -1367,7 +1367,7 @@ export function Stroyka() {
             href="?order=1"
             data-testid="skip-to-order"
             onClick={skipToOrder}
-            className="pointer-events-auto whitespace-nowrap rounded-full bg-amber-500 px-3 py-2 text-sm font-bold text-slate-950 shadow-lg shadow-amber-600/30 hover:bg-amber-400"
+            className="pointer-events-auto inline-flex min-h-11 items-center whitespace-nowrap rounded-full bg-amber-500 px-3 text-sm font-bold text-slate-950 shadow-lg shadow-amber-600/30 hover:bg-amber-400"
           >
             <span className="sm:hidden">К заказу →</span>
             <span className="hidden sm:inline">Пропустить → к заказу</span>
@@ -1393,6 +1393,10 @@ export function Stroyka() {
               </div>
               <div className="truncate text-xs text-slate-200" data-testid="progress-line">
                 {progressLine(progress)}
+              </div>
+              {/* The object is a game scene, not a real job (review, round 2). */}
+              <div className="text-[10px] leading-tight text-slate-400" data-testid="object-hint">
+                игровой объект, для примера
               </div>
               {/* The object's passport, folded into this card (one «Объект: … этап»). */}
               {phase === 'film' && (
@@ -1625,7 +1629,7 @@ export function Stroyka() {
             type="button"
             data-testid="forget-me"
             onClick={onForget}
-            className="pointer-events-auto mx-auto rounded-full bg-slate-950/85 px-3 py-1 text-sm font-semibold text-white/85 underline decoration-dotted underline-offset-2 hover:text-white"
+            className="pointer-events-auto mx-auto inline-flex min-h-11 items-center rounded-full bg-slate-950/85 px-3 text-sm font-semibold text-white/85 underline decoration-dotted underline-offset-2 hover:text-white"
           >
             Забыть меня
           </button>

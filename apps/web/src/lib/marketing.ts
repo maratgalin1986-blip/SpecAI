@@ -1,3 +1,4 @@
+import { AB_INLINE } from './ab';
 import { SITE } from './site';
 
 // Marketing attribution: where a visitor came from (ad campaign, search,
@@ -232,8 +233,7 @@ export function metrikaInitScript(id: string) {
   return (
     `(function(m,i){if(/^\\/admin/.test(location.pathname))return;` +
     `var v=null;try{v=localStorage.getItem(${JSON.stringify(COOKIE_CONSENT_KEY)})}catch(e){}` +
-    `var b=[${init}];var c=/(?:^|;\\s*)sp_ab=(cine|calm)/.exec(document.cookie);` +
-    `if(c)b.push([${id},"params",{ab:c[1]}]);m.__ymBoot=b;m.__ymSrc=${JSON.stringify(metrikaTagSrc(id))};` +
+    `var b=[${init}];${AB_INLINE};b.push([${id},"params",{ab:ab}]);m.__ymBoot=b;m.__ymSrc=${JSON.stringify(metrikaTagSrc(id))};` +
     `if(v==='no'){m.__ymOff=true;return}` +
     `m[i]=m[i]||function(){(m[i].a=m[i].a||[]).push(arguments)};m[i].l=1*new Date();` +
     `if(v==='yes'){for(var k=0;k<b.length;k++)m[i].apply(null,b[k]);m.__ymStarted=true}` +

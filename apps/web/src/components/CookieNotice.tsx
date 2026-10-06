@@ -103,21 +103,41 @@ export function CookieNotice() {
 
   if (!open) return null;
 
+  // /stroyka is a full-screen layer at z-80 with its order panel at z-95: the
+  // strip goes between them, at the top under the bar (the dialogue and the
+  // zone card live lower), in one compact line on phones; on wide screens the
+  // zone tabs take the top, so it goes to the free bottom-left corner.
+  const stroyka = pathname?.startsWith('/stroyka') ?? false;
+  const place = stroyka
+    ? 'inset-x-2 top-[calc(max(0.5rem,env(safe-area-inset-top))+3rem)] z-[90] sm:inset-x-auto sm:left-1/2 sm:w-[30rem] sm:-ml-[15rem] lg:bottom-4 lg:left-4 lg:top-auto lg:ml-0 lg:w-[17rem] lg:rounded-2xl'
+    : 'inset-x-2 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-[45] sm:inset-x-auto sm:bottom-4 sm:right-6';
+  const hiddenShift = stroyka ? '-translate-y-4' : 'translate-y-4';
+
   return (
     <div
       role="region"
       aria-label="Согласие на обработку персональных данных"
-      data-bottom-bar
-      className={`fixed inset-x-2 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-[45] flex items-center gap-1.5 rounded-full border border-slate-200 bg-white/95 py-1 pl-3 pr-1 text-xs text-slate-700 shadow-md backdrop-blur motion-safe:transition motion-safe:duration-300 sm:inset-x-auto sm:bottom-4 sm:right-6 ${
-        shown ? 'translate-y-0 opacity-100' : 'translate-y-4 opacity-0 motion-reduce:translate-y-0'
+      data-testid="cookie-strip"
+      data-bottom-bar={stroyka ? undefined : true}
+      className={`fixed ${place} flex items-center gap-1.5 rounded-full border border-slate-200 bg-white/95 py-1 pl-3 pr-1 text-xs text-slate-700 shadow-md backdrop-blur motion-safe:transition motion-safe:duration-300 ${
+        shown ? 'translate-y-0 opacity-100' : `${hiddenShift} opacity-0 motion-reduce:translate-y-0`
       }`}
     >
-      <p className="min-w-0 flex-1 leading-snug">
-        Cookie и Метрика — только после «Согласен» ·{' '}
-        <Link href="/privacy" className="font-medium text-amber-800 underline">
-          Подробнее
-        </Link>
-      </p>
+      {stroyka ? (
+        <p className="flex min-w-0 flex-1 items-center gap-1 whitespace-nowrap text-[11px] leading-snug sm:text-xs lg:flex-wrap lg:whitespace-normal">
+          <span className="truncate lg:whitespace-normal">Cookie — после «Согласен» ·</span>
+          <Link href="/privacy" className="shrink-0 font-medium text-amber-800 underline">
+            Подробнее
+          </Link>
+        </p>
+      ) : (
+        <p className="min-w-0 flex-1 leading-snug">
+          Cookie и Метрика — только после «Согласен» ·{' '}
+          <Link href="/privacy" className="font-medium text-amber-800 underline">
+            Подробнее
+          </Link>
+        </p>
+      )}
       <button
         type="button"
         onClick={() => choose('yes')}

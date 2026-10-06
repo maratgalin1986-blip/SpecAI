@@ -612,7 +612,10 @@ export default async function HomePage() {
         <Faq items={HOME_FAQ} />
       </div>
 
-      <section id="callback" className="scroll-mt-24">
+      {/* The anchor sits on the form card itself (first on phones), so «Заказать
+          технику» lands with the phone field mid-screen, not on the heading. No
+          dolly tilt here: a tilted form is harder to tap and skews the jump. */}
+      <section data-no-dolly>
         <CallbackIris backdrop="/images/trench.jpg">
           <div className="grid grid-cols-1 gap-8 p-6 sm:p-10 lg:grid-cols-2">
             <div className="flex min-w-0 flex-col justify-center">
@@ -642,7 +645,10 @@ export default async function HomePage() {
                 </span>
               </div>
             </div>
-            <div className="min-w-0 rounded-3xl bg-slate-950/50 p-4 ring-1 ring-white/10 backdrop-blur sm:p-6">
+            <div
+              id="callback"
+              className="order-first min-w-0 scroll-mt-28 rounded-3xl bg-slate-950/50 p-4 ring-1 ring-white/10 backdrop-blur sm:p-6 lg:order-none"
+            >
               <CallbackForm source="home" dark />
             </div>
           </div>

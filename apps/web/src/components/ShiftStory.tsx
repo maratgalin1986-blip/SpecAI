@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { MachinePhoto } from '@/components/MachinePhoto';
-import { RATES } from '@/lib/prices';
+import { fromPerHour, RATES } from '@/lib/prices';
 
 // A cinematic, scroll-scrubbed "one shift" story: the section is several
 // screens tall, the scene stays pinned, and scrolling plays it like a video.
@@ -205,7 +205,7 @@ export function ShiftStory() {
             </p>
             <div className="mt-3 flex items-center justify-between rounded-xl bg-amber-500/10 px-3 py-2 text-sm ring-1 ring-amber-500/30">
               <span>Подобран экскаватор-погрузчик</span>
-              <span className="font-mono text-amber-400">{RATE.toLocaleString('ru-RU')} ₽/ч</span>
+              <span className="text-right font-mono text-amber-400">{fromPerHour(RATE)}</span>
             </div>
           </div>
         </div>
