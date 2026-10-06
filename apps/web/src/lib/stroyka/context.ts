@@ -101,34 +101,19 @@ export interface RadioLine {
 }
 
 /**
- * The radio exchange when `from` passes the visitor to `to`. The receiver
- * repeats what is known and asks only for what is missing.
+ * The radio exchange when `from` passes the visitor to `to`. Света only
+ * acknowledges (her next line asks for what is missing); the others say
+ * what they will do.
  */
 export function radioHandoff(from: SpeakerId, to: SpeakerId, ctx: OrderContext): RadioLine[] {
   const facts = contextFacts(ctx);
   const who = ctx.name ?? 'человек';
   const call = `${CALL_NAME[to]}, приём! Тут ${who}${facts ? `: ${facts}` : ' — по технике'}.`;
   const first: RadioLine = { speaker: from, text: call };
-  const gaps = missing(ctx);
   let answer: string;
   if (to === 'sveta') {
-    const ask =
-      gaps.includes('address') && gaps.includes('when')
-        ? 'Адрес и на когда — скажете? И телефон.'
-        : gaps.includes('address')
-          ? 'Адрес точный скажете и телефон?'
-          : gaps.includes('when')
-            ? 'На какой день ставим? И телефон оставьте.'
-            : 'Оставьте телефон — перезвоню и подтвержу.';
-    const brand = ctx.machine ? ' Машину СпецПласт16 поставлю в график.' : '';
-    const known = [
-      ctx.task,
-      ctx.machine && MACHINE_SLANG[ctx.machine],
-      ctx.when && whenPhrase(ctx.when),
-    ]
-      .filter(Boolean)
-      .join(', ');
-    answer = `Приняла, ${CALL_NAME[from]}. Здравствуйте!${known ? ` ${capital(known)} — записала.` : ''}${brand} ${ask}`;
+    // Short on the radio: the questions come once, in Света's own line.
+    answer = `Приняла, ${CALL_NAME[from]}. Здравствуйте!`;
   } else if (to === 'alsu') {
     answer = `Приняла, ${CALL_NAME[from]}. Материалы посчитаю, доставку самосвалом поставим со Светой.`;
   } else if (to === 'ildar') {
@@ -139,12 +124,21 @@ export function radioHandoff(from: SpeakerId, to: SpeakerId, ctx: OrderContext):
   return [first, { speaker: to, text: answer.replace(/\s+/g, ' ').trim() }];
 }
 
+/** Света and Алсу are women: their verbs take the feminine form. */
+export const isFemale = (speaker: SpeakerId) => speaker === 'sveta' || speaker === 'alsu';
+
+/** «понял» / «поняла» by the speaker: `g(speaker, 'Понял', 'Поняла')`. */
+export const g = (speaker: SpeakerId, male: string, female: string) =>
+  isFemale(speaker) ? female : male;
+
 /** What the next character says first, so the visitor never repeats themselves. */
 export function contextIntro(ctx: OrderContext, speaker: SpeakerId): string {
   const facts = contextFacts(ctx);
   if (!facts) return '';
   const from = ctx.heardBy.filter((s) => s !== speaker).pop();
-  const by = from ? `${CALL_NAME[from]} передал по рации` : 'Понял задачу';
+  const by = from
+    ? `${CALL_NAME[from]} ${g(from, 'передал', 'передала')} по рации`
+    : g(speaker, 'Понял задачу', 'Поняла задачу');
   return `${by}: ${facts}.`;
 }
 

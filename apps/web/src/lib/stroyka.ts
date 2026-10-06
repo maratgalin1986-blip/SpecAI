@@ -67,7 +67,7 @@ export interface Zone {
   radius: number;
   /** Machines working in the zone (for the sound layer). */
   machines: MachineType[];
-  /** The machine «Оформить заявку» orders from this zone. */
+  /** The machine «Оформить у Светы» orders from this zone. */
   order?: MachineType;
   /** Where the NPC stands. */
   npc: Vec2;
@@ -413,7 +413,7 @@ export const DIALOGUE: Record<string, DialogNode> = {
   kotlovan: {
     id: 'kotlovan',
     speaker: 'rinat',
-    text: `Котлован под фундамент? Траншея под трубы? Мой JCB за смену сделает. Экскаватор-погрузчик — ${P(PRICES.other)}.`,
+    text: `Котлован под фундамент? Траншея под трубы? Обычно управляемся за смену, если грунт без сюрпризов. Экскаватор-погрузчик — ${P(PRICES.other)}.`,
     replies: [orderReply('backhoe'), moreAbout('backhoe'), CALL, NEXT],
   },
   planirovka: {
