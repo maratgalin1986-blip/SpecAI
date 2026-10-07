@@ -29,6 +29,7 @@ export default function PrivacyPage() {
         от 27.07.2006 № 152-ФЗ «О персональных данных». Оператор персональных данных — {operator}
         {SITE.inn ? `, ИНН ${SITE.inn}` : ''}
         {SITE.kpp ? `, КПП ${SITE.kpp}` : ''}
+        {SITE.ogrn ? `, ОГРН ${SITE.ogrn}` : ''}
         {SITE.legalAddress ? `, адрес: ${SITE.legalAddress}` : ''} (далее — «Оператор»). Контакты
         Оператора:{' '}
         <a href={`mailto:${SITE.email}`} className="text-amber-700 underline">

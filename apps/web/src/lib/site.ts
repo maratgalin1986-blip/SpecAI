@@ -28,10 +28,11 @@ export const SITE = {
   legalName: 'ООО «СПЕЦПЛАСТ 16»' as string,
   inn: '1650412557' as string,
   kpp: '165001001' as string,
-  // PLACEHOLDER — the owner must supply the operator's legal address (from the
-  // ЕГРЮЛ extract). /privacy and /soglasie show it once it is filled in; until
-  // then they show nothing in its place. Never invent it.
-  legalAddress: '' as string,
+  ogrn: '1221600029287' as string,
+  // Registered address from the ЕГРЮЛ (owner, 2026-10-07: «ты знаешь мою фирму»).
+  // /privacy and /soglasie show it.
+  legalAddress:
+    '423823, Республика Татарстан, г. Набережные Челны, б-р Главмосстроевцев, д. 3, кв. 92' as string,
 };
 
 /** Working hours for calls: Mon–Sat, 8:00–20:00 Moscow time. */

@@ -51,13 +51,6 @@ import {
 import { loadUsed } from '@/lib/stroyka/shuffleBag';
 import { moodLine, type Mood } from '@/lib/stroyka/mood';
 import { seasonalEvent } from '@/lib/stroyka/seasonal';
-import {
-  applyBadge,
-  emptyBadges,
-  loadBadges,
-  saveBadges,
-  type BadgeEvent,
-} from '@/lib/stroyka/badges';
 import { stageNode } from '@/lib/stroyka/stage';
 import { BANTER_NAMES, type BanterSpeaker } from '@/lib/stroykaJokes';
 import {
@@ -173,8 +166,6 @@ const VISIT_KEY = 'stroyka.visit.v1';
 const WEATHER_KEY = 'stroyka.weather.v1';
 
 /** Every voice on the site, for «Знакомство со всеми». */
-const ALL_SPEAKERS = [...new Set(ZONES.map((z) => z.speaker))];
-const ALL_ZONES = ZONES.map((z) => z.id);
 
 const uniq = <T,>(list: T[]) => [...new Set(list)];
 
@@ -209,8 +200,6 @@ export function Stroyka() {
   const [progress, setProgress] = useState<WorldProgress>(() => worldProgress(Date.now(), null));
   const [away, setAway] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
-  const toastRef = useRef(toast);
-  toastRef.current = toast;
   const [extra, setExtra] = useState<{ speaker: BanterSpeaker; text: string } | null>(null);
   const [cardOpen, setCardOpen] = useState(false);
   const pendingRadio = useRef<RadioLine[]>([]);
@@ -225,9 +214,6 @@ export function Stroyka() {
     quick: Quick[];
     mood: Mood;
   } | null>(null);
-  const [badges, setBadges] = useState(emptyBadges);
-  const badgesRef = useRef(badges);
-  badgesRef.current = badges;
   const [pendingPhone, setPendingPhone] = useState<string | null>(null);
   const [phoneSending, setPhoneSending] = useState(false);
   const brain = useRef<typeof import('@/lib/stroyka/brain') | null>(null);
@@ -276,24 +262,6 @@ export function Stroyka() {
   const [dateOverride, setDateOverride] = useState<Date | null>(null);
   const dayKey = (dateOverride ?? now).toISOString().slice(0, 10);
   const season = useMemo(() => seasonalEvent(dateOverride ?? now), [dayKey]);
-
-  // «Значки прораба»: just for fun, kept in localStorage.
-  useEffect(() => setBadges(loadBadges()), []);
-  // A badge earned while the end credits roll waits until they close.
-  const creditsOn = useRef(false);
-  const heldBadges = useRef<string[]>([]);
-  const earn = useCallback((event: BadgeEvent) => {
-    const { state, earned } = applyBadge(badgesRef.current, event);
-    if (JSON.stringify(state) === JSON.stringify(badgesRef.current)) return;
-    badgesRef.current = state;
-    setBadges(state);
-    saveBadges(state);
-    for (const b of earned) {
-      const text = `🏅 Новый значок: ${b.icon} «${b.title}»`;
-      if (creditsOn.current) heldBadges.current.push(text);
-      else setToast(text);
-    }
-  }, []);
 
   // ------------------------------------------------------------ boot
   useEffect(() => {
@@ -450,11 +418,6 @@ export function Stroyka() {
       .then((p) => apply(p.startedAt ? p : worldProgress(Date.now(), null), true))
       .catch(() => apply(worldProgress(Date.now(), null), true));
   }, [phase]);
-
-  // «Заявка собрана»: every point of the order filled in, or the order sent.
-  useEffect(() => {
-    if (ctx.sent || orderProgress(ctx).done >= 5) earn({ type: 'order' });
-  }, [ctx, earn]);
 
   // ------------------------------------------------------------ dialogue
   const nodeFor = useCallback(
@@ -623,9 +586,8 @@ export function Stroyka() {
           setMemoryNote({ mode: 'offer', speaker: who, text: OFFER_TEXT[who] });
         }, 3000);
       }
-      earn({ type: 'talk', speaker: zn.speaker, all: ALL_SPEAKERS });
     },
-    [openNode, earn, busy],
+    [openNode, busy],
   );
 
   /** The visitor chose a zone: it opens now, whatever was on screen. */
@@ -655,7 +617,6 @@ export function Stroyka() {
     prevZone.current = zone;
     if (before) for (const m of zoneById(before).machines) emitScene(m, false);
     if (zone) for (const m of zoneById(zone).machines) emitScene(m, true);
-    if (zone) earn({ type: 'zone', zone, all: ALL_ZONES });
     // A zone the visitor picked always opens; walking or the tour into a zone
     // waits only while the visitor is typing, filling in the form or ordering.
     const picked = pickedZone.current === zone;
@@ -1040,12 +1001,6 @@ export function Stroyka() {
   // The order went through: end credits (and, with consent, the order status).
   const rollCredits = useCallback(() => {
     const c = ctxRef.current;
-    creditsOn.current = true;
-    // A badge toast already on screen waits for the end of the credits too.
-    if (toastRef.current?.startsWith('🏅')) {
-      heldBadges.current.push(toastRef.current);
-      setToast(null);
-    }
     setEndCredits(buildCredits(c, uniq([...met.current, ...c.heardBy]), c.name));
     const sent: PersonalFacts = { sent: true, sentMachine: c.machine, sentAt: Date.now() };
     facts.current = { ...facts.current, ...sent };
@@ -1119,10 +1074,6 @@ export function Stroyka() {
 
   const closeCredits = useCallback(() => {
     setEndCredits(null);
-    creditsOn.current = false;
-    const held = heldBadges.current;
-    heldBadges.current = [];
-    if (held.length) setToast(held.join(' · '));
   }, []);
 
   // ------------------------------------------------------------ film tour: nature and crew

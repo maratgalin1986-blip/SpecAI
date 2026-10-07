@@ -22,7 +22,7 @@ export default function ConsentPage() {
         Отмечая галочку «Согласен(на) на обработку персональных данных» в форме на сайте{' '}
         {SITE.platform} от {SITE.name}, я свободно, своей волей и в своём интересе даю согласие{' '}
         {operator}
-        {SITE.inn ? ` (ИНН ${SITE.inn})` : ''}
+        {SITE.inn ? ` (ИНН ${SITE.inn}${SITE.ogrn ? `, ОГРН ${SITE.ogrn}` : ''})` : ''}
         {SITE.legalAddress ? `, адрес: ${SITE.legalAddress}` : ''} (далее — Оператор) на обработку
         моих персональных данных на следующих условиях.
       </p>
