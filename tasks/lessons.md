@@ -25,3 +25,7 @@
     → Добавить CA прокси в NSS (`certutil -A -d sql:$HOME/.pki/nssdb -n ccr-agent-proxy -t "C,," -i /root/.ccr/agent-proxy-ca.crt`),
     списки и id брать из страниц тегов `mixkit.co/free-sound-effects/<тег>/` через Playwright, а сами файлы — curl'ом
     с `assets.mixkit.co/active_storage/sfx/<id>/<id>.wav` (там проверки нет). Поиска по `?query=` у Mixkit нет.
+12. Ночная запись голосов: фоновая задача агента живёт не больше 2 ч, контейнер может перезапуститься, а
+    `until ! pgrep -f X` находит сам себя и ждёт вечно.
+    → Долгие задания — через `setsid nohup … &` с чекпойнтом (`stroyka-voices-hybrid.py --state`), коммитить
+    готовые mp3 каждые полчаса; ждать процесс по PID (`ps -p`), не по `pgrep -f`.
