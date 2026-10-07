@@ -23,4 +23,13 @@ const result = spawnSync('prisma', ['db', 'push', ...process.argv.slice(2)], {
   shell: process.platform === 'win32',
 });
 
-process.exit(result.status ?? 1);
+const status = result.status ?? 1;
+// Preview deployments share one test database with every branch. A branch with
+// another schema (claude/expo-eas-publish added Provider.verified and more tables
+// on 2026-10-06) made `db push` refuse to drop its columns, and every other
+// preview failed. A preview keeps building; production still stops on any error.
+if (status !== 0 && process.env.VERCEL_ENV === 'preview') {
+  console.warn('[db:push] schema push failed on a preview deployment, continuing without it');
+  process.exit(0);
+}
+process.exit(status);
