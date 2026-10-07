@@ -26,3 +26,7 @@
     списки и id брать из страниц тегов `mixkit.co/free-sound-effects/<тег>/` через Playwright, а сами файлы — curl'ом
     с `assets.mixkit.co/active_storage/sfx/<id>/<id>.wav` (там проверки нет). Поиска по `?query=` у Mixkit нет.
 12. e2e локально: `cd apps/web && NODE_PATH=/opt/node22/lib/node_modules npx playwright test -c e2e/playwright.config.ts` (иначе конфиг не находит модуль `playwright`). Перед `pnpm lint` удалять готовые worktree агентов — eslint лезет в их `.claude/worktrees/*/public/sw.js`.
+13. Ночная запись голосов: фоновая задача агента живёт не больше 2 ч, контейнер может перезапуститься, а
+    `until ! pgrep -f X` находит сам себя и ждёт вечно.
+    → Долгие задания — через `setsid nohup … &` с чекпойнтом (`stroyka-voices-hybrid.py --state`), коммитить
+    готовые mp3 каждые полчаса; ждать процесс по PID (`ps -p`), не по `pgrep -f`.

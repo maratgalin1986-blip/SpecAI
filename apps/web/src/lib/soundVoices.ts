@@ -4,7 +4,7 @@
 
 import { stripEmoji } from '@/lib/stripEmoji';
 
-export type Speaker = 'mihalych' | 'rinat' | 'sveta' | 'ildar' | 'worker';
+export type Speaker = 'mihalych' | 'rinat' | 'sveta' | 'ildar' | 'alsu' | 'worker';
 export type LineKind = 'business' | 'joke' | 'radio';
 
 export type Line = {
@@ -16,7 +16,10 @@ export type Line = {
   reply?: Line;
 };
 
-/** How each character sounds when only pitch and rate can tell them apart. */
+/**
+ * How each character sounds when only pitch and rate can tell them apart: the
+ * browser-speech fallback for lines without a recording (lib/stroyka/voice.ts).
+ */
 export const SPEAKER_STYLE: Record<
   Speaker,
   { pitch: [number, number]; rate: [number, number]; female?: boolean }
@@ -25,6 +28,7 @@ export const SPEAKER_STYLE: Record<
   rinat: { pitch: [0.95, 1.05], rate: [1.15, 1.25] }, // operator: quick
   sveta: { pitch: [1.2, 1.3], rate: [1.0, 1.08], female: true }, // dispatcher
   ildar: { pitch: [0.78, 0.82], rate: [0.82, 0.88] }, // crane operator: low and calm
+  alsu: { pitch: [1.08, 1.15], rate: [0.94, 1.0], female: true }, // warehouse: kind, homely
   worker: { pitch: [0.8, 1.1], rate: [0.95, 1.15] },
 };
 
@@ -98,7 +102,7 @@ const FEMALE =
 
 /**
  * Picks a distinct Russian voice per character where the browser has
- * several: Sveta takes a female voice, the men share the others in turn.
+ * several: Sveta and Alsu take a female voice, the men share the others in turn.
  */
 export function voiceFor<V extends VoiceLike>(
   speaker: Speaker,
@@ -110,8 +114,9 @@ export function voiceFor<V extends VoiceLike>(
   const female = ru.filter((v) => FEMALE.test(v.name));
   const male = ru.filter((v) => !FEMALE.test(v.name));
   if (speaker === 'sveta') return female[0] ?? ru[ru.length - 1]!;
+  if (speaker === 'alsu') return female[1] ?? female[0] ?? ru[ru.length - 1]!;
   const pool = male.length ? male : ru;
-  const order: Record<Exclude<Speaker, 'sveta'>, number> = {
+  const order: Record<Exclude<Speaker, 'sveta' | 'alsu'>, number> = {
     mihalych: 0,
     rinat: 1,
     ildar: 2,
@@ -120,7 +125,7 @@ export function voiceFor<V extends VoiceLike>(
   return pool[order[speaker] % pool.length]!;
 }
 
-/** Pitch and rate for a character; a female voice for Sveta needs no lift. */
+/** Pitch and rate for a character; a female voice for Sveta or Alsu needs no lift. */
 export function styleFor(
   speaker: Speaker,
   femaleVoice: boolean,

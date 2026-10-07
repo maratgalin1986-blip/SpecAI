@@ -78,7 +78,7 @@ export const CREW: Record<string, CrewMember> = {
   },
 };
 
-/** Who speaks how in the recordings (voice, pace, pitch): see scripts/stroyka-voices.py. */
+/** Whose voice each crew member speaks in: see scripts/stroyka-voices-hybrid.py. */
 export const CREW_VOICE: Record<string, string> = {
   'worker-pit': 'crew-rustam',
   'worker-sling': 'crew-armen',
