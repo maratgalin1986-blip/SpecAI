@@ -113,7 +113,7 @@ export default function LoginScreen() {
           <View style={styles.contacts}>
             <ContactActions source="mobile:login" compact />
             <Link href="/about" style={styles.link}>
-              О компании {SITE.name}
+              О сервисе {SITE.name}
             </Link>
           </View>
 
