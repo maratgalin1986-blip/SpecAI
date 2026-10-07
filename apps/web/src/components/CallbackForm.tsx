@@ -13,17 +13,20 @@ import { useHydrated } from '@/lib/useHydrated';
 export function CallbackForm({
   source,
   defaultMessage = '',
+  defaultName = '',
   title = 'Заявка на звонок',
   subtitle = 'Оставьте телефон — менеджер перезвонит, подберёт технику и назовёт цену.',
   dark = false,
 }: {
   source: string;
   defaultMessage?: string;
+  /** A name the visitor already told (the /stroyka chat): the field starts with it. */
+  defaultName?: string;
   title?: string;
   subtitle?: string;
   dark?: boolean;
 }) {
-  const [name, setName] = useState('');
+  const [name, setName] = useState(defaultName);
   const [phone, setPhone] = useState('');
   const [message, setMessage] = useState(defaultMessage);
   const [point, setPoint] = useState<MapPoint | null>(null);
@@ -55,7 +58,7 @@ export function CallbackForm({
     }
   }
 
-  const input = `w-full rounded-md border px-3 py-2 text-sm ${
+  const input = `min-h-11 w-full rounded-md border px-3 py-2 text-base sm:text-sm ${
     dark
       ? 'border-slate-600 bg-slate-900/60 text-white placeholder:text-slate-400'
       : 'border-slate-300 bg-white'
@@ -66,21 +69,25 @@ export function CallbackForm({
   }
 
   return (
-    <form method="post" onSubmit={handleSubmit} className="ym-hide-content flex flex-col gap-3">
+    <form
+      method="post"
+      onSubmit={handleSubmit}
+      data-callback-form
+      className="ym-hide-content flex flex-col gap-3"
+    >
       <div>
         <h2 className={`text-lg font-semibold ${dark ? 'text-white' : ''}`}>{title}</h2>
         <p className={`mt-1 text-sm ${dark ? 'text-slate-300' : 'text-slate-600'}`}>{subtitle}</p>
       </div>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <input
-          required
           name="name"
           value={name}
           onChange={(e) => setName(e.target.value)}
           maxLength={100}
-          placeholder="Ваше имя"
+          placeholder="Имя (необязательно)"
           autoComplete="name"
-          aria-label="Ваше имя"
+          aria-label="Имя (необязательно)"
           className={input}
         />
         <input
@@ -156,7 +163,7 @@ export function CallbackForm({
       <button
         type="submit"
         disabled={!hydrated || status === 'sending'}
-        className="rounded-md bg-amber-500 px-5 py-2.5 text-sm font-semibold text-slate-950 shadow-lg shadow-amber-600/30 transition hover:bg-amber-400 disabled:opacity-60"
+        className="min-h-11 rounded-md bg-amber-500 px-5 py-2.5 text-sm font-bold text-slate-950 shadow-lg shadow-amber-600/30 transition hover:bg-amber-400 disabled:opacity-60"
       >
         {status === 'sending' ? 'Отправляем…' : 'Жду звонка'}
       </button>

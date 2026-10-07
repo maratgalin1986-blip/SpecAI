@@ -15,7 +15,7 @@ import {
   type Job,
 } from '@/lib/jobs';
 import { landingClips } from '@/lib/landingClips';
-import { fromPrice, rub, SHIFT_HOURS } from '@/lib/prices';
+import { fromPerHour, fromPrice, rub, SHIFT_HOURS } from '@/lib/prices';
 import { SITE } from '@/lib/site';
 import { siteUrl } from '@/lib/siteUrl';
 
@@ -24,11 +24,11 @@ export function generateStaticParams() {
 }
 
 function jobTitle(job: Job) {
-  return `${job.name} в Набережных Челнах — ${fromPrice(jobRate(job))} с машинистом`;
+  return `${job.name} в Набережных Челнах — ${fromPerHour(jobRate(job))}`;
 }
 
 function jobDescription(job: Job) {
-  return `${job.short} Техника СпецПласт16 ${fromPrice(jobRate(job))} с машинистом, пример смены: ${shiftExample(jobRate(job))}. ${DELIVERY_NOTE}`;
+  return `${job.short} Техника СпецПласт16 ${fromPerHour(jobRate(job))}, пример смены: ${shiftExample(jobRate(job))}. ${DELIVERY_NOTE}`;
 }
 
 export function generateMetadata({ params }: { params: { slug: string } }): Metadata {
@@ -198,7 +198,7 @@ export default function JobPage({ params }: { params: { slug: string } }) {
             <a
               key={city.slug}
               href={cityPath(landing.slug, city.slug)}
-              className="text-amber-700 hover:underline"
+              className="inline-flex min-h-[44px] items-center text-amber-700 hover:underline"
             >
               {city.name}
             </a>
@@ -207,7 +207,11 @@ export default function JobPage({ params }: { params: { slug: string } }) {
         <div className="flex flex-wrap gap-x-3 gap-y-2">
           <span className="text-slate-500">Другие работы:</span>
           {JOBS.filter((j) => j.slug !== job.slug).map((j) => (
-            <a key={j.slug} href={`/raboty/${j.slug}`} className="text-amber-700 hover:underline">
+            <a
+              key={j.slug}
+              href={`/raboty/${j.slug}`}
+              className="inline-flex min-h-[44px] items-center text-amber-700 hover:underline"
+            >
               {j.name}
             </a>
           ))}

@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from 'react';
 import { usePathname } from 'next/navigation';
-import { afterLoad, fxAllowed, hydrated } from '@/lib/cinemaFx';
+import { afterIntroIdle, afterLoad, fxAllowed, hydrated } from '@/lib/cinemaFx';
 
 // Title-sequence extras, all transform/opacity/clip/blur and all one-shot:
 //  - home hero: the h1 «slams» in with a short camera shake (CSS plays it at
@@ -165,6 +165,9 @@ export function CinemaFx() {
       if (disposed) return;
       const h = window.innerHeight;
       let retry = false;
+      // Measure everything first, then arm: arming changes styles, and a
+      // measurement after each change would force a layout per element.
+      const armed: Array<[HTMLElement, Mode]> = [];
       root.querySelectorAll<HTMLElement>('main h2, main img').forEach((el) => {
         if (seen.has(el)) return;
         if (!hydrated(el)) {
@@ -180,20 +183,26 @@ export function CinemaFx() {
           if (r.width < 80 || r.height < 60) return;
           // Very large images: skip (LCP candidates, and expensive to blur).
           if (r.width >= 900 || r.width * r.height > 0.4 * window.innerWidth * h) return;
-          arm(el, 'focus');
+          armed.push([el, 'focus']);
         } else {
           if (el.closest(GATE_SKIP) || r.height > h * 0.8) return;
-          arm(el, 'gate');
+          armed.push([el, 'gate']);
         }
       });
+      armed.forEach(([el, mode]) => arm(el, mode));
       if (retry && tries++ < 20) retryTimer = window.setTimeout(() => scan(root), 400);
     }
 
     let mo: MutationObserver | null = null;
     let scanRaf = 0;
-    const cancel = afterLoad(() => {
+    // The hero extras are cheap and timed to the titles; the page scan reads
+    // the layout of every heading and image, so it waits until the titles are
+    // gone and the main thread is idle.
+    const cancelHero = afterLoad(() => {
+      if (!disposed) hero();
+    }, 650);
+    const cancel = afterIntroIdle(() => {
       if (disposed) return;
-      hero();
       scan(document);
       const main = document.querySelector('main');
       if (!main) return;
@@ -209,6 +218,7 @@ export function CinemaFx() {
 
     return () => {
       disposed = true;
+      cancelHero();
       cancel();
       mo?.disconnect();
       io.disconnect();

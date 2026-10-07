@@ -16,6 +16,8 @@ import {
   shiftExample,
 } from '@/lib/cities';
 import { landingClips } from '@/lib/landingClips';
+import { landingLoop } from '@/lib/loops';
+import { Reveal } from '@/components/Reveal';
 import { landingBySlug } from '@/lib/landings';
 import { rateOf, rub } from '@/lib/prices';
 import { SITE } from '@/lib/site';
@@ -124,7 +126,7 @@ export default function CityLandingPage({ params }: { params: Params }) {
             <div className="mt-6 flex flex-wrap gap-3">
               <a
                 href={SITE.phoneHref}
-                className="rounded-md bg-amber-500 px-5 py-3 font-semibold text-slate-950 hover:bg-amber-400"
+                className="sweep rounded-md bg-amber-500 px-5 py-3 font-semibold text-slate-950 hover:bg-amber-400"
               >
                 {SITE.phone}
               </a>
@@ -158,13 +160,13 @@ export default function CityLandingPage({ params }: { params: Params }) {
 
       <section>
         <h2 className="text-2xl font-bold">Какие задачи решаем {city.inCity}</h2>
-        <ul className="mt-4 grid gap-3 sm:grid-cols-2">
+        <Reveal stagger className="mt-4 grid gap-3 sm:grid-cols-2">
           {landing.tasks.map((task) => (
-            <li key={task} className="rounded-xl border border-slate-200 bg-white p-4 text-sm">
+            <div key={task} className="rounded-xl border border-slate-200 bg-white p-4 text-sm">
               ✔ {task}
-            </li>
+            </div>
           ))}
-        </ul>
+        </Reveal>
       </section>
 
       <section className="rounded-2xl border border-amber-200 bg-amber-50 p-6">
@@ -186,6 +188,7 @@ export default function CityLandingPage({ params }: { params: Params }) {
 
       <CinemaBand
         machine={machine}
+        clip={landingLoop(landing.slug)}
         eyebrow={`Аренда ${landing.title} ${city.inCity}`}
         phrase="Скажите задачу — приедет машина и машинист"
       />
@@ -197,16 +200,22 @@ export default function CityLandingPage({ params }: { params: Params }) {
             <a
               key={c.slug}
               href={cityPath(landing.slug, c.slug)}
-              className="text-amber-700 hover:underline"
+              className="inline-flex min-h-[44px] items-center text-amber-700 hover:underline"
             >
               {c.name}
             </a>
           ))}
         </div>
-        <a href={`/arenda/${landing.slug}`} className="text-amber-700 hover:underline">
+        <a
+          href={`/arenda/${landing.slug}`}
+          className="inline-flex min-h-[44px] items-center text-amber-700 hover:underline"
+        >
           ← Аренда {landing.title}: вся информация и техника в наличии
         </a>
-        <a href="/raboty" className="text-amber-700 hover:underline">
+        <a
+          href="/raboty"
+          className="inline-flex min-h-[44px] items-center text-amber-700 hover:underline"
+        >
           Работы и цены: траншеи, котлованы, снег, демонтаж →
         </a>
       </section>

@@ -6,13 +6,16 @@ const LINK = 'flex min-h-11 items-center hover:text-white sm:min-h-0';
 
 export function SiteFooter() {
   return (
-    <footer className="border-t border-slate-200 bg-slate-900 text-slate-300">
+    <footer data-site-footer className="border-t border-slate-200 bg-slate-900 text-slate-300">
       <div className="mx-auto grid max-w-6xl gap-6 px-6 py-10 pb-36 text-sm sm:grid-cols-3">
         <div>
           <div className="text-base font-semibold text-white">
             {SITE.platform} <span className="text-amber-400">от {SITE.name}</span>
           </div>
           <p className="mt-2">{SITE.tagline}.</p>
+          <p className="mt-3 text-xs italic text-slate-400">
+            Копаем, поднимаем, вывозим — техника {SITE.name} с машинистом.
+          </p>
         </div>
         <div className="flex flex-col sm:gap-1">
           <div className="font-semibold text-white">Разделы</div>

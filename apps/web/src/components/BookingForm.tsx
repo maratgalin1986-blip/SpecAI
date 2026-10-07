@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { Button } from '@specai/ui';
+import { SITE } from '@/lib/site';
 import { pluralizeRu } from '@/lib/pluralize';
 import { formatMoney } from '@/lib/money';
 import { moscowDateKey } from '@/lib/bookingRules';
@@ -87,7 +88,9 @@ export function BookingForm({
 
   if (success) {
     return (
-      <p className="text-sm text-green-700">Заявка отправлена — статус: ожидает подтверждения.</p>
+      <p className="text-sm text-green-700">
+        Заявка у диспетчера {SITE.name} — статус: ожидает подтверждения.
+      </p>
     );
   }
 

@@ -44,6 +44,44 @@ interface OrdersSearchParams {
   provider?: string;
 }
 
+type OrderWhere = NonNullable<Parameters<typeof prisma.order.count>[0]>['where'];
+
+/**
+ * The list under the form. Without a database it is empty (logged), so the
+ * guest form above always renders instead of a 500.
+ */
+async function loadOrders(where: OrderWhere, requestedPage: number) {
+  try {
+    const total = await prisma.order.count({ where });
+    const totalPages = totalPagesFor(total, PAGE_SIZE);
+    const page = Math.min(requestedPage, totalPages);
+    const orders = await prisma.order.findMany({
+      where,
+      include: { category: true, customer: true, bids: true },
+      orderBy: { createdAt: 'desc' },
+      skip: (page - 1) * PAGE_SIZE,
+      take: PAGE_SIZE,
+    });
+    return { total, totalPages, page, orders, failed: false };
+  } catch (error) {
+    console.error('Failed to load orders', error);
+    return { total: 0, totalPages: 1, page: 1, orders: [], failed: true };
+  }
+}
+
+async function loadProvider(id: string | undefined) {
+  if (!id || !/^[\w-]{1,64}$/.test(id)) return null;
+  try {
+    return await prisma.company.findFirst({
+      where: { id, isProvider: true },
+      select: { id: true, name: true },
+    });
+  } catch (error) {
+    console.error('Failed to load the provider for /orders', error);
+    return null;
+  }
+}
+
 export default async function OrdersPage({ searchParams }: { searchParams: OrdersSearchParams }) {
   const status = parseEnumParam(
     searchParams.status,
@@ -57,30 +95,18 @@ export default async function OrdersPage({ searchParams }: { searchParams: Order
   const viewerIsProvider = isProvider(session?.user);
   const seesAll = viewerIsProvider || isAdminRequest();
   const viewerId = session?.user.id;
-  const forProvider =
-    searchParams.provider && /^[\w-]{1,64}$/.test(searchParams.provider)
-      ? await prisma.company.findFirst({
-          where: { id: searchParams.provider, isProvider: true },
-          select: { id: true, name: true },
-        })
-      : null;
+  const forProvider = await loadProvider(searchParams.provider);
   // Orders imported from messengers stay hidden until the admin publishes them.
   const where = {
     ...(status === 'ALL' ? { status: { not: 'PENDING_REVIEW' as const } } : { status }),
     ...(seesAll ? {} : { customerId: viewerId ?? '-' }),
   };
 
-  const total = await prisma.order.count({ where });
-  const totalPages = totalPagesFor(total, PAGE_SIZE);
-  const page = Math.min(requestedPage, totalPages);
-
-  const orders = await prisma.order.findMany({
-    where,
-    include: { category: true, customer: true, bids: true },
-    orderBy: { createdAt: 'desc' },
-    skip: (page - 1) * PAGE_SIZE,
-    take: PAGE_SIZE,
-  });
+  // A guest sees only the form: no query at all.
+  const { total, totalPages, page, orders, failed } =
+    seesAll || viewerId
+      ? await loadOrders(where, requestedPage)
+      : { total: 0, totalPages: 1, page: 1, orders: [], failed: false };
 
   const statusHref = (value: OrderStatus | 'ALL') =>
     value === 'OPEN' ? '/orders' : `/orders?status=${value}`;
@@ -141,16 +167,6 @@ export default async function OrdersPage({ searchParams }: { searchParams: Order
                 >
                   Подобрать технику за 30 секунд
                 </a>
-                <p className="text-xs text-slate-500">
-                  Есть аккаунт?{' '}
-                  <a
-                    href={`/login?callbackUrl=${encodeURIComponent(forProvider ? `/orders?provider=${forProvider.id}` : '/orders')}`}
-                    className="text-amber-700 underline"
-                  >
-                    Войдите
-                  </a>{' '}
-                  — заявка с адресом покажет прогноз и карту места работ.
-                </p>
               </Card>
             </div>
           )}
@@ -190,10 +206,20 @@ export default async function OrdersPage({ searchParams }: { searchParams: Order
             {totalPages > 1 && ` · страница ${page} из ${totalPages}`}
           </p>
 
-          {orders.length === 0 ? (
+          {failed ? (
+            <p role="status" className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm">
+              Список заявок сейчас не загрузился. Новую заявку можно оставить по телефону{' '}
+              <a href={SITE.phoneHref} className="font-semibold text-amber-800 underline">
+                {SITE.phone}
+              </a>
+              .
+            </p>
+          ) : orders.length === 0 ? (
             <div className="rounded-lg border border-dashed border-slate-300 bg-white p-8 text-center">
               <p className="font-medium text-slate-700">
-                {status === 'ALL' ? 'Заявок пока нет.' : 'Заявок с таким статусом нет.'}
+                {status === 'ALL'
+                  ? `Заявок пока нет — техника ${SITE.name} ждёт первой задачи.`
+                  : 'Заявок с таким статусом нет.'}
               </p>
               {status !== 'OPEN' && (
                 <p className="mt-2 text-sm text-slate-500">

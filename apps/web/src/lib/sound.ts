@@ -7,12 +7,13 @@ import type { MachineType } from '@/lib/machinePhotos';
 
 /** One-shot cues the components may ask for. */
 export type SoundCue =
-  | 'click' // any button press
+  | 'click' // a button press (not links: a page change gets the whoosh)
   | 'thunk' // «Позвонить», «Наряд», «Отправить»
   | 'whoosh' // page transition, curtain, push-in
   | 'boom' // intro partner card
   | 'start' // engine start (wizard: machine or job chosen)
-  | 'stamp'; // wizard: work order complete
+  | 'stamp' // wizard: work order complete
+  | 'chime'; // a quiet «done» (a stamp is followed by one)
 
 /** Where a machine is announced from; the newest active source wins. */
 export type MachineSource = 'hero' | 'journey' | 'page' | 'wizard' | 'scene';
@@ -21,6 +22,8 @@ export type MachineSource = 'hero' | 'journey' | 'page' | 'wizard' | 'scene';
 // saved under the old key were accidents; sound is on again for everyone.
 export const SOUND_STORAGE_KEY = 'specplast16_sound_v2';
 export const SOUND_HINT_KEY = 'specplast16_sound_hint';
+/** The chat microphone opened (detail true) or closed: the site's sound steps aside. */
+export const MIC_EVENT = 'specplast16:mic';
 const CUE_EVENT = 'specplast16:sound-cue';
 const MACHINE_EVENT = 'specplast16:sound-machine';
 
@@ -66,7 +69,25 @@ export function onMachine(handler: (detail: MachineDetail) => void): () => void 
 
 type Listener = () => void;
 const listeners = new Set<Listener>();
-let enabled = false;
+// The first client render already shows the right label (SoundToggle): the
+// saved choice, before the director (a lazy chunk) arrives. Under reduced
+// motion the director starts sound only from the switch, so it reads «off».
+let enabled = typeof window !== 'undefined' && !prefersReducedMotion() && storedSoundChoice();
+
+/** The director starts sound by itself only without this preference. */
+export function prefersReducedMotion(): boolean {
+  try {
+    return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Pages for reading (consent, policy, credits): no cinema layer and no sound
+ * director, so no sound switch either (CinemaLayer, SoundToggle).
+ */
+export const DOCUMENT_PAGES = /^\/(soglasie|privacy|credits)(\/|$)/;
 
 export function soundEnabled(): boolean {
   return enabled;
@@ -104,31 +125,24 @@ export function storedSoundChoice(): boolean {
   }
 }
 
-// ---- Which sound each machine makes --------------------------------------
+// ---- How loud each machine is ---------------------------------------------
 
-/** A machine's character: one diesel model tuned per machine, plus a layer. */
-export type MachineVoice = {
-  /** Idle firing rate of the diesel model, Hz. */
-  rpm: number;
-  /** Low-pass cutoff of the engine, Hz (bigger engines sound darker). */
-  tone: number;
-  /** Specific layer on top of the engine. */
-  layer: 'hydraulics' | 'winch' | 'beeper' | 'vibro' | 'airbrake' | 'hammer' | 'track' | 'none';
-  /** Loudness of the idle loop, 0…1. */
-  level: number;
-};
-
-export const MACHINE_VOICES: Record<MachineType, MachineVoice> = {
-  backhoe: { rpm: 30, tone: 700, layer: 'hydraulics', level: 0.8 },
-  excavator: { rpm: 24, tone: 520, layer: 'track', level: 0.9 },
-  'wheeled-excavator': { rpm: 27, tone: 620, layer: 'hammer', level: 0.85 },
-  crane: { rpm: 26, tone: 560, layer: 'winch', level: 0.8 },
-  kmu: { rpm: 32, tone: 760, layer: 'hydraulics', level: 0.75 },
-  loader: { rpm: 28, tone: 600, layer: 'beeper', level: 0.85 },
-  truck: { rpm: 25, tone: 480, layer: 'airbrake', level: 0.85 },
-  dozer: { rpm: 22, tone: 450, layer: 'track', level: 0.95 },
-  agp: { rpm: 34, tone: 820, layer: 'hydraulics', level: 0.7 },
-  roller: { rpm: 29, tone: 540, layer: 'vibro', level: 0.85 },
-  tractor: { rpm: 33, tone: 900, layer: 'none', level: 0.75 },
-  trench: { rpm: 23, tone: 420, layer: 'beeper', level: 0.6 },
+/**
+ * Loudness of each machine's idle loop, 0…1 (the recordings are in
+ * soundAssets.ts: MACHINE_SOUNDS). Big diesels a little louder than the
+ * truck-mounted cranes and the aerial platform.
+ */
+export const MACHINE_LEVELS: Record<MachineType, number> = {
+  backhoe: 0.8,
+  excavator: 0.9,
+  'wheeled-excavator': 0.85,
+  crane: 0.8,
+  kmu: 0.75,
+  loader: 0.85,
+  truck: 0.85,
+  dozer: 0.95,
+  agp: 0.7,
+  roller: 0.85,
+  tractor: 0.75,
+  trench: 0.6,
 };

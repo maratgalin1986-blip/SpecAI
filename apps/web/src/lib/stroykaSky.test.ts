@@ -9,6 +9,7 @@ import {
   nearestPoint,
   overrideLiftStop,
   parseOverrides,
+  cityLife,
   skyPalette,
   sunPosition,
   weatherScene,
@@ -142,7 +143,23 @@ describe('HUD and overrides', () => {
     });
     expect(parseOverrides('?weather=toString&time=25:00')).toEqual({});
     expect(parseOverrides('?wind=12').weather?.wind).toBe(12);
+    expect(parseOverrides('?date=2027-06-01').date).toBe(Date.parse('2027-06-01T12:00:00+03:00'));
+    expect(parseOverrides('?date=2027-02-30').date).toBeUndefined();
+    expect(parseOverrides('?date=tomorrow').date).toBeUndefined();
     const at = atMskTime(new Date('2026-10-02T22:30:00Z'), 23, 0);
     expect(at.toISOString()).toBe('2026-10-03T20:00:00.000Z');
+  });
+});
+
+describe('city life by the hour', () => {
+  it('is busiest in the evening and quiet after midnight', () => {
+    expect(cityLife(20)).toBe(1);
+    expect(cityLife(1.25)).toBeLessThan(0.4);
+    expect(cityLife(23)).toBeGreaterThan(cityLife(0.5));
+    expect(cityLife(6)).toBeGreaterThan(cityLife(3));
+    for (let h = 0; h < 24; h += 0.25) {
+      expect(cityLife(h)).toBeGreaterThanOrEqual(0.25);
+      expect(cityLife(h)).toBeLessThanOrEqual(1);
+    }
   });
 });

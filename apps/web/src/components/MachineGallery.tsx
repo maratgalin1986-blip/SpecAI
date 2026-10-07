@@ -3,7 +3,16 @@
 import { useState } from 'react';
 
 // Photo gallery with a large main image and clickable thumbnails.
-export function MachineGallery({ images, name }: { images: string[]; name: string }) {
+// `owner` names whose machine it is in the alt text, for our own photos only.
+export function MachineGallery({
+  images,
+  name,
+  owner,
+}: {
+  images: string[];
+  name: string;
+  owner?: string;
+}) {
   const [current, setCurrent] = useState(0);
   const main = images[current] ?? images[0];
 
@@ -14,7 +23,7 @@ export function MachineGallery({ images, name }: { images: string[]; name: strin
           <img
             key={main}
             src={main}
-            alt={`${name} — фото ${current + 1}`}
+            alt={`${name}${owner ? ` — техника ${owner}` : ''} — фото ${current + 1}`}
             className="cine-cut h-full w-full object-cover"
           />
         )}

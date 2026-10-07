@@ -85,8 +85,16 @@ export function guideRole(user: GuideUser | null | undefined): GuideRole {
   return 'CUSTOMER';
 }
 
-function guestSteps(): GuideStep[] {
-  return [
+/**
+ * How links are shown: 'markdown' for the site chat, 'plain' for the mobile
+ * app (GET /api/guide?links=plain), where buttons do the navigation.
+ */
+export type GuideLinks = 'markdown' | 'plain';
+
+// The public site has no sign-up (owner, 2026-10-03), so the web guest is not
+// asked to register; the mobile app still has accounts and keeps the step.
+function guestSteps(links: GuideLinks): GuideStep[] {
+  const steps: GuideStep[] = [
     {
       id: 'browse',
       title: 'Посмотрите технику и цены',
@@ -109,6 +117,7 @@ function guestSteps(): GuideStep[] {
       action: { label: 'Оставить заявку', href: '/orders', app: '/orders/new' },
     },
   ];
+  return links === 'markdown' ? steps.filter((step) => step.id !== 'register') : steps;
 }
 
 function customerSteps(s: GuideState): GuideStep[] {
@@ -304,11 +313,15 @@ function repeatStep(role: GuideRole, s: GuideState): GuideStep {
   };
 }
 
-export function nextSteps(user: GuideUser | null | undefined, state: GuideState = {}): GuideResult {
+export function nextSteps(
+  user: GuideUser | null | undefined,
+  state: GuideState = {},
+  links: GuideLinks = 'markdown',
+): GuideResult {
   const role = guideRole(user);
   const steps =
     role === 'GUEST'
-      ? guestSteps()
+      ? guestSteps(links)
       : role === 'PROVIDER'
         ? providerSteps(state)
         : customerSteps(state);
@@ -336,7 +349,7 @@ export function asksWhatNext(text: string): boolean {
  * The guide as a chat answer. `links: 'markdown'` makes [label](/path) for the
  * site chat; 'plain' is for the app, where buttons do the navigation.
  */
-export function guideReply(result: GuideResult, links: 'markdown' | 'plain' = 'markdown'): string {
+export function guideReply(result: GuideResult, links: GuideLinks = 'markdown'): string {
   const link = (action?: GuideLink) =>
     action ? (links === 'markdown' ? ` → [${action.label}](${action.href})` : '') : '';
   const lines = [

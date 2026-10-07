@@ -40,6 +40,8 @@ export interface MoodInput {
   hour?: number;
   /** The line's tags (lines/index.ts): only a «joke» gets a laughing face. */
   tags?: string[];
+  /** Shown without emojis (the characters' inner lines, the crew subtitles). */
+  plain?: boolean;
 }
 
 export interface MoodResult {
@@ -240,8 +242,12 @@ export function decorate(text: string, emojis: string[]): string {
   return out;
 }
 
-/** moodOf + decorate in one call. */
+/**
+ * The line as shown in a subtitle, a bubble or the radio log: no emoji at all
+ * (even one written into the line), crisp text only. The mood is computed
+ * for the portrait and the voice; `emojis` stays empty for the callers.
+ */
 export function moodLine(input: MoodInput): { text: string; mood: Mood; emojis: string[] } {
   const result = moodOf(input);
-  return { ...result, text: decorate(input.text, result.emojis) };
+  return { mood: result.mood, emojis: [], text: stripEmoji(input.text) };
 }

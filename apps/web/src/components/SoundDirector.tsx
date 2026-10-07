@@ -4,8 +4,10 @@ import { useEffect } from 'react';
 import type { MachineType } from '@/lib/machinePhotos';
 import {
   announcedMachines,
+  MIC_EVENT,
   onCue,
   onMachine,
+  prefersReducedMotion,
   setSoundEnabled,
   soundEnabled,
   storedSoundChoice,
@@ -15,22 +17,18 @@ import {
 import type { SoundEngine } from '@/lib/soundEngine';
 import { asSpeaker } from '@/lib/soundVoices';
 import { stripEmoji } from '@/lib/stripEmoji';
-import {
-  NATURE_EVENT,
-  STEPS_EVENT,
-  THUNDER_EVENT,
-  type NatureEventDetail,
-  type StepsEventDetail,
-} from '@/lib/sceneEvents';
+import { currentNature, NATURE_EVENT, type NatureEventDetail } from '@/lib/sceneEvents';
 
-// The cinematic sound layer, mounted once in the layout. Off by default; it
-// wakes only after the visitor turns it on (SoundToggle) and only inside a
-// gesture, as browsers require. Until then it downloads nothing: the engine,
-// its synthesis code and the recordings load with import()/fetch on demand.
+// The cinematic sound layer, mounted once in the layout. On by default; it
+// wakes at the visitor's first real gesture (or the SoundToggle press), as
+// browsers require: no AudioContext exists before that. Until then it
+// downloads nothing: the engine and the recordings load with import()/fetch
+// on demand (the beds after the gesture, a machine when it is announced).
 //
 // Components only announce what is on screen (lib/sound.ts: playCue,
-// announceMachine, useMachineSound); a 3D scene can also dispatch
-// `sp:scene` {machine, active} and `sp:dialog` {speaker, text, kind, mood}.
+// announceMachine, useMachineSound); a page can also dispatch
+// `sp:scene` {machine, active} and `sp:dialog` {speaker, text, kind, mood},
+// and the /stroyka film tour sends its weather (`sp:nature`).
 
 const GESTURES = ['pointerdown', 'keydown', 'touchend', 'click', 'scroll', 'wheel'] as const;
 const FIELD =
@@ -38,9 +36,28 @@ const FIELD =
 
 type Pick = { source: MachineSource; type: MachineType; at: number };
 
+/** The opening film of /stroyka (StroykaFilm), which has its own soundtrack. */
+const FILM_SELECTOR = '[data-testid="stroyka-film"]';
+
+type AudioSessionType = 'auto' | 'playback' | 'play-and-record';
+
+/**
+ * Safari 17+: «playback» lets Web Audio play with the iPhone's silent switch
+ * on; «play-and-record» while the chat microphone listens. Elsewhere a no-op.
+ */
+function setAudioSession(type: AudioSessionType) {
+  const session = (navigator as Navigator & { audioSession?: { type: string } }).audioSession;
+  if (!session || !('type' in session) || session.type === type) return;
+  try {
+    session.type = type;
+  } catch {
+    /* not allowed now */
+  }
+}
+
 export function SoundDirector() {
   useEffect(() => {
-    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const reduced = prefersReducedMotion();
     let ctx: AudioContext | null = null;
     let engine: SoundEngine | null = null;
     let loading: Promise<SoundEngine | null> | null = null;
@@ -49,6 +66,11 @@ export function SoundDirector() {
     let disposed = false;
     let wasRunning = false;
     let introPoll = 0;
+    let boomTimer = 0;
+    // The chat microphone is open: the site's sound steps aside (onMic below).
+    let micOn = false;
+    // The opening film is on screen (watched below).
+    let filmOn = !!document.querySelector(FILM_SELECTOR);
     let lastWhoosh = 0;
     let introAtGesture = false;
     const machines = new Map<MachineSource, Pick>();
@@ -84,6 +106,7 @@ export function SoundDirector() {
           if (disposed || !ctx) return null;
           engine = new mod.SoundEngine(ctx);
           engine.duck(typing);
+          engine.setFilm(filmOn);
           return engine;
         })
         .catch(() => null);
@@ -95,10 +118,14 @@ export function SoundDirector() {
     let natureSync = () => {};
     const onRunning = () => {
       if (!engine || !live()) return;
+      syncFilm();
       removeGestures();
       // Hides the «коснитесь — включится звук» hint of the opening titles.
       document.documentElement.setAttribute('data-sound-live', '');
+      setAudioSession('playback');
       void engine.startBeds();
+      // Timers paused by the mic, a hidden page or the switch start again.
+      engine.resumeTimers();
       natureSync();
       playing = null;
       applyMachine(true);
@@ -108,7 +135,8 @@ export function SoundDirector() {
         // The brass hit lands with the logo (1.75 s into the titles, which
         // start with the page); a later tap gets it at once.
         const hit = Math.max(0, 1750 - performance.now());
-        window.setTimeout(() => void engine?.cue('boom'), hit);
+        window.clearTimeout(boomTimer);
+        boomTimer = window.setTimeout(() => void engine?.cue('boom'), hit);
         window.clearInterval(introPoll);
         introPoll = window.setInterval(() => {
           const el = document.getElementById('intro');
@@ -122,8 +150,11 @@ export function SoundDirector() {
 
     /** Called inside a gesture: the context must be created/resumed right here. */
     const wake = () => {
-      if (disposed || !soundEnabled() || document.visibilityState !== 'visible') return;
+      if (disposed || micOn || !soundEnabled() || document.visibilityState !== 'visible') return;
       if (!ctx) {
+        // No context before the visitor's first real gesture: the browser
+        // would refuse to start it and warn in the console.
+        if (!activated()) return;
         const Ctor =
           window.AudioContext ??
           (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
@@ -151,6 +182,15 @@ export function SoundDirector() {
       void Promise.all([resumed.catch(() => {}), loadEngine()]).then(() => {
         if (context.state === 'running') onRunning();
       });
+    };
+
+    // The page has had a real gesture (sticky activation). Browsers without
+    // the API reach wake() from gesture handlers only, so they pass.
+    const activated = () => {
+      const activation = (
+        navigator as Navigator & { userActivation?: { isActive: boolean; hasBeenActive: boolean } }
+      ).userActivation;
+      return !activation || activation.isActive || activation.hasBeenActive;
     };
 
     const onGesture = (event: Event) => {
@@ -190,6 +230,9 @@ export function SoundDirector() {
       } else {
         removeGestures();
         playing = null;
+        window.clearTimeout(boomTimer);
+        window.clearInterval(introPoll);
+        setAudioSession('auto');
         if (engine) {
           engine.stopBeds();
           void engine.setMachine(null);
@@ -202,30 +245,69 @@ export function SoundDirector() {
     });
 
     // A saved «on» resumes on the first tap/scroll/key of this page. Never
-    // under reduced motion: there sound starts only from the switch itself.
-    if (!reduced && storedSoundChoice()) {
+    // under reduced motion: there sound starts only from the switch itself
+    // (which may have been pressed before this lazy chunk arrived).
+    if (soundEnabled() || (!reduced && storedSoundChoice())) {
       // Before the store changes, so the switch listener does not wake now.
       wasOn = true;
       setSoundEnabled(true, false);
       addGestures();
-      // Try at once: a browser that already trusts the site (the visitor was
-      // here before) lets audio start without a tap. Otherwise it stays
-      // asleep until the first touch, as before.
-      wake();
+      // The page was already touched (a client-side navigation): wake now.
+      // Otherwise the context is created lazily on the first touch, so no
+      // AudioContext exists before a gesture.
+      const activation = (navigator as Navigator & { userActivation?: { hasBeenActive: boolean } })
+        .userActivation;
+      if (activation?.hasBeenActive) wake();
     }
 
     const onVisibility = () => {
       if (!engine) return;
       if (document.visibilityState === 'hidden') {
         engine.hush();
+        engine.pauseTimers();
         engine.suspend();
-      } else if (soundEnabled()) {
+      } else if (soundEnabled() && !micOn) {
         void engine.resume().then((ok) => {
           if (ok) onRunning();
           else addGestures();
         });
       }
     };
+
+    // The chat microphone: iOS hears nothing while the page plays audio.
+    const onMic = (event: Event) => {
+      micOn = (event as CustomEvent<boolean>).detail;
+      if (micOn) setAudioSession('play-and-record');
+      else setAudioSession(ctx && soundEnabled() ? 'playback' : 'auto');
+      if (!engine) return;
+      if (micOn) {
+        engine.hush();
+        engine.pauseTimers();
+        engine.suspend();
+      } else if (soundEnabled() && document.visibilityState === 'visible') {
+        // The mic closes outside a gesture: if the browser refuses to resume
+        // now, the next tap does it.
+        void engine.resume().then((ok) => {
+          if (ok) onRunning();
+          else addGestures();
+        });
+      }
+    };
+
+    // The opening film: its soundtrack plays alone; the beds come back after.
+    const syncFilm = () => {
+      const on = !!document.querySelector(FILM_SELECTOR);
+      if (on === filmOn) return;
+      filmOn = on;
+      engine?.setFilm(on);
+      if (!on) natureSync();
+    };
+    // A light poll rather than a MutationObserver: /stroyka changes its DOM
+    // all the time, so nothing is added to each change. The film exists only
+    // on /stroyka.
+    const filmPoll = window.setInterval(() => {
+      if (filmOn || location.pathname.startsWith('/stroyka')) syncFilm();
+    }, 400);
 
     const isField = (el: EventTarget | null) => el instanceof Element && el.matches(FIELD);
     const onFocusIn = (event: FocusEvent) => {
@@ -272,7 +354,7 @@ export function SoundDirector() {
       applyMachine(true);
     });
 
-    // Events from the 3D construction-site page.
+    // A page that shows a machine in a scene of its own (`sp:scene`).
     const onScene = (event: Event) => {
       const detail = (event as CustomEvent<{ machine?: MachineType; active?: boolean }>).detail;
       if (!detail?.machine) return;
@@ -287,7 +369,8 @@ export function SoundDirector() {
       const detail = (
         event as CustomEvent<{ speaker?: string; text?: string; kind?: string; mood?: string }>
       ).detail;
-      if (!live() || !detail?.text) return;
+      syncFilm();
+      if (!live() || filmOn || !detail?.text) return;
       // Only the people talk: the site dog («Гав!») and other extras stay silent here.
       if (detail.speaker === 'dog') return;
       // Emojis are display-only; speechSynthesis would read them aloud.
@@ -301,31 +384,22 @@ export function SoundDirector() {
       });
     };
 
-    // Nature on the 3D site: the latest state is kept, so an engine that wakes
-    // later (the first tap) starts with the right weather.
-    let nature: NatureEventDetail | null = null;
-    let steps: StepsEventDetail = { moving: false, ground: 'dry' };
+    // Nature under the film tour: the latest state is kept, so an
+    // engine that wakes later (the first tap) starts with the right weather.
+    // The page may have sent it before this lazy chunk listened: start from it.
+    let nature: NatureEventDetail | null = currentNature();
     const onNature = (event: Event) => {
       nature = (event as CustomEvent<NatureEventDetail | null>).detail;
       if (live()) engine!.setNature(nature);
     };
-    const onSteps = (event: Event) => {
-      steps = (event as CustomEvent<StepsEventDetail>).detail;
-      if (live()) engine!.setSteps(steps.moving, steps.ground);
-    };
-    const onThunder = () => {
-      if (live()) engine!.thunder();
-    };
     natureSync = () => {
       if (!live()) return;
       engine!.setNature(nature);
-      engine!.setSteps(steps.moving, steps.ground);
     };
     window.addEventListener(NATURE_EVENT, onNature);
-    window.addEventListener(STEPS_EVENT, onSteps);
-    window.addEventListener(THUNDER_EVENT, onThunder);
 
     document.addEventListener('visibilitychange', onVisibility);
+    window.addEventListener(MIC_EVENT, onMic);
     document.addEventListener('focusin', onFocusIn);
     document.addEventListener('focusout', onFocusOut);
     document.addEventListener('click', onClick);
@@ -340,7 +414,10 @@ export function SoundDirector() {
       offMachine();
       removeGestures();
       window.clearInterval(introPoll);
+      window.clearTimeout(boomTimer);
+      window.clearInterval(filmPoll);
       document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener(MIC_EVENT, onMic);
       document.removeEventListener('focusin', onFocusIn);
       document.removeEventListener('focusout', onFocusOut);
       document.removeEventListener('click', onClick);
@@ -348,8 +425,7 @@ export function SoundDirector() {
       window.removeEventListener('sp:scene', onScene);
       window.removeEventListener('sp:dialog', onDialog);
       window.removeEventListener(NATURE_EVENT, onNature);
-      window.removeEventListener(STEPS_EVENT, onSteps);
-      window.removeEventListener(THUNDER_EVENT, onThunder);
+      setAudioSession('auto');
       if (engine) engine.dispose();
       else void ctx?.close().catch(() => {});
       engine = null;

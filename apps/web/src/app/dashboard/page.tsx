@@ -133,7 +133,7 @@ export default async function DashboardPage({
         <h2 className="mb-3 text-lg font-semibold">Мои заявки</h2>
         {myOrders.length === 0 ? (
           <p className="text-sm text-slate-600">
-            Заявок пока нет.{' '}
+            Заявок пока нет — техника {SITE.name} ждёт вашей задачи.{' '}
             <a href="/orders" className="font-medium text-amber-700">
               Опубликовать
             </a>
