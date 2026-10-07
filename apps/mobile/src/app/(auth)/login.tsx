@@ -58,10 +58,11 @@ export default function LoginScreen() {
           <View style={styles.header}>
             <View style={styles.logo}>
               <Text style={styles.logoText} numberOfLines={1} adjustsFontSizeToFit>
-                СпецПласт16
+                ИИСтройка24
               </Text>
             </View>
             <Text style={styles.title}>{SITE.name}</Text>
+            <Text style={styles.subtitle}>{SITE.byline}</Text>
             <Text style={styles.subtitle}>{SITE.tagline}</Text>
           </View>
 
