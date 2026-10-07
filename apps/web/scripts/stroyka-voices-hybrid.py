@@ -28,8 +28,12 @@ Run from apps/web (Python with chatterbox-tts, num2words; sherpa-onnx for
     OMP_WAIT_POLICY=PASSIVE python3 scripts/stroyka-voices-hybrid.py /tmp/stroyka-lines.json \
         --refs <dir with <speaker>.wav> --asr --state <dir> [--force] [--threads 2] [--shard 0/2]
 Existing files are kept (a line that only moved reuses its file); --force
-records everything again. Progress is checkpointed in --state, so a run that
-was interrupted resumes where it stopped (also with --force).
+records everything again; --not-hybrid records the missing clips and those
+still from the older Piper recorder (the mp3 comment tag tells them apart).
+Progress is checkpointed in --state, so an interrupted run resumes where it
+stopped. --priority (a JSON list of keys) records those first; --until stops
+starting new clips at a UTC time; two processes (--shard 0/2, 1/2) share the
+work. After recording, run stroyka-voice-lines.ts again for the manifest.
 """
 
 import argparse
@@ -54,6 +58,16 @@ _spec.loader.exec_module(base)
 STRESS, LETTERS, speakable, CENSORED = base.STRESS, base.LETTERS, base.speakable, base.CENSORED
 OUT_DIR = base.OUT_DIR
 SR = 24000
+MARK = "stroyka-hybrid"  # in the mp3 comment tag: this clip is a hybrid recording
+
+
+def is_hybrid(path: str) -> bool:
+    """Whether a clip was made by this recorder (not the older Piper one)."""
+    try:
+        with open(path, "rb") as f:
+            return MARK.encode() in f.read(4096)
+    except OSError:
+        return False
 
 # Emotion by mood (lib/stroyka/mood.ts): exaggeration, cfg_weight, temperature.
 # Higher exaggeration = livelier and faster; lower cfg = looser, slower pace.
@@ -214,10 +228,10 @@ def encode(wav_path: str, out: str) -> None:
     """Trim the silence at the ends, light high-pass and loudness, mp3."""
     trim = "silenceremove=start_periods=1:start_threshold=-50dB:start_silence=0.05"
     af = f"{trim},areverse,{trim.replace('0.05', '0.12')},areverse,highpass=f=70,loudnorm=I=-18:TP=-2:LRA=11"
-    tmp = out + ".part.mp3"
+    tmp = os.path.join(os.path.dirname(wav_path), "line.mp3")  # outside OUT_DIR (pruned)
     subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-i", wav_path, "-af", af, "-ac", "1",
-                    "-ar", str(SR), "-b:a", "48k", tmp], check=True)
-    os.replace(tmp, out)
+                    "-ar", str(SR), "-b:a", "48k", "-metadata", f"comment={MARK}", tmp], check=True)
+    shutil.move(tmp, out)
 
 
 def to16k(samples):
@@ -238,6 +252,8 @@ def main() -> None:
     ap.add_argument("--refs", required=True, help="dir with <speaker>.wav reference clips")
     ap.add_argument("--state", default=os.path.join(tempfile.gettempdir(), "stroyka-hybrid"))
     ap.add_argument("--force", action="store_true")
+    ap.add_argument("--not-hybrid", action="store_true",
+                    help="record only the clips that are missing or not hybrid yet (older Piper ones)")
     ap.add_argument("--asr", default="", help="Vosk small-ru sherpa-onnx model dir (am/, lang/)")
     ap.add_argument("--threads", type=int, default=2)
     ap.add_argument("--shard", default="0/1")
@@ -292,7 +308,7 @@ def main() -> None:
                         shutil.copyfile(src, out)
                         break
         for name in os.listdir(OUT_DIR):  # drop clips of removed lines
-            if name.endswith(".mp3") and name[:-4] not in keys:
+            if name.endswith(".mp3") and name[:-4] not in keys and ".part" not in name:
                 os.remove(os.path.join(OUT_DIR, name))
 
     only = set(filter(None, args.only.split(",")))
@@ -303,7 +319,9 @@ def main() -> None:
         out = os.path.join(OUT_DIR, f"{item['key']}.mp3")
         if done.get(item["key"]) == fp(item) and os.path.exists(out):
             continue
-        if not args.force and os.path.exists(out):
+        if args.not_hybrid and is_hybrid(out):
+            continue
+        if not args.force and not args.not_hybrid and os.path.exists(out):
             continue
         todo.append(item)
     # Priority keys first (in their order), then the rest grouped by speaker;
