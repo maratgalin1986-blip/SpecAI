@@ -3,13 +3,15 @@ import { prisma } from '@specai/database';
 import { cronAllowed } from '@/lib/cronAuth';
 import { DOCUMENT_REMINDER_DAYS, documentTitle, dueReminders } from '@/lib/documents';
 import { notifyCompany } from '@/lib/notifications/notifyUser';
+import { GET as evening } from '../evening/route';
 
 export const dynamic = 'force-dynamic';
 
 /**
- * Morning cron (06:00 Moscow, apps/web/vercel.json): document reminders 30
+ * Daily cron (19:00 Moscow, apps/web/vercel.json): document reminders 30
  * days before the expiry and again on the day, each once per document
- * (remindedAt30 / remindedAt0), to the company's managers via notifyUser.
+ * (remindedAt30 / remindedAt0), to the company's managers via notifyUser;
+ * then the evening digest (api/cron/evening).
  */
 export async function GET(request: NextRequest) {
   if (!cronAllowed(request)) return NextResponse.json({ error: 'forbidden' }, { status: 403 });
@@ -48,5 +50,10 @@ export async function GET(request: NextRequest) {
     });
     sent += 1;
   }
-  return NextResponse.json({ ok: true, checked: candidates.length, sent });
+  // The evening digest runs from the same cron: Vercel's Hobby plan allows two
+  // cron jobs per project (weekly + this one), so both daily tasks share it.
+  const digest = await evening(request)
+    .then((response) => response.json() as Promise<unknown>)
+    .catch((error: unknown) => ({ error: String(error) }));
+  return NextResponse.json({ ok: true, checked: candidates.length, sent, digest });
 }
