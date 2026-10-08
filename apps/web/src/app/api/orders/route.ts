@@ -11,6 +11,7 @@ import { machineTypeOf } from '@/lib/equipmentCatalog';
 import { INVALID_JSON_MESSAGE, readJson, zodErrorMessage } from '@/lib/apiInput';
 import { checkBookingDates } from '@/lib/bookingRules';
 import { customerShortName } from '@/lib/customerPrivacy';
+import { unreadMessagesByOrder } from '@/lib/orderChatAccess';
 import {
   assessWork,
   CHELNY,
@@ -79,7 +80,14 @@ export async function GET(request: NextRequest) {
       };
     },
   );
-  return NextResponse.json({ orders: safeOrders });
+  // Unread chat messages per order, for the badges in the app.
+  const unread = await unreadMessagesByOrder(
+    orders.map((order) => order.id),
+    currentUser,
+  ).catch(() => new Map<string, number>());
+  return NextResponse.json({
+    orders: safeOrders.map((order) => ({ ...order, unreadMessages: unread.get(order.id) ?? 0 })),
+  });
 }
 
 export async function POST(request: NextRequest) {

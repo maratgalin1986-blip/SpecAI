@@ -238,6 +238,8 @@ export interface Order {
     latitude?: number | null;
     longitude?: number | null;
   } | null;
+  /** Непрочитанные сообщения в чатах по заявке (для бейджей). */
+  unreadMessages?: number;
 }
 
 /**
@@ -252,6 +254,8 @@ export interface ProviderBooking extends Booking {
     phone?: string | null;
     contactsVisible?: boolean;
   };
+  /** Непрочитанные сообщения заказчика в чате по заявке брони. */
+  unreadMessages?: number;
 }
 
 export interface UploadedFile {
@@ -648,4 +652,93 @@ export interface Guide {
 
 export function fetchGuide() {
   return apiFetch<Guide>('/api/guide?links=plain');
+}
+
+// ---- Чат по заявке (заказчик ↔ исполнитель, одна переписка на компанию) ----
+
+export interface OrderThread {
+  id: string;
+  orderId: string;
+  companyId: string;
+  companyName: string;
+  lastMessageAt: string;
+  /** Контакты открыты (бронь подтверждена) — иначе телефоны и ссылки скрываются. */
+  contactsOpen: boolean;
+  unread?: number;
+  lastMessage?: { body: string; createdAt: string } | null;
+}
+
+export interface OrderThreadView {
+  id: string;
+  orderId: string;
+  companyId: string;
+  role: 'customer' | 'provider' | 'admin';
+  canWrite: boolean;
+  contactsOpen: boolean;
+  /** Собеседник: заказчику — компания, исполнителю — «Анна П.». */
+  counterpart: string;
+  /** «Контакты откроются после подтверждения брони», пока они скрыты. */
+  notice: string | null;
+}
+
+export interface OrderChatMessage {
+  id: string;
+  body: string;
+  attachmentUrl: string | null;
+  createdAt: string;
+  /** Написано нашей стороной (заказчиком или нашей компанией). */
+  mine: boolean;
+  readAt: string | null;
+}
+
+/** Переписки по заявке: заказчик видит все (по компаниям), исполнитель — свою. */
+export function fetchOrderThreads(orderId: string) {
+  return apiFetch<{
+    threads: OrderThread[];
+    companies: { id: string; name: string; contactsOpen: boolean }[];
+  }>(`/api/orders/${encodeURIComponent(orderId)}/threads`);
+}
+
+/** Открывает (или находит) переписку: заказчик указывает компанию, исполнитель — нет. */
+export function openOrderThread(orderId: string, companyId?: string) {
+  return apiFetch<{ thread: OrderThread & { role: OrderThreadView['role'] } }>(
+    `/api/orders/${encodeURIComponent(orderId)}/threads`,
+    { method: 'POST', body: companyId ? { companyId } : {} },
+  );
+}
+
+/** Сообщения (старые сверху). `cursor` — страница раньше сообщения, `after` — новее него. */
+export function fetchThreadMessages(
+  threadId: string,
+  params: { cursor?: string; after?: string } = {},
+) {
+  const search = new URLSearchParams();
+  if (params.cursor) search.set('cursor', params.cursor);
+  if (params.after) search.set('after', params.after);
+  const query = search.toString();
+  return apiFetch<{
+    thread: OrderThreadView;
+    messages: OrderChatMessage[];
+    nextCursor: string | null;
+  }>(`/api/threads/${encodeURIComponent(threadId)}/messages${query ? `?${query}` : ''}`);
+}
+
+/** Отправка; `masked` — сервер скрыл контакты (бронь ещё не подтверждена). */
+export function sendThreadMessage(threadId: string, body: string) {
+  return apiFetch<{ message: OrderChatMessage; masked: boolean; notice: string | null }>(
+    `/api/threads/${encodeURIComponent(threadId)}/messages`,
+    { method: 'POST', body: { body } },
+  );
+}
+
+export function markThreadRead(threadId: string) {
+  return apiFetch<{ ok: boolean; read: number }>(
+    `/api/threads/${encodeURIComponent(threadId)}/read`,
+    { method: 'POST' },
+  );
+}
+
+/** Все непрочитанные сообщения пользователя — бейдж на вкладке заказов. */
+export function fetchUnreadMessages() {
+  return apiFetch<{ unread: number }>('/api/threads/unread');
 }

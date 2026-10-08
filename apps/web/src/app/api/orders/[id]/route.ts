@@ -6,6 +6,7 @@ import { customerShortName } from '@/lib/customerPrivacy';
 import { maskPhone } from '@/lib/chatOrders';
 import { updateOrderSchema } from '@specai/shared';
 import { INVALID_JSON_MESSAGE, readJson, zodErrorMessage } from '@/lib/apiInput';
+import { unreadMessagesByOrder } from '@/lib/orderChatAccess';
 
 export const dynamic = 'force-dynamic';
 
@@ -79,6 +80,10 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
   const bids = isOwner
     ? rest.bids
     : rest.bids.filter((bid) => bid.equipment.company.id === currentUser.companyId);
+  // Unread chat messages for the «Открыть чат» badges in the app.
+  const unread = await unreadMessagesByOrder([order.id], currentUser).catch(
+    () => new Map<string, number>(),
+  );
   return NextResponse.json({
     order: {
       ...rest,
@@ -88,6 +93,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       customer: isOwner ? rest.customer : { name: customerShortName(rest.customer.name) },
       bids,
       bidCount: rest.bids.length,
+      unreadMessages: unread.get(order.id) ?? 0,
     },
     isOwner,
   });
