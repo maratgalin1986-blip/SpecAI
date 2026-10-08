@@ -121,7 +121,7 @@ export async function apiFetch<T>(path: string, options: RequestOptions = {}): P
 
 // ---- Типы ответов API (подмножество полей, которые использует приложение) ----
 
-export type UserRole = 'CUSTOMER' | 'PROVIDER_ADMIN' | 'ADMIN';
+export type UserRole = 'CUSTOMER' | 'PROVIDER_ADMIN' | 'PROVIDER_OPERATOR' | 'ADMIN';
 
 export interface ApiUser {
   id: string;
@@ -256,6 +256,8 @@ export interface Order {
  * «Анна П.»; телефон и e-mail — только после подтверждения брони.
  */
 export interface ProviderBooking extends Booking {
+  /** Назначенный машинист (см. /api/operators/assign). */
+  operatorId?: string | null;
   customer: {
     id: string;
     name: string;
@@ -864,4 +866,237 @@ export interface DemandSummary {
 
 export function fetchDemand() {
   return apiFetch<DemandSummary>('/api/demand', { anonymous: true });
+}
+
+// ---- Смены машиниста, табель, машинисты, календарь занятости ----
+
+export type ShiftStatus = 'PLANNED' | 'EN_ROUTE' | 'ON_SITE' | 'WORKING' | 'IDLE' | 'FINISHED';
+export type TimesheetState = 'none' | 'waiting' | 'disputed' | 'final';
+
+export interface ShiftEvent {
+  id: string;
+  kind: ShiftStatus | string;
+  label: string;
+  at: string;
+  note: string | null;
+  photoUrl: string | null;
+}
+
+export interface Timesheet {
+  id: string;
+  shiftId: string;
+  hoursWorked: string;
+  idleHours: string;
+  note: string | null;
+  customerConfirmedAt: string | null;
+  providerConfirmedAt: string | null;
+  disputedAt: string | null;
+  disputeNote: string | null;
+  state: TimesheetState;
+  updatedAt: string;
+}
+
+/** Смена по брони (GET /api/shifts): статусы с отметками времени, таймер, табель. */
+export interface Shift {
+  id: string;
+  bookingId: string;
+  /** YYYY-MM-DD */
+  date: string;
+  status: ShiftStatus | string;
+  statusLabel: string;
+  startedAt: string | null;
+  arrivedAt: string | null;
+  workStartedAt: string | null;
+  finishedAt: string | null;
+  startPhotoUrl: string | null;
+  endPhotoUrl: string | null;
+  operator: { id: string; name: string } | null;
+  events: ShiftEvent[];
+  workedMinutes: number;
+  idleMinutes: number;
+  workedLabel: string;
+  idleLabel: string;
+  /** Статусы, в которые можно перейти. */
+  next: ShiftStatus[];
+  timesheet: Timesheet | null;
+}
+
+export type ShiftRole = 'customer' | 'provider' | 'operator';
+
+/**
+ * Бронь глазами машиниста: без цен и имени заказчика; адрес объекта и
+ * телефон контакта на объекте — только у подтверждённой/активной брони.
+ */
+export interface OperatorBooking {
+  id: string;
+  status: BookingStatus;
+  startDate: string;
+  endDate: string;
+  equipment: { id: string; name: string; imageUrls: string[] };
+  siteAddress: string | null;
+  contactPhone: string | null;
+  notes: string | null;
+  shifts: Shift[];
+}
+
+export function fetchBookingShifts(bookingId: string) {
+  return apiFetch<{ role: ShiftRole; shifts: Shift[] }>(
+    `/api/shifts?bookingId=${encodeURIComponent(bookingId)}`,
+  );
+}
+
+/** Брони, назначенные машинисту, со сменами. */
+export function fetchMyAssignments() {
+  return apiFetch<{ operator: { name: string; active: boolean }; bookings: OperatorBooking[] }>(
+    '/api/shifts?mine=1',
+  );
+}
+
+/** Открыть смену на день (по умолчанию сегодня); повтор вернёт уже открытую. */
+export function openShift(bookingId: string, date?: string) {
+  return apiFetch<{ shift: Shift }>('/api/shifts', { method: 'POST', body: { bookingId, date } });
+}
+
+export function transitionShift(
+  shiftId: string,
+  input: { status: ShiftStatus; note?: string; photoUrl?: string },
+) {
+  return apiFetch<{ shift: Shift }>(`/api/shifts/${encodeURIComponent(shiftId)}`, {
+    method: 'PATCH',
+    body: input,
+  });
+}
+
+export function submitTimesheet(input: {
+  shiftId: string;
+  hoursWorked: number;
+  idleHours: number;
+  note?: string;
+}) {
+  return apiFetch<{ shift: Shift }>('/api/timesheets', { method: 'POST', body: input });
+}
+
+export function reviewTimesheet(
+  timesheetId: string,
+  input: { action: 'confirm' | 'dispute'; note?: string },
+) {
+  return apiFetch<{ shift: Shift }>(`/api/timesheets/${encodeURIComponent(timesheetId)}`, {
+    method: 'PATCH',
+    body: input,
+  });
+}
+
+/** Доход за месяц по каждой машине (GET /api/shifts/income). */
+export interface MachineIncomeReport {
+  month: string;
+  total: number;
+  machines: {
+    equipmentId: string;
+    name: string;
+    income: number;
+    bookings: number;
+    confirmedHours: number;
+  }[];
+}
+
+export function fetchMachineIncome() {
+  return apiFetch<MachineIncomeReport>('/api/shifts/income');
+}
+
+export interface Operator {
+  id: string;
+  name: string;
+  phone: string | null;
+  licenseNumber: string | null;
+  active: boolean;
+  /** E-mail для входа в приложение, если администратор его создал. */
+  email: string | null;
+  createdAt: string;
+}
+
+export interface OperatorInput {
+  name?: string;
+  phone?: string;
+  licenseNumber?: string;
+  active?: boolean;
+  email?: string;
+  password?: string;
+}
+
+export function fetchOperators() {
+  return apiFetch<{ operators: Operator[] }>('/api/operators');
+}
+
+export function createOperator(input: OperatorInput & { name: string }) {
+  return apiFetch<{ operator: Operator }>('/api/operators', { method: 'POST', body: input });
+}
+
+export function updateOperator(id: string, input: OperatorInput) {
+  return apiFetch<{ operator: Operator }>(`/api/operators/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    body: input,
+  });
+}
+
+/** Назначить машиниста на бронь (null — снять). */
+export function assignOperator(bookingId: string, operatorId: string | null) {
+  return apiFetch<{ bookingId: string; operator: { id: string; name: string } | null }>(
+    '/api/operators/assign',
+    { method: 'POST', body: { bookingId, operatorId } },
+  );
+}
+
+export type CalendarDayKind = 'free' | 'booked' | 'pending' | 'blocked' | 'maintenance';
+
+export interface CalendarDay {
+  date: string;
+  kind: CalendarDayKind;
+  bookingId?: string;
+  blockId?: string;
+  past: boolean;
+}
+
+export interface MachineCalendar {
+  equipment: { id: string; name: string; status: string };
+  year: number;
+  month: number;
+  days: CalendarDay[];
+  summary: Record<CalendarDayKind, number>;
+  nextFree: string | null;
+  bookings: {
+    id: string;
+    status: BookingStatus;
+    startDate: string;
+    endDate: string;
+    customer: string;
+    totalPrice: string;
+    currency: string;
+    operator: { id: string; name: string } | null;
+  }[];
+  blocks: { id: string; from: string; to: string; reason: string | null }[];
+}
+
+/** Календарь занятости машины за месяц (`month` — YYYY-MM). */
+export function fetchMachineCalendar(equipmentId: string, month?: string) {
+  const query = month ? `?month=${encodeURIComponent(month)}` : '';
+  return apiFetch<MachineCalendar>(
+    `/api/equipment/${encodeURIComponent(equipmentId)}/calendar${query}`,
+  );
+}
+
+export function createEquipmentBlock(
+  equipmentId: string,
+  input: { from: string; to: string; reason?: string },
+) {
+  return apiFetch<{ block: MachineCalendar['blocks'][number] }>(
+    `/api/equipment/${encodeURIComponent(equipmentId)}/blocks`,
+    { method: 'POST', body: input },
+  );
+}
+
+export function deleteEquipmentBlock(equipmentId: string, blockId: string) {
+  return apiFetch<{ ok: true }>(
+    `/api/equipment/${encodeURIComponent(equipmentId)}/blocks/${encodeURIComponent(blockId)}`,
+    { method: 'DELETE' },
+  );
 }

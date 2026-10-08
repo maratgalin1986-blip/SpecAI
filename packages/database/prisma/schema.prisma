@@ -57,6 +57,7 @@ model User {
   verificationTokens VerificationToken[]
   commentsWritten    Comment[]           @relation("CommentAuthor")
   commentsReceived   Comment[]           @relation("CommentTarget")
+  operator           Operator?
 
   @@index([companyId])
   @@index([referralCode])
@@ -119,6 +120,7 @@ model Company {
   equipment Equipment[]
   reviews   Review[]
   comments  Comment[]
+  operators Operator[]
 
   @@index([locationId])
 }
@@ -204,6 +206,7 @@ model Equipment {
   maintenanceRecords MaintenanceRecord[]
   reviews            Review[]
   documents          Document[]
+  blocks             EquipmentBlock[]
 
   @@index([categoryId])
   @@index([companyId])
@@ -262,9 +265,12 @@ model Booking {
   order   Order?  @relation(fields: [orderId], references: [id])
   orderId String? @unique
 
-  documents Document[]
-  review    Review?
-  payment   Payment?
+  documents  Document[]
+  review     Review?
+  payment    Payment?
+  operatorId String?
+  operator   Operator?  @relation(fields: [operatorId], references: [id])
+  shifts     Shift[]
 
   @@index([equipmentId])
   @@index([customerId])
@@ -672,4 +678,110 @@ model ProviderDocument {
   @@index([companyId])
   @@index([equipmentId])
   @@index([expiresAt])
+}
+
+// ---- Shifts, timesheets, operators, calendar ----
+
+// A machine operator («машинист») of a provider company. Managed by the
+// company's PROVIDER_ADMIN; `userId` links the operator's own app sign-in
+// (role PROVIDER_OPERATOR), which the admin creates with a temporary password.
+model Operator {
+  id            String   @id @default(cuid())
+  name          String
+  phone         String?
+  licenseNumber String?
+  active        Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  company   Company @relation(fields: [companyId], references: [id])
+  companyId String
+
+  user   User?   @relation(fields: [userId], references: [id])
+  userId String? @unique
+
+  bookings Booking[]
+  shifts   Shift[]
+
+  @@index([companyId])
+}
+
+// One working day of a booking, driven by the operator from the app:
+// Выехал → На объекте → Работа → Простой → Смена завершена. `status` is a
+// string (see packages/shared/src/schemas/shift.ts), never an enum, so the
+// list can grow without ALTER TYPE (CLAUDE.md, rule 2). One shift per booking
+// per calendar day (`date` is UTC midnight of the Moscow day).
+model Shift {
+  id            String    @id @default(cuid())
+  date          DateTime
+  status        String    @default("PLANNED")
+  startedAt     DateTime?
+  arrivedAt     DateTime?
+  workStartedAt DateTime?
+  finishedAt    DateTime?
+  startPhotoUrl String?
+  endPhotoUrl   String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  booking   Booking @relation(fields: [bookingId], references: [id])
+  bookingId String
+
+  operator   Operator? @relation(fields: [operatorId], references: [id])
+  operatorId String?
+
+  events    ShiftEvent[]
+  timesheet Timesheet?
+
+  @@unique([bookingId, date])
+  @@index([operatorId])
+}
+
+// Every status change of a shift with its moment, an optional note (the
+// reason of an idle period) and the photo taken at the start or the end.
+model ShiftEvent {
+  id       String   @id @default(cuid())
+  kind     String
+  at       DateTime @default(now())
+  note     String?
+  photoUrl String?
+
+  shift   Shift  @relation(fields: [shiftId], references: [id])
+  shiftId String
+
+  @@index([shiftId, at])
+}
+
+// The shift's timesheet («табель»): hours worked and idle, filled by the
+// operator or the provider after the shift and final only when BOTH the
+// customer and the provider's admin have confirmed it.
+model Timesheet {
+  id                  String    @id @default(cuid())
+  hoursWorked         Decimal   @db.Decimal(5, 2)
+  idleHours           Decimal   @default(0) @db.Decimal(5, 2)
+  note                String?
+  customerConfirmedAt DateTime?
+  providerConfirmedAt DateTime?
+  disputedAt          DateTime?
+  disputeNote         String?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  shift   Shift  @relation(fields: [shiftId], references: [id])
+  shiftId String @unique
+}
+
+// Days the provider took a machine off the calendar by hand («Не сдаётся»):
+// bookings may not overlap them. Both ends inclusive, calendar days.
+model EquipmentBlock {
+  id        String   @id @default(cuid())
+  from      DateTime
+  to        DateTime
+  reason    String?
+  createdAt DateTime @default(now())
+
+  equipment   Equipment @relation(fields: [equipmentId], references: [id])
+  equipmentId String
+
+  @@index([equipmentId, from])
 }

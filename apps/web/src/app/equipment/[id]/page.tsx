@@ -36,6 +36,7 @@ import { companyReliability } from '@/lib/companyStats';
 import { providerPath } from '@/lib/providerSeo';
 import { siteUrl } from '@/lib/siteUrl';
 import { HAMMER_RATE } from '@/lib/machineWorks';
+import { NextFreeDate } from '@/components/shifts/NextFreeDate';
 
 export const dynamic = 'force-dynamic';
 
@@ -327,6 +328,8 @@ export default async function EquipmentDetailPage({ params }: { params: { id: st
                 {executor}
               </a>
               <ReliabilityBadges value={trust} />
+              {/* «Свободна с …» from the occupancy calendar (an awaited server component). */}
+              {await NextFreeDate({ equipment: item })}
             </div>
           </div>
         </aside>

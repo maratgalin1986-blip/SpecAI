@@ -170,6 +170,26 @@ export type NotificationEvent =
       equipmentName: string;
       startDate: Date;
       providerName?: string | null;
+    }
+  /** To the customer: the operator moved the shift (Выехал, На объекте, Работа…). */
+  | {
+      type: 'shift.status';
+      bookingId: string;
+      equipmentName: string;
+      /** Russian label of the shift status. */
+      statusLabel: string;
+      note?: string | null;
+      at: Date;
+    }
+  /** Timesheet steps: submitted / confirmed / disputed, to the other side. */
+  | {
+      type: 'timesheet';
+      bookingId: string;
+      equipmentName: string;
+      step: 'submitted' | 'confirmed' | 'disputed' | 'final';
+      hoursWorked: string;
+      audience: 'customer' | 'provider';
+      note?: string | null;
     };
 
 export interface RenderedNotification {
@@ -286,6 +306,35 @@ export function renderNotification(event: NotificationEvent): RenderedNotificati
         body: `${event.equipmentName}${event.providerName ? ` · ${event.providerName}` : ''}, ${day(event.startDate)}. Проверьте адрес и время подачи; исполнитель на связи в кабинете.`,
         path: '/dashboard#bookings',
       };
+    case 'shift.status': {
+      const time = event.at.toLocaleTimeString('ru-RU', {
+        timeZone: 'Europe/Moscow',
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+      return {
+        title: `Машинист: ${event.statusLabel}`,
+        body:
+          `${event.equipmentName}, ${day(event.at)} ${time}` +
+          (event.note ? ` — ${clip(maskContacts(event.note), 160)}` : ''),
+        path: '/dashboard#bookings',
+      };
+    }
+    case 'timesheet': {
+      const titles: Record<typeof event.step, string> = {
+        submitted: 'Табель смены ждёт подтверждения',
+        confirmed: 'Табель смены подтверждён',
+        disputed: 'По табелю смены есть замечания',
+        final: 'Табель смены подтверждён обеими сторонами',
+      };
+      return {
+        title: titles[event.step],
+        body:
+          `${event.equipmentName}: ${event.hoursWorked} ч` +
+          (event.note ? ` — ${clip(maskContacts(event.note), 160)}` : ''),
+        path: event.audience === 'provider' ? '/provider#bookings' : '/dashboard#bookings',
+      };
+    }
   }
 }
 

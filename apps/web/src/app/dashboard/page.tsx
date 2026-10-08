@@ -25,6 +25,7 @@ import { ensureReferralCode, invitedCounts } from '@/lib/referralStore';
 import { referralLink } from '@/lib/referral';
 import { siteUrl } from '@/lib/siteUrl';
 import { NotificationSettings } from '@/components/NotificationSettings';
+import { ShiftPanel } from '@/components/shifts/ShiftPanel';
 
 export const metadata: Metadata = { title: 'Личный кабинет', robots: { index: false } };
 
@@ -330,6 +331,11 @@ export default async function DashboardPage({
                         />
                       </div>
                     )}
+                    <ShiftPanel
+                      bookingId={booking.id}
+                      bookingStatus={booking.status}
+                      role="customer"
+                    />
                   </div>
                   <div className="flex flex-wrap items-center gap-2 sm:flex-col sm:items-end">
                     <BookingStatusBadge status={booking.status} />

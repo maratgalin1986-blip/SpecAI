@@ -14,6 +14,7 @@ import {
 import { DeliverySettingsCard } from '@/components/DeliverySettingsCard';
 import { DocumentsCard } from '@/components/DocumentsCard';
 import { EquipmentDocBadge } from '@/components/EquipmentDocBadge';
+import { MachineIncomeCard } from '@/components/MachineIncomeCard';
 import { MyMapPinCard } from '@/components/MyMapPinCard';
 import { NextStepCard } from '@/components/NextStepCard';
 import { Button, EmptyState, ErrorBanner, Loader } from '@/components/ui';
@@ -107,9 +108,24 @@ function EquipmentRow({
           );
         })}
       </View>
-      <Link href={{ pathname: '/provider/equipment/edit/[id]', params: { id: item.id } }} asChild>
-        <Button title="Изменить" variant="secondary" />
-      </Link>
+      <View style={styles.rowActions}>
+        <View style={styles.rowAction}>
+          <Link
+            href={{ pathname: '/provider/equipment/edit/[id]', params: { id: item.id } }}
+            asChild
+          >
+            <Button title="Изменить" variant="secondary" />
+          </Link>
+        </View>
+        <View style={styles.rowAction}>
+          <Link
+            href={{ pathname: '/provider/equipment/calendar/[id]', params: { id: item.id } }}
+            asChild
+          >
+            <Button title="Календарь" variant="ghost" />
+          </Link>
+        </View>
+      </View>
     </View>
   );
 }
@@ -181,6 +197,10 @@ export default function ProviderFleetScreen() {
         <Button title="Добавить технику" size="large" />
       </Link>
       <DocumentsCard summary={docs.summary} />
+      <Link href="/provider/operators" asChild>
+        <Button title="Машинисты" variant="secondary" />
+      </Link>
+      <MachineIncomeCard refreshKey={equipment.length} />
       <MyMapPinCard />
       <DeliverySettingsCard />
     </View>
@@ -247,6 +267,8 @@ const styles = StyleSheet.create({
     ...shadow.card,
   },
   retired: { opacity: 0.75 },
+  rowActions: { flexDirection: 'row', gap: spacing.sm },
+  rowAction: { flex: 1 },
   equipmentRow: { flexDirection: 'row', gap: spacing.md },
   statusChips: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
   statusChip: {

@@ -71,3 +71,10 @@ export function houseFirst<T>(
  * (they start with «c»), so descending order puts «specplast16-house» ahead.
  */
 export const HOUSE_FIRST_ORDER = { companyId: 'desc' } as const;
+
+/** A machine operator's account («машинист»): sees only the bookings assigned to them. */
+export function isOperator<T extends MaybeUser>(
+  user: T,
+): user is NonNullable<T> & { companyId: string } {
+  return user?.role === 'PROVIDER_OPERATOR' && Boolean(user.companyId);
+}

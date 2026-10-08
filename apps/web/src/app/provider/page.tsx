@@ -44,6 +44,9 @@ import { NotificationSettings } from '@/components/NotificationSettings';
 import { ProviderDocuments } from '@/components/ProviderDocuments';
 import { DeliverySettingsForm } from '@/components/DeliverySettingsForm';
 import { documentStatus } from '@/lib/documents';
+import { ProviderOpsSection, loadOperatorOptions } from '@/components/shifts/ProviderOpsSection';
+import { OperatorSelect } from '@/components/shifts/OperatorSelect';
+import { ShiftPanel } from '@/components/shifts/ShiftPanel';
 
 export const dynamic = 'force-dynamic';
 export const metadata: Metadata = {
@@ -197,6 +200,8 @@ export default async function ProviderPage({
   const expiredDocs = documents.filter((doc) => documentStatus(doc) === 'expired');
   const expiredFor = (equipmentId: string) =>
     expiredDocs.filter((doc) => doc.equipmentId === equipmentId).length;
+  // Operators («машинисты») for the booking cards: assign one per booking.
+  const operatorOptions = await loadOperatorOptions(companyId);
   const checklist = noOrdersChecklist({
     expiredDocuments: expiredDocs.length,
     hasPhone: Boolean(profile?.phone?.trim()),
@@ -350,6 +355,10 @@ export default async function ProviderPage({
       </section>
 
       <NoOrdersChecklist items={checklist} />
+
+      {/* Income per machine, the occupancy calendar and the operators (an
+          async server component, awaited so the JSX types stay simple). */}
+      {await ProviderOpsSection({ companyId })}
 
       <GuideCard guide={guide} />
       <section className="rounded-2xl border border-slate-200 bg-white p-4">
@@ -525,6 +534,19 @@ export default async function ProviderPage({
                         />
                       </div>
                     )}
+                    <div className="mt-2">
+                      <OperatorSelect
+                        bookingId={booking.id}
+                        bookingStatus={booking.status}
+                        operatorId={booking.operatorId}
+                        operators={operatorOptions}
+                      />
+                    </div>
+                    <ShiftPanel
+                      bookingId={booking.id}
+                      bookingStatus={booking.status}
+                      role="provider"
+                    />
                   </div>
                   <div className="flex flex-wrap items-center gap-3 sm:justify-end">
                     <BookingStatusBadge status={booking.status} />

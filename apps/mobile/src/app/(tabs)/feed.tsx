@@ -17,6 +17,7 @@ import { BidCountdown } from '@/components/BidCountdown';
 import { BidForm } from '@/components/BidForm';
 import { DemandCard } from '@/components/DemandCard';
 import { OrderContact } from '@/components/OrderContact';
+import { MachineIncomeCard } from '@/components/MachineIncomeCard';
 import {
   Badge,
   Button,
@@ -579,6 +580,7 @@ export default function FeedScreen() {
           />
         </Link>
       ) : null}
+      <MachineIncomeCard refreshKey={bookings.length} />
       <TipsCard tips={tips} />
       <DemandCard />
       {error ? <ErrorBanner message={error} onRetry={() => void load()} /> : null}
