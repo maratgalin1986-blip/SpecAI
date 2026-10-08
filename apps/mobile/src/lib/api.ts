@@ -208,6 +208,11 @@ export interface Bid {
   status: BidStatus;
   createdAt: string;
   equipmentId: string;
+  /** Разбивка цены: подача + смена × смен (может отсутствовать). */
+  deliveryPrice?: string | number | null;
+  shiftPrice?: string | number | null;
+  shifts?: number | null;
+  optionsNote?: string | null;
   equipment?: {
     id: string;
     name: string;
@@ -238,6 +243,10 @@ export interface Order {
     latitude?: number | null;
     longitude?: number | null;
   } | null;
+  /** До какого момента заказчик ждёт предложений (lib/bidWindow.ts на сервере). */
+  bidsUntil?: string | null;
+  /** Заявка из чата или с сайта без входа: телефон автора скрыт, «Показать телефон» открывает его. */
+  chatContact?: { maskedPhone: string | null; canReveal: boolean } | null;
 }
 
 /**
@@ -552,6 +561,9 @@ export interface CompanyPin {
   baseAddress: string | null;
   pinImageUrl: string | null;
   pinNote: string | null;
+  /** Радиус выезда от базы, км, и цена подачи за км (null — не задана). */
+  deliveryRadiusKm?: number;
+  deliveryPricePerKm?: string | number | null;
 }
 
 export function fetchMyCompanyPin() {
@@ -564,6 +576,8 @@ export function updateMyCompanyPin(input: {
   baseAddress?: string;
   pinImageUrl?: string | null;
   pinNote?: string;
+  deliveryRadiusKm?: number;
+  deliveryPricePerKm?: number | null;
 }) {
   return apiFetch<{ company: CompanyPin }>('/api/companies/me', { method: 'PATCH', body: input });
 }
@@ -575,10 +589,20 @@ export function fetchOpenOrders() {
 
 export function createBid(
   orderId: string,
-  input: { equipmentId: string; price: number; message?: string },
+  input: {
+    equipmentId: string;
+    price: number;
+    message?: string;
+    /** Разбивка: подача + цена смены × смен; сервер проверяет, что сумма равна price. */
+    deliveryPrice?: number;
+    shiftPrice?: number;
+    shifts?: number;
+    optionsNote?: string;
+  },
 ) {
   // 201 — новое предложение, 200 — обновлено прежнее (одно предложение от компании).
-  return apiFetch<{ bid: Bid; message?: string }>(
+  // late: предложение после срока приёма (всё равно принято).
+  return apiFetch<{ bid: Bid; message?: string; late?: boolean }>(
     `/api/orders/${encodeURIComponent(orderId)}/bids`,
     {
       method: 'POST',
@@ -648,4 +672,103 @@ export interface Guide {
 
 export function fetchGuide() {
   return apiFetch<Guide>('/api/guide?links=plain');
+}
+
+// ---- Документы исполнителя, телефон заявки, спрос ----
+
+export type DocumentStatus = 'ok' | 'expiring' | 'expired' | 'none';
+
+/** Документ компании, машины или машиниста (GET /api/documents). */
+export interface ProviderDocument {
+  id: string;
+  kind: string;
+  number: string | null;
+  equipmentId: string | null;
+  operatorName: string | null;
+  fileUrl: string | null;
+  issuedAt: string | null;
+  expiresAt: string | null;
+  status: DocumentStatus;
+}
+
+export interface DocumentsSummary {
+  expired: number;
+  expiring: number;
+  total: number;
+}
+
+export function fetchMyDocuments(equipmentId?: string) {
+  const query = equipmentId ? `?equipmentId=${encodeURIComponent(equipmentId)}` : '';
+  return apiFetch<{ documents: ProviderDocument[]; summary: DocumentsSummary }>(
+    `/api/documents${query}`,
+  );
+}
+
+export interface DocumentInput {
+  kind: string;
+  equipmentId?: string | null;
+  operatorName?: string | null;
+  number?: string | null;
+  fileUrl?: string | null;
+  /** YYYY-MM-DD или null. */
+  issuedAt?: string | null;
+  expiresAt?: string | null;
+}
+
+export function createDocument(input: DocumentInput) {
+  return apiFetch<{ document: ProviderDocument }>('/api/documents', {
+    method: 'POST',
+    body: input,
+  });
+}
+
+export function updateDocument(id: string, input: Partial<DocumentInput>) {
+  return apiFetch<{ document: ProviderDocument }>(`/api/documents/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    body: input,
+  });
+}
+
+export function deleteDocument(id: string) {
+  return apiFetch<{ ok: boolean }>(`/api/documents/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+  });
+}
+
+/** «Показать телефон» заявки из чата или с сайта: показ записывается, лимит в сутки. */
+export function revealOrderPhone(orderId: string) {
+  return apiFetch<{ phone: string | null; name: string | null; note?: string }>(
+    `/api/orders/${encodeURIComponent(orderId)}/phone`,
+    { method: 'POST' },
+  );
+}
+
+export type DemandLevel = 'low' | 'medium' | 'high';
+
+/** Индикатор спроса (GET /api/demand): по видам техники и по городам за 14 дней. */
+export interface DemandSummary {
+  categories: {
+    categoryId: string;
+    name: string;
+    orders: number;
+    upcoming: number;
+    supply: number;
+    level: DemandLevel;
+  }[];
+  cities: {
+    city: string;
+    lat: number;
+    lon: number;
+    orders: number;
+    supply: number;
+    level: DemandLevel;
+    topCategory: string | null;
+  }[];
+  labels: Record<DemandLevel, string>;
+  colors: Record<DemandLevel, string>;
+  providerText: string | null;
+}
+
+export function fetchDemand() {
+  return apiFetch<DemandSummary>('/api/demand', { anonymous: true });
 }

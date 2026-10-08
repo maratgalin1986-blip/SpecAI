@@ -25,10 +25,13 @@ function sitePath(url: string): string | null {
 export function MapWebView({
   style,
   fallbackStyle,
+  url = MAP_URL,
 }: {
   style?: StyleProp<ViewStyle>;
   /** Отступы блока ошибки (на главном экране его не должна закрывать шторка). */
   fallbackStyle?: StyleProp<ViewStyle>;
+  /** Другая страница карты сайта, например /map?embed=1&layer=demand (карта спроса). */
+  url?: string;
 }) {
   const router = useRouter();
   const { token } = useAuth();
@@ -69,7 +72,7 @@ export function MapWebView({
       ) : null}
       <WebView
         ref={webView}
-        source={{ uri: MAP_URL }}
+        source={{ uri: url }}
         style={[styles.webView, failed && styles.hidden]}
         onShouldStartLoadWithRequest={handleNavigation}
         onLoadEnd={() => setLoading(false)}

@@ -12,6 +12,7 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { DateField } from '@/components/DateField';
+import { DemandHint } from '@/components/DemandHint';
 import { Button, Segmented } from '@/components/ui';
 import { ApiError, createOrder, fetchCategories, type Category } from '@/lib/api';
 import { addDays, pluralizeRu, startOfDay, toIsoDate } from '@/lib/format';
@@ -162,6 +163,7 @@ export function QuickOrderSheet({ bottomInset = 0 }: { bottomInset?: number }) {
               })
             )}
           </ScrollView>
+          <DemandHint categoryId={categoryId} categoryName={category?.name} />
 
           <Segmented
             options={WHEN_OPTIONS}

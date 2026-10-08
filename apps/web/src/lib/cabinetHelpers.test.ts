@@ -59,7 +59,7 @@ describe('offer breakdown', () => {
         hourlyRate: '2500',
         dailyRate: { toString: () => '20000' },
       }),
-    ).toEqual({ total: 54000, days: 3, perDay: 18000, cardHour: 2500, cardShift: 20000 });
+    ).toMatchObject({ total: 54000, days: 3, perDay: 18000, cardHour: 2500, cardShift: 20000 });
     expect(
       offerBreakdown(null, new Date('2026-10-02'), new Date('2026-10-02'), { hourlyRate: null }),
     ).toMatchObject({ total: 0, cardHour: null, cardShift: null });

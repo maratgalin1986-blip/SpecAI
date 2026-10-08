@@ -11,6 +11,9 @@ import {
   Text,
   View,
 } from 'react-native';
+import { DeliverySettingsCard } from '@/components/DeliverySettingsCard';
+import { DocumentsCard } from '@/components/DocumentsCard';
+import { EquipmentDocBadge } from '@/components/EquipmentDocBadge';
 import { MyMapPinCard } from '@/components/MyMapPinCard';
 import { NextStepCard } from '@/components/NextStepCard';
 import { Button, EmptyState, ErrorBanner, Loader } from '@/components/ui';
@@ -23,14 +26,18 @@ import {
   type Equipment,
   type EquipmentStatus,
 } from '@/lib/api';
+import { expiredCountFor, useProviderDocuments } from '@/lib/documents';
 import { EQUIPMENT_STATUS_OPTIONS, formatMoney, pluralizeRu } from '@/lib/format';
 import { colors, radius, shadow, spacing, TAP } from '@/theme';
 
 function EquipmentRow({
   item,
+  expiredDocuments = 0,
   onStatusChanged,
 }: {
   item: Equipment;
+  /** Просроченные документы машины (красная метка). */
+  expiredDocuments?: number;
   onStatusChanged: (id: string, status: EquipmentStatus) => void;
 }) {
   const image = imageUri(item.photoUrl ?? item.imageUrls[0]);
@@ -79,6 +86,7 @@ function EquipmentRow({
           </View>
         </Pressable>
       </Link>
+      <EquipmentDocBadge equipmentId={item.id} expired={expiredDocuments} />
       <View style={styles.statusChips}>
         {EQUIPMENT_STATUS_OPTIONS.map((option) => {
           const active = option.value === item.status;
@@ -116,6 +124,7 @@ export default function ProviderFleetScreen() {
   const [waiting, setWaiting] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const docs = useProviderDocuments();
 
   const load = useCallback(async (mode: 'initial' | 'refresh' = 'initial') => {
     if (mode === 'refresh') setRefreshing(true);
@@ -142,7 +151,8 @@ export default function ProviderFleetScreen() {
   useFocusEffect(
     useCallback(() => {
       void load();
-    }, [load]),
+      void docs.reload();
+    }, [load, docs.reload]),
   );
 
   if (equipment === null) {
@@ -170,7 +180,9 @@ export default function ProviderFleetScreen() {
       <Link href="/provider/equipment/new" asChild>
         <Button title="Добавить технику" size="large" />
       </Link>
+      <DocumentsCard summary={docs.summary} />
       <MyMapPinCard />
+      <DeliverySettingsCard />
     </View>
   );
 
@@ -181,6 +193,7 @@ export default function ProviderFleetScreen() {
       renderItem={({ item }) => (
         <EquipmentRow
           item={item}
+          expiredDocuments={expiredCountFor(docs.documents ?? [], item.id)}
           onStatusChanged={(id, status) =>
             setEquipment((prev) =>
               (prev ?? []).map((row) => (row.id === id ? { ...row, status } : row)),
