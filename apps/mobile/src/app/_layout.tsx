@@ -35,6 +35,7 @@ function RootNavigator() {
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="orders/new" options={{ title: 'Новая заявка' }} />
         <Stack.Screen name="orders/[id]" options={{ title: 'Заявка' }} />
+        <Stack.Screen name="orders/[id]/chat" options={{ title: 'Чат' }} />
         <Stack.Screen name="bookings/[id]/review" options={{ title: 'Отзыв' }} />
         <Stack.Screen name="comments" options={{ title: 'Комментарии' }} />
       </Stack.Protected>

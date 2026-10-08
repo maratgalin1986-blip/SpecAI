@@ -66,6 +66,16 @@ function OrderCard({ order }: { order: Order }) {
             : pluralizeRu(order.bids.length, ['предложение', 'предложения', 'предложений'])}
           {pendingBids > 0 && order.status === 'OPEN' ? ` · ${pendingBids} ждут решения` : ''}
         </Text>
+        {order.unreadMessages ? (
+          <Text style={[styles.bids, styles.bidsActive]}>
+            {pluralizeRu(order.unreadMessages, [
+              'новое сообщение',
+              'новых сообщения',
+              'новых сообщений',
+            ])}{' '}
+            в чате
+          </Text>
+        ) : null}
       </Pressable>
     </Link>
   );

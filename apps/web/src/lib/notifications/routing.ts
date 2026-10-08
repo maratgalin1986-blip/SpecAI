@@ -148,6 +148,8 @@ export type NotificationEvent =
   | { type: 'comment.pending'; authorShortName: string; about: string; text: string }
   /** To the author and the subject: a comment was published. */
   | { type: 'comment.published'; audience: 'author' | 'subject'; about: string; text: string }
+  /** To the other side of an order chat: a new message (text already masked). */
+  | { type: 'chat.message'; orderId: string; fromName: string; text: string }
   /** «Проверить уведомления» in the settings. */
   | { type: 'test' };
 
@@ -226,6 +228,12 @@ export function renderNotification(event: NotificationEvent): RenderedNotificati
         body: `${event.about}: ${clip(maskContacts(event.text), 200)}`,
         // /dashboard sends providers on to /provider.
         path: '/dashboard',
+      };
+    case 'chat.message':
+      return {
+        title: 'Новое сообщение по заявке',
+        body: `${event.fromName}: ${clip(maskContacts(event.text), 200)}`,
+        path: `/orders/${event.orderId}#chat`,
       };
     case 'test':
       return {

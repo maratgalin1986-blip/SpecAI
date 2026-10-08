@@ -26,6 +26,7 @@ import { pluralizeRu } from '@/lib/pluralize';
 import { EraseOrderButton, RevealPhoneButton } from '@/components/ChatOrderContact';
 import { maskPhone } from '@/lib/chatOrders';
 import { SITE } from '@/lib/site';
+import { OrderChat } from '@/components/OrderChat';
 
 export const dynamic = 'force-dynamic';
 
@@ -203,6 +204,13 @@ export default async function OrderDetailPage({ params }: { params: { id: string
         </section>
       )}
 
+      {viewerIsProvider && providerHasBid && (
+        <section id="chat" className="flex scroll-mt-24 flex-col gap-3">
+          <h2 className="text-lg font-semibold">Чат с заказчиком</h2>
+          <OrderChat orderId={order.id} defaultOpen />
+        </section>
+      )}
+
       {viewerIsProvider && order.source === 'SITE' && (
         <section className="flex flex-col gap-3">
           <h2 className="text-lg font-semibold">Комментарии исполнителей о заказчике</h2>
@@ -230,11 +238,11 @@ export default async function OrderDetailPage({ params }: { params: { id: string
               : 'Пока никто не предложил технику.'}
           </p>
         ) : (
-          <div className="flex flex-col gap-3">
+          <div id={isOwner ? 'chat' : undefined} className="flex scroll-mt-24 flex-col gap-3">
             {visibleBids.map((bid) => (
               <Card
                 key={bid.id}
-                className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4"
+                className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:gap-4"
               >
                 <OfferBody
                   bid={bid}
@@ -266,6 +274,17 @@ export default async function OrderDetailPage({ params }: { params: { id: string
                   <span className="w-fit shrink-0 rounded-full bg-slate-200 px-2.5 py-0.5 text-xs font-semibold text-slate-600">
                     Отклонено
                   </span>
+                )}
+                {/* The customer talks to each bidder separately; the admin reads along. */}
+                {(isOwner || isAdmin) && (
+                  <div className="basis-full">
+                    <OrderChat
+                      orderId={order.id}
+                      companyId={bid.equipment.companyId}
+                      label={`Открыть чат с ${bid.equipment.company.name}`}
+                      readOnly={!isOwner}
+                    />
+                  </div>
                 )}
               </Card>
             ))}

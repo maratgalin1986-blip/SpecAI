@@ -20,6 +20,7 @@ import {
   Segmented,
   type BadgeTone,
 } from '@/components/ui';
+import { OrderChatButton } from '@/components/OrderChatButton';
 import {
   ApiError,
   fetchOpenOrders,
@@ -152,6 +153,13 @@ function BookingRow({
           ))}
         </View>
       ) : null}
+      {booking.orderId && booking.status !== 'CANCELLED' ? (
+        <OrderChatButton
+          orderId={booking.orderId}
+          name={booking.customer.name}
+          unread={booking.unreadMessages}
+        />
+      ) : null}
       {booking.status !== 'CANCELLED' ? (
         <Link
           href={{
@@ -192,6 +200,11 @@ function BidRow({ order }: { order: Order }) {
               ? `Всего ${pluralizeRu(total, ['предложение', 'предложения', 'предложений'])} — заказчик сравнивает`
               : 'Пока вы единственный — заказчик скоро ответит'}
           </Text>
+          <OrderChatButton
+            orderId={order.id}
+            name={order.customer?.name}
+            unread={order.unreadMessages}
+          />
         </Card>
       </Pressable>
     </Link>

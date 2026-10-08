@@ -595,3 +595,40 @@ model ContactReveal {
   @@index([companyId, createdAt])
   @@index([orderId])
 }
+
+// ---- Order chat ----
+// Chat between the customer of an order and one provider company: one
+// thread per (order, company), so bidders never see each other. No relations
+// to Order/User/Company on purpose (the shared models stay untouched);
+// access is checked in apps/web/src/lib/orderChatAccess.ts.
+model OrderThread {
+  id            String   @id @default(cuid())
+  orderId       String
+  companyId     String
+  createdAt     DateTime @default(now())
+  lastMessageAt DateTime @default(now())
+
+  messages OrderMessage[]
+
+  @@unique([orderId, companyId])
+  @@index([companyId, lastMessageAt])
+}
+
+// A message in a thread. `body` is stored already masked while the booking
+// is not confirmed (lib/orderChat.ts); `readAt` is set when the other side
+// opens the thread.
+model OrderMessage {
+  id            String    @id @default(cuid())
+  threadId      String
+  senderUserId  String
+  body          String
+  attachmentUrl String?
+  createdAt     DateTime  @default(now())
+  readAt        DateTime?
+
+  thread OrderThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+
+  @@index([threadId, createdAt])
+  @@index([threadId, readAt])
+  @@index([senderUserId])
+}

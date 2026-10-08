@@ -4,6 +4,7 @@ import React from 'react';
 import type { ColorValue } from 'react-native';
 import { useAuth } from '@/lib/auth';
 import { isProviderMode, usePrefs } from '@/lib/prefs';
+import { useUnreadMessages } from '@/lib/unread';
 import { colors } from '@/theme';
 
 type IconName = React.ComponentProps<typeof Ionicons>['name'];
@@ -21,8 +22,11 @@ function tabIcon(name: IconName) {
  * но маршрут остаётся доступен по ссылке.
  */
 export default function TabsLayout() {
-  const { user } = useAuth();
+  const { user, token } = useAuth();
   const { mode } = usePrefs();
+  // Непрочитанные сообщения в чатах по заявкам — бейдж на вкладке заказов.
+  const unread = useUnreadMessages(token);
+  const badge = unread > 0 ? (unread > 99 ? '99+' : unread) : undefined;
   const provider = isProviderMode(user?.role, mode);
   const forCustomer = provider ? null : undefined;
   const forProvider = provider ? undefined : null;
@@ -69,6 +73,7 @@ export default function TabsLayout() {
           title: 'Заказы',
           headerTitle: 'Мои заказы',
           tabBarIcon: tabIcon('receipt-outline'),
+          tabBarBadge: badge,
           href: forCustomer,
         }}
       />
@@ -77,6 +82,7 @@ export default function TabsLayout() {
         options={{
           title: 'Мои заказы',
           tabBarIcon: tabIcon('briefcase-outline'),
+          tabBarBadge: badge,
           href: forProvider,
         }}
       />

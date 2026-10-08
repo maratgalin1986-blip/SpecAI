@@ -20,6 +20,7 @@ import {
   SectionTitle,
   type BadgeTone,
 } from '@/components/ui';
+import { OrderChatButton } from '@/components/OrderChatButton';
 import {
   ApiError,
   acceptBid,
@@ -106,12 +107,15 @@ function OfferCard({
   canAccept,
   accepting,
   onAccept,
+  chat,
 }: {
   bid: Bid;
   best: boolean;
   canAccept: boolean;
   accepting: boolean;
   onAccept: (bid: Bid) => void;
+  /** «Открыть чат» с этим исполнителем (у заказчика). */
+  chat?: React.ReactNode;
 }) {
   const company = bid.equipment?.company;
   const initial = (company?.name ?? '?').trim().charAt(0).toUpperCase();
@@ -142,6 +146,7 @@ function OfferCard({
         {bid.equipment?.name ?? 'Техника'}
       </Text>
       {bid.message ? <Text style={styles.offerMessage}>{bid.message}</Text> : null}
+      {chat}
       {canAccept && bid.status === 'PENDING' ? (
         <Button
           title={`Выбрать за ${formatMoney(bid.price, bid.currency)}`}
@@ -374,6 +379,14 @@ export default function OrderDetailScreen() {
                 Телефон исполнителя появится, когда он подтвердит заказ.
               </Text>
             ) : null}
+            {booking.equipment.companyId ? (
+              <OrderChatButton
+                orderId={order.id}
+                companyId={booking.equipment.companyId}
+                name={booking.provider?.name}
+                unread={order.unreadMessages}
+              />
+            ) : null}
             {booking.status === 'COMPLETED' && !booking.review ? (
               <Button
                 title="Оценить исполнителя"
@@ -444,9 +457,27 @@ export default function OrderDetailScreen() {
                   canAccept={canAccept}
                   accepting={acceptingId === bid.id}
                   onAccept={handleAccept}
+                  chat={
+                    isOwner && bid.equipment?.company.id ? (
+                      <OrderChatButton
+                        orderId={order.id}
+                        companyId={bid.equipment.company.id}
+                        name={bid.equipment.company.name}
+                        unread={order.unreadMessages}
+                      />
+                    ) : undefined
+                  }
                 />
               ))
             )}
+            {!isOwner && order.bids.length > 0 ? (
+              <OrderChatButton
+                orderId={order.id}
+                name={order.customer?.name}
+                unread={order.unreadMessages}
+                variant="primary"
+              />
+            ) : null}
           </>
         ) : null}
 

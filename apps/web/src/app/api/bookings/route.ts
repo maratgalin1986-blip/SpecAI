@@ -15,6 +15,7 @@ import { customerForProvider, providerForCustomer } from '@/lib/customerPrivacy'
 import { HOUSE_COMPANY_ID } from '@/lib/fleet';
 import { SITE } from '@/lib/site';
 import { customerRates } from '@/lib/equipmentCatalog';
+import { unreadMessagesByOrder } from '@/lib/orderChatAccess';
 
 export const dynamic = 'force-dynamic';
 
@@ -58,10 +59,16 @@ export async function GET(request: NextRequest) {
       take: 100,
     });
 
+    // Unread chat messages of the booked orders, for «Открыть чат» in the app.
+    const unread = await unreadMessagesByOrder(
+      bookings.flatMap((booking) => (booking.orderId ? [booking.orderId] : [])),
+      currentUser,
+    ).catch(() => new Map<string, number>());
     return NextResponse.json({
       bookings: bookings.map((booking) => ({
         ...booking,
         customer: customerForProvider(booking.customer, booking.status),
+        unreadMessages: booking.orderId ? (unread.get(booking.orderId) ?? 0) : 0,
       })),
       paymentsEnabled,
     });
