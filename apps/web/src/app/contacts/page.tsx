@@ -85,6 +85,7 @@ export default function ContactsPage() {
       </div>
       <CinemaBand
         machine="crane"
+        clip="crane-dusk"
         eyebrow="Пн–Сб, 8:00–20:00"
         phrase="Звоните — техника выедет сегодня"
       />

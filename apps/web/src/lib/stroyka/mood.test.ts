@@ -29,7 +29,7 @@ describe('moodOf', () => {
   it('jokes get 😄 or 😂', () => {
     const r = moodOf({
       speaker: 'rinat',
-      text: 'Он у меня как жена: ворчит, но копает.',
+      text: 'Мой JCB как старый друг: поворчит, но выкопает.',
       kind: 'joke',
     });
     expect(['happy', 'laugh']).toContain(r.mood);
@@ -47,10 +47,13 @@ describe('moodOf', () => {
     expect(r.emojis).toEqual(['🌫️']);
   });
 
-  it('the foreman greets with 👷 at the start', () => {
+  it('the foreman greets with 👷 (as a mood), business lines are shown without emoji', () => {
+    expect(
+      moodOf({ speaker: 'mihalych', text: 'Здравствуйте! Я прораб.', kind: 'business' }).emojis,
+    ).toEqual(['👷']);
     const r = moodLine({ speaker: 'mihalych', text: 'Здравствуйте! Я прораб.', kind: 'business' });
-    expect(r.emojis).toEqual(['👷']);
-    expect(r.text.startsWith('👷 ')).toBe(true);
+    expect(r.emojis).toEqual([]);
+    expect(r.text).toBe('Здравствуйте! Я прораб.');
     expect(
       moodOf({ speaker: 'sveta', text: 'Здравствуйте!', kind: 'business' }).emojis,
     ).not.toContain('👷');
@@ -151,5 +154,27 @@ describe('stripEmoji', () => {
         expect(hasEmoji(spoken)).toBe(false);
         expect(spoken.replace(/\s/g, '')).toBe(stripEmoji(line.text).replace(/\s/g, ''));
       }
+  });
+});
+
+describe('moodLine shows no emoji', () => {
+  it('no emoji in subtitles, bubbles or the radio log, the mood stays for the portrait', () => {
+    const kinds = ['business', 'joke', 'radio'] as const;
+    for (const speaker of Object.keys(LINES) as (keyof typeof LINES)[])
+      for (const line of LINES[speaker].slice(0, 200))
+        for (const kind of kinds) {
+          const shown = moodLine({ speaker, text: line.text, kind, hour: 23 });
+          expect(shown.emojis).toEqual([]);
+          expect(hasEmoji(shown.text)).toBe(false);
+        }
+  });
+
+  it('strips an emoji written into the line and keeps the mood', () => {
+    const shown = moodLine({ speaker: 'rinat', text: 'С праздником! Ковш помыл 🚜', kind: 'joke' });
+    expect(shown.text).toBe('С праздником! Ковш помыл');
+    expect(shown.mood).not.toBe('neutral');
+    const angry = moodLine({ speaker: 'mihalych', text: 'Опять %#@&! бетон', kind: 'joke' });
+    expect(angry.mood).toBe('angry');
+    expect(angry.text).toBe('Опять %#@&! бетон');
   });
 });

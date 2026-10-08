@@ -161,7 +161,9 @@ export async function POST(request: NextRequest) {
 
   function requireUser() {
     if (!user) {
-      throw new ToolError('Пользователь не вошёл в аккаунт. Попросите войти на /login.');
+      throw new ToolError(
+        'Регистрации на сайте нет: статус заявки подскажет диспетчер по телефону или в Telegram.',
+      );
     }
     return user;
   }
@@ -396,9 +398,8 @@ export async function POST(request: NextRequest) {
             );
           }
         }
-        if (lines.length > 0) lines.push('Подробности — в [личном кабинете](/dashboard).');
       } else if (agentId === 'support') {
-        lines.push('Чтобы посмотреть свои бронирования и заявки, [войдите в аккаунт](/login).');
+        lines.push('Статус заявки подскажет диспетчер: позвоните или напишите в Telegram.');
       }
     }
 

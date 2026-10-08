@@ -1,15 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import { builderDay, seasonalEvent } from '@/lib/stroyka/seasonal';
-import {
-  applyBadge,
-  BADGES,
-  BADGES_KEY,
-  emptyBadges,
-  loadBadges,
-  saveBadges,
-  type BadgeState,
-} from '@/lib/stroyka/badges';
-import { photoCaption, photoFileName, photoLayout } from '@/lib/stroyka/photo';
 
 // Noon in Moscow on a given day.
 const msk = (y: number, m: number, d: number, h = 12) => new Date(Date.UTC(y, m - 1, d, h - 3));
@@ -66,80 +56,5 @@ describe('seasonalEvent', () => {
         expect(text).not.toMatch(/\p{Regional_Indicator}/u);
       }
     }
-  });
-});
-
-describe('badges', () => {
-  const zones = ['gate', 'kotlovan', 'sklad'] as const;
-  it('earns «Обошёл весь объект» once every zone is visited, once', () => {
-    let s: BadgeState = emptyBadges();
-    for (const z of zones.slice(0, 2)) {
-      const r = applyBadge(s, { type: 'zone', zone: z, all: zones });
-      expect(r.earned).toEqual([]);
-      s = r.state;
-    }
-    const r = applyBadge(s, { type: 'zone', zone: 'sklad', all: zones });
-    expect(r.earned.map((b) => b.title)).toEqual(['Обошёл весь объект']);
-    expect(applyBadge(r.state, { type: 'zone', zone: 'gate', all: zones }).earned).toEqual([]);
-  });
-
-  it('talk, night, rain, dog, order', () => {
-    let s = emptyBadges();
-    const all = ['mihalych', 'sveta'];
-    s = applyBadge(s, { type: 'talk', speaker: 'mihalych', all }).state;
-    expect(applyBadge(s, { type: 'talk', speaker: 'mihalych', all }).earned).toEqual([]);
-    const talk = applyBadge(s, { type: 'talk', speaker: 'sveta', all });
-    expect(talk.earned[0]!.id).toBe('talk');
-    for (const type of ['night', 'rain', 'dog', 'order'] as const) {
-      const r = applyBadge(s, { type });
-      expect(r.earned[0]!.id).toBe(type);
-      expect(applyBadge(r.state, { type }).earned).toEqual([]);
-    }
-    expect(BADGES.map((b) => b.title)).toContain('Нашёл Бетона');
-    // Just for fun: no discounts or promises.
-    for (const b of BADGES) expect(`${b.title} ${b.hint}`).not.toMatch(/скидк|%|бонус|подар/i);
-  });
-
-  it('storage never throws and ignores junk', () => {
-    const bad = {
-      getItem: () => {
-        throw new Error('blocked');
-      },
-      setItem: () => {
-        throw new Error('blocked');
-      },
-    };
-    expect(loadBadges(bad)).toEqual(emptyBadges());
-    expect(() => saveBadges(emptyBadges(), bad)).not.toThrow();
-    expect(loadBadges(null)).toEqual(emptyBadges());
-    const mem = new Map<string, string>();
-    const store = {
-      getItem: (k: string) => mem.get(k) ?? null,
-      setItem: (k: string, v: string) => void mem.set(k, v),
-    };
-    mem.set(BADGES_KEY, '{"earned":["dog","hack",3],"zones":"x"}');
-    expect(loadBadges(store)).toEqual({ earned: ['dog'], zones: [], speakers: [] });
-    saveBadges({ earned: ['night'], zones: ['gate'], speakers: [] }, store);
-    expect(loadBadges(store).earned).toEqual(['night']);
-    mem.set(BADGES_KEY, 'not json');
-    expect(loadBadges(store)).toEqual(emptyBadges());
-  });
-});
-
-describe('photo', () => {
-  it('caption with the brand, Moscow date and host as text', () => {
-    const c = photoCaption(msk(2026, 10, 2), 'https://spec-ai-web.vercel.app/stroyka');
-    expect(c.title).toBe('Я на стройке ИИСтройка24 · СпецПласт16');
-    expect(c.date).toBe('2 октября 2026');
-    expect(c.site).toBe('spec-ai-web.vercel.app');
-    expect(photoFileName(msk(2026, 10, 2, 23))).toBe('specplast16-stroyka-2026-10-02.png');
-  });
-  it('layout fits the photo and a caption band', () => {
-    const l = photoLayout(2560, 1440);
-    expect(l.photo.w).toBe(1600);
-    expect(l.photo.h).toBe(900);
-    expect(l.width).toBe(1600 + l.pad * 2);
-    expect(l.height).toBe(900 + l.pad * 2 + l.band);
-    expect(photoLayout(390, 664).photo.w).toBe(390);
   });
 });

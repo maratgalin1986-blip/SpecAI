@@ -64,6 +64,9 @@ small so merges stay conflict-free.
   materials are sold by СпецПласт16 itself (`lib/smetaPrices.ts`). The platform is called «ИИСтройка24 от СпецПласт16» (owner, 2026-10-03; domains iistroyka24.ru and iistroyka.ru bought but not connected yet — the site stays on spec-ai-web.vercel.app, see owner-requests)
   (`SITE.platform`); prices live in `lib/prices.ts`. Details:
   `docs/owner-requests.md`. Do not switch to a single executor without the owner.
+- Work plan and lessons: `tasks/todo.md` (checkable plan) and `tasks/lessons.md`
+  (read at session start; add a rule after every correction). How we work:
+  `docs/ai-office.md` → «Как работаем».
 - Shared memory lives in the repo: `docs/owner-requests.md` (the owner's
   requests and their status), `docs/ai-office.md` (how the sessions work
   together, lessons log), `docs/marketing.md`.
@@ -74,6 +77,8 @@ small so merges stay conflict-free.
 - Checks: `pnpm lint`, `pnpm typecheck`, `pnpm format:check`, `pnpm test`
   (vitest 4 — vitest 5 needs Node 22 and breaks CI), and for the app
   `cd apps/mobile && npx expo export --platform android`.
+- No sign-up or online payment on the public web (owner, 2026-10-03): account pages
+  redirect to the order form; `/admin` and the mobile API keep their sign-in.
 - Auth: NextAuth credentials for the web, Bearer JWT for mobile; API routes
   use `getRequestUser(request)` so both work.
 - Payments: Stripe Checkout + webhook; refunds are manual

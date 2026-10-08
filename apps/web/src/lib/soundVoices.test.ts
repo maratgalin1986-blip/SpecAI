@@ -98,6 +98,11 @@ describe('voices', () => {
     expect(voiceFor('rinat', voices)?.name).toBe('Yuri');
   });
 
+  it('gives Alsu a female voice too (the fallback for unrecorded lines)', () => {
+    expect(voiceFor('alsu', voices)?.name).toBe('Microsoft Irina');
+    expect(asSpeaker('alsu')).toBe('alsu');
+  });
+
   it('returns nothing without a Russian voice', () => {
     expect(voiceFor('mihalych', [{ name: 'Samantha', lang: 'en-US' }])).toBeNull();
   });

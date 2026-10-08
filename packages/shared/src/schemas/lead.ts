@@ -7,7 +7,14 @@ export const leadOutcomeSchema = z.enum(['deal', 'no_deal', 'no_answer']);
 export type LeadOutcome = z.infer<typeof leadOutcomeSchema>;
 
 export const createLeadSchema = z.object({
-  name: z.string().trim().min(1).max(100),
+  // Optional: only the phone and the consent are required. No name is kept
+  // as «Имя не указано», the same placeholder the site's short forms send.
+  name: z
+    .string()
+    .trim()
+    .max(100)
+    .optional()
+    .transform((value) => value || 'Имя не указано'),
   // Accepts any common formatting; must contain 10–15 digits.
   phone: z
     .string()

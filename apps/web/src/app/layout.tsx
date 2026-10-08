@@ -14,9 +14,11 @@ import { CinemaLayer } from '@/components/CinemaLayer';
 import { MessengerButtons } from '@/components/MessengerButtons';
 import { TelegramChip } from '@/components/TelegramChip';
 import { CookieNotice } from '@/components/CookieNotice';
+import { BrandPresence } from '@/components/BrandPresence';
 import { SITE } from '@/lib/site';
 import { siteUrl } from '@/lib/siteUrl';
 import './globals.css';
+import './motion.css';
 import { fromPrice, MIN_RATE } from '@/lib/prices';
 
 // Cyrillic-capable fonts: Manrope for text and headings, a mono for labels and figures.
@@ -152,6 +154,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           <VtMorph />
           {/* The other cinema effects load lazily (components/CinemaLayer.tsx). */}
           <CinemaLayer />
+          <BrandPresence />
         </Providers>
       </body>
     </html>

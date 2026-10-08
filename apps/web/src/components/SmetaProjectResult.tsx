@@ -17,7 +17,9 @@ import {
 
 const Smeta3D = dynamic(() => import('@/components/Smeta3D').then((m) => m.Smeta3D), {
   ssr: false,
-  loading: () => <div className="h-72 rounded-xl border border-cyan-900 bg-[#0a1a2f]" />,
+  loading: () => (
+    <div className="skeleton skeleton-dark h-72 rounded-xl border border-cyan-900 bg-[#0a1a2f]" />
+  ),
 });
 
 const rub = (n: number) => `${n.toLocaleString('ru-RU')} ₽`;

@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { MachinePhoto } from '@/components/MachinePhoto';
-import { RATES } from '@/lib/prices';
+import { fromPerHour, RATES } from '@/lib/prices';
 
 // A cinematic, scroll-scrubbed "one shift" story: the section is several
 // screens tall, the scene stays pinned, and scrolling plays it like a video.
@@ -69,10 +69,20 @@ export function ShiftStory() {
     update();
     window.addEventListener('scroll', onScroll, { passive: true });
     window.addEventListener('resize', onScroll);
+    // Off screen the looping dust pauses (globals.css, [data-offscreen]).
+    const section = sectionRef.current;
+    const observer =
+      section && typeof IntersectionObserver !== 'undefined'
+        ? new IntersectionObserver(([entry]) =>
+            section.toggleAttribute('data-offscreen', !entry?.isIntersecting),
+          )
+        : null;
+    if (section) observer?.observe(section);
     return () => {
       window.removeEventListener('scroll', onScroll);
       window.removeEventListener('resize', onScroll);
       cancelAnimationFrame(frame);
+      observer?.disconnect();
     };
   }, []);
 
@@ -195,7 +205,7 @@ export function ShiftStory() {
             </p>
             <div className="mt-3 flex items-center justify-between rounded-xl bg-amber-500/10 px-3 py-2 text-sm ring-1 ring-amber-500/30">
               <span>Подобран экскаватор-погрузчик</span>
-              <span className="font-mono text-amber-400">{RATE.toLocaleString('ru-RU')} ₽/ч</span>
+              <span className="text-right font-mono text-amber-400">{fromPerHour(RATE)}</span>
             </div>
           </div>
         </div>
@@ -208,7 +218,10 @@ export function ShiftStory() {
               {SHIFT_HOURS} ч × {RATE.toLocaleString('ru-RU')} ₽ ={' '}
               {(SHIFT_HOURS * RATE).toLocaleString('ru-RU')} ₽ ·{' '}
             </span>
-            <a href="#callback" className="text-sm font-semibold text-amber-400 hover:underline">
+            <a
+              href="#callback"
+              className="inline-flex min-h-[44px] items-center text-sm font-semibold text-amber-400 hover:underline"
+            >
               Заказать такую смену →
             </a>
           </div>

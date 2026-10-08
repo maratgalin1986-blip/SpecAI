@@ -6,10 +6,11 @@
 
 import { faqAnswers, findPhone, matchTask, wantsPrice } from '@/lib/dispatcher';
 import { MACHINE_LABELS, type MachineType } from '@/lib/machinePhotos';
-import { hourlyRate, PRICES, rub, type SpeakerId } from '@/lib/stroyka';
+import { hourlyRate, ORDER_LABEL, P, PRICES, type SpeakerId } from '@/lib/stroyka';
 import {
   capital,
   contextFacts,
+  g,
   whenPhrase,
   type ContextSet,
   type OrderContext,
@@ -18,6 +19,7 @@ import { SAFE_ADVICE, STORIES, type Hazard } from '@/lib/stroyka/lines/stories';
 import type { WorkNote } from '@/lib/weather';
 import { buildSmeta, type SmetaInput } from '@/lib/smeta';
 import { smetaHref, smetaJob } from '@/lib/stroyka/smetaLink';
+import { nameFromText } from '@/lib/stroyka/visitorMemory';
 
 // ---------------------------------------------------------------- rough estimate (lib/smeta)
 
@@ -81,7 +83,7 @@ export function roughEstimate(
   if (!smeta) return null;
   return {
     job,
-    line: `Прикинул: ${smeta.job.title.toLowerCase()} — примерно ${rubles(smeta.total)}–${rubles(smeta.totalHigh)} ₽ (${smeta.rows.map((r) => `${r.name.toLowerCase()} ${r.hours} ч`).join(', ')}). Это примерно, точную цену назовёт диспетчер СпецПласт16.`,
+    line: `Прикидка: ${smeta.job.title.toLowerCase()} — примерно ${rubles(smeta.total)}–${rubles(smeta.totalHigh)} ₽ (${smeta.rows.map((r) => `${r.name.toLowerCase()} ${r.hours} ч`).join(', ')}). Это примерно, точную цену назовёт диспетчер СпецПласт16.`,
   };
 }
 
@@ -103,6 +105,7 @@ export type Intent =
   | 'smeta'
   | 'materials'
   | 'offtopic'
+  | 'name'
   | 'unknown';
 
 export function normalize(text: string): string {
@@ -276,6 +279,8 @@ export interface Understanding {
   phone: string | null;
   date: string | null;
   faq: string[];
+  /** «меня зовут Марат» → «Марат». */
+  name: string | null;
 }
 
 export function understand(text: string, now: Date): Understanding {
@@ -321,8 +326,10 @@ export function understand(text: string, now: Date): Understanding {
     intents.push('offtopic');
   const faq = faqAnswers(n);
   if (faq.length && !intents.includes('when')) intents.push('faq');
+  const name = nameFromText(text);
+  if (name) intents.push('name');
   if (!intents.length) intents.push('unknown');
-  return { intents, set, phone, date: when?.date ?? null, faq };
+  return { intents, set, phone, date: when?.date ?? null, faq, name };
 }
 
 export interface Quick {
@@ -353,8 +360,8 @@ const QUICK_START: Quick[] = [
 
 const FALLBACK: Record<SpeakerId, string[]> = {
   mihalych: [
-    'Не расслышал — тут перфоратор. Скажите проще: что делаем и где?',
-    'Так, я прораб, а не переводчик. Что строим и когда?',
+    'Не расслышал — тут перфоратор. Скажи проще: что делаем и где?',
+    'Погоди, не расслышал. Что строим и когда?',
     'Погоди, бетон шумит. Ещё раз: какая работа и на какой день?',
   ],
   rinat: [
@@ -381,17 +388,51 @@ const WHO: Record<SpeakerId, string> = {
   rinat:
     'Ринат, машинист экскаватора-погрузчика. Персонаж, но копаю по-честному: подскажу, что за машина нужна.',
   sveta: 'Света, логист. Я персонаж этой стройки, но заявка от меня уходит настоящему диспетчеру.',
-  ildar: 'Ильдар, крановщик. Персонаж, сверху всё вижу. Про краны и подъём — это ко мне.',
+  ildar:
+    'Ильдар, крановщик. Персонаж: тут сижу на башенном кране, а к заказчикам выезжаю на автокране. Про краны и подъём — это ко мне.',
   alsu: 'Алсу, снабженец. Персонаж, но материалы и рейсы самосвалов считаю по-настоящему.',
 };
 
 const GREET: Record<SpeakerId, string> = {
   mihalych: 'Здорово! Говори, что строим, — подскажу технику.',
-  rinat: 'Привет! Что копаем?',
+  rinat: 'Здравствуйте! Что копаем?',
   sveta: 'Здравствуйте! Рассказывайте: что, где и когда.',
   ildar: 'Привет снизу! Что поднимаем?',
   alsu: 'Здравствуйте! Что привезти — песок, щебень, блоки?',
 };
+
+/**
+ * The answer to «меня зовут Марат»: the name back, in the character's voice.
+ * With the job already known (said earlier or remembered), the character
+ * shows it and asks the next thing instead of starting over.
+ */
+export function nameReply(speaker: SpeakerId, name: string, ctx?: OrderContext): string {
+  const facts = ctx ? contextFacts(ctx) : '';
+  if (facts) {
+    const next = !ctx?.machine
+      ? 'Что именно сделать — копать, поднять, вывезти?'
+      : !ctx.when
+        ? 'Когда нужна машина?'
+        : speaker === 'mihalych' || speaker === 'ildar'
+          ? 'Жми «Оформить у Светы» — она поставит в график.'
+          : speaker === 'sveta'
+            ? 'Оставьте телефон — поставлю в график.'
+            : 'Нажмите «Оформить у Светы» — она поставит в график.';
+    return `Очень приятно, ${name}. ${capital(facts)} — помню. ${next}`;
+  }
+  switch (speaker) {
+    case 'mihalych':
+      return `${name}, будем знакомы. Ну, ${name}, что строим?`;
+    case 'rinat':
+      return `Очень приятно, ${name}. Что копаем?`;
+    case 'ildar':
+      return `${name}, принял. Что поднимаем?`;
+    case 'sveta':
+      return `${name}, записала. Что за работа и куда?`;
+    case 'alsu':
+      return `Приятно познакомиться, ${name}. Что привезти?`;
+  }
+}
 
 const pick = <T>(list: T[], seed: number) => list[Math.abs(seed) % list.length]!;
 
@@ -400,13 +441,13 @@ function priceText(machine?: MachineType): string {
     const rate = hourlyRate(machine);
     const extra =
       machine === 'crane'
-        ? `, на 32 т — ${rub(PRICES.crane32)} ₽/ч`
+        ? `, на 32 т — ${P(PRICES.crane32)}`
         : machine === 'backhoe' || machine === 'wheeled-excavator'
-          ? `, с гидромолотом — ${rub(PRICES.hammer)} ₽/ч`
+          ? `, с гидромолотом — ${P(PRICES.hammer)}`
           : '';
-    return `${MACHINE_LABELS[machine]} СпецПласт16 — от ${rub(rate)} ₽/ч с машинистом${extra}. Смена 8 часов — ${rub(rate * 8)} ₽.`;
+    return `${MACHINE_LABELS[machine]} СпецПласт16 — ${P(rate)}${extra}. Смена — 8 часов.`;
   }
-  return `У СпецПласт16: самосвал — ${rub(PRICES.truck)} ₽/ч, автовышка и трактор — ${rub(PRICES.agp)}, автокран — ${rub(PRICES.crane)} (32 т — ${rub(PRICES.crane32)}), остальное — от ${rub(PRICES.other)} ₽/ч. Смена — 8 часов.`;
+  return `У СпецПласт16: самосвал — ${P(PRICES.truck)}, автовышка и трактор — ${P(PRICES.agp)}, автокран — ${P(PRICES.crane)} (32 т — ${P(PRICES.crane32)}), остальное — ${P(PRICES.other)}. Смена — 8 часов.`;
 }
 
 /** The character's answer to free text. */
@@ -421,6 +462,8 @@ export function respond(
   const seed = text.length + now.getMinutes();
   const merged: OrderContext = { ...ctx, ...u.set };
   const has = (i: Intent) => u.intents.includes(i);
+  // Михалыч and Ильдар say «ты», the others «вы».
+  const ty = speaker === 'mihalych' || speaker === 'ildar';
   const parts: string[] = [];
   let quick: Quick[] = [];
   let handoff: SpeakerId | undefined;
@@ -442,7 +485,7 @@ export function respond(
       speaker,
       text: estimate.line,
       quick: [
-        { label: '🧮 Открыть смету', action: 'smeta' },
+        { label: 'Открыть смету', action: 'smeta' },
         { label: 'Оставить телефон', action: 'form' },
         { label: 'Позвонить', action: 'call' },
       ],
@@ -453,10 +496,16 @@ export function respond(
   if (has('smeta') && !u.set.machine) {
     return {
       speaker,
-      text: 'Смету прикинем — у нас сметный отдел прямо тут, в вагончике. Скажите размеры — посчитаю примерно, а материалы посчитает смета для снабженца.',
+      text: `Смету прикинем — у нас сметный отдел прямо тут, в вагончике. ${
+        speaker === 'alsu'
+          ? 'Скажите размеры — посчитаю примерно, материалы — в смете для снабженца.'
+          : ty
+            ? 'Скажи размеры — прикину, а материалы посчитает Алсу.'
+            : 'Скажите размеры — прикину, а материалы посчитает Алсу.'
+      }`,
       quick: [
-        { label: '🧮 Смета для прораба', action: 'smeta' },
-        { label: '📦 Смета для снабженца', action: 'snab' },
+        { label: 'Смета для прораба', action: 'smeta' },
+        { label: 'Смета для снабженца', action: 'snab' },
         { label: 'Оставить телефон', action: 'form' },
       ],
       set: u.set,
@@ -466,9 +515,9 @@ export function respond(
   if (has('materials') && !u.set.machine) {
     return {
       speaker: 'alsu',
-      text: 'Материалы — это ко мне, Алсу. Бетон, песок, щебень, блоки — всё у нас, с доставкой нашими самосвалами. Скажите объём — посчитаю комплект под ключ.',
+      text: 'Материалы — это ко мне, Алсу. Бетон, песок, щебень, блоки — всё у нас, с доставкой нашими самосвалами. Скажите объём — посчитаю весь комплект.',
       quick: [
-        { label: '📦 Смета для снабженца', action: 'snab' },
+        { label: 'Смета для снабженца', action: 'snab' },
         { label: 'Доставка — к Свете', action: 'form' },
       ],
       set: u.set,
@@ -477,21 +526,27 @@ export function respond(
     };
   }
   if (has('machine') || has('order') || has('when') || has('place')) {
+    // With the machine and the day known the visitor goes to Света, and the
+    // whole reply is said in her voice (Stroyka.tsx: `handoff ?? speaker`).
+    const toSveta = !!(merged.machine && merged.when);
+    const voice: SpeakerId = toSveta ? 'sveta' : speaker;
+    const tyVoice = voice === 'mihalych' || voice === 'ildar';
     if (u.set.machine) {
       parts.push(
-        `У СпецПласт16 есть ${MACHINE_LABELS[u.set.machine].toLowerCase()} — ${matchTask(text)?.why ?? 'подойдёт под задачу'}, подача обычно в день заявки. От ${rub(hourlyRate(u.set.machine))} ₽/ч с машинистом.`,
+        `У СпецПласт16 есть ${MACHINE_LABELS[u.set.machine].toLowerCase()} — ${matchTask(text)?.why ?? 'подойдёт под задачу'}, подача обычно в день заявки. ${capitalFirst(P(hourlyRate(u.set.machine)))}.`,
       );
     } else if (has('price')) parts.push(priceText(merged.machine));
     if (u.set.machine === 'backhoe' && genericExcavator(text))
       parts.push(
-        'Обычно берут экскаватор-погрузчик: и копает, и грузит. Нужен гусеничный — скажите.',
+        `Обычно берут экскаватор-погрузчик: и копает, и грузит. Нужен гусеничный — ${tyVoice ? 'скажи' : 'скажите'}.`,
       );
-    if (u.set.when) parts.push(`${capital(whenPhrase(u.set.when))} — записал.`);
+    if (u.set.when)
+      parts.push(`${capital(whenPhrase(u.set.when))} — ${g(voice, 'записал', 'записала')}.`);
     if (u.set.address) parts.push(`${u.set.address} — знаем, ездим.`);
     const facts = contextFacts(merged);
     if (merged.machine && u.date) checkWeather = { machine: merged.machine, date: u.date };
-    if (merged.machine && merged.when) {
-      parts.push('Передаю Свете — она поставит машину в график.');
+    if (toSveta) {
+      parts.push('Ставлю машину в график — осталось адрес и телефон.');
       handoff = speaker === 'sveta' ? undefined : 'sveta';
       quick = [
         { label: 'Оставить телефон', action: 'form' },
@@ -507,7 +562,7 @@ export function respond(
     } else {
       parts.push(
         facts
-          ? `Понял: ${facts}. Что именно сделать — копать, поднять, вывезти?`
+          ? `${g(speaker, 'Понял', 'Поняла')}: ${facts}. Что именно сделать — копать, поднять, вывезти?`
           : 'Что именно сделать — копать, поднять, вывезти?',
       );
       quick = QUICK_START;
@@ -520,7 +575,7 @@ export function respond(
   } else if (has('price')) {
     parts.push(priceText(merged.machine));
     quick = [
-      { label: 'Оформить заявку', action: 'form' },
+      { label: ORDER_LABEL, action: 'form' },
       { label: 'Позвонить', action: 'call' },
     ];
   } else if (has('faq')) {
@@ -528,7 +583,9 @@ export function respond(
     quick = QUICK_START;
   } else if (has('weather')) {
     parts.push(
-      'Погоду смотрим по прогнозу на день работ — скажите машину и дату, проверю, не помешает ли.',
+      ty
+        ? 'Погоду смотрим по прогнозу на день работ — скажи машину и дату, проверю, не помешает ли.'
+        : 'Погоду смотрим по прогнозу на день работ — скажите машину и дату, проверю, не помешает ли.',
     );
     quick = QUICK_START;
   } else if (has('who')) {
@@ -541,34 +598,50 @@ export function respond(
         : 'Прораб — это человек, который знает, где лопата, но не знает, где рабочий.',
     );
     quick = QUICK_START;
-  } else if (has('greeting')) {
-    parts.push(GREET[speaker]);
+  } else if (has('name') && u.name) {
+    parts.push(nameReply(speaker, u.name, ctx));
     quick = QUICK_START;
-  } else if (has('thanks')) {
-    parts.push('Обращайтесь! Техника ждёт, машинисты на связи.');
-    quick = [{ label: 'Оформить заявку', action: 'form' }];
-  } else if (has('bye')) {
-    parts.push('Бывай! Надумаешь — Света на связи, телефон наверху.');
   } else if (has('smalltalk')) {
     parts.push(
       pick(
         [
-          'Да как обычно: бетон едет, кран крутится, обед по расписанию. У вас что строим?',
-          'Работаем! Смена идёт, техника в деле. Вам что-то нужно на объект?',
+          `Да как обычно: бетон едет, кран крутится, обед по расписанию. ${ty ? 'У тебя' : 'У вас'} что строим?`,
+          `Работаем! Смена идёт, техника в деле. ${ty ? 'Тебе' : 'Вам'} что-то нужно на объект?`,
         ],
         seed,
       ),
     );
     quick = QUICK_START;
+  } else if (has('greeting')) {
+    parts.push(GREET[speaker]);
+    quick = QUICK_START;
+  } else if (has('thanks')) {
+    parts.push(
+      speaker === 'mihalych' || speaker === 'ildar'
+        ? 'Обращайся! Техника ждёт, машинисты на связи.'
+        : 'Обращайтесь! Техника ждёт, машинисты на связи.',
+    );
+    quick = [{ label: ORDER_LABEL, action: 'form' }];
+  } else if (has('bye')) {
+    parts.push(
+      speaker === 'mihalych' || speaker === 'ildar'
+        ? 'Бывай! Надумаешь — Света на связи, телефон наверху.'
+        : speaker === 'sveta'
+          ? 'До свидания! Надумаете — я на связи, телефон наверху.'
+          : 'До свидания! Надумаете — Света на связи, телефон наверху.',
+    );
   } else if (has('offtopic')) {
     parts.push(
-      'Про это у нас на объекте не спорят — каски не выдерживают. Давайте лучше про технику: что строим?',
+      `Про это у нас на объекте не спорят — каски не выдерживают. ${ty ? 'Давай' : 'Давайте'} лучше про технику: что строим?`,
     );
     quick = QUICK_START;
   } else {
     parts.push(pick(FALLBACK[speaker], seed));
     quick = QUICK_START;
   }
+  // A name told along with the job: said back first, the job answer follows.
+  if (u.name && !parts.join(' ').includes(u.name))
+    parts.unshift(`${u.name}, приятно познакомиться.`);
   return { speaker, text: parts.join(' '), quick, set: u.set, phone: null, handoff, checkWeather };
 }
 
@@ -593,9 +666,13 @@ export function weatherStory(
   machine: MachineType,
   okDay: string | null,
   seed: number,
+  speaker?: SpeakerId,
 ): { text: string; quick: Quick[] } {
   const story = pick(STORIES[hazard], seed);
-  const day = okDay ? ` По прогнозу нормально будет ${okDay} — давайте на этот день?` : '';
+  const ty = speaker === 'mihalych' || speaker === 'ildar';
+  const day = okDay
+    ? ` По прогнозу нормально будет ${okDay} — ${ty ? 'давай' : 'давайте'} на этот день?`
+    : '';
   return {
     text: `${story} ${SAFE_ADVICE[hazard]} ${MACHINE_LABELS[machine]} поставим, когда безопасно.${day}`,
     quick: [
@@ -605,4 +682,8 @@ export function weatherStory(
       { label: 'Всё равно заказать — диспетчер решит', action: 'order-anyway' as const },
     ],
   };
+}
+
+function capitalFirst(text: string) {
+  return text.charAt(0).toUpperCase() + text.slice(1);
 }

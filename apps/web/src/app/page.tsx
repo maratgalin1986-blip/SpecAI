@@ -1,7 +1,6 @@
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { prisma } from '@specai/database';
-import { Button } from '@specai/ui';
 import { PUBLIC_AGENT_PROFILES } from '@specai/shared';
 import { CallbackForm } from '@/components/CallbackForm';
 import { CallbackIris } from '@/components/CallbackIris';
@@ -11,6 +10,7 @@ import { CountUp } from '@/components/CountUp';
 import { Faq } from '@/components/Faq';
 import { ObjectPhotos } from '@/components/ObjectPhotos';
 import { HeroPhotos } from '@/components/HeroPhotos';
+import { HowItWorks } from '@/components/HowItWorks';
 import { Icon, type IconName } from '@/components/Icon';
 import { IntroSplash } from '@/components/IntroSplash';
 import { MachinePhoto } from '@/components/MachinePhoto';
@@ -19,7 +19,8 @@ import { TiltCard } from '@/components/TiltCard';
 import type { MachineType } from '@/lib/machinePhotos';
 import { pluralizeRu } from '@/lib/pluralize';
 import { SITE } from '@/lib/site';
-import { fromPrice, HAMMER_RATE, MIN_RATE, priceFaqAnswer, SHIFT_HOURS } from '@/lib/prices';
+import { fromPerHour, HAMMER_RATE, MIN_RATE, priceFaqAnswer, SHIFT_HOURS } from '@/lib/prices';
+
 
 // Big interactive blocks below the fold: separate chunks, so the browser
 // hydrates them in their own short tasks instead of one long one.
@@ -39,70 +40,70 @@ const SERVICES: {
     title: 'Экскаваторы-погрузчики',
     photo: 'backhoe',
     text: 'JCB 4CX, CASE 570, Hidromek 102B, LGCE B877F — траншеи, котлованы, планировка.',
-    price: fromPrice('backhoe'),
+    price: fromPerHour('backhoe'),
   },
   {
     icon: 'excavator',
     title: 'Гусеничные экскаваторы',
     photo: 'excavator',
     text: 'Котлованы, карьеры и большие объёмы грунта — ковш под задачу.',
-    price: fromPrice('excavator'),
+    price: fromPerHour('excavator'),
   },
   {
     icon: 'hammer',
     title: 'Гидромолот',
     photo: 'trench',
     text: 'Демонтаж, вскрытие асфальта и бетона, работа по мёрзлому грунту.',
-    price: fromPrice(HAMMER_RATE),
+    price: fromPerHour(HAMMER_RATE),
   },
   {
     icon: 'hammer',
     title: 'Колёсный экскаватор с гидромолотом',
     photo: 'wheeled-excavator',
     text: 'Дробление бетона и асфальта в городе — своим ходом, без трала.',
-    price: fromPrice('wheeled-excavator'),
+    price: fromPerHour('wheeled-excavator'),
   },
   {
     icon: 'crane',
     title: 'Автокраны',
     photo: 'crane',
     text: 'До 32 т — монтаж конструкций, погрузка и подъём грузов.',
-    price: fromPrice('crane'),
+    price: fromPerHour('crane'),
   },
   {
     icon: 'crane',
     title: 'Манипулятор КМУ 7 т',
     photo: 'kmu',
     text: 'Погрузка, перевозка и разгрузка одной машиной: блоки, плиты, бытовки.',
-    price: fromPrice('kmu'),
+    price: fromPerHour('kmu'),
   },
   {
     icon: 'lift',
     title: 'Автовышка АГП',
     photo: 'agp',
     text: 'Работы на высоте: фасады, кровля, освещение, вывески, обрезка деревьев.',
-    price: fromPrice('agp'),
+    price: fromPerHour('agp'),
   },
   {
     icon: 'loader',
     title: 'Фронтальные погрузчики',
     photo: 'loader',
     text: 'Погрузка грунта, щебня и песка, уборка снега на объектах.',
-    price: fromPrice('loader'),
+    price: fromPerHour('loader'),
   },
   {
     icon: 'roller',
     title: 'Виброкаток',
     photo: 'roller',
     text: 'Уплотнение грунта, щебня и асфальта на дорогах и благоустройстве.',
-    price: fromPrice('roller'),
+    price: fromPerHour('roller'),
   },
   {
     icon: 'tractor',
     title: 'Тракторы',
     photo: 'tractor',
     text: 'МТЗ «Беларус» для вспомогательных и коммунальных работ.',
-    price: fromPrice('tractor'),
+    price: fromPerHour('tractor'),
   },
   {
     icon: 'helmet',
@@ -149,7 +150,7 @@ const STEPS = [
     title: 'Забронируйте',
     text: 'Примите предложение — исполнитель подтвердит бронь и закрепит машину и машиниста.',
   },
-  { title: 'Работайте', text: 'Следите за статусом в личном кабинете, оставьте отзыв.' },
+  { title: 'Работайте', text: 'Диспетчер на связи, оплата по факту.' },
 ];
 
 // Service cards link to their catalog category (matched by name) and show how
@@ -241,10 +242,10 @@ export default async function HomePage() {
   return (
     <div className="flex flex-col gap-24">
       <IntroSplash />
-      <section className="hero-short depth-exit relative -mt-2 min-h-[640px] overflow-hidden rounded-[2rem] bg-slate-950 text-white shadow-2xl lg:min-h-[680px]">
+      <section className="hero-short depth-exit relative -mt-2 min-h-[520px] overflow-hidden rounded-[2rem] sm:min-h-[640px] bg-slate-950 text-white shadow-2xl lg:min-h-[680px]">
         <HeroPhotos />
         <div className="hero-parallax-text relative grid lg:grid-cols-2">
-          <div className="hero-copy z-10 flex flex-col justify-center px-6 pb-20 pt-14 sm:px-10 lg:py-24">
+          <div className="hero-copy z-10 flex flex-col justify-center px-5 pb-16 pt-7 sm:px-10 sm:pb-20 sm:pt-14 lg:py-24">
             <div className="float-in inline-flex w-fit items-center gap-2 rounded-full bg-white/10 px-3 py-1.5 ring-1 ring-white/15">
               <span className="relative flex h-2 w-2">
                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75 motion-reduce:animate-none" />
@@ -253,36 +254,47 @@ export default async function HomePage() {
               <span className="eyebrow text-slate-200">{SITE.city} · подача сегодня</span>
             </div>
             <h1
-              className="float-in mt-6 text-[2.6rem] font-extrabold leading-[1.02] tracking-[-0.04em] sm:text-6xl"
+              className="float-in mt-4 text-[2.25rem] font-extrabold leading-[1.02] tracking-[-0.04em] sm:mt-6 sm:text-6xl"
               style={{ animationDelay: '120ms' }}
             >
               Аренда <span className="marker text-white">спецтехники</span> с машинистом
             </h1>
+            {/* Phones get the short line, so «Заказать технику» is on the
+                first screen at 360x740 above the bottom bars. */}
             <p
-              className="float-in mt-6 max-w-xl text-lg leading-relaxed text-slate-300"
+              className="float-in mt-3 max-w-xl text-base leading-snug text-slate-300 sm:hidden"
+              style={{ animationDelay: '240ms' }}
+            >
+              Одна заявка — предложения от исполнителей, включая парк {SITE.name} (
+              {fromPerHour(MIN_RATE)}). Вы выбираете лучшее, сервис бесплатный.
+            </p>
+            <p
+              className="float-in mt-6 hidden max-w-xl text-lg leading-relaxed text-slate-300 sm:block"
               style={{ animationDelay: '240ms' }}
             >
               Экскаваторы-погрузчики, автокраны и погрузчики с машинистами в Набережных Челнах и по
               Татарстану. Оставьте заявку — исполнители со своей техникой пришлют цены, вы выберете
-              лучшее. Парк {SITE.name} — {fromPrice(MIN_RATE)}, с НДС. Сервис бесплатный.
+              лучшее. Парк {SITE.name} — {fromPerHour(MIN_RATE)}, с НДС. Сервис бесплатный.
             </p>
             {/* Owner, 2026-10-03: order, estimate and design as real buttons,
                 «Заказать технику» the biggest and brightest; then the phone and
-                the 3D site; the other ways in stay quiet links. */}
+                the film tour; the other ways in stay quiet links. */}
             <div
-              className="float-in mt-8 flex max-w-xl flex-col gap-3"
+              className="float-in mt-5 flex max-w-xl flex-col gap-3 sm:mt-8"
               style={{ animationDelay: '360ms' }}
             >
               <a
                 href="#callback"
-                className="group relative inline-flex w-full items-center justify-center gap-3 overflow-hidden rounded-2xl bg-gradient-to-r from-amber-400 via-amber-500 to-orange-500 px-7 py-5 text-xl font-extrabold text-slate-950 shadow-2xl shadow-amber-500/40 ring-2 ring-amber-200/70 transition hover:brightness-110 sm:text-2xl"
+                className="group relative inline-flex w-full items-center justify-center gap-2 overflow-hidden whitespace-nowrap rounded-2xl bg-gradient-to-r from-amber-400 via-amber-500 to-orange-500 px-4 py-4 text-lg font-extrabold sm:gap-3 sm:px-7 sm:py-5 text-slate-950 shadow-2xl shadow-amber-500/40 ring-2 ring-amber-200/70 transition hover:brightness-110 sm:text-2xl"
               >
                 <span className="cta-shine pointer-events-none absolute inset-0" aria-hidden />
-                <span aria-hidden className="text-2xl sm:text-3xl">
+                <span aria-hidden className="text-xl sm:text-3xl">
                   🚜
                 </span>
                 Заказать технику
-                <Icon name="arrow" className="h-5 w-5 transition group-hover:translate-x-1" />
+                <span className="nudge">
+                  <Icon name="arrow" className="h-5 w-5" />
+                </span>
               </a>
               <div className="grid grid-cols-2 gap-3">
                 {[
@@ -309,7 +321,7 @@ export default async function HomePage() {
                   <Icon name="phone" className="h-5 w-5" />
                   {SITE.phone}
                 </a>
-                {/* The 3D site: a glass pill with a softly pulsing play button. A
+                {/* The film tour: a glass pill with a softly pulsing play button. A
                     client-side link, so the tap that started the sound here keeps
                     it playing on the site (a full page load would need a new tap). */}
                 <Link
@@ -322,9 +334,6 @@ export default async function HomePage() {
                     </svg>
                   </span>
                   Войти на стройку
-                  <span className="rounded bg-white/15 px-1.5 py-0.5 text-[11px] font-bold uppercase tracking-wider text-amber-200">
-                    3D
-                  </span>
                 </Link>
               </div>
             </div>
@@ -335,15 +344,15 @@ export default async function HomePage() {
             >
               <a
                 href="#podbor"
-                className="inline-flex min-h-10 items-center underline-offset-4 hover:text-white hover:underline"
+                className="link-draw group inline-flex min-h-[44px] items-center hover:text-white"
               >
-                Подобрать технику →
+                Подобрать технику&nbsp;<span className="nudge">→</span>
               </a>
               <a
                 href="/kalkulyator"
-                className="inline-flex min-h-10 items-center underline-offset-4 hover:text-white hover:underline"
+                className="link-draw group inline-flex min-h-[44px] items-center hover:text-white"
               >
-                Калькулятор работ →
+                Калькулятор работ&nbsp;<span className="nudge">→</span>
               </a>
             </nav>
             <p className="float-in mt-5 text-sm text-slate-400" style={{ animationDelay: '480ms' }}>
@@ -371,7 +380,10 @@ export default async function HomePage() {
         ))}
       </section>
 
-      <div className="depth -my-10 overflow-hidden border-y border-slate-200 py-4" aria-hidden>
+      <div
+        className="marquee-mask depth -my-10 overflow-hidden border-y border-slate-200 py-4"
+        aria-hidden
+      >
         <div className="marquee">
           {[...MARQUEE, ...MARQUEE].map((item, index) => (
             <span key={index} className="eyebrow flex items-center gap-8 pr-8 text-slate-500">
@@ -397,17 +409,21 @@ export default async function HomePage() {
             </h2>
             <a
               href="/equipment"
-              className="group inline-flex items-center gap-2 rounded-full border border-slate-300 px-5 py-2.5 text-sm font-semibold transition hover:border-slate-900"
+              className="group inline-flex min-h-[44px] items-center gap-2 rounded-full border border-slate-300 px-5 py-2.5 text-sm font-semibold transition hover:border-slate-900"
             >
               Весь каталог
-              <Icon name="arrow" className="h-4 w-4 transition group-hover:translate-x-1" />
+              <span className="nudge">
+                <Icon name="arrow" className="h-4 w-4" />
+              </span>
             </a>
             <a
               href="/map"
-              className="group inline-flex items-center gap-2 rounded-full border border-slate-300 px-5 py-2.5 text-sm font-semibold transition hover:border-slate-900"
+              className="group inline-flex min-h-[44px] items-center gap-2 rounded-full border border-slate-300 px-5 py-2.5 text-sm font-semibold transition hover:border-slate-900"
             >
               Заказать на карте
-              <Icon name="arrow" className="h-4 w-4 transition group-hover:translate-x-1" />
+              <span className="nudge">
+                <Icon name="arrow" className="h-4 w-4" />
+              </span>
             </a>
           </div>
           <p className="mt-3 text-slate-600">
@@ -458,10 +474,9 @@ export default async function HomePage() {
                         <span className="font-mono text-sm font-semibold text-slate-900">
                           {service.price ?? 'по договору'}
                         </span>
-                        <Icon
-                          name="arrow"
-                          className="h-5 w-5 text-amber-700 transition group-hover:translate-x-1"
-                        />
+                        <span className="nudge text-amber-700">
+                          <Icon name="arrow" className="h-5 w-5" />
+                        </span>
                       </div>
                     </div>
                   </a>
@@ -482,7 +497,9 @@ export default async function HomePage() {
                 </p>
                 <span className="relative mt-auto inline-flex w-fit items-center gap-2 rounded-full bg-amber-500 px-5 py-2.5 text-sm font-semibold text-slate-950 transition group-hover:bg-amber-400">
                   Подобрать технику
-                  <Icon name="arrow" className="h-4 w-4 transition group-hover:translate-x-1" />
+                  <span className="nudge">
+                    <Icon name="arrow" className="h-4 w-4" />
+                  </span>
                 </span>
               </a>
             </TiltCard>
@@ -492,6 +509,7 @@ export default async function HomePage() {
 
       <CinemaBand
         machine="excavator"
+        clip="excavator-gold"
         eyebrow="Как такси для спецтехники"
         phrase="Котлован к утру — не обещание, а принятая заявка"
       />
@@ -563,7 +581,7 @@ export default async function HomePage() {
                 <p className="mt-2 text-sm text-slate-300">{agent.description}</p>
                 <a
                   href={`/agents?agent=${agent.id}`}
-                  className="mt-4 inline-block text-sm font-semibold text-amber-400 hover:underline"
+                  className="mt-2 inline-flex min-h-[44px] items-center text-sm font-semibold text-amber-400 hover:underline"
                 >
                   Написать →
                 </a>
@@ -582,23 +600,14 @@ export default async function HomePage() {
             </h2>
           </Reveal>
         </div>
-        <ol className="grid gap-4 sm:grid-cols-2 lg:col-span-7">
-          {STEPS.map((step, index) => (
-            <li key={step.title}>
-              <Reveal delay={index * 100} className="h-full">
-                <div className="h-full rounded-3xl border border-slate-200 bg-white p-6 transition hover:-translate-y-1 hover:border-amber-300">
-                  <div className="font-mono text-4xl font-bold text-amber-600">0{index + 1}</div>
-                  <h3 className="mt-4 text-lg font-bold">{step.title}</h3>
-                  <p className="mt-1 text-sm text-slate-600">{step.text}</p>
-                </div>
-              </Reveal>
-            </li>
-          ))}
-        </ol>
+        <Reveal className="lg:col-span-7">
+          <HowItWorks steps={STEPS} />
+        </Reveal>
       </section>
 
       <CinemaBand
         machine="crane"
+        clip="crane-dusk"
         eyebrow="Подача сегодня"
         phrase="Техника уже едет. Осталось сказать куда"
       />
@@ -609,7 +618,10 @@ export default async function HomePage() {
         <Faq items={HOME_FAQ} />
       </div>
 
-      <section id="callback" className="scroll-mt-24">
+      {/* The anchor sits on the form card itself (first on phones), so «Заказать
+          технику» lands with the phone field mid-screen, not on the heading. No
+          dolly tilt here: a tilted form is harder to tap and skews the jump. */}
+      <section data-no-dolly>
         <CallbackIris backdrop="/images/trench.jpg">
           <div className="grid grid-cols-1 gap-8 p-6 sm:p-10 lg:grid-cols-2">
             <div className="flex min-w-0 flex-col justify-center">
@@ -639,7 +651,10 @@ export default async function HomePage() {
                 </span>
               </div>
             </div>
-            <div className="min-w-0 rounded-3xl bg-slate-950/50 p-4 ring-1 ring-white/10 backdrop-blur sm:p-6">
+            <div
+              id="callback"
+              className="order-first min-w-0 scroll-mt-28 rounded-3xl bg-slate-950/50 p-4 ring-1 ring-white/10 backdrop-blur sm:p-6 lg:order-none"
+            >
               <CallbackForm source="home" dark />
             </div>
           </div>
@@ -658,8 +673,11 @@ export default async function HomePage() {
               {SITE.name}. Сравните цены и выберите предложение: телефон исполнителя откроется,
               когда он подтвердит бронь. Сервис бесплатный, без комиссий.
             </p>
-            <a href="/orders" className="mt-5 inline-block">
-              <Button>Оставить заявку</Button>
+            <a
+              href="/orders"
+              className="mt-5 inline-flex min-h-11 items-center justify-center rounded-md bg-amber-700 px-5 text-sm font-bold text-white transition-colors hover:bg-amber-800"
+            >
+              Оставить заявку
             </a>
           </div>
           <div className="flex flex-col gap-2 text-slate-700">

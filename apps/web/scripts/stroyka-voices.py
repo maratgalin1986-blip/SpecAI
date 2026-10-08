@@ -9,12 +9,14 @@ Run from apps/web (needs `pip install piper-tts`, ffmpeg and the two voice
 files in VOICE_DIR):
     npx tsx scripts/stroyka-voice-lines.ts > /tmp/stroyka-lines.json
     python3 scripts/stroyka-voices.py /tmp/stroyka-lines.json
-Existing files are kept; pass --force to record everything again.
+Existing files are kept; pass --force to record everything again. A line
+that only moved (its id changed, the text did not) reuses its old file.
 """
 
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -42,7 +44,7 @@ STYLE = {
 # Native words in the crew's and the Tatar characters' lines: spelled so the
 # Russian voice says them right, with the stress (U+0301) where it falls.
 STRESS = {
-    "Ассалому алейкум": "Ассало́му але́йкум",
+    "Ассалому алайкум": "Ассало́му ала́йкум",
     "Салам алейкум": "Сала́м але́йкум",
     "Сәлеметсіз бе": "Салеметси́з бе",
     "Һаумыһығыҙ": "Хаумыхыгы́з",
@@ -70,6 +72,7 @@ STRESS = {
     "Хәерле көн": "Хаерле́ кён",
     "Әйбәт эш": "Айба́т эш",
     "Сак булыгыз": "Сак булыгы́з",
+    "Сак бул": "Сак бу́л",
     "Мин краннан бөтен шәһәрне күрәм": "Мин краннан бётен шахарне́ кюра́м",
     "Сау булыгыз": "Сау булыгы́з",
     "Бүген": "Бюге́н",
@@ -77,6 +80,9 @@ STRESS = {
     "без булдырабыз": "без булдырабы́з",
     "Без булдырабыз": "Без булдырабы́з",
     "булдырабыз": "булдырабы́з",
+    "Здорово": "Здоро́во",
+    "здорово": "здоро́во",
+    "JCB": "Джей-Си-Би",
 }
 # Tatar, Bashkir and Kazakh letters the Russian voice does not know.
 LETTERS = str.maketrans({"ә": "а", "Ә": "А", "ө": "ё", "Ө": "Ё", "ү": "у", "Ү": "У", "һ": "х",
@@ -159,6 +165,28 @@ def main() -> None:
     force = "--force" in sys.argv
     os.makedirs(OUT_DIR, exist_ok=True)
     keys = {i["key"] for i in items}
+    # A line that moved keeps its recording: same text (the hash after the
+    # last «-»), same speaker group (mihalych, radio, crew-armen…).
+    def group(key: str) -> str:
+        head = key.split("-")
+        return "-".join(head[:2]) if head[0] == "crew" else head[0]
+
+    old = {}
+    for name in os.listdir(OUT_DIR):
+        if name.endswith(".mp3"):
+            k = name[:-4]
+            old.setdefault((group(k), k.rsplit("-", 1)[-1]), []).append(k)
+    moved = 0
+    for item in items:
+        out = os.path.join(OUT_DIR, f"{item['key']}.mp3")
+        if force or os.path.exists(out):
+            continue
+        for prev in old.get((group(item["key"]), item["key"].rsplit("-", 1)[-1]), []):
+            src = os.path.join(OUT_DIR, f"{prev}.mp3")
+            if os.path.exists(src):
+                shutil.copyfile(src, out)
+                moved += 1
+                break
     for name in os.listdir(OUT_DIR):  # drop clips of removed lines
         if name.endswith(".mp3") and name[:-4] not in keys:
             os.remove(os.path.join(OUT_DIR, name))
@@ -172,7 +200,7 @@ def main() -> None:
         done += 1
         if done % 25 == 0:
             print(f"{done} recorded", flush=True)
-    print(f"done: {done} new, {len(items)} total")
+    print(f"done: {done} new, {moved} reused after a move, {len(items)} total")
 
 
 if __name__ == "__main__":

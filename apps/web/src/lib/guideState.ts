@@ -1,5 +1,11 @@
 import { prisma } from '@specai/database';
-import { guideRole, nextSteps, type GuideState, type GuideUser } from '@/lib/guide';
+import {
+  guideRole,
+  nextSteps,
+  type GuideLinks,
+  type GuideState,
+  type GuideUser,
+} from '@/lib/guide';
 
 type StatusCounts = Partial<Record<string, number>>;
 
@@ -93,6 +99,9 @@ export async function loadGuideState(
 }
 
 /** The guide for a signed-in user or a guest. */
-export async function guideFor(user: (GuideUser & { id: string }) | null | undefined) {
-  return nextSteps(user, await loadGuideState(user));
+export async function guideFor(
+  user: (GuideUser & { id: string }) | null | undefined,
+  links: GuideLinks = 'markdown',
+) {
+  return nextSteps(user, await loadGuideState(user), links);
 }

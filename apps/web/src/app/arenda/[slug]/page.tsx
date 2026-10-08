@@ -10,13 +10,16 @@ import { SITE } from '@/lib/site';
 import { siteUrl } from '@/lib/siteUrl';
 import { CinemaBand } from '@/components/CinemaBand';
 import { CinemaLayer } from '@/components/CinemaHero';
-import { fromPrice, houseRate, rateOf, rub } from '@/lib/prices';
+import { fromPerHour, houseRate, rateOf, rub, SHIFT_HOURS } from '@/lib/prices';
 import { HOUSE_FIRST_ORDER, PUBLIC_FLEET, isHouseEquipment } from '@/lib/fleet';
 import { customerRates } from '@/lib/equipmentCatalog';
 import { MachineAmbience } from '@/components/MachineAmbience';
 import { TelegramButton } from '@/components/TelegramButton';
 import { cityPath, NEARBY_CITIES } from '@/lib/cities';
 import { landingClips } from '@/lib/landingClips';
+import { landingLoop } from '@/lib/loops';
+import { CountUp } from '@/components/CountUp';
+import { Reveal } from '@/components/Reveal';
 
 export const revalidate = 300;
 
@@ -46,7 +49,7 @@ export async function generateMetadata({
   const landing = landingBySlug(params.slug);
   if (!landing) return { title: 'Страница не найдена' };
   // The price comes from lib/prices.ts, never from the database.
-  const title = `Аренда ${landing.title} в Набережных Челнах — ${fromPrice(landing.machine)}`;
+  const title = `Аренда ${landing.title} в Набережных Челнах — ${fromPerHour(landing.machine)}`;
   return {
     title,
     description: `${landing.intro} ${SITE.city} и ${SITE.region}. ${SITE.phone}`,
@@ -106,7 +109,7 @@ export default async function LandingPage({ params }: { params: { slug: string }
             <div className="mt-6 flex flex-wrap gap-3">
               <a
                 href={SITE.phoneHref}
-                className="rounded-md bg-amber-500 px-5 py-3 font-semibold hover:bg-amber-400 text-slate-950"
+                className="sweep rounded-md bg-amber-500 px-5 py-3 font-semibold hover:bg-amber-400 text-slate-950"
               >
                 {SITE.phone}
               </a>
@@ -127,7 +130,7 @@ export default async function LandingPage({ params }: { params: { slug: string }
                   {i > 0 && <span className="mr-2 text-slate-500">·</span>}
                   <a
                     href={cityPath(landing.slug, city.slug)}
-                    className="text-amber-300 hover:underline"
+                    className="inline-flex min-h-[44px] items-center text-amber-300 hover:underline"
                   >
                     {city.name}
                   </a>
@@ -174,7 +177,7 @@ export default async function LandingPage({ params }: { params: { slug: string }
                         ? houseRate(item.hourlyRate, machine)
                         : customerRates({ ...item, categoryName: landing.title }).hourlyRate,
                     )}{' '}
-                    ₽<span className="text-sm font-normal text-slate-500">/ч</span>
+                    ₽<span className="text-sm font-normal text-slate-500">/ч с машинистом</span>
                   </p>
                   <span className="text-sm font-medium text-amber-700">Рассчитать стоимость →</span>
                 </Card>
@@ -186,26 +189,43 @@ export default async function LandingPage({ params }: { params: { slug: string }
 
       <CinemaBand
         machine={machine}
+        clip={landingLoop(landing.slug)}
         eyebrow={`Аренда ${landing.title}`}
         phrase="Скажите задачу — приедет машина и машинист"
       />
 
       <section>
         <h2 className="text-2xl font-bold">Какие задачи решаем</h2>
-        <ul className="mt-4 grid gap-3 sm:grid-cols-2">
+        <Reveal stagger className="mt-4 grid gap-3 sm:grid-cols-2">
           {landing.tasks.map((task) => (
-            <li key={task} className="rounded-xl border border-slate-200 bg-white p-4 text-sm">
+            <div key={task} className="rounded-xl border border-slate-200 bg-white p-4 text-sm">
               ✔ {task}
-            </li>
+            </div>
           ))}
-        </ul>
+        </Reveal>
       </section>
 
       <section className="rounded-2xl border border-amber-200 bg-amber-50 p-6">
         <h2 className="text-xl font-bold">Что входит в стоимость</h2>
-        <ul className="mt-3 space-y-1 text-sm text-slate-700">
+        {/* The two numbers count up when they scroll in: the price from
+            lib/prices.ts and the shift length, nothing else. */}
+        <div className="mt-4 flex flex-wrap gap-x-10 gap-y-3">
+          <div>
+            <div className="whitespace-nowrap text-3xl font-extrabold tracking-tight text-slate-900">
+              от <CountUp value={from} /> ₽
+            </div>
+            <div className="text-sm text-slate-600">час с машинистом</div>
+          </div>
+          <div>
+            <div className="whitespace-nowrap text-3xl font-extrabold tracking-tight text-slate-900">
+              <CountUp value={SHIFT_HOURS} duration={900} /> ч
+            </div>
+            <div className="text-sm text-slate-600">смена, оплата по факту</div>
+          </div>
+        </div>
+        <ul className="mt-4 space-y-1 text-sm text-slate-700">
           <li>✔ Работа машиниста</li>
-          <li>✔ Оплата по фактически отработанным часам, смена — 8 часов</li>
+          <li>✔ Оплата по фактически отработанным часам, смена — {SHIFT_HOURS} часов</li>
           <li>✔ Договор, счёт с НДС и закрывающие документы</li>
           <li>• Подача техники на объект — рассчитывается по адресу</li>
         </ul>
@@ -223,7 +243,11 @@ export default async function LandingPage({ params }: { params: { slug: string }
       <section className="flex flex-wrap gap-2 text-sm">
         <span className="text-slate-500">Другая техника:</span>
         {LANDINGS.filter((l) => l.slug !== landing.slug).map((l) => (
-          <a key={l.slug} href={`/arenda/${l.slug}`} className="text-amber-700 hover:underline">
+          <a
+            key={l.slug}
+            href={`/arenda/${l.slug}`}
+            className="inline-flex min-h-[44px] items-center text-amber-700 hover:underline"
+          >
             {l.short}
           </a>
         ))}

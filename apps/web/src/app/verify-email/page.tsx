@@ -3,6 +3,7 @@
 import { Suspense, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Button, Card } from '@specai/ui';
+import { SITE } from '@/lib/site';
 
 /**
  * Подтверждение выполняется только по явному клику (POST): переход по ссылке из письма
@@ -84,7 +85,11 @@ export default function VerifyEmailPage() {
     <div className="mx-auto max-w-sm">
       <Card>
         <h1 className="mb-4 text-xl font-bold">Подтверждение email</h1>
-        <Suspense fallback={<p className="text-sm text-slate-500">Загрузка…</p>}>
+        <Suspense
+          fallback={
+            <p className="text-sm text-slate-500">Секунду — {SITE.name} открывает страницу…</p>
+          }
+        >
           <VerifyEmailForm />
         </Suspense>
       </Card>

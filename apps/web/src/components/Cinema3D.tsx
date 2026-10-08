@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react';
 import { usePathname } from 'next/navigation';
+import { afterIntroIdle } from '@/lib/cinemaFx';
 
 // One lightweight effects layer for every page, no per-page edits:
 //  1. 3D fly-in of sections, cards, figures and images as they scroll in;
@@ -196,11 +197,15 @@ export function Cinema3D() {
       });
     }
 
-    function prepHeading(el: HTMLElement): boolean {
+    // The words of a heading that can rise word by word, or null.
+    function headingWords(el: HTMLElement): string[] | null {
       const only = el.childNodes.length === 1 ? el.firstChild : null;
-      if (!only || only.nodeType !== Node.TEXT_NODE) return false;
+      if (!only || only.nodeType !== Node.TEXT_NODE) return null;
       const words = (only.textContent ?? '').split(/\s+/).filter(Boolean);
-      if (words.length === 0 || words.length > 14) return false;
+      return words.length === 0 || words.length > 14 ? null : words;
+    }
+
+    function prepHeading(el: HTMLElement, words: string[]) {
       const frag = document.createDocumentFragment();
       const spans: HTMLElement[] = [];
       words.forEach((w, idx) => {
@@ -236,7 +241,6 @@ export function Cinema3D() {
           650 + spans.length * 55 + 100,
         );
       });
-      return true;
     }
 
     /* ---------- parallax: one scroll listener, one rAF ---------- */
@@ -266,7 +270,7 @@ export function Cinema3D() {
     const schedule = () => {
       if (!raf && visible.size) raf = requestAnimationFrame(paint);
     };
-    function prepParallax(el: HTMLElement, r: DOMRect) {
+    function prepParallax(el: HTMLElement, r: DOMRect, writes: Array<() => void>) {
       if (saveData || !(el instanceof HTMLImageElement) || hasVt(el)) return;
       if (r.width < 300 || r.height < 180) return;
       if (!pio) {
@@ -285,7 +289,10 @@ export function Cinema3D() {
       const parent = el.parentElement;
       // Inside a clipped frame, zoom slightly so the drift never shows a gap.
       if (parent && getComputedStyle(parent).overflow !== 'visible') {
-        el.style.scale = String(1 + (2 * amp) / r.height + 0.01);
+        const scale = String(1 + (2 * amp) / r.height + 0.01);
+        writes.push(() => {
+          el.style.scale = scale;
+        });
       }
       drift.set(el, amp);
       pio.observe(el);
@@ -304,6 +311,10 @@ export function Cinema3D() {
         root.querySelectorAll<HTMLElement>(`${HEADING_SELECTOR}, ${FLY_SELECTOR}`),
       );
       items.forEach((i) => list.add(i));
+      // Measure everything first, then change styles: a measurement after each
+      // change would force a full layout per element (hundreds on the home page).
+      const writes: Array<() => void> = [];
+      const chosen = new Set<Element>();
       const ordered = Array.from(list).sort((a, b) =>
         a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1,
       );
@@ -318,7 +329,7 @@ export function Cinema3D() {
         if (r.width === 0 || r.height === 0) return;
         const isHeading = el.matches(HEADING_SELECTOR);
         if (!isHeading && !el.closest(SKIP_DECOR) && !el.closest('header, nav, form, dialog')) {
-          if (!isFixedOrSticky(el)) prepParallax(el, r);
+          if (!isFixedOrSticky(el)) prepParallax(el, r, writes);
         }
         // Headings only avoid elements that animate their own text.
         if (
@@ -350,15 +361,19 @@ export function Cinema3D() {
           !isHeading && a && a !== document.body;
           a = a.parentElement
         ) {
-          if (pending.has(a)) return;
+          if (pending.has(a) || chosen.has(a)) return;
         }
         if (isHeading) {
-          if (!prepHeading(el)) return;
+          const words = headingWords(el);
+          if (!words) return;
+          writes.push(() => prepHeading(el, words));
         } else {
-          prepFly(el);
+          writes.push(() => prepFly(el));
         }
-        io.observe(el);
+        chosen.add(el);
+        writes.push(() => io.observe(el));
       });
+      writes.forEach((write) => write());
       if (retry && tries++ < 20) retryTimer = window.setTimeout(() => scan(root), 400);
     }
 
@@ -559,18 +574,13 @@ export function Cinema3D() {
       });
       mo.observe(main, { childList: true, subtree: true });
     };
-    let timer = 0;
-    const boot = () => {
-      timer = window.setTimeout(start, 400);
-    };
-    if (document.readyState === 'complete') boot();
-    else window.addEventListener('load', boot, { once: true });
+    // After load, once the opening titles are gone and the main thread is idle.
+    const cancelBoot = afterIntroIdle(start, 400);
 
     return () => {
       disposed = true;
-      window.clearTimeout(timer);
+      cancelBoot();
       window.clearTimeout(retryTimer);
-      window.removeEventListener('load', boot);
       mo?.disconnect();
       io.disconnect();
       pio?.disconnect();

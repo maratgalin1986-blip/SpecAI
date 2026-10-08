@@ -2,7 +2,6 @@ import { notFound } from 'next/navigation';
 import { prisma } from '@specai/database';
 import type { Metadata } from 'next';
 import { AvailabilityChip } from '@/components/AvailabilityChip';
-import { BookingForm } from '@/components/BookingForm';
 import { EquipmentCard, categoryIcon } from '@/components/EquipmentCard';
 import { EstimateBox } from '@/components/EstimateBox';
 import { Icon } from '@/components/Icon';
@@ -262,7 +261,7 @@ export default async function EquipmentDetailPage({ params }: { params: { id: st
 
           {photos.length > 0 ? (
             <div style={{ viewTransitionName: 'machine-photo' }}>
-              <MachineGallery images={photos} name={item.name} />
+              <MachineGallery images={photos} name={item.name} owner={SITE.name} />
             </div>
           ) : modelPhotos.length > 0 ? (
             <figure style={{ viewTransitionName: 'machine-photo' }}>
@@ -329,24 +328,6 @@ export default async function EquipmentDetailPage({ params }: { params: { id: st
               </a>
               <ReliabilityBadges value={trust} />
             </div>
-            {item.status === 'AVAILABLE' && (
-              <details className="group rounded-3xl border border-slate-200 bg-white px-5 py-4">
-                <summary className="flex cursor-pointer list-none items-center justify-between gap-2 text-sm font-semibold [&::-webkit-details-marker]:hidden">
-                  Забронировать на даты
-                  <Icon
-                    name="plus"
-                    className="h-4 w-4 text-slate-500 transition group-open:rotate-45"
-                  />
-                </summary>
-                <div className="mt-4">
-                  <BookingForm
-                    equipmentId={item.id}
-                    dailyRate={rates.dailyRate}
-                    currency={item.currency}
-                  />
-                </div>
-              </details>
-            )}
           </div>
         </aside>
 
@@ -418,23 +399,7 @@ export default async function EquipmentDetailPage({ params }: { params: { id: st
                   label="Оставить комментарий о работе"
                   compact={comments.length > 0}
                 />
-              ) : (
-                <p className="text-xs text-slate-500">
-                  {session?.user ? (
-                    'Комментарий можно оставить после брони этой техники или предложения исполнителя по вашей заявке.'
-                  ) : (
-                    <>
-                      <a
-                        href={`/login?callbackUrl=/equipment/${item.id}`}
-                        className="font-medium text-amber-700 underline"
-                      >
-                        Войдите
-                      </a>
-                      , чтобы оставить комментарий после брони.
-                    </>
-                  )}
-                </p>
-              )}
+              ) : null}
             </div>
           </section>
         </div>

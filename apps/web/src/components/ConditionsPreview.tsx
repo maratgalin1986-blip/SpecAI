@@ -100,7 +100,7 @@ export function ConditionsPreview({
       )}
       {state === 'loading' && !result && (
         <div
-          className="h-40 animate-pulse rounded-3xl bg-slate-900/80"
+          className="skeleton skeleton-dark h-40 rounded-3xl bg-slate-900/80"
           aria-label="Загружаем прогноз"
         />
       )}

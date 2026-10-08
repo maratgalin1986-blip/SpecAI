@@ -8,6 +8,7 @@ import {
   type PhotoRole,
   type PhotoStage,
 } from '@/lib/photoShare';
+import { SITE } from '@/lib/site';
 
 // A quiet, optional offer to share photos from the job site. Collapsed to one
 // line until the visitor opens it. Photos are shrunk in the browser (which
@@ -64,7 +65,7 @@ export function PhotoShare({
   if (state === 'done') {
     return (
       <p className={`text-sm ${muted}`} role="status">
-        Спасибо за фото! Посмотрим и, если подойдёт, покажем на сайте.
+        Спасибо за фото! Посмотрим и, если подойдёт, покажем на сайте {SITE.name}.
       </p>
     );
   }

@@ -433,7 +433,7 @@ export function TaskWizard() {
                   />
                 ) : (
                   <div
-                    className="h-72 animate-pulse rounded-2xl bg-slate-100"
+                    className="skeleton h-72 rounded-2xl bg-slate-100"
                     aria-label="Проверяем погоду"
                   />
                 )}

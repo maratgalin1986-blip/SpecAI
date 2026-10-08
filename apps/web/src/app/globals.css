@@ -15,8 +15,9 @@ html {
 
 /* ---- «Воронка»: page-to-page vortex transition ---------------------------
    Cross-document View Transitions (Chromium 126+, Safari 18.2+): the old page
-   is sucked into the centre, turning and blurring, and the new page rises out
-   of the depth. Browsers without support simply navigate. The header keeps
+   is sucked into the centre, turning and fading, and the new page rises out
+   of the depth. Transform and opacity only (2026-10-06): the blur made the
+   type soft and cost the phone frames mid-swirl. Browsers without support simply navigate. The header keeps
    its own name so it stays put while the page swirls underneath. */
 
 @view-transition {
@@ -50,13 +51,10 @@ html {
   from {
     opacity: 1;
     transform: none;
-    filter: none;
   }
   to {
     opacity: 0;
     transform: perspective(1200px) translateZ(-600px) rotate(-9deg) scale(0.55);
-    filter: blur(10px) brightness(0.6);
-    border-radius: 48px;
   }
 }
 
@@ -64,16 +62,13 @@ html {
   from {
     opacity: 0;
     transform: perspective(1200px) translateZ(-900px) rotate(12deg) scale(0.35);
-    filter: blur(14px);
   }
   60% {
     opacity: 1;
-    filter: blur(0);
   }
   to {
     opacity: 1;
     transform: none;
-    filter: none;
   }
 }
 
@@ -141,11 +136,16 @@ html {
   --gx: 50%;
   --gy: 50%;
   transform: rotateX(var(--rx)) rotateY(var(--ry));
-  transform-style: preserve-3d;
   transition:
-    transform 0.2s ease-out,
+    transform var(--motion-base, 0.32s) var(--motion-ease-out, ease-out),
     box-shadow 0.3s,
     border-color 0.3s;
+}
+
+/* Touch: no tilt, the card sinks a little under the finger (TiltCard). */
+.tilt-card[data-pressed] {
+  transform: scale(0.975);
+  transition-duration: var(--motion-fast, 0.16s);
 }
 
 .tilt-card:hover {
@@ -153,9 +153,15 @@ html {
   box-shadow: 0 25px 50px -12px rgba(217, 119, 6, 0.35);
 }
 
-.tilt-content {
-  transform: translateZ(30px);
-  backface-visibility: hidden;
+/* The content lifts off the card only while the mouse is on it: at rest it
+   is a flat 2D layer, so the type is rasterised pixel-sharp. */
+@media (hover: hover) and (pointer: fine) {
+  .tilt-card:hover {
+    transform-style: preserve-3d;
+  }
+  .tilt-card:hover .tilt-content {
+    transform: translateZ(18px);
+  }
 }
 
 .tilt-glare {
@@ -237,12 +243,10 @@ html {
   from {
     opacity: 0;
     transform: perspective(1000px) translateZ(-240px) rotateX(6deg);
-    filter: blur(6px);
   }
   to {
     opacity: 1;
     transform: none;
-    filter: none;
   }
 }
 
@@ -252,8 +256,8 @@ html {
   opacity: 0;
   transform: translateY(24px);
   transition:
-    opacity 0.7s cubic-bezier(0.22, 1, 0.36, 1),
-    transform 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+    opacity var(--motion-slow, 0.7s) var(--motion-ease-out, ease-out),
+    transform var(--motion-slow, 0.7s) var(--motion-ease-out, ease-out);
 }
 
 .reveal-visible {
@@ -305,7 +309,16 @@ html {
 
 /* ---- Scroll story: floating dust in the work light ----------------------- */
 
+/* The dust tiles sit on a layer one tile larger than the box that slides by
+   one tile: the same drift as moving the background, but the compositor
+   moves it, so nothing is repainted on every frame. */
 .story-dust {
+  overflow: hidden;
+}
+.story-dust::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 -300px -400px;
   background-image:
     radial-gradient(1px 1px at 20% 30%, rgba(253, 230, 138, 0.5), transparent),
     radial-gradient(1px 1px at 70% 20%, rgba(253, 230, 138, 0.4), transparent),
@@ -313,13 +326,25 @@ html {
     radial-gradient(1px 1px at 85% 55%, rgba(253, 230, 138, 0.4), transparent),
     radial-gradient(1px 1px at 10% 70%, rgba(253, 230, 138, 0.3), transparent);
   background-size: 400px 300px;
+  will-change: transform;
   animation: dust 30s linear infinite;
 }
 
 @keyframes dust {
   to {
-    background-position: 400px -300px;
+    transform: translate(400px, -300px);
   }
+}
+
+/* Pinned scroll stages (SiteJourney, ShiftStory) off screen: their looping
+   animations pause, so they cost no style, paint or compositing work. */
+[data-offscreen] .story-dust::before,
+[data-offscreen] .journey-handheld,
+[data-offscreen] .journey-push,
+[data-offscreen] .journey-clouds,
+[data-offscreen] .journey-flicker,
+[data-offscreen] .journey-rec {
+  animation-play-state: paused;
 }
 
 /* ---- Depth scroll: blocks rise out of the depth and fly past the camera --
@@ -503,12 +528,13 @@ html {
     transparent 66%
   );
   transform: translateX(-120%);
-  animation: cta-shine 3.6s ease-in-out 1.2s infinite;
+  /* Slow and calm: one pass every six seconds. */
+  animation: cta-shine 6s var(--motion-ease-in-out, ease-in-out) 1.2s infinite;
 }
 
 @keyframes cta-shine {
   0%,
-  55% {
+  70% {
     transform: translateX(-120%);
   }
   100% {
@@ -534,6 +560,37 @@ html {
   60%,
   100% {
     box-shadow: 0 0 0 10px rgb(251 191 36 / 0);
+  }
+}
+
+/* ---- Acid date/time/weather badge on /stroyka (WeatherBadge) -----------
+   The owner's «кислотный цвет, меняется каждые 5 с», made calm for the film
+   (review, 2026-10-03): three acid tones on a dark plate, each held about
+   5 s and cross-faded over 1.5 s. No glow on the text: it stays crisp. */
+.acid-cycle {
+  color: #39ff14;
+  animation: acid-color 19.5s ease-in-out infinite;
+}
+@keyframes acid-color {
+  0%,
+  25.6% {
+    color: #39ff14;
+  }
+  33.3%,
+  59% {
+    color: #d7ff1f;
+  }
+  66.6%,
+  92.3% {
+    color: #3cf2ff;
+  }
+  100% {
+    color: #39ff14;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .acid-cycle {
+    animation: none;
   }
 }
 
@@ -622,6 +679,7 @@ html {
   .stroyka-ping::after,
   .cta-shine,
   .story-dust,
+  .story-dust::before,
   .float-in {
     animation: none;
   }
@@ -647,8 +705,11 @@ html {
 
 /* Opening titles (IntroSplash): ~7.8 s, cut like a TV channel ident.
    0–1.5 s «представляет» over light beams · 1.75 s brass hit, flash, gold
-   logo · 2.5–7.2 s the partner card under a spotlight, the three offers
-   (rent, estimate, design) rising under it from 3.4 s · 7.2 s dive in.
+   logo · 2.5–7.2 s the partner card under a spotlight (on phones it comes
+   in at 2.85 s, once the wide logo has cleared), the three offers (rent,
+   estimate, design) rising under it from 3.4 s, light sweeping across the
+   card while it holds · 7.0 s the card and offers fade out, so nothing of
+   them ghosts over the hero · 7.2 s dive in.
    All timings are CSS, so it ends even before hydration. */
 .intro {
   animation: intro-out 0.6s cubic-bezier(0.7, 0, 0.84, 0) 7.2s forwards;
@@ -794,11 +855,18 @@ html {
 }
 .intro-stage-3 {
   opacity: 0;
-  animation: intro-appear 0.3s ease-out 2.45s forwards;
+  animation:
+    intro-appear 0.3s ease-out 2.45s forwards,
+    intro-vanish 0.2s ease-in 7s forwards;
 }
 @keyframes intro-appear {
   to {
     opacity: 1;
+  }
+}
+@keyframes intro-vanish {
+  to {
+    opacity: 0;
   }
 }
 .intro-spot {
@@ -869,7 +937,22 @@ html {
   background-size: 250% 100%;
   animation:
     intro-shine 1.1s ease-in-out 3.1s both,
-    intro-shine 1.1s ease-in-out 4.6s forwards;
+    intro-shine 1.1s ease-in-out 4.5s forwards,
+    intro-shine 1.1s ease-in-out 5.85s forwards;
+}
+/* Phones: the logo spans the screen, so the card waits until it has gone. */
+@media (max-width: 640px) {
+  .intro-card {
+    animation:
+      intro-card 1.1s cubic-bezier(0.2, 0.8, 0.2, 1) 2.85s both,
+      intro-card-hold 3.85s ease-in-out 3.95s forwards;
+  }
+  .intro-card-shine {
+    animation:
+      intro-shine 1.1s ease-in-out 3.6s both,
+      intro-shine 1.1s ease-in-out 4.75s forwards,
+      intro-shine 1.1s ease-in-out 5.9s forwards;
+  }
 }
 @keyframes intro-shine {
   from {
@@ -1385,6 +1468,11 @@ html {
 .chat-fab {
   bottom: calc(4.75rem + env(safe-area-inset-bottom));
 }
+/* The callback form is on screen (CallbackIris): the chat button steps aside. */
+html[data-callback-view] .chat-fab {
+  opacity: 0;
+  pointer-events: none;
+}
 html[data-cookie-strip] .chat-fab,
 html[data-tg-chip] .chat-fab {
   bottom: calc(7.25rem + env(safe-area-inset-bottom));
@@ -1866,6 +1954,17 @@ html[data-vt-kind='fade']::view-transition-group(root) {
   html {
     scroll-padding-bottom: 8.5rem;
   }
+  /* The cookie strip sits on top of the contact bar: keep the end of the page
+     and a focused field clear of both while it is open. */
+  html[data-cookie-strip] {
+    scroll-padding-bottom: 12rem;
+  }
+  html[data-cookie-strip] body {
+    padding-bottom: 3.5rem;
+  }
+  html[data-cookie-strip] .chat-fab {
+    bottom: calc(8.25rem + env(safe-area-inset-bottom));
+  }
   [data-bottom-bar] {
     transition:
       transform 0.2s ease,
@@ -1934,73 +2033,267 @@ html[data-typing] [aria-label='Установить приложение'] {
   outline-offset: 2px;
 }
 
-/* /stroyka opening cinematic (9 s fly-over): letterbox bars slide in and out,
-   titles fade in turn, like a console game's opening shot. */
-.stroyka-cine-bar {
-  animation: cine-bar-in 0.9s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+/* While the opening titles cover the page, the endless loops underneath only
+   cost frames on a phone (they repaint every frame): hold them until it lifts. */
+body:has(#intro:not([hidden])) :is(.journey-clouds, .story-dust, .marquee, .hero-kenburns),
+body:has(#intro:not([hidden])) .stroyka-ping::after {
+  animation-play-state: paused;
 }
-.stroyka-cine-bar:last-of-type {
+
+/* ---- /stroyka film tour: the cinematic layer (ZoneFilm, FilmLook) ---------
+   Compositor-only: every animation here moves transform or opacity, nothing
+   repaints per frame and no filter touches a text layer. The whole block sits
+   inside ZoneFilm's own stacking context (z-0), under the top bar, the
+   chapter cards and the dialogue box. */
+
+/* Camera life: a slow push-in and drift on the footage only. Scale >= 1 and
+   the drift stays inside the (scale - 1) / 2 margin, so no edge ever shows. */
+.zf-cam {
+  animation: zf-kenburns 22s ease-in-out infinite alternate;
+  transform-origin: 50% 45%;
+}
+@keyframes zf-kenburns {
+  from {
+    transform: scale(1);
+  }
+  to {
+    transform: translate3d(-1.2%, -0.8%, 0) scale(1.06);
+  }
+}
+
+/* The cut between zones (~700 ms): the outgoing shot whips away and fades,
+   the picture dips toward black under a warm light-leak swipe, the new shot
+   settles in from a slight push. Never a hard cut. */
+.zf-shot {
+  opacity: 0;
+}
+.zf-fade {
+  animation: zf-fade 700ms ease-out both;
+}
+.zf-in {
+  animation: zf-in 720ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+.zf-out {
+  animation: zf-out 720ms cubic-bezier(0.5, 0, 0.75, 0) both;
+}
+@keyframes zf-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes zf-in {
+  0%,
+  30% {
+    opacity: 0;
+    transform: translate3d(3%, 0, 0) scale(1.08);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes zf-out {
+  0% {
+    opacity: 1;
+    transform: none;
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(-4%, 0, 0) scale(1.1);
+  }
+}
+.zf-dip {
+  background: #000;
+  animation: zf-dip 760ms ease-in-out both;
+}
+@keyframes zf-dip {
+  0% {
+    opacity: 0;
+  }
+  42% {
+    opacity: 0.72;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+.zf-leak {
+  width: 220%;
+  left: -60%;
+  background: linear-gradient(
+    100deg,
+    transparent 30%,
+    rgba(255, 140, 50, 0.32) 44%,
+    rgba(255, 214, 160, 0.42) 50%,
+    rgba(255, 120, 60, 0.26) 56%,
+    transparent 70%
+  );
+  animation: zf-leak 780ms cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+@keyframes zf-leak {
+  0% {
+    opacity: 0;
+    transform: translate3d(-35%, 0, 0);
+  }
+  25%,
+  70% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(30%, 0, 0);
+  }
+}
+
+/* Grade glass: a soft vignette, a warm halation bloom from the top corner,
+   teal in the low shadows and a faint chromatic fringe at the frame edge.
+   One static layer of gradients, painted once. */
+.zf-glass {
+  background:
+    radial-gradient(
+      ellipse 75% 70% at 50% 46%,
+      transparent 58%,
+      rgba(255, 70, 40, 0.035) 78%,
+      rgba(0, 170, 190, 0.05) 90%,
+      transparent 100%
+    ),
+    radial-gradient(ellipse 90% 85% at 50% 45%, transparent 52%, rgba(0, 0, 0, 0.35) 100%),
+    radial-gradient(circle at 92% 6%, rgba(255, 176, 96, 0.2), transparent 38%),
+    radial-gradient(circle at 4% 96%, rgba(0, 92, 104, 0.22), transparent 45%);
+}
+
+/* Film grain: a 128 px tiling texture (8 KB, drawn at 96 px) jumped between offsets with
+   steps(), about 12 times a second. The layer moves, it never repaints. */
+.zf-grain {
+  inset: -128px;
+  background: url('/film/grain.png') repeat;
+  background-size: 96px 96px;
+  opacity: 0.11;
+  animation: zf-grain 0.66s steps(1) infinite;
+}
+@keyframes zf-grain {
+  0% {
+    transform: translate3d(0, 0, 0);
+  }
+  12.5% {
+    transform: translate3d(-37px, 52px, 0);
+  }
+  25% {
+    transform: translate3d(61px, -18px, 0);
+  }
+  37.5% {
+    transform: translate3d(-84px, -71px, 0);
+  }
+  50% {
+    transform: translate3d(23px, 96px, 0);
+  }
+  62.5% {
+    transform: translate3d(102px, 41px, 0);
+  }
+  75% {
+    transform: translate3d(-58px, 9px, 0);
+  }
+  87.5% {
+    transform: translate3d(47px, -99px, 0);
+  }
+}
+
+/* 2.39:1 letterbox, timed with the chapter card (CHAPTER_MS = 2.6 s): the
+   bars close in on the cut, hold while the title is up and open as it fades.
+   It is the only matte on screen (the card has none of its own). Bars never
+   exceed 14vh (a true 2.39 matte would bury a phone); the top bar is then
+   at least as tall as the top bar of buttons, so no button straddles it. */
+.zf-matte {
+  height: min(14vh, max(0px, calc((100vh - 100vw / 2.39) / 2)));
+  animation: zf-matte 2.6s cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+.zf-matte-top {
+  transform-origin: top;
+}
+.zf-matte-bottom {
   transform-origin: bottom;
 }
-@keyframes cine-bar-in {
-  from {
+@keyframes zf-matte {
+  0% {
+    transform: scaleY(0);
+  }
+  12%,
+  80% {
+    transform: scaleY(1);
+  }
+  100% {
     transform: scaleY(0);
   }
 }
-.stroyka-cine-bar:first-of-type {
-  transform-origin: top;
+
+/* Day for night (the footage is always shot by day): a blue multiply and
+   lower exposure at night, a soft amber dusk in the evening. Two static
+   layers over the picture, under every text layer. */
+.zf-night {
+  background: linear-gradient(180deg, #24346e 0%, #31458a 55%, #3a4b80 100%);
+  mix-blend-mode: multiply;
 }
-.stroyka-cine-t1 {
-  animation: cine-title 3s ease-in-out 0.8s both;
+.zf-night-exposure {
+  background: radial-gradient(
+    ellipse 80% 70% at 50% 40%,
+    rgba(2, 6, 23, 0.25),
+    rgba(2, 6, 23, 0.55)
+  );
 }
-.stroyka-cine-t2 {
-  animation: cine-title-big 4.2s ease-in-out 3.2s both;
+.zf-dusk {
+  background: linear-gradient(180deg, #ffb070 0%, #f4a77a 50%, #b98a9a 100%);
+  mix-blend-mode: multiply;
+  opacity: 0.55;
 }
-.stroyka-cine-t3 {
-  animation: cine-title 3.4s ease-in-out 4s both;
+
+/* The clean frame: while a chapter title is up, everything but the top bar,
+   the subtitle bar and the title itself steps out (opacity only). */
+.sp-cleanable {
+  transition: opacity 0.35s ease-out;
 }
-@keyframes cine-title {
-  0% {
-    opacity: 0;
-    letter-spacing: 0.7em;
-  }
-  25%,
-  75% {
-    opacity: 1;
-  }
-  100% {
-    opacity: 0;
-  }
+.sp-clean .sp-cleanable {
+  opacity: 0;
+  pointer-events: none;
 }
-@keyframes cine-title-big {
-  0% {
-    opacity: 0;
-    transform: scale(1.15);
-    filter: blur(6px);
-  }
-  20%,
-  80% {
-    opacity: 1;
-    transform: scale(1);
-    filter: blur(0);
-  }
-  100% {
-    opacity: 0;
-    transform: scale(0.98);
-  }
+.sp-clean .sp-cleanable * {
+  pointer-events: none;
 }
-.stroyka-cine-t2 {
-  background: linear-gradient(180deg, #fff7d6 0%, #fcd34d 40%, #d97706 65%, #fde68a 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  filter: drop-shadow(0 6px 24px rgba(0, 0, 0, 0.6));
+
+/* The opening film's headline: opacity only, so the type is never scaled. */
+.sf-headline {
+  opacity: 0;
+  animation: zf-fade 0.6s ease-out forwards;
 }
+
+/* Held still while the opening film covers the tour (ZoneFilm paused). */
+.zf-hold :is(.zf-cam, .zf-grain) {
+  animation-play-state: paused;
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .stroyka-cine-bar,
-  .stroyka-cine-t1,
-  .stroyka-cine-t2,
-  .stroyka-cine-t3 {
+  .zf-cam,
+  .zf-grain,
+  .zf-in,
+  .zf-out,
+  .zf-fade {
     animation: none;
+  }
+  .zf-in,
+  .zf-fade {
+    opacity: 1;
+  }
+  .zf-matte,
+  .zf-dip,
+  .zf-leak {
+    display: none;
+  }
+  .sp-cleanable,
+  .sf-headline {
+    transition: none;
+    animation: none;
+    opacity: 1;
   }
 }

@@ -1,5 +1,7 @@
 // Lists the /stroyka lines that get a recorded voice, for
-// scripts/stroyka-voices.py, and writes the clip manifest
+// scripts/stroyka-voices-hybrid.py (Qwen-designed voices spoken by
+// Chatterbox; scripts/stroyka-voices.py is the older Piper recorder whose
+// text preparation it reuses), and writes the clip manifest
 // src/lib/stroyka/voiceClips.ts. Run from apps/web:
 //   npx tsx scripts/stroyka-voice-lines.ts > /tmp/stroyka-lines.json
 // Template lines (opener + remark) are recorded in two parts and played back
@@ -16,6 +18,8 @@ import { SVETA_TEMPLATES } from '../src/lib/stroyka/lines/sveta';
 import { WORKER_TEMPLATES } from '../src/lib/stroyka/lines/worker';
 import { RECORDED_SPEAKERS, radioClipKey, voiceKey } from '../src/lib/stroyka/voice';
 import { CREW, CREW_VOICE } from '../src/lib/stroyka/crew';
+import { INNER_LINES } from '../src/lib/stroyka/lines/inner';
+import { moodOf } from '../src/lib/stroyka/mood';
 
 const TEMPLATES = {
   mihalych: MIHALYCH_TEMPLATES,
@@ -27,34 +31,56 @@ const TEMPLATES = {
 };
 
 // `key` is the file name: the line id plus a fingerprint of its text, so an
-// edited line gets a new recording and the old file is removed.
-const out: { key: string; speaker: string; text: string }[] = [];
+// edited line gets a new recording and the old file is removed. `kind`, `tags`
+// and `mood` (lib/stroyka/mood.ts) set the emotion of the recording.
+type Kind = 'business' | 'joke' | 'radio' | 'inner' | 'opener';
+const out: {
+  key: string;
+  speaker: string;
+  text: string;
+  kind: Kind;
+  tags: string[];
+  mood: string;
+}[] = [];
 const fileOf = (id: string, text: string) => `${id}-${voiceKey(text)}`;
 const keyOf = new Map<string, string>();
-const add = (id: string, speaker: string, text: string) => {
+const add = (id: string, speaker: string, text: string, kind: Kind, tags: string[] = []) => {
   const key = fileOf(id, text);
   keyOf.set(id, key);
-  out.push({ key, speaker, text });
+  const said = kind === 'business' || kind === 'radio' ? kind : 'joke';
+  const { mood } = moodOf({ speaker, text, kind: said, tags });
+  out.push({ key, speaker, text, kind, tags, mood });
 };
+const kindOf = (tags: string[]): Kind => (tags.includes('business') ? 'business' : 'joke');
 for (const speaker of RECORDED_SPEAKERS) {
   LINES[speaker]
     .filter((line) => line.id.includes('-h'))
-    .forEach((line) => add(line.id, speaker, line.text));
+    .forEach((line) => add(line.id, speaker, line.text, kindOf(line.tags), line.tags));
   const t = TEMPLATES[speaker];
-  t.openers.forEach((text, o) => add(`${speaker}-o${o}`, speaker, text));
-  t.remarks.forEach(([text], r) => add(`${speaker}-r${r}`, speaker, text));
+  t.openers.forEach((text, o) => add(`${speaker}-o${o}`, speaker, text, 'opener'));
+  t.remarks.forEach(([text, tags], r) => {
+    const list = tags.split(' ');
+    add(`${speaker}-r${r}`, speaker, text, kindOf(list), list);
+  });
 }
 RADIO_PAIRS.forEach((pair, n) => {
   for (const side of ['a', 'b'] as const) {
     const speaker = pair[side];
     if (!(RECORDED_SPEAKERS as readonly string[]).includes(speaker)) continue;
     const text = side === 'a' ? pair.aText : pair.bText;
-    add(radioClipKey(n, side), speaker, text);
+    add(radioClipKey(n, side), speaker, text, 'radio', pair.tags.split(' '));
   }
 });
-// The crew by name, each in their own voice style (crew-<name> in the recorder).
+// The crew by name, each in their own voice (crew-<name> in the recorder).
 for (const [id, member] of Object.entries(CREW)) {
-  member.lines.forEach((text, n) => add(`${CREW_VOICE[id]}-${n}`, CREW_VOICE[id]!, text));
+  member.lines.forEach((text, n) =>
+    add(`${CREW_VOICE[id]}-${n}`, CREW_VOICE[id]!, text, 'joke', ['talk']),
+  );
+}
+// The characters' inner-life lines (lib/stroyka/lines/inner.ts).
+for (const line of INNER_LINES) {
+  if ((RECORDED_SPEAKERS as readonly string[]).includes(line.speaker))
+    add(line.id, line.speaker, line.text, 'inner');
 }
 // Manifest: spoken text → clips. Hand and radio lines map to one clip; every
 // template combination maps to its opener and remark.
