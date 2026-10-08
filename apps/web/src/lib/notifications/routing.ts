@@ -149,7 +149,26 @@ export type NotificationEvent =
   /** To the author and the subject: a comment was published. */
   | { type: 'comment.published'; audience: 'author' | 'subject'; about: string; text: string }
   /** «Проверить уведомления» in the settings. */
-  | { type: 'test' };
+  | { type: 'test' }
+  /** To the company's managers: a document runs out in 30 days / today (api/cron/daily). */
+  | {
+      type: 'document.expiring';
+      /** «СТС № … (JCB 4CX)», see lib/documents.ts documentTitle. */
+      title: string;
+      expiresAt: Date;
+      /** 0 on the day (or after), otherwise the days left. */
+      daysLeft: number;
+    }
+  /** To providers at 19:00: tomorrow's open orders in their categories and radius. */
+  | { type: 'digest.evening'; items: string[] }
+  /** To the customer at 19:00: the booking starts tomorrow. */
+  | {
+      type: 'booking.tomorrow';
+      bookingId: string;
+      equipmentName: string;
+      startDate: Date;
+      providerName?: string | null;
+    };
 
 export interface RenderedNotification {
   title: string;
@@ -233,7 +252,41 @@ export function renderNotification(event: NotificationEvent): RenderedNotificati
         body: 'Если вы это видите — канал работает.',
         path: '/dashboard',
       };
+    case 'document.expiring':
+      return {
+        title:
+          event.daysLeft <= 0
+            ? `Документ истёк: ${event.title}`
+            : `Документ истекает через ${event.daysLeft} дн: ${event.title}`,
+        body:
+          event.daysLeft <= 0
+            ? `Срок действия закончился ${day(event.expiresAt)}. Продлите документ и обновите дату в кабинете — без него машину могут не выбрать.`
+            : `Действует до ${day(event.expiresAt)}. Продлите заранее и обновите дату в кабинете.`,
+        path: '/provider#documents',
+      };
+    case 'digest.evening': {
+      const count = event.items.length;
+      return {
+        title: `На завтра: ${count} ${pluralOrders(count)}`,
+        body: `${event.items.map((item) => clip(maskContacts(item), 80)).join('; ')}. Предложите цену вечером — утром заказчики выбирают.`,
+        path: '/orders',
+      };
+    }
+    case 'booking.tomorrow':
+      return {
+        title: 'Завтра начало работ',
+        body: `${event.equipmentName}${event.providerName ? ` · ${event.providerName}` : ''}, ${day(event.startDate)}. Проверьте адрес и время подачи; исполнитель на связи в кабинете.`,
+        path: '/dashboard#bookings',
+      };
   }
+}
+
+function pluralOrders(n: number): string {
+  const mod10 = n % 10;
+  const mod100 = n % 100;
+  if (mod10 === 1 && mod100 !== 11) return 'заявка';
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return 'заявки';
+  return 'заявок';
 }
 
 /** Plain text for Telegram, WhatsApp and SMS. SMS is kept short (one or two segments). */
@@ -267,6 +320,8 @@ export interface ProviderForMatch {
   categoryIds: string[];
   baseLat?: number | null;
   baseLon?: number | null;
+  /** The company's own delivery radius (Company.deliveryRadiusKm); ORDER_RADIUS_KM without it. */
+  radiusKm?: number | null;
 }
 
 export interface OrderForMatch {
@@ -278,7 +333,8 @@ export interface OrderForMatch {
 /**
  * A provider hears about an order when it has machinery of the order's
  * category (any, if the order has none) and, when both points are known, its
- * base is within ORDER_RADIUS_KM of the work site.
+ * base is within its own delivery radius (ORDER_RADIUS_KM when none is set)
+ * of the work site.
  */
 export function providerMatchesOrder(provider: ProviderForMatch, order: OrderForMatch): boolean {
   if (provider.categoryIds.length === 0) return false;
@@ -293,7 +349,9 @@ export function providerMatchesOrder(provider: ProviderForMatch, order: OrderFor
       { lat: order.lat, lon: order.lon },
       { lat: provider.baseLat, lon: provider.baseLon },
     );
-    if (km > ORDER_RADIUS_KM) return false;
+    const radius =
+      provider.radiusKm != null && provider.radiusKm > 0 ? provider.radiusKm : ORDER_RADIUS_KM;
+    if (km > radius) return false;
   }
   return true;
 }

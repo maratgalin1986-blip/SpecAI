@@ -2,6 +2,7 @@ import { prisma, type OrderSource } from '@specai/database';
 import { analyzeChatMessage } from '@specai/ai-service';
 import { parseEquipmentRequest, requestFingerprint } from '@specai/shared';
 import { notifyTelegram } from '@/lib/notify';
+import { bidsUntilFor } from '@/lib/bidWindow';
 import { chatOrderNote } from '@/lib/chatOrders';
 import { notifyProvidersAboutOrder } from '@/lib/notifications/notifyUser';
 import { isSafeHttpUrl, maskContacts } from '@/lib/privacy';
@@ -30,17 +31,30 @@ export type IngestResult =
   | { status: 'created'; orderId: string; published: boolean }
   | { status: 'duplicate' | 'ignored' | 'too_short'; reason?: string };
 
-const IMPORTER_EMAIL = 'imported-orders@specplast16.invalid';
 const PUBLISH_CONFIDENCE = 0.7;
 const REPOST_WINDOW_DAYS = 7;
 
-async function importerUserId() {
+// Technical customer accounts (reserved .invalid addresses, no notifications):
+// orders whose author has no account are filed under them, with the real
+// contact in contactName/contactPhone (masked for providers, see lib/chatOrders.ts).
+export const TECHNICAL_CUSTOMERS = {
+  importer: { email: 'imported-orders@specplast16.invalid', name: 'Заявка из мессенджера' },
+  guest: { email: 'site-guest-orders@specplast16.invalid', name: 'Заявка с сайта' },
+} as const;
+
+/** Id of a technical customer account, created on first use. */
+export async function technicalUserId(kind: keyof typeof TECHNICAL_CUSTOMERS) {
+  const account = TECHNICAL_CUSTOMERS[kind];
   const user = await prisma.user.upsert({
-    where: { email: IMPORTER_EMAIL },
+    where: { email: account.email },
     update: {},
-    create: { email: IMPORTER_EMAIL, name: 'Заявка из мессенджера', role: 'CUSTOMER' },
+    create: { email: account.email, name: account.name, role: 'CUSTOMER' },
   });
   return user.id;
+}
+
+export function importerUserId() {
+  return technicalUserId('importer');
 }
 
 function parseDate(value: string | null | undefined) {
@@ -131,6 +145,7 @@ export async function ingestMessage(message: IncomingMessage): Promise<IngestRes
       contactName: message.authorName?.slice(0, 200),
       contactPhone: phone,
       rawText: text.slice(0, 4000),
+      bidsUntil: bidsUntilFor(new Date(), start),
     },
   });
 

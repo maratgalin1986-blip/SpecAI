@@ -45,10 +45,21 @@ export interface ChecklistState {
   verified: boolean;
   /** Open orders on the board the company has not answered. */
   newOrders: number;
+  /** Documents past their expiry (lib/documents.ts); omitted = none known. */
+  expiredDocuments?: number;
 }
 
 export interface ChecklistItem {
-  id: 'machines' | 'profile' | 'photos' | 'base' | 'prices' | 'available' | 'verified' | 'answer';
+  id:
+    | 'machines'
+    | 'profile'
+    | 'photos'
+    | 'base'
+    | 'prices'
+    | 'available'
+    | 'verified'
+    | 'answer'
+    | 'documents';
   title: string;
   hint: string;
   done: boolean;
@@ -117,6 +128,19 @@ export function noOrdersChecklist(s: ChecklistState): ChecklistItem[] {
       href: '/provider#feed',
     },
   ];
+  // Only when the page knows about documents (the app and the cabinet pass it).
+  if (s.expiredDocuments !== undefined) {
+    items.push({
+      id: 'documents',
+      title: 'Документы действуют',
+      hint:
+        s.expiredDocuments > 0
+          ? `Просрочено документов: ${s.expiredDocuments}. Продлите и обновите дату — с просроченным СТС или страховкой машину выбирают реже.`
+          : 'СТС, ПСМ, удостоверения и страховка в порядке.',
+      done: s.expiredDocuments === 0,
+      href: '/provider#documents',
+    });
+  }
   return items;
 }
 

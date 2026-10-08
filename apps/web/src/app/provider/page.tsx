@@ -41,6 +41,9 @@ import { providerPath } from '@/lib/providerSeo';
 import { customerShortName } from '@/lib/customerPrivacy';
 import { pluralizeRu } from '@/lib/pluralize';
 import { NotificationSettings } from '@/components/NotificationSettings';
+import { ProviderDocuments } from '@/components/ProviderDocuments';
+import { DeliverySettingsForm } from '@/components/DeliverySettingsForm';
+import { documentStatus } from '@/lib/documents';
 
 export const dynamic = 'force-dynamic';
 export const metadata: Metadata = {
@@ -143,7 +146,13 @@ export default async function ProviderPage({
   ] = await Promise.all([
     prisma.company.findUnique({
       where: { id: companyId },
-      select: { description: true, phone: true, verified: true },
+      select: {
+        description: true,
+        phone: true,
+        verified: true,
+        deliveryRadiusKm: true,
+        deliveryPricePerKm: true,
+      },
     }),
     prisma.equipment.findMany({
       where: { companyId, status: { not: 'RETIRED' } },
@@ -179,7 +188,17 @@ export default async function ProviderPage({
     invitedCounts(session.user.id).catch(() => ({ total: 0, providers: 0 })),
   ]);
   const income = monthIncome(monthBookings);
+  // Documents (СТС, ПСМ, страховка…): expired ones mark the machine and the checklist.
+  const documents = await prisma.providerDocument.findMany({
+    where: { companyId },
+    select: { equipmentId: true, expiresAt: true },
+    take: 500,
+  });
+  const expiredDocs = documents.filter((doc) => documentStatus(doc) === 'expired');
+  const expiredFor = (equipmentId: string) =>
+    expiredDocs.filter((doc) => doc.equipmentId === equipmentId).length;
   const checklist = noOrdersChecklist({
+    expiredDocuments: expiredDocs.length,
     hasPhone: Boolean(profile?.phone?.trim()),
     hasDescription: Boolean(profile?.description?.trim()),
     machines: fleet.length,
@@ -375,6 +394,7 @@ export default async function ProviderPage({
               <ProviderEquipmentCard
                 key={item.id}
                 categoryName={item.category.name}
+                expiredDocuments={expiredFor(item.id)}
                 item={{
                   id: item.id,
                   name: item.name,
@@ -406,6 +426,37 @@ export default async function ProviderPage({
         <Card className="max-w-xl">
           <NewEquipmentForm />
         </Card>
+      </section>
+
+      <section id="documents" className="flex scroll-mt-24 flex-col gap-3">
+        <div>
+          <h2 className="text-lg font-semibold">Документы</h2>
+          <p className="text-sm text-graphite-600">
+            СТС, ПСМ, удостоверения машинистов, страховка и техосмотр — по компании и по каждой
+            машине. Напомним за 30 дней до окончания срока и в день окончания.
+          </p>
+        </div>
+        <div className="cab-card">
+          <ProviderDocuments machines={fleet.map((item) => ({ id: item.id, name: item.name }))} />
+        </div>
+      </section>
+
+      <section id="delivery" className="flex scroll-mt-24 flex-col gap-3">
+        <div>
+          <h2 className="text-lg font-semibold">Радиус выезда и подача</h2>
+          <p className="text-sm text-graphite-600">
+            Заявки присылаются в пределах радиуса от базы; цена за км подставляется в «подачу»
+            предложения.
+          </p>
+        </div>
+        <div className="cab-card max-w-xl">
+          <DeliverySettingsForm
+            initial={{
+              deliveryRadiusKm: profile?.deliveryRadiusKm ?? 100,
+              deliveryPricePerKm: profile?.deliveryPricePerKm?.toString() ?? null,
+            }}
+          />
+        </div>
       </section>
 
       <section id="bookings" className="flex scroll-mt-24 flex-col gap-3">

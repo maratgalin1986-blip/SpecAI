@@ -210,4 +210,63 @@ describe('providerMatchesOrder', () => {
       true,
     );
   });
+
+  it("uses the company's own delivery radius when it has one", () => {
+    const provider = { categoryIds: ['exc'], baseLat: chelny.lat, baseLon: chelny.lon };
+    const site = { categoryId: 'exc', lat: 55.6, lon: 52.0 }; // ~30 km
+    expect(providerMatchesOrder({ ...provider, radiusKm: 20 }, site)).toBe(false);
+    expect(providerMatchesOrder({ ...provider, radiusKm: 50 }, site)).toBe(true);
+    // Zero or null falls back to the default radius.
+    expect(
+      providerMatchesOrder({ ...provider, radiusKm: 0 }, { categoryId: 'exc', ...kazan }),
+    ).toBe(distanceKm(chelny, kazan) <= ORDER_RADIUS_KM);
+  });
+});
+
+describe('renderNotification: documents and the evening digest', () => {
+  it('names the document and the days left', () => {
+    const soon = renderNotification({
+      type: 'document.expiring',
+      title: 'СТС № 16 АА 123456 (JCB 4CX)',
+      expiresAt: new Date('2026-11-07T00:00:00Z'),
+      daysLeft: 30,
+    });
+    expect(soon.title).toBe('Документ истекает через 30 дн: СТС № 16 АА 123456 (JCB 4CX)');
+    expect(soon.body).toContain('07.11.2026');
+    expect(soon.path).toBe('/provider#documents');
+    const today = renderNotification({
+      type: 'document.expiring',
+      title: 'ОСАГО',
+      expiresAt: new Date('2026-10-08T00:00:00Z'),
+      daysLeft: 0,
+    });
+    expect(today.title).toBe('Документ истёк: ОСАГО');
+  });
+
+  it("lists tomorrow's orders in one message", () => {
+    const digest = renderNotification({
+      type: 'digest.evening',
+      items: ['экскаватор, Елабуга', 'кран, Набережные Челны +7 917 123-45-67'],
+    });
+    expect(digest.title).toBe('На завтра: 2 заявки');
+    expect(digest.body).toContain('экскаватор, Елабуга; кран, Набережные Челны');
+    expect(digest.body).not.toContain('123-45-67');
+    expect(digest.path).toBe('/orders');
+    expect(renderNotification({ type: 'digest.evening', items: ['a'] }).title).toBe(
+      'На завтра: 1 заявка',
+    );
+  });
+
+  it("reminds the customer about tomorrow's booking", () => {
+    const reminder = renderNotification({
+      type: 'booking.tomorrow',
+      bookingId: 'b1',
+      equipmentName: 'JCB 4CX',
+      startDate: new Date('2026-10-09T00:00:00Z'),
+      providerName: 'СпецПласт16',
+    });
+    expect(reminder.title).toBe('Завтра начало работ');
+    expect(reminder.body).toContain('JCB 4CX · СпецПласт16');
+    expect(reminder.path).toBe('/dashboard#bookings');
+  });
 });

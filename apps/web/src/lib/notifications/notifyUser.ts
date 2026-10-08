@@ -141,6 +141,7 @@ export async function notifyProvidersAboutOrder(orderId: string): Promise<void> 
         id: true,
         baseLat: true,
         baseLon: true,
+        deliveryRadiusKm: true,
         equipment: {
           where: { status: { not: 'RETIRED' } },
           select: { categoryId: true },
@@ -160,6 +161,7 @@ export async function notifyProvidersAboutOrder(orderId: string): Promise<void> 
             categoryIds: company.equipment.map((item) => item.categoryId),
             baseLat: company.baseLat,
             baseLon: company.baseLon,
+            radiusKm: company.deliveryRadiusKm,
           },
           {
             categoryId: order.categoryId,

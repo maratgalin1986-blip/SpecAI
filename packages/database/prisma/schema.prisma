@@ -103,13 +103,17 @@ model Company {
   // Aggregator map: where the provider's fleet is based, the marker picture
   // (a photo of its machinery; empty = the default icon) and a short note
   // customers see on the map ("от 2 500 ₽/ч, скидка 10% на неделю").
-  baseLat     Float?
-  baseLon     Float?
-  baseAddress String?
-  pinImageUrl String?
-  pinNote     String?
+  baseLat            Float?
+  baseLon            Float?
+  baseAddress        String?
+  pinImageUrl        String?
+  pinNote            String?
   // «Проверен»: the admin checked the company (ИНН, documents, a call).
-  verified    Boolean @default(false)
+  verified           Boolean  @default(false)
+  // Delivery: how far from the base the company goes and what a kilometre of
+  // the trip to the site costs (prefills «подача» in a bid).
+  deliveryRadiusKm   Int      @default(100)
+  deliveryPricePerKm Decimal? @db.Decimal(10, 2)
 
   users     User[]
   equipment Equipment[]
@@ -351,6 +355,9 @@ model Order {
   contactName  String?
   contactPhone String?
   rawText      String?
+  // Until when providers are asked to bid: «Нужна сейчас» — 2 h, otherwise
+  // 24 h, capped at the start date (lib/bidWindow.ts). Later bids are late.
+  bidsUntil    DateTime?
 
   @@index([customerId])
   @@index([categoryId])
@@ -387,6 +394,12 @@ model Bid {
 
   equipment   Equipment @relation(fields: [equipmentId], references: [id])
   equipmentId String
+
+  // Price breakdown (lib/offerBreakdown.ts): price = deliveryPrice + shiftPrice × shifts.
+  deliveryPrice Decimal? @db.Decimal(10, 2)
+  shiftPrice    Decimal? @db.Decimal(10, 2)
+  shifts        Int?
+  optionsNote   String?
 
   @@index([orderId])
   @@index([equipmentId])
@@ -594,4 +607,32 @@ model ContactReveal {
 
   @@index([companyId, createdAt])
   @@index([orderId])
+}
+
+// ---- Documents, demand, delivery, bids ----
+
+// A provider's document: for the company (ИНН, insurance), a machine (СТС,
+// ПСМ, техосмотр) or an operator (удостоверение машиниста). Plain ids, no
+// relations, so Company and Equipment stay untouched. The daily cron
+// (api/cron/daily) reminds the company's managers 30 days before expiresAt
+// and again on the day; remindedAt30/remindedAt0 make each reminder one-off.
+model ProviderDocument {
+  id           String    @id @default(cuid())
+  companyId    String
+  equipmentId  String?
+  operatorName String?
+  // One of PROVIDER_DOCUMENT_KINDS in @specai/shared (STS, PSM, OPERATOR_LICENSE, OSAGO, INSPECTION, OTHER).
+  kind         String
+  number       String?
+  fileUrl      String?
+  issuedAt     DateTime?
+  expiresAt    DateTime?
+  remindedAt30 DateTime?
+  remindedAt0  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@index([companyId])
+  @@index([equipmentId])
+  @@index([expiresAt])
 }

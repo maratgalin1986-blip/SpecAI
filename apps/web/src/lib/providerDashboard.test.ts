@@ -86,4 +86,15 @@ describe('noOrdersChecklist', () => {
     expect(items.find((item) => item.id === 'answer')!.hint).toContain('4');
     expect(items.every((item) => item.href.startsWith('/'))).toBe(true);
   });
+
+  it('adds the documents item only when the page knows about documents', () => {
+    expect(noOrdersChecklist(ready).some((item) => item.id === 'documents')).toBe(false);
+    const fine = noOrdersChecklist({ ...ready, expiredDocuments: 0 });
+    expect(fine.find((item) => item.id === 'documents')).toMatchObject({ done: true });
+    const expired = noOrdersChecklist({ ...ready, expiredDocuments: 2 });
+    const item = expired.find((row) => row.id === 'documents')!;
+    expect(item.done).toBe(false);
+    expect(item.hint).toContain('2');
+    expect(item.href).toBe('/provider#documents');
+  });
 });
