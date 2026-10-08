@@ -13,6 +13,7 @@ import { colors, spacing } from '@/lib/theme';
 const ROLE_LABELS: Record<UserRole, string> = {
   CUSTOMER: 'Клиент',
   PROVIDER_ADMIN: 'Исполнитель',
+  PROVIDER_OPERATOR: 'Машинист',
   ADMIN: 'Администратор',
 };
 

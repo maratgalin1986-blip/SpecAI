@@ -14,6 +14,7 @@ import {
   View,
 } from 'react-native';
 import { BidForm } from '@/components/BidForm';
+import { MachineIncomeCard } from '@/components/MachineIncomeCard';
 import {
   Badge,
   Button,
@@ -534,6 +535,7 @@ export default function FeedScreen() {
           />
         </Link>
       ) : null}
+      <MachineIncomeCard refreshKey={bookings.length} />
       <TipsCard tips={tips} />
       {error ? <ErrorBanner message={error} onRetry={() => void load()} /> : null}
       <SectionTitle>

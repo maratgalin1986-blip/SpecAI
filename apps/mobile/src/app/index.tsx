@@ -10,5 +10,7 @@ export default function Index() {
   const { loaded, mode } = usePrefs();
   if (!token) return <Redirect href="/(auth)/login" />;
   if (user?.role === 'PROVIDER_ADMIN' && !loaded) return <Loader />;
+  // Машинист видит только свои смены.
+  if (user?.role === 'PROVIDER_OPERATOR') return <Redirect href="/(tabs)/shifts" />;
   return <Redirect href={isProviderMode(user?.role, mode) ? '/(tabs)/feed' : '/(tabs)'} />;
 }

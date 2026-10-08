@@ -21,7 +21,6 @@ import { pluralizeRu } from '@/lib/pluralize';
 import { SITE } from '@/lib/site';
 import { fromPerHour, HAMMER_RATE, MIN_RATE, priceFaqAnswer, SHIFT_HOURS } from '@/lib/prices';
 
-
 // Big interactive blocks below the fold: separate chunks, so the browser
 // hydrates them in their own short tasks instead of one long one.
 const SiteJourney = dynamic(() => import('@/components/SiteJourney').then((m) => m.SiteJourney));

@@ -24,8 +24,11 @@ export default function TabsLayout() {
   const { user } = useAuth();
   const { mode } = usePrefs();
   const provider = isProviderMode(user?.role, mode);
-  const forCustomer = provider ? null : undefined;
+  // Машинист: только «Мои смены» и «Профиль».
+  const operator = user?.role === 'PROVIDER_OPERATOR';
+  const forCustomer = provider || operator ? null : undefined;
   const forProvider = provider ? undefined : null;
+  const forOperator = operator ? undefined : null;
 
   return (
     <Tabs
@@ -95,6 +98,14 @@ export default function TabsLayout() {
           headerTitle: 'Моя техника',
           tabBarIcon: tabIcon('construct-outline'),
           href: forProvider,
+        }}
+      />
+      <Tabs.Screen
+        name="shifts"
+        options={{
+          title: 'Мои смены',
+          tabBarIcon: tabIcon('timer-outline'),
+          href: forOperator,
         }}
       />
       <Tabs.Screen

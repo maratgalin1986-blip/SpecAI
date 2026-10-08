@@ -10,6 +10,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import { ProviderBookingOps } from '@/components/ProviderBookingOps';
 import {
   Badge,
   Button,
@@ -23,9 +24,11 @@ import {
 import {
   ApiError,
   fetchOpenOrders,
+  fetchOperators,
   fetchProviderBookings,
   updateBookingStatus,
   type BookingStatus,
+  type Operator,
   type Order,
   type ProviderBooking,
 } from '@/lib/api';
@@ -81,11 +84,15 @@ const STATUS_ORDER: Record<BookingStatus, number> = {
 function BookingRow({
   booking,
   pendingStatus,
+  operators,
   onChangeStatus,
+  onOperatorChanged,
 }: {
   booking: ProviderBooking;
   pendingStatus: BookingStatus | null;
+  operators: Operator[];
   onChangeStatus: (booking: ProviderBooking, status: BookingStatus) => void;
+  onOperatorChanged: (bookingId: string, operatorId: string | null) => void;
 }) {
   const transitions = PROVIDER_ALLOWED_TRANSITIONS[booking.status] ?? [];
   const phone = booking.customer.phone;
@@ -152,6 +159,13 @@ function BookingRow({
           ))}
         </View>
       ) : null}
+      <ProviderBookingOps
+        bookingId={booking.id}
+        bookingStatus={booking.status}
+        operatorId={booking.operatorId}
+        operators={operators}
+        onOperatorChanged={(operatorId) => onOperatorChanged(booking.id, operatorId)}
+      />
       {booking.status !== 'CANCELLED' ? (
         <Link
           href={{
@@ -203,6 +217,7 @@ export default function JobsScreen() {
   const [view, setView] = useState<JobsView>('bookings');
   const [bookings, setBookings] = useState<ProviderBooking[] | null>(null);
   const [bids, setBids] = useState<Order[]>([]);
+  const [operators, setOperators] = useState<Operator[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState<{ id: string; status: BookingStatus } | null>(null);
@@ -211,10 +226,12 @@ export default function JobsScreen() {
     if (mode === 'refresh') setRefreshing(true);
     setError(null);
     try {
-      const [bookingsResult, ordersResult] = await Promise.allSettled([
+      const [bookingsResult, ordersResult, operatorsResult] = await Promise.allSettled([
         fetchProviderBookings(),
         fetchOpenOrders(),
+        fetchOperators(),
       ]);
+      if (operatorsResult.status === 'fulfilled') setOperators(operatorsResult.value.operators);
       if (bookingsResult.status === 'fulfilled') {
         setBookings(
           [...bookingsResult.value.bookings].sort(
@@ -325,7 +342,13 @@ export default function JobsScreen() {
         <BookingRow
           booking={item}
           pendingStatus={pending?.id === item.id ? pending.status : null}
+          operators={operators}
           onChangeStatus={handleChangeStatus}
+          onOperatorChanged={(bookingId, operatorId) =>
+            setBookings((prev) =>
+              (prev ?? []).map((row) => (row.id === bookingId ? { ...row, operatorId } : row)),
+            )
+          }
         />
       )}
       contentContainerStyle={styles.list}
