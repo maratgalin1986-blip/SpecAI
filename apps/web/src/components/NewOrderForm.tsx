@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import { ConditionsPreview } from '@/components/ConditionsPreview';
+import { DemandHint } from '@/components/DemandHint';
+import { GuestOrderForm } from '@/components/GuestOrderForm';
 import { PointPicker } from '@/components/PointPicker';
 import { pointAddress, type MapPoint } from '@/lib/mapPoint';
 import { useRouter } from 'next/navigation';
@@ -48,15 +50,10 @@ export function NewOrderForm({
       .then((data) => setCategories(data.categories ?? []));
   }, []);
 
+  // No registration on the site: a visitor orders with a name and a phone
+  // (GuestOrderForm → /api/orders/guest), providers bid as on any order.
   if (status === 'unauthenticated') {
-    return (
-      <p className="text-sm text-slate-600">
-        <a href="/login" className="font-medium text-amber-700">
-          Войдите
-        </a>{' '}
-        , чтобы разместить заявку.
-      </p>
-    );
+    return <GuestOrderForm provider={provider} initial={initial} />;
   }
 
   async function handleSubmit(event: React.FormEvent) {
@@ -129,6 +126,10 @@ export function NewOrderForm({
           ))}
         </select>
       </label>
+      <DemandHint
+        categoryId={categoryId}
+        categoryName={categories.find((category) => category.id === categoryId)?.name}
+      />
 
       <div className="grid grid-cols-2 gap-3">
         <label className="flex flex-col gap-1 text-sm">

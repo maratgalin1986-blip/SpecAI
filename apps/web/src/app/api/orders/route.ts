@@ -2,7 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@specai/database';
 import { createOrderSchema } from '@specai/shared';
 import { getRequestUser } from '@/lib/requestUser';
-import { isProvider } from '@/lib/fleet';
+import { isHouseManager, isProvider } from '@/lib/fleet';
+import { bidsUntilFor } from '@/lib/bidWindow';
+import { maskedContactFor } from '@/lib/chatOrders';
 import { geocodeAddress } from '@/lib/geo';
 import { notifyTelegram } from '@/lib/notify';
 import { notifyProvidersAboutOrder } from '@/lib/notifications/notifyUser';
@@ -68,12 +70,18 @@ export async function GET(request: NextRequest) {
   // competitors' prices and the customer's identity stay private.
   const safeOrders = orders.map(
     ({ contactName, contactPhone, rawText, sourceUrl, externalId, fingerprint, ...order }) => {
-      void [contactName, contactPhone, rawText, sourceUrl, externalId, fingerprint];
+      void [contactName, rawText, sourceUrl, externalId, fingerprint];
       if (order.customerId === currentUser.id) return { ...order, bidCount: order.bids.length };
       const { customerId, customer, ...rest } = order;
       void customerId;
+      // A chat or guest order: the phone masked, «Показать телефон» opens it.
+      const chatContact = maskedContactFor(
+        { contactPhone },
+        { isProvider: isProvider(currentUser), isHouse: isHouseManager(currentUser) },
+      );
       return {
         ...rest,
+        ...(chatContact ? { chatContact } : {}),
         customer: { name: customerShortName(customer.name) },
         bids: order.bids.filter((bid) => bid.equipment.companyId === currentUser.companyId),
         bidCount: order.bids.length,
@@ -132,6 +140,7 @@ export async function POST(request: NextRequest) {
       desiredEndDate: parsed.data.desiredEndDate,
       categoryId: parsed.data.categoryId,
       locationId: location?.id,
+      bidsUntil: bidsUntilFor(new Date(), dates.startDate),
     },
     include: { category: true },
   });

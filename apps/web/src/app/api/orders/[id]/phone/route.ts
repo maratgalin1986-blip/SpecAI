@@ -3,7 +3,7 @@ import { prisma } from '@specai/database';
 import { getRequestUser } from '@/lib/requestUser';
 import { checkRateLimit } from '@/lib/rateLimit';
 import { isEmailConfigured } from '@/lib/email';
-import { DAY_MS, revealDecision } from '@/lib/chatOrders';
+import { DAY_MS, revealDecision, revealNote } from '@/lib/chatOrders';
 
 export const dynamic = 'force-dynamic';
 
@@ -77,6 +77,6 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
   return NextResponse.json({
     phone: order!.contactPhone,
     name: order!.contactName,
-    note: 'Человек написал в открытый чат. Представьтесь и скажите, где нашли заявку.',
+    note: revealNote(order!.source),
   });
 }

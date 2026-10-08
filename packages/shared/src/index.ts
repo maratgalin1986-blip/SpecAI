@@ -7,4 +7,5 @@ export * from './schemas/order';
 export * from './schemas/bid';
 export * from './schemas/agents';
 export * from './schemas/lead';
+export * from './schemas/document';
 export * from './messageParser';

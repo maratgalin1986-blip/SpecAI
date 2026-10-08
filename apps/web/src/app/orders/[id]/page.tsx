@@ -27,6 +27,9 @@ import { EraseOrderButton, RevealPhoneButton } from '@/components/ChatOrderConta
 import { maskPhone } from '@/lib/chatOrders';
 import { SITE } from '@/lib/site';
 import { OrderChat } from '@/components/OrderChat';
+import { bidsLeftText, isLateBid } from '@/lib/bidWindow';
+import { orderDays } from '@/lib/offerBreakdown';
+import { distanceKm } from '@/lib/geo';
 
 export const dynamic = 'force-dynamic';
 
@@ -95,6 +98,26 @@ export default async function OrderDetailPage({ params }: { params: { id: string
   const ownPendingBid = viewerIsProvider
     ? visibleBids.find((bid) => bid.status === 'PENDING')
     : undefined;
+  // «Подача» prefilled from the distance base → site × the company's price per km.
+  const viewerCompany =
+    viewerIsProvider && session?.user.companyId
+      ? await prisma.company.findUnique({
+          where: { id: session.user.companyId },
+          select: { baseLat: true, baseLon: true, deliveryPricePerKm: true },
+        })
+      : null;
+  const suggestedDelivery =
+    viewerCompany?.baseLat != null &&
+    viewerCompany.baseLon != null &&
+    viewerCompany.deliveryPricePerKm != null &&
+    order.location?.latitude != null &&
+    order.location.longitude != null
+      ? distanceKm(
+          { lat: viewerCompany.baseLat, lon: viewerCompany.baseLon },
+          { lat: order.location.latitude, lon: order.location.longitude },
+        ) * Number(viewerCompany.deliveryPricePerKm)
+      : null;
+  const bidsLeft = order.status === 'OPEN' ? bidsLeftText(order.bidsUntil) : null;
 
   return (
     <div className="flex flex-col gap-6">
@@ -183,12 +206,40 @@ export default async function OrderDetailPage({ params }: { params: { id: string
         </Card>
       )}
 
+      {!isImported && order.contactPhone && (viewerIsProvider || canSeeContact) && (
+        <Card className="border-sky-200 bg-sky-50">
+          <h2 className="font-semibold">Заявка с сайта без регистрации</h2>
+          {canSeeContact ? (
+            <p className="mt-2 text-sm">
+              {order.contactName && <>Автор: {order.contactName} · </>}
+              Телефон:{' '}
+              <a href={`tel:${order.contactPhone}`} className="font-semibold text-amber-700">
+                {order.contactPhone}
+              </a>
+            </p>
+          ) : (
+            <div className="mt-2">
+              <RevealPhoneButton orderId={order.id} maskedPhone={maskPhone(order.contactPhone)} />
+            </div>
+          )}
+        </Card>
+      )}
+
       {order.status === 'OPEN' && !isOwner && (
         <section id="bid" className="scroll-mt-24">
           <h2 className="mb-3 text-lg font-semibold">Ваше предложение</h2>
+          <p className="mb-3 text-sm text-slate-600">
+            {bidsLeft
+              ? `Предложить цену: ${bidsLeft}`
+              : order.bidsUntil
+                ? 'Срок приёма предложений истёк — предложение примут, но пометят как позднее'
+                : null}
+          </p>
           <Card className="max-w-xl">
             <BidForm
               orderId={order.id}
+              suggestedDelivery={suggestedDelivery}
+              days={orderDays(order.desiredStartDate, order.desiredEndDate)}
               existing={
                 ownPendingBid
                   ? {
@@ -196,6 +247,14 @@ export default async function OrderDetailPage({ params }: { params: { id: string
                       currency: ownPendingBid.currency,
                       message: ownPendingBid.message,
                       equipmentId: ownPendingBid.equipmentId,
+                      deliveryPrice:
+                        ownPendingBid.deliveryPrice === null
+                          ? null
+                          : Number(ownPendingBid.deliveryPrice),
+                      shiftPrice:
+                        ownPendingBid.shiftPrice === null ? null : Number(ownPendingBid.shiftPrice),
+                      shifts: ownPendingBid.shifts,
+                      optionsNote: ownPendingBid.optionsNote,
                     }
                   : undefined
               }
@@ -254,6 +313,7 @@ export default async function OrderDetailPage({ params }: { params: { id: string
                       : null
                   }
                   cheapest={cheapest !== null && Number(bid.price) === cheapest}
+                  late={isLateBid(order.bidsUntil, bid.createdAt)}
                 />
                 {isOwner && order.status === 'OPEN' && bid.status === 'PENDING' && (
                   <AcceptBidButton bidId={bid.id} />
@@ -302,11 +362,16 @@ function OfferBody({
   end,
   trust,
   cheapest,
+  late = false,
 }: {
   bid: {
     price: unknown;
     currency: string;
     message: string | null;
+    deliveryPrice?: unknown;
+    shiftPrice?: unknown;
+    shifts?: number | null;
+    optionsNote?: string | null;
     equipment: {
       id: string;
       name: string;
@@ -320,8 +385,10 @@ function OfferBody({
   end: Date;
   trust: ReturnType<typeof reliability> | null;
   cheapest: boolean;
+  /** Sent after the order's bid deadline (Order.bidsUntil). */
+  late?: boolean;
 }) {
-  const parts = offerBreakdown(bid.price, start, end, bid.equipment);
+  const parts = offerBreakdown(bid.price, start, end, bid.equipment, bid);
   return (
     <div className="flex min-w-0 flex-col gap-2">
       <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
@@ -334,6 +401,11 @@ function OfferBody({
         {cheapest && (
           <span className="rounded-full bg-signal-500 px-2 py-0.5 text-xs font-bold text-graphite-950">
             Лучшая цена
+          </span>
+        )}
+        {late && (
+          <span className="rounded-full bg-graphite-100 px-2 py-0.5 text-xs font-semibold text-graphite-600">
+            Позднее предложение
           </span>
         )}
       </div>
@@ -350,6 +422,29 @@ function OfferBody({
           за {pluralizeRu(parts.days, ['день', 'дня', 'дней'])}
         </span>
       </p>
+      {parts.shiftPrice !== null && parts.shifts !== null && (
+        <dl className="grid grid-cols-3 gap-x-3 rounded-xl bg-graphite-50 px-3 py-2 text-xs text-graphite-700">
+          <div>
+            <dt>Подача</dt>
+            <dd className="font-semibold text-graphite-900">
+              {parts.delivery ? formatMoney(parts.delivery, bid.currency) : 'бесплатно'}
+            </dd>
+          </div>
+          <div>
+            <dt>Смены</dt>
+            <dd className="font-semibold text-graphite-900">
+              {parts.shifts} × {formatMoney(parts.shiftPrice, bid.currency)}
+            </dd>
+          </div>
+          <div>
+            <dt>Итого</dt>
+            <dd className="font-semibold text-graphite-900">
+              {formatMoney(parts.total, bid.currency)}
+            </dd>
+          </div>
+        </dl>
+      )}
+      {parts.optionsNote && <p className="text-xs text-graphite-600">Опции: {parts.optionsNote}</p>}
       <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-graphite-600 sm:grid-cols-3">
         {parts.days > 1 && (
           <div>

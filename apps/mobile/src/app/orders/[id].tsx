@@ -11,6 +11,9 @@ import {
   Text,
   View,
 } from 'react-native';
+import { BidCountdown } from '@/components/BidCountdown';
+import { OfferBreakdown } from '@/components/OfferBreakdown';
+import { OrderContact } from '@/components/OrderContact';
 import {
   Badge,
   Button,
@@ -145,6 +148,7 @@ function OfferCard({
       <Text style={styles.offerMachine} numberOfLines={2}>
         {bid.equipment?.name ?? 'Техника'}
       </Text>
+      <OfferBreakdown bid={bid} />
       {bid.message ? <Text style={styles.offerMessage}>{bid.message}</Text> : null}
       {chat}
       {canAccept && bid.status === 'PENDING' ? (
@@ -341,6 +345,13 @@ export default function OrderDetailScreen() {
         <Card>
           <Timeline index={stage.index} cancelled={stage.cancelled} />
         </Card>
+
+        {!isOwner && order.status === 'OPEN' ? (
+          <Card style={styles.section}>
+            <BidCountdown bidsUntil={order.bidsUntil} />
+            <OrderContact order={order} />
+          </Card>
+        ) : null}
 
         {isOwner && booking ? (
           <Card style={styles.section}>

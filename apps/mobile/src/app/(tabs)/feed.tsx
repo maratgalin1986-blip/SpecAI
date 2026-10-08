@@ -1,6 +1,6 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Link, useFocusEffect, useRouter, type Href } from 'expo-router';
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   FlatList,
@@ -13,7 +13,10 @@ import {
   Text,
   View,
 } from 'react-native';
+import { BidCountdown } from '@/components/BidCountdown';
 import { BidForm } from '@/components/BidForm';
+import { DemandCard } from '@/components/DemandCard';
+import { OrderContact } from '@/components/OrderContact';
 import {
   Badge,
   Button,
@@ -27,16 +30,19 @@ import {
   ApiError,
   createBid,
   fetchMyCompanyPin,
+  fetchMyDocuments,
   fetchMyEquipment,
   fetchOpenOrders,
   fetchProviderBookings,
   updateEquipment,
   type CompanyPin,
+  type DocumentsSummary,
   type Equipment,
   type EquipmentStatus,
   type Order,
   type ProviderBooking,
 } from '@/lib/api';
+import { deliveryEstimate, isBidWindowOpen } from '@/lib/providerFeed';
 import { EQUIPMENT_STATUS_OPTIONS, formatMoney, pluralizeRu } from '@/lib/format';
 import {
   addressFromDescription,
@@ -246,6 +252,7 @@ function FeedCard({
   order,
   machine,
   base,
+  pricePerKm,
   open,
   submitted,
   equipment,
@@ -258,6 +265,8 @@ function FeedCard({
   order: Order;
   machine: Equipment | null;
   base: { lat: number; lon: number } | null;
+  /** Цена подачи за км компании (оценка подачи на карточке). */
+  pricePerKm: string | number | null | undefined;
   open: boolean;
   submitted: boolean;
   equipment: Equipment[];
@@ -271,10 +280,12 @@ function FeedCard({
   const address = order.location?.addressLine || addressFromDescription(order.description);
   const lat = order.location?.latitude;
   const lon = order.location?.longitude;
-  const distance =
+  const km =
     base && typeof lat === 'number' && typeof lon === 'number'
-      ? formatDistance(distanceKm(base, { lat, lon }))
+      ? distanceKm(base, { lat, lon })
       : null;
+  const distance = km !== null ? formatDistance(km) : null;
+  const delivery = deliveryEstimate(km, pricePerKm);
   const ownBid = order.bids.find((bid) => bid.status === 'PENDING');
   const byRate = machine ? priceByRate(machine.dailyRate, days) : 0;
   const bidCount = order.bidCount ?? order.bids.length;
@@ -292,8 +303,14 @@ function FeedCard({
             {days === 1 ? '1 смена' : pluralizeRu(days, ['день', 'дня', 'дней'])}
           </Text>
         </View>
-        {distance ? <Badge text={distance} tone="dark" /> : null}
+        {distance ? (
+          <Badge
+            text={delivery !== null ? `${distance} · подача ≈ ${formatMoney(delivery)}` : distance}
+            tone="dark"
+          />
+        ) : null}
       </View>
+      <BidCountdown bidsUntil={order.bidsUntil} />
       {address ? (
         <View style={styles.orderPlace}>
           <Ionicons name="location-outline" size={16} color={colors.primary} />
@@ -311,11 +328,18 @@ function FeedCard({
           ? 'Предложений ещё нет — будьте первым'
           : pluralizeRu(bidCount, ['предложение', 'предложения', 'предложений'])}
       </Text>
+      <OrderContact order={order} />
 
       {submitted ? (
         <Badge text="Предложение отправлено" tone="success" />
       ) : open ? (
-        <BidForm order={order} equipment={equipment} onCancel={onClose} onSubmitted={onSubmitted} />
+        <BidForm
+          order={order}
+          equipment={equipment}
+          suggestedDelivery={delivery}
+          onCancel={onClose}
+          onSubmitted={onSubmitted}
+        />
       ) : ownBid ? (
         <View style={styles.ownBid}>
           <Text style={styles.ownBidText}>
@@ -357,6 +381,9 @@ export default function FeedScreen() {
   const [equipment, setEquipment] = useState<Equipment[]>([]);
   const [bookings, setBookings] = useState<ProviderBooking[]>([]);
   const [pin, setPin] = useState<CompanyPin | null>(null);
+  const [documents, setDocuments] = useState<DocumentsSummary | null>(null);
+  // Карточки с истёкшим сроком приёма предложений прячутся; «сейчас» обновляется раз в минуту.
+  const [now, setNow] = useState(() => new Date());
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [openBidFor, setOpenBidFor] = useState<string | null>(null);
@@ -367,18 +394,22 @@ export default function FeedScreen() {
     if (mode === 'refresh') setRefreshing(true);
     if (mode !== 'silent') setError(null);
     try {
-      const [ordersResult, equipmentResult, bookingsResult, pinResult] = await Promise.allSettled([
-        fetchOpenOrders(),
-        fetchMyEquipment(),
-        fetchProviderBookings(),
-        fetchMyCompanyPin(),
-      ]);
+      const [ordersResult, equipmentResult, bookingsResult, pinResult, documentsResult] =
+        await Promise.allSettled([
+          fetchOpenOrders(),
+          fetchMyEquipment(),
+          fetchProviderBookings(),
+          fetchMyCompanyPin(),
+          fetchMyDocuments(),
+        ]);
       if (ordersResult.status === 'fulfilled') {
         setOrders(ordersResult.value.orders.filter((order) => order.status === 'OPEN'));
+        setNow(new Date());
       }
       if (equipmentResult.status === 'fulfilled') setEquipment(equipmentResult.value.equipment);
       if (bookingsResult.status === 'fulfilled') setBookings(bookingsResult.value.bookings);
       if (pinResult.status === 'fulfilled') setPin(pinResult.value.company);
+      if (documentsResult.status === 'fulfilled') setDocuments(documentsResult.value.summary);
       if (ordersResult.status === 'rejected') throw ordersResult.reason;
     } catch (caught) {
       if (mode !== 'silent') {
@@ -397,6 +428,14 @@ export default function FeedScreen() {
       const timer = setInterval(() => void load('silent'), POLL_MS);
       return () => clearInterval(timer);
     }, [load, online]),
+  );
+  useEffect(() => {
+    const timer = setInterval(() => setNow(new Date()), 60_000);
+    return () => clearInterval(timer);
+  }, []);
+  const openOrders = useMemo(
+    () => (orders ?? []).filter((order) => isBidWindowOpen(order, now)),
+    [orders, now],
   );
 
   const available = useMemo(
@@ -506,6 +545,12 @@ export default function FeedScreen() {
       title: 'Будьте на линии и отвечайте быстро',
       href: '/(tabs)/feed',
     },
+    {
+      id: 'documents',
+      done: (documents?.expired ?? 0) === 0,
+      title: `Продлите просроченные документы${documents?.expired ? ` (${documents.expired})` : ''}`,
+      href: '/provider/documents',
+    },
   ];
 
   const machineFor = (order: Order): Equipment | null =>
@@ -535,10 +580,11 @@ export default function FeedScreen() {
         </Link>
       ) : null}
       <TipsCard tips={tips} />
+      <DemandCard />
       {error ? <ErrorBanner message={error} onRetry={() => void load()} /> : null}
       <SectionTitle>
         {online
-          ? `Заявки заказчиков${orders.length > 0 ? ` · ${orders.length}` : ''}`
+          ? `Заявки заказчиков${openOrders.length > 0 ? ` · ${openOrders.length}` : ''}`
           : 'Заявки скрыты'}
       </SectionTitle>
     </View>
@@ -550,7 +596,7 @@ export default function FeedScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <FlatList
-        data={online ? orders : []}
+        data={online ? openOrders : []}
         keyExtractor={(item) => item.id}
         keyboardShouldPersistTaps="handled"
         renderItem={({ item }) => (
@@ -558,6 +604,7 @@ export default function FeedScreen() {
             order={item}
             machine={machineFor(item)}
             base={base}
+            pricePerKm={pin?.deliveryPricePerKm}
             open={openBidFor === item.id}
             submitted={submittedIds.has(item.id)}
             equipment={available}
@@ -590,8 +637,8 @@ export default function FeedScreen() {
           ) : (
             <EmptyState
               title={
-                orders.length > 0
-                  ? `${pluralizeRu(orders.length, ['заявка ждёт', 'заявки ждут', 'заявок ждут'])} исполнителя`
+                openOrders.length > 0
+                  ? `${pluralizeRu(openOrders.length, ['заявка ждёт', 'заявки ждут', 'заявок ждут'])} исполнителя`
                   : 'Вы не на линии'
               }
               description="Нажмите «Выйти на линию», чтобы увидеть заявки."

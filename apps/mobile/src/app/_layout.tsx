@@ -38,6 +38,8 @@ function RootNavigator() {
         <Stack.Screen name="orders/[id]/chat" options={{ title: 'Чат' }} />
         <Stack.Screen name="bookings/[id]/review" options={{ title: 'Отзыв' }} />
         <Stack.Screen name="comments" options={{ title: 'Комментарии' }} />
+        <Stack.Screen name="provider/documents" options={{ title: 'Документы' }} />
+        <Stack.Screen name="demand" options={{ title: 'Карта спроса' }} />
       </Stack.Protected>
       {/* Доступны и без входа: каталог, карточка техники, карта, звонок, о компании. */}
       <Stack.Screen name="catalog" options={{ title: 'Каталог техники' }} />

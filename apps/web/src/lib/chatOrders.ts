@@ -1,9 +1,10 @@
-// Orders found in open Telegram/WhatsApp chats (the bot was added there by
-// the chat's admins; no userbots, no private chats). The author's phone is
-// stored but shown masked; a signed-in provider presses «Показать телефон»,
-// which is logged (ContactReveal) and limited per provider company per day.
-// The author may ask to remove the order — the admin erases it.
-// Pure functions only; the route handlers do the database work.
+// Orders whose author has no account: found in open Telegram/WhatsApp chats
+// (the bot was added there by the chat's admins; no userbots, no private
+// chats) or left by a guest on the site (source SITE, api/orders/guest).
+// The author's phone is stored but shown masked; a signed-in provider
+// presses «Показать телефон», which is logged (ContactReveal) and limited per
+// provider company per day. The author may ask to remove the order — the
+// admin erases it. Pure functions only; the route handlers do the database work.
 
 export const CHAT_PHONE_REVEALS_PER_DAY = 30;
 export const DAY_MS = 24 * 60 * 60_000;
@@ -59,7 +60,8 @@ export type RevealDecision =
  * Whether a viewer may see the phone of a chat order.
  * - only providers (PROVIDER_ADMIN with a company); customers and guests never;
  * - a confirmed e-mail when the site can send letters (accountability);
- * - only open/matched orders from chats that still have a phone;
+ * - only open/matched orders (from chats or guests of the site) that still
+ *   have a phone — an order of a signed-in customer never has one;
  * - at most CHAT_PHONE_REVEALS_PER_DAY different orders per company a day;
  *   opening the same order again does not count.
  */
@@ -78,7 +80,7 @@ export function revealDecision(input: {
   if (input.requireVerifiedEmail && !viewer.emailVerified) {
     return { ok: false, status: 403, error: 'Подтвердите e-mail, чтобы открывать телефоны' };
   }
-  if (!order || order.source === 'SITE' || order.status === 'PENDING_REVIEW') {
+  if (!order || order.status === 'PENDING_REVIEW') {
     return { ok: false, status: 404, error: 'Заявка не найдена' };
   }
   if (order.status === 'CANCELLED' || !order.contactPhone) {
@@ -93,4 +95,24 @@ export function revealDecision(input: {
     };
   }
   return { ok: true, counts: true };
+}
+
+/** What the provider is told when the phone opens: how the author reached us. */
+export function revealNote(source: string): string {
+  return source === 'SITE'
+    ? 'Человек оставил заявку на сайте без регистрации. Представьтесь и скажите, что звоните по заявке с ИИСтройка24.'
+    : 'Человек написал в открытый чат. Представьтесь и скажите, где нашли заявку.';
+}
+
+/**
+ * The masked contact a provider sees on an order whose author has no account
+ * (a chat or a guest order): the house fleet and admins get the full contact
+ * elsewhere, everyone else may open it with POST /api/orders/[id]/phone.
+ */
+export function maskedContactFor(
+  order: { contactPhone: string | null },
+  viewer: { isProvider: boolean; isHouse: boolean },
+): { maskedPhone: string | null; canReveal: true } | undefined {
+  if (!order.contactPhone || !viewer.isProvider || viewer.isHouse) return undefined;
+  return { maskedPhone: maskPhone(order.contactPhone), canReveal: true };
 }

@@ -4,7 +4,9 @@ import {
   ERASED_ORDER_DATA,
   chatOrderNote,
   maskPhone,
+  maskedContactFor,
   revealDecision,
+  revealNote,
   type RevealViewer,
 } from './chatOrders';
 
@@ -60,8 +62,12 @@ describe('revealDecision', () => {
     expect(decide({ viewer: unverified, requireVerifiedEmail: false })).toMatchObject({ ok: true });
   });
 
-  it('only for chat orders that still have a phone', () => {
-    expect(decide({ order: { ...CHAT_ORDER, source: 'SITE' } })).toMatchObject({ status: 404 });
+  it('only for chat and guest orders that still have a phone', () => {
+    // A guest order from the site keeps its phone in contactPhone too.
+    expect(decide({ order: { ...CHAT_ORDER, source: 'SITE' } })).toEqual({
+      ok: true,
+      counts: true,
+    });
     expect(decide({ order: { ...CHAT_ORDER, status: 'PENDING_REVIEW' } })).toMatchObject({
       status: 404,
     });
@@ -105,5 +111,26 @@ describe('chat order note and erasure', () => {
       sourceUrl: null,
       sourceChat: null,
     });
+  });
+});
+
+describe('masked contact of a chat or guest order', () => {
+  const order = { contactPhone: '+79171234567' };
+
+  it('is shown to other providers only, and only when there is a phone', () => {
+    expect(maskedContactFor(order, { isProvider: true, isHouse: false })).toEqual({
+      maskedPhone: '+7 917 •••-••-67',
+      canReveal: true,
+    });
+    expect(maskedContactFor(order, { isProvider: false, isHouse: false })).toBeUndefined();
+    expect(maskedContactFor(order, { isProvider: true, isHouse: true })).toBeUndefined();
+    expect(
+      maskedContactFor({ contactPhone: null }, { isProvider: true, isHouse: false }),
+    ).toBeUndefined();
+  });
+
+  it('tells the provider how the author reached the service', () => {
+    expect(revealNote('SITE')).toContain('на сайте');
+    expect(revealNote('TELEGRAM')).toContain('открытый чат');
   });
 });
