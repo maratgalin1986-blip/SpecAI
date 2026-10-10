@@ -785,3 +785,15 @@ model EquipmentBlock {
 
   @@index([equipmentId, from])
 }
+
+// ---- Admin feed ----
+
+// «Прочитано» in the admin's notification feed (/admin/feed): one row per
+// event the admin has seen. `key` is "<event kind>:<entity id>[:<state>]",
+// built in apps/web/src/lib/adminFeed.ts. A model only, no enum (CLAUDE.md,
+// rule 2); nothing else refers to it.
+model AdminFeedRead {
+  id     String   @id @default(cuid())
+  key    String   @unique
+  readAt DateTime @default(now())
+}

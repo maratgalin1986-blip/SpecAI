@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import { prisma } from '@specai/database';
 import { Card } from '@specai/ui';
-import { AdminLogin, AdminLogout } from '@/components/AdminLogin';
+import { AdminLogin } from '@/components/AdminLogin';
 import { LeadOutcome } from '@/components/LeadOutcome';
 import { LeadStatusSelect } from '@/components/LeadStatusSelect';
 import { LinkOwnerForm } from '@/components/LinkOwnerForm';
@@ -150,7 +150,17 @@ export default async function AdminPage() {
             <span className="font-semibold text-amber-700">{newCount}</span> · всего {leads.length}
           </p>
         </div>
-        <AdminLogout />
+        <nav aria-label="Разделы CRM" className="flex flex-wrap gap-1.5 text-xs">
+          <a href="/admin/providers" className="cab-chip hover:border-graphite-800">
+            Исполнители
+          </a>
+          <a href="/admin/funnel" className="cab-chip hover:border-graphite-800">
+            Воронка
+          </a>
+          <a href="/admin/feed" className="cab-chip hover:border-graphite-800">
+            Уведомления
+          </a>
+        </nav>
       </div>
 
       <Card className="flex flex-col gap-4">
@@ -423,7 +433,7 @@ export default async function AdminPage() {
       {leads.length === 0 ? (
         <Card>Заявок пока нет. Они появятся здесь, как только клиенты заполнят форму.</Card>
       ) : (
-        <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-3" id="leads">
           {leads.map((lead) => (
             <Card
               key={lead.id}
