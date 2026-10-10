@@ -1,17 +1,20 @@
 import type { Metadata } from 'next';
 import { prisma } from '@specai/database';
 import { Card } from '@specai/ui';
-import { AdminLogin, AdminLogout } from '@/components/AdminLogin';
+import { AdminLogin } from '@/components/AdminLogin';
 import { LeadOutcome } from '@/components/LeadOutcome';
 import { LeadStatusSelect } from '@/components/LeadStatusSelect';
 import { LinkOwnerForm } from '@/components/LinkOwnerForm';
 import { CommentModerationButtons } from '@/components/Comments';
+import { EraseOrderButton } from '@/components/ChatOrderContact';
 import { ModerationButtons, CopyField, TelegramSetupButton } from '@/components/AdminIntegrations';
 import { headers } from 'next/headers';
 import { inboundApiToken, telegramWebhookSecret, whatsappWebhookToken } from '@/lib/integrations';
 import { isAdminConfigured, isAdminRequest } from '@/lib/admin';
 import { SITE } from '@/lib/site';
 import { formLabel, splitSource } from '@/lib/marketing';
+import { AdminVerifyToggle } from '@/components/AdminVerifyToggle';
+import { providerPath } from '@/lib/providerSeo';
 
 export const dynamic = 'force-dynamic';
 export const metadata: Metadata = { title: 'Заявки на звонок', robots: { index: false } };
@@ -92,6 +95,22 @@ export default async function AdminPage() {
     orderBy: { createdAt: 'asc' },
     take: 100,
   });
+  // «Исполнители»: provider companies with the «Проверен» switch, unchecked first.
+  const providers = await prisma.company.findMany({
+    where: { isProvider: true },
+    select: {
+      id: true,
+      name: true,
+      taxId: true,
+      phone: true,
+      verified: true,
+      baseAddress: true,
+      createdAt: true,
+      _count: { select: { equipment: { where: { status: { not: 'RETIRED' } } } } },
+    },
+    orderBy: [{ verified: 'asc' }, { createdAt: 'desc' }],
+    take: 200,
+  });
   const origin = siteOrigin();
   const tgSecretReady = Boolean(telegramWebhookSecret());
   const whatsappToken = whatsappWebhookToken();
@@ -131,7 +150,17 @@ export default async function AdminPage() {
             <span className="font-semibold text-amber-700">{newCount}</span> · всего {leads.length}
           </p>
         </div>
-        <AdminLogout />
+        <nav aria-label="Разделы CRM" className="flex flex-wrap gap-1.5 text-xs">
+          <a href="/admin/providers" className="cab-chip hover:border-graphite-800">
+            Исполнители
+          </a>
+          <a href="/admin/funnel" className="cab-chip hover:border-graphite-800">
+            Воронка
+          </a>
+          <a href="/admin/feed" className="cab-chip hover:border-graphite-800">
+            Уведомления
+          </a>
+        </nav>
       </div>
 
       <Card className="flex flex-col gap-4">
@@ -216,7 +245,10 @@ export default async function AdminPage() {
                 {order.contactPhone ? ` · ${order.contactPhone}` : ''}
               </p>
             </div>
-            <ModerationButtons orderId={order.id} />
+            <div className="flex flex-col items-start gap-2">
+              <ModerationButtons orderId={order.id} />
+              <EraseOrderButton orderId={order.id} />
+            </div>
           </div>
         ))}
       </Card>
@@ -277,6 +309,48 @@ export default async function AdminPage() {
             <CommentModerationButtons commentId={comment.id} />
           </div>
         ))}
+      </Card>
+
+      <Card className="flex flex-col gap-3" id="providers">
+        <div>
+          <h2 className="font-semibold">
+            Исполнители · {providers.length} · проверено{' '}
+            {providers.filter((company) => company.verified).length}
+          </h2>
+          <p className="text-sm text-slate-600">
+            Отметка «Проверен» видна заказчикам в предложениях и на странице исполнителя. Ставьте её
+            после звонка и проверки ИНН и документов на технику.
+          </p>
+        </div>
+        {providers.length === 0 ? (
+          <p className="text-sm text-slate-500">Исполнителей пока нет.</p>
+        ) : (
+          <ul className="flex flex-col divide-y divide-slate-100">
+            {providers.map((company) => (
+              <li
+                key={company.id}
+                className="flex flex-col gap-2 py-2 text-sm sm:flex-row sm:items-center sm:justify-between"
+              >
+                <div className="min-w-0">
+                  <a
+                    href={providerPath(company.id)}
+                    className="break-words font-medium hover:text-amber-700"
+                  >
+                    {company.name}
+                  </a>
+                  <p className="text-xs text-slate-500">
+                    Техники: {company._count.equipment}
+                    {company.taxId ? ` · ИНН ${company.taxId}` : ''}
+                    {company.phone ? ` · ${company.phone}` : ''}
+                    {company.baseAddress ? ` · ${company.baseAddress}` : ''} · с{' '}
+                    {company.createdAt.toLocaleDateString('ru-RU')}
+                  </p>
+                </div>
+                <AdminVerifyToggle companyId={company.id} initial={company.verified} />
+              </li>
+            ))}
+          </ul>
+        )}
       </Card>
 
       <Card className="flex flex-col gap-4">
@@ -359,7 +433,7 @@ export default async function AdminPage() {
       {leads.length === 0 ? (
         <Card>Заявок пока нет. Они появятся здесь, как только клиенты заполнят форму.</Card>
       ) : (
-        <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-3" id="leads">
           {leads.map((lead) => (
             <Card
               key={lead.id}

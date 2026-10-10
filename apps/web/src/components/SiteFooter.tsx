@@ -25,6 +25,12 @@ export function SiteFooter() {
           <a href="/raboty" className={LINK}>
             Работы и цены
           </a>
+          <a href="/providers" className="hover:text-white">
+            Исполнители
+          </a>
+          <a href="/map" className={LINK}>
+            Заказ на карте
+          </a>
           {LANDINGS.map((landing) => (
             <a key={landing.slug} href={`/arenda/${landing.slug}`} className={LINK}>
               Аренда {landing.title}

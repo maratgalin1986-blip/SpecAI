@@ -1,6 +1,7 @@
 import { NextResponse, type NextFetchEvent, type NextRequest } from 'next/server';
 import authMiddleware from 'next-auth/middleware';
 import { AB_KEY } from '@/lib/ab';
+import { REFERRAL_COOKIE, REFERRAL_MAX_AGE, normalizeReferralCode } from '@/lib/referral';
 
 type AuthMiddleware = (
   request: NextRequest,
@@ -19,6 +20,17 @@ export default async function middleware(request: NextRequest, event: NextFetchE
   response ??= NextResponse.next();
 
   if (request.cookies.has(AB_KEY)) response.cookies.delete(AB_KEY);
+  // «Пригласи коллегу»: any page opened with ?ref=<code> remembers the inviter
+  // for the sign-up (the first inviter wins).
+  const ref = normalizeReferralCode(request.nextUrl.searchParams.get('ref'));
+  if (ref && !request.cookies.get(REFERRAL_COOKIE)) {
+    response.cookies.set(REFERRAL_COOKIE, ref, {
+      path: '/',
+      maxAge: REFERRAL_MAX_AGE,
+      sameSite: 'lax',
+      httpOnly: true,
+    });
+  }
   return response;
 }
 

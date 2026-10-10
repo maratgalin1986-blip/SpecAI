@@ -1,12 +1,20 @@
 import { describe, expect, it } from 'vitest';
 import { HOUSE_COMPANY_ID as DB_HOUSE_ID } from '@specai/database';
-import { HOUSE_COMPANY_ID, isHouseManager, isProvider, OWN_FLEET, PUBLIC_FLEET } from './fleet';
+import {
+  HOUSE_COMPANY_ID,
+  isHouseEquipment,
+  isHouseManager,
+  isProvider,
+  isPublicEquipment,
+  OWN_FLEET,
+  PUBLIC_FLEET,
+} from './fleet';
 
 describe('aggregator roles', () => {
   it('uses the same company id as the database package', () => {
     expect(HOUSE_COMPANY_ID).toBe(DB_HOUSE_ID);
     expect(OWN_FLEET).toEqual({ companyId: DB_HOUSE_ID });
-    expect(PUBLIC_FLEET).toEqual({ companyId: HOUSE_COMPANY_ID });
+    expect(PUBLIC_FLEET).toEqual({ company: { isProvider: true } });
   });
 
   it('treats every provider account with a company as a provider', () => {
@@ -39,9 +47,25 @@ describe('houseFirst', () => {
   });
 });
 
-describe('public equipment filter', () => {
-  it('is always the house fleet', async () => {
-    const { PUBLISHED_FLEET, HOUSE_COMPANY_ID } = await import('./fleet');
-    expect(PUBLISHED_FLEET.companyId).toBe(HOUSE_COMPANY_ID);
+describe('public equipment filter (the aggregator)', () => {
+  it('shows every provider company, the house among them, without retired machines', async () => {
+    const { PUBLISHED_FLEET } = await import('./fleet');
+    expect(PUBLISHED_FLEET).toEqual({
+      company: { isProvider: true },
+      status: { not: 'RETIRED' },
+    });
+    expect(PUBLISHED_FLEET).not.toHaveProperty('companyId');
+  });
+
+  it('lets customers order any provider company machine', () => {
+    expect(isPublicEquipment({ company: { isProvider: true } })).toBe(true);
+    expect(isPublicEquipment({ company: { isProvider: false } })).toBe(false);
+    expect(isPublicEquipment({ company: null })).toBe(false);
+    expect(isPublicEquipment(null)).toBe(false);
+  });
+
+  it('keeps the «Парк СпецПласт16» badge to the house fleet', () => {
+    expect(isHouseEquipment({ companyId: HOUSE_COMPANY_ID })).toBe(true);
+    expect(isHouseEquipment({ companyId: 'other-co' })).toBe(false);
   });
 });

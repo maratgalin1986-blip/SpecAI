@@ -12,11 +12,12 @@ import { isAdminRequest } from '@/lib/admin';
 import { isProvider } from '@/lib/fleet';
 import { SITE } from '@/lib/site';
 import { CallbackForm } from '@/components/CallbackForm';
+import { orderPrefill } from '@/lib/quickOrder';
 
 export const metadata: Metadata = {
   title: 'Заявка на технику',
   description:
-    'Опишите задачу — диспетчер СпецПласт16 подберёт технику из своего парка и назовёт одну цену с подачей.',
+    'Опишите задачу — исполнители со своей техникой и машинистами, включая парк СпецПласт16, пришлют предложения с ценой. Сервис бесплатный.',
 };
 
 export const dynamic = 'force-dynamic';
@@ -42,6 +43,11 @@ interface OrdersSearchParams {
   page?: string;
   /** From the map: the provider the order is meant for. */
   provider?: string;
+  /** From the cabinet's quick-order panel (lib/quickOrder.ts). */
+  category?: string;
+  start?: string;
+  now?: string;
+  address?: string;
 }
 
 type OrderWhere = NonNullable<Parameters<typeof prisma.order.count>[0]>['where'];
@@ -127,25 +133,25 @@ export default async function OrdersPage({ searchParams }: { searchParams: Order
           </p>
         ) : (
           <p>
-            Опишите задачу — диспетчер {SITE.name} подберёт технику из нашего парка и назовёт одну
-            цену с подачей. Наши машинисты, без посредников.
+            Опишите задачу — её увидят исполнители со своей техникой и машинистами, включая парк{' '}
+            {SITE.name}. Они пришлют цены, вы выберете лучшее. Сервис бесплатный.
           </p>
         )}
       </CinemaHero>
 
       {!viewerIsProvider && (
-        <section>
+        <section id="new" className="scroll-mt-24">
           <h2 className="mb-3 text-lg font-semibold">
             {forProvider ? `Заявка для «${forProvider.name}»` : 'Новая заявка'}
           </h2>
           {forProvider && (
             <p className="mb-3 max-w-xl text-sm text-slate-600">
-              Заявку получит диспетчер {SITE.name} — он назовёт цену и время подачи.
+              Заявку увидит «{forProvider.name}» и другие исполнители — сравните предложения.
             </p>
           )}
           {viewerId ? (
             <Card className="max-w-xl">
-              <NewOrderForm provider={forProvider} />
+              <NewOrderForm provider={forProvider} initial={orderPrefill(searchParams)} />
             </Card>
           ) : (
             <div className="grid gap-4 lg:grid-cols-2">

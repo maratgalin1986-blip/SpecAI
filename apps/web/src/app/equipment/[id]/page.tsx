@@ -22,7 +22,7 @@ import {
 import { formatMoney, formatRate } from '@/lib/money';
 import { pluralizeRu } from '@/lib/pluralize';
 import { SITE } from '@/lib/site';
-import { PUBLISHED_FLEET, isHouseEquipment, PUBLIC_FLEET } from '@/lib/fleet';
+import { HOUSE_FIRST_ORDER, PUBLISHED_FLEET, PUBLIC_FLEET, isHouseEquipment } from '@/lib/fleet';
 import { isDisplayableImage } from '@/lib/providerMap';
 import { shortAuthorName } from '@/lib/comments';
 import { maskContactsAndLinks } from '@/lib/privacy';
@@ -30,7 +30,13 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { approvedComments, commentAccessError } from '@/lib/commentAccess';
 import { CommentForm, CommentList } from '@/components/Comments';
+import { ShareButtons } from '@/components/ShareButtons';
+import { ReliabilityBadges } from '@/components/ReliabilityBadges';
+import { companyReliability } from '@/lib/companyStats';
+import { providerPath } from '@/lib/providerSeo';
+import { siteUrl } from '@/lib/siteUrl';
 import { HAMMER_RATE } from '@/lib/machineWorks';
+import { NextFreeDate } from '@/components/shifts/NextFreeDate';
 
 export const dynamic = 'force-dynamic';
 
@@ -50,7 +56,10 @@ export async function generateMetadata({ params }: { params: { id: string } }): 
       hourlyRate: true,
       currency: true,
       status: true,
+      imageUrls: true,
+      companyId: true,
       category: { select: { name: true } },
+      company: { select: { name: true } },
     },
   });
   if (!item) return { title: 'Техника не найдена' };
@@ -58,11 +67,33 @@ export async function generateMetadata({ params }: { params: { id: string } }): 
     ...customerRates({ ...item, categoryName: item.category.name }),
     currency: item.currency,
   });
+  const title = `${item.name} — аренда ${rate.price}${rate.unit}`;
+  const description = maskContactsAndLinks(
+    item.description ?? `Аренда: ${item.name}, ${item.category.name.toLowerCase()} с машинистом`,
+  ).slice(0, 200);
+  const photo = item.imageUrls.find(isDisplayableImage);
+  const url = `/equipment/${params.id}`;
   return {
-    title: `${item.name} — аренда ${rate.price}${rate.unit}`,
+    title,
+    description,
     // A retired machine keeps its page for old links but leaves the search index.
     robots: item.status === 'RETIRED' ? { index: false } : undefined,
-    description: item.description ?? `Аренда: ${item.name} от ${SITE.name}, ${SITE.city}`,
+    alternates: { canonical: url },
+    openGraph: {
+      type: 'website',
+      locale: 'ru_RU',
+      siteName: SITE.name,
+      url,
+      title,
+      description: `${description} · исполнитель: ${item.company.name}`.slice(0, 300),
+      ...(photo ? { images: [{ url: photo, alt: item.name }] } : {}),
+    },
+    twitter: {
+      card: photo ? 'summary_large_image' : 'summary',
+      title,
+      description,
+      ...(photo ? { images: [photo] } : {}),
+    },
   };
 }
 
@@ -80,16 +111,17 @@ export default async function EquipmentDetailPage({ params }: { params: { id: st
     },
   });
 
-  // Only СпецПласт16's own machinery has a public page.
-  if (!item || !isHouseEquipment(item)) {
+  // Machinery of any provider company has a public page (the aggregator).
+  if (!item || !item.company?.isProvider) {
     notFound();
   }
 
   const session = await getServerSession(authOptions);
   const commentTarget = { targetCompanyId: item.companyId };
-  const [comments, commentDenied] = await Promise.all([
+  const [comments, commentDenied, trust] = await Promise.all([
     approvedComments(commentTarget),
     session?.user ? commentAccessError(session.user, commentTarget) : Promise.resolve(null),
+    companyReliability(item.companyId),
   ]);
   const canComment = Boolean(session?.user) && commentDenied === null;
 
@@ -104,8 +136,10 @@ export default async function EquipmentDetailPage({ params }: { params: { id: st
     numericSpec(specs, /гидромолот.*₽/i) ??
     (/гидромолот/i.test(item.name) ? HAMMER_RATE : undefined);
   const illustration = machineTypeOf(item.category.name, item.name);
-  const ownFleet = item.company.name === SITE.legalName;
-  const executor = 'Парк СпецПласт16 · машинист в штате';
+  const ownFleet = isHouseEquipment(item);
+  const executor = ownFleet
+    ? 'Парк СпецПласт16 · машинист в штате'
+    : `${item.company.name} · с машинистом`;
   const photos = item.imageUrls.filter(isDisplayableImage);
   // No own photo yet: photos of the same model, labelled as such.
   const modelPhotos = photos.length ? [] : modelPhotosOf(item.name);
@@ -116,8 +150,8 @@ export default async function EquipmentDetailPage({ params }: { params: { id: st
   // Same category first; if it has nothing else, the same task group.
   let similar = await prisma.equipment.findMany({
     where: { ...PUBLISHED_FLEET, categoryId: item.categoryId, id: { not: item.id } },
-    include: { category: true, location: true },
-    orderBy: [{ status: 'asc' }, { createdAt: 'desc' }],
+    include: { category: true, location: true, company: { select: { name: true } } },
+    orderBy: [HOUSE_FIRST_ORDER, { status: 'asc' }, { createdAt: 'desc' }],
     take: 3,
   });
   if (similar.length === 0) {
@@ -128,8 +162,8 @@ export default async function EquipmentDetailPage({ params }: { params: { id: st
     const groupIds = categories.filter((c) => taskGroupOf(c.name) === group).map((c) => c.id);
     similar = await prisma.equipment.findMany({
       where: { ...PUBLISHED_FLEET, categoryId: { in: groupIds }, id: { not: item.id } },
-      include: { category: true, location: true },
-      orderBy: [{ status: 'asc' }, { createdAt: 'desc' }],
+      include: { category: true, location: true, company: { select: { name: true } } },
+      orderBy: [HOUSE_FIRST_ORDER, { status: 'asc' }, { createdAt: 'desc' }],
       take: 3,
     });
   }
@@ -285,6 +319,18 @@ export default async function EquipmentDetailPage({ params }: { params: { id: st
               showVatNote={ownFleet}
               statusNote={STATUS_NOTE[item.status]}
             />
+            <div className="cab-card flex flex-col gap-2">
+              <p className="text-xs text-graphite-500">Исполнитель</p>
+              <a
+                href={providerPath(item.companyId)}
+                className="break-words font-bold text-graphite-950 hover:text-signal-700 hover:underline"
+              >
+                {executor}
+              </a>
+              <ReliabilityBadges value={trust} />
+              {/* «Свободна с …» from the occupancy calendar (an awaited server component). */}
+              {await NextFreeDate({ equipment: item })}
+            </div>
           </div>
         </aside>
 
@@ -336,10 +382,17 @@ export default async function EquipmentDetailPage({ params }: { params: { id: st
             </section>
           )}
 
+          <ShareButtons
+            url={`${siteUrl()}/equipment/${item.id}`}
+            text={`${item.name} — аренда с машинистом`}
+            label="Поделиться техникой"
+          />
+
           <section id="comments" className="scroll-mt-24">
             <div className="eyebrow text-amber-700">Комментарии заказчиков</div>
             <p className="mt-2 text-sm text-slate-500">
-              О работе {SITE.name}. Публикуются после проверки.
+              О работе {ownFleet ? SITE.name : `«${item.company.name}»`}. Публикуются после
+              проверки.
             </p>
             <div className="mt-4 flex flex-col gap-4">
               <CommentList comments={comments} empty="Комментариев пока нет." />

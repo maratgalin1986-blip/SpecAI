@@ -20,7 +20,33 @@ import { guideFor } from '@/lib/guideState';
 import { toPublicComment } from '@/lib/comments';
 import { MyMapPin } from '@/components/MyMapPin';
 import { getBlobToken } from '@/lib/blob';
-import { pinPhotoChoices } from '@/lib/providerMap';
+import { isDisplayableImage, pinPhotoChoices } from '@/lib/providerMap';
+import { OnlineToggle } from '@/components/OnlineToggle';
+import { MachineStatusChips } from '@/components/MachineStatusChips';
+import { NoOrdersChecklist } from '@/components/NoOrdersChecklist';
+import { ReliabilityBadges } from '@/components/ReliabilityBadges';
+import { CompanyProfileForm } from '@/components/CompanyProfileForm';
+import { ReferralCard } from '@/components/ReferralCard';
+import { companyReliability } from '@/lib/companyStats';
+import {
+  INCOME_STATUSES,
+  monthIncome,
+  monthStartMsk,
+  noOrdersChecklist,
+} from '@/lib/providerDashboard';
+import { ensureReferralCode, invitedCounts } from '@/lib/referralStore';
+import { referralLink } from '@/lib/referral';
+import { siteUrl } from '@/lib/siteUrl';
+import { providerPath } from '@/lib/providerSeo';
+import { customerShortName } from '@/lib/customerPrivacy';
+import { pluralizeRu } from '@/lib/pluralize';
+import { NotificationSettings } from '@/components/NotificationSettings';
+import { ProviderDocuments } from '@/components/ProviderDocuments';
+import { DeliverySettingsForm } from '@/components/DeliverySettingsForm';
+import { documentStatus } from '@/lib/documents';
+import { ProviderOpsSection, loadOperatorOptions } from '@/components/shifts/ProviderOpsSection';
+import { OperatorSelect } from '@/components/shifts/OperatorSelect';
+import { ShiftPanel } from '@/components/shifts/ShiftPanel';
 
 export const dynamic = 'force-dynamic';
 export const metadata: Metadata = {
@@ -102,6 +128,93 @@ export default async function ProviderPage({
       take: 100,
     }),
   ]);
+  // Pro-like dashboard: summary, incoming orders, machine statuses, checklist.
+  const companyId = session.user.companyId;
+  const monthStart = monthStartMsk();
+  const feedWhere = {
+    status: 'OPEN' as const,
+    NOT: { customer: { companyId } },
+    bids: { none: { equipment: { companyId } } },
+  };
+  const [
+    profile,
+    fleet,
+    monthBookings,
+    activeBookings,
+    feed,
+    feedTotal,
+    trust,
+    referralCode,
+    invited,
+  ] = await Promise.all([
+    prisma.company.findUnique({
+      where: { id: companyId },
+      select: {
+        description: true,
+        phone: true,
+        verified: true,
+        deliveryRadiusKm: true,
+        deliveryPricePerKm: true,
+      },
+    }),
+    prisma.equipment.findMany({
+      where: { companyId, status: { not: 'RETIRED' } },
+      select: { id: true, name: true, status: true, imageUrls: true, hourlyRate: true },
+      orderBy: { createdAt: 'desc' },
+      take: 200,
+    }),
+    prisma.booking.findMany({
+      where: {
+        equipment: { companyId },
+        status: { in: [...INCOME_STATUSES] },
+        startDate: { gte: monthStart },
+      },
+      select: { status: true, startDate: true, totalPrice: true },
+      take: 1000,
+    }),
+    prisma.booking.count({
+      where: { equipment: { companyId }, status: { in: ['CONFIRMED', 'ACTIVE'] } },
+    }),
+    prisma.order.findMany({
+      where: feedWhere,
+      include: {
+        category: { select: { name: true } },
+        customer: { select: { name: true } },
+        _count: { select: { bids: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 6,
+    }),
+    prisma.order.count({ where: feedWhere }),
+    companyReliability(companyId),
+    ensureReferralCode(session.user.id).catch(() => null),
+    invitedCounts(session.user.id).catch(() => ({ total: 0, providers: 0 })),
+  ]);
+  const income = monthIncome(monthBookings);
+  // Documents (СТС, ПСМ, страховка…): expired ones mark the machine and the checklist.
+  const documents = await prisma.providerDocument.findMany({
+    where: { companyId },
+    select: { equipmentId: true, expiresAt: true },
+    take: 500,
+  });
+  const expiredDocs = documents.filter((doc) => documentStatus(doc) === 'expired');
+  const expiredFor = (equipmentId: string) =>
+    expiredDocs.filter((doc) => doc.equipmentId === equipmentId).length;
+  // Operators («машинисты») for the booking cards: assign one per booking.
+  const operatorOptions = await loadOperatorOptions(companyId);
+  const checklist = noOrdersChecklist({
+    expiredDocuments: expiredDocs.length,
+    hasPhone: Boolean(profile?.phone?.trim()),
+    hasDescription: Boolean(profile?.description?.trim()),
+    machines: fleet.length,
+    machinesWithPhoto: fleet.filter((item) => item.imageUrls.some(isDisplayableImage)).length,
+    machinesWithHourly: fleet.filter((item) => item.hourlyRate !== null).length,
+    machinesAvailable: fleet.filter((item) => item.status === 'AVAILABLE').length,
+    hasBase: pinCompany?.baseLat != null && pinCompany?.baseLon != null,
+    verified: Boolean(profile?.verified),
+    newOrders: feedTotal,
+  });
+
   const ownPhotos = pinPhotoChoices(
     session.user.companyId,
     photoRows.flatMap((row) => row.imageUrls),
@@ -137,9 +250,116 @@ export default async function ProviderPage({
 
   return (
     <div className="flex flex-col gap-8">
-      <h1 className="text-2xl font-bold">
-        {isHouseManager(session.user) ? 'Кабинет парка СпецПласт16' : 'Кабинет поставщика'}
-      </h1>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
+          <p className="cab-eyebrow">Кабинет исполнителя</p>
+          <h1 className="text-2xl font-extrabold tracking-tight text-graphite-950">
+            {isHouseManager(session.user) ? 'Кабинет парка СпецПласт16' : 'Кабинет поставщика'}
+          </h1>
+          <a
+            href={providerPath(companyId)}
+            className="text-sm font-semibold text-signal-700 hover:underline"
+          >
+            Моя публичная страница
+          </a>
+        </div>
+        <OnlineToggle />
+      </div>
+
+      <section aria-label="Сводка" className="flex flex-col gap-3">
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <div className="cab-dark">
+            <p className="text-xs text-graphite-300">Доход за месяц</p>
+            <p className="mt-1 break-words font-mono text-2xl font-bold text-signal-300">
+              {formatMoney(income)}
+            </p>
+            <p className="mt-1 text-[0.7rem] text-graphite-300">
+              подтверждённые брони с началом в этом месяце
+            </p>
+          </div>
+          <a href="#bookings" className="cab-card hover:border-signal-400">
+            <p className="text-xs text-graphite-500">Активные брони</p>
+            <p className="mt-1 font-mono text-2xl font-bold text-graphite-950">{activeBookings}</p>
+          </a>
+          <a href="#feed" className="cab-card hover:border-signal-400">
+            <p className="text-xs text-graphite-500">Новые заявки</p>
+            <p className="mt-1 font-mono text-2xl font-bold text-graphite-950">{feedTotal}</p>
+          </a>
+          <div className="cab-card">
+            <p className="text-xs text-graphite-500">Рейтинг</p>
+            <p className="mt-1 font-mono text-2xl font-bold text-graphite-950">
+              {trust.rating !== null ? `★ ${trust.rating.toFixed(1)}` : '—'}
+            </p>
+            <p className="mt-1 text-[0.7rem] text-graphite-500">
+              {trust.ratingCount > 0
+                ? pluralizeRu(trust.ratingCount, ['отзыв', 'отзыва', 'отзывов'])
+                : 'отзывов пока нет'}
+            </p>
+          </div>
+        </div>
+        <ReliabilityBadges value={trust} />
+      </section>
+
+      <section id="feed" className="flex scroll-mt-24 flex-col gap-3">
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <h2 className="text-lg font-bold text-graphite-950">Входящие заявки</h2>
+          <a href="/orders" className="text-sm font-semibold text-signal-700 hover:underline">
+            Вся лента
+          </a>
+        </div>
+        {feed.length === 0 ? (
+          <p className="cab-card text-sm text-graphite-600">
+            Новых заявок без вашей цены нет. Оставайтесь на линии — лента обновляется сама.
+          </p>
+        ) : (
+          <ul className="grid gap-3 sm:grid-cols-2">
+            {feed.map((order) => (
+              <li key={order.id} className="cab-card flex flex-col gap-2">
+                <div className="flex items-start justify-between gap-2">
+                  <p className="text-sm font-bold text-graphite-950">
+                    {order.category?.name ?? 'Любая техника'}
+                  </p>
+                  <span className="shrink-0 rounded-full bg-graphite-100 px-2 py-0.5 text-[0.7rem] font-semibold text-graphite-700">
+                    {order._count.bids > 0 ? `Предложений: ${order._count.bids}` : 'Без ответа'}
+                  </span>
+                </div>
+                <p className="line-clamp-3 break-words text-sm text-graphite-700">
+                  {order.description}
+                </p>
+                <p className="text-xs text-graphite-500">
+                  {order.desiredStartDate.toLocaleDateString('ru-RU')} –{' '}
+                  {order.desiredEndDate.toLocaleDateString('ru-RU')} ·{' '}
+                  {order.source === 'SITE'
+                    ? customerShortName(order.customer.name)
+                    : `из ${order.source === 'WHATSAPP' ? 'WhatsApp' : 'Telegram'}`}
+                </p>
+                <a href={`/orders/${order.id}#bid`} className="cab-action mt-auto w-full">
+                  Предложить цену
+                </a>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <section id="fleet-status" className="cab-card flex scroll-mt-24 flex-col gap-2">
+        <div>
+          <h2 className="text-lg font-bold text-graphite-950">Техника на линии</h2>
+          <p className="text-sm text-graphite-600">
+            Отмечайте, какая машина свободна: предложить по заявке можно только свободную технику.
+          </p>
+        </div>
+        <MachineStatusChips
+          machines={fleet.map((item) => ({ id: item.id, name: item.name, status: item.status }))}
+        />
+      </section>
+
+      <NoOrdersChecklist items={checklist} />
+
+      {/* Income per machine, the occupancy calendar and the operators (an
+          async server component, awaited so the JSX types stay simple). */}
+      {await ProviderOpsSection({ companyId })}
+
       <GuideCard guide={guide} />
       <section className="rounded-2xl border border-slate-200 bg-white p-4">
         <PhotoShare role="executor" />
@@ -165,7 +385,7 @@ export default async function ProviderPage({
         </section>
       )}
 
-      <section className="flex flex-col gap-3">
+      <section id="fleet" className="flex scroll-mt-24 flex-col gap-3">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
           <h2 className="text-lg font-semibold">Ваша техника</h2>
           <p className="text-sm text-slate-600">
@@ -183,6 +403,7 @@ export default async function ProviderPage({
               <ProviderEquipmentCard
                 key={item.id}
                 categoryName={item.category.name}
+                expiredDocuments={expiredFor(item.id)}
                 item={{
                   id: item.id,
                   name: item.name,
@@ -214,6 +435,37 @@ export default async function ProviderPage({
         <Card className="max-w-xl">
           <NewEquipmentForm />
         </Card>
+      </section>
+
+      <section id="documents" className="flex scroll-mt-24 flex-col gap-3">
+        <div>
+          <h2 className="text-lg font-semibold">Документы</h2>
+          <p className="text-sm text-graphite-600">
+            СТС, ПСМ, удостоверения машинистов, страховка и техосмотр — по компании и по каждой
+            машине. Напомним за 30 дней до окончания срока и в день окончания.
+          </p>
+        </div>
+        <div className="cab-card">
+          <ProviderDocuments machines={fleet.map((item) => ({ id: item.id, name: item.name }))} />
+        </div>
+      </section>
+
+      <section id="delivery" className="flex scroll-mt-24 flex-col gap-3">
+        <div>
+          <h2 className="text-lg font-semibold">Радиус выезда и подача</h2>
+          <p className="text-sm text-graphite-600">
+            Заявки присылаются в пределах радиуса от базы; цена за км подставляется в «подачу»
+            предложения.
+          </p>
+        </div>
+        <div className="cab-card max-w-xl">
+          <DeliverySettingsForm
+            initial={{
+              deliveryRadiusKm: profile?.deliveryRadiusKm ?? 100,
+              deliveryPricePerKm: profile?.deliveryPricePerKm?.toString() ?? null,
+            }}
+          />
+        </div>
       </section>
 
       <section id="bookings" className="flex scroll-mt-24 flex-col gap-3">
@@ -282,6 +534,19 @@ export default async function ProviderPage({
                         />
                       </div>
                     )}
+                    <div className="mt-2">
+                      <OperatorSelect
+                        bookingId={booking.id}
+                        bookingStatus={booking.status}
+                        operatorId={booking.operatorId}
+                        operators={operatorOptions}
+                      />
+                    </div>
+                    <ShiftPanel
+                      bookingId={booking.id}
+                      bookingStatus={booking.status}
+                      role="provider"
+                    />
                   </div>
                   <div className="flex flex-wrap items-center gap-3 sm:justify-end">
                     <BookingStatusBadge status={booking.status} />
@@ -303,6 +568,33 @@ export default async function ProviderPage({
           searchParams={{ page: currentQuery.page }}
         />
       </section>
+
+      <section id="profile" className="flex scroll-mt-24 flex-col gap-3">
+        <div>
+          <h2 className="text-lg font-semibold">Профиль компании</h2>
+          <p className="text-sm text-graphite-600">
+            Пара строк о компании на{' '}
+            <a href={providerPath(companyId)} className="text-signal-700 underline">
+              публичной странице
+            </a>{' '}
+            и телефон, который заказчик увидит после подтверждения брони.
+          </p>
+        </div>
+        <div className="cab-card max-w-xl">
+          <CompanyProfileForm
+            initial={{ description: profile?.description ?? null, phone: profile?.phone ?? null }}
+          />
+        </div>
+      </section>
+
+      {referralCode && (
+        <ReferralCard
+          link={referralLink(siteUrl(), referralCode)}
+          role="PROVIDER"
+          invited={invited}
+        />
+      )}
+      {session && <NotificationSettings />}
     </div>
   );
 }

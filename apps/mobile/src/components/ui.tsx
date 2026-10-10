@@ -7,42 +7,68 @@ import {
   TextInput,
   View,
   type PressableProps,
+  type StyleProp,
   type TextInputProps,
   type ViewProps,
+  type ViewStyle,
 } from 'react-native';
-import { colors, radius, spacing } from '@/lib/theme';
+import { colors, radius, shadow, spacing, TAP, typography } from '@/theme';
+
+type ButtonVariant = 'primary' | 'secondary' | 'danger' | 'dark' | 'ghost';
 
 interface ButtonProps extends Omit<PressableProps, 'style'> {
   title: string;
-  variant?: 'primary' | 'secondary' | 'danger';
+  variant?: ButtonVariant;
+  /** «large» — главная кнопка экрана (56 dp), как «Заказать». */
+  size?: 'regular' | 'large';
   loading?: boolean;
+  style?: StyleProp<ViewStyle>;
 }
 
-export function Button({ title, variant = 'primary', loading, disabled, ...rest }: ButtonProps) {
+const BUTTON_TEXT_COLOR: Record<ButtonVariant, string> = {
+  primary: colors.onPrimary,
+  secondary: colors.text,
+  danger: colors.danger,
+  dark: colors.onDark,
+  ghost: colors.primaryDark,
+};
+
+export function Button({
+  title,
+  variant = 'primary',
+  size = 'regular',
+  loading,
+  disabled,
+  style,
+  ...rest
+}: ButtonProps) {
   const isDisabled = disabled || loading;
   return (
     <Pressable
       accessibilityRole="button"
+      accessibilityLabel={title}
+      accessibilityState={{ disabled: Boolean(isDisabled), busy: Boolean(loading) }}
       disabled={isDisabled}
       style={({ pressed }) => [
         styles.button,
-        variant === 'primary' && styles.buttonPrimary,
-        variant === 'secondary' && styles.buttonSecondary,
-        variant === 'danger' && styles.buttonDanger,
+        size === 'large' && styles.buttonLarge,
+        styles[`button_${variant}`],
         pressed && styles.buttonPressed,
         isDisabled && styles.buttonDisabled,
+        style,
       ]}
       {...rest}
     >
       {loading ? (
-        <ActivityIndicator color={variant === 'secondary' ? colors.text : '#fff'} />
+        <ActivityIndicator color={BUTTON_TEXT_COLOR[variant]} />
       ) : (
         <Text
           style={[
             styles.buttonText,
-            variant === 'secondary' && styles.buttonTextSecondary,
-            variant === 'danger' && styles.buttonTextDanger,
+            size === 'large' && styles.buttonTextLarge,
+            { color: BUTTON_TEXT_COLOR[variant] },
           ]}
+          numberOfLines={2}
         >
           {title}
         </Text>
@@ -62,6 +88,7 @@ export function Input({ label, error, style, ...rest }: InputProps) {
       {label ? <Text style={styles.label}>{label}</Text> : null}
       <TextInput
         placeholderTextColor={colors.textSoft}
+        accessibilityLabel={rest.accessibilityLabel ?? label ?? rest.placeholder}
         style={[styles.input, error ? styles.inputError : null, style]}
         {...rest}
       />
@@ -87,16 +114,108 @@ export function Badge({ text, tone = 'neutral' }: { text: string; tone?: BadgeTo
   );
 }
 
-export type BadgeTone = 'neutral' | 'success' | 'warning' | 'info' | 'danger' | 'dark';
+export type BadgeTone = 'neutral' | 'success' | 'warning' | 'info' | 'danger' | 'dark' | 'accent';
 
 const BADGE_TONES: Record<BadgeTone, { bg: string; fg: string }> = {
-  neutral: { bg: colors.border, fg: colors.dark },
+  neutral: { bg: colors.surfaceMuted, fg: colors.darkSoft },
   success: { bg: colors.successLight, fg: colors.success },
-  warning: { bg: colors.warningLight, fg: '#854d0e' },
+  warning: { bg: colors.warningLight, fg: colors.warningText },
   info: { bg: colors.infoLight, fg: colors.info },
   danger: { bg: colors.dangerLight, fg: colors.danger },
-  dark: { bg: colors.dark, fg: '#fff' },
+  dark: { bg: colors.dark, fg: colors.onDark },
+  accent: { bg: colors.primaryLight, fg: colors.primaryDark },
 };
+
+/** Выбираемая «таблетка»: категория, статус машины, вариант ответа. */
+export function Chip({
+  label,
+  selected = false,
+  onPress,
+  disabled,
+  accessibilityLabel,
+}: {
+  label: string;
+  selected?: boolean;
+  onPress?: () => void;
+  disabled?: boolean;
+  accessibilityLabel?: string;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel ?? label}
+      accessibilityState={{ selected, disabled: Boolean(disabled) }}
+      disabled={disabled}
+      onPress={onPress}
+      hitSlop={4}
+      style={({ pressed }) => [
+        styles.chip,
+        selected && styles.chipSelected,
+        pressed && styles.buttonPressed,
+      ]}
+    >
+      <Text style={[styles.chipText, selected && styles.chipTextSelected]} numberOfLines={1}>
+        {label}
+      </Text>
+    </Pressable>
+  );
+}
+
+/** Переключатель из 2–3 сегментов («Нужна сейчас / На дату», «Брони / Предложения»). */
+export function Segmented<T extends string>({
+  options,
+  value,
+  onChange,
+  dark = false,
+}: {
+  options: readonly { value: T; label: string }[];
+  value: T;
+  onChange: (next: T) => void;
+  dark?: boolean;
+}) {
+  return (
+    <View style={[styles.segmented, dark && styles.segmentedDark]} accessibilityRole="tablist">
+      {options.map((option) => {
+        const active = option.value === value;
+        return (
+          <Pressable
+            key={option.value}
+            accessibilityRole="tab"
+            accessibilityLabel={option.label}
+            accessibilityState={{ selected: active }}
+            onPress={() => onChange(option.value)}
+            style={[
+              styles.segment,
+              active && (dark ? styles.segmentActiveDark : styles.segmentActive),
+            ]}
+          >
+            <Text
+              style={[
+                styles.segmentText,
+                dark && styles.segmentTextDark,
+                active && (dark ? styles.segmentTextActiveDark : styles.segmentTextActive),
+              ]}
+              numberOfLines={1}
+            >
+              {option.label}
+            </Text>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
+export function SectionTitle({ children, action }: { children: string; action?: React.ReactNode }) {
+  return (
+    <View style={styles.sectionRow}>
+      <Text style={styles.sectionTitle} accessibilityRole="header">
+        {children}
+      </Text>
+      {action}
+    </View>
+  );
+}
 
 export function EmptyState({ title, description }: { title: string; description?: string }) {
   return (
@@ -109,10 +228,16 @@ export function EmptyState({ title, description }: { title: string; description?
 
 export function ErrorBanner({ message, onRetry }: { message: string; onRetry?: () => void }) {
   return (
-    <View style={styles.errorBanner}>
+    <View style={styles.errorBanner} accessibilityRole="alert">
       <Text style={styles.errorBannerText}>{message}</Text>
       {onRetry ? (
-        <Pressable onPress={onRetry} accessibilityRole="button">
+        <Pressable
+          onPress={onRetry}
+          accessibilityRole="button"
+          accessibilityLabel="Повторить"
+          hitSlop={8}
+          style={styles.errorBannerRetryWrap}
+        >
           <Text style={styles.errorBannerRetry}>Повторить</Text>
         </Pressable>
       ) : null}
@@ -130,29 +255,31 @@ export function Loader() {
 
 const styles = StyleSheet.create({
   button: {
-    minHeight: 48,
+    minHeight: TAP,
     borderRadius: radius.md,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
+    paddingVertical: spacing.sm,
   },
-  buttonPrimary: { backgroundColor: colors.primary },
-  buttonSecondary: {
+  buttonLarge: { minHeight: 56, borderRadius: radius.lg },
+  button_primary: { backgroundColor: colors.primary },
+  button_secondary: {
     backgroundColor: colors.card,
     borderWidth: 1,
     borderColor: colors.border,
   },
-  buttonDanger: { backgroundColor: colors.dangerLight },
+  button_danger: { backgroundColor: colors.dangerLight },
+  button_dark: { backgroundColor: colors.dark },
+  button_ghost: { backgroundColor: 'transparent' },
   buttonPressed: { opacity: 0.85 },
   buttonDisabled: { opacity: 0.5 },
-  buttonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
-  buttonTextSecondary: { color: colors.text },
-  buttonTextDanger: { color: colors.danger },
+  buttonText: { fontSize: 16, fontWeight: '700', textAlign: 'center' },
+  buttonTextLarge: { fontSize: 18 },
   inputWrap: { gap: spacing.xs },
-  label: { fontSize: 14, fontWeight: '500', color: colors.text },
+  label: { fontSize: 14, fontWeight: '600', color: colors.text },
   input: {
-    minHeight: 48,
+    minHeight: TAP,
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: radius.md,
@@ -169,17 +296,59 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     padding: spacing.lg,
+    ...shadow.card,
   },
   badge: {
     alignSelf: 'flex-start',
-    borderRadius: 999,
+    borderRadius: radius.pill,
     paddingHorizontal: spacing.sm + 2,
     paddingVertical: 3,
   },
-  badgeText: { fontSize: 12, fontWeight: '600' },
+  badgeText: { fontSize: 12, fontWeight: '700' },
+  chip: {
+    minHeight: 40,
+    maxWidth: '100%',
+    justifyContent: 'center',
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.card,
+    paddingHorizontal: spacing.md,
+  },
+  chipSelected: { backgroundColor: colors.dark, borderColor: colors.dark },
+  chipText: { fontSize: 14, color: colors.text, fontWeight: '500' },
+  chipTextSelected: { color: colors.onDark, fontWeight: '700' },
+  segmented: {
+    flexDirection: 'row',
+    backgroundColor: colors.surfaceMuted,
+    borderRadius: radius.md,
+    padding: 3,
+  },
+  segmentedDark: { backgroundColor: colors.darkSoft },
+  segment: {
+    flex: 1,
+    minHeight: 42,
+    borderRadius: radius.sm + 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacing.xs,
+  },
+  segmentActive: { backgroundColor: colors.card, ...shadow.card },
+  segmentActiveDark: { backgroundColor: colors.primary },
+  segmentText: { fontSize: 14, fontWeight: '600', color: colors.textMuted },
+  segmentTextDark: { color: colors.onDarkMuted },
+  segmentTextActive: { color: colors.text, fontWeight: '700' },
+  segmentTextActiveDark: { color: colors.onPrimary, fontWeight: '700' },
+  sectionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+  },
+  sectionTitle: { ...typography.heading, color: colors.text, flexShrink: 1 },
   empty: { alignItems: 'center', padding: spacing.xl, gap: spacing.sm },
-  emptyTitle: { fontSize: 17, fontWeight: '600', color: colors.text, textAlign: 'center' },
-  emptyDescription: { fontSize: 14, color: colors.textMuted, textAlign: 'center' },
+  emptyTitle: { fontSize: 17, fontWeight: '700', color: colors.text, textAlign: 'center' },
+  emptyDescription: { fontSize: 14, color: colors.textMuted, textAlign: 'center', lineHeight: 20 },
   errorBanner: {
     backgroundColor: colors.dangerLight,
     borderRadius: radius.md,
@@ -190,6 +359,7 @@ const styles = StyleSheet.create({
     gap: spacing.md,
   },
   errorBannerText: { color: colors.danger, flex: 1, fontSize: 14 },
+  errorBannerRetryWrap: { minHeight: 32, justifyContent: 'center' },
   errorBannerRetry: { color: colors.danger, fontWeight: '700' },
   loader: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.xl },
 });

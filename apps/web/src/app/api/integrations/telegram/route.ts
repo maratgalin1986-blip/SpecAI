@@ -5,6 +5,12 @@ import { ingestMessage, type IngestResult } from '@/lib/ingest';
 import { acceptLead } from '@/lib/leadIntake';
 import { notifyTelegram } from '@/lib/notify';
 import { safeEqual, telegramWebhookSecret } from '@/lib/integrations';
+import {
+  completeTelegramLink,
+  isStopCommand,
+  parseStartToken,
+  unlinkTelegramChat,
+} from '@/lib/notifications/telegramLink';
 import { SITE } from '@/lib/site';
 import { siteUrl } from '@/lib/siteUrl';
 import { isOnShift } from '@/lib/site';
@@ -154,6 +160,30 @@ export async function POST(request: NextRequest) {
     );
     return NextResponse.json({ ok: true });
   }
+  // Notifications: "/start <token>" from the deep link in the cabinet links
+  // this chat to the account; "/stop" switches the messages off.
+  const linkToken = isPrivate ? parseStartToken(text) : null;
+  if (linkToken) {
+    const linked = await completeTelegramLink(linkToken, message.chat.id).catch(() => false);
+    await reply(
+      message.chat.id,
+      linked
+        ? `Готово! Уведомления ${SITE.name} будут приходить сюда: новые заявки, предложения, ` +
+            `брони. Отключить — /stop или в личном кабинете.`
+        : 'Ссылка устарела или уже использована. Нажмите «Подключить Telegram» в личном кабинете ещё раз.',
+    );
+    return NextResponse.json({ ok: true, linked });
+  }
+  if (isPrivate && isStopCommand(text)) {
+    const count = await unlinkTelegramChat(message.chat.id).catch(() => 0);
+    await reply(
+      message.chat.id,
+      count > 0
+        ? 'Уведомления в Telegram отключены. Включить снова — в личном кабинете.'
+        : 'Этот чат не подключён к уведомлениям.',
+    );
+    return NextResponse.json({ ok: true });
+  }
   if (isPrivate && text.startsWith('/start')) {
     // «/start <source>»: the page and campaign the visitor came from.
     const start = text.split(/\s+/)[1] ?? '';
@@ -175,6 +205,7 @@ export async function POST(request: NextRequest) {
     externalId: `telegram:${message.chat.id}:${message.message_id}`,
     text,
     chatTitle: isPrivate ? 'Личное сообщение боту' : message.chat.title,
+    openChat: !isPrivate,
     authorName: [author, username].filter(Boolean).join(' ') || undefined,
     authorPhone: message.contact?.phone_number,
     url: message.chat.username

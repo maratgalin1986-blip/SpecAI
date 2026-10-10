@@ -80,7 +80,11 @@ export default function EquipmentDetailScreen() {
         endDate: toIsoDate(endDate),
       });
       Alert.alert('Заявка отправлена', 'Бронирование создано и ожидает подтверждения.', [
-        { text: 'К бронированиям', onPress: () => router.replace('/(tabs)/bookings') },
+        {
+          text: 'К бронированиям',
+          onPress: () =>
+            router.replace({ pathname: '/(tabs)/orders', params: { view: 'bookings' } }),
+        },
         { text: 'Ок' },
       ]);
     } catch (caught) {

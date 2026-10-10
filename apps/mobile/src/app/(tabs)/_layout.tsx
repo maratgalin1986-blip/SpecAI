@@ -3,8 +3,9 @@ import { Tabs } from 'expo-router';
 import React from 'react';
 import type { ColorValue } from 'react-native';
 import { useAuth } from '@/lib/auth';
-import { SITE } from '@/lib/site';
-import { colors } from '@/lib/theme';
+import { isProviderMode, usePrefs } from '@/lib/prefs';
+import { useUnreadMessages } from '@/lib/unread';
+import { colors } from '@/theme';
 
 type IconName = React.ComponentProps<typeof Ionicons>['name'];
 
@@ -14,56 +15,111 @@ function tabIcon(name: IconName) {
   );
 }
 
+/**
+ * Одно приложение, две роли. Заказчик: Главная (карта + заказ), Заказы,
+ * Помощник, Профиль. Исполнитель: Лента, Мои заказы, Техника, Профиль; в
+ * «Режиме заказчика» он видит вкладки заказчика. `href: null` прячет вкладку,
+ * но маршрут остаётся доступен по ссылке.
+ */
 export default function TabsLayout() {
-  const { user } = useAuth();
-  const isProvider = user?.role === 'PROVIDER_ADMIN';
+  const { user, token } = useAuth();
+  const { mode } = usePrefs();
+  // Непрочитанные сообщения в чатах по заявкам — бейдж на вкладке заказов.
+  const unread = useUnreadMessages(token);
+  const badge = unread > 0 ? (unread > 99 ? '99+' : unread) : undefined;
+  const provider = isProviderMode(user?.role, mode);
+  // Машинист: только «Мои смены» и «Профиль».
+  const operator = user?.role === 'PROVIDER_OPERATOR';
+  const forCustomer = provider || operator ? null : undefined;
+  const forProvider = provider ? undefined : null;
+  const forOperator = operator ? undefined : null;
 
   return (
     <Tabs
       screenOptions={{
         headerStyle: { backgroundColor: colors.card },
         headerTintColor: colors.text,
-        headerTitleStyle: { fontWeight: '600' },
+        headerTitleStyle: { fontWeight: '700' },
         headerShadowVisible: false,
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.textMuted,
-        tabBarStyle: { backgroundColor: colors.card, borderTopColor: colors.border },
+        tabBarLabelStyle: { fontSize: 12, fontWeight: '600' },
+        tabBarStyle: {
+          backgroundColor: colors.card,
+          borderTopColor: colors.border,
+          minHeight: 60,
+        },
         sceneStyle: { backgroundColor: colors.background },
       }}
     >
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Каталог',
-          headerTitle: `${SITE.name} · Каталог`,
-          tabBarIcon: tabIcon('construct-outline'),
+          title: 'Главная',
+          headerShown: false,
+          tabBarIcon: tabIcon('navigate-circle-outline'),
+          href: forCustomer,
         }}
       />
       <Tabs.Screen
-        name="bookings"
-        options={{ title: 'Бронирования', tabBarIcon: tabIcon('calendar-outline') }}
+        name="feed"
+        options={{
+          title: 'Лента',
+          headerTitle: 'Заявки рядом',
+          tabBarIcon: tabIcon('flash-outline'),
+          href: forProvider,
+        }}
       />
       <Tabs.Screen
         name="orders"
-        options={{ title: 'Заявки', tabBarIcon: tabIcon('document-text-outline') }}
+        options={{
+          title: 'Заказы',
+          headerTitle: 'Мои заказы',
+          tabBarIcon: tabIcon('receipt-outline'),
+          tabBarBadge: badge,
+          href: forCustomer,
+        }}
       />
       <Tabs.Screen
-        name="provider"
+        name="jobs"
         options={{
-          title: 'Кабинет',
+          title: 'Мои заказы',
           tabBarIcon: tabIcon('briefcase-outline'),
-          // href: null скрывает вкладку у клиентов и администраторов.
-          href: isProvider ? undefined : null,
+          tabBarBadge: badge,
+          href: forProvider,
         }}
       />
       <Tabs.Screen
         name="chat"
-        options={{ title: 'Ассистент', tabBarIcon: tabIcon('chatbubble-ellipses-outline') }}
+        options={{
+          title: 'Помощник',
+          tabBarIcon: tabIcon('chatbubble-ellipses-outline'),
+          href: forCustomer,
+        }}
+      />
+      <Tabs.Screen
+        name="provider"
+        options={{
+          title: 'Техника',
+          headerTitle: 'Моя техника',
+          tabBarIcon: tabIcon('construct-outline'),
+          href: forProvider,
+        }}
+      />
+      <Tabs.Screen
+        name="shifts"
+        options={{
+          title: 'Мои смены',
+          tabBarIcon: tabIcon('timer-outline'),
+          href: forOperator,
+        }}
       />
       <Tabs.Screen
         name="profile"
         options={{ title: 'Профиль', tabBarIcon: tabIcon('person-circle-outline') }}
       />
+      {/* Брони заказчика живут во вкладке «Заказы»; маршрут оставлен для ссылок помощника. */}
+      <Tabs.Screen name="bookings" options={{ title: 'Брони', href: null }} />
     </Tabs>
   );
 }

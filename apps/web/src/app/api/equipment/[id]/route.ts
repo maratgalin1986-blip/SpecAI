@@ -40,7 +40,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     });
   }
 
-  // Only СпецПласт16's own machinery is public (owner's decision, 2026-10-02).
+  // Every provider company's published machinery is public (the aggregator).
   const equipment = await prisma.equipment.findFirst({
     where: { id: params.id, ...PUBLISHED_FLEET },
     include: {
@@ -57,7 +57,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
   return NextResponse.json({
     equipment: {
       ...equipment,
-      // Prices as on the site: never below lib/prices.ts.
+      // Prices as on the site (the house fleet never below lib/prices.ts).
       ...customerRates({ ...equipment, categoryName: equipment.category.name }),
       ...listingPhoto(equipment, request.nextUrl.origin),
     },

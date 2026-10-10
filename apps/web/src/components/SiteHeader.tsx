@@ -8,6 +8,8 @@ import { SITE } from '@/lib/site';
 
 const NAV_LINKS = [
   { href: '/equipment', label: 'Техника' },
+  // Hidden on narrow desktops (lg) like «Кабинет»; in the mobile menu always.
+  { href: '/map', label: 'Карта', wide: true },
   { href: '/stroyka', label: 'Стройка' },
   { href: '/dizain', label: 'Дизайн' },
   { href: '/orders', label: 'Заявка' },

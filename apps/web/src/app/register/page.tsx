@@ -1,20 +1,36 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { signIn } from 'next-auth/react';
 import { Button, Card } from '@specai/ui';
 import { CinemaBackdrop } from '@/components/CinemaHero';
+import { BasePicker, type BaseValue } from '@/components/BasePicker';
 import { ConsentText } from '@/components/ConsentText';
+import { normalizeReferralCode } from '@/lib/referral';
 import { useHydrated } from '@/lib/useHydrated';
 
-// Customer accounts only: provider sign-up is closed, the site offers only
-// СпецПласт16's own fleet (PROVIDER_SIGNUP_OPEN in app/api/auth/register).
+type AccountType = 'CUSTOMER' | 'PROVIDER';
+
 export default function RegisterPage() {
+  // /register?type=provider opens the provider form directly.
+  // Read after mounting, so the server and the first client render match.
+  const [accountType, setAccountType] = useState<AccountType>('CUSTOMER');
+  // «Пригласи коллегу»: the inviter's code from /r/<code> or ?ref=.
+  const [referralCode, setReferralCode] = useState<string | null>(null);
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('type') === 'provider') {
+      setAccountType('PROVIDER');
+    }
+    setReferralCode(normalizeReferralCode(params.get('ref')));
+  }, []);
+  const [companyName, setCompanyName] = useState('');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [phone, setPhone] = useState('');
   const [consent, setConsent] = useState(false);
+  const [base, setBase] = useState<BaseValue>({ address: '', lat: null, lon: null });
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const hydrated = useHydrated();
@@ -22,17 +38,31 @@ export default function RegisterPage() {
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
     setError(null);
+    if (accountType === 'PROVIDER' && base.lat === null && base.address.trim().length < 3) {
+      setError('Укажите адрес базы или поставьте точку на карте — по ней вас найдут заказчики');
+      return;
+    }
     setIsSubmitting(true);
 
     const response = await fetch('/api/auth/register', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        accountType: 'CUSTOMER',
+        accountType,
+        ...(accountType === 'PROVIDER'
+          ? {
+              companyName,
+              baseAddress: base.address.trim(),
+              ...(base.lat !== null && base.lon !== null
+                ? { baseLat: base.lat, baseLon: base.lon }
+                : {}),
+            }
+          : {}),
         name,
         email,
         password,
         ...(phone ? { phone } : {}),
+        ...(referralCode ? { ref: referralCode } : {}),
         consent,
       }),
     });
@@ -44,11 +74,11 @@ export default function RegisterPage() {
       return;
     }
 
-    // Sign straight in and open the customer cabinet.
+    // Sign straight in and go to the right cabinet.
     await signIn('credentials', {
       email,
       password,
-      callbackUrl: '/dashboard',
+      callbackUrl: accountType === 'PROVIDER' ? '/provider' : '/dashboard',
     });
   }
 
@@ -57,8 +87,58 @@ export default function RegisterPage() {
       <CinemaBackdrop clip="frame-sunset" />
       <Card className="cine-sub shadow-2xl">
         <h1 className="cine-title mb-4 text-xl font-bold">Создать аккаунт</h1>
+        {referralCode && (
+          <p className="mb-4 rounded-md bg-signal-50 px-3 py-2 text-sm text-graphite-800">
+            Вас пригласил коллега — регистрация, заявки и предложения бесплатны.
+          </p>
+        )}
+
+        <div className="mb-4 flex flex-col gap-2 text-sm sm:flex-row">
+          {(
+            [
+              ['CUSTOMER', 'Хочу арендовать технику'],
+              ['PROVIDER', 'Хочу сдавать технику'],
+            ] as const
+          ).map(([type, label]) => (
+            <button
+              key={type}
+              type="button"
+              onClick={() => setAccountType(type)}
+              className={`flex-1 rounded-md border px-3 py-2 font-medium ${
+                accountType === type
+                  ? 'border-amber-600 bg-amber-50 text-amber-800'
+                  : 'border-slate-300 text-slate-600'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
 
         <form method="post" onSubmit={handleSubmit} className="ym-hide-content flex flex-col gap-3">
+          {accountType === 'PROVIDER' && (
+            <label className="flex flex-col gap-1 text-sm">
+              Название компании или ИП
+              <input
+                required
+                value={companyName}
+                onChange={(e) => setCompanyName(e.target.value)}
+                className="rounded-md border border-slate-300 px-3 py-2"
+              />
+            </label>
+          )}
+          {accountType === 'PROVIDER' && (
+            <div className="flex flex-col gap-1 text-sm">
+              <span>
+                Где стоит техника <span className="text-red-600">*</span>
+              </span>
+              <span className="text-xs text-slate-500">
+                Адрес базы или стоянки — по нему заказчики увидят вас на карте и выберут ближайшего.
+                Телефон и e-mail на карте не показываются.
+              </span>
+              <BasePicker value={base} onChange={setBase} />
+            </div>
+          )}
           <label className="flex flex-col gap-1 text-sm">
             Имя
             <input

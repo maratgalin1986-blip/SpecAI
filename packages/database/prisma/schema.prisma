@@ -44,6 +44,12 @@ model User {
   company   Company? @relation(fields: [companyId], references: [id])
   companyId String?
 
+  // «Пригласи коллегу»: the user's own code (/r/<code>) and who invited them.
+  // No @unique: adding a unique constraint makes the build-time `db push`
+  // stop for confirmation; codes are random and checked in lib/referralStore.ts.
+  referralCode String?
+  referredById String?
+
   bookings           Booking[]           @relation("BookingCustomer")
   orders             Order[]             @relation("OrderCustomer")
   reviews            Review[]
@@ -51,8 +57,11 @@ model User {
   verificationTokens VerificationToken[]
   commentsWritten    Comment[]           @relation("CommentAuthor")
   commentsReceived   Comment[]           @relation("CommentTarget")
+  operator           Operator?
 
   @@index([companyId])
+  @@index([referralCode])
+  @@index([referredById])
 }
 
 enum VerificationTokenType {
@@ -95,16 +104,23 @@ model Company {
   // Aggregator map: where the provider's fleet is based, the marker picture
   // (a photo of its machinery; empty = the default icon) and a short note
   // customers see on the map ("от 2 500 ₽/ч, скидка 10% на неделю").
-  baseLat     Float?
-  baseLon     Float?
-  baseAddress String?
-  pinImageUrl String?
-  pinNote     String?
+  baseLat            Float?
+  baseLon            Float?
+  baseAddress        String?
+  pinImageUrl        String?
+  pinNote            String?
+  // «Проверен»: the admin checked the company (ИНН, documents, a call).
+  verified           Boolean  @default(false)
+  // Delivery: how far from the base the company goes and what a kilometre of
+  // the trip to the site costs (prefills «подача» in a bid).
+  deliveryRadiusKm   Int      @default(100)
+  deliveryPricePerKm Decimal? @db.Decimal(10, 2)
 
   users     User[]
   equipment Equipment[]
   reviews   Review[]
   comments  Comment[]
+  operators Operator[]
 
   @@index([locationId])
 }
@@ -190,6 +206,7 @@ model Equipment {
   maintenanceRecords MaintenanceRecord[]
   reviews            Review[]
   documents          Document[]
+  blocks             EquipmentBlock[]
 
   @@index([categoryId])
   @@index([companyId])
@@ -248,9 +265,12 @@ model Booking {
   order   Order?  @relation(fields: [orderId], references: [id])
   orderId String? @unique
 
-  documents Document[]
-  review    Review?
-  payment   Payment?
+  documents  Document[]
+  review     Review?
+  payment    Payment?
+  operatorId String?
+  operator   Operator?  @relation(fields: [operatorId], references: [id])
+  shifts     Shift[]
 
   @@index([equipmentId])
   @@index([customerId])
@@ -341,6 +361,9 @@ model Order {
   contactName  String?
   contactPhone String?
   rawText      String?
+  // Until when providers are asked to bid: «Нужна сейчас» — 2 h, otherwise
+  // 24 h, capped at the start date (lib/bidWindow.ts). Later bids are late.
+  bidsUntil    DateTime?
 
   @@index([customerId])
   @@index([categoryId])
@@ -377,6 +400,12 @@ model Bid {
 
   equipment   Equipment @relation(fields: [equipmentId], references: [id])
   equipmentId String
+
+  // Price breakdown (lib/offerBreakdown.ts): price = deliveryPrice + shiftPrice × shifts.
+  deliveryPrice Decimal? @db.Decimal(10, 2)
+  shiftPrice    Decimal? @db.Decimal(10, 2)
+  shifts        Int?
+  optionsNote   String?
 
   @@index([orderId])
   @@index([equipmentId])
@@ -533,4 +562,238 @@ model Comment {
   @@index([status])
   @@index([targetCompanyId])
   @@index([targetUserId])
+}
+
+// ---------------------------------------------------------------------------
+// Notifications: channels each user picked, Telegram linking, app push tokens
+// ---------------------------------------------------------------------------
+
+// One row per user, created on the first change (no row = the defaults).
+// userId is a plain column, not a relation, so the User model stays untouched.
+model NotificationSettings {
+  id                    String    @id @default(cuid())
+  userId                String    @unique
+  telegram              Boolean   @default(true)
+  push                  Boolean   @default(true)
+  email                 Boolean   @default(true)
+  whatsapp              Boolean   @default(false)
+  sms                   Boolean   @default(false)
+  // Private chat with the bot, set by "/start <token>" (lib/notifications/telegramLink.ts).
+  telegramChatId        String?
+  // sha256 of the one-time token from the deep link, never the token itself.
+  telegramLinkHash      String?
+  telegramLinkExpiresAt DateTime?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@index([telegramLinkHash])
+  @@index([telegramChatId])
+}
+
+// Expo push token of a signed-in device (several per user).
+model PushToken {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String
+  platform  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+}
+
+// Log of «Показать телефон» on orders found in open chats: who saw the phone
+// and when. Also the per-provider daily limit (lib/chatOrders.ts).
+model ContactReveal {
+  id        String   @id @default(cuid())
+  orderId   String
+  userId    String
+  companyId String?
+  createdAt DateTime @default(now())
+
+  @@index([companyId, createdAt])
+  @@index([orderId])
+}
+
+// ---- Order chat ----
+// Chat between the customer of an order and one provider company: one
+// thread per (order, company), so bidders never see each other. No relations
+// to Order/User/Company on purpose (the shared models stay untouched);
+// access is checked in apps/web/src/lib/orderChatAccess.ts.
+model OrderThread {
+  id            String   @id @default(cuid())
+  orderId       String
+  companyId     String
+  createdAt     DateTime @default(now())
+  lastMessageAt DateTime @default(now())
+
+  messages OrderMessage[]
+
+  @@unique([orderId, companyId])
+  @@index([companyId, lastMessageAt])
+}
+
+// A message in a thread. `body` is stored already masked while the booking
+// is not confirmed (lib/orderChat.ts); `readAt` is set when the other side
+// opens the thread.
+model OrderMessage {
+  id            String    @id @default(cuid())
+  threadId      String
+  senderUserId  String
+  body          String
+  attachmentUrl String?
+  createdAt     DateTime  @default(now())
+  readAt        DateTime?
+
+  thread OrderThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+
+  @@index([threadId, createdAt])
+  @@index([threadId, readAt])
+  @@index([senderUserId])
+}
+
+// ---- Documents, demand, delivery, bids ----
+
+// A provider's document: for the company (ИНН, insurance), a machine (СТС,
+// ПСМ, техосмотр) or an operator (удостоверение машиниста). Plain ids, no
+// relations, so Company and Equipment stay untouched. The daily cron
+// (api/cron/daily) reminds the company's managers 30 days before expiresAt
+// and again on the day; remindedAt30/remindedAt0 make each reminder one-off.
+model ProviderDocument {
+  id           String    @id @default(cuid())
+  companyId    String
+  equipmentId  String?
+  operatorName String?
+  // One of PROVIDER_DOCUMENT_KINDS in @specai/shared (STS, PSM, OPERATOR_LICENSE, OSAGO, INSPECTION, OTHER).
+  kind         String
+  number       String?
+  fileUrl      String?
+  issuedAt     DateTime?
+  expiresAt    DateTime?
+  remindedAt30 DateTime?
+  remindedAt0  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@index([companyId])
+  @@index([equipmentId])
+  @@index([expiresAt])
+}
+
+// ---- Shifts, timesheets, operators, calendar ----
+
+// A machine operator («машинист») of a provider company. Managed by the
+// company's PROVIDER_ADMIN; `userId` links the operator's own app sign-in
+// (role PROVIDER_OPERATOR), which the admin creates with a temporary password.
+model Operator {
+  id            String   @id @default(cuid())
+  name          String
+  phone         String?
+  licenseNumber String?
+  active        Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  company   Company @relation(fields: [companyId], references: [id])
+  companyId String
+
+  user   User?   @relation(fields: [userId], references: [id])
+  userId String? @unique
+
+  bookings Booking[]
+  shifts   Shift[]
+
+  @@index([companyId])
+}
+
+// One working day of a booking, driven by the operator from the app:
+// Выехал → На объекте → Работа → Простой → Смена завершена. `status` is a
+// string (see packages/shared/src/schemas/shift.ts), never an enum, so the
+// list can grow without ALTER TYPE (CLAUDE.md, rule 2). One shift per booking
+// per calendar day (`date` is UTC midnight of the Moscow day).
+model Shift {
+  id            String    @id @default(cuid())
+  date          DateTime
+  status        String    @default("PLANNED")
+  startedAt     DateTime?
+  arrivedAt     DateTime?
+  workStartedAt DateTime?
+  finishedAt    DateTime?
+  startPhotoUrl String?
+  endPhotoUrl   String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  booking   Booking @relation(fields: [bookingId], references: [id])
+  bookingId String
+
+  operator   Operator? @relation(fields: [operatorId], references: [id])
+  operatorId String?
+
+  events    ShiftEvent[]
+  timesheet Timesheet?
+
+  @@unique([bookingId, date])
+  @@index([operatorId])
+}
+
+// Every status change of a shift with its moment, an optional note (the
+// reason of an idle period) and the photo taken at the start or the end.
+model ShiftEvent {
+  id       String   @id @default(cuid())
+  kind     String
+  at       DateTime @default(now())
+  note     String?
+  photoUrl String?
+
+  shift   Shift  @relation(fields: [shiftId], references: [id])
+  shiftId String
+
+  @@index([shiftId, at])
+}
+
+// The shift's timesheet («табель»): hours worked and idle, filled by the
+// operator or the provider after the shift and final only when BOTH the
+// customer and the provider's admin have confirmed it.
+model Timesheet {
+  id                  String    @id @default(cuid())
+  hoursWorked         Decimal   @db.Decimal(5, 2)
+  idleHours           Decimal   @default(0) @db.Decimal(5, 2)
+  note                String?
+  customerConfirmedAt DateTime?
+  providerConfirmedAt DateTime?
+  disputedAt          DateTime?
+  disputeNote         String?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  shift   Shift  @relation(fields: [shiftId], references: [id])
+  shiftId String @unique
+}
+
+// Days the provider took a machine off the calendar by hand («Не сдаётся»):
+// bookings may not overlap them. Both ends inclusive, calendar days.
+model EquipmentBlock {
+  id        String   @id @default(cuid())
+  from      DateTime
+  to        DateTime
+  reason    String?
+  createdAt DateTime @default(now())
+
+  equipment   Equipment @relation(fields: [equipmentId], references: [id])
+  equipmentId String
+
+  @@index([equipmentId, from])
+}
+
+// ---- Admin feed ----
+
+// «Прочитано» in the admin's notification feed (/admin/feed): one row per
+// event the admin has seen. `key` is "<event kind>:<entity id>[:<state>]",
+// built in apps/web/src/lib/adminFeed.ts. A model only, no enum (CLAUDE.md,
+// rule 2); nothing else refers to it.
+model AdminFeedRead {
+  id     String   @id @default(cuid())
+  key    String   @unique
+  readAt DateTime @default(now())
 }

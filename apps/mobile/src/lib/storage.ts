@@ -4,6 +4,10 @@ export const STORAGE_KEYS = {
   token: 'specai.token',
   user: 'specai.user',
   conversationId: 'specai.conversationId',
+  /** Режим исполнителя: «customer» — заказывает технику как заказчик. Только на телефоне. */
+  appMode: 'specai.appMode',
+  /** «На линии» исполнителя — хранится только на этом телефоне. */
+  providerOnline: 'specai.providerOnline',
 } as const;
 
 export async function getItem(key: string): Promise<string | null> {

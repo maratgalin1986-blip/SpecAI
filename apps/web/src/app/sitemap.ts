@@ -5,6 +5,7 @@ import { cityPages, cityPath } from '@/lib/cities';
 import { JOBS } from '@/lib/jobs';
 import { siteUrl } from '@/lib/siteUrl';
 import { PUBLIC_FLEET } from '@/lib/fleet';
+import { providerPath } from '@/lib/providerSeo';
 
 export const revalidate = 3600;
 
@@ -24,6 +25,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     '/kalkulyator',
     '/dizain',
     '/map',
+    '/providers',
     '/stroyka',
     '/agents',
     '/contacts',
@@ -35,6 +37,17 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       select: { id: true, updatedAt: true },
     })
     .catch(() => []);
+  // Public pages of provider companies (/providers/[id]) with a fleet or a base.
+  const providers = await prisma.company
+    .findMany({
+      where: {
+        isProvider: true,
+        OR: [{ equipment: { some: { status: { not: 'RETIRED' } } } }, { baseLat: { not: null } }],
+      },
+      select: { id: true, updatedAt: true },
+      take: 5000,
+    })
+    .catch(() => []);
   return [
     ...staticPages.map((path) => ({
       url: `${base}${path}`,
@@ -44,6 +57,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     ...equipment.map((item) => ({
       url: `${base}/equipment/${item.id}`,
       lastModified: item.updatedAt,
+      changeFrequency: 'weekly' as const,
+      priority: 0.6,
+    })),
+    ...providers.map((company) => ({
+      url: `${base}${providerPath(company.id)}`,
+      lastModified: company.updatedAt,
       changeFrequency: 'weekly' as const,
       priority: 0.6,
     })),

@@ -3,8 +3,10 @@ import { prisma } from '@specai/database';
 import { getRequestUser } from '@/lib/requestUser';
 import { isProvider, isHouseManager } from '@/lib/fleet';
 import { customerShortName } from '@/lib/customerPrivacy';
+import { maskedContactFor } from '@/lib/chatOrders';
 import { updateOrderSchema } from '@specai/shared';
 import { INVALID_JSON_MESSAGE, readJson, zodErrorMessage } from '@/lib/apiInput';
+import { unreadMessagesByOrder } from '@/lib/orderChatAccess';
 
 export const dynamic = 'force-dynamic';
 
@@ -25,6 +27,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     include: {
       category: { select: { id: true, name: true } },
       customer: { select: { id: true, name: true } },
+      location: { select: { addressLine: true, city: true, latitude: true, longitude: true } },
       bids: {
         include: {
           equipment: {
@@ -66,19 +69,31 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
   const contact = isHouseManager(currentUser)
     ? { contactName, contactPhone, rawText, sourceUrl }
     : {};
+  // Other providers see the phone of a chat or guest order masked and open
+  // it with POST /api/orders/[id]/phone (logged, limited per day).
+  const chatContact = maskedContactFor(
+    { contactPhone },
+    { isProvider: isManager, isHouse: isHouseManager(currentUser) },
+  );
   void externalId;
   void fingerprint;
   const bids = isOwner
     ? rest.bids
     : rest.bids.filter((bid) => bid.equipment.company.id === currentUser.companyId);
+  // Unread chat messages for the «Открыть чат» badges in the app.
+  const unread = await unreadMessagesByOrder([order.id], currentUser).catch(
+    () => new Map<string, number>(),
+  );
   return NextResponse.json({
     order: {
       ...rest,
       ...(isOwner ? { customerId } : {}),
       ...contact,
+      ...(chatContact ? { chatContact } : {}),
       customer: isOwner ? rest.customer : { name: customerShortName(rest.customer.name) },
       bids,
       bidCount: rest.bids.length,
+      unreadMessages: unread.get(order.id) ?? 0,
     },
     isOwner,
   });
