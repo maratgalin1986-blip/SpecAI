@@ -10,6 +10,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import { CategoryPickerModal } from '@/components/CategoryPickerModal';
 import { Button, Card, ErrorBanner, Input } from '@/components/ui';
 import {
   ApiError,
@@ -24,6 +25,7 @@ import {
   type SpecValue,
 } from '@/lib/api';
 import { EQUIPMENT_STATUS_OPTIONS, suggestShiftRate } from '@/lib/format';
+import { categoryIcon } from '@/lib/orderFlow';
 import { colors, radius, spacing } from '@/lib/theme';
 
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024; // Anthropic не принимает изображения больше 5 МБ
@@ -82,6 +84,7 @@ export function EquipmentForm({
 }) {
   const [categories, setCategories] = useState<Category[]>([]);
   const [categoriesError, setCategoriesError] = useState<string | null>(null);
+  const [categoryPickerOpen, setCategoryPickerOpen] = useState(false);
 
   const [name, setName] = useState(initial?.name ?? '');
   const [categoryId, setCategoryId] = useState(initial?.category.id ?? '');
@@ -269,6 +272,11 @@ export function EquipmentForm({
   };
 
   const busy = uploading || extracting || submitting;
+  // The chosen type: from the loaded list, or the saved machine's own category
+  // while the list is still loading.
+  const selectedCategory: Category | null =
+    categories.find((category) => category.id === categoryId) ??
+    (initial && initial.category.id === categoryId ? initial.category : null);
 
   return (
     <>
@@ -286,31 +294,50 @@ export function EquipmentForm({
             />
 
             <View style={styles.field}>
-              <Text style={styles.label}>Категория *</Text>
+              <Text style={styles.label}>Вид техники *</Text>
               {categoriesError ? (
                 <ErrorBanner message={categoriesError} onRetry={() => void loadCategories()} />
               ) : (
-                <View style={styles.chips}>
-                  {categories.map((category) => {
-                    const active = category.id === categoryId;
-                    return (
-                      <Pressable
-                        key={category.id}
-                        accessibilityRole="button"
-                        accessibilityState={{ selected: active }}
-                        onPress={() => setCategoryId(category.id)}
-                        style={[styles.chip, active && styles.chipActive]}
+                <>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={
+                      selectedCategory
+                        ? `Вид техники: ${selectedCategory.name}`
+                        : 'Выбрать вид техники'
+                    }
+                    onPress={() => setCategoryPickerOpen(true)}
+                    style={[styles.picker, selectedCategory && styles.pickerActive]}
+                  >
+                    <Text style={styles.pickerIcon}>
+                      {selectedCategory
+                        ? categoryIcon(selectedCategory.name, selectedCategory.emoji)
+                        : '🛠️'}
+                    </Text>
+                    <View style={styles.flex}>
+                      <Text
+                        style={[styles.pickerText, !selectedCategory && styles.pickerPlaceholder]}
                       >
-                        <Text style={[styles.chipText, active && styles.chipTextActive]}>
-                          {category.name}
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
+                        {selectedCategory ? selectedCategory.name : 'Выберите из списка по группам'}
+                      </Text>
+                      {selectedCategory?.group ? (
+                        <Text style={styles.hint}>{selectedCategory.group}</Text>
+                      ) : null}
+                    </View>
+                    <Text style={styles.pickerChevron}>›</Text>
+                  </Pressable>
                   {categories.length === 0 ? (
-                    <Text style={styles.hint}>Загружаем категории…</Text>
+                    <Text style={styles.hint}>Загружаем виды техники…</Text>
                   ) : null}
-                </View>
+                  <CategoryPickerModal
+                    visible={categoryPickerOpen}
+                    categories={categories}
+                    selectedId={categoryId || null}
+                    onSelect={(picked) => setCategoryId(picked?.id ?? '')}
+                    onClose={() => setCategoryPickerOpen(false)}
+                    title="Вид техники"
+                  />
+                </>
               )}
             </View>
 
@@ -536,6 +563,23 @@ const styles = StyleSheet.create({
   chipActive: { borderColor: colors.primary, backgroundColor: colors.primaryLight },
   chipText: { fontSize: 14, color: colors.text },
   chipTextActive: { color: colors.primaryDark, fontWeight: '600' },
+  picker: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    minHeight: 52,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.card,
+  },
+  pickerActive: { borderColor: colors.primary },
+  pickerIcon: { fontSize: 22 },
+  pickerText: { fontSize: 16, color: colors.text, fontWeight: '600' },
+  pickerPlaceholder: { color: colors.textMuted, fontWeight: '400' },
+  pickerChevron: { fontSize: 24, color: colors.textMuted, paddingHorizontal: spacing.xs },
   photos: { flexDirection: 'row', gap: spacing.md },
   photoWrap: { gap: spacing.xs, alignItems: 'center' },
   photoFrame: {

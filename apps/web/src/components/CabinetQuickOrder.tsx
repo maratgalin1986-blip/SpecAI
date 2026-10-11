@@ -2,18 +2,21 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { CategorySelect } from '@/components/CategorySelect';
 import { Icon } from '@/components/Icon';
 import { categoryIcon } from '@/components/EquipmentCard';
 import { quickOrderHref, todayMsk, type QuickWhen } from '@/lib/quickOrder';
 
 // The quick-order panel at the top of the customer cabinet: machine type
-// tiles, «Нужна сейчас» / «На дату», the address and one button. It opens the
-// usual order form already filled in (/orders?category=…&start=…#new), where
-// the customer adds a sentence about the job and publishes it.
+// tiles (the most listed types), a grouped list of every other type,
+// «Нужна сейчас» / «На дату», the address and one button. It opens the usual
+// order form already filled in (/orders?category=…&start=…#new), where the
+// customer adds a sentence about the job and publishes it.
 
 export interface QuickCategory {
   id: string;
   name: string;
+  slug?: string | null;
 }
 
 export function CabinetQuickOrder({ categories }: { categories: QuickCategory[] }) {
@@ -23,6 +26,8 @@ export function CabinetQuickOrder({ categories }: { categories: QuickCategory[] 
   const [date, setDate] = useState('');
   const [address, setAddress] = useState('');
   const tiles = categories.slice(0, 8);
+  const tileIds = new Set(tiles.map((category) => category.id));
+  const selectedElsewhere = categoryId && !tileIds.has(categoryId);
 
   function submit(event: React.FormEvent) {
     event.preventDefault();
@@ -57,7 +62,7 @@ export function CabinetQuickOrder({ categories }: { categories: QuickCategory[] 
               }`}
             >
               <Icon
-                name={categoryIcon(category.name)}
+                name={categoryIcon(category.name, category.slug)}
                 className={`h-7 w-7 ${active ? 'text-graphite-950' : 'text-signal-400'}`}
               />
               {category.name}
@@ -65,6 +70,21 @@ export function CabinetQuickOrder({ categories }: { categories: QuickCategory[] 
           );
         })}
       </div>
+
+      {categories.length > tiles.length && (
+        <label className="flex flex-col gap-1 text-sm text-graphite-100">
+          Все виды техники
+          <CategorySelect
+            categories={categories}
+            value={categoryId}
+            onChange={setCategoryId}
+            emptyLabel={selectedElsewhere ? 'Выбрано выше' : 'Выбрать из полного списка…'}
+            className={`min-h-[44px] rounded-xl border bg-graphite-800 px-3 text-white [color-scheme:dark] ${
+              selectedElsewhere ? 'border-signal-500' : 'border-graphite-600'
+            }`}
+          />
+        </label>
+      )}
 
       <div className="grid grid-cols-2 gap-1 rounded-full bg-graphite-800 p-1" role="radiogroup">
         {(

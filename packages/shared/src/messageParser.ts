@@ -2,6 +2,10 @@
 // a message is someone *looking for* special equipment (a job request), as
 // opposed to a provider advertising theirs, and pulls out what it can.
 // Works offline; the AI extractor (ai-service) is used on top when available.
+// The machine types and their keywords come from ./categories (one list for
+// the seed, the pickers and this parser).
+
+import { detectCategory } from './categories';
 
 export interface ParsedEquipmentRequest {
   isRequest: boolean;
@@ -23,40 +27,6 @@ const BOUNDARY = `(?:(?<!${W})(?=${W})|(?<=${W})(?!${W}))`;
 function re(pattern: RegExp): RegExp {
   return new RegExp(pattern.source.replace(/\\b/g, BOUNDARY), pattern.flags);
 }
-
-const EQUIPMENT: { slug: string; label: string; pattern: RegExp }[] = [
-  // First: «нужен трал перевезти экскаватор» is a transport request.
-  { slug: 'lowboys', label: 'трал', pattern: re(/\bтрал(а|ом|ы|у)?\b|низкорамн/) },
-  {
-    slug: 'backhoe-loaders',
-    label: 'экскаватор-погрузчик',
-    pattern: re(
-      /экскаватор[\s-]*погрузчик|погрузчик[\s-]*экскаватор|\bjcb\b|джисиби|\b[34]cx\b|case\s?570|\bкейс\b|hidromek|гидромек|terex|терекс|гидромолот/,
-    ),
-  },
-  { slug: 'crane-trucks', label: 'манипулятор', pattern: re(/манипулятор|кму\b|воровайк/) },
-  // Matched before «кран»: «бурильно-крановая машина».
-  { slug: 'augers', label: 'ямобур', pattern: re(/ямобур|бурильно-кранов|\bбкм\b/) },
-  { slug: 'cranes', label: 'автокран', pattern: re(/автокран|\bкран(а|ом|у|ы)?\b|кс-?\d{4,5}/) },
-  { slug: 'excavators', label: 'экскаватор', pattern: re(/экскаватор|гусеничн|полноповоротн/) },
-  {
-    slug: 'loaders',
-    label: 'погрузчик',
-    pattern: re(
-      /фронтальн|фронтальник|погрузчик|амкодор|lonking|sdlg|bobcat|бобкэт|мини[\s-]?погрузчик/,
-    ),
-  },
-  {
-    slug: 'dump-trucks',
-    label: 'самосвал',
-    pattern: re(/самосвал|камаз|шаланд|тонар|howo|хово|shacman|шакман/),
-  },
-  { slug: 'bulldozers', label: 'бульдозер', pattern: re(/бульдозер|\bдоз[еє]р|шантуй/) },
-  { slug: 'tractors', label: 'трактор', pattern: re(/трактор|\bмтз\b|беларус|\bюмз\b/) },
-  { slug: 'aerial-platforms', label: 'автовышка', pattern: re(/автовышк|\bвышк[аиу]\b/) },
-  { slug: 'graders', label: 'грейдер', pattern: re(/грейдер/) },
-  { slug: 'rollers', label: 'каток', pattern: re(/виброкат|\bкат(ок|ка|ки|ком)\b/) },
-];
 
 // "I need …" signals.
 const REQUEST_PATTERNS: RegExp[] = [
@@ -197,8 +167,8 @@ export function parseEquipmentRequest(raw: string, now: Date = new Date()): Pars
   const text = normalize(raw);
   const signals: string[] = [];
 
-  const equipment = EQUIPMENT.find((item) => item.pattern.test(text));
-  if (equipment) signals.push(`техника: ${equipment.label}`);
+  const equipment = detectCategory(text);
+  if (equipment) signals.push(`техника: ${equipment.name.toLowerCase()}`);
 
   const requestHits = REQUEST_PATTERNS.filter((p) => p.test(text)).length;
   const offerHits = OFFER_PATTERNS.filter((p) => p.test(text)).length;

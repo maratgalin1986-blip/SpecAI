@@ -2,35 +2,65 @@
 // groups for the category tabs, which photo illustrates a category, spec
 // formatting and headline prices. Pure functions — safe on server and client.
 
+import {
+  CATEGORY_GROUPS,
+  categoryByName,
+  categoryBySlug,
+  type CategoryGroupSlug,
+} from '@specai/shared';
 import { defaultPhotoOf, type MachineType } from './machinePhotos';
 import { HOUSE_COMPANY_ID } from './fleet';
 import { houseRate } from './prices';
 
-export type TaskGroupId = 'earth' | 'lifting' | 'loading' | 'transport' | 'other';
+/** The groups of packages/shared/src/categories.ts plus «Другая» for rows outside the tree. */
+export type TaskGroupId = CategoryGroupSlug | 'other';
 
 export interface TaskGroup {
   id: TaskGroupId;
   label: string;
 }
 
+/** Short names for the catalog chips («Землеройная техника» → «Землеройная»). */
+const SHORT_LABELS: Record<CategoryGroupSlug, string> = {
+  earthmoving: 'Землеройная',
+  lifting: 'Подъёмная',
+  loading: 'Погрузочная',
+  hauling: 'Перевозка',
+  road: 'Дорожная',
+  concrete: 'Бетон',
+  drilling: 'Бурение и сваи',
+  municipal: 'Коммунальная',
+  equipment: 'Оборудование',
+  'agri-forestry': 'Сельхоз и лес',
+};
+
 export const TASK_GROUPS: readonly TaskGroup[] = [
-  { id: 'earth', label: 'Землеройная' },
-  { id: 'lifting', label: 'Подъёмная' },
-  { id: 'loading', label: 'Погрузочная' },
-  { id: 'transport', label: 'Транспортная' },
+  ...CATEGORY_GROUPS.map((group) => ({ id: group.slug, label: SHORT_LABELS[group.slug] })),
   { id: 'other', label: 'Другая' },
 ];
 
+// For categories outside the shared list (made by hand in the database).
 const GROUP_RULES: [RegExp, TaskGroupId][] = [
   // "Экскаваторы-погрузчики" dig first and load second.
-  [/экскаватор|бульдоз|грейдер|траншее|бур/i, 'earth'],
-  [/кран|манипулятор|вышк|подъёмник|подъемник/i, 'lifting'],
-  [/погрузчик/i, 'loading'],
-  [/самосвал|трактор|тягач|трал|длинномер|грузовик/i, 'transport'],
+  [/экскаватор|бульдоз|грейдер|траншее|скрепер/i, 'earthmoving'],
+  [/кран|манипулятор|вышк|подъёмник|подъемник|телескоп/i, 'lifting'],
+  [/погрузчик|трактор/i, 'loading'],
+  [/самосвал|тягач|трал|длинномер|грузовик|шаланд|эвакуатор|прицеп/i, 'hauling'],
+  [/кат(ок|ки)|асфальт|фрез|гудронатор|разметоч/i, 'road'],
+  [/бетон|миксер|раствор/i, 'concrete'],
+  [/бур|сва[ийе]|гидромолот|виброплит/i, 'drilling'],
+  [/илосос|вакуум|водовоз|поливомо|снег|мусоровоз|подметал/i, 'municipal'],
+  [/генератор|компрессор|освет|теплов|бытовк|контейнер/i, 'equipment'],
+  [/сельхоз|комбайн|лесозагот|харвестер|форвардер/i, 'agri-forestry'],
 ];
 
-/** Which task group a category belongs to, from its name. */
-export function taskGroupOf(categoryName: string): TaskGroupId {
+/**
+ * Which task group a category belongs to: by its slug or exact name in the
+ * shared list, otherwise guessed from the name.
+ */
+export function taskGroupOf(categoryName: string, slug?: string | null): TaskGroupId {
+  const def = categoryBySlug(slug) ?? categoryByName(categoryName);
+  if (def) return def.group as TaskGroupId;
   for (const [pattern, group] of GROUP_RULES) {
     if (pattern.test(categoryName)) return group;
   }
@@ -41,23 +71,81 @@ export function isTaskGroupId(value: string | undefined): value is TaskGroupId {
   return TASK_GROUPS.some((group) => group.id === value);
 }
 
+/** Group ids of older catalog links (?group=earth) still open the right chip. */
+const LEGACY_GROUP_IDS: Record<string, TaskGroupId> = {
+  earth: 'earthmoving',
+  transport: 'hauling',
+};
+
+export function normalizeTaskGroupId(value: string | undefined): TaskGroupId | undefined {
+  if (isTaskGroupId(value)) return value;
+  return value ? LEGACY_GROUP_IDS[value] : undefined;
+}
+
+/**
+ * The photo type of each category in the shared list: the nearest of our
+ * photos, or null when none looks like it (a forklift is not a wheel loader,
+ * a tower crane is not an автокран) — then a drawn placeholder is shown and
+ * the house price list does not apply. Categories left out fall back to the
+ * name rules below.
+ */
+const CATEGORY_MACHINE: Record<string, MachineType | null> = {
+  excavators: 'excavator',
+  'wheeled-excavators': 'wheeled-excavator',
+  'mini-excavators': 'excavator',
+  'backhoe-loaders': 'backhoe',
+  bulldozers: 'dozer',
+  graders: null,
+  trenchers: null,
+  scrapers: null,
+  cranes: 'crane',
+  'crane-trucks': 'kmu',
+  'aerial-platforms': 'agp',
+  'tower-cranes': null,
+  'crawler-cranes': 'crane',
+  telehandlers: null,
+  'scissor-lifts': null,
+  loaders: 'loader',
+  'skid-steers': null,
+  forklifts: null,
+  tractors: 'tractor',
+  'dump-trucks': 'truck',
+  lowboys: 'truck',
+  flatbeds: 'truck',
+  'tractor-units': 'truck',
+  'tow-trucks': 'truck',
+  'special-trailers': null,
+  rollers: 'roller',
+  'farm-tractors': 'tractor',
+};
+
 /**
  * Which machine type illustrates a listing, or null when none of our photos
  * looks like it (a forklift is not a wheel loader) — then the page shows a
- * drawn placeholder instead.
+ * drawn placeholder instead. The machine's own name is read first (a backhoe
+ * listed under «Экскаваторы гусеничные», a KMU under «Автокраны»), then the
+ * category: the shared list by exact name, or the name rules for other rows.
  */
 export function machineTypeOf(categoryName: string, machineName = ''): MachineType | null {
   const category = categoryName.toLowerCase();
   const name = machineName.toLowerCase();
   const both = `${category} ${name}`;
-  if (/экскаватор/.test(category) && /погрузчик/.test(both)) return 'backhoe';
+  if (/экскаватор/.test(both) && /погрузчик/.test(both)) return 'backhoe';
   if (/экскаватор/.test(both) && /колёсн|колесн/.test(both)) return 'wheeled-excavator';
-  if (/экскаватор/.test(category)) return 'excavator';
   if (/манипулятор|кму/.test(both)) return 'kmu';
-  if (/вышк|(^|[^а-яё])агп([^а-яё]|$)|подъ[её]мник/.test(both)) return 'agp';
+  if (/вышк|(^|[^а-яё])агп([^а-яё]|$)/.test(both)) return 'agp';
   if (/кат(ок|ки)/.test(both)) return 'roller';
+
+  const def = categoryByName(categoryName);
+  if (def) {
+    const mapped = CATEGORY_MACHINE[def.slug];
+    if (mapped !== undefined) return mapped;
+  }
+
+  if (/экскаватор/.test(category)) return 'excavator';
+  if (/подъ[её]мник/.test(both)) return 'agp';
   if (/кран/.test(category)) return 'crane';
-  if (/погрузчик/.test(category) && !/вилоч|телескоп|мини/.test(name)) return 'loader';
+  if (/погрузчик/.test(category) && !/вилоч|телескоп|мини/.test(both)) return 'loader';
   if (/самосвал/.test(category)) return 'truck';
   if (/бульдоз/.test(category)) return 'dozer';
   if (/трактор/.test(category)) return 'tractor';

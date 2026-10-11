@@ -1,20 +1,12 @@
+import { CATEGORY_SLUGS } from '@specai/shared';
 import { z } from 'zod';
 import { getAnthropicClient, DEFAULT_MODEL } from './client';
 
 // AI classification of a message from a Telegram/WhatsApp chat: is someone
 // looking for special equipment, and if so — what, where and when.
 
-export const CHAT_REQUEST_CATEGORIES = [
-  'backhoe-loaders',
-  'excavators',
-  'loaders',
-  'cranes',
-  'crane-trucks',
-  'dump-trucks',
-  'bulldozers',
-  'tractors',
-  'aerial-platforms',
-] as const;
+/** Every machinery type of the catalogue (packages/shared/src/categories.ts). */
+export const CHAT_REQUEST_CATEGORIES = CATEGORY_SLUGS;
 
 export const chatRequestSchema = z.object({
   is_request: z.boolean(),

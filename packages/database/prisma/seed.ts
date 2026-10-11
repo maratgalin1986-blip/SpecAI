@@ -1,3 +1,4 @@
+import { categoryName } from '@specai/shared';
 import bcrypt from 'bcryptjs';
 import { createPrismaClient } from '../src';
 
@@ -60,10 +61,18 @@ async function main() {
     },
   });
 
+  // Names from the shared category list; ensure-categories (run on every build)
+  // may already have created these rows, so they are upserted by slug.
+  const category = (slug: string) =>
+    prisma.equipmentCategory.upsert({
+      where: { slug },
+      update: {},
+      create: { name: categoryName(slug), slug },
+    });
   const [excavators, cranes, bulldozers] = await Promise.all([
-    prisma.equipmentCategory.create({ data: { name: 'Экскаваторы', slug: 'excavators' } }),
-    prisma.equipmentCategory.create({ data: { name: 'Краны', slug: 'cranes' } }),
-    prisma.equipmentCategory.create({ data: { name: 'Бульдозеры', slug: 'bulldozers' } }),
+    category('excavators'),
+    category('cranes'),
+    category('bulldozers'),
   ]);
 
   const excavator = await prisma.equipment.create({

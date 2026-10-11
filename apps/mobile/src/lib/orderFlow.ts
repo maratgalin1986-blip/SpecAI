@@ -4,7 +4,10 @@
  * (orderFlow.test.ts).
  */
 
-/** Значок типа техники по названию категории (категории приходят с сервера). */
+/**
+ * Значок типа техники. Сервер отдаёт `emoji` из общего списка категорий
+ * (packages/shared/src/categories.ts); без него значок угадывается по названию.
+ */
 const CATEGORY_ICONS: [RegExp, string][] = [
   [/автовышк|вышк|подъ[её]мник/i, '🪜'],
   [/кран|манипулятор/i, '🏗️'],
@@ -17,7 +20,8 @@ const CATEGORY_ICONS: [RegExp, string][] = [
   [/вакуум|илосос|ассениз|водовоз|цистерн/i, '💧'],
 ];
 
-export function categoryIcon(name: string | null | undefined): string {
+export function categoryIcon(name: string | null | undefined, emoji?: string | null): string {
+  if (emoji) return emoji;
   if (!name) return '🛠️';
   const match = CATEGORY_ICONS.find(([pattern]) => pattern.test(name));
   return match ? match[1] : '🛠️';

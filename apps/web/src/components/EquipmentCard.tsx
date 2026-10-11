@@ -36,16 +36,25 @@ export interface EquipmentCardItem {
 }
 
 const GROUP_ICON: Record<ReturnType<typeof taskGroupOf>, IconName> = {
-  earth: 'excavator',
+  earthmoving: 'excavator',
   lifting: 'crane',
   loading: 'loader',
-  transport: 'tractor',
+  hauling: 'tractor',
+  road: 'roller',
+  concrete: 'helmet',
+  drilling: 'hammer',
+  municipal: 'helmet',
+  equipment: 'spark',
+  'agri-forestry': 'tractor',
   other: 'helmet',
 };
 
-export function categoryIcon(categoryName: string): IconName {
+/** The line icon of a category (the site's SVG set), by its group. */
+export function categoryIcon(categoryName: string, slug?: string | null): IconName {
   if (/бульдоз|трактор/i.test(categoryName)) return 'tractor';
-  return GROUP_ICON[taskGroupOf(categoryName)];
+  if (/вышк|подъ[её]мник/i.test(categoryName)) return 'lift';
+  if (/гидромолот/i.test(categoryName)) return 'hammer';
+  return GROUP_ICON[taskGroupOf(categoryName, slug)];
 }
 
 // Catalog card: photo (or a drawn placeholder), availability, key specs,
