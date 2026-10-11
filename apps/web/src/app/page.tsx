@@ -152,7 +152,7 @@ const STEPS = [
   { title: 'Работайте', text: 'Диспетчер на связи, оплата по факту.' },
 ];
 
-// Service cards link to their catalog category (matched by name) and show how
+// Service cards link to their catalog category (matched by slug) and show how
 // much equipment is listed there. Falls back to plain cards without a database.
 export const revalidate = 300;
 
@@ -163,7 +163,7 @@ async function loadCategoryLinks() {
     });
     const links = new Map(
       categories.map((category) => [
-        category.name,
+        category.slug,
         { id: category.id, available: category._count.equipment },
       ]),
     );
@@ -175,16 +175,18 @@ async function loadCategoryLinks() {
   }
 }
 
+/** Catalog category (slug, packages/shared/src/categories.ts) of each service card. */
 const SERVICE_CATEGORY: Record<string, string> = {
-  'Экскаваторы-погрузчики': 'Экскаваторы-погрузчики',
-  Гидромолот: 'Экскаваторы-погрузчики',
-  'Гусеничные экскаваторы': 'Экскаваторы',
-  'Колёсный экскаватор с гидромолотом': 'Экскаваторы',
-  Автокраны: 'Краны',
-  'Манипулятор КМУ 7 т': 'Манипуляторы',
-  'Автовышка АГП': 'Автовышки',
-  'Фронтальные погрузчики': 'Погрузчики',
-  Тракторы: 'Тракторы',
+  'Экскаваторы-погрузчики': 'backhoe-loaders',
+  Гидромолот: 'backhoe-loaders',
+  'Гусеничные экскаваторы': 'excavators',
+  'Колёсный экскаватор с гидромолотом': 'excavators',
+  Автокраны: 'cranes',
+  'Манипулятор КМУ 7 т': 'crane-trucks',
+  'Автовышка АГП': 'aerial-platforms',
+  'Фронтальные погрузчики': 'loaders',
+  Виброкаток: 'rollers',
+  Тракторы: 'tractors',
 };
 
 const SERVICE_LANDING: Record<string, string> = {

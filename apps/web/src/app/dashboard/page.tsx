@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { ORDER_STATUS_LABELS } from '@specai/shared';
+import { ORDER_STATUS_LABELS, categoryOrder } from '@specai/shared';
 import { getServerSession } from 'next-auth';
 import { prisma } from '@specai/database';
 import { BookingStatusBadge, Card } from '@specai/ui';
@@ -109,19 +109,27 @@ export default async function DashboardPage({
           select: { emailVerified: true },
         })
       : Promise.resolve(null),
-    // Quick-order tiles: the machine types with the most published machinery first.
+    // Quick-order tiles: the machine types (leaves of the category tree) with
+    // the most published machinery first, then the catalogue order.
     prisma.equipmentCategory
       .findMany({
+        where: { children: { none: {} } },
         select: {
           id: true,
           name: true,
+          slug: true,
           _count: { select: { equipment: { where: PUBLISHED_FLEET } } },
         },
       })
       .then((rows) =>
         rows
-          .sort((a, b) => b._count.equipment - a._count.equipment || a.name.localeCompare(b.name))
-          .map(({ id, name }) => ({ id, name })),
+          .sort(
+            (a, b) =>
+              b._count.equipment - a._count.equipment ||
+              categoryOrder(a.slug) - categoryOrder(b.slug) ||
+              a.name.localeCompare(b.name),
+          )
+          .map(({ id, name, slug }) => ({ id, name, slug })),
       ),
     session ? ensureReferralCode(session.user.id).catch(() => null) : Promise.resolve(null),
     session

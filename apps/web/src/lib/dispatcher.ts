@@ -1,3 +1,4 @@
+import { categoryName } from '@specai/shared';
 import { SHIFT, SITE } from '@/lib/site';
 
 // The site's dispatcher without a paid AI: it reads the visitor's message
@@ -55,81 +56,84 @@ export function findPhone(text: string): string | null {
 export interface TaskMatch {
   /** Category name as stored in the catalogue. */
   category: string;
+  /** Category slug (packages/shared/src/categories.ts). */
+  categorySlug: string;
   /** Why this machine fits, one short sentence. */
   why: string;
 }
 
 // Order matters: the first rule that matches wins, so the specific ones
-// (a machine named outright) come before the job descriptions.
-const RULES: { test: RegExp; category: string; why: string }[] = [
+// (a machine named outright) come before the job descriptions. Categories are
+// the slugs of packages/shared/src/categories.ts; the display name follows.
+const RULES: { test: RegExp; slug: string; why: string }[] = [
   {
     test: /экскаватор-погруз|погрузчик-экскав|jcb|4cx|3cx/,
-    category: 'Экскаваторы-погрузчики',
+    slug: 'backhoe-loaders',
     why: 'копает и грузит одной машиной',
   },
   {
     test: /(подн|подъ[её]м).*(плит|блок|балк|ферм|груз|\d+\s*т\b)|монтаж.*(плит|конструкц)/,
-    category: 'Краны',
+    slug: 'cranes',
     why: 'поднимет и установит тяжёлые грузы',
   },
   {
     test: /вывез|вывоз|мусор/,
-    category: 'Самосвалы',
+    slug: 'dump-trucks',
     why: 'вывезет грунт и мусор',
   },
   {
     test: /гидромолот|молот|демонтаж|разбить|бетон/,
-    category: 'Экскаваторы',
+    slug: 'excavators',
     why: 'колёсный экскаватор с гидромолотом разбивает бетон, асфальт и мёрзлый грунт',
   },
   {
     test: /экскав/,
-    category: 'Экскаваторы',
+    slug: 'excavators',
     why: 'для котлованов и больших объёмов земляных работ',
   },
   {
     test: /автокран|кран(?!.*манипул)/,
-    category: 'Краны',
+    slug: 'cranes',
     why: 'поднимет и установит тяжёлые грузы',
   },
   {
     test: /манипул|кму|перевез.*(груз|блок|плит)|привез.*и.*выгруз/,
-    category: 'Манипуляторы',
+    slug: 'crane-trucks',
     why: 'привезёт груз и сам выгрузит краном',
   },
   {
     test: /вышк|агп|высот|фасад|кровл|спил|дерев|освещ|фонар/,
-    category: 'Автовышки',
+    slug: 'aerial-platforms',
     why: 'для работ на высоте',
   },
   {
     test: /каток|катк|уплотн|утрамб|асфальт/,
-    category: 'Катки',
+    slug: 'rollers',
     why: 'уплотнит грунт, щебень или асфальт',
   },
   {
     test: /самосв|вывез|вывоз|мусор|привез.*(песок|щеб|грунт|пгс)|песок|щебень|пгс/,
-    category: 'Самосвалы',
+    slug: 'dump-trucks',
     why: 'вывезет грунт и мусор или привезёт сыпучие материалы',
   },
   {
     test: /бульд|планиров|разровн|выровн|засып/,
-    category: 'Бульдозеры',
+    slug: 'bulldozers',
     why: 'спланирует участок и переместит грунт',
   },
   {
     test: /трактор|мтз|беларус|покос|косить/,
-    category: 'Тракторы',
+    slug: 'tractors',
     why: 'для вспомогательных и коммунальных работ',
   },
   {
     test: /снег|погрузчик|погруз(ить|ка)|фронтал/,
-    category: 'Погрузчики',
+    slug: 'loaders',
     why: 'погрузит сыпучие материалы и уберёт снег',
   },
   {
     test: /транше|траншея|траншею|канав|котлован|яму|ямы|копать|выкопать|рыть|вырыть|фундамент|септик|водопровод|канализ|кабел/,
-    category: 'Экскаваторы-погрузчики',
+    slug: 'backhoe-loaders',
     why: 'траншеи, ямы и котлованы, а потом засыпка и погрузка',
   },
 ];
@@ -137,7 +141,9 @@ const RULES: { test: RegExp; category: string; why: string }[] = [
 export function matchTask(text: string): TaskMatch | null {
   const lower = text.toLowerCase();
   const rule = RULES.find(({ test }) => test.test(lower));
-  return rule ? { category: rule.category, why: rule.why } : null;
+  return rule
+    ? { category: categoryName(rule.slug), categorySlug: rule.slug, why: rule.why }
+    : null;
 }
 
 /** Answers to common questions, from facts the site already states. */

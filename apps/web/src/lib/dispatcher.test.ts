@@ -34,13 +34,16 @@ describe('matchTask', () => {
   it('maps jobs to machines', () => {
     expect(matchTask('Нужно вырыть траншею 30 метров')?.category).toBe('Экскаваторы-погрузчики');
     expect(matchTask('вывезти строительный мусор')?.category).toBe('Самосвалы');
-    expect(matchTask('поднять плиты на 3 этаж, нужен кран')?.category).toBe('Краны');
-    expect(matchTask('покраска фасада на высоте 15 м')?.category).toBe('Автовышки');
-    expect(matchTask('разбить старый бетон')?.category).toBe('Экскаваторы');
+    expect(matchTask('поднять плиты на 3 этаж, нужен кран')?.category).toBe('Автокраны');
+    expect(matchTask('покраска фасада на высоте 15 м')?.category).toBe('Автовышки (АГП)');
+    expect(matchTask('разбить старый бетон')?.category).toBe('Экскаваторы гусеничные');
     expect(matchTask('уплотнить щебень под площадку')?.category).toBe('Катки');
     expect(matchTask('спланировать участок')?.category).toBe('Бульдозеры');
-    expect(matchTask('почистить снег во дворе')?.category).toBe('Погрузчики');
-    expect(matchTask('привезти и выгрузить блоки, манипулятор')?.category).toBe('Манипуляторы');
+    expect(matchTask('почистить снег во дворе')?.category).toBe('Фронтальные погрузчики');
+    expect(matchTask('привезти и выгрузить блоки, манипулятор')?.category).toBe(
+      'Краны-манипуляторы (КМУ)',
+    );
+    expect(matchTask('привезти и выгрузить блоки, манипулятор')?.categorySlug).toBe('crane-trucks');
   });
   it('returns null for small talk', () => {
     expect(matchTask('здравствуйте')).toBeNull();
@@ -67,8 +70,8 @@ describe('faqAnswers and wantsPrice', () => {
 
 describe('matchTask for lifting and removal jobs', () => {
   it('sends lifting slabs to a crane and rubbish removal to a dump truck', () => {
-    expect(matchTask('Поднять плиты по 3 т на высоту 10 м')?.category).toBe('Краны');
+    expect(matchTask('Поднять плиты по 3 т на высоту 10 м')?.category).toBe('Автокраны');
     expect(matchTask('Вывезти мусор после демонтажа, 20 кубов')?.category).toBe('Самосвалы');
-    expect(matchTask('Разбить бетон')?.category).toBe('Экскаваторы');
+    expect(matchTask('Разбить бетон')?.category).toBe('Экскаваторы гусеничные');
   });
 });

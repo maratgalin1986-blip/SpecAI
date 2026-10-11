@@ -117,17 +117,18 @@ export function normalize(text: string): string {
     .trim();
 }
 
+// By category slug (packages/shared/src/categories.ts).
 const CATEGORY_MACHINE: Record<string, MachineType> = {
-  'Экскаваторы-погрузчики': 'backhoe',
-  Краны: 'crane',
-  Самосвалы: 'truck',
-  Экскаваторы: 'excavator',
-  Манипуляторы: 'kmu',
-  Автовышки: 'agp',
-  Катки: 'roller',
-  Бульдозеры: 'dozer',
-  Тракторы: 'tractor',
-  Погрузчики: 'loader',
+  'backhoe-loaders': 'backhoe',
+  cranes: 'crane',
+  'dump-trucks': 'truck',
+  excavators: 'excavator',
+  'crane-trucks': 'kmu',
+  'aerial-platforms': 'agp',
+  rollers: 'roller',
+  bulldozers: 'dozer',
+  tractors: 'tractor',
+  loaders: 'loader',
 };
 
 /** The machine for the job in the text, via the dispatcher's rules. */
@@ -149,7 +150,7 @@ export function machineFor(text: string): MachineType | null {
   if (genericExcavator(text)) return 'backhoe';
   const match = matchTask(text);
   if (!match) return null;
-  const machine = CATEGORY_MACHINE[match.category] ?? null;
+  const machine = CATEGORY_MACHINE[match.categorySlug] ?? null;
   if (machine === 'excavator' && /молот|демонтаж|разбить|бетон|асфальт/.test(text.toLowerCase()))
     return 'wheeled-excavator';
   return machine;

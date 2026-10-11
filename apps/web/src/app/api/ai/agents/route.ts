@@ -3,6 +3,7 @@ import { prisma } from '@specai/database';
 import {
   ORDER_STATUS_LABELS,
   agentChatRequestSchema,
+  categoryOrder,
   createOrderSchema,
   type AgentId,
 } from '@specai/shared';
@@ -170,10 +171,14 @@ export async function POST(request: NextRequest) {
 
   const handlers: AgentToolHandlers = {
     async list_categories() {
-      return prisma.equipmentCategory.findMany({
-        orderBy: { name: 'asc' },
-        select: { id: true, name: true },
+      // The leaves of the category tree, with their group, in catalogue order.
+      const rows = await prisma.equipmentCategory.findMany({
+        where: { children: { none: {} } },
+        select: { id: true, name: true, slug: true, parent: { select: { name: true } } },
       });
+      return rows
+        .sort((a, b) => categoryOrder(a.slug) - categoryOrder(b.slug))
+        .map((row) => ({ id: row.id, name: row.name, group: row.parent?.name ?? null }));
     },
 
     async search_equipment(input) {

@@ -197,6 +197,20 @@ export type BidStatus = 'PENDING' | 'ACCEPTED' | 'REJECTED';
 export interface Category {
   id: string;
   name: string;
+  /** Поля ниже отдаёт GET /api/categories (дерево видов техники); у старых ответов их нет. */
+  slug?: string | null;
+  /** Группа («Землеройная техника», «Подъёмная техника», …). */
+  group?: string | null;
+  groupSlug?: string | null;
+  emoji?: string | null;
+  /** Один из десяти самых частых видов — показывается первым в плитках. */
+  popular?: boolean;
+}
+
+export interface CategoryGroup {
+  slug: string;
+  name: string;
+  emoji: string;
 }
 
 export interface Bid {
@@ -417,7 +431,9 @@ export function createReview(input: { bookingId: string; rating: number; comment
 }
 
 export function fetchCategories() {
-  return apiFetch<{ categories: Category[] }>('/api/categories', { anonymous: true });
+  return apiFetch<{ categories: Category[]; groups?: CategoryGroup[] }>('/api/categories', {
+    anonymous: true,
+  });
 }
 
 export function fetchMyOrders() {

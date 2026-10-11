@@ -9,9 +9,11 @@ import {
   Text,
   View,
 } from 'react-native';
+import { CategoryPickerModal } from '@/components/CategoryPickerModal';
 import { DateField } from '@/components/DateField';
 import { Button, Card, Chip, Input } from '@/components/ui';
 import { ApiError, createOrder, fetchCategories, type Category } from '@/lib/api';
+import { popularCategories } from '@/lib/categoryGroups';
 import { addDays, bookingDays, pluralizeRu, startOfDay, toIsoDate } from '@/lib/format';
 import { categoryIcon } from '@/lib/orderFlow';
 import { colors, spacing } from '@/theme';
@@ -24,6 +26,7 @@ export default function NewOrderScreen() {
   const [description, setDescription] = useState('');
   const [categories, setCategories] = useState<Category[]>([]);
   const [categoryId, setCategoryId] = useState<string | null>(params.categoryId ?? null);
+  const [pickerOpen, setPickerOpen] = useState(false);
   const [address, setAddress] = useState(params.address ?? '');
   // По умолчанию — одна смена завтра.
   const [startDate, setStartDate] = useState(() => addDays(today, 1));
@@ -114,23 +117,34 @@ export default function NewOrderScreen() {
         </Card>
 
         <Card style={styles.section}>
-          <Text style={styles.sectionTitle}>Категория</Text>
+          <Text style={styles.sectionTitle}>Вид техники</Text>
           <View style={styles.chips}>
             <Chip
               label="Любая"
               selected={categoryId === null}
               onPress={() => setCategoryId(null)}
             />
-            {categories.map((category) => (
+            {popularCategories(categories, 10, categoryId).map((category) => (
               <Chip
                 key={category.id}
-                label={`${categoryIcon(category.name)} ${category.name}`}
+                label={`${categoryIcon(category.name, category.emoji)} ${category.name}`}
                 accessibilityLabel={category.name}
                 selected={categoryId === category.id}
                 onPress={() => setCategoryId(category.id)}
               />
             ))}
+            {categories.length > 0 ? (
+              <Chip label="Все виды техники…" onPress={() => setPickerOpen(true)} />
+            ) : null}
           </View>
+          <CategoryPickerModal
+            visible={pickerOpen}
+            categories={categories}
+            selectedId={categoryId}
+            onSelect={(picked) => setCategoryId(picked?.id ?? null)}
+            onClose={() => setPickerOpen(false)}
+            allowNone
+          />
         </Card>
 
         <Card style={styles.section}>
