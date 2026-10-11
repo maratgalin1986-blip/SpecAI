@@ -37,4 +37,5 @@ export const bidBreakdownSchema = z.object({
     .optional(),
   optionsNote: z.string().trim().max(300, 'Опции — до 300 знаков').optional(),
 });
+
 export type BidBreakdownInput = z.infer<typeof bidBreakdownSchema>;

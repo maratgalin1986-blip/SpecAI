@@ -57,8 +57,16 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
   }
   const from = toBookingDay(parsed.data.from);
   const to = toBookingDay(parsed.data.to);
+  if (to < toBookingDay(new Date())) {
+    return NextResponse.json({ error: 'Эти даты уже прошли' }, { status: 400 });
+  }
   const result = await prisma.$transaction(async (tx) => {
     await lockEquipment(tx, machine.id);
+    const same = await tx.equipmentBlock.findFirst({
+      where: { equipmentId: machine.id, from: { lte: from }, to: { gte: to } },
+      select: { id: true },
+    });
+    if (same) return { error: 'Эти дни уже закрыты' } as const;
     const booked = await findOverlappingBooking(tx, {
       equipmentId: machine.id,
       startDate: from,
