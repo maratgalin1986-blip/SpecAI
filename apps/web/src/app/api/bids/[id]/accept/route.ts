@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@specai/database';
 import { getRequestUser } from '@/lib/requestUser';
-import { sendEmail } from '@/lib/email';
 import { bidAccepted } from '@/lib/emailTemplates';
 import { prismaErrorCode } from '@/lib/apiInput';
 import {
@@ -12,6 +11,8 @@ import {
 } from '@/lib/bookingRules';
 import { findOverlappingBooking, lockEquipment } from '@/lib/bookingConflicts';
 import { customerShortName } from '@/lib/customerPrivacy';
+import { formatMoney } from '@/lib/money';
+import { notifyCompany } from '@/lib/notifications/notifyUser';
 
 /** Thrown inside the transaction to roll it back when the order was taken meanwhile. */
 class AlreadyClosedError extends Error {}
@@ -129,22 +130,31 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
   const { booking } = result;
 
   try {
-    const providerEmails = bid.equipment.company.users.map((user) => user.email);
-    if (providerEmails.length > 0) {
-      const template = bidAccepted({
+    const template = bidAccepted({
+      bookingId: booking.id,
+      equipmentName: bid.equipment.name,
+      price: booking.totalPrice,
+      currency: booking.currency,
+      startDate: booking.startDate,
+      endDate: booking.endDate,
+      // Providers see the customer as «Анна П.» (owner's decision).
+      customerName: customerShortName(bid.order.customer.name),
+    });
+    // Each manager of the company gets it over the channels they chose.
+    await notifyCompany(
+      bid.equipment.companyId,
+      {
+        type: 'bid.accepted',
         bookingId: booking.id,
         equipmentName: bid.equipment.name,
-        price: booking.totalPrice,
-        currency: booking.currency,
+        price: formatMoney(booking.totalPrice, booking.currency),
         startDate: booking.startDate,
-        endDate: booking.endDate,
-        // Providers see the customer as «Анна П.» (owner's decision).
-        customerName: customerShortName(bid.order.customer.name),
-      });
-      await sendEmail({ to: providerEmails, ...template });
-    }
+        customerShortName: customerShortName(bid.order.customer.name),
+      },
+      { email: template },
+    );
   } catch (error) {
-    console.error('[email] bidAccepted failed', error);
+    console.error('[notify] bidAccepted failed', error);
   }
 
   return NextResponse.json({ booking, message: 'Бронь создана' }, { status: 201 });

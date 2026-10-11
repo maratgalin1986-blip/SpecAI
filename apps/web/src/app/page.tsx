@@ -21,8 +21,6 @@ import { pluralizeRu } from '@/lib/pluralize';
 import { SITE } from '@/lib/site';
 import { fromPerHour, HAMMER_RATE, MIN_RATE, priceFaqAnswer, SHIFT_HOURS } from '@/lib/prices';
 
-const cap = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
-
 // Big interactive blocks below the fold: separate chunks, so the browser
 // hydrates them in their own short tasks instead of one long one.
 const SiteJourney = dynamic(() => import('@/components/SiteJourney').then((m) => m.SiteJourney));
@@ -132,11 +130,11 @@ const ADVANTAGES = [
   },
   {
     title: 'Цена видна сразу',
-    text: `Почасовая ставка на сайте, смена — ${SHIFT_HOURS} часов. Подачу техники диспетчер назовёт заранее.`,
+    text: `Почасовая ставка на каждой карточке, смена — ${SHIFT_HOURS} часов. Подачу техники назовут заранее.`,
   },
   {
-    title: 'Одна цена от диспетчера',
-    text: `Наш парк и наши машинисты: диспетчер ${SITE.name} называет одну цену с подачей — без посредников и торгов.`,
+    title: 'Несколько предложений',
+    text: `Заявку видят исполнители со своей техникой, включая парк ${SITE.name}: каждый называет цену, вы выбираете. Сервис бесплатный.`,
   },
   { title: 'Круглосуточно', text: 'ИИ-агенты подберут технику и примут заявку даже ночью.' },
 ];
@@ -145,11 +143,11 @@ const STEPS = [
   { title: 'Опишите задачу', text: 'Своими словами — в чате ИИ-агенту или в форме заявки.' },
   {
     title: 'Получите варианты',
-    text: 'Диспетчер СпецПласт16 перезвонит, подберёт машину из нашего парка и назовёт цену.',
+    text: 'Исполнители, включая парк СпецПласт16, пришлют цены, агент подберёт технику из каталога.',
   },
   {
-    title: 'Оставьте заявку',
-    text: 'Подтвердите по телефону — мы закрепим за вами машину и машиниста из штата СпецПласт16.',
+    title: 'Забронируйте',
+    text: 'Примите предложение — исполнитель подтвердит бронь и закрепит машину и машиниста.',
   },
   { title: 'Работайте', text: 'Диспетчер на связи, оплата по факту.' },
 ];
@@ -205,15 +203,19 @@ const SERVICE_LANDING: Record<string, string> = {
 const HOME_FAQ = [
   {
     q: 'Сколько стоит аренда спецтехники?',
-    a: priceFaqAnswer(),
+    a: `Парк ${SITE.name}: ${priceFaqAnswer()} У других исполнителей — свои цены на карточках.`,
   },
   {
     q: 'Как быстро приедет техника?',
-    a: 'Зависит от загрузки парка и адреса. Оставьте заявку или позвоните — менеджер назовёт время подачи.',
+    a: 'Зависит от загрузки техники и адреса. Оставьте заявку или позвоните — время подачи назовут заранее.',
+  },
+  {
+    q: 'Кто выполняет работы?',
+    a: `Исполнители со своей техникой и машинистами, включая парк ${SITE.name} — он первый в списке. Заявку видят все, каждый называет свою цену, вы выбираете. Для заказчика сервис бесплатный.`,
   },
   {
     q: 'Работаете с юридическими лицами?',
-    a: 'Да: договор, оплата по безналу с НДС, закрывающие документы, в том числе через ЭДО.',
+    a: `${SITE.name} — да: договор, оплата по безналу с НДС, закрывающие документы, в том числе через ЭДО. Условия других исполнителей — в их предложениях.`,
   },
   {
     q: 'Где вы работаете?',
@@ -248,9 +250,7 @@ export default async function HomePage() {
                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75 motion-reduce:animate-none" />
                 <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-400" />
               </span>
-              <span className="eyebrow text-slate-200">
-                {SITE.city} · свой парк, подача сегодня
-              </span>
+              <span className="eyebrow text-slate-200">{SITE.city} · подача сегодня</span>
             </div>
             <h1
               className="float-in mt-4 text-[2.25rem] font-extrabold leading-[1.02] tracking-[-0.04em] sm:mt-6 sm:text-6xl"
@@ -264,15 +264,16 @@ export default async function HomePage() {
               className="float-in mt-3 max-w-xl text-base leading-snug text-slate-300 sm:hidden"
               style={{ animationDelay: '240ms' }}
             >
-              {cap(fromPerHour(MIN_RATE))}. Свой парк {SITE.name}, подача в день заявки.
+              Одна заявка — предложения от исполнителей, включая парк {SITE.name} (
+              {fromPerHour(MIN_RATE)}). Вы выбираете лучшее, сервис бесплатный.
             </p>
             <p
               className="float-in mt-6 hidden max-w-xl text-lg leading-relaxed text-slate-300 sm:block"
               style={{ animationDelay: '240ms' }}
             >
-              Экскаваторы-погрузчики, автокраны и погрузчики в Набережных Челнах и по Татарстану —{' '}
-              {fromPerHour(MIN_RATE)}. Свой парк и свои машинисты {SITE.name}, без посредников:
-              подача в день заявки, работаем с НДС.
+              Экскаваторы-погрузчики, автокраны и погрузчики с машинистами в Набережных Челнах и по
+              Татарстану. Оставьте заявку — исполнители со своей техникой пришлют цены, вы выберете
+              лучшее. Парк {SITE.name} — {fromPerHour(MIN_RATE)}, с НДС. Сервис бесплатный.
             </p>
             {/* Owner, 2026-10-03: order, estimate and design as real buttons,
                 «Заказать технику» the biggest and brightest; then the phone and
@@ -354,7 +355,7 @@ export default async function HomePage() {
               </a>
             </nav>
             <p className="float-in mt-5 text-sm text-slate-400" style={{ animationDelay: '480ms' }}>
-              Свой парк · Свои машинисты · Без посредников · Работаем с НДС и ЭДО
+              Цены исполнителей · Машинист на каждой машине · Бесплатно для заказчика
             </p>
           </div>
         </div>
@@ -403,7 +404,7 @@ export default async function HomePage() {
           <div className="eyebrow text-amber-700">Техника и цены</div>
           <div className="mt-3 flex flex-wrap items-end justify-between gap-4">
             <h2 className="max-w-2xl text-4xl font-extrabold tracking-[-0.03em] sm:text-5xl">
-              Цена видна сразу. Подачу техники диспетчер назовёт заранее
+              Цена видна сразу. Подачу техники назовут заранее
             </h2>
             <a
               href="/equipment"
@@ -425,8 +426,8 @@ export default async function HomePage() {
             </a>
           </div>
           <p className="mt-3 text-slate-600">
-            Все цены — с машинистом, смена {SHIFT_HOURS} часов. Подача зависит от расстояния до
-            объекта.
+            Цены парка {SITE.name} — с машинистом, смена {SHIFT_HOURS} часов; у других исполнителей
+            — свои ставки на карточках. Подача зависит от расстояния до объекта.
           </p>
         </Reveal>
         <div className="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
@@ -508,7 +509,7 @@ export default async function HomePage() {
       <CinemaBand
         machine="excavator"
         clip="excavator-gold"
-        eyebrow="Свой парк"
+        eyebrow="Как такси для спецтехники"
         phrase="Котлован к утру — не обещание, а принятая заявка"
       />
 
@@ -519,12 +520,13 @@ export default async function HomePage() {
           <Reveal>
             <div className="eyebrow text-amber-700">Почему мы</div>
             <h2 className="mt-3 text-4xl font-extrabold tracking-[-0.03em] sm:text-5xl">
-              Наш парк, наши машинисты
+              Исполнители с техникой и машинистами
             </h2>
             <p className="mt-4 text-slate-600">
-              {SITE.name} — аренда спецтехники в{' '}
+              {SITE.name} — сервис заказа спецтехники в{' '}
               {SITE.city === 'Набережные Челны' ? 'Набережных Челнах' : SITE.city}: собственный парк
-              и машинисты в штате. Одна цена от диспетчера {SITE.name} — с подачей, без посредников.
+              и другие исполнители со своей техникой. Заявку видят все, вы выбираете цену и машину.
+              Для заказчика — бесплатно.
             </p>
           </Reveal>
         </div>
@@ -661,13 +663,14 @@ export default async function HomePage() {
       <Reveal>
         <section className="grid gap-6 rounded-[2rem] border border-amber-200 bg-gradient-to-br from-amber-50 to-orange-100 p-6 sm:grid-cols-2 sm:p-10">
           <div>
-            <div className="eyebrow text-amber-700">Наш парк — наши машинисты</div>
+            <div className="eyebrow text-amber-700">Как «такси» для спецтехники</div>
             <h2 className="mt-3 text-3xl font-extrabold tracking-tight">
-              Одна заявка — и техника едет
+              Одна заявка — несколько предложений
             </h2>
             <p className="mt-3 text-slate-700">
-              Опишите задачу — диспетчер {SITE.name} подберёт машину из нашего парка, назовёт цену и
-              поставит её в график. Машинисты в штате, без посредников и перекупщиков.
+              Опишите задачу — её увидят исполнители со своей техникой и машинистами, включая парк{' '}
+              {SITE.name}. Сравните цены и выберите предложение: телефон исполнителя откроется,
+              когда он подтвердит бронь. Сервис бесплатный, без комиссий.
             </p>
             <a
               href="/orders"

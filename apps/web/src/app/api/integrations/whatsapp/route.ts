@@ -49,6 +49,7 @@ export async function POST(request: NextRequest) {
     externalId: `whatsapp:${chatId}:${body.idMessage}`,
     text,
     chatTitle: isGroup ? body.senderData?.chatName : 'Личное сообщение',
+    openChat: isGroup,
     authorName: body.senderData?.senderName,
     authorPhone: senderPhone,
   };

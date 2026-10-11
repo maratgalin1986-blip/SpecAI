@@ -199,3 +199,59 @@ export function tileAllowed(z: number, x: number, y: number) {
   const south = tileLat(y + 1, z);
   return east > AREA.west && west < AREA.east && north > AREA.south && south < AREA.north;
 }
+
+// ---------------------------------------------------------------------------
+// Districts for the demand map (lib/demand.ts): the fixed list of Tatarstan
+// cities. An order is counted for its own city or the nearest of these.
+// ---------------------------------------------------------------------------
+
+export interface CityPoint {
+  name: string;
+  lat: number;
+  lon: number;
+}
+
+export const TATARSTAN_CITIES: readonly CityPoint[] = [
+  { name: 'Набережные Челны', lat: 55.7436, lon: 52.3959 },
+  { name: 'Казань', lat: 55.7963, lon: 49.1088 },
+  { name: 'Нижнекамск', lat: 55.6367, lon: 51.8245 },
+  { name: 'Альметьевск', lat: 54.9014, lon: 52.2971 },
+  { name: 'Елабуга', lat: 55.7565, lon: 52.0634 },
+  { name: 'Зеленодольск', lat: 55.8466, lon: 48.5145 },
+  { name: 'Бугульма', lat: 54.5364, lon: 52.7977 },
+  { name: 'Лениногорск', lat: 54.5967, lon: 52.4432 },
+  { name: 'Чистополь', lat: 55.3647, lon: 50.6396 },
+  { name: 'Заинск', lat: 55.2991, lon: 52.0083 },
+  { name: 'Азнакаево', lat: 54.8595, lon: 53.0749 },
+  { name: 'Менделеевск', lat: 55.8995, lon: 52.3041 },
+  { name: 'Мензелинск', lat: 55.7261, lon: 53.1006 },
+  { name: 'Мамадыш', lat: 55.7126, lon: 51.4136 },
+  { name: 'Агрыз', lat: 56.5233, lon: 52.9947 },
+  { name: 'Нурлат', lat: 54.4284, lon: 50.8049 },
+  { name: 'Буинск', lat: 54.9644, lon: 48.2901 },
+  { name: 'Арск', lat: 56.0912, lon: 49.8766 },
+];
+
+/** Great-circle distance in kilometres (the same formula as lib/notifications/routing.ts). */
+export function distanceKm(a: { lat: number; lon: number }, b: { lat: number; lon: number }) {
+  const rad = (value: number) => (value * Math.PI) / 180;
+  const dLat = rad(b.lat - a.lat);
+  const dLon = rad(b.lon - a.lon);
+  const h =
+    Math.sin(dLat / 2) ** 2 + Math.cos(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.sin(dLon / 2) ** 2;
+  return 2 * 6371 * Math.asin(Math.min(1, Math.sqrt(h)));
+}
+
+/** The nearest city of the list within `maxKm` (default 80), else null. */
+export function nearestCity(lat: number, lon: number, maxKm = 80): CityPoint | null {
+  let best: CityPoint | null = null;
+  let bestKm = Infinity;
+  for (const city of TATARSTAN_CITIES) {
+    const km = distanceKm({ lat, lon }, city);
+    if (km < bestKm) {
+      best = city;
+      bestKm = km;
+    }
+  }
+  return best && bestKm <= maxKm ? best : null;
+}

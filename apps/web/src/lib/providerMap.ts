@@ -8,6 +8,7 @@ import { inServiceArea } from './geo';
 import { maskContacts } from './privacy';
 import { pluralizeRu } from './pluralize';
 import { MACHINE_TYPES, photosOf } from './machinePhotos';
+import { providerPath } from './providerSeo';
 
 export const PIN_NOTE_MAX = 120;
 
@@ -193,8 +194,8 @@ export function toMapPins(rows: readonly ProviderMapRow[]): ProviderMapPin[] {
       imageUrl: isDisplayableImage(row.pinImageUrl) ? row.pinImageUrl : null,
       equipmentCount: Math.max(0, Math.floor(row.equipmentCount)),
       isHouse: row.id === HOUSE_COMPANY_ID,
-      // The catalogue shows only the house fleet.
-      catalogUrl: '/equipment',
+      // The provider's public page lists its machinery.
+      catalogUrl: providerPath(row.id),
     });
   }
   // The own fleet first, then the providers with the most machinery.

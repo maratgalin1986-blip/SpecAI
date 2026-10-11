@@ -2,14 +2,18 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@specai/database';
 import { createOrderSchema } from '@specai/shared';
 import { getRequestUser } from '@/lib/requestUser';
-import { isProvider } from '@/lib/fleet';
+import { isHouseManager, isProvider } from '@/lib/fleet';
+import { bidsUntilFor } from '@/lib/bidWindow';
+import { maskedContactFor } from '@/lib/chatOrders';
 import { geocodeAddress } from '@/lib/geo';
 import { notifyTelegram } from '@/lib/notify';
+import { notifyProvidersAboutOrder } from '@/lib/notifications/notifyUser';
 import { SITE } from '@/lib/site';
 import { machineTypeOf } from '@/lib/equipmentCatalog';
 import { INVALID_JSON_MESSAGE, readJson, zodErrorMessage } from '@/lib/apiInput';
 import { checkBookingDates } from '@/lib/bookingRules';
 import { customerShortName } from '@/lib/customerPrivacy';
+import { unreadMessagesByOrder } from '@/lib/orderChatAccess';
 import {
   assessWork,
   CHELNY,
@@ -54,6 +58,7 @@ export async function GET(request: NextRequest) {
       category: { select: { id: true, name: true } },
       customer: { select: { id: true, name: true } },
       bids: { include: { equipment: { select: { companyId: true } } } },
+      location: { select: { addressLine: true, city: true, latitude: true, longitude: true } },
     },
     orderBy: { createdAt: 'desc' },
     take: 50,
@@ -65,19 +70,32 @@ export async function GET(request: NextRequest) {
   // competitors' prices and the customer's identity stay private.
   const safeOrders = orders.map(
     ({ contactName, contactPhone, rawText, sourceUrl, externalId, fingerprint, ...order }) => {
-      void [contactName, contactPhone, rawText, sourceUrl, externalId, fingerprint];
+      void [contactName, rawText, sourceUrl, externalId, fingerprint];
       if (order.customerId === currentUser.id) return { ...order, bidCount: order.bids.length };
       const { customerId, customer, ...rest } = order;
       void customerId;
+      // A chat or guest order: the phone masked, «Показать телефон» opens it.
+      const chatContact = maskedContactFor(
+        { contactPhone },
+        { isProvider: isProvider(currentUser), isHouse: isHouseManager(currentUser) },
+      );
       return {
         ...rest,
+        ...(chatContact ? { chatContact } : {}),
         customer: { name: customerShortName(customer.name) },
         bids: order.bids.filter((bid) => bid.equipment.companyId === currentUser.companyId),
         bidCount: order.bids.length,
       };
     },
   );
-  return NextResponse.json({ orders: safeOrders });
+  // Unread chat messages per order, for the badges in the app.
+  const unread = await unreadMessagesByOrder(
+    orders.map((order) => order.id),
+    currentUser,
+  ).catch(() => new Map<string, number>());
+  return NextResponse.json({
+    orders: safeOrders.map((order) => ({ ...order, unreadMessages: unread.get(order.id) ?? 0 })),
+  });
 }
 
 export async function POST(request: NextRequest) {
@@ -122,11 +140,14 @@ export async function POST(request: NextRequest) {
       desiredEndDate: parsed.data.desiredEndDate,
       categoryId: parsed.data.categoryId,
       locationId: location?.id,
+      bidsUntil: bidsUntilFor(new Date(), dates.startDate),
     },
     include: { category: true },
   });
 
   await notifyTelegram(await orderMessage(order, place, request.nextUrl.origin));
+  // Providers with machinery of this category nearby (Telegram, push, e-mail…).
+  await notifyProvidersAboutOrder(order.id);
 
   return NextResponse.json({ order }, { status: 201 });
 }

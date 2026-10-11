@@ -51,10 +51,10 @@ export async function GET(request: NextRequest) {
     categoryId,
     // The provider's own list shows everything, including listings taken off
     // the site; public lists never show RETIRED.
-    // With ?mine=1 a provider sees its own company's machinery. Public lists
-    // are always СпецПласт16's published fleet: the house filter comes last so
-    // ?companyId= is ignored there (owner's decision, 2026-10-02).
-    ...(ownFleet ? { ...PUBLIC_FLEET, companyId } : PUBLISHED_FLEET),
+    ...(ownFleet ? PUBLIC_FLEET : PUBLISHED_FLEET),
+    // ?companyId= — one provider's machinery (its page and the map); with
+    // ?mine=1 it is the signed-in provider's own company.
+    companyId,
     ...(status ? { status: ownFleet || status !== 'RETIRED' ? status : { in: [] } } : {}),
     location: city ? { city: { equals: city, mode: 'insensitive' } } : undefined,
     dailyRate:
@@ -80,8 +80,9 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({
     equipment: equipment.map((item) => ({
       ...item,
-      // Customers see prices as on the site (never below lib/prices.ts); the
-      // provider's own list keeps the stored ones, which its edit form saves.
+      // Customers see prices as on the site (the house fleet never below
+      // lib/prices.ts); the provider's own list keeps the stored ones, which
+      // its edit form saves.
       ...(ownFleet ? {} : customerRates({ ...item, categoryName: item.category.name })),
       ...listingPhoto(item, origin),
     })),

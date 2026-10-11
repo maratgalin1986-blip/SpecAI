@@ -2,6 +2,9 @@ import { prisma, type OrderSource } from '@specai/database';
 import { analyzeChatMessage } from '@specai/ai-service';
 import { parseEquipmentRequest, requestFingerprint } from '@specai/shared';
 import { notifyTelegram } from '@/lib/notify';
+import { bidsUntilFor } from '@/lib/bidWindow';
+import { chatOrderNote } from '@/lib/chatOrders';
+import { notifyProvidersAboutOrder } from '@/lib/notifications/notifyUser';
 import { isSafeHttpUrl, maskContacts } from '@/lib/privacy';
 import { SITE } from '@/lib/site';
 import { siteUrl } from '@/lib/siteUrl';
@@ -20,23 +23,38 @@ export interface IncomingMessage {
   authorName?: string;
   authorPhone?: string;
   url?: string;
+  /** A group or channel (the bot was added by its admins), not a private message. */
+  openChat?: boolean;
 }
 
 export type IngestResult =
   | { status: 'created'; orderId: string; published: boolean }
   | { status: 'duplicate' | 'ignored' | 'too_short'; reason?: string };
 
-const IMPORTER_EMAIL = 'imported-orders@specplast16.invalid';
 const PUBLISH_CONFIDENCE = 0.7;
 const REPOST_WINDOW_DAYS = 7;
 
-async function importerUserId() {
+// Technical customer accounts (reserved .invalid addresses, no notifications):
+// orders whose author has no account are filed under them, with the real
+// contact in contactName/contactPhone (masked for providers, see lib/chatOrders.ts).
+export const TECHNICAL_CUSTOMERS = {
+  importer: { email: 'imported-orders@specplast16.invalid', name: 'Заявка из мессенджера' },
+  guest: { email: 'site-guest-orders@specplast16.invalid', name: 'Заявка с сайта' },
+} as const;
+
+/** Id of a technical customer account, created on first use. */
+export async function technicalUserId(kind: keyof typeof TECHNICAL_CUSTOMERS) {
+  const account = TECHNICAL_CUSTOMERS[kind];
   const user = await prisma.user.upsert({
-    where: { email: IMPORTER_EMAIL },
+    where: { email: account.email },
     update: {},
-    create: { email: IMPORTER_EMAIL, name: 'Заявка из мессенджера', role: 'CUSTOMER' },
+    create: { email: account.email, name: account.name, role: 'CUSTOMER' },
   });
   return user.id;
+}
+
+export function importerUserId() {
+  return technicalUserId('importer');
 }
 
 function parseDate(value: string | null | undefined) {
@@ -110,7 +128,10 @@ export async function ingestMessage(message: IncomingMessage): Promise<IngestRes
       customerId: await importerUserId(),
       // The public description never carries phones, e-mails or @usernames
       // (152-ФЗ); the full text stays in rawText for admins and providers.
-      description: maskContacts(summary ?? text).slice(0, 2000),
+      // Orders from open chats say so, and that the author may ask to remove them.
+      description: message.openChat
+        ? `${maskContacts(summary ?? text).slice(0, 1850)}\n\n${chatOrderNote(message.chatTitle)}`
+        : maskContacts(summary ?? text).slice(0, 2000),
       desiredStartDate: start,
       desiredEndDate: end,
       status: published ? 'OPEN' : 'PENDING_REVIEW',
@@ -124,6 +145,7 @@ export async function ingestMessage(message: IncomingMessage): Promise<IngestRes
       contactName: message.authorName?.slice(0, 200),
       contactPhone: phone,
       rawText: text.slice(0, 4000),
+      bidsUntil: bidsUntilFor(new Date(), start),
     },
   });
 
@@ -142,6 +164,9 @@ export async function ingestMessage(message: IncomingMessage): Promise<IngestRes
       .filter(Boolean)
       .join('\n'),
   );
+
+  // Providers with this kind of machinery nearby hear about it at once.
+  if (published) await notifyProvidersAboutOrder(order.id);
 
   return { status: 'created', orderId: order.id, published };
 }

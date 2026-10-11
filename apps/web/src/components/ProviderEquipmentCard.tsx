@@ -19,9 +19,12 @@ import { isDisplayableImage } from '@/lib/providerMap';
 export function ProviderEquipmentCard({
   item,
   categoryName,
+  expiredDocuments = 0,
 }: {
   item: EditableEquipment;
   categoryName: string;
+  /** Documents of this machine past their expiry (red badge, lib/documents.ts). */
+  expiredDocuments?: number;
 }) {
   const router = useRouter();
   const [editing, setEditing] = useState(false);
@@ -95,6 +98,11 @@ export function ProviderEquipmentCard({
             {item.hourlyRate ? `${formatMoney(item.hourlyRate)}/ч · ` : ''}
             {formatMoney(item.dailyRate)}/смена
           </p>
+          {expiredDocuments ? (
+            <span className="mt-1 inline-block rounded-full bg-red-100 px-2 py-0.5 text-[0.7rem] font-semibold text-red-800">
+              Просрочены документы: {expiredDocuments}
+            </span>
+          ) : null}
         </div>
       </a>
       <div className="flex flex-wrap items-center gap-2">

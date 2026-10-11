@@ -76,8 +76,8 @@ const TOOLS: Record<AgentToolName, Anthropic.Tool> = {
   create_order: {
     name: 'create_order',
     description:
-      'Creates a job order on behalf of the signed-in customer; СпецПласт16 then replies ' +
-      'with its price. Only call after the user has confirmed the description and dates.',
+      'Creates a job order on behalf of the signed-in customer; providers (СпецПласт16 among ' +
+      'them) then reply with their prices. Only call after the user has confirmed the description and dates.',
     input_schema: {
       type: 'object',
       properties: {
@@ -104,7 +104,7 @@ const TOOLS: Record<AgentToolName, Anthropic.Tool> = {
   },
   list_open_orders: {
     name: 'list_open_orders',
-    description: 'Returns open customer job orders waiting for a price from СпецПласт16.',
+    description: 'Returns open customer job orders waiting for price offers from providers.',
     input_schema: {
       type: 'object',
       properties: { categoryId: { type: 'string' } },
@@ -125,10 +125,12 @@ const TOOLS: Record<AgentToolName, Anthropic.Tool> = {
 const COMPANY_CONTEXT =
   'You work for СпецПласт16 (ООО «СПЕЦПЛАСТ 16», Naberezhnye Chelny) — a special-equipment ' +
   'rental and construction services ' +
-  'company in the Republic of Tatarstan (region 16). СпецПласт16 is the only executor: its own ' +
-  'machines and its own operators, no intermediaries or third-party providers. Customers rent ' +
+  'company in the Republic of Tatarstan (region 16). The site is an aggregator, a taxi for ' +
+  'heavy machinery: provider companies publish their own machines with operators and prices, ' +
+  "and СпецПласт16's own fleet takes part alongside them (listed first). Customers rent " +
   'excavators, cranes, loaders, dump trucks and other machinery by booking a catalog listing ' +
-  'or by leaving a job order that СпецПласт16 answers with its price. ' +
+  'or by leaving a job order; providers answer it with their prices and the customer chooses. ' +
+  'The service is free for customers. ' +
   'Always answer in Russian, concisely and politely. Prices are in the listing currency; ' +
   'hourlyRate is per machine-hour with an operator (quote it when present), dailyRate is an ' +
   '8-hour shift. ' +
@@ -168,7 +170,7 @@ const AGENTS: Record<AgentId, AgentDefinition> = {
       'using the tools, and explain how the platform works: bookings go PENDING → ' +
       'CONFIRMED → ACTIVE → COMPLETED; a customer can cancel a pending or confirmed ' +
       'booking from /dashboard; after completion they can leave a review; orders collect ' +
-      'a price offer from СпецПласт16 and the customer accepts it on the order page. If you cannot ' +
+      'price offers from providers and the customer accepts one on the order page. If you cannot ' +
       'resolve something, suggest contacting a manager via the contacts on the home page.',
     tools: ['get_my_bookings', 'get_my_orders'],
   },

@@ -21,7 +21,43 @@ const PIN_SELECT = {
   baseAddress: true,
   pinImageUrl: true,
   pinNote: true,
+  description: true,
+  phone: true,
+  deliveryRadiusKm: true,
+  deliveryPricePerKm: true,
 } as const;
+
+/** Delivery settings from the request: radius 5–1000 km, a price per km or null. */
+function parseDelivery(
+  input: Record<string, unknown>,
+): { ok: true; value: DeliveryPatch } | { ok: false; error: string } {
+  const value: DeliveryPatch = {};
+  if ('deliveryRadiusKm' in input) {
+    const radius = Number(input.deliveryRadiusKm);
+    if (!Number.isInteger(radius) || radius < 5 || radius > 1000) {
+      return { ok: false, error: 'Радиус выезда — целое число от 5 до 1000 км' };
+    }
+    value.deliveryRadiusKm = radius;
+  }
+  if ('deliveryPricePerKm' in input) {
+    const raw = input.deliveryPricePerKm;
+    if (raw === null || raw === '') {
+      value.deliveryPricePerKm = null;
+    } else {
+      const price = Number(raw);
+      if (!Number.isFinite(price) || price < 0 || price > 100_000) {
+        return { ok: false, error: 'Цена за км — число от 0 до 100 000' };
+      }
+      value.deliveryPricePerKm = Math.round(price * 100) / 100;
+    }
+  }
+  return { ok: true, value };
+}
+
+interface DeliveryPatch {
+  deliveryRadiusKm?: number;
+  deliveryPricePerKm?: number | null;
+}
 
 /**
  * Photos of the company's own machinery (newest first, without repeats); the
@@ -72,7 +108,39 @@ export async function PATCH(request: NextRequest) {
     baseAddress?: string | null;
     pinImageUrl?: string | null;
     pinNote?: string | null;
-  } = {};
+    description?: string | null;
+    phone?: string | null;
+  } & DeliveryPatch = {};
+
+  // Delivery radius and price per km (the feed and the bid form use them).
+  const delivery = parseDelivery(input);
+  if (!delivery.ok) return NextResponse.json({ error: delivery.error }, { status: 400 });
+  Object.assign(data, delivery.value);
+
+  // Profile (the cabinet's «Профиль компании»): a few lines for the public
+  // page /providers/[id] and the phone a customer gets after confirmation.
+  if ('description' in input) {
+    const value = input.description;
+    if (value !== null && typeof value !== 'string') {
+      return NextResponse.json({ error: 'Описание — это текст' }, { status: 400 });
+    }
+    const text = value?.trim() ?? '';
+    if (text.length > 1000) {
+      return NextResponse.json({ error: 'Описание — не длиннее 1000 символов' }, { status: 400 });
+    }
+    data.description = text || null;
+  }
+  if ('phone' in input) {
+    const value = input.phone;
+    const text = typeof value === 'string' ? value.trim() : '';
+    if (value !== null && typeof value !== 'string') {
+      return NextResponse.json({ error: 'Телефон — это текст' }, { status: 400 });
+    }
+    if (text && !/^\+?[\d\s()-]{6,30}$/.test(text)) {
+      return NextResponse.json({ error: 'Проверьте номер телефона' }, { status: 400 });
+    }
+    data.phone = text || null;
+  }
 
   // The base: a new point or a new address replaces the old one; it cannot be
   // removed, a provider always has a place on the map. A point sent without

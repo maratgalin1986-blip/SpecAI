@@ -7,15 +7,16 @@ import { sendVerificationEmail } from '@/lib/verificationEmail';
 import { zodErrorMessage } from '@/lib/apiInput';
 import { resolveProviderBase, type ProviderBase } from '@/lib/providerBase';
 import { checkRateLimit } from '@/lib/rateLimit';
+import { REFERRAL_COOKIE } from '@/lib/referral';
+import { findReferrer, freeReferralCode } from '@/lib/referralStore';
 
-/** Outside providers may sign up again if the owner reopens the aggregator. */
-const PROVIDER_SIGNUP_OPEN = false as boolean;
 export async function POST(request: NextRequest) {
   const body = (await request.json().catch(() => null)) as {
     consent?: unknown;
     baseAddress?: unknown;
     baseLat?: unknown;
     baseLon?: unknown;
+    ref?: unknown;
   } | null;
   // 152-ФЗ: без явного согласия на обработку персональных данных аккаунт не создаётся.
   if (body?.consent !== true) {
@@ -37,14 +38,6 @@ export async function POST(request: NextRequest) {
 
   // A provider is shown on the customers' map (/map): without the place where
   // its machinery stands it cannot sign up.
-  // Owner's decision (2026-10-02): only СпецПласт16's own fleet is offered,
-  // so outside providers cannot sign up.
-  if (!PROVIDER_SIGNUP_OPEN && parsed.data.accountType === 'PROVIDER') {
-    return NextResponse.json(
-      { error: 'Регистрация исполнителей закрыта: всю технику предоставляет СпецПласт16.' },
-      { status: 403 },
-    );
-  }
   let base: ProviderBase | null = null;
   if (parsed.data.accountType === 'PROVIDER') {
     const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown';
@@ -63,6 +56,13 @@ export async function POST(request: NextRequest) {
 
   const passwordHash = await bcrypt.hash(parsed.data.password, 10);
 
+  // «Пригласи коллегу»: the code from the form (?ref=) or the cookie set by /r/<code>.
+  const referrer = await findReferrer(body?.ref ?? request.cookies.get(REFERRAL_COOKIE)?.value);
+  const referral = {
+    referralCode: await freeReferralCode(),
+    ...(referrer ? { referredById: referrer.id } : {}),
+  };
+
   // Aggregator: a provider signs up together with its company, which then
   // publishes its fleet and answers customers' orders.
   const data = parsed.data;
@@ -79,6 +79,7 @@ export async function POST(request: NextRequest) {
           passwordHash,
           role: 'PROVIDER_ADMIN',
           companyId: company.id,
+          ...referral,
         },
       });
     }
@@ -89,6 +90,7 @@ export async function POST(request: NextRequest) {
         phone: data.phone,
         passwordHash,
         role: 'CUSTOMER',
+        ...referral,
       },
     });
   });
@@ -100,5 +102,7 @@ export async function POST(request: NextRequest) {
     console.error('[auth] failed to send verification email', error);
   }
 
-  return NextResponse.json({ id: user.id, email: user.email }, { status: 201 });
+  const response = NextResponse.json({ id: user.id, email: user.email }, { status: 201 });
+  if (referrer) response.cookies.delete(REFERRAL_COOKIE);
+  return response;
 }

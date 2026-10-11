@@ -25,6 +25,8 @@ function re(pattern: RegExp): RegExp {
 }
 
 const EQUIPMENT: { slug: string; label: string; pattern: RegExp }[] = [
+  // First: «нужен трал перевезти экскаватор» is a transport request.
+  { slug: 'lowboys', label: 'трал', pattern: re(/\bтрал(а|ом|ы|у)?\b|низкорамн/) },
   {
     slug: 'backhoe-loaders',
     label: 'экскаватор-погрузчик',
@@ -33,6 +35,8 @@ const EQUIPMENT: { slug: string; label: string; pattern: RegExp }[] = [
     ),
   },
   { slug: 'crane-trucks', label: 'манипулятор', pattern: re(/манипулятор|кму\b|воровайк/) },
+  // Matched before «кран»: «бурильно-крановая машина».
+  { slug: 'augers', label: 'ямобур', pattern: re(/ямобур|бурильно-кранов|\bбкм\b/) },
   { slug: 'cranes', label: 'автокран', pattern: re(/автокран|\bкран(а|ом|у|ы)?\b|кс-?\d{4,5}/) },
   { slug: 'excavators', label: 'экскаватор', pattern: re(/экскаватор|гусеничн|полноповоротн/) },
   {
@@ -50,6 +54,8 @@ const EQUIPMENT: { slug: string; label: string; pattern: RegExp }[] = [
   { slug: 'bulldozers', label: 'бульдозер', pattern: re(/бульдозер|\bдоз[еє]р|шантуй/) },
   { slug: 'tractors', label: 'трактор', pattern: re(/трактор|\bмтз\b|беларус|\bюмз\b/) },
   { slug: 'aerial-platforms', label: 'автовышка', pattern: re(/автовышк|\bвышк[аиу]\b/) },
+  { slug: 'graders', label: 'грейдер', pattern: re(/грейдер/) },
+  { slug: 'rollers', label: 'каток', pattern: re(/виброкат|\bкат(ок|ка|ки|ком)\b/) },
 ];
 
 // "I need …" signals.
@@ -65,6 +71,8 @@ const REQUEST_PATTERNS: RegExp[] = [
   re(/подскажите/),
   re(/\bсрочно\b/),
   re(/\bвозьм(у|ем)\b/),
+  re(/\bаренд(овать|ую|уем)\b/),
+  re(/\b(в|на) аренду (на|с|до|завтра|сегодня)\b/),
 ];
 
 // "I offer …" signals — providers advertising their machines.

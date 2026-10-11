@@ -29,7 +29,9 @@ async function main() {
 main()
   .catch((error) => {
     console.error(error);
-    process.exitCode = 1;
+    // A preview shares its test database with every branch (see push.ts):
+    // when the schema there is another branch's, the categories can wait.
+    if (process.env.VERCEL_ENV !== 'preview') process.exitCode = 1;
   })
   .finally(async () => {
     await prisma.$disconnect();

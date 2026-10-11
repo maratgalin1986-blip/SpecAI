@@ -10,7 +10,7 @@ export function CancelOrderButton({ orderId }: { orderId: string }) {
   const [error, setError] = useState<string | null>(null);
 
   async function cancel() {
-    if (!window.confirm('Отменить заявку? Диспетчер больше не будет по ней звонить.')) {
+    if (!window.confirm('Отменить заявку? Исполнители больше не смогут присылать предложения.')) {
       return;
     }
     setBusy(true);

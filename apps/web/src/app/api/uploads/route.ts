@@ -8,13 +8,14 @@ import {
   isAllowedUploadType,
   uploadTooLargeMessage,
 } from '@/lib/blob';
-import { isProvider } from '@/lib/fleet';
+import { isOperator, isProvider } from '@/lib/fleet';
 
 const RATE_LIMIT = { limit: 30, windowMs: 60_000 };
 
 export async function POST(request: NextRequest) {
   const currentUser = await getRequestUser(request);
-  if (!isProvider(currentUser)) {
+  // Providers upload machine photos; their operators the shift's start/end photos.
+  if (!isProvider(currentUser) && !isOperator(currentUser)) {
     return NextResponse.json({ error: 'Требуется аккаунт поставщика' }, { status: 403 });
   }
 

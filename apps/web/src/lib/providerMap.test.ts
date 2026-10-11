@@ -183,7 +183,7 @@ describe('toMapPins', () => {
       imageUrl: base.pinImageUrl,
       equipmentCount: 3,
       isHouse: false,
-      catalogUrl: '/equipment',
+      catalogUrl: '/providers/p1',
     });
     const json = JSON.stringify(toMapPins([row]));
     expect(json).not.toContain('79270000000');

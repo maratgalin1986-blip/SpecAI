@@ -2,6 +2,7 @@ import { Link, useFocusEffect, useRouter } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import React, { useCallback, useState } from 'react';
 import { Alert, FlatList, Linking, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import { ShiftStatusView } from '@/components/ShiftStatusView';
 import {
   Badge,
   Button,
@@ -109,6 +110,7 @@ function BookingCard({
       {booking.review ? (
         <Text style={styles.reviewed}>Ваш отзыв: {'★'.repeat(booking.review.rating)}</Text>
       ) : null}
+      <ShiftStatusView bookingId={booking.id} bookingStatus={booking.status} />
       {canPay ? <Button title="Оплатить" loading={paying} onPress={() => onPay(booking)} /> : null}
       {canReview ? (
         <Button title="Оставить отзыв" variant="secondary" onPress={() => onReview(booking)} />

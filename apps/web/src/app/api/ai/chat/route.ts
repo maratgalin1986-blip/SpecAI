@@ -11,7 +11,7 @@ import {
 import { getRequestUser } from '@/lib/requestUser';
 import { customerRates } from '@/lib/equipmentCatalog';
 import { checkRateLimit } from '@/lib/rateLimit';
-import { PUBLIC_FLEET } from '@/lib/fleet';
+import { HOUSE_FIRST_ORDER, PUBLIC_FLEET } from '@/lib/fleet';
 import { maskMessagesForAi } from '@/lib/privacy';
 
 export const runtime = 'nodejs';
@@ -69,7 +69,8 @@ async function searchEquipment(input: SearchEquipmentInput) {
   const items = await prisma.equipment.findMany({
     where,
     include: { category: true, location: true },
-    orderBy: { dailyRate: 'asc' },
+    // СпецПласт16's machines first, then the cheapest.
+    orderBy: [HOUSE_FIRST_ORDER, { dailyRate: 'asc' }],
     take: 5,
   });
 

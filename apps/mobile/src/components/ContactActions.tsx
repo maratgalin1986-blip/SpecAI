@@ -61,7 +61,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
   },
   call: { backgroundColor: colors.primary },
-  callback: { backgroundColor: colors.primaryLight, borderWidth: 1, borderColor: '#fcd34d' },
+  callback: {
+    backgroundColor: colors.primaryLight,
+    borderWidth: 1,
+    borderColor: colors.primaryLight,
+  },
   pressed: { opacity: 0.85 },
   callText: { color: '#fff', fontWeight: '600', fontSize: 14 },
   callbackText: { color: colors.primaryDark, fontWeight: '600', fontSize: 14 },

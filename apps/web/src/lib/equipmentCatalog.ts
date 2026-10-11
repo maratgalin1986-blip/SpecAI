@@ -3,6 +3,7 @@
 // formatting and headline prices. Pure functions — safe on server and client.
 
 import { defaultPhotoOf, type MachineType } from './machinePhotos';
+import { HOUSE_COMPANY_ID } from './fleet';
 import { houseRate } from './prices';
 
 export type TaskGroupId = 'earth' | 'lifting' | 'loading' | 'transport' | 'other';
@@ -151,12 +152,16 @@ export function headlinePrices(item: { hourlyRate?: Amount; dailyRate?: Amount }
 }
 
 /**
- * The rates a customer sees for a house machine: the hourly rate never below
- * the lib/prices.ts list (as on /arenda), the shift never below 8 such hours.
+ * The rates a customer sees. СпецПласт16's own machines: the hourly rate never
+ * below the lib/prices.ts list (as on /arenda), the shift never below 8 such
+ * hours. Other providers' machines show their own rates (an hour from the
+ * shift and back when only one is set). Without `companyId` the machine is
+ * treated as the house's (older callers).
  */
 export function customerRates(item: {
   name: string;
   categoryName: string;
+  companyId?: string | null;
   hourlyRate?: Amount;
   dailyRate?: Amount;
   weeklyRate?: Amount;
@@ -167,6 +172,18 @@ export function customerRates(item: {
   weeklyRate: number | null;
   monthlyRate: number | null;
 } {
+  const weekly = toNumber(item.weeklyRate);
+  const monthly = toNumber(item.monthlyRate);
+  if (item.companyId !== undefined && item.companyId !== HOUSE_COMPANY_ID) {
+    const hour = toNumber(item.hourlyRate);
+    const shift = toNumber(item.dailyRate);
+    return {
+      hourlyRate: hour ?? (shift !== null ? shift / SHIFT_HOURS : 0),
+      dailyRate: shift ?? (hour !== null ? hour * SHIFT_HOURS : 0),
+      weeklyRate: weekly,
+      monthlyRate: monthly,
+    };
+  }
   const hourlyRate = houseRate(
     toNumber(item.hourlyRate),
     machineTypeOf(item.categoryName, item.name),
@@ -174,8 +191,6 @@ export function customerRates(item: {
   const dailyRate = Math.max(toNumber(item.dailyRate) ?? 0, hourlyRate * SHIFT_HOURS);
   // A week or a month may be cheaper per day, but not below its working days
   // (5 and 22 shifts) at the list price.
-  const weekly = toNumber(item.weeklyRate);
-  const monthly = toNumber(item.monthlyRate);
   return {
     hourlyRate,
     dailyRate,

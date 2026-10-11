@@ -23,10 +23,11 @@ export default function AboutScreen() {
         <View style={styles.hero}>
           <View style={styles.logo}>
             <Text style={styles.logoText} numberOfLines={1} adjustsFontSizeToFit>
-              СпецПласт16
+              ИИСтройка24
             </Text>
           </View>
           <Text style={styles.name}>{SITE.name}</Text>
+          <Text style={styles.tagline}>{SITE.byline}</Text>
           <Text style={styles.tagline}>{SITE.tagline}</Text>
           <Text style={styles.region}>
             {SITE.city} · {SITE.region}

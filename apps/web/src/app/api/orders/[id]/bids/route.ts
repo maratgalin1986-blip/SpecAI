@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { prisma } from '@specai/database';
 import { getRequestUser } from '@/lib/requestUser';
-import { sendEmail } from '@/lib/email';
 import { newBidReceived } from '@/lib/emailTemplates';
 import { notifyTelegram } from '@/lib/notify';
 import { formatMoney } from '@/lib/money';
@@ -11,6 +10,10 @@ import { INVALID_JSON_MESSAGE, readJson, zodErrorMessage } from '@/lib/apiInput'
 import { BLOCKING_BOOKING_STATUSES, unavailableEquipmentMessage } from '@/lib/bookingRules';
 import { findOverlappingBooking } from '@/lib/bookingConflicts';
 import { isProvider } from '@/lib/fleet';
+import { notifyUser } from '@/lib/notifications/notifyUser';
+import { bidBreakdownSchema, type BidBreakdownInput } from '@specai/shared';
+import { bidSumMatches, bidTotal } from '@/lib/offerBreakdown';
+import { isLateBid } from '@/lib/bidWindow';
 
 const requestSchema = z.object({
   // Not a cuid: the owner's own fleet uses readable ids like "sp16-jcb-4cx".
@@ -25,6 +28,16 @@ const requestSchema = z.object({
   message: z.string().max(1000, 'Сообщение слишком длинное (до 1000 знаков)').optional(),
 });
 
+/** The breakdown columns of a bid from the request (lib/offerBreakdown.ts). */
+function breakdownData(data: BidBreakdownInput) {
+  return {
+    deliveryPrice: data.deliveryPrice ?? null,
+    shiftPrice: data.shiftPrice ?? null,
+    shifts: data.shifts ?? null,
+    optionsNote: data.optionsNote?.trim() || null,
+  };
+}
+
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
   const currentUser = await getRequestUser(request);
   if (!isProvider(currentUser)) {
@@ -35,9 +48,20 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
   if (body === null) {
     return NextResponse.json({ error: INVALID_JSON_MESSAGE }, { status: 400 });
   }
-  const parsed = requestSchema.safeParse(body);
+  const parsed = requestSchema.merge(bidBreakdownSchema).safeParse(body);
   if (!parsed.success) {
     return NextResponse.json({ error: zodErrorMessage(parsed.error) }, { status: 400 });
+  }
+  // The total must be what the breakdown says: подача + смена × смен.
+  if (!bidSumMatches(parsed.data.price, parsed.data)) {
+    return NextResponse.json(
+      {
+        error: `Итог не сходится: подача + смена × смен = ${formatMoney(
+          bidTotal(parsed.data.deliveryPrice, parsed.data.shiftPrice!, parsed.data.shifts!),
+        )}`,
+      },
+      { status: 400 },
+    );
   }
 
   const order = await prisma.order.findUnique({
@@ -47,6 +71,9 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
   if (!order || order.status !== 'OPEN') {
     return NextResponse.json({ error: 'Заявка не найдена или уже закрыта' }, { status: 404 });
   }
+  // After bidsUntil the bid is still taken, but marked late for the customer.
+  const late = isLateBid(order.bidsUntil);
+  const lateNote = late ? ' — срок приёма предложений истёк, заказчик всё равно его увидит' : '';
 
   const equipment = await prisma.equipment.findUnique({ where: { id: parsed.data.equipmentId } });
   if (!equipment || equipment.companyId !== currentUser.companyId) {
@@ -99,9 +126,13 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         price: parsed.data.price,
         currency: equipment.currency,
         message,
+        ...breakdownData(parsed.data),
       },
     });
-    return NextResponse.json({ bid, message: 'Предложение обновлено' }, { status: 200 });
+    return NextResponse.json(
+      { bid, late, message: `Предложение обновлено${lateNote}` },
+      { status: 200 },
+    );
   }
 
   const bid = await prisma.bid.create({
@@ -111,6 +142,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       price: parsed.data.price,
       currency: equipment.currency,
       message,
+      ...breakdownData(parsed.data),
     },
   });
 
@@ -123,7 +155,22 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       currency: bid.currency,
       message: bid.message,
     });
-    await sendEmail({ to: order.customer.email, ...template });
+    // The customer's chosen channels; the e-mail is the newBidReceived letter.
+    const company = await prisma.company.findUnique({
+      where: { id: equipment.companyId },
+      select: { name: true },
+    });
+    await notifyUser(
+      order.customerId,
+      {
+        type: 'bid.new',
+        orderId: order.id,
+        equipmentName: equipment.name,
+        price: formatMoney(bid.price, bid.currency),
+        companyName: company?.name,
+      },
+      { email: template },
+    );
     if (order.source !== 'SITE') {
       // Imported orders have no real customer account — tell the site owner instead.
       await notifyTelegram(
@@ -132,8 +179,11 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       );
     }
   } catch (error) {
-    console.error('[email] newBidReceived failed', error);
+    console.error('[notify] newBidReceived failed', error);
   }
 
-  return NextResponse.json({ bid, message: 'Предложение отправлено' }, { status: 201 });
+  return NextResponse.json(
+    { bid, late, message: `Предложение отправлено${lateNote}` },
+    { status: 201 },
+  );
 }

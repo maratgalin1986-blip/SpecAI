@@ -5,10 +5,13 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Loader } from '@/components/ui';
 import { AuthProvider, useAuth } from '@/lib/auth';
+import { usePushRegistration } from '@/lib/push';
 import { colors } from '@/lib/theme';
 
 function RootNavigator() {
   const { token, isLoading } = useAuth();
+  // Push: registers this device after sign-in, forgets it on sign-out.
+  usePushRegistration(token);
 
   if (isLoading) {
     return <Loader />;
@@ -32,8 +35,11 @@ function RootNavigator() {
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="orders/new" options={{ title: 'Новая заявка' }} />
         <Stack.Screen name="orders/[id]" options={{ title: 'Заявка' }} />
+        <Stack.Screen name="orders/[id]/chat" options={{ title: 'Чат' }} />
         <Stack.Screen name="bookings/[id]/review" options={{ title: 'Отзыв' }} />
         <Stack.Screen name="comments" options={{ title: 'Комментарии' }} />
+        <Stack.Screen name="provider/documents" options={{ title: 'Документы' }} />
+        <Stack.Screen name="demand" options={{ title: 'Карта спроса' }} />
       </Stack.Protected>
       {/* Доступны и без входа: каталог, карточка техники, карта, звонок, о компании. */}
       <Stack.Screen name="catalog" options={{ title: 'Каталог техники' }} />

@@ -113,7 +113,7 @@ export default async function EquipmentCatalogPage({
   const requestedPage = parsePage(searchParams.page);
 
   // Filters other than the category: the tab counts are computed against these.
-  // Only the house fleet; PUBLISHED_FLEET goes last so no filter can override it.
+  // Every provider's published machinery; PUBLISHED_FLEET goes last so no filter can override it.
   const baseWhere = {
     location: searchParams.city
       ? { city: { equals: searchParams.city, mode: 'insensitive' as const } }
@@ -210,7 +210,8 @@ export default async function EquipmentCatalogPage({
         camera={2}
       >
         <p>
-          Цена за час и за смену 8 часов — на каждой карточке. Оставьте телефон прямо в карточке:{' '}
+          Техника {SITE.name} и других исполнителей со своими машинистами. Цена за час и за смену 8
+          часов — на каждой карточке. Оставьте телефон прямо в карточке:{' '}
           {SITE.callbackPromise.toLowerCase()}.
         </p>
         <a
@@ -395,7 +396,7 @@ export default async function EquipmentCatalogPage({
               <a href="/orders" className="text-amber-700 underline">
                 заявку
               </a>
-              , подскажем, чем {SITE.name} закроет вашу задачу.
+              : её увидят исполнители, включая {SITE.name}, и ответят своими ценами.
             </p>
           </div>
           <div className="rounded-3xl border border-slate-200 bg-white p-6">

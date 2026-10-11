@@ -1,29 +1,33 @@
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   Keyboard,
   KeyboardAvoidingView,
   Platform,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
 import { DateField } from '@/components/DateField';
-import { Button, Card, Input } from '@/components/ui';
+import { Button, Card, Chip, Input } from '@/components/ui';
 import { ApiError, createOrder, fetchCategories, type Category } from '@/lib/api';
 import { addDays, bookingDays, pluralizeRu, startOfDay, toIsoDate } from '@/lib/format';
-import { colors, spacing } from '@/lib/theme';
+import { categoryIcon } from '@/lib/orderFlow';
+import { colors, spacing } from '@/theme';
 
 export default function NewOrderScreen() {
   const router = useRouter();
+  // Поля, заполненные на главном экране (шторка быстрого заказа).
+  const params = useLocalSearchParams<{ categoryId?: string; address?: string }>();
   const today = useMemo(() => startOfDay(new Date()), []);
   const [description, setDescription] = useState('');
   const [categories, setCategories] = useState<Category[]>([]);
-  const [categoryId, setCategoryId] = useState<string | null>(null);
+  const [categoryId, setCategoryId] = useState<string | null>(params.categoryId ?? null);
+  const [address, setAddress] = useState(params.address ?? '');
+  // По умолчанию — одна смена завтра.
   const [startDate, setStartDate] = useState(() => addDays(today, 1));
-  const [endDate, setEndDate] = useState(() => addDays(today, 4));
+  const [endDate, setEndDate] = useState(() => addDays(today, 1));
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -68,6 +72,7 @@ export default function NewOrderScreen() {
         desiredStartDate: toIsoDate(startDate),
         desiredEndDate: toIsoDate(endDate),
         categoryId: categoryId ?? undefined,
+        address: address.trim() || undefined,
       });
       router.replace({ pathname: '/orders/[id]', params: { id: order.id } });
     } catch (caught) {
@@ -99,6 +104,16 @@ export default function NewOrderScreen() {
         </Card>
 
         <Card style={styles.section}>
+          <Input
+            label="Адрес объекта"
+            value={address}
+            onChangeText={setAddress}
+            placeholder="Город, улица, дом или ориентир"
+            maxLength={200}
+          />
+        </Card>
+
+        <Card style={styles.section}>
           <Text style={styles.sectionTitle}>Категория</Text>
           <View style={styles.chips}>
             <Chip
@@ -109,7 +124,8 @@ export default function NewOrderScreen() {
             {categories.map((category) => (
               <Chip
                 key={category.id}
-                label={category.name}
+                label={`${categoryIcon(category.name)} ${category.name}`}
+                accessibilityLabel={category.name}
                 selected={categoryId === category.id}
                 onPress={() => setCategoryId(category.id)}
               />
@@ -145,33 +161,17 @@ export default function NewOrderScreen() {
         </Card>
 
         {error ? <Text style={styles.error}>{error}</Text> : null}
-        <Button title="Разместить заявку" onPress={handleSubmit} loading={submitting} />
+        <Button
+          title="Разместить заявку"
+          size="large"
+          onPress={handleSubmit}
+          loading={submitting}
+        />
         <Text style={styles.footer}>
           Поставщики увидят заявку и предложат технику с ценой. Вы выбираете лучшее предложение.
         </Text>
       </ScrollView>
     </KeyboardAvoidingView>
-  );
-}
-
-function Chip({
-  label,
-  selected,
-  onPress,
-}: {
-  label: string;
-  selected: boolean;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityState={{ selected }}
-      onPress={onPress}
-      style={[styles.chip, selected && styles.chipSelected]}
-    >
-      <Text style={[styles.chipText, selected && styles.chipTextSelected]}>{label}</Text>
-    </Pressable>
   );
 }
 
@@ -182,17 +182,6 @@ const styles = StyleSheet.create({
   sectionTitle: { fontSize: 16, fontWeight: '600', color: colors.text },
   textarea: { minHeight: 110, paddingTop: spacing.md },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
-  chip: {
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.card,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-  },
-  chipSelected: { backgroundColor: colors.primary, borderColor: colors.primary },
-  chipText: { fontSize: 14, color: colors.text },
-  chipTextSelected: { color: '#fff', fontWeight: '600' },
   dateRow: { flexDirection: 'row', gap: spacing.md },
   dateField: { flex: 1 },
   hint: { fontSize: 14, color: colors.textMuted },
