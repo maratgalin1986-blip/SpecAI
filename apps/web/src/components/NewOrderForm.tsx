@@ -86,12 +86,19 @@ export function NewOrderForm({
       return;
     }
 
+    // The order page shows what happens next (offers, chat); the list under
+    // the form only refreshes if the id is missing for some reason.
+    const created = (await response.json().catch(() => null)) as { order?: { id?: string } } | null;
     setDescription('');
     setCategoryId('');
     setStartDate('');
     setEndDate('');
     setAddress('');
     setPoint(null);
+    if (created?.order?.id) {
+      router.push(`/orders/${encodeURIComponent(created.order.id)}`);
+      return;
+    }
     router.refresh();
   }
 

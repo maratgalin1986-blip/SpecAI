@@ -356,7 +356,9 @@ export default async function EquipmentDetailPage({ params }: { params: { id: st
           <section>
             <div className="eyebrow text-amber-700">Описание</div>
             <p className="mt-4 max-w-3xl whitespace-pre-line leading-relaxed text-slate-700">
-              {item.description ?? 'Описание не указано — уточните детали у менеджера.'}
+              {item.description
+                ? maskContactsAndLinks(item.description)
+                : 'Описание не указано — уточните детали у менеджера.'}
             </p>
           </section>
 

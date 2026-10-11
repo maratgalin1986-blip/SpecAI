@@ -24,6 +24,37 @@ function cleanAddress(value: unknown): string {
   return typeof value === 'string' ? value.replace(/\s+/g, ' ').trim().slice(0, 200) : '';
 }
 
+// `\b` knows only Latin letters, so the boundaries are spelled out.
+const ABBREVIATIONS: [RegExp, string][] = [
+  [/(?<![\p{L}-])(?:пр-т|просп\.|пр\.)(?=\s)/giu, 'проспект'],
+  [/(?<![\p{L}-])ул\.(?=\s)/giu, 'улица'],
+  [/(?<![\p{L}-])пер\.(?=\s)/giu, 'переулок'],
+  [/(?<![\p{L}-])(?:б-р|бул\.)(?=\s)/giu, 'бульвар'],
+  [/(?<![\p{L}-])ш\.(?=\s)/giu, 'шоссе'],
+  [/(?<![\p{L}-])д\.\s*(?=\d)/giu, ''],
+  [/(?<![\p{L}-])г\.\s*(?=\p{Lu})/giu, ''],
+];
+
+/** «пр. Мира 10» → «проспект Мира 10»; without a city the republic is added. */
+export function addressVariants(address: string): string[] {
+  const expanded = ABBREVIATIONS.reduce(
+    (text, [pattern, word]) => text.replace(pattern, word),
+    address,
+  )
+    .replace(/\s+/g, ' ')
+    .trim();
+  const variants = [address, expanded];
+  if (
+    !/татарстан|челны|казан|елабуг|нижнекамск|альметьевск|менделеевск|заинск|бугульм/iu.test(
+      expanded,
+    )
+  ) {
+    variants.push(`${expanded}, Набережные Челны`);
+  }
+  variants.push(`${expanded}, Республика Татарстан`);
+  return [...new Set(variants)];
+}
+
 export async function resolveProviderBase(input: {
   baseAddress?: unknown;
   baseLat?: unknown;
@@ -44,7 +75,11 @@ export async function resolveProviderBase(input: {
     };
   }
   if (address.length < 3) return { ok: false, error: BASE_REQUIRED_MESSAGE };
-  const found = await lookupAddress(address);
+  let found = await lookupAddress(address);
+  for (const variant of addressVariants(address).slice(1)) {
+    if (found.status !== 'not_found') break;
+    found = await lookupAddress(variant);
+  }
   if (found.status === 'unavailable') {
     return { ok: false, error: GEOCODER_UNAVAILABLE_MESSAGE, status: 503 };
   }

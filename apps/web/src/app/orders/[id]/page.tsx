@@ -11,7 +11,7 @@ import { formatMoney } from '@/lib/money';
 import { isAdminRequest } from '@/lib/admin';
 import { SiteConditions } from '@/components/SiteConditions';
 import { houseFirst, isProvider, isHouseManager } from '@/lib/fleet';
-import { isSafeHttpUrl } from '@/lib/privacy';
+import { isSafeHttpUrl, maskContactsAndLinks } from '@/lib/privacy';
 import { approvedComments } from '@/lib/commentAccess';
 import { CommentForm, CommentList } from '@/components/Comments';
 import { customerShortName } from '@/lib/customerPrivacy';
@@ -153,7 +153,9 @@ export default async function OrderDetailPage({ params }: { params: { id: string
 
       <Card>
         <h2 className="font-semibold">Описание</h2>
-        <p className="mt-2 whitespace-pre-line text-sm text-slate-600">{order.description}</p>
+        <p className="mt-2 whitespace-pre-line text-sm text-slate-600">
+          {isOwner || isAdmin ? order.description : maskContactsAndLinks(order.description)}
+        </p>
       </Card>
 
       {/* An async server component, awaited directly so the JSX types do not
@@ -307,7 +309,19 @@ export default async function OrderDetailPage({ params }: { params: { id: string
                 className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:gap-4"
               >
                 <OfferBody
-                  bid={bid}
+                  bid={{
+                    ...bid,
+                    message:
+                      bid.message &&
+                      !isAdmin &&
+                      !(
+                        ['CONFIRMED', 'ACTIVE', 'COMPLETED'].includes(
+                          order.booking?.status ?? '',
+                        ) && bid.status === 'ACCEPTED'
+                      )
+                        ? maskContactsAndLinks(bid.message)
+                        : bid.message,
+                  }}
                   start={order.desiredStartDate}
                   end={order.desiredEndDate}
                   trust={

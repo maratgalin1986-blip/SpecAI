@@ -14,6 +14,7 @@ import { INVALID_JSON_MESSAGE, readJson, zodErrorMessage } from '@/lib/apiInput'
 import { checkBookingDates } from '@/lib/bookingRules';
 import { customerShortName } from '@/lib/customerPrivacy';
 import { unreadMessagesByOrder } from '@/lib/orderChatAccess';
+import { maskContactsAndLinks } from '@/lib/privacy';
 import {
   assessWork,
   CHELNY,
@@ -81,6 +82,8 @@ export async function GET(request: NextRequest) {
       );
       return {
         ...rest,
+        // Phones typed into the task text stay private until the booking.
+        description: maskContactsAndLinks(rest.description),
         ...(chatContact ? { chatContact } : {}),
         customer: { name: customerShortName(customer.name) },
         bids: order.bids.filter((bid) => bid.equipment.companyId === currentUser.companyId),
@@ -115,6 +118,19 @@ export async function POST(request: NextRequest) {
   const dates = checkBookingDates(parsed.data.desiredStartDate, parsed.data.desiredEndDate);
   if (!dates.ok) {
     return NextResponse.json({ error: dates.error }, { status: 400 });
+  }
+
+  if (parsed.data.categoryId) {
+    const category = await prisma.equipmentCategory.findUnique({
+      where: { id: parsed.data.categoryId },
+      select: { parentId: true, children: { select: { id: true }, take: 1 } },
+    });
+    if (!category) {
+      return NextResponse.json({ error: 'Неизвестный вид техники' }, { status: 400 });
+    }
+    if (category.children.length > 0) {
+      return NextResponse.json({ error: 'Выберите конкретный вид техники' }, { status: 400 });
+    }
   }
 
   // The work site: geocoded once here, used for the weather and the map.

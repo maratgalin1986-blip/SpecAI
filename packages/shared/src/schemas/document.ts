@@ -37,10 +37,20 @@ const optionalText = (max: number) =>
     .nullable()
     .transform((value) => value || null);
 
-const optionalDate = z
-  .union([z.coerce.date(), z.null()])
-  .optional()
-  .transform((value) => value ?? null);
+// '' / 0 / '0' from an empty form field mean «без даты», not 1970-01-01.
+const optionalDate = z.preprocess(
+  (value) =>
+    value === '' || value === 0 || value === '0' || (typeof value === 'string' && !value.trim())
+      ? null
+      : value,
+  z
+    .union([z.coerce.date(), z.null()])
+    .optional()
+    .transform((value) => value ?? null)
+    .refine((value) => value === null || !Number.isNaN(value.getTime()), {
+      message: 'Неверная дата',
+    }),
+);
 
 export const providerDocumentKindSchema = z.enum(PROVIDER_DOCUMENT_KINDS, {
   errorMap: () => ({ message: 'Выберите вид документа' }),
