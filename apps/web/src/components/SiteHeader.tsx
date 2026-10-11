@@ -6,6 +6,8 @@ import { JOURNEY_SELECTOR } from '@/components/useJourneyInView';
 import { SoundToggle } from '@/components/SoundToggle';
 import { SITE } from '@/lib/site';
 
+import { AuthStatus } from '@/components/AuthStatus';
+
 const NAV_LINKS = [
   { href: '/equipment', label: 'Техника' },
   // Hidden on narrow desktops (lg) like «Кабинет»; in the mobile menu always.
@@ -116,6 +118,7 @@ export function SiteHeader() {
           >
             Смета
           </a>
+          <AuthStatus />
           <a
             href="/#callback"
             className="group inline-flex items-center gap-1.5 rounded-full bg-slate-900 px-4 py-2 text-white transition hover:bg-amber-500 hover:text-slate-950"
@@ -203,7 +206,9 @@ export function SiteHeader() {
           >
             📦 Смета для снабженца
           </a>
-          <div className="px-2 py-2"></div>
+          <div className="px-2 py-2">
+            <AuthStatus />
+          </div>
         </nav>
       )}
     </header>

@@ -96,8 +96,8 @@ export default function RegisterPage() {
         <div className="mb-4 flex flex-col gap-2 text-sm sm:flex-row">
           {(
             [
-              ['CUSTOMER', 'Хочу арендовать технику'],
-              ['PROVIDER', 'Хочу сдавать технику'],
+              ['CUSTOMER', 'Заказать технику'],
+              ['PROVIDER', 'Встать на линию'],
             ] as const
           ).map(([type, label]) => (
             <button

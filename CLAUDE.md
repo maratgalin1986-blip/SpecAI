@@ -84,8 +84,10 @@ small so merges stay conflict-free.
 - Checks: `pnpm lint`, `pnpm typecheck`, `pnpm format:check`, `pnpm test`
   (vitest 4 — vitest 5 needs Node 22 and breaks CI), and for the app
   `cd apps/mobile && npx expo export --platform android`.
-- No sign-up or online payment on the public web (owner, 2026-10-03): account pages
-  redirect to the order form; `/admin` and the mobile API keep their sign-in.
+- Sign-up on the web and in the app (owner, 2026-10-11, replaces the 2026-10-03
+  «no sign-up» note): at registration one chooses «Заказать технику» (customer)
+  or «Встать на линию» (provider). No online payment; `/orders` keeps the guest
+  form for visitors without an account.
 - Auth: NextAuth credentials for the web, Bearer JWT for mobile; API routes
   use `getRequestUser(request)` so both work.
 - Payments: Stripe Checkout + webhook; refunds are manual

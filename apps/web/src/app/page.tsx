@@ -298,7 +298,7 @@ export default async function HomePage() {
               <div className="grid grid-cols-2 gap-3">
                 {[
                   { href: '/smeta', icon: '🧮', label: 'Рассчитать смету' },
-                  { href: '/dizain', icon: '🏠', label: 'Создать дизайн' },
+                  { href: '/register?type=provider', icon: '🚛', label: 'Встать на линию' },
                 ].map((item) => (
                   <a
                     key={item.href}
