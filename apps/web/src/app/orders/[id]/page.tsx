@@ -1,4 +1,4 @@
-import { notFound } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 import { getServerSession } from 'next-auth';
 import { prisma } from '@specai/database';
 import { Card } from '@specai/ui';
@@ -30,6 +30,7 @@ import { OrderChat } from '@/components/OrderChat';
 import { bidsLeftText, isLateBid } from '@/lib/bidWindow';
 import { orderDays } from '@/lib/offerBreakdown';
 import { distanceKm } from '@/lib/geo';
+import { bidLoginHref } from '@/lib/orderBoard';
 
 export const dynamic = 'force-dynamic';
 
@@ -63,8 +64,10 @@ export default async function OrderDetailPage({ params }: { params: { id: string
   const isAdmin = isAdminRequest();
   const canSeeContact = isHouseManager(session?.user) || isAdmin;
   const seesAllBids = isOwner || isAdmin;
+  // A guest from the public board (/orders) signs in as a provider and comes
+  // back; another customer is shown the board instead of a 404.
   if (!isOwner && !isAdmin && !isProvider(session?.user)) {
-    notFound();
+    redirect(session?.user ? '/orders#board' : bidLoginHref(order.id));
   }
   const visibleBids = houseFirst(
     seesAllBids

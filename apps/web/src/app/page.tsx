@@ -14,6 +14,7 @@ import { HowItWorks } from '@/components/HowItWorks';
 import { Icon, type IconName } from '@/components/Icon';
 import { IntroSplash } from '@/components/IntroSplash';
 import { MachinePhoto } from '@/components/MachinePhoto';
+import { MarketplaceBlock } from '@/components/MarketplaceBlock';
 import { Reveal } from '@/components/Reveal';
 import { TiltCard } from '@/components/TiltCard';
 import type { MachineType } from '@/lib/machinePhotos';
@@ -378,6 +379,11 @@ export default async function HomePage() {
           </div>
         ))}
       </section>
+
+      {/* Owner, 2026-10-11: the marketplace itself — two doors and the live board. */}
+      <div className="depth">
+        <MarketplaceBlock />
+      </div>
 
       <div
         className="marquee-mask depth -my-10 overflow-hidden border-y border-slate-200 py-4"

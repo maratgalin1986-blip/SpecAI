@@ -1100,3 +1100,44 @@ export function deleteEquipmentBlock(equipmentId: string, blockId: string) {
     { method: 'DELETE' },
   );
 }
+
+// ---- Исполнители (публичный список, GET /api/providers) ----
+
+/**
+ * Карточка исполнителя: без телефонов, e-mail и адресов — контакты открываются
+ * после подтверждения брони. Поля считает сервер (lib/providerCards.ts).
+ */
+export interface ProviderCard {
+  id: string;
+  name: string;
+  verified: boolean;
+  isHouse: boolean;
+  rating: number | null;
+  ratingCount: number;
+  completed: number;
+  cancelLabel: string | null;
+  badges: string[];
+  city: string;
+  fleetCount: number;
+  /** «12 машин: экскаваторы, краны». */
+  fleetSummary: string;
+  categories: string[];
+  groupIds: string[];
+  /** До трёх фото техники (абсолютные https-ссылки или пути сайта). */
+  photos: string[];
+  radiusKm: number;
+  radiusLabel: string;
+  sinceLabel: string;
+}
+
+export function fetchProviders(params: { sort?: 'rating' | 'fleet' | 'newest' } = {}) {
+  const search = new URLSearchParams();
+  if (params.sort) search.set('sort', params.sort);
+  const query = search.toString();
+  return apiFetch<{
+    providers: ProviderCard[];
+    total: number;
+    groups: { id: string; label: string }[];
+    cities: string[];
+  }>(`/api/providers${query ? `?${query}` : ''}`, { anonymous: true });
+}
