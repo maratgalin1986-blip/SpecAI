@@ -48,6 +48,13 @@ small so merges stay conflict-free.
    not reach the CLI. Only a new container sees a new value, and each service
    host must also be allowed under Network access. Never ask the owner to paste
    a secret into the chat.
+9. **A preview that fails only on Vercel with a React/JSX type error** («Property
+   'src' does not exist on type …», «cannot be used as a JSX component») while
+   `next build` passes locally and CI is green is a stale Vercel build cache
+   (a branch that once installed another `@types/react`). It cost two days on
+   2026‑10‑08…11. Fix: the owner opens the failed deployment → ⋯ → Redeploy →
+   untick «Use existing Build Cache». Cloud sessions cannot read Vercel logs
+   without `VERCEL_TOKEN` in the environment; ask for the log screenshot.
 
 ## Project facts
 
