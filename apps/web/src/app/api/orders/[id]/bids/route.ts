@@ -15,6 +15,7 @@ import { bidBreakdownSchema, type BidBreakdownInput } from '@specai/shared';
 import { bidSumMatches, bidTotal, houseFloorError, orderDays } from '@/lib/offerBreakdown';
 import { bidShiftFloor } from '@/lib/equipmentCatalog';
 import { isLateBid } from '@/lib/bidWindow';
+import { maskContactsAndLinks } from '@/lib/privacy';
 
 const requestSchema = z.object({
   // Not a cuid: the owner's own fleet uses readable ids like "sp16-jcb-4cx".
@@ -72,10 +73,18 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
 
   const order = await prisma.order.findUnique({
     where: { id: params.id },
-    include: { customer: { select: { email: true } } },
+    include: { customer: { select: { email: true, companyId: true } } },
   });
   if (!order || order.status !== 'OPEN') {
     return NextResponse.json({ error: 'Заявка не найдена или уже закрыта' }, { status: 404 });
+  }
+  // No offers on the company's own orders: a self-made deal would count as a
+  // completed order and let the company rate itself.
+  if (order.customerId === currentUser.id || order.customer.companyId === currentUser.companyId) {
+    return NextResponse.json(
+      { error: 'Нельзя предлагать технику на собственную заявку' },
+      { status: 403 },
+    );
   }
   // After bidsUntil the bid is still taken, but marked late for the customer.
   const late = isLateBid(order.bidsUntil);
@@ -174,7 +183,8 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       equipmentName: equipment.name,
       price: bid.price,
       currency: bid.currency,
-      message: bid.message,
+      // As on the order page: no phones or links before the booking.
+      message: bid.message && maskContactsAndLinks(bid.message),
     });
     // The customer's chosen channels; the e-mail is the newBidReceived letter.
     const company = await prisma.company.findUnique({

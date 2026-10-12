@@ -8,6 +8,7 @@ import { updateOrderSchema } from '@specai/shared';
 import { INVALID_JSON_MESSAGE, readJson, zodErrorMessage } from '@/lib/apiInput';
 import { unreadMessagesByOrder } from '@/lib/orderChatAccess';
 import { maskContactsAndLinks } from '@/lib/privacy';
+import { bidForCustomer } from '@/lib/bidPrivacy';
 
 export const dynamic = 'force-dynamic';
 
@@ -82,15 +83,8 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
   // Contacts open only with the booked company once it confirmed: until then
   // a provider's message to the customer (and the task text to providers)
   // goes without phones and links.
-  const contactsOpen = ['CONFIRMED', 'ACTIVE', 'COMPLETED'].includes(rest.booking?.status ?? '');
   const bids = isOwner
-    ? rest.bids.map((bid) => ({
-        ...bid,
-        message:
-          bid.message && !(contactsOpen && bid.status === 'ACCEPTED')
-            ? maskContactsAndLinks(bid.message)
-            : bid.message,
-      }))
+    ? rest.bids.map((bid) => bidForCustomer(bid, rest.booking?.status))
     : rest.bids.filter((bid) => bid.equipment.company.id === currentUser.companyId);
   const { booking, ...publicRest } = rest;
   void booking;

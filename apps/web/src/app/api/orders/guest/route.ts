@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { clientIp } from '@/lib/loginErrors';
 import { prisma } from '@specai/database';
 import { createGuestOrderSchema } from '@specai/shared';
 import { INVALID_JSON_MESSAGE, readJson, zodErrorMessage } from '@/lib/apiInput';
@@ -41,7 +42,7 @@ export async function POST(request: NextRequest) {
   const dates = checkBookingDates(parsed.data.desiredStartDate, parsed.data.desiredEndDate);
   if (!dates.ok) return NextResponse.json({ error: dates.error }, { status: 400 });
 
-  const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown';
+  const ip = clientIp(request);
   if (!checkRateLimit(`guest-orders:${ip}`, LEAD_RATE_LIMIT).ok) {
     return NextResponse.json(
       { error: `Слишком много заявок. Позвоните нам: ${SITE.phone}` },

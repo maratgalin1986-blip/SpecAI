@@ -7,11 +7,15 @@ const EMAIL = /[\p{L}\p{N}._%+-]+@[\p{L}\p{N}-]+(?:\.[\p{L}\p{N}-]+)+/gu;
 const MESSENGER_LINK =
   /(?:https?:\/\/)?(?:www\.)?(?:t\.me|telegram\.me|wa\.me|api\.whatsapp\.com|vk\.com|ok\.ru)\/[^\s,;)]+/giu;
 const USERNAME = /(^|[^\p{L}\p{N}_@])@[A-Za-z0-9_]{3,32}(?![A-Za-z0-9_])/gu;
-// Digits with spaces, dashes and brackets in between; dots are left out so
-// dates such as 01.06.2028 are never touched.
-const PHONE_LIKE = /\+?\d[\d\s()-]{5,}\d/g;
+// Digits with any separator people use to dodge the filter: spaces, dashes
+// (also en/em), brackets, dots, middle dots, underscores, slashes. The digit
+// count in looksLikePhone decides; a candidate holding a full date such as
+// 01.06.2028 is left alone, so «12.10.2026 - 15.10» stays readable.
+const PHONE_LIKE = /\+?\d[\d\s().·_/\u2013\u2014-]{5,}\d/g;
+const FULL_DATE = /(?<!\d)\d{1,2}\.\d{1,2}\.(?:19|20)\d{2}(?!\d)/;
 
 function looksLikePhone(candidate: string): boolean {
+  if (FULL_DATE.test(candidate)) return false;
   const digits = candidate.replace(/\D/g, '');
   if (digits.length >= 10 && digits.length <= 15) return true;
   // Local numbers written like 242-80-88.

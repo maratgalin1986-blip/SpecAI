@@ -43,6 +43,14 @@ describe('login errors', () => {
     expect(clientIpFrom(() => undefined)).toBe('unknown');
   });
 
+  it("prefers Vercel's own header to a spoofable X-Forwarded-For", () => {
+    const headers: Record<string, string> = {
+      'x-forwarded-for': '203.0.113.7',
+      'x-vercel-forwarded-for': '5.6.7.8',
+    };
+    expect(clientIpFrom((name) => headers[name])).toBe('5.6.7.8');
+  });
+
   it('sends providers to their cabinet', () => {
     expect(homeForRole('PROVIDER_ADMIN')).toBe('/provider');
     expect(homeForRole('CUSTOMER')).toBe('/dashboard');

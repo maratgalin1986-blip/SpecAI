@@ -8,6 +8,7 @@
 // the masked text is what gets stored.
 import { canSeeCustomerContacts, customerShortName } from './customerPrivacy';
 import { isHttpsUrl, maskContactsAndLinks } from './privacy';
+import { isOurBlobUrl } from './blob';
 
 export const CHAT_MESSAGE_MAX_LENGTH = 2000;
 
@@ -164,6 +165,11 @@ export function prepareAttachmentUrl(
   if (raw === undefined || raw === null || raw === '') return { ok: true, url: null };
   if (typeof raw !== 'string' || raw.length > 2048 || !isHttpsUrl(raw)) {
     return { ok: false, error: 'Вложение должно быть ссылкой https' };
+  }
+  // Only files uploaded through /api/uploads: any other link (t.me, wa.me, a
+  // site) would carry contacts past the masking before the booking.
+  if (!isOurBlobUrl(raw)) {
+    return { ok: false, error: 'Вложение — только загруженный файл, ссылки не принимаются' };
   }
   return { ok: true, url: raw };
 }

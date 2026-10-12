@@ -11,7 +11,12 @@ import { findOverlappingBooking, lockEquipment } from '@/lib/bookingConflicts';
 import { INVALID_JSON_MESSAGE, prismaErrorCode, readJson, zodErrorMessage } from '@/lib/apiInput';
 import { isOnlinePaymentEnabled } from '@/lib/stripe';
 import { isProvider, isPublicEquipment } from '@/lib/fleet';
-import { customerForProvider, providerForCustomer } from '@/lib/customerPrivacy';
+import {
+  canSeeCustomerContacts,
+  customerForProvider,
+  providerForCustomer,
+} from '@/lib/customerPrivacy';
+import { maskContactsAndLinks } from '@/lib/privacy';
 import { HOUSE_COMPANY_ID } from '@/lib/fleet';
 import { SITE } from '@/lib/site';
 import { customerRates } from '@/lib/equipmentCatalog';
@@ -68,6 +73,11 @@ export async function GET(request: NextRequest) {
       bookings: bookings.map((booking) => ({
         ...booking,
         customer: customerForProvider(booking.customer, booking.status),
+        // The customer's note may carry a phone: hidden until the booking is confirmed.
+        notes:
+          booking.notes && !canSeeCustomerContacts(booking.status)
+            ? maskContactsAndLinks(booking.notes)
+            : booking.notes,
         unreadMessages: booking.orderId ? (unread.get(booking.orderId) ?? 0) : 0,
       })),
       paymentsEnabled,
@@ -153,6 +163,11 @@ export async function POST(request: NextRequest) {
       // Any provider company's machine can be booked (the aggregator).
       if (!equipment || !isPublicEquipment(equipment)) {
         return { status: 404, error: 'Техника не найдена' } as const;
+      }
+      // A company cannot book its own machine: a fake booking would count as
+      // a completed order and let it rate itself.
+      if (currentUser.companyId && equipment.companyId === currentUser.companyId) {
+        return { status: 403, error: 'Нельзя заказывать собственную технику' } as const;
       }
       const unavailable = unavailableEquipmentMessage(equipment.status);
       if (unavailable) {

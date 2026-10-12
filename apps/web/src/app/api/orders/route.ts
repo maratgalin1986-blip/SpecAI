@@ -14,6 +14,7 @@ import { INVALID_JSON_MESSAGE, readJson, zodErrorMessage } from '@/lib/apiInput'
 import { checkBookingDates } from '@/lib/bookingRules';
 import { customerShortName } from '@/lib/customerPrivacy';
 import { unreadMessagesByOrder } from '@/lib/orderChatAccess';
+import { bidForCustomer } from '@/lib/bidPrivacy';
 import { maskContactsAndLinks } from '@/lib/privacy';
 import {
   assessWork,
@@ -59,6 +60,7 @@ export async function GET(request: NextRequest) {
       category: { select: { id: true, name: true } },
       customer: { select: { id: true, name: true } },
       bids: { include: { equipment: { select: { companyId: true } } } },
+      booking: { select: { status: true } },
       location: { select: { addressLine: true, city: true, latitude: true, longitude: true } },
     },
     orderBy: { createdAt: 'desc' },
@@ -72,8 +74,16 @@ export async function GET(request: NextRequest) {
   const safeOrders = orders.map(
     ({ contactName, contactPhone, rawText, sourceUrl, externalId, fingerprint, ...order }) => {
       void [contactName, rawText, sourceUrl, externalId, fingerprint];
-      if (order.customerId === currentUser.id) return { ...order, bidCount: order.bids.length };
-      const { customerId, customer, ...rest } = order;
+      const { booking, ...withoutBooking } = order;
+      if (order.customerId === currentUser.id) {
+        // The customer's own list (the app's «Заявки»): offers as on the order page.
+        return {
+          ...withoutBooking,
+          bids: order.bids.map((bid) => bidForCustomer(bid, booking?.status)),
+          bidCount: order.bids.length,
+        };
+      }
+      const { customerId, customer, ...rest } = withoutBooking;
       void customerId;
       // A chat or guest order: the phone masked, «Показать телефон» opens it.
       const chatContact = maskedContactFor(

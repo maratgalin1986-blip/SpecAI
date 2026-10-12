@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { clientIp } from '@/lib/loginErrors';
 import { GEOCODER_UNAVAILABLE_MESSAGE, lookupAddress } from '@/lib/geo';
 import { checkRateLimit } from '@/lib/rateLimit';
 
@@ -11,7 +12,7 @@ import { checkRateLimit } from '@/lib/rateLimit';
 export async function GET(request: NextRequest) {
   const q = request.nextUrl.searchParams.get('q')?.trim() ?? '';
   if (q.length < 3) return NextResponse.json({ error: 'Введите адрес' }, { status: 400 });
-  const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown';
+  const ip = clientIp(request);
   if (!checkRateLimit(`geocode:${ip}`, { limit: 20, windowMs: 60_000 }).ok) {
     return NextResponse.json({ error: 'Слишком часто, попробуйте через минуту' }, { status: 429 });
   }

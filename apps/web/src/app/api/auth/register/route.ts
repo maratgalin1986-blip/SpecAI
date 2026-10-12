@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { clientIp } from '@/lib/loginErrors';
 import bcrypt from 'bcryptjs';
 import { prisma } from '@specai/database';
 import { findUserByEmail } from '@/lib/findUserByEmail';
@@ -40,7 +41,7 @@ export async function POST(request: NextRequest) {
   // its machinery stands it cannot sign up.
   let base: ProviderBase | null = null;
   if (parsed.data.accountType === 'PROVIDER') {
-    const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown';
+    const ip = clientIp(request);
     if (!checkRateLimit(`register-base:${ip}`, { limit: 10, windowMs: 60_000 }).ok) {
       return NextResponse.json(
         { error: 'Слишком часто, попробуйте через минуту' },

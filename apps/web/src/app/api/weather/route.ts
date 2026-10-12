@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { clientIp } from '@/lib/loginErrors';
 import { geocodeAddress } from '@/lib/geo';
 import {
   assessWork,
@@ -36,7 +37,7 @@ export async function GET(request: NextRequest) {
   if (Number.isFinite(lat) && Number.isFinite(lon) && params.has('lat') && params.has('lon')) {
     place = { lat, lon, label: params.get('label') || 'Объект' };
   } else if (q) {
-    const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown';
+    const ip = clientIp(request);
     if (!checkRateLimit(`geocode:${ip}`, { limit: 20, windowMs: 60_000 }).ok) {
       return NextResponse.json(
         { error: 'Слишком часто, попробуйте через минуту' },

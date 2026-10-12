@@ -12,6 +12,30 @@ import {
 } from './privacy';
 
 describe('maskContacts', () => {
+  it('masks phones written with dots, underscores, slashes and long dashes', () => {
+    for (const phone of [
+      '8.917.444.55.66',
+      '+7 917 444.55.66',
+      '8\u2014917\u2014444\u201455\u201466',
+      '8_917_444_55_66',
+      '8/917/444/55/66',
+      '+7\u00b7917\u00b7444\u00b755\u00b766',
+    ]) {
+      expect(maskContacts(`звоните ${phone}, жду`)).toBe(`звоните ${HIDDEN_CONTACT}, жду`);
+    }
+  });
+
+  it('leaves dates and date ranges readable', () => {
+    for (const text of [
+      'с 12.10.2026 - 15.10',
+      'на 01.06.2028',
+      '12.10.2026 08:00',
+      'смены 12.10-15.10',
+    ]) {
+      expect(maskContacts(text)).toBe(text);
+    }
+  });
+
   it('hides phone numbers in any common format', () => {
     for (const phone of [
       '89170001122',

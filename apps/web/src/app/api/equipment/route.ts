@@ -68,7 +68,11 @@ export async function GET(request: NextRequest) {
     prisma.equipment.count({ where }),
     prisma.equipment.findMany({
       where,
-      include: { category: true, location: true, company: true },
+      include: {
+        category: true,
+        location: true,
+        company: { select: { id: true, name: true, verified: true } },
+      },
       skip: (page - 1) * pageSize,
       take: pageSize,
       orderBy: EQUIPMENT_ORDER_BY[sort],
