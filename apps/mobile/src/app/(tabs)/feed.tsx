@@ -43,7 +43,7 @@ import {
   type Order,
   type ProviderBooking,
 } from '@/lib/api';
-import { deliveryEstimate, isBidWindowOpen } from '@/lib/providerFeed';
+import { bidShiftRate, deliveryEstimate, isBidWindowOpen } from '@/lib/providerFeed';
 import { EQUIPMENT_STATUS_OPTIONS, formatMoney, pluralizeRu } from '@/lib/format';
 import {
   addressFromDescription,
@@ -288,7 +288,8 @@ function FeedCard({
   const distance = km !== null ? formatDistance(km) : null;
   const delivery = deliveryEstimate(km, pricePerKm);
   const ownBid = order.bids.find((bid) => bid.status === 'PENDING');
-  const byRate = machine ? priceByRate(machine.dailyRate, days) : 0;
+  // The shift price the customer sees on the card: the house fleet by the price list.
+  const byRate = machine ? priceByRate(bidShiftRate(machine), days) : 0;
   const bidCount = order.bidCount ?? order.bids.length;
 
   return (
@@ -472,7 +473,10 @@ export default function FeedScreen() {
 
   const take = (order: Order, machine: Equipment) => {
     const days = orderDays(order.desiredStartDate, order.desiredEndDate);
-    const price = priceByRate(machine.dailyRate, days);
+    // Same number as on the machine's card (customerDailyRate), so the
+    // customer sees one price and the server's price-list check passes.
+    const shiftRate = bidShiftRate(machine);
+    const price = priceByRate(shiftRate, days);
     Alert.alert(
       'Беру по прайсу',
       `${machine.name}: ${formatMoney(price, machine.currency)} за ${days === 1 ? '1 смену' : pluralizeRu(days, ['день', 'дня', 'дней'])}. Заказчик увидит предложение и сможет выбрать вас.`,
@@ -486,7 +490,7 @@ export default function FeedScreen() {
               await createBid(order.id, {
                 equipmentId: machine.id,
                 price,
-                message: `Беру по прайсу: ${machine.name}, ${formatMoney(machine.dailyRate, machine.currency)} за смену × ${days}.`,
+                message: `Беру по прайсу: ${machine.name}, ${formatMoney(shiftRate, machine.currency)} за смену × ${days}.`,
               });
               markSubmitted(order.id);
             } catch (caught) {

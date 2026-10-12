@@ -6,7 +6,7 @@ import { getRequestUser } from '@/lib/requestUser';
 import { isProvider } from '@/lib/fleet';
 import { INVALID_JSON_MESSAGE, readJson, zodErrorMessage } from '@/lib/apiInput';
 import { listingPhoto } from '@/lib/equipmentPhoto';
-import { customerRates } from '@/lib/equipmentCatalog';
+import { customerRateFields, customerRates } from '@/lib/equipmentCatalog';
 
 export const dynamic = 'force-dynamic';
 
@@ -31,9 +31,11 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     : null;
   if (own) {
     return NextResponse.json({
-      // The edit form saves imageUrls back: keep them as stored, add only the cover.
+      // The edit form saves imageUrls back: keep them as stored, add only the
+      // cover and the rates the customer sees (the bid form prefills from them).
       equipment: {
         ...own,
+        ...customerRateFields({ ...own, categoryName: own.category.name }),
         ...listingPhoto(own, request.nextUrl.origin),
         imageUrls: own.imageUrls,
       },
@@ -59,6 +61,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       ...equipment,
       // Prices as on the site (the house fleet never below lib/prices.ts).
       ...customerRates({ ...equipment, categoryName: equipment.category.name }),
+      ...customerRateFields({ ...equipment, categoryName: equipment.category.name }),
       ...listingPhoto(equipment, request.nextUrl.origin),
     },
   });

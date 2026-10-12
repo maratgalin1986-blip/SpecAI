@@ -6,7 +6,7 @@ import { EQUIPMENT_ORDER_BY, totalPagesFor } from '@/lib/pagination';
 import { PUBLIC_FLEET, PUBLISHED_FLEET, isProvider } from '@/lib/fleet';
 import { INVALID_JSON_MESSAGE, readJson, zodErrorMessage } from '@/lib/apiInput';
 import { listingPhoto } from '@/lib/equipmentPhoto';
-import { customerRates } from '@/lib/equipmentCatalog';
+import { customerRateFields, customerRates } from '@/lib/equipmentCatalog';
 
 export async function GET(request: NextRequest) {
   const { mine, ...params } = Object.fromEntries(request.nextUrl.searchParams.entries());
@@ -82,8 +82,10 @@ export async function GET(request: NextRequest) {
       ...item,
       // Customers see prices as on the site (the house fleet never below
       // lib/prices.ts); the provider's own list keeps the stored ones, which
-      // its edit form saves.
+      // its edit form saves. customerHourlyRate/customerDailyRate are what
+      // the customer sees either way: the bid forms prefill from them.
       ...(ownFleet ? {} : customerRates({ ...item, categoryName: item.category.name })),
+      ...customerRateFields({ ...item, categoryName: item.category.name }),
       ...listingPhoto(item, origin),
     })),
     total,

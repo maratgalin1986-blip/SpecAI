@@ -2,6 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { CATEGORIES } from '@specai/shared';
 import {
   TASK_GROUPS,
+  bidShiftFloor,
+  customerRateFields,
+  customerRates,
   headlinePrices,
   keySpecs,
   machinePhotoOf,
@@ -12,6 +15,9 @@ import {
   specEntries,
   taskGroupOf,
 } from './equipmentCatalog';
+import { HOUSE_COMPANY_ID } from './fleet';
+import { cardRates, houseFloorError } from './offerBreakdown';
+import { RATES, SHIFT_HOURS } from './prices';
 
 describe('taskGroupOf', () => {
   it('groups catalog categories by task, by slug or exact name', () => {
@@ -139,5 +145,47 @@ describe('headlinePrices', () => {
       hour: null,
       shift: 22000,
     });
+  });
+});
+
+describe('one price per machine in the catalogue and in offers', () => {
+  const house = {
+    name: 'Экскаватор-погрузчик JCB 3CX',
+    categoryName: 'Экскаваторы-погрузчики',
+    companyId: HOUSE_COMPANY_ID,
+    hourlyRate: 1000,
+    dailyRate: 8000,
+  };
+  const listShift = RATES.backhoe * SHIFT_HOURS;
+
+  it('gives the API the rates the customer sees', () => {
+    expect(customerRateFields(house)).toEqual({
+      customerHourlyRate: RATES.backhoe,
+      customerDailyRate: listShift,
+    });
+    expect(customerRates(house).dailyRate).toBe(listShift);
+  });
+
+  it('floors bids only on the house fleet', () => {
+    expect(bidShiftFloor(house)).toBe(listShift);
+    expect(bidShiftFloor({ ...house, companyId: 'other-company' })).toBeNull();
+  });
+
+  it('shows the offer card rates as the machine page does', () => {
+    expect(cardRates(house)).toEqual({ hour: RATES.backhoe, shift: listShift });
+    // Older callers without the name and category keep the stored numbers.
+    expect(cardRates({ hourlyRate: 1000, dailyRate: 8000 })).toEqual({ hour: 1000, shift: 8000 });
+  });
+
+  it('refuses a house bid below the list, by the shift or by the total', () => {
+    expect(
+      houseFloorError({ price: 0, shiftPrice: listShift - 100, shifts: 2 }, listShift, 2),
+    ).toMatch(/минимум/);
+    expect(
+      houseFloorError({ price: 0, shiftPrice: listShift, shifts: 2 }, listShift, 2),
+    ).toBeNull();
+    expect(houseFloorError({ price: listShift * 3 - 500 }, listShift, 3)).toMatch(/за 3 смены/);
+    expect(houseFloorError({ price: listShift * 3 }, listShift, 3)).toBeNull();
+    expect(houseFloorError({ price: 1 }, null, 3)).toBeNull();
   });
 });

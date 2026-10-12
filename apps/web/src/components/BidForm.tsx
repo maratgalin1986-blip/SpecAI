@@ -12,7 +12,13 @@ interface EquipmentOption {
   id: string;
   name: string;
   dailyRate: string;
+  /** The shift price the customer sees (GET /api/equipment): the house fleet never below the price list. */
+  customerDailyRate?: number;
 }
+
+/** The shift price to offer: what the customer sees on the card. */
+const cardShiftRate = (option: EquipmentOption) =>
+  Math.round(Number(option.customerDailyRate ?? option.dailyRate));
 
 /** The company's pending bid on this order: one bid per company, a repeat updates it. */
 export interface ExistingBid {
@@ -102,7 +108,7 @@ export function BidForm({
 
   function useCardRate() {
     const option = equipmentOptions.find((item) => item.id === equipmentId);
-    if (option) setShiftPrice(String(Math.round(Number(option.dailyRate))));
+    if (option) setShiftPrice(String(cardShiftRate(option)));
   }
 
   async function handleSubmit(event: React.FormEvent) {
@@ -198,7 +204,7 @@ export function BidForm({
           </option>
           {equipmentOptions.map((item) => (
             <option key={item.id} value={item.id}>
-              {item.name} ({formatMoney(item.dailyRate)}/смена)
+              {item.name} ({formatMoney(cardShiftRate(item))}/смена)
             </option>
           ))}
         </select>

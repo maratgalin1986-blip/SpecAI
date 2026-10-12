@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  bidShiftRate,
   bidTotal,
   bidsLeftText,
   countdownTickMs,
@@ -46,6 +47,14 @@ describe('prices', () => {
     expect(deliveryEstimate(null, 80)).toBeNull();
     expect(deliveryEstimate(10, null)).toBeNull();
     expect(deliveryEstimate(10, '')).toBeNull();
+  });
+
+  it('offers the shift at the price the customer sees, else the stored one', () => {
+    // The house fleet: the card shows the list price even when the row is lower.
+    expect(bidShiftRate({ dailyRate: '12000', customerDailyRate: 32000 })).toBe(32000);
+    // Other providers (and older servers): their own stored price.
+    expect(bidShiftRate({ dailyRate: '12000.4' })).toBe(12000);
+    expect(bidShiftRate({ dailyRate: 'junk', customerDailyRate: null })).toBe(0);
   });
 
   it('adds the delivery to the shifts', () => {

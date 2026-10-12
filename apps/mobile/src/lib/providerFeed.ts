@@ -52,6 +52,23 @@ export function deliveryEstimate(
   return Math.round(km * rate);
 }
 
+/**
+ * Цена смены для предложения — та, что заказчик видит на карточке машины
+ * (customerDailyRate из GET /api/equipment: парк СпецПласт16 не ниже прайса
+ * сайта, у остальных — своя), иначе сохранённая dailyRate. Так «Беру по
+ * прайсу» и подсказка в форме совпадают с каталогом, и сервер не откажет
+ * из-за цены ниже прайса.
+ */
+export function bidShiftRate(machine: {
+  dailyRate: string | number;
+  customerDailyRate?: number | null;
+}): number {
+  const customer = Number(machine.customerDailyRate);
+  if (Number.isFinite(customer) && customer > 0) return Math.round(customer);
+  const stored = Number(machine.dailyRate);
+  return Number.isFinite(stored) && stored > 0 ? Math.round(stored) : 0;
+}
+
 /** Итог предложения: подача + смена × смен (копейки округляются). */
 export function bidTotal(delivery: number, shiftPrice: number, shifts: number): number {
   return Math.round((delivery + shiftPrice * Math.max(1, shifts)) * 100) / 100;

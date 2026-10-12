@@ -45,7 +45,9 @@ export default async function OrderDetailPage({ params }: { params: { id: string
       location: true,
       booking: { select: { status: true } },
       bids: {
-        include: { equipment: { include: { company: true } } },
+        include: {
+          equipment: { include: { company: true, category: { select: { name: true } } } },
+        },
         orderBy: { price: 'asc' },
       },
     },
@@ -396,6 +398,7 @@ function OfferBody({
       dailyRate: unknown;
       companyId: string;
       company: { name: string };
+      category: { name: string };
     };
   };
   start: Date;
@@ -405,7 +408,15 @@ function OfferBody({
   /** Sent after the order's bid deadline (Order.bidsUntil). */
   late?: boolean;
 }) {
-  const parts = offerBreakdown(bid.price, start, end, bid.equipment, bid);
+  // The card rates are the machine page's numbers (customerRates): a house
+  // machine never shows a lower price here than in the catalogue.
+  const parts = offerBreakdown(
+    bid.price,
+    start,
+    end,
+    { ...bid.equipment, categoryName: bid.equipment.category.name },
+    bid,
+  );
   return (
     <div className="flex min-w-0 flex-col gap-2">
       <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">

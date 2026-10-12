@@ -145,6 +145,13 @@ export interface Equipment {
   dailyRate: string | number;
   /** Цена за машино-час — главная цена на сайте; null, если не задана. */
   hourlyRate?: string | number | null;
+  /**
+   * Цены, которые видит заказчик на карточке: для парка СпецПласт16 — не ниже
+   * прайса сайта, у остальных — свои. Из них подставляется цена смены в
+   * предложение; сервер не примет цену ниже (bidShiftRate в providerFeed.ts).
+   */
+  customerHourlyRate?: number;
+  customerDailyRate?: number;
   weeklyRate: string | number | null;
   monthlyRate: string | number | null;
   currency: string;

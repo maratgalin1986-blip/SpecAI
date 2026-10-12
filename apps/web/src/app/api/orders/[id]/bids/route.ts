@@ -12,7 +12,8 @@ import { findOverlappingBooking } from '@/lib/bookingConflicts';
 import { isProvider } from '@/lib/fleet';
 import { notifyUser } from '@/lib/notifications/notifyUser';
 import { bidBreakdownSchema, type BidBreakdownInput } from '@specai/shared';
-import { bidSumMatches, bidTotal } from '@/lib/offerBreakdown';
+import { bidSumMatches, bidTotal, houseFloorError, orderDays } from '@/lib/offerBreakdown';
+import { bidShiftFloor } from '@/lib/equipmentCatalog';
 import { isLateBid } from '@/lib/bidWindow';
 
 const requestSchema = z.object({
@@ -80,7 +81,10 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
   const late = isLateBid(order.bidsUntil);
   const lateNote = late ? ' — срок приёма предложений истёк, заказчик всё равно его увидит' : '';
 
-  const equipment = await prisma.equipment.findUnique({ where: { id: parsed.data.equipmentId } });
+  const equipment = await prisma.equipment.findUnique({
+    where: { id: parsed.data.equipmentId },
+    include: { category: { select: { name: true } } },
+  });
   if (!equipment || equipment.companyId !== currentUser.companyId) {
     return NextResponse.json(
       { error: 'Можно предлагать только собственную технику' },
@@ -93,6 +97,18 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       { error: `${unavailable} — предложить можно только доступную технику` },
       { status: 409 },
     );
+  }
+  // СпецПласт16's own machines are offered at no less than the shift price
+  // the customer already sees on the card (lib/equipmentCatalog.ts), so one
+  // machine never shows two prices; other providers set their own prices. A
+  // low price is refused with the minimum, never raised silently.
+  const floorError = houseFloorError(
+    parsed.data,
+    bidShiftFloor({ ...equipment, categoryName: equipment.category.name }),
+    orderDays(order.desiredStartDate, order.desiredEndDate),
+  );
+  if (floorError) {
+    return NextResponse.json({ error: floorError }, { status: 400 });
   }
 
   // The machine must be free on the order's dates.
