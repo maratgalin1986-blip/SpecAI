@@ -250,6 +250,12 @@ model Booking {
   notes       String?
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
+  // Who cancelled a CANCELLED booking (CANCELLED_BY in @specai/shared:
+  // CUSTOMER | PROVIDER | ADMIN — a plain column, not an enum, see CLAUDE.md)
+  // and when. Null on bookings cancelled before 2026-10-12: unknown, and the
+  // provider's cancellation share leaves them out (lib/reliability.ts).
+  cancelledBy String?
+  cancelledAt DateTime?
 
   equipment   Equipment @relation(fields: [equipmentId], references: [id])
   equipmentId String

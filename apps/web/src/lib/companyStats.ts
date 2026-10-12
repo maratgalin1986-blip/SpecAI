@@ -16,7 +16,7 @@ export async function loadCompanyStats(companyIds: string[]): Promise<Map<string
     prisma.company.findMany({ where: { id: { in: ids } }, select: { id: true, verified: true } }),
     prisma.booking.findMany({
       where: { equipment: { companyId: { in: ids } } },
-      select: { status: true, equipment: { select: { companyId: true } } },
+      select: { status: true, cancelledBy: true, equipment: { select: { companyId: true } } },
       take: 10_000,
     }),
     prisma.review.groupBy({
@@ -29,15 +29,19 @@ export async function loadCompanyStats(companyIds: string[]): Promise<Map<string
   ]);
 
   const byCompany = tallyBookings(
-    bookings.map((row) => ({ status: row.status, companyId: row.equipment.companyId })),
+    bookings.map((row) => ({
+      status: row.status,
+      cancelledBy: row.cancelledBy,
+      companyId: row.equipment.companyId,
+    })),
   );
-  for (const id of ids) result.set(id, { ...EMPTY_STATS, bookings: {} });
+  for (const id of ids) result.set(id, { ...EMPTY_STATS, bookings: {}, cancelledBy: {} });
   for (const company of companies) {
     result.get(company.id)!.verified = company.verified;
   }
-  for (const [id, counts] of byCompany) {
+  for (const [id, tally] of byCompany) {
     const stats = result.get(id);
-    if (stats) stats.bookings = counts;
+    if (stats) Object.assign(stats, tally);
   }
   for (const row of ratings) {
     const stats = result.get(row.companyId);
