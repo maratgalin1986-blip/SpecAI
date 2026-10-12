@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { CategorySelect, type SelectableCategory } from '@/components/CategorySelect';
 import { ConditionsPreview } from '@/components/ConditionsPreview';
 import { DemandHint } from '@/components/DemandHint';
 import { GuestOrderForm } from '@/components/GuestOrderForm';
@@ -16,10 +17,7 @@ function todayInMoscow() {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Moscow' }).format(new Date());
 }
 
-interface Category {
-  id: string;
-  name: string;
-}
+type Category = SelectableCategory;
 
 export function NewOrderForm({
   provider,
@@ -88,12 +86,19 @@ export function NewOrderForm({
       return;
     }
 
+    // The order page shows what happens next (offers, chat); the list under
+    // the form only refreshes if the id is missing for some reason.
+    const created = (await response.json().catch(() => null)) as { order?: { id?: string } } | null;
     setDescription('');
     setCategoryId('');
     setStartDate('');
     setEndDate('');
     setAddress('');
     setPoint(null);
+    if (created?.order?.id) {
+      router.push(`/orders/${encodeURIComponent(created.order.id)}`);
+      return;
+    }
     router.refresh();
   }
 
@@ -112,19 +117,14 @@ export function NewOrderForm({
       </label>
 
       <label className="flex flex-col gap-1 text-sm">
-        Категория (необязательно)
-        <select
+        Техника (необязательно)
+        <CategorySelect
+          categories={categories}
           value={categoryId}
-          onChange={(e) => setCategoryId(e.target.value)}
+          onChange={setCategoryId}
+          emptyLabel="Любая"
           className="rounded-md border border-slate-300 px-3 py-2"
-        >
-          <option value="">Любая</option>
-          {categories.map((category) => (
-            <option key={category.id} value={category.id}>
-              {category.name}
-            </option>
-          ))}
-        </select>
+        />
       </label>
       <DemandHint
         categoryId={categoryId}

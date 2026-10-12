@@ -22,6 +22,11 @@ describe('categoryIcon', () => {
     expect(categoryIcon('Что-то новое')).toBe('🛠️');
     expect(categoryIcon(null)).toBe('🛠️');
   });
+
+  it('prefers the emoji the server sends with the category', () => {
+    expect(categoryIcon('Дизельные генераторы', '⚡')).toBe('⚡');
+    expect(categoryIcon('Автокраны', null)).toBe('🏗️');
+  });
 });
 
 describe('orderStage', () => {

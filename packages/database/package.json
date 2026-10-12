@@ -24,6 +24,7 @@
   },
   "dependencies": {
     "@prisma/client": "^5.20.0",
+    "@specai/shared": "workspace:*",
     "bcryptjs": "^2.4.3"
   },
   "devDependencies": {

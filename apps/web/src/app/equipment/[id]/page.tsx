@@ -155,11 +155,13 @@ export default async function EquipmentDetailPage({ params }: { params: { id: st
     take: 3,
   });
   if (similar.length === 0) {
-    const group = taskGroupOf(item.category.name);
+    const group = taskGroupOf(item.category.name, item.category.slug);
     const categories = await prisma.equipmentCategory.findMany({
-      select: { id: true, name: true },
+      select: { id: true, name: true, slug: true },
     });
-    const groupIds = categories.filter((c) => taskGroupOf(c.name) === group).map((c) => c.id);
+    const groupIds = categories
+      .filter((c) => taskGroupOf(c.name, c.slug) === group)
+      .map((c) => c.id);
     similar = await prisma.equipment.findMany({
       where: { ...PUBLISHED_FLEET, categoryId: { in: groupIds }, id: { not: item.id } },
       include: { category: true, location: true, company: { select: { name: true } } },
@@ -354,7 +356,9 @@ export default async function EquipmentDetailPage({ params }: { params: { id: st
           <section>
             <div className="eyebrow text-amber-700">Описание</div>
             <p className="mt-4 max-w-3xl whitespace-pre-line leading-relaxed text-slate-700">
-              {item.description ?? 'Описание не указано — уточните детали у менеджера.'}
+              {item.description
+                ? maskContactsAndLinks(item.description)
+                : 'Описание не указано — уточните детали у менеджера.'}
             </p>
           </section>
 

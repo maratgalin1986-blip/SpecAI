@@ -1,4 +1,4 @@
-import { notFound } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 import { getServerSession } from 'next-auth';
 import { prisma } from '@specai/database';
 import { Card } from '@specai/ui';
@@ -11,7 +11,7 @@ import { formatMoney } from '@/lib/money';
 import { isAdminRequest } from '@/lib/admin';
 import { SiteConditions } from '@/components/SiteConditions';
 import { houseFirst, isProvider, isHouseManager } from '@/lib/fleet';
-import { isSafeHttpUrl } from '@/lib/privacy';
+import { isSafeHttpUrl, maskContactsAndLinks } from '@/lib/privacy';
 import { approvedComments } from '@/lib/commentAccess';
 import { CommentForm, CommentList } from '@/components/Comments';
 import { customerShortName } from '@/lib/customerPrivacy';
@@ -30,6 +30,7 @@ import { OrderChat } from '@/components/OrderChat';
 import { bidsLeftText, isLateBid } from '@/lib/bidWindow';
 import { orderDays } from '@/lib/offerBreakdown';
 import { distanceKm } from '@/lib/geo';
+import { bidLoginHref } from '@/lib/orderBoard';
 
 export const dynamic = 'force-dynamic';
 
@@ -63,8 +64,10 @@ export default async function OrderDetailPage({ params }: { params: { id: string
   const isAdmin = isAdminRequest();
   const canSeeContact = isHouseManager(session?.user) || isAdmin;
   const seesAllBids = isOwner || isAdmin;
+  // A guest from the public board (/orders) signs in as a provider and comes
+  // back; another customer is shown the board instead of a 404.
   if (!isOwner && !isAdmin && !isProvider(session?.user)) {
-    notFound();
+    redirect(session?.user ? '/orders#board' : bidLoginHref(order.id));
   }
   const visibleBids = houseFirst(
     seesAllBids
@@ -150,7 +153,9 @@ export default async function OrderDetailPage({ params }: { params: { id: string
 
       <Card>
         <h2 className="font-semibold">Описание</h2>
-        <p className="mt-2 whitespace-pre-line text-sm text-slate-600">{order.description}</p>
+        <p className="mt-2 whitespace-pre-line text-sm text-slate-600">
+          {isOwner || isAdmin ? order.description : maskContactsAndLinks(order.description)}
+        </p>
       </Card>
 
       {/* An async server component, awaited directly so the JSX types do not
@@ -304,7 +309,19 @@ export default async function OrderDetailPage({ params }: { params: { id: string
                 className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:gap-4"
               >
                 <OfferBody
-                  bid={bid}
+                  bid={{
+                    ...bid,
+                    message:
+                      bid.message &&
+                      !isAdmin &&
+                      !(
+                        ['CONFIRMED', 'ACTIVE', 'COMPLETED'].includes(
+                          order.booking?.status ?? '',
+                        ) && bid.status === 'ACCEPTED'
+                      )
+                        ? maskContactsAndLinks(bid.message)
+                        : bid.message,
+                  }}
                   start={order.desiredStartDate}
                   end={order.desiredEndDate}
                   trust={

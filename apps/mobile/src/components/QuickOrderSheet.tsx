@@ -11,10 +11,12 @@ import {
   View,
   useWindowDimensions,
 } from 'react-native';
+import { CategoryPickerModal } from '@/components/CategoryPickerModal';
 import { DateField } from '@/components/DateField';
 import { DemandHint } from '@/components/DemandHint';
 import { Button, Segmented } from '@/components/ui';
 import { ApiError, createOrder, fetchCategories, type Category } from '@/lib/api';
+import { popularCategories } from '@/lib/categoryGroups';
 import { addDays, pluralizeRu, startOfDay, toIsoDate } from '@/lib/format';
 import { categoryIcon, quickOrderDescription } from '@/lib/orderFlow';
 import { colors, radius, shadow, spacing, TAP, typography } from '@/theme';
@@ -30,6 +32,8 @@ const WHEN_OPTIONS = [
  * Нижняя шторка главного экрана заказчика: адрес, тип техники, «сейчас / на
  * дату» и большая кнопка «Заказать». Заказ в 1–3 касания: по умолчанию одна
  * смена сегодня; заявка уходит в ту же POST /api/orders, что и подробная форма.
+ * Плитки — десять самых частых видов, дальше «Все виды техники» открывает
+ * полный список по группам с поиском.
  */
 export function QuickOrderSheet({ bottomInset = 0 }: { bottomInset?: number }) {
   const router = useRouter();
@@ -38,6 +42,7 @@ export function QuickOrderSheet({ bottomInset = 0 }: { bottomInset?: number }) {
   const [expanded, setExpanded] = useState(true);
   const [categories, setCategories] = useState<Category[] | null>(null);
   const [categoryId, setCategoryId] = useState<string | null>(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
   const [address, setAddress] = useState('');
   const [note, setNote] = useState('');
   const [showNote, setShowNote] = useState(false);
@@ -58,6 +63,10 @@ export function QuickOrderSheet({ bottomInset = 0 }: { bottomInset?: number }) {
   }, []);
 
   const category = categories?.find((item) => item.id === categoryId) ?? null;
+  const tiles = useMemo(
+    () => popularCategories(categories ?? [], 10, categoryId),
+    [categories, categoryId],
+  );
   const start = when === 'now' ? today : date;
 
   const submit = async () => {
@@ -136,33 +145,59 @@ export function QuickOrderSheet({ bottomInset = 0 }: { bottomInset?: number }) {
             {categories === null ? (
               <Text style={styles.muted}>Загружаем виды техники…</Text>
             ) : (
-              categories.map((item) => {
-                const selected = item.id === categoryId;
-                return (
+              <>
+                {tiles.map((item) => {
+                  const selected = item.id === categoryId;
+                  return (
+                    <Pressable
+                      key={item.id}
+                      accessibilityRole="button"
+                      accessibilityLabel={item.name}
+                      accessibilityState={{ selected }}
+                      onPress={() => setCategoryId(selected ? null : item.id)}
+                      style={({ pressed }) => [
+                        styles.tile,
+                        selected && styles.tileSelected,
+                        pressed && styles.pressed,
+                      ]}
+                    >
+                      <Text style={styles.tileIcon}>{categoryIcon(item.name, item.emoji)}</Text>
+                      <Text
+                        style={[styles.tileText, selected && styles.tileTextSelected]}
+                        numberOfLines={2}
+                      >
+                        {item.name}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+                {categories.length > tiles.length || categories.length === 0 ? (
                   <Pressable
-                    key={item.id}
                     accessibilityRole="button"
-                    accessibilityLabel={item.name}
-                    accessibilityState={{ selected }}
-                    onPress={() => setCategoryId(selected ? null : item.id)}
+                    accessibilityLabel="Все виды техники"
+                    onPress={() => setPickerOpen(true)}
                     style={({ pressed }) => [
                       styles.tile,
-                      selected && styles.tileSelected,
+                      styles.tileMore,
                       pressed && styles.pressed,
                     ]}
                   >
-                    <Text style={styles.tileIcon}>{categoryIcon(item.name)}</Text>
-                    <Text
-                      style={[styles.tileText, selected && styles.tileTextSelected]}
-                      numberOfLines={2}
-                    >
-                      {item.name}
+                    <Ionicons name="grid-outline" size={24} color={colors.primaryDark} />
+                    <Text style={[styles.tileText, styles.tileTextSelected]} numberOfLines={2}>
+                      Все виды техники
                     </Text>
                   </Pressable>
-                );
-              })
+                ) : null}
+              </>
             )}
           </ScrollView>
+          <CategoryPickerModal
+            visible={pickerOpen}
+            categories={categories ?? []}
+            selectedId={categoryId}
+            onSelect={(picked) => setCategoryId(picked?.id ?? null)}
+            onClose={() => setPickerOpen(false)}
+          />
           <DemandHint categoryId={categoryId} categoryName={category?.name} />
 
           <Segmented
@@ -308,6 +343,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   tileSelected: { borderColor: colors.primary, backgroundColor: colors.primarySoft },
+  tileMore: { borderColor: colors.border, borderStyle: 'dashed', backgroundColor: colors.card },
   tileIcon: { fontSize: 26 },
   tileText: { fontSize: 13, lineHeight: 16, fontWeight: '600', color: colors.text },
   tileTextSelected: { color: colors.primaryDark },

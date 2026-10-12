@@ -6,15 +6,21 @@ import { JOURNEY_SELECTOR } from '@/components/useJourneyInView';
 import { SoundToggle } from '@/components/SoundToggle';
 import { SITE } from '@/lib/site';
 
+import { AuthStatus } from '@/components/AuthStatus';
+
+// The marketplace first (owner, 2026-10-11: a board of orders and a list of
+// providers, like a classifieds platform), then the rest of the site.
 const NAV_LINKS = [
+  { href: '/orders', label: 'Заявки' },
+  { href: '/providers', label: 'Исполнители' },
   { href: '/equipment', label: 'Техника' },
   // Hidden on narrow desktops (lg) like «Кабинет»; in the mobile menu always.
   { href: '/map', label: 'Карта', wide: true },
   { href: '/stroyka', label: 'Стройка' },
   { href: '/dizain', label: 'Дизайн' },
-  { href: '/orders', label: 'Заявка' },
   { href: '/agents', label: 'ИИ-агенты' },
-  { href: '/contacts', label: 'Контакты' },
+  // The phone button and the footer carry the contacts on narrow desktops.
+  { href: '/contacts', label: 'Контакты', wide: true },
   // Also in «Войти» and the mobile menu: hidden on narrow desktops (lg) so the
   // header fits in one line at 1024 px.
 ];
@@ -116,6 +122,7 @@ export function SiteHeader() {
           >
             Смета
           </a>
+          <AuthStatus />
           <a
             href="/#callback"
             className="group inline-flex items-center gap-1.5 rounded-full bg-slate-900 px-4 py-2 text-white transition hover:bg-amber-500 hover:text-slate-950"
@@ -203,7 +210,9 @@ export function SiteHeader() {
           >
             📦 Смета для снабженца
           </a>
-          <div className="px-2 py-2"></div>
+          <div className="px-2 py-2">
+            <AuthStatus />
+          </div>
         </nav>
       )}
     </header>

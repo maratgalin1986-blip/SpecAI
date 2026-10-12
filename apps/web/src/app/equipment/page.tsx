@@ -4,7 +4,12 @@ import { CallbackForm } from '@/components/CallbackForm';
 import { EquipmentCard } from '@/components/EquipmentCard';
 import { Icon } from '@/components/Icon';
 import { Pagination } from '@/components/Pagination';
-import { TASK_GROUPS, isTaskGroupId, taskGroupOf, type TaskGroupId } from '@/lib/equipmentCatalog';
+import {
+  TASK_GROUPS,
+  normalizeTaskGroupId,
+  taskGroupOf,
+  type TaskGroupId,
+} from '@/lib/equipmentCatalog';
 import {
   EQUIPMENT_ORDER_BY,
   EQUIPMENT_SORT_LABELS,
@@ -126,8 +131,15 @@ export default async function EquipmentCatalogPage({
     ...PUBLISHED_FLEET,
   };
 
+  // Only the leaves of the category tree hold machines; the groups are the chips.
   const [categories, countsByCategory] = await Promise.all([
-    orEmpty('categories', prisma.equipmentCategory.findMany({ orderBy: { name: 'asc' } })),
+    orEmpty(
+      'categories',
+      prisma.equipmentCategory.findMany({
+        where: { children: { none: {} } },
+        orderBy: { name: 'asc' },
+      }),
+    ),
     orEmpty(
       'category counts',
       prisma.equipment.groupBy({ by: ['categoryId'], where: baseWhere, _count: { _all: true } }),
@@ -137,13 +149,13 @@ export default async function EquipmentCatalogPage({
   const countOf = new Map(countsByCategory.map((row) => [row.categoryId, row._count._all]));
   const categoryRows = categories.map((category) => ({
     ...category,
-    group: taskGroupOf(category.name),
+    group: taskGroupOf(category.name, category.slug),
     count: countOf.get(category.id) ?? 0,
   }));
 
   const selectedCategory = categoryRows.find((category) => category.id === searchParams.category);
   const activeGroup: TaskGroupId | undefined =
-    selectedCategory?.group ?? (isTaskGroupId(searchParams.group) ? searchParams.group : undefined);
+    selectedCategory?.group ?? normalizeTaskGroupId(searchParams.group);
 
   const groupTabs = TASK_GROUPS.map((group) => {
     const members = categoryRows.filter((category) => category.group === group.id);

@@ -22,8 +22,8 @@ import { colors, spacing } from '@/lib/theme';
 type AccountType = 'CUSTOMER' | 'PROVIDER';
 
 const ACCOUNT_TYPES: { value: AccountType; label: string; hint: string }[] = [
-  { value: 'CUSTOMER', label: 'Арендую технику', hint: 'Заявки, брони, отзывы' },
-  { value: 'PROVIDER', label: 'Сдаю технику', hint: 'Своя техника и заявки заказчиков' },
+  { value: 'CUSTOMER', label: 'Заказать технику', hint: 'Заявка, предложения исполнителей, брони' },
+  { value: 'PROVIDER', label: 'Встать на линию', hint: 'Своя техника, заявки заказчиков, доход' },
 ];
 
 /**

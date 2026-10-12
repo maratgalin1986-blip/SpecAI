@@ -50,21 +50,11 @@ const nextConfig = {
   async redirects() {
     // «Поддержать проект» is gone (СпецПласт16 sells its own work, no donations);
     // old links, including the app's «О приложении», land on the home page.
-    // No registration on the site (owner, 2026-10-03: «регистрация не нужна, это
-    // сайт, а не приложение; оплату убрать, только заказ техники»): the old
-    // account pages lead to the order form. /orders stays (the guest form); the
-    // admin (/admin) and the mobile app's API keep their own sign-in.
-    const accounts = [
-      '/login',
-      '/register',
-      '/dashboard',
-      '/orders/:id',
-      '/provider',
-      '/forgot-password',
-      '/reset-password',
-      '/verify-email',
-    ].map((source) => ({ source, destination: '/#callback', permanent: false }));
-    return [{ source: '/support', destination: '/', permanent: true }, ...accounts];
+    // Owner, 2026-10-11: the aggregator has customers and providers on the
+    // site too — at sign-up one chooses «Заказать технику» or «Встать на
+    // линию». The 2026-10-03 redirects of the account pages to the order form
+    // are gone; /orders keeps the guest form, online payment stays off.
+    return [{ source: '/support', destination: '/', permanent: true }];
   },
   transpilePackages: ['@specai/ui', '@specai/shared', '@specai/ai-service', '@specai/database'],
   experimental: {

@@ -52,6 +52,11 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
   if (!parsed.success) {
     return NextResponse.json({ error: zodErrorMessage(parsed.error) }, { status: 400 });
   }
+  // A shift price without the number of shifts (or the reverse) would skip
+  // the sum check and store an offer the customer cannot read.
+  if ((parsed.data.shiftPrice === undefined) !== (parsed.data.shifts === undefined)) {
+    return NextResponse.json({ error: 'Укажите и цену смены, и число смен' }, { status: 400 });
+  }
   // The total must be what the breakdown says: подача + смена × смен.
   if (!bidSumMatches(parsed.data.price, parsed.data)) {
     return NextResponse.json(

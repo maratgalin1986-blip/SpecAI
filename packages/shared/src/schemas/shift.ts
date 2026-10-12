@@ -150,5 +150,9 @@ export const createEquipmentBlockSchema = z
   .refine((data) => data.to.getTime() >= data.from.getTime(), {
     message: 'Дата окончания не может быть раньше даты начала',
     path: ['to'],
+  })
+  .refine((data) => data.to.getTime() - data.from.getTime() <= 366 * 86_400_000, {
+    message: 'Блокировка не дольше года',
+    path: ['to'],
   });
 export type CreateEquipmentBlockInput = z.infer<typeof createEquipmentBlockSchema>;

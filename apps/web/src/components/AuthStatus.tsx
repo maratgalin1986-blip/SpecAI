@@ -19,12 +19,13 @@ export function AuthStatus() {
 
   return (
     <div className="flex min-w-0 items-center gap-3 text-sm">
-      <span
-        className="auth-email min-w-0 truncate text-slate-600"
+      <a
+        href={session.user.role === 'PROVIDER_ADMIN' ? '/provider' : '/dashboard'}
+        className="auth-email min-w-0 truncate font-medium text-slate-700 hover:text-slate-900"
         title={session.user.email ?? undefined}
       >
-        {session.user.email}
-      </span>
+        Кабинет
+      </a>
       <button
         onClick={() => signOut({ callbackUrl: '/' })}
         className="shrink-0 font-medium text-slate-600 hover:text-slate-900"

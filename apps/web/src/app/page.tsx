@@ -14,6 +14,7 @@ import { HowItWorks } from '@/components/HowItWorks';
 import { Icon, type IconName } from '@/components/Icon';
 import { IntroSplash } from '@/components/IntroSplash';
 import { MachinePhoto } from '@/components/MachinePhoto';
+import { MarketplaceBlock } from '@/components/MarketplaceBlock';
 import { Reveal } from '@/components/Reveal';
 import { TiltCard } from '@/components/TiltCard';
 import type { MachineType } from '@/lib/machinePhotos';
@@ -152,7 +153,7 @@ const STEPS = [
   { title: 'Работайте', text: 'Диспетчер на связи, оплата по факту.' },
 ];
 
-// Service cards link to their catalog category (matched by name) and show how
+// Service cards link to their catalog category (matched by slug) and show how
 // much equipment is listed there. Falls back to plain cards without a database.
 export const revalidate = 300;
 
@@ -163,7 +164,7 @@ async function loadCategoryLinks() {
     });
     const links = new Map(
       categories.map((category) => [
-        category.name,
+        category.slug,
         { id: category.id, available: category._count.equipment },
       ]),
     );
@@ -175,16 +176,18 @@ async function loadCategoryLinks() {
   }
 }
 
+/** Catalog category (slug, packages/shared/src/categories.ts) of each service card. */
 const SERVICE_CATEGORY: Record<string, string> = {
-  'Экскаваторы-погрузчики': 'Экскаваторы-погрузчики',
-  Гидромолот: 'Экскаваторы-погрузчики',
-  'Гусеничные экскаваторы': 'Экскаваторы',
-  'Колёсный экскаватор с гидромолотом': 'Экскаваторы',
-  Автокраны: 'Краны',
-  'Манипулятор КМУ 7 т': 'Манипуляторы',
-  'Автовышка АГП': 'Автовышки',
-  'Фронтальные погрузчики': 'Погрузчики',
-  Тракторы: 'Тракторы',
+  'Экскаваторы-погрузчики': 'backhoe-loaders',
+  Гидромолот: 'backhoe-loaders',
+  'Гусеничные экскаваторы': 'excavators',
+  'Колёсный экскаватор с гидромолотом': 'excavators',
+  Автокраны: 'cranes',
+  'Манипулятор КМУ 7 т': 'crane-trucks',
+  'Автовышка АГП': 'aerial-platforms',
+  'Фронтальные погрузчики': 'loaders',
+  Виброкаток: 'rollers',
+  Тракторы: 'tractors',
 };
 
 const SERVICE_LANDING: Record<string, string> = {
@@ -298,7 +301,7 @@ export default async function HomePage() {
               <div className="grid grid-cols-2 gap-3">
                 {[
                   { href: '/smeta', icon: '🧮', label: 'Рассчитать смету' },
-                  { href: '/dizain', icon: '🏠', label: 'Создать дизайн' },
+                  { href: '/register?type=provider', icon: '🚛', label: 'Встать на линию' },
                 ].map((item) => (
                   <a
                     key={item.href}
@@ -378,6 +381,11 @@ export default async function HomePage() {
           </div>
         ))}
       </section>
+
+      {/* Owner, 2026-10-11: the marketplace itself — two doors and the live board. */}
+      <div className="depth">
+        <MarketplaceBlock />
+      </div>
 
       <div
         className="marquee-mask depth -my-10 overflow-hidden border-y border-slate-200 py-4"

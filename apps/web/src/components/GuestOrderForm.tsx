@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { Button } from '@specai/ui';
+import { CategorySelect, type SelectableCategory } from '@/components/CategorySelect';
 import { ConsentText } from '@/components/ConsentText';
 import { DemandHint } from '@/components/DemandHint';
 import { SITE } from '@/lib/site';
@@ -12,10 +13,7 @@ function todayInMoscow() {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Moscow' }).format(new Date());
 }
 
-interface Category {
-  id: string;
-  name: string;
-}
+type Category = SelectableCategory;
 
 /**
  * The order form for visitors without an account (there is no registration
@@ -131,18 +129,13 @@ export function GuestOrderForm({
 
       <label className="flex flex-col gap-1 text-sm">
         Техника
-        <select
+        <CategorySelect
+          categories={categories}
           value={categoryId}
-          onChange={(e) => setCategoryId(e.target.value)}
+          onChange={setCategoryId}
+          emptyLabel="Подобрать по описанию"
           className="rounded-md border border-slate-300 px-3 py-2"
-        >
-          <option value="">Подобрать по описанию</option>
-          {categories.map((category) => (
-            <option key={category.id} value={category.id}>
-              {category.name}
-            </option>
-          ))}
-        </select>
+        />
       </label>
       <DemandHint categoryId={categoryId} categoryName={categoryName} />
 

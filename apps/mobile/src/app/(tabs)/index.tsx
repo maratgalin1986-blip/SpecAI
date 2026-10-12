@@ -92,6 +92,14 @@ export default function HomeScreen() {
           ) : null}
           <Pressable
             accessibilityRole="button"
+            accessibilityLabel="Исполнители"
+            onPress={() => router.push('/providers')}
+            style={({ pressed }) => [styles.roundButton, pressed && styles.pressed]}
+          >
+            <Ionicons name="people-outline" size={22} color={colors.text} />
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
             accessibilityLabel="Каталог техники"
             onPress={() => router.push('/catalog')}
             style={({ pressed }) => [styles.roundButton, pressed && styles.pressed]}
