@@ -274,7 +274,7 @@ export default async function EquipmentDetailPage({ params }: { params: { id: st
             <figure style={{ viewTransitionName: 'machine-photo' }}>
               <MachineGallery images={modelPhotos} name={item.name} />
               <figcaption className="mt-2 text-xs text-slate-500">
-                Фото этой модели из открытых источников — не эта машина
+                Фото этой модели из открытых источников, а не самой машины
               </figcaption>
             </figure>
           ) : illustration ? (

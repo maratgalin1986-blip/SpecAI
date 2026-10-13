@@ -6,8 +6,9 @@ import { SITE } from '@/lib/site';
 // the platform shows to everyone: a provider's name and base point on the map
 // (for a sole trader that is personal data) and the short name under reviews,
 // comments and orders on the public board.
-// TODO(owner): a lawyer should confirm the text; a separate checkbox for it
-// at provider sign-up and before a review is posted is still to be added.
+// TODO владелец: a lawyer should confirm the text. Web provider sign-up has its
+// own checkbox for it; customers see a line at sign-up. Still missing: a
+// checkbox before a review or comment is posted and in the mobile sign-up.
 
 export const metadata: Metadata = {
   title: 'Согласие на распространение персональных данных',
@@ -28,8 +29,8 @@ export default function DistributionConsentPage() {
         <a href="/soglasie" className="text-amber-700 underline">
           согласия на обработку персональных данных
         </a>
-        . Публикуя на площадке {SITE.platform} от {SITE.name} карточку исполнителя, заявку, отзыв
-        или комментарий, я даю {operator}
+        . Отмечая галочку о согласии на распространение при регистрации исполнителя либо публикуя на
+        площадке {SITE.platform} от {SITE.name} заявку, отзыв или комментарий, я даю {operator}
         {SITE.inn ? ` (ИНН ${SITE.inn}${SITE.ogrn ? `, ОГРН ${SITE.ogrn}` : ''})` : ''} (далее —
         Оператор) согласие сделать перечисленные ниже данные доступными неограниченному кругу лиц на
         сайте, в мобильном приложении и в Telegram-боте площадки.
@@ -37,13 +38,14 @@ export default function DistributionConsentPage() {
       <h2>Какие данные публикуются</h2>
       <ul>
         <li>
-          для исполнителя: наименование компании или ИП, город, точка базы на карте, техника, цены,
-          фото техники;
+          для исполнителя: наименование компании или ИП, город, адрес базы и её точка на карте,
+          техника, цены, фото техники, отзывы о работе;
         </li>
         <li>
           для заказчика и автора отзыва или комментария: имя и первая буква фамилии («Анна П.»),
-          текст заявки, отзыва или комментария, город и даты работ — без телефона, e-mail и точного
-          адреса.
+          текст заявки, отзыва или комментария, город и даты работ. Телефоны, e-mail и ссылки в
+          тексте заявки на доске скрываются; адрес работ, если я сам(а) написал(а) его в тексте
+          заявки, виден всем.
         </li>
       </ul>
       <h2>Условия и запреты</h2>

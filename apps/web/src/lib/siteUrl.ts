@@ -1,10 +1,12 @@
 // Absolute site URL for metadata, sitemap, robots, share links, QR codes and
 // links in notifications.
 //
-// The site lives on spec-ai-web.vercel.app. iistroyka24.ru and iistroyka.ru
-// are bought but not connected (a registrar parking page answers there), so a
-// NEXT_PUBLIC_SITE_URL or Vercel production domain on those hosts is ignored
-// until NEXT_PUBLIC_SITE_DOMAIN_CONNECTED=1 says the DNS points at Vercel.
+// The site lives on https://spec-ai-web.vercel.app, and that is the default.
+// NEXT_PUBLIC_SITE_URL overrides it (e.g. a staging host). iistroyka24.ru and
+// iistroyka.ru are bought but not connected (a registrar parking page answers
+// there), so an override or a Vercel production domain on those hosts is
+// ignored until NEXT_PUBLIC_SITE_DOMAIN_CONNECTED=1 says the DNS points at
+// Vercel.
 
 export const DEFAULT_SITE_URL = 'https://spec-ai-web.vercel.app';
 
@@ -13,10 +15,7 @@ export const PENDING_DOMAINS = ['iistroyka24.ru', 'iistroyka.ru'];
 
 type SiteEnv = Partial<
   Record<
-    | 'NEXT_PUBLIC_SITE_URL'
-    | 'NEXT_PUBLIC_SITE_DOMAIN_CONNECTED'
-    | 'VERCEL'
-    | 'VERCEL_PROJECT_PRODUCTION_URL',
+    'NEXT_PUBLIC_SITE_URL' | 'NEXT_PUBLIC_SITE_DOMAIN_CONNECTED' | 'VERCEL_PROJECT_PRODUCTION_URL',
     string
   >
 >;
@@ -38,29 +37,30 @@ function isPending(url: string): boolean {
   return PENDING_DOMAINS.includes(host);
 }
 
+/**
+ * A configured address, normalised (no trailing slash), or null when it is
+ * empty, malformed or one of the not yet connected domains.
+ */
+export function usableSiteUrl(raw: string | undefined, domainConnected = false): string | null {
+  const url = normalize(raw);
+  if (!url) return null;
+  return domainConnected || !isPending(url) ? url : null;
+}
+
 /** Pure resolver, exported for tests. */
 export function resolveSiteUrl(env: SiteEnv): string {
   const connected = env.NEXT_PUBLIC_SITE_DOMAIN_CONNECTED?.trim() === '1';
-  const candidates = [
-    normalize(env.NEXT_PUBLIC_SITE_URL),
-    normalize(env.VERCEL_PROJECT_PRODUCTION_URL),
-  ];
-  for (const url of candidates) {
-    if (url && (connected || !isPending(url))) return url;
-  }
-  // On Vercel (production and previews) fall back to the working address;
-  // locally keep links on the dev server.
-  if (env.VERCEL || env.VERCEL_PROJECT_PRODUCTION_URL || env.NEXT_PUBLIC_SITE_URL) {
-    return DEFAULT_SITE_URL;
-  }
-  return 'http://localhost:3000';
+  return (
+    usableSiteUrl(env.NEXT_PUBLIC_SITE_URL, connected) ??
+    usableSiteUrl(env.VERCEL_PROJECT_PRODUCTION_URL, connected) ??
+    DEFAULT_SITE_URL
+  );
 }
 
 export function siteUrl() {
   return resolveSiteUrl({
     NEXT_PUBLIC_SITE_URL: process.env.NEXT_PUBLIC_SITE_URL,
     NEXT_PUBLIC_SITE_DOMAIN_CONNECTED: process.env.NEXT_PUBLIC_SITE_DOMAIN_CONNECTED,
-    VERCEL: process.env.VERCEL,
     VERCEL_PROJECT_PRODUCTION_URL: process.env.VERCEL_PROJECT_PRODUCTION_URL,
   });
 }

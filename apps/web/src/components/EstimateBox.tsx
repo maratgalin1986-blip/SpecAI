@@ -301,9 +301,11 @@ export function EstimateBox({
           >
             {status === 'sending'
               ? 'Отправляем…'
-              : total !== null
-                ? 'Заказать по расчёту'
-                : 'Узнать цену'}
+              : executor
+                ? 'Отправить диспетчеру'
+                : total !== null
+                  ? 'Заказать по расчёту'
+                  : 'Узнать цену'}
             <Icon name="arrow" className="h-4 w-4 transition group-hover:translate-x-1" />
           </button>
           <p className="text-center text-xs text-slate-500">
@@ -319,7 +321,7 @@ export function EstimateBox({
           href={executor.orderHref}
           className="text-center text-sm font-semibold text-amber-700 underline-offset-2 hover:underline"
         >
-          Заявка для «{executor.name}» на доске заказов
+          Разместить заявку для «{executor.name}»
         </a>
       )}
 
@@ -330,7 +332,7 @@ export function EstimateBox({
           className="inline-flex items-center justify-center gap-2 rounded-full border border-slate-300 px-3 py-2.5 text-sm font-semibold transition hover:border-slate-900"
         >
           <Icon name="phone" className="h-4 w-4 text-amber-700" />
-          {executor ? 'Диспетчер' : 'Позвонить'}
+          {executor ? 'Диспетчер площадки' : 'Позвонить'}
         </a>
         <a
           href={SITE.whatsappHref}

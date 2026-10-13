@@ -62,6 +62,32 @@ describe('bidAccepted', () => {
   });
 });
 
+describe('links and sender', () => {
+  it('never links to a bought but unconnected domain', () => {
+    process.env.NEXT_PUBLIC_APP_URL = 'https://iistroyka.ru';
+    delete process.env.NEXTAUTH_URL;
+    delete process.env.NEXT_PUBLIC_SITE_URL;
+    delete process.env.VERCEL_PROJECT_PRODUCTION_URL;
+    const tpl = passwordReset({ resetUrl: 'https://spec-ai-web.vercel.app/reset?t=1' });
+    expect(tpl.html).not.toContain('iistroyka.ru');
+    const bid = bidAccepted({
+      bookingId: 'bk_9',
+      equipmentName: 'Кран',
+      price: 1,
+      currency: 'RUB',
+      startDate: new Date('2026-10-01T00:00:00Z'),
+      endDate: new Date('2026-10-02T00:00:00Z'),
+    });
+    expect(bid.html).toContain('https://spec-ai-web.vercel.app/dashboard');
+  });
+
+  it('is signed by the platform', () => {
+    const tpl = emailVerify({ verifyUrl: 'https://spec-ai-web.vercel.app/verify?t=1' });
+    expect(tpl.subject.startsWith('ИИСтройка24:')).toBe(true);
+    expect(tpl.text).toContain('ИИСтройка24 от СпецПласт16');
+  });
+});
+
 describe('bookingStatusChanged', () => {
   it('translates the status into Russian', () => {
     const tpl = bookingStatusChanged({

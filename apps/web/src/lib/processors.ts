@@ -1,7 +1,7 @@
 // Services that process visitors' data for the site, with their country.
 // Shown in the privacy policy (/privacy) and the consent (/soglasie): keep
 // this list true when a service is added or removed.
-// TODO(owner): before ONLINE_PAYMENTS=on add Stripe (USA) here and to /privacy.
+// TODO владелец: before online payment is switched on, add Stripe (USA) here and to /privacy.
 
 export interface Processor {
   name: string;
@@ -41,14 +41,14 @@ export const PROCESSORS: Processor[] = [
   {
     name: 'Anthropic',
     purpose:
-      'ответы ИИ-ассистента и распознавание заявок в сообщениях из открытых чатов: текст сообщения, только когда ИИ включён; без ИИ сообщения разбираются по правилам на сервере сайта',
+      'ответы ИИ-ассистентов, распознавание заявок в сообщениях из чатов и характеристик техники в тексте или файле, который загрузил исполнитель: текст сообщения или файл, только когда ИИ включён; без ИИ сообщения разбираются по правилам на сервере сайта',
     country: 'США',
   },
   {
-    // TODO(owner): confirm the country of the WhatsApp gateway before enabling it.
+    // TODO владелец: confirm the gateway company and its country before enabling it.
     name: 'GREEN-API (шлюз WhatsApp)',
     purpose:
-      'только если подключено: отправка уведомлений в WhatsApp (номер телефона и текст); сообщения доставляет WhatsApp (Meta Platforms, США)',
+      'только если подключено: получение сообщений из групп WhatsApp, где состоит аккаунт площадки, и личных сообщений ему (номер и имя отправителя, текст), отправка уведомлений в WhatsApp (номер телефона и текст); сообщения доставляет WhatsApp (Meta Platforms, США)',
     country: 'Россия; WhatsApp — США',
   },
   {
@@ -62,9 +62,9 @@ export const PROCESSORS: Processor[] = [
     country: 'Россия',
   },
   {
-    name: 'OpenStreetMap Foundation (Nominatim, карта)',
-    purpose:
-      'поиск координат по адресу места работ (передаётся только адрес) и показ карты (IP-адрес при загрузке фрагментов карты)',
+    // Map tiles go through the site's own proxy (/api/tiles), so visitors' IPs stay with us.
+    name: 'OpenStreetMap Foundation (Nominatim)',
+    purpose: 'поиск координат по адресу места работ (передаётся только адрес)',
     country: 'Великобритания',
   },
   {

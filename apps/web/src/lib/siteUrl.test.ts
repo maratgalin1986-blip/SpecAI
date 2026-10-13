@@ -1,10 +1,18 @@
-import { describe, expect, it } from 'vitest';
-import { DEFAULT_SITE_URL, resolveSiteUrl } from './siteUrl';
+import { afterEach, describe, expect, it } from 'vitest';
+import { DEFAULT_SITE_URL, resolveSiteUrl, siteUrl, usableSiteUrl } from './siteUrl';
 
 describe('resolveSiteUrl', () => {
-  it('uses an explicit working address', () => {
+  it('defaults to the working Vercel address', () => {
+    expect(DEFAULT_SITE_URL).toBe('https://spec-ai-web.vercel.app');
+    expect(resolveSiteUrl({})).toBe(DEFAULT_SITE_URL);
+  });
+
+  it('keeps the NEXT_PUBLIC_SITE_URL override', () => {
     expect(resolveSiteUrl({ NEXT_PUBLIC_SITE_URL: 'https://example.org/' })).toBe(
       'https://example.org',
+    );
+    expect(resolveSiteUrl({ NEXT_PUBLIC_SITE_URL: 'staging.example.org' })).toBe(
+      'https://staging.example.org',
     );
   });
 
@@ -12,7 +20,6 @@ describe('resolveSiteUrl', () => {
     expect(
       resolveSiteUrl({
         NEXT_PUBLIC_SITE_URL: 'https://iistroyka.ru',
-        VERCEL: '1',
         VERCEL_PROJECT_PRODUCTION_URL: 'iistroyka.ru',
       }),
     ).toBe(DEFAULT_SITE_URL);
@@ -39,12 +46,34 @@ describe('resolveSiteUrl', () => {
     ).toBe('https://iistroyka24.ru');
   });
 
-  it('defaults to the Vercel address on Vercel and to localhost elsewhere', () => {
-    expect(resolveSiteUrl({ VERCEL: '1' })).toBe(DEFAULT_SITE_URL);
-    expect(resolveSiteUrl({})).toBe('http://localhost:3000');
+  it('ignores blank and malformed values', () => {
+    expect(resolveSiteUrl({ NEXT_PUBLIC_SITE_URL: '   ' })).toBe(DEFAULT_SITE_URL);
+    expect(resolveSiteUrl({ NEXT_PUBLIC_SITE_URL: 'https://' })).toBe(DEFAULT_SITE_URL);
+  });
+});
+
+describe('usableSiteUrl', () => {
+  it('drops pending domains and keeps working ones', () => {
+    expect(usableSiteUrl('https://iistroyka.ru/')).toBeNull();
+    expect(usableSiteUrl('http://localhost:3100/')).toBe('http://localhost:3100');
+    expect(usableSiteUrl(undefined)).toBeNull();
+  });
+});
+
+describe('siteUrl', () => {
+  const saved = { ...process.env };
+  afterEach(() => {
+    process.env = { ...saved };
   });
 
-  it('ignores blank values', () => {
-    expect(resolveSiteUrl({ NEXT_PUBLIC_SITE_URL: '   ', VERCEL: '1' })).toBe(DEFAULT_SITE_URL);
+  it('reads the environment', () => {
+    delete process.env.NEXT_PUBLIC_SITE_URL;
+    delete process.env.VERCEL_PROJECT_PRODUCTION_URL;
+    delete process.env.NEXT_PUBLIC_SITE_DOMAIN_CONNECTED;
+    expect(siteUrl()).toBe(DEFAULT_SITE_URL);
+    process.env.NEXT_PUBLIC_SITE_URL = 'https://iistroyka.ru';
+    expect(siteUrl()).toBe(DEFAULT_SITE_URL);
+    process.env.NEXT_PUBLIC_SITE_URL = 'https://example.org';
+    expect(siteUrl()).toBe('https://example.org');
   });
 });

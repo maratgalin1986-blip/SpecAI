@@ -30,6 +30,9 @@ export default function RegisterPage() {
   const [password, setPassword] = useState('');
   const [phone, setPhone] = useState('');
   const [consent, setConsent] = useState(false);
+  // 152-ФЗ ст. 10.1: a provider's card (name, base address and point, machines)
+  // is public, which needs a consent to distribution separate from `consent`.
+  const [publicConsent, setPublicConsent] = useState(false);
   const [base, setBase] = useState<BaseValue>({ address: '', lat: null, lon: null });
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -40,6 +43,10 @@ export default function RegisterPage() {
     setError(null);
     if (accountType === 'PROVIDER' && base.lat === null && base.address.trim().length < 3) {
       setError('Укажите адрес базы или поставьте точку на карте — по ней вас найдут заказчики');
+      return;
+    }
+    if (accountType === 'PROVIDER' && !publicConsent) {
+      setError('Нужно согласие на публикацию карточки компании');
       return;
     }
     setIsSubmitting(true);
@@ -191,16 +198,33 @@ export default function RegisterPage() {
             />
             <ConsentText />
           </label>
+          {accountType === 'PROVIDER' && (
+            <label className="flex items-start gap-2 text-xs text-slate-600">
+              <input
+                type="checkbox"
+                required
+                checked={publicConsent}
+                onChange={(e) => setPublicConsent(e.target.checked)}
+                className="mt-0.5"
+              />
+              <span>
+                Согласен(на), что название компании, город, адрес базы и её точка на карте, техника,
+                цены и фото будут видны всем посетителям (
+                <a href="/soglasie-rasprostranenie" className="underline" target="_blank">
+                  согласие на распространение
+                </a>
+                )
+              </span>
+            </label>
+          )}
           <p className="text-xs text-slate-500">
             Создавая аккаунт, вы принимаете{' '}
             <a href="/pravila" className="underline" target="_blank">
               Правила площадки
             </a>
-            {accountType === 'PROVIDER' ? (
+            {accountType === 'CUSTOMER' ? (
               <>
-                {' '}
-                и соглашаетесь, что название компании, город, точка базы на карте и техника будут
-                видны всем (
+                . Отзывы и комментарии публикуются с именем в виде «Анна П.» (
                 <a href="/soglasie-rasprostranenie" className="underline" target="_blank">
                   согласие на распространение
                 </a>

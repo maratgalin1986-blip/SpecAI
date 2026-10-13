@@ -198,10 +198,16 @@ export default async function OrdersPage({ searchParams }: { searchParams: Order
       ) : (
         <div className="grid gap-4 lg:grid-cols-2">
           <Card>
+            {/* The provider's id rides in the lead source, so the dispatcher
+                knows which company the guest wanted. */}
             <CallbackForm
-              source="orders"
-              title="Заявка без регистрации"
-              subtitle="Оставьте телефон и коротко опишите задачу — диспетчер перезвонит и подскажет цену."
+              source={forProvider ? `orders:${forProvider.id}` : 'orders'}
+              title="Звонок диспетчера"
+              subtitle={
+                forProvider
+                  ? `Оставьте телефон и коротко опишите задачу — диспетчер площадки перезвонит и передаст заявку «${forProvider.name}».`
+                  : 'Оставьте телефон и коротко опишите задачу — диспетчер площадки перезвонит и подскажет цену.'
+              }
             />
           </Card>
           <Card className="flex flex-col justify-center gap-3">

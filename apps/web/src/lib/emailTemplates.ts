@@ -1,4 +1,5 @@
 import { SITE } from './site';
+import { siteUrl, usableSiteUrl } from './siteUrl';
 
 /**
  * Шаблоны email-уведомлений (простой HTML на русском).
@@ -20,10 +21,14 @@ export const BOOKING_STATUS_LABELS: Record<BookingStatusValue, string> = {
   CANCELLED: 'отменено',
 };
 
+/** Links in letters: the app URL, else NEXTAUTH_URL, else the site; never a parked domain. */
 export function getEmailBaseUrl(): string {
-  const url =
-    process.env.NEXT_PUBLIC_APP_URL ?? process.env.NEXTAUTH_URL ?? 'http://localhost:3000';
-  return url.replace(/\/+$/, '');
+  const connected = process.env.NEXT_PUBLIC_SITE_DOMAIN_CONNECTED?.trim() === '1';
+  return (
+    usableSiteUrl(process.env.NEXT_PUBLIC_APP_URL, connected) ??
+    usableSiteUrl(process.env.NEXTAUTH_URL, connected) ??
+    siteUrl()
+  );
 }
 
 export function escapeHtml(value: string): string {
