@@ -6,7 +6,7 @@ import { EQUIPMENT_ORDER_BY, totalPagesFor } from '@/lib/pagination';
 import { PUBLIC_FLEET, PUBLISHED_FLEET, isProvider } from '@/lib/fleet';
 import { INVALID_JSON_MESSAGE, readJson, zodErrorMessage } from '@/lib/apiInput';
 import { listingPhoto } from '@/lib/equipmentPhoto';
-import { maskContactsAndLinks } from '@/lib/privacy';
+import { maskContactsAndLinks, containsContact } from '@/lib/privacy';
 import { customerRateFields, customerRates } from '@/lib/equipmentCatalog';
 
 export async function GET(request: NextRequest) {
@@ -120,6 +120,15 @@ export async function POST(request: NextRequest) {
 
   if (!parsed.success) {
     return NextResponse.json({ error: zodErrorMessage(parsed.error) }, { status: 400 });
+  }
+  if (containsContact(parsed.data.name)) {
+    return NextResponse.json(
+      {
+        error:
+          'Уберите телефон, почту и ссылки из названия: контакты откроются заказчику после подтверждения брони',
+      },
+      { status: 400 },
+    );
   }
   const category = await prisma.equipmentCategory.findUnique({
     where: { id: parsed.data.categoryId },

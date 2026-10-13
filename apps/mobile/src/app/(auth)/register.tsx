@@ -215,9 +215,9 @@ export default function RegisterScreen() {
                 Согласен(на) на обработку персональных данных в соответствии с{' '}
                 <Text
                   style={styles.consentLink}
-                  onPress={() => void WebBrowser.openBrowserAsync(`${API_URL}/privacy`)}
+                  onPress={() => void WebBrowser.openBrowserAsync(`${API_URL}/soglasie`)}
                 >
-                  политикой конфиденциальности
+                  условиями согласия
                 </Text>
               </Text>
             </Pressable>

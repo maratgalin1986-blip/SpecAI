@@ -6,7 +6,7 @@ import { getRequestUser } from '@/lib/requestUser';
 import { isProvider } from '@/lib/fleet';
 import { INVALID_JSON_MESSAGE, readJson, zodErrorMessage } from '@/lib/apiInput';
 import { listingPhoto } from '@/lib/equipmentPhoto';
-import { maskContactsAndLinks } from '@/lib/privacy';
+import { maskContactsAndLinks, containsContact } from '@/lib/privacy';
 import { customerRateFields, customerRates } from '@/lib/equipmentCatalog';
 
 export const dynamic = 'force-dynamic';
@@ -91,6 +91,15 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
     return NextResponse.json({ error: zodErrorMessage(parsed.error) }, { status: 400 });
   }
   const input = parsed.data;
+  if (typeof input.name === 'string' && containsContact(input.name)) {
+    return NextResponse.json(
+      {
+        error:
+          'Уберите телефон, почту и ссылки из названия: контакты откроются заказчику после подтверждения брони',
+      },
+      { status: 400 },
+    );
+  }
   if (Object.keys(input).length === 0) {
     return NextResponse.json({ error: 'Нечего сохранять' }, { status: 400 });
   }

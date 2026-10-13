@@ -8,18 +8,53 @@ const MESSENGER_LINK =
   /(?:https?:\/\/)?(?:www\.)?(?:t\.me|telegram\.me|wa\.me|api\.whatsapp\.com|vk\.com|ok\.ru)\/[^\s,;)]+/giu;
 const USERNAME = /(^|[^\p{L}\p{N}_@])@[A-Za-z0-9_]{3,32}(?![A-Za-z0-9_])/gu;
 // Digits with any separator people use to dodge the filter: spaces, dashes
-// (also en/em), brackets, dots, middle dots, underscores, slashes. The digit
-// count in looksLikePhone decides; a candidate holding a full date such as
-// 01.06.2028 is left alone, so «12.10.2026 - 15.10» stays readable.
-const PHONE_LIKE = /\+?\d[\d\s().·_/\u2013\u2014-]{5,}\d/g;
-const FULL_DATE = /(?<!\d)\d{1,2}\.\d{1,2}\.(?:19|20)\d{2}(?!\d)/;
+// (also en/em), brackets, dots, middle dots, underscores, slashes, commas,
+// pipes, asterisks. A candidate never starts inside a word («AUDIT3»).
+const PHONE_LIKE = /(?<![\p{L}\d])\+?\d[\d\s().·_/,|*\u2013\u2014-]{5,}\d/gu;
+// Spaces, dashes and brackets only: the usual ways to write a phone.
+const CLASSIC_SEPARATORS = /^\+?[\d\s()-]+$/;
+// A full date such as 01.06.2028; split out of a candidate so that a phone
+// written next to a date is still hidden and the date stays readable.
+const FULL_DATE_SPLIT = /((?<!\d)\d{1,2}\.\d{1,2}\.(?:19|20)\d{2}(?!\d))/;
+
+const LIST_SPLIT = /([,|*]\s+)/;
 
 function looksLikePhone(candidate: string): boolean {
-  if (FULL_DATE.test(candidate)) return false;
   const digits = candidate.replace(/\D/g, '');
-  if (digits.length >= 10 && digits.length <= 15) return true;
-  // Local numbers written like 242-80-88.
-  return digits.length === 7 && /^\d{3}-\d{2}-\d{2}$/.test(candidate.trim());
+  if (CLASSIC_SEPARATORS.test(candidate.trim())) {
+    if (digits.length >= 10 && digits.length <= 15) return true;
+    // Local numbers written like 242-80-88.
+    return digits.length === 7 && /^\d{3}-\d{2}-\d{2}$/.test(candidate.trim());
+  }
+  // Dots, commas, slashes and the like also write coordinates, sums and date
+  // ranges: only a Russian number counts here (8/7 + 10 digits, or 9xx + 7).
+  return (
+    (digits.length === 11 && /^[78]/.test(digits)) || (digits.length === 10 && digits[0] === '9')
+  );
+}
+
+function maskPhones(text: string): string {
+  return text.replace(PHONE_LIKE, (match) => {
+    if (FULL_DATE_SPLIT.test(match)) {
+      // Odd parts are the dates; mask the phones around them.
+      return match
+        .split(FULL_DATE_SPLIT)
+        .map((part, index) => (index % 2 === 1 ? part : maskPhones(part)))
+        .join('');
+    }
+    // «, » / «| » / «* » between numbers is a list, not one long number.
+    if (LIST_SPLIT.test(match)) {
+      return match
+        .split(LIST_SPLIT)
+        .map((part, index) => (index % 2 === 1 ? part : maskPhones(part)))
+        .join('');
+    }
+    if (!looksLikePhone(match)) return match;
+    // Keep the space that the pattern may have swallowed at the edges.
+    const lead = /^\s/.test(match) ? ' ' : '';
+    const tail = /\s$/.test(match) ? ' ' : '';
+    return `${lead}${HIDDEN_CONTACT}${tail}`;
+  });
 }
 
 /**
@@ -28,17 +63,12 @@ function looksLikePhone(candidate: string): boolean {
  * in Order.rawText, which only admins and verified providers see.
  */
 export function maskContacts(text: string): string {
-  return text
-    .replace(EMAIL, HIDDEN_CONTACT)
-    .replace(MESSENGER_LINK, HIDDEN_CONTACT)
-    .replace(USERNAME, (_match, prefix: string) => `${prefix}${HIDDEN_CONTACT}`)
-    .replace(PHONE_LIKE, (match) => {
-      if (!looksLikePhone(match)) return match;
-      // Keep the space that the pattern may have swallowed at the edges.
-      const lead = /^\s/.test(match) ? ' ' : '';
-      const tail = /\s$/.test(match) ? ' ' : '';
-      return `${lead}${HIDDEN_CONTACT}${tail}`;
-    });
+  return maskPhones(
+    text
+      .replace(EMAIL, HIDDEN_CONTACT)
+      .replace(MESSENGER_LINK, HIDDEN_CONTACT)
+      .replace(USERNAME, (_match, prefix: string) => `${prefix}${HIDDEN_CONTACT}`),
+  );
 }
 
 /**
@@ -135,4 +165,25 @@ export function orderDescriptionFor(
 ): string {
   if (order.source === 'SITE' || canSeeChatContacts(viewer)) return order.description;
   return maskContacts(order.description);
+}
+
+/**
+ * Whether a short text (a machine's name) carries a contact: a Russian phone
+ * number in any spelling, an e-mail, a @username or a messenger link. Model
+ * codes such as «65115-6058-48» are not phones here (strict Russian shape).
+ */
+export function containsContact(text: string): boolean {
+  if (new RegExp(EMAIL.source, 'u').test(text)) return true;
+  if (new RegExp(MESSENGER_LINK.source, 'iu').test(text)) return true;
+  if (new RegExp(USERNAME.source, 'u').test(text)) return true;
+  for (const match of text.match(PHONE_LIKE) ?? []) {
+    const digits = match.replace(/\D/g, '');
+    if (
+      (digits.length === 11 && /^[78]/.test(digits)) ||
+      (digits.length === 10 && digits[0] === '9')
+    ) {
+      return true;
+    }
+  }
+  return false;
 }

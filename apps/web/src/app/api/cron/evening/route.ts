@@ -21,8 +21,21 @@ export const fetchCache = 'force-no-store';
  * provider's managers and the assigned operator are reminded. Once a day
  * (lib/cronOnce.ts): a repeated call sends nothing.
  */
+/** The evening digest may run from this Moscow hour on. */
+const EVENING_FROM_HOUR = 18;
+
+/** Hour of the day in Moscow (UTC+3 all year). */
+function moscowHour(now: Date): number {
+  return (now.getUTCHours() + 3) % 24;
+}
+
 export async function GET(request: NextRequest) {
   if (!cronAllowed(request)) return NextResponse.json({ error: 'forbidden' }, { status: 403 });
+  // The digest is an evening one (the cron fires at 19:00 Moscow): an early
+  // call must not use up the day's single run with half of the day's orders.
+  if (moscowHour(new Date()) < EVENING_FROM_HOUR) {
+    return NextResponse.json({ ok: true, skipped: 'too early' });
+  }
   const result = await onceADay('evening', sendEveningNotifications);
   if (!result) return NextResponse.json({ ok: true, skipped: 'already sent today' });
   return NextResponse.json({ ok: true, ...result });

@@ -50,9 +50,12 @@ export function addressVariants(address: string): string[] {
     /татарстан|челны|казан|елабуг|нижнекамск|альметьевск|менделеевск|заинск|бугульм/iu.test(
       expanded,
     );
-  const variants = namesCity
-    ? [address, expanded]
-    : [`${expanded}, Набережные Челны`, expanded, address];
+  // An address with a comma most likely names its own town (outside the
+  // list too, e.g. Москва): never move it to Набережные Челны first.
+  const variants =
+    namesCity || address.includes(',')
+      ? [address, expanded]
+      : [`${expanded}, Набережные Челны`, expanded, address];
   variants.push(`${expanded}, Республика Татарстан`);
   return [...new Set(variants)];
 }
@@ -84,9 +87,10 @@ export async function resolveProviderBase(input: {
   let unavailable = false;
   for (const variant of addressVariants(address)) {
     const found = await lookupAddress(variant);
+    // The geocoder is down or throttling: stop at once instead of hammering it.
     if (found.status === 'unavailable') {
       unavailable = true;
-      continue;
+      break;
     }
     if (found.status === 'not_found') continue;
     if (inServiceArea(found.place.lat, found.place.lon)) {

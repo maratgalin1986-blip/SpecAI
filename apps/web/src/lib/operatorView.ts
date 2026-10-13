@@ -42,8 +42,11 @@ export function bookingForOperator(
   maskText: (text: string) => string = (text) => text,
 ): OperatorBookingView {
   const location = booking.deliveryLocation ?? booking.order?.location ?? null;
+  // The typed address often already names the city: do not repeat it.
   const siteAddress = location
-    ? [location.addressLine, location.city].filter(Boolean).join(', ')
+    ? location.city && !location.addressLine.toLowerCase().includes(location.city.toLowerCase())
+      ? [location.addressLine, location.city].filter(Boolean).join(', ')
+      : location.addressLine || location.city
     : null;
   return {
     id: booking.id,

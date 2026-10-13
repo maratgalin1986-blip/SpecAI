@@ -239,7 +239,8 @@ export async function POST(request: NextRequest) {
         ...customerRates({ ...item, categoryName: item.category.name }),
         currency: item.currency,
         specs: item.specs,
-        description: item.description,
+        // As on the machine page: no phones or links reach the model.
+        description: item.description && maskContactsAndLinks(item.description),
         averageRating: ratings.length
           ? Math.round((ratings.reduce((a, b) => a + b, 0) / ratings.length) * 10) / 10
           : null,

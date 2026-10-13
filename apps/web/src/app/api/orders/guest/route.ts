@@ -43,7 +43,12 @@ export async function POST(request: NextRequest) {
   if (!dates.ok) return NextResponse.json({ error: dates.error }, { status: 400 });
 
   const ip = clientIp(request);
-  if (!checkRateLimit(`guest-orders:${ip}`, LEAD_RATE_LIMIT).ok) {
+  // Per number too: a spoofed address header must not give a fresh limit.
+  const phoneKey = parsed.data.phone.replace(/\D/g, '').slice(-10);
+  if (
+    !checkRateLimit(`guest-orders:${ip}`, LEAD_RATE_LIMIT).ok ||
+    !checkRateLimit(`guest-orders:phone:${phoneKey}`, LEAD_RATE_LIMIT).ok
+  ) {
     return NextResponse.json(
       { error: `Слишком много заявок. Позвоните нам: ${SITE.phone}` },
       { status: 429 },

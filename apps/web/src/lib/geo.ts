@@ -267,13 +267,32 @@ const CITY_PATTERNS = TATARSTAN_CITIES.map((city) => ({
     .map((word) => new RegExp(`(?<![a-zа-я0-9])${word.length > 4 ? word.slice(0, -1) : word}`)),
 }));
 
+// «Нижнекамское шоссе», «ул. Казанская», «Чистопольская», «Арское поле»: a
+// street named after a city is an adjective ending in -ск-/-цк- + ending.
+const ADJECTIVE_WORD = /(?:ск|цк|ьск)(?:ий|ая|ое|ой|ого|ому|ую|ие|их|им|ими|ые|ых)$/;
+
+/** Where `pattern` matches a city name (not a street adjective), else -1. */
+function firstCityWord(text: string, pattern: RegExp, words: number): number {
+  const global = new RegExp(pattern.source, 'g');
+  for (const match of text.matchAll(global)) {
+    const at = match.index ?? 0;
+    const word = /^[a-zа-я0-9-]+/.exec(text.slice(at))?.[0] ?? '';
+    // Multi-word names («Набережные Челны») are checked by all their words.
+    if (words === 1 && ADJECTIVE_WORD.test(word)) continue;
+    return at;
+  }
+  return -1;
+}
+
 /** The city of TATARSTAN_CITIES named in a free text (the earliest one), else null. */
 export function cityInText(text: string | null | undefined): CityPoint | null {
   if (!text) return null;
   const normalized = text.toLowerCase().replace(/ё/g, 'е');
   let best: { city: CityPoint; at: number } | null = null;
   for (const { city, patterns } of CITY_PATTERNS) {
-    const positions = patterns.map((pattern) => normalized.search(pattern));
+    const positions = patterns.map((pattern) =>
+      firstCityWord(normalized, pattern, patterns.length),
+    );
     if (positions.some((at) => at < 0)) continue;
     const at = Math.min(...positions);
     if (!best || at < best.at) best = { city, at };

@@ -10,7 +10,7 @@ import { AcceptBidButton } from '@/components/AcceptBidButton';
 import { formatMoney } from '@/lib/money';
 import { isAdminRequest } from '@/lib/admin';
 import { SiteConditions } from '@/components/SiteConditions';
-import { houseFirst, isProvider, isHouseManager } from '@/lib/fleet';
+import { houseFirstBids, isHouseManager, isProvider } from '@/lib/fleet';
 import { isSafeHttpUrl, maskContactsAndLinks } from '@/lib/privacy';
 import { bookedProviderSees } from '@/lib/bidPrivacy';
 import { approvedComments } from '@/lib/commentAccess';
@@ -72,7 +72,7 @@ export default async function OrderDetailPage({ params }: { params: { id: string
   if (!isOwner && !isAdmin && !isProvider(session?.user)) {
     redirect(session?.user ? '/orders#board' : bidLoginHref(order.id));
   }
-  const visibleBids = houseFirst(
+  const visibleBids = houseFirstBids(
     seesAllBids
       ? order.bids
       : order.bids.filter((bid) => bid.equipment.companyId === session?.user.companyId),

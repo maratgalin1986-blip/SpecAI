@@ -82,7 +82,10 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
   }
   // No offers on the company's own orders: a self-made deal would count as a
   // completed order and let the company rate itself.
-  if (order.customerId === currentUser.id || order.customer.companyId === currentUser.companyId) {
+  if (
+    order.customerId === currentUser.id ||
+    (!!currentUser.companyId && order.customer.companyId === currentUser.companyId)
+  ) {
     return NextResponse.json(
       { error: 'Нельзя предлагать технику на собственную заявку' },
       { status: 403 },

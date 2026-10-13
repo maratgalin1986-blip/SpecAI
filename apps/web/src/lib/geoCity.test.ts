@@ -35,3 +35,13 @@ describe('orderPoint', () => {
     expect(orderPoint({ city: 'Бавлы', addressLine: 'Бавлы' }, 'Набережные Челны')).toBeNull();
   });
 });
+
+describe('cityInText and street names', () => {
+  it('does not take a street named after a city for the city', () => {
+    expect(cityInText('Нижнекамское шоссе 10, Набережные Челны')?.name).toBe('Набережные Челны');
+    expect(cityInText('ул. Казанская 5, Елабуга')?.name).toBe('Елабуга');
+    expect(cityInText('ул. Чистопольская 3')).toBeNull();
+    expect(cityInText('в Нижнекамске, промзона')?.name).toBe('Нижнекамск');
+    expect(cityInText('Казань, ул. Баумана 1')?.name).toBe('Казань');
+  });
+});

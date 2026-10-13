@@ -2,11 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@specai/database';
 import { createOrderSchema } from '@specai/shared';
 import { getRequestUser } from '@/lib/requestUser';
-import { isOperator, isProvider } from '@/lib/fleet';
-import { providerMatchesOrder } from '@/lib/notifications/routing';
+import { HOUSE_COMPANY_ID, isOperator, isProvider } from '@/lib/fleet';
+import { acceptedCategoryIds, providerMatchesOrder } from '@/lib/notifications/routing';
 import { bidsUntilFor } from '@/lib/bidWindow';
 import { maskedContactFor } from '@/lib/chatOrders';
-import { cityInText, geocodeAddress } from '@/lib/geo';
+import { cityInText, geocodeAddress, orderPoint } from '@/lib/geo';
 import { notifyTelegram } from '@/lib/notify';
 import { notifyProvidersAboutOrder } from '@/lib/notifications/notifyUser';
 import { SITE } from '@/lib/site';
@@ -34,6 +34,8 @@ const FEED_PAGE = 50;
 const FEED_PAGE_MAX = 100;
 /** How many open orders the «near» feed checks against the radius at most. */
 const NEAR_SCAN = 1000;
+/** A company's open orders with its own waiting offers: more is not realistic. */
+const OWN_BIDS_MAX = 500;
 
 const ORDER_INCLUDE = {
   category: { select: { id: true, name: true } },
@@ -88,6 +90,7 @@ export async function GET(request: NextRequest) {
         where: ownBids,
         include: ORDER_INCLUDE,
         orderBy: { createdAt: 'desc' },
+        take: OWN_BIDS_MAX,
       });
     } else {
       const offset = intParam(searchParams.get('offset'), 0, 100_000);
@@ -97,6 +100,7 @@ export async function GET(request: NextRequest) {
         where: ownBids,
         include: ORDER_INCLUDE,
         orderBy: { createdAt: 'desc' },
+        take: OWN_BIDS_MAX,
       });
       const where = {
         status: 'OPEN' as const,
@@ -105,46 +109,54 @@ export async function GET(request: NextRequest) {
       };
       let page;
       if (searchParams.get('scope') === 'near') {
-        const company = await prisma.company.findUnique({
-          where: { id: currentUser.companyId },
-          select: {
-            baseLat: true,
-            baseLon: true,
-            deliveryRadiusKm: true,
-            equipment: {
-              where: { status: { not: 'RETIRED' } },
-              select: { categoryId: true },
-              distinct: ['categoryId'],
+        // The same rule as the new-order push and the evening digest
+        // (lib/notifications/notifyUser.ts): machine families, the order's
+        // city when it has no point, the house sees orders with no place.
+        const [company, categoryRows] = await Promise.all([
+          prisma.company.findUnique({
+            where: { id: currentUser.companyId },
+            select: {
+              id: true,
+              baseLat: true,
+              baseLon: true,
+              baseAddress: true,
+              deliveryRadiusKm: true,
+              equipment: {
+                where: { status: { not: 'RETIRED' } },
+                select: { categoryId: true },
+                distinct: ['categoryId'],
+              },
             },
-          },
-        });
+          }),
+          prisma.equipmentCategory.findMany({ select: { id: true, slug: true, parentId: true } }),
+        ]);
         const provider = {
           categoryIds: company?.equipment.map((item) => item.categoryId) ?? [],
           baseLat: company?.baseLat,
           baseLon: company?.baseLon,
           radiusKm: company?.deliveryRadiusKm,
+          baseAddress: company?.baseAddress,
+          isHouse: company?.id === HOUSE_COMPANY_ID,
         };
         const candidates =
           provider.categoryIds.length === 0
             ? []
             : await prisma.order.findMany({
-                where: {
-                  ...where,
-                  ...(categoryId
-                    ? {}
-                    : { OR: [{ categoryId: { in: provider.categoryIds } }, { categoryId: null }] }),
-                },
+                where,
                 include: ORDER_INCLUDE,
                 orderBy: { createdAt: 'desc' },
                 take: NEAR_SCAN,
               });
-        const near = candidates.filter((order) =>
-          providerMatchesOrder(provider, {
+        const near = candidates.filter((order) => {
+          const point = orderPoint(order.location, SITE.city);
+          return providerMatchesOrder(provider, {
             categoryId: order.categoryId,
-            lat: order.location?.latitude,
-            lon: order.location?.longitude,
-          }),
-        );
+            categoryIds: acceptedCategoryIds(order.categoryId, categoryRows),
+            lat: point?.lat,
+            lon: point?.lon,
+            city: order.location?.city,
+          });
+        });
         page = near.slice(offset, offset + limit);
         nextOffset = near.length > offset + limit ? offset + limit : null;
       } else {

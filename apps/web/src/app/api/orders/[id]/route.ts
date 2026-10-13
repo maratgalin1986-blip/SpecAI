@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@specai/database';
 import { getRequestUser } from '@/lib/requestUser';
-import { houseFirst, isProvider, isHouseManager } from '@/lib/fleet';
+import { houseFirstBids, isProvider, isHouseManager } from '@/lib/fleet';
 import { loadCompanyStats } from '@/lib/companyStats';
 import { EMPTY_STATS, reliability } from '@/lib/reliability';
 import { customerShortName } from '@/lib/customerPrivacy';
@@ -112,7 +112,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     };
   };
   // СпецПласт16 always leads the list (owner's rule), the rest by price.
-  const ordered = houseFirst(rest.bids, (bid) => bid.equipment.company.id).map(withTrust);
+  const ordered = houseFirstBids(rest.bids, (bid) => bid.equipment.company.id).map(withTrust);
   const bids = isOwner
     ? ordered.map((bid) => bidForCustomer(bid, rest.booking?.status))
     : ordered.filter((bid) => bid.equipment.company.id === currentUser.companyId);

@@ -67,6 +67,19 @@ export function houseFirst<T>(
 }
 
 /**
+ * Offers on an order: live ones (waiting or accepted) first, СпецПласт16's
+ * leading them; rejected and withdrawn ones after, so a declined house offer
+ * never sits above a live offer from another company.
+ */
+export function houseFirstBids<T extends { status: string }>(
+  bids: T[],
+  companyIdOf: (bid: T) => string | null | undefined,
+): T[] {
+  const live = (bid: T) => bid.status === 'PENDING' || bid.status === 'ACCEPTED';
+  return [...houseFirst(bids.filter(live), companyIdOf), ...bids.filter((bid) => !live(bid))];
+}
+
+/**
  * Prisma ordering that puts the house fleet first. Company ids are cuids
  * (they start with «c»), so descending order puts «specplast16-house» ahead.
  */

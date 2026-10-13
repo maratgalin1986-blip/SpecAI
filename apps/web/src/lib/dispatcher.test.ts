@@ -37,6 +37,9 @@ describe('matchTask', () => {
     expect(matchTask('поднять плиты на 3 этаж, нужен кран')?.category).toBe('Автокраны');
     expect(matchTask('покраска фасада на высоте 15 м')?.category).toBe('Автовышки (АГП)');
     expect(matchTask('разбить старый бетон')?.category).toBe('Экскаваторы колёсные');
+    expect(matchTask('нужен бетононасос')?.categorySlug).toBe('concrete-pumps');
+    expect(matchTask('залить бетон фундамент')?.categorySlug).toBe('concrete-pumps');
+    expect(matchTask('привезти бетон 5 кубов')?.categorySlug).toBe('mixer-trucks');
     expect(matchTask('уплотнить щебень под площадку')?.category).toBe('Катки');
     expect(matchTask('спланировать участок')?.category).toBe('Бульдозеры');
     expect(matchTask('почистить снег во дворе')?.category).toBe('Фронтальные погрузчики');

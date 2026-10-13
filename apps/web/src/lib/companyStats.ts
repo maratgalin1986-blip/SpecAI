@@ -16,24 +16,32 @@ export async function loadCompanyStats(companyIds: string[]): Promise<Map<string
     prisma.company.findMany({ where: { id: { in: ids } }, select: { id: true, verified: true } }),
     prisma.booking.findMany({
       where: { equipment: { companyId: { in: ids } } },
-      select: { status: true, cancelledBy: true, equipment: { select: { companyId: true } } },
+      select: {
+        status: true,
+        cancelledBy: true,
+        equipment: { select: { companyId: true } },
+        customer: { select: { companyId: true } },
+      },
       take: 10_000,
     }),
-    prisma.review.groupBy({
-      by: ['companyId'],
+    prisma.review.findMany({
       where: { companyId: { in: ids } },
-      _sum: { rating: true },
-      _count: { _all: true },
+      select: { companyId: true, rating: true, author: { select: { companyId: true } } },
+      take: 20_000,
     }),
     loadInvitedProviders(ids),
   ]);
 
+  // A company's own bookings of its own machines (a self-deal, refused since
+  // 2026-10-13) and its own reviews of itself count for nothing.
   const byCompany = tallyBookings(
-    bookings.map((row) => ({
-      status: row.status,
-      cancelledBy: row.cancelledBy,
-      companyId: row.equipment.companyId,
-    })),
+    bookings
+      .filter((row) => row.customer.companyId !== row.equipment.companyId)
+      .map((row) => ({
+        status: row.status,
+        cancelledBy: row.cancelledBy,
+        companyId: row.equipment.companyId,
+      })),
   );
   for (const id of ids) result.set(id, { ...EMPTY_STATS, bookings: {}, cancelledBy: {} });
   for (const company of companies) {
@@ -44,10 +52,11 @@ export async function loadCompanyStats(companyIds: string[]): Promise<Map<string
     if (stats) Object.assign(stats, tally);
   }
   for (const row of ratings) {
+    if (row.author.companyId === row.companyId) continue;
     const stats = result.get(row.companyId);
     if (stats) {
-      stats.ratingSum = row._sum.rating ?? 0;
-      stats.ratingCount = row._count._all;
+      stats.ratingSum += row.rating;
+      stats.ratingCount += 1;
     }
   }
   for (const [id, n] of invited) {

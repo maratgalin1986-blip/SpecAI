@@ -10,7 +10,7 @@ import {
 import { findOverlappingBooking, lockEquipment } from '@/lib/bookingConflicts';
 import { INVALID_JSON_MESSAGE, prismaErrorCode, readJson, zodErrorMessage } from '@/lib/apiInput';
 import { isOnlinePaymentEnabled } from '@/lib/stripe';
-import { isProvider, isPublicEquipment } from '@/lib/fleet';
+import { isOperator, isProvider, isPublicEquipment } from '@/lib/fleet';
 import {
   canSeeCustomerContacts,
   customerForProvider,
@@ -118,6 +118,10 @@ export async function POST(request: NextRequest) {
   const currentUser = await getRequestUser(request);
   if (!currentUser) {
     return NextResponse.json({ error: 'Необходимо войти в аккаунт' }, { status: 401 });
+  }
+  // A machine operator drives shifts; it does not book in the company's name.
+  if (isOperator(currentUser)) {
+    return NextResponse.json({ error: 'Машинист не может бронировать технику' }, { status: 403 });
   }
 
   const body = await readJson(request);

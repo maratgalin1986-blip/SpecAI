@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { canSeeCustomerContacts } from '@/lib/customerPrivacy';
+import { maskContactsAndLinks } from '@/lib/privacy';
 import { z } from 'zod';
 import { prisma } from '@specai/database';
 import { getRequestUser } from '@/lib/requestUser';
@@ -248,5 +250,11 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
     }
   }
 
-  return NextResponse.json({ booking: updated });
+  // The customer's note may carry a phone: the provider reads it masked
+  // until the booking is confirmed, as in GET /api/bookings?as=provider.
+  const notes =
+    isOwningProvider && updated.notes && !canSeeCustomerContacts(updated.status)
+      ? maskContactsAndLinks(updated.notes)
+      : updated.notes;
+  return NextResponse.json({ booking: { ...updated, notes } });
 }

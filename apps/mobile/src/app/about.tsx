@@ -91,7 +91,7 @@ export default function AboutScreen() {
             onPress={() => void openSite('/register?type=provider')}
           />
           <LinkRow label="Контакты" onPress={() => void openSite('/contacts')} />
-          <LinkRow label="♥ Поддержать проект" onPress={() => void openSite('/support')} />
+          <LinkRow label="Правила площадки" onPress={() => void openSite('/pravila')} />
           <LinkRow label="Политика конфиденциальности" onPress={() => void openSite('/privacy')} />
         </Card>
 

@@ -29,6 +29,15 @@ describe('houseFirstBids', () => {
     ]);
     expect(sorted.map((item) => item.id)).toEqual(['h', 'a', 'b', 'x']);
   });
+
+  it('puts a declined house bid after the live ones', () => {
+    type Row = { id: string; status: string; equipment: { company: { id: string } } };
+    const sorted = houseFirstBids<Row>([
+      { id: 'h', status: 'REJECTED', equipment: { company: { id: 'specplast16-house' } } },
+      { id: 'a', status: 'PENDING', equipment: { company: { id: 'c1' } } },
+    ]);
+    expect(sorted.map((item) => item.id)).toEqual(['a', 'h']);
+  });
 });
 
 describe('categoryIcon', () => {

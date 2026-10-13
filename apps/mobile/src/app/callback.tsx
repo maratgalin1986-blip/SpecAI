@@ -146,9 +146,9 @@ export default function CallbackScreen() {
                   Согласен(на) на обработку персональных данных в соответствии с{' '}
                   <Text
                     style={styles.consentLink}
-                    onPress={() => void WebBrowser.openBrowserAsync(`${SITE.url}/privacy`)}
+                    onPress={() => void WebBrowser.openBrowserAsync(`${SITE.url}/soglasie`)}
                   >
-                    политикой конфиденциальности
+                    условиями согласия
                   </Text>
                 </Text>
               </Pressable>
