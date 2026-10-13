@@ -131,6 +131,9 @@ const COMPANY_CONTEXT =
   'excavators, cranes, loaders, dump trucks and other machinery by booking a catalog listing ' +
   'or by leaving a job order; providers answer it with their prices and the customer chooses. ' +
   'The service is free for customers. ' +
+  'Excavators come as three catalog categories: crawler («Экскаваторы гусеничные»), wheeled ' +
+  '(«Экскаваторы колёсные», also the hydraulic hammer machine) and mini («Мини-экскаваторы»); ' +
+  'pick the one the customer names, and the wheeled one for breaking concrete or asphalt. ' +
   'Always answer in Russian, concisely and politely. Prices are in the listing currency; ' +
   'hourlyRate is per machine-hour with an operator (quote it when present), dailyRate is an ' +
   '8-hour shift. ' +

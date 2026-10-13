@@ -5,6 +5,9 @@ import { siteUrl } from '@/lib/siteUrl';
 import { connectBot } from '@/lib/telegramSetup';
 
 export const dynamic = 'force-dynamic';
+// A GET handler: without this Next keeps outgoing sends (Telegram, push,
+// e-mail) in its Data Cache and never repeats an identical one.
+export const fetchCache = 'force-no-store';
 
 // Keeps the bot connected to the production site without a login: it only
 // points the bot at this site's own webhook (never at a caller-given URL),

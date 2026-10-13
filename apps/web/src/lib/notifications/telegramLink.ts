@@ -51,6 +51,7 @@ export async function botUsername(): Promise<string | null> {
   if (!token) return null;
   try {
     const response = await fetch(`https://api.telegram.org/bot${token}/getMe`, {
+      cache: 'no-store',
       signal: AbortSignal.timeout(5000),
     });
     const body = (await response.json()) as { ok?: boolean; result?: { username?: string } };

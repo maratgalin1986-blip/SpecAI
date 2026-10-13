@@ -5,7 +5,7 @@ import { getRequestUser } from '@/lib/requestUser';
 import { isHouseManager, isProvider } from '@/lib/fleet';
 import { bidsUntilFor } from '@/lib/bidWindow';
 import { maskedContactFor } from '@/lib/chatOrders';
-import { geocodeAddress } from '@/lib/geo';
+import { cityInText, geocodeAddress } from '@/lib/geo';
 import { notifyTelegram } from '@/lib/notify';
 import { notifyProvidersAboutOrder } from '@/lib/notifications/notifyUser';
 import { SITE } from '@/lib/site';
@@ -140,7 +140,8 @@ export async function POST(request: NextRequest) {
     ? await prisma.location.create({
         data: {
           addressLine: address,
-          city: place?.city ?? SITE.city,
+          // A failed lookup still keeps a city the address names («Елабуга, …»).
+          city: place?.city ?? cityInText(address)?.name ?? SITE.city,
           country: 'Россия',
           latitude: place?.lat ?? null,
           longitude: place?.lon ?? null,

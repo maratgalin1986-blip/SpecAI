@@ -32,14 +32,31 @@ export function pushSupportHint(): string | null {
   }
 }
 
-/** Путь сайта из уведомления → экран приложения. */
+/**
+ * Путь сайта из уведомления (apps/web/src/lib/notifications/routing.ts) →
+ * экран приложения. Чат заявки (`#chat`) открывает карточку заявки: экрану
+ * чата заказчика нужен исполнитель (`?company=`), которого в пути нет, а
+ * кнопка чата есть в карточке.
+ */
 export function appRouteFor(path: string | undefined): string | null {
   if (!path) return null;
-  const clean = path.split('#')[0] ?? '';
+  const [clean = '', hash = ''] = path.split('#');
   const order = /^\/orders\/([\w-]{1,64})$/.exec(clean);
   if (order) return `/orders/${order[1]}`;
-  if (clean.startsWith('/provider')) return '/provider';
-  if (clean.startsWith('/dashboard')) return '/bookings';
+  // Вечерняя сводка заявок на завтра — лента исполнителя.
+  if (clean === '/orders') return '/feed';
+  if (clean.startsWith('/provider')) {
+    if (hash === 'documents') return '/provider/documents';
+    if (hash === 'bookings') return '/jobs';
+    return '/provider';
+  }
+  if (clean.startsWith('/dashboard')) {
+    if (hash === 'bookings') return '/bookings';
+    if (hash === 'shifts') return '/shifts';
+    // Проверка уведомлений и опубликованный комментарий: профиль, а не
+    // скрытый экран броней заказчика.
+    return '/profile';
+  }
   return null;
 }
 

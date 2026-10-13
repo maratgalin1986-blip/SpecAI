@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_PREFS,
   ORDER_RADIUS_KM,
+  acceptedCategoryIds,
+  addressNamesCity,
   distanceKm,
   phoneDigits,
   pickChannels,
@@ -189,13 +191,44 @@ describe('providerMatchesOrder', () => {
   const moscow = { lat: 55.75, lon: 37.62 };
 
   it('needs machinery of the order category', () => {
-    expect(providerMatchesOrder({ categoryIds: ['exc'] }, { categoryId: 'exc' })).toBe(true);
-    expect(providerMatchesOrder({ categoryIds: ['crane'] }, { categoryId: 'exc' })).toBe(false);
+    expect(providerMatchesOrder({ categoryIds: ['exc'] }, { categoryId: 'exc', ...chelny })).toBe(
+      true,
+    );
+    expect(providerMatchesOrder({ categoryIds: ['crane'] }, { categoryId: 'exc', ...chelny })).toBe(
+      false,
+    );
+  });
+
+  it('takes the accepted categories (family, group) when given', () => {
+    const order = { categoryId: 'mini', categoryIds: ['mini', 'exc', 'earth'], ...chelny };
+    expect(providerMatchesOrder({ categoryIds: ['exc'] }, order)).toBe(true);
+    expect(providerMatchesOrder({ categoryIds: ['crane'] }, order)).toBe(false);
   });
 
   it('sends orders without a category to every provider with machinery', () => {
-    expect(providerMatchesOrder({ categoryIds: ['crane'] }, { categoryId: null })).toBe(true);
-    expect(providerMatchesOrder({ categoryIds: [] }, { categoryId: null })).toBe(false);
+    expect(providerMatchesOrder({ categoryIds: ['crane'] }, { categoryId: null, ...chelny })).toBe(
+      true,
+    );
+    expect(providerMatchesOrder({ categoryIds: [] }, { categoryId: null, ...chelny })).toBe(false);
+  });
+
+  it('keeps an order with an unknown place to the house and providers of that city', () => {
+    const order = { categoryId: 'exc', city: 'Бавлы' };
+    const kazanProvider = {
+      categoryIds: ['exc'],
+      baseLat: kazan.lat,
+      baseLon: kazan.lon,
+      baseAddress: 'Казань, ул. Тихая 1',
+    };
+    expect(providerMatchesOrder(kazanProvider, order)).toBe(false);
+    expect(providerMatchesOrder({ categoryIds: ['exc'] }, order)).toBe(false);
+    expect(
+      providerMatchesOrder({ ...kazanProvider, baseAddress: 'г. Бавлы, промзона' }, order),
+    ).toBe(true);
+    expect(providerMatchesOrder({ ...kazanProvider, isHouse: true }, order)).toBe(true);
+    expect(providerMatchesOrder({ ...kazanProvider, isHouse: true }, { categoryId: 'crane' })).toBe(
+      false,
+    );
   });
 
   it('limits by distance when both points are known', () => {
@@ -268,5 +301,71 @@ describe('renderNotification: documents and the evening digest', () => {
     expect(reminder.title).toBe('Завтра начало работ');
     expect(reminder.body).toContain('JCB 4CX · СпецПласт16');
     expect(reminder.path).toBe('/dashboard#bookings');
+  });
+
+  it("reminds the provider and the operator about tomorrow's booking", () => {
+    const base = {
+      type: 'booking.tomorrow' as const,
+      bookingId: 'b1',
+      equipmentName: 'JCB 4CX',
+      startDate: new Date('2026-10-09T00:00:00Z'),
+    };
+    const provider = renderNotification({ ...base, audience: 'provider' });
+    expect(provider.title).toBe('Завтра выезд на объект');
+    expect(provider.path).toBe('/provider#bookings');
+    const operator = renderNotification({ ...base, audience: 'operator' });
+    expect(operator.body).toContain('Выехал');
+    expect(operator.path).toBe('/dashboard#shifts');
+  });
+});
+
+describe('renderNotification: a bid relayed to the house managers', () => {
+  it('says whose order it is and asks to call', () => {
+    const guest = renderNotification({
+      type: 'bid.relay',
+      orderId: 'o1',
+      equipmentName: 'JCB 3CX',
+      price: '28 000 ₽',
+      companyName: 'ООО Ромашка',
+      fromChat: false,
+    });
+    expect(guest.title).toBe('Предложение по заявке гостя с сайта');
+    expect(guest.body).toContain('JCB 3CX · ООО Ромашка — 28 000 ₽');
+    expect(guest.body).toContain('позвоните');
+    expect(guest.path).toBe('/orders/o1');
+  });
+});
+
+describe('acceptedCategoryIds', () => {
+  const rows = [
+    { id: 'earth', slug: 'earthmoving', parentId: null },
+    { id: 'exc', slug: 'excavators', parentId: 'earth' },
+    { id: 'wheel', slug: 'wheeled-excavators', parentId: 'earth' },
+    { id: 'mini', slug: 'mini-excavators', parentId: 'earth' },
+    { id: 'doz', slug: 'bulldozers', parentId: 'earth' },
+    { id: 'lift', slug: 'lifting', parentId: null },
+    { id: 'crane', slug: 'cranes', parentId: 'lift' },
+  ];
+
+  it('adds the excavator family and the group row, not other machines of the group', () => {
+    expect(acceptedCategoryIds('wheel', rows)?.sort()).toEqual(['earth', 'exc', 'mini', 'wheel']);
+    expect(acceptedCategoryIds('doz', rows)?.sort()).toEqual(['doz', 'earth']);
+  });
+
+  it('takes every category of a group for an order filed under the group', () => {
+    expect(acceptedCategoryIds('lift', rows)?.sort()).toEqual(['crane', 'lift']);
+  });
+
+  it('keeps unknown ids and orders without a category as they are', () => {
+    expect(acceptedCategoryIds('gone', rows)).toEqual(['gone']);
+    expect(acceptedCategoryIds(null, rows)).toBeNull();
+  });
+});
+
+describe('addressNamesCity', () => {
+  it('finds the city in any case and form', () => {
+    expect(addressNamesCity('г. Бавлы, ул. Ленина', 'Бавлы')).toBe(true);
+    expect(addressNamesCity('Набережные Челны', 'Бавлы')).toBe(false);
+    expect(addressNamesCity(null, 'Бавлы')).toBe(false);
   });
 });

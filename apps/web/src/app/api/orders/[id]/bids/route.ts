@@ -10,7 +10,9 @@ import { INVALID_JSON_MESSAGE, readJson, zodErrorMessage } from '@/lib/apiInput'
 import { BLOCKING_BOOKING_STATUSES, unavailableEquipmentMessage } from '@/lib/bookingRules';
 import { findOverlappingBooking } from '@/lib/bookingConflicts';
 import { isProvider } from '@/lib/fleet';
-import { notifyUser } from '@/lib/notifications/notifyUser';
+import { notifyCompany, notifyUser } from '@/lib/notifications/notifyUser';
+import { isRealEmail } from '@/lib/notifications/routing';
+import { HOUSE_COMPANY_ID } from '@/lib/fleet';
 import { bidBreakdownSchema, type BidBreakdownInput } from '@specai/shared';
 import { bidSumMatches, bidTotal } from '@/lib/offerBreakdown';
 import { isLateBid } from '@/lib/bidWindow';
@@ -176,12 +178,24 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       },
       { email: template },
     );
-    if (order.source !== 'SITE') {
-      // Imported orders have no real customer account — tell the site owner instead.
+    if (!isRealEmail(order.customer.email)) {
+      // Chat-imported and guest orders belong to technical accounts (.invalid
+      // e-mail, no channels): nobody would hear of the bid, though the guest
+      // was promised a call. СпецПласт16's managers relay it.
+      const fromChat = order.source !== 'SITE';
       await notifyTelegram(
-        `💰 Предложение по заявке из чата: ${equipment.name} — ${formatMoney(bid.price, bid.currency)}\n` +
+        `💰 Предложение по заявке ${fromChat ? 'из чата' : 'гостя с сайта'}: ${equipment.name} — ${formatMoney(bid.price, bid.currency)}\n` +
+          (order.contactPhone ? `Позвоните заказчику: ${order.contactPhone}\n` : '') +
           `${order.description.slice(0, 200)}\n${siteUrl()}/orders/${order.id}`,
       );
+      await notifyCompany(HOUSE_COMPANY_ID, {
+        type: 'bid.relay',
+        orderId: order.id,
+        equipmentName: equipment.name,
+        price: formatMoney(bid.price, bid.currency),
+        companyName: company?.name,
+        fromChat,
+      });
     }
   } catch (error) {
     console.error('[notify] newBidReceived failed', error);

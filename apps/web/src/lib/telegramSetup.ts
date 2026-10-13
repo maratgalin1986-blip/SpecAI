@@ -45,6 +45,7 @@ export async function connectBot(origin: string, force = false): Promise<Connect
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: body ? JSON.stringify(body) : undefined,
+      cache: 'no-store',
       signal: AbortSignal.timeout(10_000),
     }).then((r) => r.json() as Promise<TgResult<T>>);
 

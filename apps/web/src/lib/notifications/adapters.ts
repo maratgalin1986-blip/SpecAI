@@ -43,6 +43,7 @@ export async function sendTelegramMessage(chatId: string, text: string): Promise
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ chat_id: chatId, text, disable_web_page_preview: true }),
+      cache: 'no-store',
       signal: AbortSignal.timeout(TIMEOUT_MS),
     });
     if (response.ok) return { ok: true };
@@ -99,6 +100,7 @@ export async function sendExpoPush(
           priority: 'high',
         })),
       ),
+      cache: 'no-store',
       signal: AbortSignal.timeout(TIMEOUT_MS),
     });
     if (!response.ok) return { ok: false, error: `expo push ${response.status}` };
@@ -140,6 +142,7 @@ export async function sendWhatsApp(phoneDigits: string, text: string): Promise<D
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ chatId: `${phoneDigits}@c.us`, message: text }),
+      cache: 'no-store',
       signal: AbortSignal.timeout(TIMEOUT_MS),
     });
     return response.ok ? { ok: true } : { ok: false, error: `green api ${response.status}` };
@@ -160,6 +163,7 @@ export async function sendSms(phoneDigits: string, text: string): Promise<Delive
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: params.toString(),
+      cache: 'no-store',
       signal: AbortSignal.timeout(TIMEOUT_MS),
     });
     const payload = (await response.json().catch(() => null)) as { status?: string } | null;

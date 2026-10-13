@@ -123,6 +123,8 @@ const CATEGORY_MACHINE: Record<string, MachineType> = {
   cranes: 'crane',
   'dump-trucks': 'truck',
   excavators: 'excavator',
+  'wheeled-excavators': 'wheeled-excavator',
+  'mini-excavators': 'excavator',
   'crane-trucks': 'kmu',
   'aerial-platforms': 'agp',
   rollers: 'roller',

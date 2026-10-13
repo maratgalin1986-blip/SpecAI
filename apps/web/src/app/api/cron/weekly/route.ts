@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@specai/database';
+import { onceADay } from '@/lib/cronOnce';
 import { notifyTelegram } from '@/lib/notify';
 import { SITE } from '@/lib/site';
 import { buildWeeklyReport } from '@/lib/weeklyReport';
@@ -7,6 +8,9 @@ import { submitToIndexNow } from '@/lib/indexNow';
 import sitemap from '@/app/sitemap';
 
 export const dynamic = 'force-dynamic';
+// A GET handler: without this Next keeps outgoing sends (Telegram, push,
+// e-mail) in its Data Cache and never repeats an identical one.
+export const fetchCache = 'force-no-store';
 
 // Called by Vercel Cron on Monday mornings (apps/web/vercel.json). With
 // CRON_SECRET set in Vercel, only requests carrying it are accepted.
@@ -17,6 +21,13 @@ export async function GET(request: NextRequest) {
   if (secret ? auth !== `Bearer ${secret}` : !fromCron) {
     return NextResponse.json({ error: 'forbidden' }, { status: 403 });
   }
+  // Once a day (lib/cronOnce.ts): a repeated call does not resend the report.
+  const result = await onceADay('weekly', sendWeeklyReport);
+  if (!result) return NextResponse.json({ ok: true, skipped: 'already sent today' });
+  return NextResponse.json({ ok: true, ...result });
+}
+
+async function sendWeeklyReport() {
   const since = new Date(Date.now() - 14 * 86_400_000);
   const [leads, orders] = await Promise.all([
     prisma.lead.findMany({
@@ -35,5 +46,5 @@ export async function GET(request: NextRequest) {
     process.env.VERCEL_ENV === 'production'
       ? await submitToIndexNow((await sitemap()).map((entry) => entry.url))
       : null;
-  return NextResponse.json({ ok: true, sent, indexNow });
+  return { sent, indexNow };
 }
