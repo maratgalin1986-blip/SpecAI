@@ -19,7 +19,7 @@ export type SoundCue =
 export type MachineSource = 'hero' | 'journey' | 'page' | 'wizard' | 'scene';
 
 // v2 (2026-10-03): the old switch took two presses, so many «off» choices
-// saved under the old key were accidents; sound is on again for everyone.
+// saved under the old key were accidents. Only an explicit «on» counts now.
 export const SOUND_STORAGE_KEY = 'specplast16_sound_v2';
 export const SOUND_HINT_KEY = 'specplast16_sound_hint';
 /** The chat microphone opened (detail true) or closed: the site's sound steps aside. */
@@ -113,15 +113,15 @@ export function setSoundEnabled(value: boolean, persist = true): void {
 }
 
 /**
- * The saved choice; sound is on unless the visitor turned it off (owner's
- * request, 2026-10-03). Browsers still start audio only at the first tap,
- * key or click of the page.
+ * The saved choice. Sound is off until the visitor turns it on with the
+ * switch (2026-10-13, replaces the 2026-10-03 «on by default»): nothing plays
+ * by itself, and the cabinets never play the music (CinemaLayer).
  */
 export function storedSoundChoice(): boolean {
   try {
-    return localStorage.getItem(SOUND_STORAGE_KEY) !== 'off';
+    return localStorage.getItem(SOUND_STORAGE_KEY) === 'on';
   } catch {
-    return true;
+    return false;
   }
 }
 

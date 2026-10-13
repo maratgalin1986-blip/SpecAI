@@ -1975,6 +1975,22 @@ html[data-vt-kind='fade']::view-transition-group(root) {
     opacity: 0;
     pointer-events: none;
   }
+  /* Cabinets and sign-in forms have no contact bar (lib/workPages.ts): the
+     cookie strip and the chat button sit lower, and the chat button steps
+     aside while a field has focus, so neither covers a form's last button. */
+  html[data-no-contact-bar] [data-testid='cookie-strip'] {
+    bottom: calc(0.5rem + env(safe-area-inset-bottom));
+  }
+  html[data-no-contact-bar] .chat-fab {
+    bottom: calc(1rem + env(safe-area-inset-bottom));
+  }
+  html[data-no-contact-bar][data-cookie-strip] .chat-fab {
+    bottom: calc(4.25rem + env(safe-area-inset-bottom));
+  }
+  html[data-typing] .chat-fab {
+    opacity: 0;
+    pointer-events: none;
+  }
 }
 
 /* Soft mode («Уменьшение движения»): opacity-only fades, nothing moves. */

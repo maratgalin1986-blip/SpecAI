@@ -10,20 +10,63 @@ import { AuthStatus } from '@/components/AuthStatus';
 
 // The marketplace first (owner, 2026-10-11: a board of orders and a list of
 // providers, like a classifieds platform), then the rest of the site.
-const NAV_LINKS = [
-  { href: '/orders', label: 'Заявки' },
-  { href: '/providers', label: 'Исполнители' },
-  { href: '/equipment', label: 'Техника' },
-  // Hidden on narrow desktops (lg) like «Кабинет»; in the mobile menu always.
-  { href: '/map', label: 'Карта', wide: true },
-  { href: '/stroyka', label: 'Стройка' },
-  { href: '/dizain', label: 'Дизайн' },
-  { href: '/agents', label: 'ИИ-агенты' },
-  // The phone button and the footer carry the contacts on narrow desktops.
-  { href: '/contacts', label: 'Контакты', wide: true },
-  // Also in «Войти» and the mobile menu: hidden on narrow desktops (lg) so the
-  // header fits in one line at 1024 px.
+type NavLink = { href: string; label: string; tier: 'core' | 'xl' | 'more' };
+// core: always in the desktop line; xl: in the line from 1280 px and under
+// «Ещё» below it; more: under «Ещё» on desktop. The mobile menu lists all.
+// The line must fit at 1024 px even signed in («Кабинет» + «Выйти»).
+const NAV_LINKS: NavLink[] = [
+  { href: '/orders', label: 'Заявки', tier: 'core' },
+  { href: '/providers', label: 'Исполнители', tier: 'core' },
+  { href: '/equipment', label: 'Техника', tier: 'core' },
+  { href: '/map', label: 'Карта', tier: 'xl' },
+  { href: '/stroyka', label: 'Стройка', tier: 'xl' },
+  { href: '/dizain', label: 'Дизайн', tier: 'more' },
+  { href: '/agents', label: 'ИИ-агенты', tier: 'more' },
+  { href: '/contacts', label: 'Контакты', tier: 'more' },
 ];
+
+/** «Ещё ▾»: the desktop links that do not fit in the line at this width. */
+function MoreMenu() {
+  const ref = useRef<HTMLDetailsElement>(null);
+  useEffect(() => {
+    const close = (event: Event) => {
+      const el = ref.current;
+      if (!el?.open) return;
+      if (event instanceof KeyboardEvent) {
+        if (event.key !== 'Escape') return;
+      } else if (el.contains(event.target as Node)) {
+        return;
+      }
+      el.open = false;
+    };
+    document.addEventListener('pointerdown', close);
+    document.addEventListener('keydown', close);
+    return () => {
+      document.removeEventListener('pointerdown', close);
+      document.removeEventListener('keydown', close);
+    };
+  }, []);
+  return (
+    <details ref={ref} className="relative">
+      <summary className="flex cursor-pointer list-none items-center gap-1 hover:text-slate-900 [&::-webkit-details-marker]:hidden">
+        Ещё <span aria-hidden>▾</span>
+      </summary>
+      <div className="absolute right-0 top-full z-50 mt-3 flex min-w-44 flex-col rounded-xl border border-slate-200 bg-white p-1.5 shadow-lg">
+        {NAV_LINKS.filter((link) => link.tier !== 'core').map((link) => (
+          <a
+            key={link.href}
+            href={link.href}
+            className={`rounded-lg px-3 py-2 text-slate-700 hover:bg-slate-100 hover:text-slate-900 ${
+              link.tier === 'xl' ? 'xl:hidden' : ''
+            }`}
+          >
+            {link.label}
+          </a>
+        ))}
+      </div>
+    </details>
+  );
+}
 
 export function SiteHeader() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -107,15 +150,16 @@ export function SiteHeader() {
           aria-label="Основное меню"
           className="hidden items-center gap-3 whitespace-nowrap text-sm font-medium text-slate-600 lg:flex xl:gap-5"
         >
-          {NAV_LINKS.map((link) => (
+          {NAV_LINKS.filter((link) => link.tier !== 'more').map((link) => (
             <a
               key={link.href}
               href={link.href}
-              className={`hover:text-slate-900 ${'wide' in link ? 'hidden xl:inline' : ''}`}
+              className={`hover:text-slate-900 ${link.tier === 'xl' ? 'hidden xl:inline' : ''}`}
             >
               {link.label}
             </a>
           ))}
+          <MoreMenu />
           <a
             href="/smeta"
             className="rounded-full px-3 py-1.5 font-semibold text-amber-700 ring-2 ring-amber-400 transition hover:bg-amber-400 hover:text-slate-950"
@@ -130,7 +174,7 @@ export function SiteHeader() {
             Заказать технику
             <span className="transition group-hover:translate-x-0.5">→</span>
           </a>
-          <SoundToggle large />
+          <SoundToggle iconOnly large />
         </nav>
 
         <div className="ml-auto flex items-center gap-2 lg:hidden">

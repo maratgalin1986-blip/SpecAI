@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { prisma } from '@specai/database';
+import { HOUSE_COMPANY_ID, prisma } from '@specai/database';
 import { Card } from '@specai/ui';
 import { AdminLogin } from '@/components/AdminLogin';
 import { LeadOutcome } from '@/components/LeadOutcome';
@@ -15,6 +15,14 @@ import { SITE } from '@/lib/site';
 import { formLabel, splitSource } from '@/lib/marketing';
 import { AdminVerifyToggle } from '@/components/AdminVerifyToggle';
 import { providerPath } from '@/lib/providerSeo';
+import { chipClass } from '@/components/admin/AdminUi';
+import {
+  LEAD_FILTERS,
+  filterLeads,
+  leadFilterCounts,
+  parseLeadFilter,
+  sortLeads,
+} from '@/lib/adminLeads';
 
 export const dynamic = 'force-dynamic';
 export const metadata: Metadata = { title: 'Заявки на звонок', robots: { index: false } };
@@ -33,7 +41,9 @@ function siteOrigin() {
   return `${proto}://${host}`;
 }
 
-export default async function AdminPage() {
+type Query = Record<string, string | string[] | undefined>;
+
+export default async function AdminPage({ searchParams = {} }: { searchParams?: Query }) {
   if (!isAdminConfigured()) {
     return (
       <Card className="mx-auto max-w-lg">
@@ -111,11 +121,20 @@ export default async function AdminPage() {
     orderBy: [{ verified: 'asc' }, { createdAt: 'desc' }],
     take: 200,
   });
+  const houseManagers = await prisma.user.findMany({
+    where: { companyId: HOUSE_COMPANY_ID, role: 'PROVIDER_ADMIN' },
+    select: { name: true, email: true },
+    take: 20,
+  });
   const origin = siteOrigin();
   const tgSecretReady = Boolean(telegramWebhookSecret());
   const whatsappToken = whatsappWebhookToken();
   const inboundToken = inboundApiToken();
   const newCount = leads.filter((lead) => lead.status === 'NEW').length;
+  // Callbacks first on the page: new ones on top, a status filter.
+  const leadFilter = parseLeadFilter(searchParams.leads);
+  const leadCounts = leadFilterCounts(leads);
+  const shownLeads = filterLeads(sortLeads(leads), leadFilter);
   // Marketing: which channels and which forms brought requests in 30 days.
   const monthAgo = Date.now() - 30 * 86_400_000;
   const recentLeads = leads.filter((lead) => lead.createdAt.getTime() >= monthAgo);
@@ -142,7 +161,7 @@ export default async function AdminPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold">Панель управления</h1>
           <p className="text-slate-600">
@@ -151,6 +170,9 @@ export default async function AdminPage() {
           </p>
         </div>
         <nav aria-label="Разделы CRM" className="flex flex-wrap gap-1.5 text-xs">
+          <a href="#leads" className="cab-chip hover:border-graphite-800">
+            Звонки
+          </a>
           <a href="/admin/providers" className="cab-chip hover:border-graphite-800">
             Исполнители
           </a>
@@ -162,6 +184,73 @@ export default async function AdminPage() {
           </a>
         </nav>
       </div>
+
+      <form action="/admin/search" className="flex gap-2">
+        <input
+          type="search"
+          name="q"
+          placeholder="Найти по телефону или имени"
+          aria-label="Найти по телефону или имени"
+          className="min-h-[44px] min-w-0 flex-1 rounded-full border border-slate-300 bg-white px-4 text-sm"
+        />
+        <button type="submit" className="cab-action">
+          Найти
+        </button>
+      </form>
+
+      <section className="flex scroll-mt-24 flex-col gap-3" id="leads">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="font-semibold">Заявки на звонок</h2>
+          <nav aria-label="Фильтр звонков" className="flex flex-wrap gap-1.5">
+            {LEAD_FILTERS.map((item) => (
+              <a
+                key={item.id}
+                href={item.id === 'all' ? '/admin#leads' : `/admin?leads=${item.id}#leads`}
+                aria-current={item.id === leadFilter ? 'page' : undefined}
+                className={chipClass(item.id === leadFilter)}
+              >
+                {item.label} · {leadCounts[item.id]}
+              </a>
+            ))}
+          </nav>
+        </div>
+        {shownLeads.length === 0 ? (
+          <Card>
+            {leads.length === 0
+              ? 'Заявок пока нет. Они появятся здесь, как только клиенты заполнят форму.'
+              : 'В этом списке заявок нет.'}
+          </Card>
+        ) : (
+          shownLeads.map((lead) => (
+            <Card
+              key={lead.id}
+              className={`flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between ${
+                lead.status === 'NEW' ? 'border-amber-300' : ''
+              }`}
+            >
+              <div className="min-w-0">
+                <div className="font-semibold">
+                  {lead.name} ·{' '}
+                  <a href={`tel:${lead.phone.replace(/[^\d+]/g, '')}`} className="text-amber-700">
+                    {lead.phone}
+                  </a>
+                </div>
+                {lead.message && (
+                  <p className="mt-1 whitespace-pre-wrap text-sm text-slate-700">{lead.message}</p>
+                )}
+                <p className="mt-1 text-xs text-slate-500">
+                  {lead.createdAt.toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' })}
+                  {lead.source ? ` · ${lead.source}` : ''}
+                </p>
+              </div>
+              <div className="flex flex-col items-end gap-2">
+                <LeadStatusSelect id={lead.id} status={lead.status} />
+                <LeadOutcome id={lead.id} outcome={lead.outcome} amount={lead.amount} />
+              </div>
+            </Card>
+          ))
+        )}
+      </section>
 
       <Card className="flex flex-col gap-4">
         <div>
@@ -311,159 +400,138 @@ export default async function AdminPage() {
         ))}
       </Card>
 
-      <Card className="flex flex-col gap-3" id="providers">
-        <div>
-          <h2 className="font-semibold">
-            Исполнители · {providers.length} · проверено{' '}
-            {providers.filter((company) => company.verified).length}
-          </h2>
-          <p className="text-sm text-slate-600">
-            Отметка «Проверен» видна заказчикам в предложениях и на странице исполнителя. Ставьте её
-            после звонка и проверки ИНН и документов на технику.
-          </p>
-        </div>
-        {providers.length === 0 ? (
-          <p className="text-sm text-slate-500">Исполнителей пока нет.</p>
-        ) : (
-          <ul className="flex flex-col divide-y divide-slate-100">
-            {providers.map((company) => (
-              <li
-                key={company.id}
-                className="flex flex-col gap-2 py-2 text-sm sm:flex-row sm:items-center sm:justify-between"
-              >
-                <div className="min-w-0">
-                  <a
-                    href={providerPath(company.id)}
-                    className="break-words font-medium hover:text-amber-700"
+      {/* Reference and one-time setup: collapsed, the daily work is above. */}
+      <details className="rounded-xl border border-slate-200 bg-white p-4" id="settings">
+        <summary className="cursor-pointer font-semibold">
+          Настройки и справочники: исполнители, мессенджеры, парк компании
+        </summary>
+        <div className="mt-4 flex flex-col gap-6">
+          <Card className="flex flex-col gap-3" id="providers">
+            <div>
+              <h2 className="font-semibold">
+                Исполнители · {providers.length} · проверено{' '}
+                {providers.filter((company) => company.verified).length}
+              </h2>
+              <p className="text-sm text-slate-600">
+                Отметка «Проверен» видна заказчикам в предложениях и на странице исполнителя.
+                Ставьте её после звонка и проверки ИНН и документов на технику.
+              </p>
+            </div>
+            {providers.length === 0 ? (
+              <p className="text-sm text-slate-500">Исполнителей пока нет.</p>
+            ) : (
+              <ul className="flex flex-col divide-y divide-slate-100">
+                {providers.map((company) => (
+                  <li
+                    key={company.id}
+                    className="flex flex-col gap-2 py-2 text-sm sm:flex-row sm:items-center sm:justify-between"
                   >
-                    {company.name}
-                  </a>
-                  <p className="text-xs text-slate-500">
-                    Техники: {company._count.equipment}
-                    {company.taxId ? ` · ИНН ${company.taxId}` : ''}
-                    {company.phone ? ` · ${company.phone}` : ''}
-                    {company.baseAddress ? ` · ${company.baseAddress}` : ''} · с{' '}
-                    {company.createdAt.toLocaleDateString('ru-RU')}
-                  </p>
-                </div>
-                <AdminVerifyToggle companyId={company.id} initial={company.verified} />
-              </li>
-            ))}
-          </ul>
-        )}
-      </Card>
+                    <div className="min-w-0">
+                      <a
+                        href={providerPath(company.id)}
+                        className="break-words font-medium hover:text-amber-700"
+                      >
+                        {company.name}
+                      </a>
+                      <p className="text-xs text-slate-500">
+                        Техники: {company._count.equipment}
+                        {company.taxId ? ` · ИНН ${company.taxId}` : ''}
+                        {company.phone ? ` · ${company.phone}` : ''}
+                        {company.baseAddress ? ` · ${company.baseAddress}` : ''} · с{' '}
+                        {company.createdAt.toLocaleDateString('ru-RU')}
+                      </p>
+                    </div>
+                    <AdminVerifyToggle companyId={company.id} initial={company.verified} />
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Card>
 
-      <Card className="flex flex-col gap-4">
-        <div>
-          <h2 className="font-semibold">Подключение мессенджеров</h2>
-          <p className="text-sm text-slate-600">
-            Заявки из групп и чатов автоматически попадают к вам в заявки и в Telegram — на сайте их
-            видите только вы. Реклама и болтовня отсекаются.
-          </p>
-        </div>
-        <div className="flex flex-col gap-2 rounded-lg border border-slate-200 p-3">
-          <h3 className="text-sm font-semibold">Telegram</h3>
-          <ol className="list-decimal space-y-1 pl-5 text-sm text-slate-600">
-            <li>
-              В Telegram у @BotFather: /newbot → получите токен → добавьте его в Vercel как
-              TELEGRAM_BOT_TOKEN → Redeploy.
-            </li>
-            <li>Нажмите кнопку ниже — бот начнёт присылать сообщения на сайт.</li>
-            <li>
-              У @BotFather: /setprivacy → выберите бота → Disable (чтобы бот видел все сообщения в
-              группах).
-            </li>
-            <li>
-              Добавьте бота в нужные группы (в каналы — администратором). Клиенты могут писать и
-              боту напрямую.
-            </li>
-          </ol>
-          <TelegramSetupButton
-            configured={Boolean(process.env.TELEGRAM_BOT_TOKEN) && tgSecretReady}
-          />
-        </div>
-        <div className="flex flex-col gap-2 rounded-lg border border-slate-200 p-3">
-          <h3 className="text-sm font-semibold">WhatsApp (через Green API)</h3>
-          <p className="text-sm text-slate-600">
-            У WhatsApp нет официального способа читать группы, поэтому используется шлюз
-            green-api.com: зарегистрируйтесь, создайте инстанс, отсканируйте QR-код с отдельного
-            номера (лучше не основного — неофициальные шлюзы нарушают правила WhatsApp и номер могут
-            заблокировать). В настройках инстанса вставьте URL и токен ниже и включите «Получать
-            уведомления о входящих сообщениях».
-          </p>
-          {whatsappToken && (
-            <>
-              <CopyField
-                label="URL для уведомлений"
-                value={`${origin}/api/integrations/whatsapp`}
+          <Card className="flex flex-col gap-4">
+            <div>
+              <h2 className="font-semibold">Подключение мессенджеров</h2>
+              <p className="text-sm text-slate-600">
+                Заявки из групп и чатов автоматически попадают к вам в заявки и в Telegram — на
+                сайте их видите только вы. Реклама и болтовня отсекаются.
+              </p>
+            </div>
+            <div className="flex flex-col gap-2 rounded-lg border border-slate-200 p-3">
+              <h3 className="text-sm font-semibold">Telegram</h3>
+              <ol className="list-decimal space-y-1 pl-5 text-sm text-slate-600">
+                <li>
+                  В Telegram у @BotFather: /newbot → получите токен → добавьте его в Vercel как
+                  TELEGRAM_BOT_TOKEN → Redeploy.
+                </li>
+                <li>Нажмите кнопку ниже — бот начнёт присылать сообщения на сайт.</li>
+                <li>
+                  У @BotFather: /setprivacy → выберите бота → Disable (чтобы бот видел все сообщения
+                  в группах).
+                </li>
+                <li>
+                  Добавьте бота в нужные группы (в каналы — администратором). Клиенты могут писать и
+                  боту напрямую.
+                </li>
+              </ol>
+              <TelegramSetupButton
+                configured={Boolean(process.env.TELEGRAM_BOT_TOKEN) && tgSecretReady}
               />
-              <CopyField label="Токен (webhookUrlToken)" value={whatsappToken} />
-            </>
-          )}
-        </div>
-        <div className="flex flex-col gap-2 rounded-lg border border-slate-200 p-3">
-          <h3 className="text-sm font-semibold">Другие источники (n8n, Make, парсеры)</h3>
-          <p className="text-sm text-slate-600">
-            POST JSON{' '}
-            {
-              '{ "text": "...", "source": "telegram|whatsapp|other", "chat": "...", "author": "...", "phone": "..." }'
-            }{' '}
-            с заголовком Authorization: Bearer &lt;токен&gt;.
-          </p>
-          {inboundToken && (
-            <>
-              <CopyField label="URL" value={`${origin}/api/integrations/inbound`} />
-              <CopyField label="Токен" value={inboundToken} />
-            </>
-          )}
-        </div>
-      </Card>
+            </div>
+            <div className="flex flex-col gap-2 rounded-lg border border-slate-200 p-3">
+              <h3 className="text-sm font-semibold">WhatsApp (через Green API)</h3>
+              <p className="text-sm text-slate-600">
+                У WhatsApp нет официального способа читать группы, поэтому используется шлюз
+                green-api.com: зарегистрируйтесь, создайте инстанс, отсканируйте QR-код с отдельного
+                номера (лучше не основного — неофициальные шлюзы нарушают правила WhatsApp и номер
+                могут заблокировать). В настройках инстанса вставьте URL и токен ниже и включите
+                «Получать уведомления о входящих сообщениях».
+              </p>
+              {whatsappToken && (
+                <>
+                  <CopyField
+                    label="URL для уведомлений"
+                    value={`${origin}/api/integrations/whatsapp`}
+                  />
+                  <CopyField label="Токен (webhookUrlToken)" value={whatsappToken} />
+                </>
+              )}
+            </div>
+            <div className="flex flex-col gap-2 rounded-lg border border-slate-200 p-3">
+              <h3 className="text-sm font-semibold">Другие источники (n8n, Make, парсеры)</h3>
+              <p className="text-sm text-slate-600">
+                POST JSON{' '}
+                {
+                  '{ "text": "...", "source": "telegram|whatsapp|other", "chat": "...", "author": "...", "phone": "..." }'
+                }{' '}
+                с заголовком Authorization: Bearer &lt;токен&gt;.
+              </p>
+              {inboundToken && (
+                <>
+                  <CopyField label="URL" value={`${origin}/api/integrations/inbound`} />
+                  <CopyField label="Токен" value={inboundToken} />
+                </>
+              )}
+            </div>
+          </Card>
 
-      <Card className="flex flex-col gap-3">
-        <div>
-          <h2 className="font-semibold">Парк компании в каталоге</h2>
-          <p className="text-sm text-slate-600">
-            Техника СпецПласт16 публикуется в каталоге автоматически. Чтобы менять цены и статусы,
-            зарегистрируйтесь на сайте и привяжите аккаунт:
-          </p>
+          <Card className="flex flex-col gap-3">
+            <div>
+              <h2 className="font-semibold">Парк компании в каталоге</h2>
+              <p className="text-sm text-slate-600">
+                Техника СпецПласт16 публикуется в каталоге автоматически. Чтобы менять цены и
+                статусы, зарегистрируйтесь на сайте и привяжите аккаунт:
+              </p>
+            </div>
+            <LinkOwnerForm />
+            {houseManagers.length > 0 && (
+              <p className="text-sm text-slate-600">
+                Управляют парком:{' '}
+                {houseManagers.map((user) => `${user.name} (${user.email})`).join(', ')}
+              </p>
+            )}
+          </Card>
         </div>
-        <LinkOwnerForm />
-      </Card>
-
-      {leads.length === 0 ? (
-        <Card>Заявок пока нет. Они появятся здесь, как только клиенты заполнят форму.</Card>
-      ) : (
-        <div className="flex flex-col gap-3" id="leads">
-          {leads.map((lead) => (
-            <Card
-              key={lead.id}
-              className={`flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between ${
-                lead.status === 'NEW' ? 'border-amber-300' : ''
-              }`}
-            >
-              <div className="min-w-0">
-                <div className="font-semibold">
-                  {lead.name} ·{' '}
-                  <a href={`tel:${lead.phone.replace(/[^\d+]/g, '')}`} className="text-amber-700">
-                    {lead.phone}
-                  </a>
-                </div>
-                {lead.message && (
-                  <p className="mt-1 whitespace-pre-wrap text-sm text-slate-700">{lead.message}</p>
-                )}
-                <p className="mt-1 text-xs text-slate-500">
-                  {lead.createdAt.toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' })}
-                  {lead.source ? ` · ${lead.source}` : ''}
-                </p>
-              </div>
-              <div className="flex flex-col items-end gap-2">
-                <LeadStatusSelect id={lead.id} status={lead.status} />
-                <LeadOutcome id={lead.id} outcome={lead.outcome} amount={lead.amount} />
-              </div>
-            </Card>
-          ))}
-        </div>
-      )}
+      </details>
     </div>
   );
 }
