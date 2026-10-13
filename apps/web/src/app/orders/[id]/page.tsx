@@ -24,7 +24,7 @@ import { EMPTY_STATS, reliability } from '@/lib/reliability';
 import { providerPath } from '@/lib/providerSeo';
 import { pluralizeRu } from '@/lib/pluralize';
 import { EraseOrderButton, RevealPhoneButton } from '@/components/ChatOrderContact';
-import { maskPhone } from '@/lib/chatOrders';
+import { CHAT_ORDER_REMOVAL, maskPhone } from '@/lib/chatOrders';
 import { SITE } from '@/lib/site';
 import { OrderChat } from '@/components/OrderChat';
 import { bidsLeftText, isLateBid } from '@/lib/bidWindow';
@@ -200,8 +200,8 @@ export default async function OrderDetailPage({ params }: { params: { id: string
             </div>
           ) : null}
           <p className="mt-2 text-xs text-slate-500">
-            Найдена в открытом чате, куда бот добавлен администраторами чата. Автор может попросить
-            удалить заявку.
+            Найдена в открытом чате, куда бот добавлен администраторами чата. {CHAT_ORDER_REMOVAL} (
+            <a href="/privacy#iz-chatov">подробнее</a>).
           </p>
           {isAdmin && (
             <div className="mt-2">

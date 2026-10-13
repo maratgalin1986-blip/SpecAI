@@ -5,7 +5,7 @@ import { SITE } from '@/lib/site';
 
 export const metadata: Metadata = {
   title: 'QR-код сайта',
-  description: `Наведите камеру телефона — откроется сайт ${SITE.name}. Для визиток, техники и объявлений.`,
+  description: `Наведите камеру телефона — откроется сайт ${SITE.platform} от ${SITE.name}. Для визиток, техники и объявлений.`,
   robots: { index: false },
 };
 

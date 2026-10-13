@@ -16,7 +16,7 @@ export async function POST(request: NextRequest) {
   const currentUser = await getRequestUser(request);
   // Providers upload machine photos; their operators the shift's start/end photos.
   if (!isProvider(currentUser) && !isOperator(currentUser)) {
-    return NextResponse.json({ error: 'Требуется аккаунт поставщика' }, { status: 403 });
+    return NextResponse.json({ error: 'Требуется аккаунт исполнителя' }, { status: 403 });
   }
 
   const rate = checkRateLimit(`uploads:${currentUser.id}`, RATE_LIMIT);

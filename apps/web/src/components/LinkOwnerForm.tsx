@@ -22,7 +22,7 @@ export function LinkOwnerForm() {
       response.ok
         ? {
             ok: true,
-            text: `Готово: аккаунт управляет парком ${body?.company ?? ''}. Выйдите и войдите снова, затем откройте «Поставщикам».`,
+            text: `Готово: аккаунт управляет парком ${body?.company ?? ''}. Выйдите и войдите снова, затем откройте кабинет исполнителя (/provider).`,
           }
         : { ok: false, text: typeof body?.error === 'string' ? body.error : 'Ошибка' },
     );

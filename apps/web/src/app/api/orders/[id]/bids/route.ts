@@ -41,7 +41,7 @@ function breakdownData(data: BidBreakdownInput) {
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
   const currentUser = await getRequestUser(request);
   if (!isProvider(currentUser)) {
-    return NextResponse.json({ error: 'Требуется аккаунт поставщика' }, { status: 403 });
+    return NextResponse.json({ error: 'Требуется аккаунт исполнителя' }, { status: 403 });
   }
 
   const body = await readJson(request);

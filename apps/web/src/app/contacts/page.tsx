@@ -87,7 +87,7 @@ export default function ContactsPage() {
         machine="crane"
         clip="crane-dusk"
         eyebrow="Пн–Сб, 8:00–20:00"
-        phrase="Звоните — техника выедет сегодня"
+        phrase="Звоните — подберём технику на ближайший день"
       />
     </div>
   );

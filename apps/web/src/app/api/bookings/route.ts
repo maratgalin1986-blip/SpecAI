@@ -46,7 +46,7 @@ export async function GET(request: NextRequest) {
 
   if (request.nextUrl.searchParams.get('as') === 'provider') {
     if (!isProvider(currentUser)) {
-      return NextResponse.json({ error: 'Требуется аккаунт поставщика' }, { status: 403 });
+      return NextResponse.json({ error: 'Требуется аккаунт исполнителя' }, { status: 403 });
     }
 
     const bookings = await prisma.booking.findMany({
