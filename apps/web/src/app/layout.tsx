@@ -38,7 +38,7 @@ export const metadata: Metadata = {
     template: `%s · ${SITE.platform} · ${SITE.name}`,
   },
   description: SITE.description,
-  applicationName: SITE.name,
+  applicationName: SITE.platform,
   keywords: [
     'аренда спецтехники Набережные Челны',
     'аренда экскаватора-погрузчика',
@@ -59,7 +59,7 @@ export const metadata: Metadata = {
   manifest: '/manifest.webmanifest',
   appleWebApp: {
     capable: true,
-    title: SITE.name,
+    title: SITE.platform,
     statusBarStyle: 'black-translucent',
   },
   icons: {

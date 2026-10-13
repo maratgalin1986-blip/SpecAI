@@ -95,10 +95,11 @@ describe('revealDecision', () => {
 describe('chat order note and erasure', () => {
   it('says where the order was found', () => {
     expect(chatOrderNote('Стройка Челны')).toBe(
-      'Заявка найдена в открытом чате «Стройка Челны». Автор может попросить удалить её.',
+      'Заявка найдена в открытом чате «Стройка Челны». Автор может попросить удалить её: ' +
+        'specplast16@mail.ru или +7 (927) 242-80-88.',
     );
-    expect(chatOrderNote(undefined)).toBe(
-      'Заявка найдена в открытом чате. Автор может попросить удалить её.',
+    expect(chatOrderNote(undefined)).toMatch(
+      /^Заявка найдена в открытом чате\. Автор может попросить удалить её: \S+@\S+/,
     );
   });
 

@@ -174,7 +174,8 @@ export function askPhoneText(c: Extract<Callback, { step: 'place' }>) {
     `Отлично: ${machineName(c.machine).toLowerCase()}, ${CITIES[c.city]}.\n` +
     `Ориентировочно ${priceLine(c.machine)}.\n\n` +
     `Нажмите «📱 Поделиться номером» — диспетчер перезвонит и назовёт точную цену с подачей. ` +
-    `Отправляя номер, вы соглашаетесь на обработку персональных данных: ${siteUrl()}/privacy`
+    `Отправляя номер, вы соглашаетесь на обработку персональных данных: ${siteUrl()}/soglasie ` +
+    `(политика — ${siteUrl()}/privacy)`
   );
 }
 

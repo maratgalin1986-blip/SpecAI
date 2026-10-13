@@ -63,7 +63,7 @@ async function fetchBlobAsBase64(fileUrl: string) {
 export async function POST(request: NextRequest) {
   const currentUser = await getRequestUser(request);
   if (!isProvider(currentUser)) {
-    return NextResponse.json({ error: 'Требуется аккаунт поставщика' }, { status: 403 });
+    return NextResponse.json({ error: 'Требуется аккаунт исполнителя' }, { status: 403 });
   }
 
   const rate = checkRateLimit(`ai:extract-specs:${currentUser.id}`, RATE_LIMIT);

@@ -191,6 +191,24 @@ export default function RegisterPage() {
             />
             <ConsentText />
           </label>
+          <p className="text-xs text-slate-500">
+            Создавая аккаунт, вы принимаете{' '}
+            <a href="/pravila" className="underline" target="_blank">
+              Правила площадки
+            </a>
+            {accountType === 'PROVIDER' ? (
+              <>
+                {' '}
+                и соглашаетесь, что название компании, город, точка базы на карте и техника будут
+                видны всем (
+                <a href="/soglasie-rasprostranenie" className="underline" target="_blank">
+                  согласие на распространение
+                </a>
+                )
+              </>
+            ) : null}
+            .
+          </p>
           {error && (
             <p role="alert" className="text-sm text-red-700">
               {error}

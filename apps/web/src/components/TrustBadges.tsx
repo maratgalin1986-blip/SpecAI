@@ -1,9 +1,11 @@
 import { Icon, type IconName } from '@/components/Icon';
 
+// Shown on pages that list every provider's machines: claims that only the
+// house fleet can back are said about СпецПласт16 by name.
 const BADGES: { icon: IconName; title: string; text: string }[] = [
-  { icon: 'helmet', title: 'С машинистом', text: 'Опытные операторы на каждой машине' },
-  { icon: 'receipt', title: 'Работаем с НДС', text: 'Оплата по безналу для юрлиц' },
-  { icon: 'document', title: 'Договор и ЭДО', text: 'Закрывающие документы в срок' },
+  { icon: 'helmet', title: 'С машинистом', text: 'Машина приезжает с машинистом' },
+  { icon: 'receipt', title: 'НДС у СпецПласт16', text: 'Безнал для юрлиц; у других — уточняйте' },
+  { icon: 'document', title: 'Договор с исполнителем', text: 'Закрывающие документы — от него' },
   { icon: 'clock', title: 'Почасовая оплата', text: 'Платите за отработанные часы' },
 ];
 

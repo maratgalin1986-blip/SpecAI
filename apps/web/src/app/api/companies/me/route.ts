@@ -76,7 +76,7 @@ async function ownPhotos(companyId: string): Promise<string[]> {
   );
 }
 
-const FORBIDDEN = { error: 'Точку на карте меняет только аккаунт поставщика' };
+const FORBIDDEN = { error: 'Точку на карте меняет только аккаунт исполнителя' };
 
 export async function GET(request: NextRequest) {
   const user = await getRequestUser(request);

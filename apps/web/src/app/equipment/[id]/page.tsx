@@ -264,13 +264,17 @@ export default async function EquipmentDetailPage({ params }: { params: { id: st
 
           {photos.length > 0 ? (
             <div style={{ viewTransitionName: 'machine-photo' }}>
-              <MachineGallery images={photos} name={item.name} owner={SITE.name} />
+              <MachineGallery
+                images={photos}
+                name={item.name}
+                owner={ownFleet ? SITE.name : item.company.name}
+              />
             </div>
           ) : modelPhotos.length > 0 ? (
             <figure style={{ viewTransitionName: 'machine-photo' }}>
               <MachineGallery images={modelPhotos} name={item.name} />
               <figcaption className="mt-2 text-xs text-slate-500">
-                Фото этой модели из открытых источников — не наша машина
+                Фото этой модели из открытых источников — не эта машина
               </figcaption>
             </figure>
           ) : illustration ? (
@@ -320,6 +324,11 @@ export default async function EquipmentDetailPage({ params }: { params: { id: st
               hammerRate={hammerRate}
               showVatNote={ownFleet}
               statusNote={STATUS_NOTE[item.status]}
+              executor={
+                ownFleet
+                  ? undefined
+                  : { name: item.company.name, orderHref: `/orders?provider=${item.companyId}` }
+              }
             />
             <div className="cab-card flex flex-col gap-2">
               <p className="text-xs text-graphite-500">Исполнитель</p>

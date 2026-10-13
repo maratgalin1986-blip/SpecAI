@@ -9,7 +9,6 @@ import { BookingActionButtons } from '@/components/BookingActionButtons';
 import { formatMoney } from '@/lib/money';
 import { ProviderEquipmentCard } from '@/components/ProviderEquipmentCard';
 import { CONTACTS_AFTER_CONFIRM, customerForProvider } from '@/lib/customerPrivacy';
-import { SITE } from '@/lib/site';
 import { Pagination } from '@/components/Pagination';
 import { parsePage, totalPagesFor } from '@/lib/pagination';
 import { isHouseManager, isProvider } from '@/lib/fleet';
@@ -50,8 +49,8 @@ import { ShiftPanel } from '@/components/shifts/ShiftPanel';
 
 export const dynamic = 'force-dynamic';
 export const metadata: Metadata = {
-  title: 'Кабинет парка',
-  description: `Парк техники ${SITE.name}: бронирования и заявки клиентов.`,
+  title: 'Кабинет исполнителя',
+  description: 'Кабинет исполнителя: техника, заявки, предложения и брони.',
   robots: { index: false },
 };
 
@@ -254,7 +253,7 @@ export default async function ProviderPage({
         <div className="min-w-0">
           <p className="cab-eyebrow">Кабинет исполнителя</p>
           <h1 className="text-2xl font-extrabold tracking-tight text-graphite-950">
-            {isHouseManager(session.user) ? 'Кабинет парка СпецПласт16' : 'Кабинет поставщика'}
+            {isHouseManager(session.user) ? 'Кабинет парка СпецПласт16' : 'Техника, заявки и брони'}
           </h1>
           <a
             href={providerPath(companyId)}

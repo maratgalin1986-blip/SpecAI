@@ -12,7 +12,7 @@ export async function DELETE(
 ) {
   const currentUser = await getRequestUser(request);
   if (!isProvider(currentUser)) {
-    return NextResponse.json({ error: 'Требуется аккаунт поставщика' }, { status: 403 });
+    return NextResponse.json({ error: 'Требуется аккаунт исполнителя' }, { status: 403 });
   }
   const { count } = await prisma.equipmentBlock.deleteMany({
     where: {

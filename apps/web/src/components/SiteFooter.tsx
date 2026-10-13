@@ -14,7 +14,7 @@ export function SiteFooter() {
           </div>
           <p className="mt-2">{SITE.tagline}.</p>
           <p className="mt-3 text-xs italic text-slate-400">
-            Копаем, поднимаем, вывозим — техника {SITE.name} с машинистом.
+            Копаем, поднимаем, вывозим — техника {SITE.name} и других исполнителей с машинистом.
           </p>
         </div>
         <div className="flex flex-col sm:gap-1">
@@ -44,6 +44,9 @@ export function SiteFooter() {
           </a>
           <a href="/contacts" className={LINK}>
             Контакты
+          </a>
+          <a href="/pravila" className={LINK}>
+            Правила площадки
           </a>
           <a href="/privacy" className={LINK}>
             Политика конфиденциальности
