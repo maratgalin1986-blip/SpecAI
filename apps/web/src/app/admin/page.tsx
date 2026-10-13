@@ -16,6 +16,7 @@ import { formLabel, splitSource } from '@/lib/marketing';
 import { AdminVerifyToggle } from '@/components/AdminVerifyToggle';
 import { providerPath } from '@/lib/providerSeo';
 import { chipClass } from '@/components/admin/AdminUi';
+import { PhoneLink } from '@/components/admin/PhoneLink';
 import {
   LEAD_FILTERS,
   filterLeads,
@@ -230,10 +231,7 @@ export default async function AdminPage({ searchParams = {} }: { searchParams?: 
             >
               <div className="min-w-0">
                 <div className="font-semibold">
-                  {lead.name} ·{' '}
-                  <a href={`tel:${lead.phone.replace(/[^\d+]/g, '')}`} className="text-amber-700">
-                    {lead.phone}
-                  </a>
+                  {lead.name} · <PhoneLink phone={lead.phone} />
                 </div>
                 {lead.message && (
                   <p className="mt-1 whitespace-pre-wrap text-sm text-slate-700">{lead.message}</p>

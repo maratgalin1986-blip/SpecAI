@@ -14,3 +14,13 @@ export const ADMIN_ORDER_FROM: Record<AdminOrderTarget, readonly string[]> = {
 export function adminCanMoveOrder(from: string, to: AdminOrderTarget): boolean {
   return ADMIN_ORDER_FROM[to].includes(from);
 }
+
+/**
+ * Open orders whose last desired day ended before today (Moscow midnight,
+ * `todayStart`): nobody will take them any more. /admin/funnel lists them
+ * apart from the stuck ones; «Закрыть все» (api/admin/orders/close-stale)
+ * closes them.
+ */
+export function staleOrdersWhere(todayStart: Date) {
+  return { status: 'OPEN' as const, desiredEndDate: { lt: todayStart } };
+}

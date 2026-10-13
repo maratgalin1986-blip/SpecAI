@@ -102,6 +102,47 @@ export function CloseOrderButton({ orderId }: { orderId: string }) {
   );
 }
 
+/** «Закрыть все»: every open order whose dates have passed leaves the board. */
+export function CloseStaleOrdersButton({ count }: { count: number }) {
+  const router = useRouter();
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+  return (
+    <span className="flex flex-col items-start gap-1">
+      <button
+        type="button"
+        disabled={busy}
+        onClick={async () => {
+          if (
+            !window.confirm(
+              `Закрыть все заявки с прошедшими датами (${count})? Они уйдут с доски, ожидающие предложения будут отклонены.`,
+            )
+          )
+            return;
+          setBusy(true);
+          const response = await fetch('/api/admin/orders/close-stale', { method: 'POST' }).catch(
+            () => null,
+          );
+          const body = await response?.json().catch(() => null);
+          setBusy(false);
+          setMessage(
+            response?.ok
+              ? `Закрыто: ${typeof body?.closed === 'number' ? body.closed : 0}`
+              : typeof body?.error === 'string'
+                ? body.error
+                : 'Не удалось закрыть',
+          );
+          router.refresh();
+        }}
+        className="rounded-md bg-graphite-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-graphite-800 disabled:opacity-50"
+      >
+        {busy ? 'Закрываем…' : `Закрыть все (${count})`}
+      </button>
+      {message && <span className="text-xs text-graphite-600">{message}</span>}
+    </span>
+  );
+}
+
 export function ModerationButtons({ orderId }: { orderId: string }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);

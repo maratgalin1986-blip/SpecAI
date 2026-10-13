@@ -1,8 +1,17 @@
-// «Входящие заявки» of a provider's cabinet: which open orders a company is
-// offered. Pure, unit-tested; providerFeedData.ts loads the rows.
+// Which open orders a provider company is offered: the web cabinet's
+// «Входящие заявки» and the app's «Подходят мне» (api/orders?scope=near).
+// The same rule as the new-order alert (lib/notifications/routing.ts:
+// acceptedCategoryIds + providerMatchesOrder, the place by lib/geo.ts
+// orderPoint). Pure, unit-tested; providerFeedData.ts loads the rows.
 import { moscowDateKey } from './bookingRules';
-import { providerMatchesOrder, type ProviderForMatch } from './notifications/routing';
-import type { CategoryGroup } from './orderBoard';
+import { orderPoint } from './geo';
+import { SITE } from './site';
+import {
+  acceptedCategoryIds,
+  providerMatchesOrder,
+  type CategoryRow,
+  type ProviderForMatch,
+} from './notifications/routing';
 
 /** Moscow midnight of today: orders that ended before it are stale. */
 export function todayStartMsk(now: Date = new Date()): Date {
@@ -24,42 +33,36 @@ export function incomingOrdersWhere(companyId: string, now: Date = new Date()) {
   };
 }
 
-/**
- * The company's categories widened to their whole groups: a provider with a
- * «JCB 3CX» category also sees orders for a backhoe loader of the same group.
- */
-export function widenToGroups(
-  categoryIds: readonly string[],
-  groups: readonly CategoryGroup[],
-): string[] {
-  const result = new Set(categoryIds);
-  for (const group of groups) {
-    if (group.categoryIds.some((id) => result.has(id))) {
-      group.categoryIds.forEach((id) => result.add(id));
-    }
-  }
-  return [...result];
-}
-
 export interface IncomingCandidate {
   categoryId: string | null;
-  lat?: number | null;
-  lon?: number | null;
+  location?: {
+    latitude?: number | null;
+    longitude?: number | null;
+    city?: string | null;
+    addressLine?: string | null;
+  } | null;
 }
 
 /**
- * The orders that fit the company: its categories (by group) within its
- * delivery radius. A company with no machinery yet sees every order, so the
- * cabinet shows the demand it could answer once a machine is added.
+ * The orders that fit the company: machinery that can take them (the
+ * category, its family and group) within its delivery radius of the work
+ * site, or of the city's centre when only the city is known. A company with
+ * no machinery yet is offered nothing.
  */
 export function matchIncoming<T extends IncomingCandidate>(
   company: ProviderForMatch,
-  groups: readonly CategoryGroup[],
+  categoryRows: readonly CategoryRow[],
   orders: readonly T[],
+  homeCity: string = SITE.city,
 ): T[] {
-  if (company.categoryIds.length === 0) return [...orders];
-  const widened = { ...company, categoryIds: widenToGroups(company.categoryIds, groups) };
-  return orders.filter((order) =>
-    providerMatchesOrder(widened, { categoryId: order.categoryId, lat: order.lat, lon: order.lon }),
-  );
+  return orders.filter((order) => {
+    const point = orderPoint(order.location, homeCity);
+    return providerMatchesOrder(company, {
+      categoryId: order.categoryId,
+      categoryIds: acceptedCategoryIds(order.categoryId, categoryRows),
+      lat: point?.lat,
+      lon: point?.lon,
+      city: order.location?.city,
+    });
+  });
 }

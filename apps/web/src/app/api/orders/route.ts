@@ -3,7 +3,8 @@ import { prisma } from '@specai/database';
 import { createOrderSchema } from '@specai/shared';
 import { getRequestUser } from '@/lib/requestUser';
 import { isOperator, isProvider } from '@/lib/fleet';
-import { providerMatchesOrder } from '@/lib/notifications/routing';
+import { matchIncoming } from '@/lib/providerFeed';
+import { loadProviderMatch } from '@/lib/providerFeedData';
 import { bidsUntilFor } from '@/lib/bidWindow';
 import { maskedContactFor } from '@/lib/chatOrders';
 import { cityInText, geocodeAddress } from '@/lib/geo';
@@ -105,46 +106,22 @@ export async function GET(request: NextRequest) {
       };
       let page;
       if (searchParams.get('scope') === 'near') {
-        const company = await prisma.company.findUnique({
-          where: { id: currentUser.companyId },
-          select: {
-            baseLat: true,
-            baseLon: true,
-            deliveryRadiusKm: true,
-            equipment: {
-              where: { status: { not: 'RETIRED' } },
-              select: { categoryId: true },
-              distinct: ['categoryId'],
-            },
-          },
-        });
-        const provider = {
-          categoryIds: company?.equipment.map((item) => item.categoryId) ?? [],
-          baseLat: company?.baseLat,
-          baseLon: company?.baseLon,
-          radiusKm: company?.deliveryRadiusKm,
-        };
+        // The rule of the new-order alert and the web cabinet's «Входящие
+        // заявки» (lib/providerFeed.ts): category family and group, the city's
+        // centre when only the city is known.
+        const { provider, categoryRows } = currentUser.companyId
+          ? await loadProviderMatch(currentUser.companyId)
+          : { provider: { categoryIds: [] }, categoryRows: [] };
         const candidates =
           provider.categoryIds.length === 0
             ? []
             : await prisma.order.findMany({
-                where: {
-                  ...where,
-                  ...(categoryId
-                    ? {}
-                    : { OR: [{ categoryId: { in: provider.categoryIds } }, { categoryId: null }] }),
-                },
+                where,
                 include: ORDER_INCLUDE,
                 orderBy: { createdAt: 'desc' },
                 take: NEAR_SCAN,
               });
-        const near = candidates.filter((order) =>
-          providerMatchesOrder(provider, {
-            categoryId: order.categoryId,
-            lat: order.location?.latitude,
-            lon: order.location?.longitude,
-          }),
-        );
+        const near = matchIncoming(provider, categoryRows, candidates);
         page = near.slice(offset, offset + limit);
         nextOffset = near.length > offset + limit ? offset + limit : null;
       } else {

@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { adminCanMoveOrder } from './adminOrders';
+import { adminCanMoveOrder, staleOrdersWhere } from './adminOrders';
+
+describe('staleOrdersWhere', () => {
+  it('takes only open orders that ended before today', () => {
+    const today = new Date('2026-10-12T21:00:00Z');
+    expect(staleOrdersWhere(today)).toEqual({ status: 'OPEN', desiredEndDate: { lt: today } });
+  });
+});
 
 describe('adminCanMoveOrder', () => {
   it('publishes only orders waiting in moderation', () => {

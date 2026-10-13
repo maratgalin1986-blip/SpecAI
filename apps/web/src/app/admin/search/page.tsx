@@ -90,14 +90,7 @@ async function search(q: string) {
           { orderId: { in: orderIds } },
         ],
       },
-      select: {
-        id: true,
-        status: true,
-        startDate: true,
-        orderId: true,
-        customer: { select: { name: true, phone: true } },
-        equipment: { select: { name: true, company: { select: { name: true, phone: true } } } },
-      },
+      select: BOOKING_SELECT,
       orderBy: { createdAt: 'desc' },
       take: SHOW,
     }),
@@ -109,6 +102,60 @@ async function search(q: string) {
     orders: orderRows,
     bookings: bookingRows,
   };
+}
+
+const BOOKING_SELECT = {
+  id: true,
+  status: true,
+  startDate: true,
+  orderId: true,
+  customer: { select: { name: true, phone: true } },
+  equipment: { select: { name: true, company: { select: { name: true, phone: true } } } },
+} as const;
+
+type BookingHit = {
+  id: string;
+  status: 'PENDING' | 'CONFIRMED' | 'ACTIVE' | 'COMPLETED' | 'CANCELLED';
+  startDate: Date;
+  orderId: string | null;
+  customer: { name: string; phone: string | null };
+  equipment: { name: string; company: { name: string; phone: string | null } };
+};
+
+/** A booking with both phones: the customer and the provider. */
+function BookingRow({ booking }: { booking: BookingHit }) {
+  return (
+    <li className="flex flex-col gap-0.5 py-2">
+      <span className="flex flex-wrap items-center gap-2">
+        <span className="font-semibold">{booking.equipment.name}</span>
+        <BookingStatusBadge status={booking.status} />
+        <span className="text-xs text-graphite-500">с {msk(booking.startDate)}</span>
+        {booking.orderId && (
+          <a href={`/orders/${booking.orderId}`} className="text-xs underline">
+            заявка
+          </a>
+        )}
+      </span>
+      <span className="text-xs text-graphite-600">
+        Заказчик: {booking.customer.name} <PhoneLink phone={booking.customer.phone} /> ·
+        Исполнитель: «{booking.equipment.company.name}»{' '}
+        <PhoneLink phone={booking.equipment.company.phone} />
+      </span>
+    </li>
+  );
+}
+
+/** Without a query: the bookings in work now and ahead, to call either side. */
+async function currentBookings() {
+  return prisma.booking.findMany({
+    where: {
+      status: { in: ['PENDING', 'CONFIRMED', 'ACTIVE'] },
+      endDate: { gte: new Date(Date.now() - 86_400_000) },
+    },
+    select: BOOKING_SELECT,
+    orderBy: { startDate: 'asc' },
+    take: SHOW,
+  });
 }
 
 function Section({
@@ -140,6 +187,7 @@ export default async function AdminSearchPage({ searchParams }: { searchParams: 
   const raw = Array.isArray(searchParams.q) ? searchParams.q[0] : searchParams.q;
   const q = (raw ?? '').trim().slice(0, 100);
   const result = q.length >= 2 ? await search(q) : null;
+  const upcoming = result ? [] : await currentBookings();
 
   return (
     <div className="flex flex-col gap-5">
@@ -162,6 +210,13 @@ export default async function AdminSearchPage({ searchParams }: { searchParams: 
       </form>
       {q.length > 0 && q.length < 2 && (
         <p className="text-sm text-graphite-500">Введите хотя бы два символа.</p>
+      )}
+      {!result && (
+        <Section title="Брони в работе и впереди" count={upcoming.length}>
+          {upcoming.map((booking) => (
+            <BookingRow key={booking.id} booking={booking} />
+          ))}
+        </Section>
       )}
       {result && (
         <>
@@ -193,23 +248,7 @@ export default async function AdminSearchPage({ searchParams }: { searchParams: 
           </Section>
           <Section title="Брони" count={result.bookings.length}>
             {result.bookings.map((booking) => (
-              <li key={booking.id} className="flex flex-col gap-0.5 py-2">
-                <span className="flex flex-wrap items-center gap-2">
-                  <span className="font-semibold">{booking.equipment.name}</span>
-                  <BookingStatusBadge status={booking.status} />
-                  <span className="text-xs text-graphite-500">с {msk(booking.startDate)}</span>
-                  {booking.orderId && (
-                    <a href={`/orders/${booking.orderId}`} className="text-xs underline">
-                      заявка
-                    </a>
-                  )}
-                </span>
-                <span className="text-xs text-graphite-600">
-                  Заказчик: {booking.customer.name} <PhoneLink phone={booking.customer.phone} /> ·
-                  Исполнитель: «{booking.equipment.company.name}»{' '}
-                  <PhoneLink phone={booking.equipment.company.phone} />
-                </span>
-              </li>
+              <BookingRow key={booking.id} booking={booking} />
             ))}
           </Section>
           <Section title="Аккаунты" count={result.users.length}>

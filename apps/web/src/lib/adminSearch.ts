@@ -16,6 +16,8 @@ function phoneCore(phone: string): string {
  */
 export function phoneNeedle(query: string): string | null {
   const trimmed = query.trim();
+  // A name, an e-mail or an order id («cmv5hcj…») is not a phone.
+  if (/[a-zа-яё@]/i.test(trimmed)) return null;
   let digits = trimmed.replace(/\D/g, '');
   if (/^\+?7/.test(trimmed) || (/^8/.test(trimmed) && digits.length > 3)) digits = digits.slice(1);
   return digits.length >= 3 ? digits : null;

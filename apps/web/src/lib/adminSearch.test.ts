@@ -8,6 +8,9 @@ describe('phoneNeedle', () => {
     expect(phoneNeedle('917-666')).toBe('917666');
     expect(phoneNeedle('77')).toBeNull();
     expect(phoneNeedle('Иван')).toBeNull();
+    // An order id or an e-mail has digits but is not a phone.
+    expect(phoneNeedle('cmv5hcjzv000fqdy3rnbnwphg')).toBeNull();
+    expect(phoneNeedle('user123@example.com')).toBeNull();
   });
 });
 

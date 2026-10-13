@@ -17,10 +17,13 @@ import {
   type FunnelStageId,
 } from '@/lib/adminFunnel';
 import { clipText } from '@/lib/adminFeed';
-import { CloseOrderButton } from '@/components/AdminIntegrations';
+import { CloseOrderButton, CloseStaleOrdersButton } from '@/components/AdminIntegrations';
 import { PhoneLink } from '@/components/admin/PhoneLink';
 
 export const dynamic = 'force-dynamic';
+
+/** Stale orders listed one by one; «Закрыть все» takes the rest. */
+const STALE_SHOWN = 50;
 export const metadata: Metadata = { title: 'Воронка заявок · CRM', robots: { index: false } };
 
 type Query = Record<string, string | string[] | undefined>;
@@ -232,17 +235,20 @@ export default async function AdminFunnelPage({ searchParams }: { searchParams: 
 
       {stale.length > 0 && (
         <section className="cab-card flex flex-col gap-3">
-          <div>
-            <h2 className="font-semibold text-graphite-950">
-              Даты прошли <span className="text-graphite-400">({stale.length})</span>
-            </h2>
-            <p className="text-sm text-graphite-600">
-              Открытые заявки, у которых последний день уже позади. Позвоните заказчику или закройте
-              заявку — она уйдёт с доски.
-            </p>
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <div>
+              <h2 className="font-semibold text-graphite-950">
+                Даты прошли <span className="text-graphite-400">({stale.length})</span>
+              </h2>
+              <p className="text-sm text-graphite-600">
+                Открытые заявки, у которых последний день уже позади. В «Застрявших» их нет.
+                Позвоните заказчику или закройте заявку — она уйдёт с доски.
+              </p>
+            </div>
+            <CloseStaleOrdersButton count={stale.length} />
           </div>
           <ul className="divide-y divide-graphite-100">
-            {stale.map((order) => (
+            {stale.slice(0, STALE_SHOWN).map((order) => (
               <li
                 key={order.id}
                 className="flex flex-col gap-1 py-2 text-sm sm:flex-row sm:items-center sm:justify-between"
@@ -267,6 +273,11 @@ export default async function AdminFunnelPage({ searchParams }: { searchParams: 
               </li>
             ))}
           </ul>
+          {stale.length > STALE_SHOWN && (
+            <p className="text-xs text-graphite-500">
+              Показаны {STALE_SHOWN} из {stale.length}, самые новые.
+            </p>
+          )}
         </section>
       )}
     </div>
