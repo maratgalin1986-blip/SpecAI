@@ -8,7 +8,7 @@ import { updateOrderSchema } from '@specai/shared';
 import { INVALID_JSON_MESSAGE, readJson, zodErrorMessage } from '@/lib/apiInput';
 import { unreadMessagesByOrder } from '@/lib/orderChatAccess';
 import { maskContactsAndLinks } from '@/lib/privacy';
-import { bidForCustomer } from '@/lib/bidPrivacy';
+import { bidForCustomer, bookedProviderSees } from '@/lib/bidPrivacy';
 
 export const dynamic = 'force-dynamic';
 
@@ -43,7 +43,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
         },
         orderBy: { price: 'asc' },
       },
-      booking: { select: { status: true } },
+      booking: { select: { status: true, equipment: { select: { companyId: true } } } },
     },
   });
   const isManager = isProvider(currentUser);
@@ -95,7 +95,9 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
   return NextResponse.json({
     order: {
       ...publicRest,
-      ...(isOwner ? {} : { description: maskContactsAndLinks(rest.description) }),
+      ...(isOwner || bookedProviderSees(rest.booking, currentUser.companyId)
+        ? {}
+        : { description: maskContactsAndLinks(rest.description) }),
       ...(isOwner ? { customerId } : {}),
       ...contact,
       ...(chatContact ? { chatContact } : {}),

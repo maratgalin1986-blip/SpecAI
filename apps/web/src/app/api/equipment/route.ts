@@ -6,6 +6,7 @@ import { EQUIPMENT_ORDER_BY, totalPagesFor } from '@/lib/pagination';
 import { PUBLIC_FLEET, PUBLISHED_FLEET, isProvider } from '@/lib/fleet';
 import { INVALID_JSON_MESSAGE, readJson, zodErrorMessage } from '@/lib/apiInput';
 import { listingPhoto } from '@/lib/equipmentPhoto';
+import { maskContactsAndLinks } from '@/lib/privacy';
 import { customerRateFields, customerRates } from '@/lib/equipmentCatalog';
 
 export async function GET(request: NextRequest) {
@@ -89,6 +90,11 @@ export async function GET(request: NextRequest) {
       // its edit form saves. customerHourlyRate/customerDailyRate are what
       // the customer sees either way: the bid forms prefill from them.
       ...(ownFleet ? {} : customerRates({ ...item, categoryName: item.category.name })),
+      // Contacts in the description stay hidden from customers, as on the
+      // machine page; the provider's own list keeps the text it edits.
+      ...(ownFleet || !item.description
+        ? {}
+        : { description: maskContactsAndLinks(item.description) }),
       ...customerRateFields({ ...item, categoryName: item.category.name }),
       ...listingPhoto(item, origin),
     })),

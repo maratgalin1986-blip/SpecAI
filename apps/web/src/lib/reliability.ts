@@ -53,22 +53,26 @@ export const EMPTY_STATS: CompanyStats = {
 const count = (value: number | undefined) => (value && value > 0 ? value : 0);
 
 /**
- * The share of bookings cancelled by `who` among the decided ones (kept +
- * those cancellations), 0..1; null below MIN_SAMPLE. The provider's
- * reliability counts PROVIDER cancellations, a customer's would count
- * CUSTOMER ones. Other parties' cancellations are left out of the sample, and
- * so are legacy rows with `cancelledBy` null (cancelled before the column
- * existed): nobody knows who cancelled them, so they are neither kept nor
- * held against anyone.
+ * The share of bookings cancelled by `who` among the decided ones, 0..1; null
+ * below MIN_SAMPLE. The provider's reliability counts PROVIDER cancellations.
+ * A booking another party cancelled (the customer, the admin) counts as kept:
+ * the provider kept its word, so a customer's cancellation never raises the
+ * provider's share. Legacy rows with `cancelledBy` null (cancelled before the
+ * column existed) stay out: nobody knows who cancelled them.
  */
 export function cancellationShare(stats: CompanyStats, who: CancelledBy): number | null {
   const cancelled = count(stats.cancelledBy?.[who]);
   // Waiting bookings (PENDING) are not decided yet; confirmed and active ones
   // already count as kept.
+  const byOthers = Object.entries(stats.cancelledBy ?? {}).reduce(
+    (sum, [party, n]) => (party === who ? sum : sum + count(n)),
+    0,
+  );
   const kept =
     count(stats.bookings.COMPLETED) +
     count(stats.bookings.CONFIRMED) +
-    count(stats.bookings.ACTIVE);
+    count(stats.bookings.ACTIVE) +
+    byOthers;
   const decided = kept + cancelled;
   return decided >= MIN_SAMPLE ? cancelled / decided : null;
 }

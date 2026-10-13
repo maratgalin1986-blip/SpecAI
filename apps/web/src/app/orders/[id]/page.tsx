@@ -12,6 +12,7 @@ import { isAdminRequest } from '@/lib/admin';
 import { SiteConditions } from '@/components/SiteConditions';
 import { houseFirst, isProvider, isHouseManager } from '@/lib/fleet';
 import { isSafeHttpUrl, maskContactsAndLinks } from '@/lib/privacy';
+import { bookedProviderSees } from '@/lib/bidPrivacy';
 import { approvedComments } from '@/lib/commentAccess';
 import { CommentForm, CommentList } from '@/components/Comments';
 import { customerShortName } from '@/lib/customerPrivacy';
@@ -43,7 +44,7 @@ export default async function OrderDetailPage({ params }: { params: { id: string
       category: true,
       customer: true,
       location: true,
-      booking: { select: { status: true } },
+      booking: { select: { status: true, equipment: { select: { companyId: true } } } },
       bids: {
         include: {
           equipment: { include: { company: true, category: { select: { name: true } } } },
@@ -156,7 +157,9 @@ export default async function OrderDetailPage({ params }: { params: { id: string
       <Card>
         <h2 className="font-semibold">Описание</h2>
         <p className="mt-2 whitespace-pre-line text-sm text-slate-600">
-          {isOwner || isAdmin ? order.description : maskContactsAndLinks(order.description)}
+          {isOwner || isAdmin || bookedProviderSees(order.booking, session?.user.companyId)
+            ? order.description
+            : maskContactsAndLinks(order.description)}
         </p>
       </Card>
 

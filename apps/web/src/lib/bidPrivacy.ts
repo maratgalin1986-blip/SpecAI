@@ -11,6 +11,23 @@ export function contactsOpenFor(bookingStatus: string | null | undefined): boole
   return CONTACTS_OPEN.includes(bookingStatus ?? '');
 }
 
+/**
+ * Whether the viewer's company is the one booked on this order with the
+ * booking confirmed: then it reads the customer's task text in full, phone
+ * included (the customer wrote it for the provider it chose).
+ */
+export function bookedProviderSees(
+  booking: { status: string; equipment: { companyId: string } } | null | undefined,
+  companyId: string | null | undefined,
+): boolean {
+  return (
+    !!booking &&
+    !!companyId &&
+    booking.equipment.companyId === companyId &&
+    contactsOpenFor(booking.status)
+  );
+}
+
 export function bidForCustomer<T extends { status: string; message: string | null }>(
   bid: T,
   bookingStatus: string | null | undefined,

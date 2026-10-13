@@ -57,6 +57,7 @@ describe('dueReminders', () => {
       { ...base, id: 'done30', expiresAt: day('2026-10-20'), remindedAt30: now },
       { ...base, id: 'done0', expiresAt: day('2026-10-01'), remindedAt0: now },
       { ...base, id: 'nodate', expiresAt: null },
+      { ...base, id: 'epoch', expiresAt: new Date(0) },
     ];
     const due = dueReminders(docs, now);
     expect(due.map((item) => [item.doc.id, item.threshold])).toEqual([

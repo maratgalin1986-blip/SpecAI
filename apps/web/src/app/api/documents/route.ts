@@ -20,6 +20,17 @@ export async function GET(request: NextRequest) {
   const user = await getRequestUser(request);
   if (!isProvider(user)) return NextResponse.json(FORBIDDEN, { status: 403 });
   const equipmentId = request.nextUrl.searchParams.get('equipmentId') ?? undefined;
+  // Documents saved «без срока» before the date fix carry 1970-01-01 and
+  // showed as expired: repair the company's rows once, on the next look.
+  const epoch = new Date(0);
+  await prisma.providerDocument.updateMany({
+    where: { companyId: user.companyId, expiresAt: epoch },
+    data: { expiresAt: null, remindedAt30: null, remindedAt0: null },
+  });
+  await prisma.providerDocument.updateMany({
+    where: { companyId: user.companyId, issuedAt: epoch },
+    data: { issuedAt: null },
+  });
   const documents = await prisma.providerDocument.findMany({
     where: { companyId: user.companyId, ...(equipmentId ? { equipmentId } : {}) },
     orderBy: [{ expiresAt: 'asc' }, { createdAt: 'desc' }],

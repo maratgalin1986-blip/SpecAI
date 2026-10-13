@@ -37,14 +37,21 @@ const optionalText = (max: number) =>
     .nullable()
     .transform((value) => value || null);
 
-// '' / 0 / '0' from an empty form field mean «без даты», not 1970-01-01.
+// null / '' / 0 / '0' / false from an empty form field mean «без даты», not
+// 1970-01-01. z.null() goes first in the union: z.coerce.date() would turn
+// null into new Date(null), the epoch, before the null branch is tried.
 const optionalDate = z.preprocess(
   (value) =>
-    value === '' || value === 0 || value === '0' || (typeof value === 'string' && !value.trim())
+    value === null ||
+    value === '' ||
+    value === 0 ||
+    value === '0' ||
+    value === false ||
+    (typeof value === 'string' && !value.trim())
       ? null
       : value,
   z
-    .union([z.coerce.date(), z.null()])
+    .union([z.null(), z.coerce.date()])
     .optional()
     .transform((value) => value ?? null)
     .refine((value) => value === null || !Number.isNaN(value.getTime()), {

@@ -58,10 +58,11 @@ describe('reliability', () => {
       cancelledBy: { CUSTOMER: 2, PROVIDER: 1 },
     };
     const value = reliability(stats);
-    expect(value.cancelShare).toBeCloseTo(1 / 4);
-    expect(value.badges).toContain('Отмены 25%');
+    // The customers' two cancellations count as kept by the provider.
+    expect(value.cancelShare).toBeCloseTo(1 / 6);
+    expect(value.badges).toContain('Отмены 17%');
     // The same bookings from the customers' side.
-    expect(cancellationShare(stats, 'CUSTOMER')).toBeCloseTo(2 / 5);
+    expect(cancellationShare(stats, 'CUSTOMER')).toBeCloseTo(2 / 6);
     // Only customers cancelled: a clean provider.
     expect(
       reliability({
@@ -70,6 +71,20 @@ describe('reliability', () => {
         cancelledBy: { CUSTOMER: 4 },
       }).badges,
     ).toContain('Без отмен');
+  });
+
+  it("never raises the provider's share when a customer cancels a confirmed booking", () => {
+    const before = {
+      ...EMPTY_STATS,
+      bookings: { COMPLETED: 3, CONFIRMED: 3, CANCELLED: 1 },
+      cancelledBy: { PROVIDER: 1 },
+    };
+    const after = {
+      ...EMPTY_STATS,
+      bookings: { COMPLETED: 3, CONFIRMED: 2, CANCELLED: 2 },
+      cancelledBy: { PROVIDER: 1, CUSTOMER: 1 },
+    };
+    expect(cancellationShare(after, 'PROVIDER')).toBe(cancellationShare(before, 'PROVIDER'));
   });
 
   it('leaves out cancellations nobody is recorded for (legacy rows)', () => {
@@ -104,6 +119,7 @@ describe('reliability', () => {
       bookings: { CANCELLED: 5 },
       cancelledBy: { PROVIDER: 1, CUSTOMER: 2 },
     });
-    expect(reliability({ ...EMPTY_STATS, ...map.get('b')! }).cancelShare).toBeNull();
+    // The customers' two cancellations count as kept: 1 of 3 is the provider's.
+    expect(reliability({ ...EMPTY_STATS, ...map.get('b')! }).cancelShare).toBeCloseTo(1 / 3);
   });
 });

@@ -6,6 +6,7 @@ import { getRequestUser } from '@/lib/requestUser';
 import { isProvider } from '@/lib/fleet';
 import { INVALID_JSON_MESSAGE, readJson, zodErrorMessage } from '@/lib/apiInput';
 import { listingPhoto } from '@/lib/equipmentPhoto';
+import { maskContactsAndLinks } from '@/lib/privacy';
 import { customerRateFields, customerRates } from '@/lib/equipmentCatalog';
 
 export const dynamic = 'force-dynamic';
@@ -62,6 +63,8 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       // Prices as on the site (the house fleet never below lib/prices.ts).
       ...customerRates({ ...equipment, categoryName: equipment.category.name }),
       ...customerRateFields({ ...equipment, categoryName: equipment.category.name }),
+      // As on the machine page: no phones or links in the public description.
+      description: equipment.description && maskContactsAndLinks(equipment.description),
       ...listingPhoto(equipment, request.nextUrl.origin),
     },
   });
