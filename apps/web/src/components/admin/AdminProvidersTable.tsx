@@ -162,8 +162,8 @@ export function AdminProvidersTable({ rows, initialFilter = 'all', now }: Props)
           type="search"
           value={query}
           onChange={(event) => setQuery(event.target.value)}
-          placeholder="Название или ИНН"
-          aria-label="Поиск по названию или ИНН"
+          placeholder="Название, ИНН или телефон"
+          aria-label="Поиск по названию, ИНН или телефону"
           className="min-h-[36px] rounded-full border border-graphite-200 bg-white px-3.5 text-sm text-graphite-900 placeholder:text-graphite-400 focus:border-graphite-800 focus:outline-none sm:w-64"
         />
       </div>

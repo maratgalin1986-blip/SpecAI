@@ -9,15 +9,15 @@ import {
   subscribeSound,
   SOUND_HINT_KEY,
 } from '@/lib/sound';
+import { isCabinetPage } from '@/lib/workPages';
 
 const HINT_MS = 5000;
 
 /**
  * «🔊 Звук» / «🔇»: the one switch of the cinematic sound layer. Sound is on
- * from the first tap unless the visitor turned it off; the choice is
- * remembered (lib/sound.ts). The button says what it does (owner,
- * 2026-10-03): «Выключить звук» while the sound is on — the default, which
- * starts at the first touch of the page — and «Включить звук» once it is off.
+ * by default on the public pages (owner, 2026-10-03); the choice is
+ * remembered (lib/sound.ts). The button says what it does: «Выключить звук»
+ * while it is on (the default) and «Включить звук» once it is off.
  * Shows a one-time hint per session, after the opening titles. Hidden on the
  * document pages, which have no sound director (CinemaLayer): a press there
  * would do nothing.
@@ -25,18 +25,23 @@ const HINT_MS = 5000;
 export function SoundToggle({
   className = '',
   iconOnPhone = false,
+  iconOnly = false,
   large = false,
 }: {
   className?: string;
   /** The site header on a phone has room for the icon only. */
   iconOnPhone?: boolean;
+  /** The desktop header: the icon only, so the line fits at 1024 px (label in aria-label/title). */
+  iconOnly?: boolean;
   /** A 44 px tap target (the site header); 36 px with a 44 px hit area on desktop. */
   large?: boolean;
 }) {
   // On by default: the server render shows «Выключить звук» too, and the
   // client store starts from the saved choice (lib/sound.ts), so no flicker.
   const on = useSyncExternalStore(subscribeSound, soundEnabled, () => true);
-  const documentPage = DOCUMENT_PAGES.test(usePathname() ?? '');
+  const pathname = usePathname() ?? '';
+  // Cabinets have no sound director (CinemaLayer): no switch there either.
+  const silentPage = DOCUMENT_PAGES.test(pathname) || isCabinetPage(pathname);
   const [hint, setHint] = useState(false);
 
   useEffect(() => {
@@ -82,7 +87,7 @@ export function SoundToggle({
     if (on) setHint(false);
   }, [on]);
 
-  if (documentPage) return null;
+  if (silentPage) return null;
 
   return (
     <span className={`relative inline-flex ${className}`}>
@@ -104,8 +109,12 @@ export function SoundToggle({
         }`}
       >
         <span aria-hidden>{on ? '🔇' : '🔊'}</span>
-        {!iconOnPhone && <span className="sm:hidden">{on ? 'Выкл. звук' : 'Вкл. звук'}</span>}
-        <span className="hidden sm:inline">{on ? 'Выключить звук' : 'Включить звук'}</span>
+        {!iconOnPhone && !iconOnly && (
+          <span className="sm:hidden">{on ? 'Выкл. звук' : 'Вкл. звук'}</span>
+        )}
+        {!iconOnly && (
+          <span className="hidden sm:inline">{on ? 'Выключить звук' : 'Включить звук'}</span>
+        )}
       </button>
       {hint && (
         <span

@@ -116,6 +116,10 @@ describe('filterProviders', () => {
     expect(filterProviders(rows, 'unverified', 'альфа').map((r) => r.id)).toEqual(['b']);
     expect(matchesQuery(rows[1]!, '')).toBe(true);
     expect(matchesQuery(rows[1]!, '999')).toBe(false);
+    const withPhone = { ...rows[1]!, phone: '+7 917 666-00-04' };
+    expect(matchesQuery(withPhone, '+7 917 666')).toBe(true);
+    expect(matchesQuery(withPhone, '8 (917) 666-00')).toBe(true);
+    expect(matchesQuery(withPhone, '917 555')).toBe(false);
   });
 });
 

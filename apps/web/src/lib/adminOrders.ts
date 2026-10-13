@@ -1,0 +1,26 @@
+// Which order statuses the admin may change (api/admin/orders/[id]). Pure,
+// unit-tested. Publishing is only for chat imports waiting in moderation, so
+// an erased (CANCELLED) order or a MATCHED one with a booking never goes back
+// on the board; closing also takes an open order off the board (a stale one
+// whose dates have passed).
+
+export type AdminOrderTarget = 'OPEN' | 'CANCELLED';
+
+export const ADMIN_ORDER_FROM: Record<AdminOrderTarget, readonly string[]> = {
+  OPEN: ['PENDING_REVIEW'],
+  CANCELLED: ['PENDING_REVIEW', 'OPEN'],
+};
+
+export function adminCanMoveOrder(from: string, to: AdminOrderTarget): boolean {
+  return ADMIN_ORDER_FROM[to].includes(from);
+}
+
+/**
+ * Open orders whose last desired day ended before today (Moscow midnight,
+ * `todayStart`): nobody will take them any more. /admin/funnel lists them
+ * apart from the stuck ones; «Закрыть все» (api/admin/orders/close-stale)
+ * closes them.
+ */
+export function staleOrdersWhere(todayStart: Date) {
+  return { status: 'OPEN' as const, desiredEndDate: { lt: todayStart } };
+}

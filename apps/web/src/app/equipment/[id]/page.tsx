@@ -312,6 +312,7 @@ export default async function EquipmentDetailPage({ params }: { params: { id: st
         {/* Estimate: sticky on desktop, right after the gallery on phones */}
         <aside
           id="estimate"
+          data-order-form
           className="scroll-mt-24 lg:col-start-2 lg:row-span-2 lg:row-start-1"
           aria-label="Расчёт и заказ"
         >

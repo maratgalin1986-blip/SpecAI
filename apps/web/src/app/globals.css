@@ -1975,6 +1975,26 @@ html[data-vt-kind='fade']::view-transition-group(root) {
     opacity: 0;
     pointer-events: none;
   }
+  /* Cabinets and sign-in forms have no contact bar (lib/workPages.ts), and
+     nothing else floats over their forms either: the cookie strip stands at
+     the end of the page instead of over the «Создать аккаунт» button, and
+     the chat button is not shown on a phone there. /stroyka keeps its own
+     strip (no data-bottom-bar on it). */
+  html[data-no-contact-bar] [data-testid='cookie-strip'][data-bottom-bar] {
+    position: relative;
+    inset: auto;
+    margin: 0.75rem 0.5rem calc(0.75rem + env(safe-area-inset-bottom));
+  }
+  html[data-no-contact-bar][data-cookie-strip] body {
+    padding-bottom: 0;
+  }
+  html[data-no-contact-bar] .chat-fab {
+    display: none;
+  }
+  html[data-typing] .chat-fab {
+    opacity: 0;
+    pointer-events: none;
+  }
 }
 
 /* Soft mode («Уменьшение движения»): opacity-only fades, nothing moves. */

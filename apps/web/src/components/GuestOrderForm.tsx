@@ -16,8 +16,7 @@ function todayInMoscow() {
 type Category = SelectableCategory;
 
 /**
- * The order form for visitors without an account (there is no registration
- * on the site): what is needed, the machine type, dates, the address, a name,
+ * The order form for visitors without an account (/orders): what is needed, the machine type, dates, the address, a name,
  * a phone and the consent. POST /api/orders/guest puts the order on the
  * board; providers bid, the dispatcher calls back with the best offers.
  */

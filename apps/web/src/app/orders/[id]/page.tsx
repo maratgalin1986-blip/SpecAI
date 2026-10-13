@@ -32,6 +32,9 @@ import { bidsLeftText, isLateBid } from '@/lib/bidWindow';
 import { orderDays } from '@/lib/offerBreakdown';
 import { distanceKm } from '@/lib/geo';
 import { bidLoginHref } from '@/lib/orderBoard';
+import { CloseOrderButton } from '@/components/AdminIntegrations';
+import { PhoneLink } from '@/components/admin/PhoneLink';
+import { isRealEmail } from '@/lib/notifications/routing';
 
 export const dynamic = 'force-dynamic';
 
@@ -144,6 +147,35 @@ export default async function OrderDetailPage({ params }: { params: { id: string
         </span>
       </div>
       {(isOwner || isAdmin) && <OrderTimeline timeline={timeline} />}
+      {isAdmin && (
+        <Card className="border-amber-200 bg-amber-50">
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <h2 className="font-semibold">Контакты (видит только администратор)</h2>
+            {order.status === 'OPEN' && <CloseOrderButton orderId={order.id} />}
+          </div>
+          <ul className="mt-2 flex flex-col gap-1 text-sm">
+            <li>
+              Заказчик: {order.contactName ?? order.customer.name} ·{' '}
+              <PhoneLink phone={order.contactPhone ?? order.customer.phone} />
+              {!isImported && isRealEmail(order.customer.email) && (
+                <>
+                  {' '}
+                  ·{' '}
+                  <a href={`mailto:${order.customer.email}`} className="underline">
+                    {order.customer.email}
+                  </a>
+                </>
+              )}
+            </li>
+            {houseFirstBids(order.bids, (bid) => bid.equipment.companyId).map((bid) => (
+              <li key={bid.id}>
+                {bid.status === 'ACCEPTED' ? 'Выбран исполнитель' : 'Предложение'}: «
+                {bid.equipment.company.name}» · <PhoneLink phone={bid.equipment.company.phone} />
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
       {isOwner && order.status === 'OPEN' && <CancelOrderButton orderId={order.id} />}
       {isOwner && order.status === 'MATCHED' && (
         <p className="rounded-md border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">

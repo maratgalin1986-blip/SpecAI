@@ -9,7 +9,7 @@ import { SoundDirector } from '@/components/SoundDirector';
 
 // Loaded lazily by CinemaLayer: one chunk, so shared helpers are not split
 // and duplicated between several small lazy chunks.
-export function CinemaEffects() {
+export function CinemaEffects({ sound = true }: { sound?: boolean }) {
   return (
     <>
       <CinemaClicks />
@@ -17,7 +17,7 @@ export function CinemaEffects() {
       <CinemaDolly />
       <CinemaFx />
       <CinemaParticles />
-      <SoundDirector />
+      {sound && <SoundDirector />}
     </>
   );
 }

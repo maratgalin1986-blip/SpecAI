@@ -1,4 +1,5 @@
 import { prisma } from '@specai/database';
+import { loadIncomingOrders } from '@/lib/providerFeedData';
 import {
   guideRole,
   nextSteps,
@@ -46,13 +47,7 @@ export async function loadGuideState(
         where: { equipment: { companyId } },
         _count: { _all: true },
       }),
-      prisma.order.count({
-        where: {
-          status: 'OPEN',
-          NOT: { customer: { companyId } },
-          bids: { none: { equipment: { companyId } } },
-        },
-      }),
+      loadIncomingOrders(companyId, 0).then((incoming) => incoming.total),
       prisma.bid.count({ where: { equipment: { companyId } } }),
       commentsWritten,
     ]);
