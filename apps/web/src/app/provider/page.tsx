@@ -17,6 +17,7 @@ import { GuideCard } from '@/components/GuideCard';
 import { PhotoShare } from '@/components/PhotoShare';
 import { CommentForm, CommentList } from '@/components/Comments';
 import { guideFor } from '@/lib/guideState';
+import { loadIncomingOrders } from '@/lib/providerFeedData';
 import { toPublicComment } from '@/lib/comments';
 import { MyMapPin } from '@/components/MyMapPin';
 import { getBlobToken } from '@/lib/blob';
@@ -131,65 +132,42 @@ export default async function ProviderPage({
   // Pro-like dashboard: summary, incoming orders, machine statuses, checklist.
   const companyId = session.user.companyId;
   const monthStart = monthStartMsk();
-  const feedWhere = {
-    status: 'OPEN' as const,
-    NOT: { customer: { companyId } },
-    bids: { none: { equipment: { companyId } } },
-  };
-  const [
-    profile,
-    fleet,
-    monthBookings,
-    activeBookings,
-    feed,
-    feedTotal,
-    trust,
-    referralCode,
-    invited,
-  ] = await Promise.all([
-    prisma.company.findUnique({
-      where: { id: companyId },
-      select: {
-        description: true,
-        phone: true,
-        verified: true,
-        deliveryRadiusKm: true,
-        deliveryPricePerKm: true,
-      },
-    }),
-    prisma.equipment.findMany({
-      where: { companyId, status: { not: 'RETIRED' } },
-      select: { id: true, name: true, status: true, imageUrls: true, hourlyRate: true },
-      orderBy: { createdAt: 'desc' },
-      take: 200,
-    }),
-    prisma.booking.findMany({
-      where: {
-        equipment: { companyId },
-        status: { in: [...INCOME_STATUSES] },
-        startDate: { gte: monthStart },
-      },
-      select: { status: true, startDate: true, totalPrice: true },
-      take: 1000,
-    }),
-    prisma.booking.count({
-      where: { equipment: { companyId }, status: { in: ['CONFIRMED', 'ACTIVE'] } },
-    }),
-    prisma.order.findMany({
-      where: feedWhere,
-      include: {
-        category: { select: { name: true } },
-        customer: { select: { name: true } },
-        _count: { select: { bids: true } },
-      },
-      orderBy: { createdAt: 'desc' },
-      take: 6,
-    }),
-    prisma.order.count({ where: feedWhere }),
-    companyReliability(companyId),
-    ensureReferralCode(session.user.id).catch(() => null),
-    invitedCounts(session.user.id).catch(() => ({ total: 0, providers: 0 })),
-  ]);
+  const [profile, fleet, monthBookings, activeBookings, incoming, trust, referralCode, invited] =
+    await Promise.all([
+      prisma.company.findUnique({
+        where: { id: companyId },
+        select: {
+          description: true,
+          phone: true,
+          verified: true,
+          deliveryRadiusKm: true,
+          deliveryPricePerKm: true,
+        },
+      }),
+      prisma.equipment.findMany({
+        where: { companyId, status: { not: 'RETIRED' } },
+        select: { id: true, name: true, status: true, imageUrls: true, hourlyRate: true },
+        orderBy: { createdAt: 'desc' },
+        take: 200,
+      }),
+      prisma.booking.findMany({
+        where: {
+          equipment: { companyId },
+          status: { in: [...INCOME_STATUSES] },
+          startDate: { gte: monthStart },
+        },
+        select: { status: true, startDate: true, totalPrice: true },
+        take: 1000,
+      }),
+      prisma.booking.count({
+        where: { equipment: { companyId }, status: { in: ['CONFIRMED', 'ACTIVE'] } },
+      }),
+      loadIncomingOrders(companyId),
+      companyReliability(companyId),
+      ensureReferralCode(session.user.id).catch(() => null),
+      invitedCounts(session.user.id).catch(() => ({ total: 0, providers: 0 })),
+    ]);
+  const { items: feed, total: feedTotal } = incoming;
   const income = monthIncome(monthBookings);
   // Documents (СТС, ПСМ, страховка…): expired ones mark the machine and the checklist.
   const documents = await prisma.providerDocument.findMany({
@@ -307,6 +285,12 @@ export default async function ProviderPage({
             Вся лента
           </a>
         </div>
+        <p className="text-sm text-graphite-600">
+          {fleet.length > 0
+            ? 'Заявки по вашей технике в радиусе выезда, на которые вы ещё не ответили'
+            : 'Все открытые заявки: добавьте технику, и здесь останутся подходящие вам'}
+          {feedTotal > feed.length && ` · показаны ${feed.length} из ${feedTotal}`}
+        </p>
         {feed.length === 0 ? (
           <p className="cab-card text-sm text-graphite-600">
             Новых заявок без вашей цены нет. Оставайтесь на линии — лента обновляется сама.

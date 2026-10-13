@@ -19,8 +19,9 @@ import { asSpeaker } from '@/lib/soundVoices';
 import { stripEmoji } from '@/lib/stripEmoji';
 import { currentNature, NATURE_EVENT, type NatureEventDetail } from '@/lib/sceneEvents';
 
-// The cinematic sound layer, mounted once in the layout. On by default; it
-// wakes at the visitor's first real gesture (or the SoundToggle press), as
+// The cinematic sound layer, mounted once in the layout (not on the cabinets,
+// CinemaLayer). Off by default; once the visitor turns it on it wakes at the
+// SoundToggle press, or on a later page at the first real gesture, as
 // browsers require: no AudioContext exists before that. Until then it
 // downloads nothing: the engine and the recordings load with import()/fetch
 // on demand (the beds after the gesture, a machine when it is announced).

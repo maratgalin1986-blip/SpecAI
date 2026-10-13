@@ -12,10 +12,13 @@ import {
   medianTimeToFirstBid,
   ordersInPeriod,
   parseFunnelPeriod,
+  staleOrders,
   stuckOrders,
   type FunnelStageId,
 } from '@/lib/adminFunnel';
 import { clipText } from '@/lib/adminFeed';
+import { CloseOrderButton } from '@/components/AdminIntegrations';
+import { PhoneLink } from '@/components/admin/PhoneLink';
 
 export const dynamic = 'force-dynamic';
 export const metadata: Metadata = { title: 'Воронка заявок · CRM', robots: { index: false } };
@@ -53,11 +56,21 @@ export default async function AdminFunnelPage({ searchParams }: { searchParams: 
       createdAt: true,
       description: true,
       desiredStartDate: true,
+      desiredEndDate: true,
       source: true,
+      contactName: true,
+      contactPhone: true,
+      customer: { select: { name: true, phone: true } },
       category: { select: { name: true } },
       location: { select: { city: true } },
       bids: { select: { createdAt: true, status: true } },
-      booking: { select: { status: true } },
+      booking: {
+        select: {
+          status: true,
+          createdAt: true,
+          equipment: { select: { company: { select: { name: true, phone: true } } } },
+        },
+      },
     },
     orderBy: { createdAt: 'desc' },
     take: 5000,
@@ -65,6 +78,7 @@ export default async function AdminFunnelPage({ searchParams }: { searchParams: 
   const rows = orders.map((order) => ({
     ...order,
     bookingStatus: order.booking?.status ?? null,
+    bookingCreatedAt: order.booking?.createdAt ?? null,
   }));
 
   const inPeriod = ordersInPeriod(rows, period, now);
@@ -72,6 +86,7 @@ export default async function AdminFunnelPage({ searchParams }: { searchParams: 
   const conversion = conversionToProvider(stages);
   const median = medianTimeToFirstBid(inPeriod);
   const stuck = stuckOrders(rows, now);
+  const stale = staleOrders(rows, now);
   const pendingReview = rows.filter((order) => order.status === 'PENDING_REVIEW').length;
   const maxCount = Math.max(1, ...stages.map((stage) => stage.count));
 
@@ -159,7 +174,8 @@ export default async function AdminFunnelPage({ searchParams }: { searchParams: 
             Застрявшие заявки <span className="text-graphite-400">({stuck.length})</span>
           </h2>
           <p className="text-sm text-graphite-600">
-            Открыты больше суток без предложений, или заказчик не выбирает исполнителя двое суток.
+            Открыты больше суток без предложений, заказчик не выбирает исполнителя двое суток, или
+            исполнитель сутки не подтверждает бронь. Заявки с прошедшими датами — ниже.
           </p>
         </div>
         {stuck.length === 0 ? (
@@ -187,6 +203,18 @@ export default async function AdminFunnelPage({ searchParams }: { searchParams: 
                     })}
                     {order.bids.length > 0 ? ` · предложений: ${order.bids.length}` : ''}
                   </p>
+                  <p className="flex flex-wrap gap-x-3 text-xs">
+                    <span>
+                      Заказчик: {order.contactName ?? order.customer.name}{' '}
+                      <PhoneLink phone={order.contactPhone ?? order.customer.phone} />
+                    </span>
+                    {order.booking && (
+                      <span>
+                        Исполнитель: {order.booking.equipment.company.name}{' '}
+                        <PhoneLink phone={order.booking.equipment.company.phone} />
+                      </span>
+                    )}
+                  </p>
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
                   <AdminTag tone={reason === 'no_bids' ? 'red' : 'amber'}>
@@ -201,6 +229,46 @@ export default async function AdminFunnelPage({ searchParams }: { searchParams: 
           </ul>
         )}
       </section>
+
+      {stale.length > 0 && (
+        <section className="cab-card flex flex-col gap-3">
+          <div>
+            <h2 className="font-semibold text-graphite-950">
+              Даты прошли <span className="text-graphite-400">({stale.length})</span>
+            </h2>
+            <p className="text-sm text-graphite-600">
+              Открытые заявки, у которых последний день уже позади. Позвоните заказчику или закройте
+              заявку — она уйдёт с доски.
+            </p>
+          </div>
+          <ul className="divide-y divide-graphite-100">
+            {stale.map((order) => (
+              <li
+                key={order.id}
+                className="flex flex-col gap-1 py-2 text-sm sm:flex-row sm:items-center sm:justify-between"
+              >
+                <div className="min-w-0">
+                  <a
+                    href={`/orders/${order.id}`}
+                    className="font-semibold text-graphite-950 hover:text-signal-700"
+                  >
+                    {clipText(order.description, 90) || 'Заявка без описания'}
+                  </a>
+                  <p className="text-xs text-graphite-500">
+                    до{' '}
+                    {order.desiredEndDate.toLocaleDateString('ru-RU', {
+                      timeZone: 'Europe/Moscow',
+                    })}{' '}
+                    · {order.contactName ?? order.customer.name}{' '}
+                    <PhoneLink phone={order.contactPhone ?? order.customer.phone} />
+                  </p>
+                </div>
+                <CloseOrderButton orderId={order.id} />
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
     </div>
   );
 }
