@@ -27,6 +27,9 @@ function unitLabel(mode: Mode, n: number) {
 
 // Price box on the machine page: hours or shifts → live estimate from the
 // listed rates, and a phone-only lead with the estimate in the message.
+// The lead and the call buttons reach the platform's dispatcher; on another
+// provider's machine the box says so and links to the order form for that
+// company (`executor`).
 export function EstimateBox({
   equipmentId,
   equipmentName,
@@ -35,6 +38,7 @@ export function EstimateBox({
   hammerRate,
   showVatNote,
   statusNote,
+  executor,
 }: {
   equipmentId: string;
   equipmentName: string;
@@ -46,6 +50,8 @@ export function EstimateBox({
   showVatNote: boolean;
   /** Shown when the machine isn't free right now. */
   statusNote?: string;
+  /** Another provider's machine: its company and the order form for it. */
+  executor?: { name: string; orderHref: string };
 }) {
   const modes: Mode[] = [
     ...(hourlyRate !== null ? (['hours'] as const) : []),
@@ -99,7 +105,8 @@ export function EstimateBox({
         website,
         source: `estimate:${equipmentId}`,
         message:
-          `Интересует: ${equipmentName}${withHammer ? ' с гидромолотом' : ''}. ` +
+          `Интересует: ${equipmentName}${withHammer ? ' с гидромолотом' : ''}` +
+          `${executor ? ` (исполнитель «${executor.name}»)` : ''}. ` +
           (total !== null
             ? `Расчёт на сайте: ${breakdown} = ${rub(total)} (предварительно, без доставки).`
             : 'Цена по запросу.'),
@@ -294,13 +301,28 @@ export function EstimateBox({
           >
             {status === 'sending'
               ? 'Отправляем…'
-              : total !== null
-                ? 'Заказать по расчёту'
-                : 'Узнать цену'}
+              : executor
+                ? 'Отправить диспетчеру'
+                : total !== null
+                  ? 'Заказать по расчёту'
+                  : 'Узнать цену'}
             <Icon name="arrow" className="h-4 w-4 transition group-hover:translate-x-1" />
           </button>
-          <p className="text-center text-xs text-slate-500">{SITE.callbackPromise}</p>
+          <p className="text-center text-xs text-slate-500">
+            {executor
+              ? `Заявку получит диспетчер площадки ${SITE.platform}: он перезвонит и свяжет вас с «${executor.name}».`
+              : SITE.callbackPromise}
+          </p>
         </form>
+      )}
+
+      {executor && (
+        <a
+          href={executor.orderHref}
+          className="text-center text-sm font-semibold text-amber-700 underline-offset-2 hover:underline"
+        >
+          Разместить заявку для «{executor.name}»
+        </a>
       )}
 
       {/* Phones already have a fixed call / WhatsApp bar at the bottom. */}
@@ -310,7 +332,7 @@ export function EstimateBox({
           className="inline-flex items-center justify-center gap-2 rounded-full border border-slate-300 px-3 py-2.5 text-sm font-semibold transition hover:border-slate-900"
         >
           <Icon name="phone" className="h-4 w-4 text-amber-700" />
-          Позвонить
+          {executor ? 'Диспетчер площадки' : 'Позвонить'}
         </a>
         <a
           href={SITE.whatsappHref}

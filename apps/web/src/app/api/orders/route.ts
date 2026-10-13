@@ -76,7 +76,7 @@ export async function GET(request: NextRequest) {
   let nextOffset: number | null = null;
   if (openFeed) {
     if (!isProvider(currentUser)) {
-      return NextResponse.json({ error: 'Доступно только поставщикам' }, { status: 403 });
+      return NextResponse.json({ error: 'Доступно только исполнителям' }, { status: 403 });
     }
     const ownBids = {
       status: 'OPEN' as const,

@@ -167,11 +167,30 @@ export default async function OrdersPage({ searchParams }: { searchParams: Order
       <h2 className="mb-3 text-lg font-semibold">
         {forProvider ? `Заявка для «${forProvider.name}»` : 'Разместить заявку'}
       </h2>
-      <p className="mb-3 max-w-xl text-sm text-slate-600">
-        {forProvider
-          ? `Заявку увидит «${forProvider.name}» и другие исполнители — сравните предложения.`
-          : `Заявку увидят все исполнители со своей техникой, включая парк ${SITE.name}, и пришлют цены. Бесплатно.`}
-      </p>
+      {viewerId ? (
+        <p className="mb-3 max-w-xl text-sm text-slate-600">
+          {forProvider
+            ? `Заявку увидит «${forProvider.name}» и другие исполнители — сравните предложения.`
+            : `Заявку увидят все исполнители со своей техникой, включая парк ${SITE.name}, и пришлют цены. Бесплатно.`}
+        </p>
+      ) : (
+        // A guest gets the callback form: the lead goes to the platform's
+        // dispatcher, not to the board or to the chosen company.
+        <p className="mb-3 max-w-xl text-sm text-slate-600">
+          Без регистрации: оставьте телефон — диспетчер площадки перезвонит и поможет подобрать
+          технику. Чтобы заявку увидели{' '}
+          {forProvider ? `«${forProvider.name}» и другие исполнители` : 'все исполнители'} и
+          прислали свои цены,{' '}
+          <a href="/register" className="underline">
+            зарегистрируйтесь
+          </a>{' '}
+          или{' '}
+          <a href="/login" className="underline">
+            войдите
+          </a>{' '}
+          — это бесплатно.
+        </p>
+      )}
       {viewerId ? (
         <Card className="max-w-xl">
           <NewOrderForm provider={forProvider} initial={orderPrefill(searchParams)} />
@@ -179,10 +198,16 @@ export default async function OrdersPage({ searchParams }: { searchParams: Order
       ) : (
         <div className="grid gap-4 lg:grid-cols-2">
           <Card>
+            {/* The provider's id rides in the lead source, so the dispatcher
+                knows which company the guest wanted. */}
             <CallbackForm
-              source="orders"
-              title="Заявка без регистрации"
-              subtitle="Оставьте телефон и коротко опишите задачу — перезвоним и назовём цену."
+              source={forProvider ? `orders:${forProvider.id}` : 'orders'}
+              title="Звонок диспетчера"
+              subtitle={
+                forProvider
+                  ? `Оставьте телефон и коротко опишите задачу — диспетчер площадки перезвонит и передаст заявку «${forProvider.name}».`
+                  : 'Оставьте телефон и коротко опишите задачу — диспетчер площадки перезвонит и подскажет цену.'
+              }
             />
           </Card>
           <Card className="flex flex-col justify-center gap-3">
@@ -432,7 +457,8 @@ export default async function OrdersPage({ searchParams }: { searchParams: Order
           Найдено: {board.total}
           {board.totalPages > 1 && ` · страница ${board.page} из ${board.totalPages}`}
           {' · '}
-          заказчик виден как «Анна П.», контакты открываются после подтверждения брони
+          заказчик виден как «Анна П.», контакты — после подтверждения брони, а телефон из заявок
+          без аккаунта — по кнопке «Показать телефон»
         </p>
 
         {board.items.length === 0 ? (

@@ -30,6 +30,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     '/agents',
     '/contacts',
     '/privacy',
+    '/pravila',
   ];
   const equipment = await prisma.equipment
     .findMany({

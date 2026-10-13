@@ -8,7 +8,8 @@ export function Catalogue({ onOrder }: { onOrder: (slug: string) => void }) {
   return (
     <div className="h-full overflow-y-auto overscroll-contain px-4 pb-[calc(1.5rem+env(safe-area-inset-bottom))] pt-4">
       <p className="mb-3 text-sm text-slate-400">
-        Своя техника СпецПласт16, всегда с машинистом. Смена — {SHIFT_HOURS} часов.
+        Парк СпецПласт16 — всегда с машинистом. Смена — {SHIFT_HOURS} часов. Технику других
+        исполнителей площадки смотрите в каталоге на сайте.
       </p>
       <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         {MINI_APP_MACHINES.map((machine, i) => {
