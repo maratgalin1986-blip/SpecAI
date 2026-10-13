@@ -22,7 +22,7 @@ import {
 } from '@/lib/api';
 import { BOOKING_STATUS_LABELS, formatDate, phoneToHref } from '@/lib/format';
 import { relativeDay } from '@/lib/orderFlow';
-import { dayKey } from '@/lib/shifts';
+import { canOpenShiftToday, dayKey, isFutureShift } from '@/lib/shifts';
 import { colors, spacing } from '@/theme';
 
 /** Смена в работе обновляется сама раз в полминуты. */
@@ -106,13 +106,17 @@ function AssignmentCard({
           role="operator"
           onChanged={(shift) => onShiftChanged(booking.id, shift)}
         />
-      ) : active && !hasToday ? (
+      ) : active && !hasToday && canOpenShiftToday(booking) ? (
         <Button
           title="Начать смену сегодня"
           size="large"
           loading={opening}
           onPress={() => void start()}
         />
+      ) : active && !hasToday && new Date(booking.startDate).getTime() > Date.now() ? (
+        <Text style={styles.muted}>
+          Смену можно начать в день работ — {formatDate(booking.startDate)}.
+        </Text>
       ) : null}
       {error ? <Text style={styles.error}>{error}</Text> : null}
       {older.map((shift) => (
@@ -120,6 +124,7 @@ function AssignmentCard({
           key={shift.id}
           shift={shift}
           role="operator"
+          readOnly={isFutureShift(shift.date)}
           onChanged={(next) => onShiftChanged(booking.id, next)}
         />
       ))}

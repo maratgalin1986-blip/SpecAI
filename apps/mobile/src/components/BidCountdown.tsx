@@ -9,7 +9,14 @@ import { colors, radius, spacing } from '@/theme';
  * как на карточке входящего заказа у водителя. Обновляется раз в минуту,
  * в последние 10 минут — каждые 15 секунд; после срока пишет, что он вышел.
  */
-export function BidCountdown({ bidsUntil }: { bidsUntil: string | null | undefined }) {
+export function BidCountdown({
+  bidsUntil,
+  lateStillOpen = false,
+}: {
+  bidsUntil: string | null | undefined;
+  /** В ленте исполнителя: заявка открыта, позднее предложение ещё примут. */
+  lateStillOpen?: boolean;
+}) {
   const [now, setNow] = useState(() => new Date());
 
   useEffect(() => {
@@ -35,7 +42,11 @@ export function BidCountdown({ bidsUntil }: { bidsUntil: string | null | undefin
       <Text
         style={[styles.text, left === null ? styles.textOver : urgent ? styles.textUrgent : null]}
       >
-        {left === null ? 'Срок приёма предложений вышел' : `Предложить цену: ${left}`}
+        {left === null
+          ? lateStillOpen
+            ? 'Срок вышел, но заказчик ещё ждёт — предложите цену'
+            : 'Срок приёма предложений вышел'
+          : `Предложить цену: ${left}`}
       </Text>
     </View>
   );

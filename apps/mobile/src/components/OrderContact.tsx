@@ -10,15 +10,20 @@ import { colors, radius, spacing, TAP } from '@/theme';
  * («+7 917 •••-••-67»), «Показать телефон» открывает его через
  * POST /api/orders/[id]/phone — показ записывается, лимит в сутки на компанию.
  */
-export function OrderContact({ order }: { order: Pick<Order, 'id' | 'chatContact'> }) {
+export function OrderContact({
+  order,
+}: {
+  order: Pick<Order, 'id' | 'chatContact' | 'contactName' | 'contactPhone'>;
+}) {
   const contact = order.chatContact;
-  const [phone, setPhone] = useState<string | null>(null);
-  const [name, setName] = useState<string | null>(null);
+  // СпецПласт16 на странице заявки получает контакт сразу (сервер отдаёт его только дому).
+  const [phone, setPhone] = useState<string | null>(order.contactPhone ?? null);
+  const [name, setName] = useState<string | null>(order.contactName ?? null);
   const [note, setNote] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  if (!contact?.canReveal) return null;
+  if (!contact?.canReveal && !phone) return null;
 
   const reveal = async () => {
     setLoading(true);
@@ -52,7 +57,9 @@ export function OrderContact({ order }: { order: Pick<Order, 'id' | 'chatContact
             </Text>
           </Pressable>
         ) : (
-          <Text style={[styles.masked, styles.flex]}>{contact.maskedPhone ?? 'Телефон скрыт'}</Text>
+          <Text style={[styles.masked, styles.flex]}>
+            {contact?.maskedPhone ?? 'Телефон скрыт'}
+          </Text>
         )}
         {!phone ? (
           <Pressable

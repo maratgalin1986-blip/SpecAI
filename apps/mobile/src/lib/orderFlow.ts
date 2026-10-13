@@ -4,6 +4,20 @@
  * (orderFlow.test.ts).
  */
 
+/** Компания СпецПласт16 на сервере (apps/web/src/lib/fleet.ts). */
+export const HOUSE_COMPANY_ID = 'specplast16-house';
+
+/**
+ * Предложение СпецПласт16 всегда первое (правило владельца, как на сайте),
+ * остальные сохраняют порядок сервера (по цене).
+ */
+export function houseFirstBids<T extends { equipment?: { company?: { id: string } | null } }>(
+  bids: T[],
+): T[] {
+  const isHouse = (bid: T) => Number(bid.equipment?.company?.id === HOUSE_COMPANY_ID);
+  return [...bids].sort((a, b) => isHouse(b) - isHouse(a));
+}
+
 /**
  * Значок типа техники. Сервер отдаёт `emoji` из общего списка категорий
  * (packages/shared/src/categories.ts); без него значок угадывается по названию.

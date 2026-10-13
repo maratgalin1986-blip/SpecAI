@@ -149,3 +149,28 @@ export function dayKey(date: Date): string {
   const d = String(date.getDate()).padStart(2, '0');
   return `${y}-${m}-${d}`;
 }
+
+const MSK_OFFSET_MS = 3 * 3_600_000;
+
+/** YYYY-MM-DD по Москве — так сервер считает день смены и даты брони. */
+export function moscowDayKey(date: Date | string): string {
+  const time = new Date(date).getTime();
+  return new Date(time + MSK_OFFSET_MS).toISOString().slice(0, 10);
+}
+
+/**
+ * Можно ли открыть смену сегодня: сегодня (по Москве) входит в даты брони,
+ * обе границы включительно. До начала работ сервер ответил бы 409.
+ */
+export function canOpenShiftToday(
+  booking: { startDate: string; endDate: string },
+  now: Date = new Date(),
+): boolean {
+  const today = moscowDayKey(now);
+  return today >= moscowDayKey(booking.startDate) && today <= moscowDayKey(booking.endDate);
+}
+
+/** Смена будущего дня: её статусы ещё нельзя вести, только смотреть. */
+export function isFutureShift(shiftDate: string, now: Date = new Date()): boolean {
+  return shiftDate.slice(0, 10) > moscowDayKey(now);
+}

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@specai/database';
 import { getRequestUser } from '@/lib/requestUser';
 import { checkRateLimit } from '@/lib/rateLimit';
+import { isHouseManager } from '@/lib/fleet';
 import { isEmailConfigured } from '@/lib/email';
 import { DAY_MS, revealDecision, revealNote } from '@/lib/chatOrders';
 
@@ -63,7 +64,8 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       : null,
     order,
     alreadyRevealed: Boolean(alreadyRevealed),
-    revealsToday: revealedToday.length,
+    // The house fleet works guest and chat leads itself: logged, not limited.
+    revealsToday: isHouseManager(user) ? 0 : revealedToday.length,
     requireVerifiedEmail: isEmailConfigured(),
   });
   if (!decision.ok) {

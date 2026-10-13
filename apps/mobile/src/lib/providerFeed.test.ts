@@ -5,6 +5,7 @@ import {
   countdownTickMs,
   customerDemandText,
   deliveryEstimate,
+  feedOrders,
   isBidWindowOpen,
   offerParts,
   parseAmount,
@@ -12,6 +13,35 @@ import {
 
 const now = new Date('2026-10-08T09:00:00Z');
 const inMinutes = (minutes: number) => new Date(now.getTime() + minutes * 60_000).toISOString();
+
+describe('feedOrders', () => {
+  const order = (id: string, end: string, bidsUntil: string | null, status = 'OPEN') => ({
+    id,
+    status,
+    desiredEndDate: `${end}T00:00:00.000Z`,
+    bidsUntil,
+  });
+
+  it('keeps preorders whose bid window ended, after the live ones', () => {
+    const list = feedOrders(
+      [
+        order('late', '2026-10-21', inMinutes(-60)),
+        order('live', '2026-10-09', inMinutes(30)),
+        order('today', '2026-10-08', null),
+      ],
+      now,
+    );
+    expect(list.map((item) => item.id)).toEqual(['live', 'today', 'late']);
+  });
+
+  it('drops past and closed orders', () => {
+    const list = feedOrders(
+      [order('past', '2026-10-07', null), order('matched', '2026-10-20', null, 'MATCHED')],
+      now,
+    );
+    expect(list).toEqual([]);
+  });
+});
 
 describe('bid window', () => {
   it('is open until bidsUntil, and always without one', () => {

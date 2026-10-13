@@ -70,12 +70,22 @@ const PROVIDER_LINKS: typeof CUSTOMER_LINKS = [
   { icon: 'map-outline', label: 'Карта исполнителей', href: '/map' },
 ];
 
+/** Машинист: только его смены, без разделов заказчика. */
+const OPERATOR_LINKS: typeof CUSTOMER_LINKS = [
+  { icon: 'timer-outline', label: 'Мои смены', href: '/(tabs)/shifts' },
+];
+
 /** Быстрые ссылки профиля: разделы, которых нет на панели вкладок. */
 export function ProfileShortcuts() {
   const router = useRouter();
   const { user } = useAuth();
   const { mode } = usePrefs();
-  const links = isProviderMode(user?.role, mode) ? PROVIDER_LINKS : CUSTOMER_LINKS;
+  const links =
+    user?.role === 'PROVIDER_OPERATOR'
+      ? OPERATOR_LINKS
+      : isProviderMode(user?.role, mode)
+        ? PROVIDER_LINKS
+        : CUSTOMER_LINKS;
   return (
     <Card style={styles.links}>
       {[
