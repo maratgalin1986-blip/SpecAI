@@ -1,3 +1,4 @@
+import type { ProviderPin } from './providersMap';
 import { STORAGE_KEYS, getItem } from './storage';
 
 /**
@@ -238,8 +239,21 @@ export interface Bid {
     id: string;
     name: string;
     imageUrls?: string[];
-    /** rating и verified — если сервер начнёт их отдавать; сейчас их нет. */
-    company: { id: string; name: string; rating?: number | null; verified?: boolean };
+    /**
+     * Надёжность — только заказчику на его заявке (GET /api/orders/[id], как
+     * на сайте): «Проверен», рейтинг, выполненные заказы, доля отмен.
+     */
+    company: {
+      id: string;
+      name: string;
+      rating?: number | null;
+      ratingCount?: number;
+      verified?: boolean;
+      completed?: number;
+      cancelShare?: number | null;
+      /** Готовые подписи: «Проверен», «★ 4.5 (2)», «3 заказа выполнено», «Отмены 17%». */
+      badges?: string[];
+    };
   };
 }
 
@@ -270,6 +284,9 @@ export interface Order {
   bidsUntil?: string | null;
   /** Заявка из чата или с сайта без входа: телефон автора скрыт, «Показать телефон» открывает его. */
   chatContact?: { maskedPhone: string | null; canReveal: boolean } | null;
+  /** Контакт автора заявки из чата или с сайта — только СпецПласт16 на странице заявки. */
+  contactName?: string | null;
+  contactPhone?: string | null;
 }
 
 /**
@@ -611,9 +628,26 @@ export function updateMyCompanyPin(input: {
   return apiFetch<{ company: CompanyPin }>('/api/companies/me', { method: 'PATCH', body: input });
 }
 
-/** Открытые заявки клиентов (для предложений поставщика). */
-export function fetchOpenOrders() {
-  return apiFetch<{ orders: Order[] }>('/api/orders?open=1');
+/**
+ * Открытые заявки клиентов (для предложений поставщика), постранично.
+ * scope 'near' — только виды техники компании в её радиусе подачи; заявки со
+ * своими ожидающими предложениями сервер ставит в начало первой страницы.
+ */
+export function fetchOpenOrders(params: { scope?: 'near' | 'all'; offset?: number } = {}) {
+  const query = new URLSearchParams({ open: '1' });
+  if (params.scope === 'near') query.set('scope', 'near');
+  if (params.offset) query.set('offset', String(params.offset));
+  return apiFetch<{ orders: Order[]; nextOffset?: number | null }>(`/api/orders?${query}`);
+}
+
+/** Исполнители на карте: точки баз компаний (публично, без контактов). */
+export function fetchProviderPins() {
+  return apiFetch<{ providers: ProviderPin[] }>('/api/providers/map');
+}
+
+/** Все открытые заявки с ожидающими предложениями своей компании («Мои предложения»). */
+export function fetchMyBidOrders() {
+  return apiFetch<{ orders: Order[] }>('/api/orders?open=1&mine=1');
 }
 
 export function createBid(

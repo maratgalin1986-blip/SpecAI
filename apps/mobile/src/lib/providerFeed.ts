@@ -3,6 +3,7 @@
  * приёма предложений, оценка подачи по расстоянию, разбивка цены
  * предложения, тексты спроса. Покрыта тестами (providerFeed.test.ts).
  */
+import { moscowDayKey } from './shifts';
 
 /** Открыто ли ещё окно приёма предложений (без срока — всегда открыто). */
 export function isBidWindowOpen(
@@ -12,6 +13,26 @@ export function isBidWindowOpen(
   if (!order.bidsUntil) return true;
   const until = new Date(order.bidsUntil);
   return Number.isNaN(until.getTime()) || until.getTime() > now.getTime();
+}
+
+/**
+ * Заявки ленты: открытые и ещё не прошедшие (последний день работ — сегодня
+ * или позже). Заявка с вышедшим сроком приёма предложений не пропадает —
+ * сервер принимает поздние предложения, а предзаказ без ответов ждёт
+ * исполнителя; такие идут после заявок с живым сроком, порядок внутри
+ * групп сохраняется.
+ */
+export function feedOrders<
+  T extends { status: string; desiredEndDate: string; bidsUntil?: string | null },
+>(orders: T[], now: Date = new Date()): T[] {
+  const today = moscowDayKey(now);
+  const actual = orders.filter(
+    (order) => order.status === 'OPEN' && moscowDayKey(order.desiredEndDate) >= today,
+  );
+  return [
+    ...actual.filter((order) => isBidWindowOpen(order, now)),
+    ...actual.filter((order) => !isBidWindowOpen(order, now)),
+  ];
 }
 
 /** «осталось 1 ч 20 мин», «осталось 45 мин» или null, когда срок вышел. */

@@ -3,7 +3,7 @@ import { Redirect, useFocusEffect, useRouter } from 'expo-router';
 import React, { useCallback, useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { MapWebView } from '@/components/MapWebView';
+import { ProvidersMap } from '@/components/ProvidersMap';
 import { QuickOrderSheet } from '@/components/QuickOrderSheet';
 import { fetchMyOrders, type Order } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
@@ -53,6 +53,9 @@ export default function HomeScreen() {
   );
 
   const { loaded, mode } = usePrefs();
+  // Машинист видит только свои смены: после входа с экрана логина роутер
+  // открывает первую вкладку, поэтому уводим его отсюда.
+  if (user?.role === 'PROVIDER_OPERATOR') return <Redirect href="/(tabs)/shifts" />;
   // Исполнитель в своём кабинете начинает с «Ленты».
   if (isProvider && !loaded) return <View style={styles.screen} />;
   if (isProviderMode(user?.role, mode)) return <Redirect href="/(tabs)/feed" />;
@@ -61,7 +64,7 @@ export default function HomeScreen() {
 
   return (
     <View style={styles.screen}>
-      <MapWebView style={StyleSheet.absoluteFill} fallbackStyle={{ paddingTop: insets.top + 72 }} />
+      <ProvidersMap style={StyleSheet.absoluteFill} />
 
       <View
         style={[styles.topBar, { paddingTop: insets.top + spacing.sm }]}

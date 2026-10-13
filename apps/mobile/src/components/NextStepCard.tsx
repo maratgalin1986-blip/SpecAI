@@ -2,6 +2,7 @@ import { useFocusEffect, useRouter, type Href } from 'expo-router';
 import React, { useCallback, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { fetchGuide, type Guide } from '@/lib/api';
+import { guideAppRoute } from '@/lib/guideRoute';
 import { colors, radius, spacing } from '@/lib/theme';
 
 /**
@@ -27,7 +28,7 @@ export function NextStepCard() {
 
   if (!guide) return null;
   const { next, progress } = guide;
-  const target = next.action?.app;
+  const target = guideAppRoute(next.action);
 
   return (
     <View style={styles.card} accessibilityLabel="Помощник: следующий шаг">

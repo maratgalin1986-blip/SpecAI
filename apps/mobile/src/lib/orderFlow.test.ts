@@ -4,6 +4,7 @@ import {
   categoryIcon,
   distanceKm,
   formatDistance,
+  houseFirstBids,
   monthIncome,
   orderDays,
   orderStage,
@@ -12,6 +13,23 @@ import {
   relativeDay,
   stageHeadline,
 } from './orderFlow';
+
+describe('houseFirstBids', () => {
+  it('puts the СпецПласт16 bid first and keeps the price order of the rest', () => {
+    type Row = { id: string; equipment?: { company: { id: string } } };
+    const bid = (id: string, company: string): Row => ({
+      id,
+      equipment: { company: { id: company } },
+    });
+    const sorted = houseFirstBids<Row>([
+      bid('a', 'c1'),
+      bid('b', 'c2'),
+      bid('h', 'specplast16-house'),
+      { id: 'x' },
+    ]);
+    expect(sorted.map((item) => item.id)).toEqual(['h', 'a', 'b', 'x']);
+  });
+});
 
 describe('categoryIcon', () => {
   it('maps machine types to icons', () => {

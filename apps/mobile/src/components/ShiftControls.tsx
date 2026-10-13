@@ -149,17 +149,20 @@ export function ShiftControls({
   shift,
   role,
   onChanged,
+  readOnly = false,
 }: {
   shift: Shift;
   role: ShiftRole;
   onChanged: (shift: Shift) => void;
+  /** Смена будущего дня: только просмотр, статусы ведут в её день. */
+  readOnly?: boolean;
 }) {
   const timer = useTimer(shift);
   const [pending, setPending] = useState<ShiftStatus | null>(null);
   const [idleReason, setIdleReason] = useState('');
   const [askingIdle, setAskingIdle] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const canDrive = role === 'operator' || role === 'provider';
+  const canDrive = !readOnly && (role === 'operator' || role === 'provider');
 
   const send = async (status: ShiftStatus, note?: string, photoUrl?: string) => {
     setPending(status);

@@ -24,7 +24,7 @@ import {
 import { OrderChatButton } from '@/components/OrderChatButton';
 import {
   ApiError,
-  fetchOpenOrders,
+  fetchMyBidOrders,
   fetchOperators,
   fetchProviderBookings,
   updateBookingStatus,
@@ -69,7 +69,8 @@ const NEXT_STATUS_LABEL: Record<BookingStatus, string> = {
   PENDING: 'Ожидать',
   CONFIRMED: 'Подтвердить',
   ACTIVE: 'На объекте — начать',
-  COMPLETED: 'Завершить смену',
+  // Закрывает всю аренду, а не смену дня (смены — в блоке ниже).
+  COMPLETED: 'Работы выполнены',
   CANCELLED: 'Отказаться',
 };
 
@@ -170,6 +171,8 @@ function BookingRow({
       <ProviderBookingOps
         bookingId={booking.id}
         bookingStatus={booking.status}
+        startDate={booking.startDate}
+        endDate={booking.endDate}
         operatorId={booking.operatorId}
         operators={operators}
         onOperatorChanged={(operatorId) => onOperatorChanged(booking.id, operatorId)}
@@ -241,7 +244,7 @@ export default function JobsScreen() {
     try {
       const [bookingsResult, ordersResult, operatorsResult] = await Promise.allSettled([
         fetchProviderBookings(),
-        fetchOpenOrders(),
+        fetchMyBidOrders(),
         fetchOperators(),
       ]);
       if (operatorsResult.status === 'fulfilled') setOperators(operatorsResult.value.operators);
@@ -253,7 +256,7 @@ export default function JobsScreen() {
         );
       }
       if (ordersResult.status === 'fulfilled') {
-        // В открытой ленте bids — только предложения своей компании.
+        // Все открытые заявки с ожидающими предложениями своей компании (без лимита ленты).
         setBids(
           ordersResult.value.orders.filter(
             (order) =>
@@ -294,6 +297,18 @@ export default function JobsScreen() {
   };
 
   const handleChangeStatus = (booking: ProviderBooking, status: BookingStatus) => {
+    if (status === 'COMPLETED') {
+      // Необратимо: аренда закрывается, заказчика просят оставить отзыв.
+      Alert.alert(
+        'Завершить заказ целиком?',
+        `Аренда «${booking.equipment.name}» (${formatDate(booking.startDate)} – ${formatDate(booking.endDate)}) будет закрыта, заказчик получит просьбу оставить отзыв. Отменить это нельзя. Чтобы закончить только сегодняшнюю смену, используйте кнопки смены ниже.`,
+        [
+          { text: 'Нет', style: 'cancel' },
+          { text: 'Завершить заказ', onPress: () => void applyStatus(booking, status) },
+        ],
+      );
+      return;
+    }
     if (status !== 'CANCELLED') {
       void applyStatus(booking, status);
       return;

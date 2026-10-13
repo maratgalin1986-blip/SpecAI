@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
+  canOpenShiftToday,
   dayKey,
   formatMinutes,
+  isFutureShift,
+  moscowDayKey,
   leadingBlanks,
   liveMinutes,
   monthKey,
@@ -70,5 +73,28 @@ describe('calendar helpers', () => {
   it('formats days', () => {
     expect(shortDay('2026-10-08')).toBe('08.10');
     expect(dayKey(new Date(2026, 9, 8))).toBe('2026-10-08');
+  });
+});
+
+describe('shift days', () => {
+  const booking = { startDate: '2026-10-14T00:00:00.000Z', endDate: '2026-10-15T00:00:00.000Z' };
+
+  it('counts the day in Moscow', () => {
+    expect(moscowDayKey(new Date('2026-10-13T21:30:00Z'))).toBe('2026-10-14');
+    expect(moscowDayKey('2026-10-13T20:59:00Z')).toBe('2026-10-13');
+  });
+
+  it('opens a shift only inside the booking dates', () => {
+    expect(canOpenShiftToday(booking, new Date('2026-10-12T09:00:00Z'))).toBe(false);
+    expect(canOpenShiftToday(booking, new Date('2026-10-14T05:00:00Z'))).toBe(true);
+    expect(canOpenShiftToday(booking, new Date('2026-10-15T20:00:00Z'))).toBe(true);
+    expect(canOpenShiftToday(booking, new Date('2026-10-15T21:00:00Z'))).toBe(false);
+  });
+
+  it('treats shifts of later days as future', () => {
+    const now = new Date('2026-10-12T09:00:00Z');
+    expect(isFutureShift('2026-10-14', now)).toBe(true);
+    expect(isFutureShift('2026-10-12', now)).toBe(false);
+    expect(isFutureShift('2026-10-11', now)).toBe(false);
   });
 });
