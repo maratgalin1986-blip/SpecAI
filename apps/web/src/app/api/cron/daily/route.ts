@@ -6,6 +6,9 @@ import { notifyCompany } from '@/lib/notifications/notifyUser';
 import { GET as evening } from '../evening/route';
 
 export const dynamic = 'force-dynamic';
+// A GET handler: without this Next keeps outgoing sends (Telegram, push,
+// e-mail) in its Data Cache and never repeats an identical one.
+export const fetchCache = 'force-no-store';
 
 /**
  * Daily cron (19:00 Moscow, apps/web/vercel.json): document reminders 30

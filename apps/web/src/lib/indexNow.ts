@@ -17,6 +17,7 @@ export async function submitToIndexNow(urls: string[]): Promise<number | null> {
       keyLocation: `${base}/${INDEXNOW_KEY}.txt`,
       urlList: urls.slice(0, 10_000),
     }),
+    cache: 'no-store',
     signal: AbortSignal.timeout(10_000),
   }).catch(() => null);
   return response?.status ?? null;

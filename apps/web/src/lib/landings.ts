@@ -159,7 +159,7 @@ export const LANDINGS: Landing[] = [
   },
   {
     slug: 'kolyosnyj-ekskavator-gidromolot',
-    categorySlug: 'excavators',
+    categorySlug: 'wheeled-excavators',
     machine: 'wheeled-excavator',
     title: 'колёсного экскаватора с гидромолотом',
     short: 'Колёсные экскаваторы с гидромолотом',

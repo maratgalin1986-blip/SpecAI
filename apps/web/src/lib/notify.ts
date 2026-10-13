@@ -13,6 +13,7 @@ export async function notifyTelegram(message: string): Promise<boolean> {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ chat_id: chatId, text, disable_web_page_preview: true }),
+      cache: 'no-store',
       signal: AbortSignal.timeout(5000),
     });
     return response.ok;

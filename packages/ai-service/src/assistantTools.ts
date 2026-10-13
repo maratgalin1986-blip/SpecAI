@@ -43,7 +43,10 @@ export const SEARCH_EQUIPMENT_TOOL: Anthropic.Tool = {
       },
       category: {
         type: 'string',
-        description: 'Equipment category name or slug, e.g. "Экскаваторы" or "excavators".',
+        description:
+          'Equipment category name or slug. Excavators are three types: "Экскаваторы гусеничные" ' +
+          '(excavators), "Экскаваторы колёсные" (wheeled-excavators, also the hydraulic hammer ' +
+          'machine) and "Мини-экскаваторы" (mini-excavators); "Экскаваторы" finds all three.',
       },
       city: {
         type: 'string',

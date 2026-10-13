@@ -255,3 +255,58 @@ export function nearestCity(lat: number, lon: number, maxKm = 80): CityPoint | n
   }
   return best && bestKm <= maxKm ? best : null;
 }
+
+// «Елабуга, ул. Окружное шоссе 1», «в Набережных Челнах», «Казани»: every word
+// of the name by its stem (the last letter may change), at a word start.
+const CITY_PATTERNS = TATARSTAN_CITIES.map((city) => ({
+  city,
+  patterns: city.name
+    .toLowerCase()
+    .replace(/ё/g, 'е')
+    .split(/\s+/)
+    .map((word) => new RegExp(`(?<![a-zа-я0-9])${word.length > 4 ? word.slice(0, -1) : word}`)),
+}));
+
+/** The city of TATARSTAN_CITIES named in a free text (the earliest one), else null. */
+export function cityInText(text: string | null | undefined): CityPoint | null {
+  if (!text) return null;
+  const normalized = text.toLowerCase().replace(/ё/g, 'е');
+  let best: { city: CityPoint; at: number } | null = null;
+  for (const { city, patterns } of CITY_PATTERNS) {
+    const positions = patterns.map((pattern) => normalized.search(pattern));
+    if (positions.some((at) => at < 0)) continue;
+    const at = Math.min(...positions);
+    if (!best || at < best.at) best = { city, at };
+  }
+  return best?.city ?? null;
+}
+
+/**
+ * Where an order's work site is, for choosing which providers hear of it: the
+ * geocoded point; else the centre of a known city named in the location (chat
+ * orders store only «Елабуга»); with no location at all, the centre of
+ * `homeCity` (the site's own city, as the owner's order announcement
+ * assumes). Null when a place is named but unknown — providerMatchesOrder
+ * then sends the order only to the house company and to providers whose base
+ * address names that place.
+ */
+export function orderPoint(
+  location:
+    | {
+        latitude?: number | null;
+        longitude?: number | null;
+        city?: string | null;
+        addressLine?: string | null;
+      }
+    | null
+    | undefined,
+  homeCity: string,
+): { lat: number; lon: number } | null {
+  if (location?.latitude != null && location.longitude != null) {
+    return { lat: location.latitude, lon: location.longitude };
+  }
+  const city = location
+    ? cityInText(`${location.city ?? ''} ${location.addressLine ?? ''}`)
+    : cityInText(homeCity);
+  return city ? { lat: city.lat, lon: city.lon } : null;
+}

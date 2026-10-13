@@ -5,7 +5,7 @@ import { createGuestOrderSchema } from '@specai/shared';
 import { INVALID_JSON_MESSAGE, readJson, zodErrorMessage } from '@/lib/apiInput';
 import { bidsUntilFor } from '@/lib/bidWindow';
 import { checkBookingDates } from '@/lib/bookingRules';
-import { geocodeAddress } from '@/lib/geo';
+import { cityInText, geocodeAddress } from '@/lib/geo';
 import { GUEST_ORDER_SUCCESS } from '@/lib/guestOrder';
 import { technicalUserId } from '@/lib/ingest';
 import { notifyTelegram } from '@/lib/notify';
@@ -56,7 +56,8 @@ export async function POST(request: NextRequest) {
     ? await prisma.location.create({
         data: {
           addressLine: address,
-          city: place?.city ?? SITE.city,
+          // A failed lookup still keeps a city the address names («Елабуга, …»).
+          city: place?.city ?? cityInText(address)?.name ?? SITE.city,
           country: 'Россия',
           latitude: place?.lat ?? null,
           longitude: place?.lon ?? null,

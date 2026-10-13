@@ -9,6 +9,7 @@ export async function telegramApi(method: string, body: unknown): Promise<boolea
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
+      cache: 'no-store',
       signal: AbortSignal.timeout(5000),
     });
     return res.ok;
