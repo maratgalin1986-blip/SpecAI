@@ -13,7 +13,14 @@ import { colors } from '@/theme';
  * компанию и число машин, «Техника исполнителя» открывает её страницу.
  * Фон главного экрана заказчика и экран «Карта».
  */
-export function ProvidersMap({ style }: { style?: StyleProp<ViewStyle> }) {
+export function ProvidersMap({
+  style,
+  onPick,
+}: {
+  style?: StyleProp<ViewStyle>;
+  /** A tap on the map: the work site for «Вызвать сюда» (QuickOrderSheet). */
+  onPick?: (point: { lat: number; lon: number }) => void;
+}) {
   const [pins, setPins] = useState<ProviderPin[] | null>(null);
 
   useEffect(() => {
@@ -42,7 +49,20 @@ export function ProvidersMap({ style }: { style?: StyleProp<ViewStyle> }) {
 
   const onMessage = (event: WebViewMessageEvent) => {
     try {
-      const message = JSON.parse(event.nativeEvent.data) as { type?: string; catalogUrl?: string };
+      const message = JSON.parse(event.nativeEvent.data) as {
+        type?: string;
+        catalogUrl?: string;
+        lat?: number;
+        lon?: number;
+      };
+      if (
+        message.type === 'point' &&
+        typeof message.lat === 'number' &&
+        typeof message.lon === 'number'
+      ) {
+        onPick?.({ lat: message.lat, lon: message.lon });
+        return;
+      }
       if (message.type === 'provider' && message.catalogUrl?.startsWith('/')) {
         void WebBrowser.openBrowserAsync(`${SITE.url}${message.catalogUrl}`);
       }

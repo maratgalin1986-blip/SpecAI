@@ -5,6 +5,7 @@ import {
   distanceKm,
   formatDistance,
   houseFirstBids,
+  pointAddress,
   monthIncome,
   orderDays,
   orderStage,
@@ -146,5 +147,13 @@ describe('dates and money', () => {
     expect(formatDistance(0.42)).toBe('400 м');
     expect(formatDistance(3.25)).toBe('3,3 км');
     expect(formatDistance(km)).toMatch(/^\d+ км$/);
+  });
+});
+
+describe('pointAddress', () => {
+  it('writes a map point the server reads as coordinates', () => {
+    expect(pointAddress({ lat: 55.743123, lon: 52.398111 })).toBe(
+      'Точка на карте: 55.74312, 52.39811',
+    );
   });
 });

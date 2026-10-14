@@ -21,6 +21,15 @@ export function houseFirstBids<
 }
 
 /**
+ * Адрес из точки на карте — в том виде, который сервер понимает без
+ * геокодера (apps/web/src/lib/geo.ts parseCoordinates): «Точка на карте:
+ * 55.74312, 52.39811».
+ */
+export function pointAddress(point: { lat: number; lon: number }): string {
+  return `Точка на карте: ${point.lat.toFixed(5)}, ${point.lon.toFixed(5)}`;
+}
+
+/**
  * Значок типа техники. Сервер отдаёт `emoji` из общего списка категорий
  * (packages/shared/src/categories.ts); без него значок угадывается по названию.
  */

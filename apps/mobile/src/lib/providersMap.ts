@@ -80,6 +80,7 @@ html,body,#map{margin:0;height:100%;background:#eceff1;font-family:-apple-system
 background:${colors.dark};color:${colors.onDark};font:700 12px sans-serif;border:2px solid #fff;
 box-shadow:0 2px 6px rgba(0,0,0,.35)}
 .pin.house{background:${colors.primary};width:40px;height:40px;border-radius:20px;font-size:13px}
+.pin.site{background:transparent;border:0;box-shadow:none;font-size:30px;line-height:34px}
 .card{min-width:180px;color:${colors.text}}
 .card b{display:block;font-size:15px;margin-bottom:2px}
 .card small{display:block;color:#5f6b73;margin:2px 0}
@@ -125,6 +126,21 @@ pins.slice().reverse().forEach(function (pin) {
   bounds.push([pin.lat, pin.lon]);
 });
 if (bounds.length > 1) map.fitBounds(bounds, { padding: [40, 40], maxZoom: 11 });
+// «Вызвать сюда»: a tap on the map marks the work site and sends the point
+// to the order sheet ({type:'point', lat, lon}).
+var picked = null;
+map.on('click', function (e) {
+  var lat = Math.round(e.latlng.lat * 100000) / 100000;
+  var lon = Math.round(e.latlng.lng * 100000) / 100000;
+  if (!picked) {
+    picked = L.marker([lat, lon], { icon: L.divIcon({ className: '', html: '<div class="pin site">📍</div>', iconSize: [34, 34], iconAnchor: [17, 34] }), zIndexOffset: 2000 }).addTo(map);
+  } else {
+    picked.setLatLng([lat, lon]);
+  }
+  if (window.ReactNativeWebView) {
+    window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'point', lat: lat, lon: lon }));
+  }
+});
 </script>
 </body></html>`;
 }
