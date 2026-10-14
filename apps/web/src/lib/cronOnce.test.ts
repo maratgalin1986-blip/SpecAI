@@ -1,13 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const keys = new Set<string>();
+const keys = new Map<string, Date>();
+let clock = new Date('2026-10-13T16:00:00Z');
 vi.mock('@specai/database', () => ({
   prisma: {
     adminFeedRead: {
       create: vi.fn(async ({ data }: { data: { key: string } }) => {
         if (keys.has(data.key)) throw Object.assign(new Error('unique'), { code: 'P2002' });
-        keys.add(data.key);
+        keys.set(data.key, clock);
         return data;
+      }),
+      findUnique: vi.fn(async ({ where }: { where: { key: string } }) => {
+        const readAt = keys.get(where.key);
+        return readAt ? { id: where.key, key: where.key, readAt } : null;
       }),
       deleteMany: vi.fn(async ({ where }: { where: { key: string } }) => {
         keys.delete(where.key);
@@ -18,6 +23,7 @@ vi.mock('@specai/database', () => ({
 }));
 
 const { cronRunKey, onceADay } = await import('./cronOnce');
+const { prisma } = await import('@specai/database');
 
 beforeEach(() => keys.clear());
 
@@ -40,6 +46,17 @@ describe('onceADay', () => {
     expect(await onceADay('weekly', task, later)).toBe('sent');
     expect(await onceADay('evening', task, nextDay)).toBe('sent');
     expect(task).toHaveBeenCalledTimes(3);
+  });
+
+  it('retries a run that was killed mid-way, but never a finished one', async () => {
+    clock = evening;
+    // A killed run: the claim exists, no «done» mark, and an hour has passed.
+    await prisma.adminFeedRead.create({ data: { key: 'cron:evening:2026-10-13' } });
+    expect(await onceADay('evening', async () => 'sent', later)).toBe('sent');
+    // Finished: the next call the same day is skipped even hours later.
+    expect(
+      await onceADay('evening', async () => 'sent', new Date('2026-10-13T20:00:00Z')),
+    ).toBeNull();
   });
 
   it('lets a retry run after the task failed', async () => {

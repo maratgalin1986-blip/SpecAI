@@ -7,6 +7,9 @@
 import { prisma } from '@specai/database';
 import { moscowDateKey } from './bookingRules';
 
+/** A claim older than this with no «done» mark counts as a killed run. */
+export const STALE_CLAIM_MS = 30 * 60_000;
+
 export function cronRunKey(job: string, now: Date = new Date()): string {
   return `cron:${job}:${moscowDateKey(now)}`;
 }
@@ -28,14 +31,32 @@ export async function onceADay<T>(
   now: Date = new Date(),
 ): Promise<T | null> {
   const key = cronRunKey(job, now);
-  try {
-    await prisma.adminFeedRead.create({ data: { key } });
-  } catch (error) {
-    if (isUniqueViolation(error)) return null;
-    throw error;
+  const doneKey = `${key}:done`;
+  const claim = async () => {
+    try {
+      await prisma.adminFeedRead.create({ data: { key } });
+      return true;
+    } catch (error) {
+      if (isUniqueViolation(error)) return false;
+      throw error;
+    }
+  };
+  if (!(await claim())) {
+    // A claim with no «done» mark after STALE_CLAIM_MS: the function was
+    // killed mid-way (a serverless timeout), so the day is retried.
+    const [done, existing] = await Promise.all([
+      prisma.adminFeedRead.findUnique({ where: { key: doneKey } }),
+      prisma.adminFeedRead.findUnique({ where: { key } }),
+    ]);
+    const stale = existing && now.getTime() - existing.readAt.getTime() > STALE_CLAIM_MS;
+    if (done || !stale) return null;
+    await prisma.adminFeedRead.deleteMany({ where: { key } });
+    if (!(await claim())) return null;
   }
   try {
-    return await task();
+    const result = await task();
+    await prisma.adminFeedRead.create({ data: { key: doneKey } }).catch(() => undefined);
+    return result;
   } catch (error) {
     await prisma.adminFeedRead.deleteMany({ where: { key } }).catch(() => undefined);
     throw error;

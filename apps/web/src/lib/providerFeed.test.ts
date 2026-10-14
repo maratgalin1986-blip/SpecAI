@@ -45,11 +45,24 @@ describe('matchIncoming', () => {
   const company = { categoryIds: ['exc'], baseLat: 55.8, baseLon: 49.1, radiusKm: 100 };
 
   it('matches like the new-order alert: category family and the radius', () => {
-    expect(matchIncoming(company, rows, orders, 'Казань').map((order) => order.id)).toEqual([
-      'family',
-      'any',
-      'city-only',
-    ]);
+    const ids = matchIncoming(company, rows, orders, 'Казань').map((order) => order.id);
+    expect([...ids].sort()).toEqual(['any', 'city-only', 'family']);
+  });
+
+  it('lists the nearest orders first, unplaced ones after', () => {
+    const chelny = { latitude: 55.74, longitude: 52.4, city: 'Набережные Челны' };
+    const wide = { ...company, radiusKm: 400, isHouse: true };
+    const ids = matchIncoming(
+      wide,
+      rows,
+      [
+        { id: 'far', categoryId: 'exc', location: chelny },
+        { id: 'unknown', categoryId: 'exc', location: { city: 'Бавлы' } },
+        { id: 'near', categoryId: 'exc', location: kazan },
+      ],
+      'Казань',
+    ).map((order) => order.id);
+    expect(ids).toEqual(['near', 'far', 'unknown']);
   });
 
   it('places an order with no location at the home city', () => {

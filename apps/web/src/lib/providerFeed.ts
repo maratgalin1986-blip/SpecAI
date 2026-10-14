@@ -4,7 +4,7 @@
 // acceptedCategoryIds + providerMatchesOrder, the place by lib/geo.ts
 // orderPoint). Pure, unit-tested; providerFeedData.ts loads the rows.
 import { moscowDateKey } from './bookingRules';
-import { orderPoint } from './geo';
+import { distanceKm, orderPoint } from './geo';
 import { SITE } from './site';
 import {
   acceptedCategoryIds,
@@ -55,14 +55,23 @@ export function matchIncoming<T extends IncomingCandidate>(
   orders: readonly T[],
   homeCity: string = SITE.city,
 ): T[] {
-  return orders.filter((order) => {
+  const base =
+    typeof company.baseLat === 'number' && typeof company.baseLon === 'number'
+      ? { lat: company.baseLat, lon: company.baseLon }
+      : null;
+  const matched: { order: T; km: number | null }[] = [];
+  for (const order of orders) {
     const point = orderPoint(order.location, homeCity);
-    return providerMatchesOrder(company, {
+    const fits = providerMatchesOrder(company, {
       categoryId: order.categoryId,
       categoryIds: acceptedCategoryIds(order.categoryId, categoryRows),
       lat: point?.lat,
       lon: point?.lon,
       city: order.location?.city,
     });
-  });
+    if (fits) matched.push({ order, km: base && point ? distanceKm(base, point) : null });
+  }
+  // «Рядом» means nearest first; orders with no known place keep their order
+  // (newest first) after them.
+  return matched.sort((a, b) => (a.km ?? Infinity) - (b.km ?? Infinity)).map((item) => item.order);
 }
