@@ -150,7 +150,7 @@ npx eas build --platform all --profile production    # магазинные сб
   с доступом к команде.
 - **Google Play Console** (разовый взнос 25 $) — для публикации Android; для тестовых APK
   аккаунт не нужен. Keystore EAS генерирует и хранит сам.
-- Идентификаторы уже заданы в `app.json`: `com.specai.app` (iOS bundle id и Android package),
+- Идентификаторы уже заданы в `app.json`: `com.specai.app` (iOS bundle id) и `com.specai.specai` (Android package, как в проекте Firebase `specai-dev`),
   scheme `specai`.
 
 Первая APK-сборка сделана 2026-10-15 (профиль `preview`, канал `preview`, versionCode 1,
@@ -160,10 +160,13 @@ keystore создан и хранится на EAS): `cd apps/mobile && npx eas 
 `apps/mobile`: из корня репозитория eas-cli создаёт лишние `app.json`/`eas.json`.
 
 В APK работают фоновая геопозиция «на линии» (`src/lib/lineTask.ts`, уведомление
-«Вы на линии» пока исполнитель на линии) и push-уведомления — для push на Android нужен
-ещё проект Firebase: файл `google-services.json` (`android.googleServicesFile` в `app.json`)
-и ключ сервисного аккаунта FCM, загруженный через `npx eas credentials` (Android →
-Push Notifications). Без него APK ставится и работает, но push не приходят.
+«Вы на линии» пока исполнитель на линии) и push-уведомления. Для push на Android
+используется проект Firebase `specai-dev` (создан в июле 2026 с аккаунта владельца):
+`google-services.json` для пакета `com.specai.specai` лежит рядом с `app.json`. Чтобы Expo
+мог отправлять push, на expo.dev → проект specai → Credentials → Android →
+Push Notifications (FCM V1) нужно один раз загрузить ключ сервисного аккаунта из консоли
+Firebase (Project settings → Service accounts → Generate new private key). Без ключа APK
+ставится и работает, но push не приходят.
 
 Публикация: `npx eas submit --platform ios|android` после успешной production-сборки.
 Профили `preview` и `production` в `eas.json` привязаны к одноимённым каналам EAS Update,
