@@ -21,13 +21,41 @@ const VIEWBOX = '51.2,56.2,53.4,55.3';
 export type GeocodeResult =
   { status: 'found'; place: GeoPoint } | { status: 'not_found' } | { status: 'unavailable' };
 
+import { addressVariants } from './addressVariants';
+
 export const GEOCODER_UNAVAILABLE_MESSAGE =
   'Сервис поиска адресов сейчас не отвечает — попробуйте через минуту или поставьте точку на карте';
 
-/** Coordinates of an address in Russia, or null (server side, cached). */
+/**
+ * Coordinates of an address in Russia, or null (server side, cached): the
+ * spelled-out variants of the address, the service area preferred.
+ */
 export async function geocodeAddress(query: string): Promise<GeoPoint | null> {
-  const result = await lookupAddress(query);
+  const result = await findAddress(query);
   return result.status === 'found' ? result.place : null;
+}
+
+/**
+ * The lookup the forms use: every spelling of the address (addressVariants:
+ * «пр-т» → «проспект», the city added when none is named), the first hit
+ * inside the service area wins, else the first hit anywhere; «unavailable»
+ * stops the search at once so a throttling geocoder is not hammered.
+ */
+export async function findAddress(query: string): Promise<GeocodeResult> {
+  let elsewhere: GeoPoint | null = null;
+  let unavailable = false;
+  for (const variant of addressVariants(query)) {
+    const found = await lookupAddress(variant);
+    if (found.status === 'unavailable') {
+      unavailable = true;
+      break;
+    }
+    if (found.status !== 'found') continue;
+    if (inServiceArea(found.place.lat, found.place.lon)) return found;
+    elsewhere ??= found.place;
+  }
+  if (elsewhere) return { status: 'found', place: elsewhere };
+  return { status: unavailable ? 'unavailable' : 'not_found' };
 }
 
 /**
@@ -67,7 +95,9 @@ export async function lookupAddress(query: string): Promise<GeocodeResult> {
       next: { revalidate: 60 * 60 * 24 * 30 },
       signal: AbortSignal.timeout(6000),
     });
-    if (!response.ok) return { status: 'unavailable' };
+    // Nominatim throttles a burst (429) or is down: Photon, the other free
+    // OpenStreetMap geocoder, answers instead.
+    if (!response.ok) return lookupPhoton(q);
     const hits = (await response.json()) as {
       lat: string;
       lon: string;
@@ -97,6 +127,63 @@ export async function lookupAddress(query: string): Promise<GeocodeResult> {
         city,
       },
     };
+  } catch {
+    return lookupPhoton(q);
+  }
+}
+
+/** Набережные Челны: the bias of the fallback geocoder. */
+const HOME_POINT = { lat: 55.7436, lon: 52.3958 };
+
+export interface PhotonFeature {
+  geometry?: { coordinates?: [number, number] };
+  properties?: {
+    name?: string;
+    street?: string;
+    housenumber?: string;
+    city?: string;
+    town?: string;
+    village?: string;
+    countrycode?: string;
+    type?: string;
+  };
+}
+
+/** The first Russian hit of a Photon answer as a GeoPoint, or null. */
+export function parsePhoton(features: PhotonFeature[]): GeoPoint | null {
+  for (const feature of features) {
+    const p = feature.properties ?? {};
+    if (p.countrycode && p.countrycode !== 'RU') continue;
+    const coords = feature.geometry?.coordinates;
+    if (!coords || coords.length < 2) continue;
+    const [lon, lat] = coords;
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
+    const city = p.city ?? p.town ?? p.village;
+    const road = p.type === 'house' ? p.street : p.name;
+    const label = [road ?? p.name, p.housenumber, city].filter(Boolean).join(', ');
+    return { lat, lon, label: label || 'Точка на карте', city };
+  }
+  return null;
+}
+
+/** The fallback geocoder (photon.komoot.io, OpenStreetMap data, no key). */
+async function lookupPhoton(q: string): Promise<GeocodeResult> {
+  const params = new URLSearchParams({
+    q,
+    limit: '3',
+    lat: String(HOME_POINT.lat),
+    lon: String(HOME_POINT.lon),
+  });
+  try {
+    const response = await fetch(`https://photon.komoot.io/api/?${params}`, {
+      headers: { 'User-Agent': GEO_USER_AGENT },
+      next: { revalidate: 60 * 60 * 24 * 30 },
+      signal: AbortSignal.timeout(6000),
+    });
+    if (!response.ok) return { status: 'unavailable' };
+    const body = (await response.json()) as { features?: PhotonFeature[] };
+    const place = parsePhoton(Array.isArray(body.features) ? body.features : []);
+    return place ? { status: 'found', place } : { status: 'not_found' };
   } catch {
     return { status: 'unavailable' };
   }

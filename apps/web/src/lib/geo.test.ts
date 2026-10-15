@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   addressLabel,
+  findAddress,
+  parsePhoton,
   lookupAddress,
   tileAllowed,
   formatCoords,
@@ -103,5 +105,90 @@ describe('lookupAddress', () => {
       }),
     );
     expect(await lookupAddress('Челны, Мира 49')).toEqual({ status: 'unavailable' });
+  });
+});
+
+describe('parsePhoton', () => {
+  it('takes the first Russian hit and labels a house by its street', () => {
+    const place = parsePhoton([
+      { geometry: { coordinates: [13.4, 52.5] }, properties: { countrycode: 'DE', name: 'Mira' } },
+      {
+        geometry: { coordinates: [52.4081, 55.7414] },
+        properties: {
+          countrycode: 'RU',
+          type: 'house',
+          name: 'Магазин',
+          street: 'проспект Мира',
+          housenumber: '10',
+          city: 'Набережные Челны',
+        },
+      },
+    ]);
+    expect(place).toEqual({
+      lat: 55.7414,
+      lon: 52.4081,
+      label: 'проспект Мира, 10, Набережные Челны',
+      city: 'Набережные Челны',
+    });
+    expect(parsePhoton([])).toBeNull();
+  });
+});
+
+describe('findAddress', () => {
+  const nominatim = (hits: unknown[]) =>
+    new Response(JSON.stringify(hits), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    });
+
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('tries the city-qualified spelling first and keeps the hit inside the area', async () => {
+    const calls: string[] = [];
+    vi.stubGlobal('fetch', async (url: string) => {
+      const q = new URL(url).searchParams.get('q') ?? '';
+      calls.push(q);
+      if (q.includes('Челны')) {
+        return nominatim([
+          {
+            lat: '55.74',
+            lon: '52.41',
+            display_name: 'x',
+            address: { road: 'проспект Мира', house_number: '10', city: 'Набережные Челны' },
+          },
+        ]);
+      }
+      return nominatim([]);
+    });
+    const result = await findAddress('пр-т Мира, 10');
+    expect(result).toMatchObject({ status: 'found', place: { city: 'Набережные Челны' } });
+    expect(calls[0]).toBe('проспект Мира, 10, Набережные Челны');
+  });
+
+  it('falls back to Photon when Nominatim throttles', async () => {
+    vi.stubGlobal('fetch', async (url: string) => {
+      if (url.includes('nominatim')) return new Response('', { status: 429 });
+      return new Response(
+        JSON.stringify({
+          features: [
+            {
+              geometry: { coordinates: [52.36, 55.69] },
+              properties: {
+                countrycode: 'RU',
+                type: 'street',
+                name: 'улица Низаметдинова',
+                city: 'Набережные Челны',
+              },
+            },
+          ],
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      );
+    });
+    const result = await findAddress('Низаметдинова 7');
+    expect(result).toMatchObject({
+      status: 'found',
+      place: { label: 'улица Низаметдинова, Набережные Челны' },
+    });
   });
 });
