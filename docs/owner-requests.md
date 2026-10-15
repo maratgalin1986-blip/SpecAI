@@ -382,7 +382,10 @@ GREEN-API, кто подписывает договор за машины Спе
   (фоновая отправка потребует сборки APK и отдельного разрешения).
 - APK собран 2026-10-15 (EAS build cbcfd20a, versionCode 1, канал preview, API прод):
   https://expo.dev/artifacts/eas/1m2GlSg4lt7y5r7B_rfHtkSQE4_RUryKsRxDGP839yM.apk —
-  с фоновой геопозицией «на линии». Push в APK ждёт проект Firebase (файл
+  с фоновой геопозицией «на линии». Вторая сборка того же дня (0a054d99, пакет
+  `com.specai.specai`, файл Firebase проекта `specai-dev` внутри):
+  https://expo.dev/artifacts/eas/510iL9v7Zr5z8OSP-Cit7TkcZQbXdRVb1vyolHEeUcU.apk — ставить её,
+  первую можно удалить. Push в APK ждёт проект Firebase (файл
   `google-services.json` переменной GOOGLE_SERVICES_JSON на expo.dev и ключ FCM в Credentials),
   создать его может только владелец из своего Google-аккаунта; облачная сессия до браузера
   владельца не дотягивается.
