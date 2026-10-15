@@ -153,6 +153,18 @@ npx eas build --platform all --profile production    # магазинные сб
 - Идентификаторы уже заданы в `app.json`: `com.specai.app` (iOS bundle id и Android package),
   scheme `specai`.
 
+Первая APK-сборка сделана 2026-10-15 (профиль `preview`, канал `preview`, versionCode 1,
+keystore создан и хранится на EAS): `cd apps/mobile && npx eas build --platform android
+--profile preview --non-interactive --no-wait`, затем `npx eas build:view <id> --json` до
+статуса FINISHED и ссылка `artifacts.buildUrl` на APK. Команду запускать только из
+`apps/mobile`: из корня репозитория eas-cli создаёт лишние `app.json`/`eas.json`.
+
+В APK работают фоновая геопозиция «на линии» (`src/lib/lineTask.ts`, уведомление
+«Вы на линии» пока исполнитель на линии) и push-уведомления — для push на Android нужен
+ещё проект Firebase: файл `google-services.json` (`android.googleServicesFile` в `app.json`)
+и ключ сервисного аккаунта FCM, загруженный через `npx eas credentials` (Android →
+Push Notifications). Без него APK ставится и работает, но push не приходят.
+
 Публикация: `npx eas submit --platform ios|android` после успешной production-сборки.
 Профили `preview` и `production` в `eas.json` привязаны к одноимённым каналам EAS Update,
 так что `eas update --channel production` доставит JS-обновление в магазинную сборку без
@@ -160,7 +172,8 @@ npx eas build --platform all --profile production    # магазинные сб
 
 ## Ограничения
 
-- Регистрация в приложении — только для клиентов; аккаунт поставщика создаётся на сайте.
+- Фоновая геопозиция «на линии» работает только в APK/магазинной сборке; в Expo Go положение
+  уходит, пока приложение открыто.
 - Восстановление пароля и сама страница Stripe Checkout открываются во встроенном браузере,
   не нативно.
 - После оплаты приложение не получает push/deep link — статус «Оплачено» появляется после
