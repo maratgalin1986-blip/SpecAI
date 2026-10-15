@@ -25,8 +25,8 @@ const DURATION_MS = 7800;
 /** What the site offers, under the card (owner, 2026-10-03: «чтобы привлечь больше людей»). */
 const OFFERS = [
   { href: '/equipment', icon: '🚜', label: 'Аренда спецтехники' },
-  { href: '/smeta', icon: '🧮', label: 'Составьте смету онлайн' },
-  { href: '/dizain', icon: '🏠', label: 'Дизайн-проект онлайн' },
+  { href: '/orders#new', icon: '📝', label: 'Разместите заявку' },
+  { href: '/providers', icon: '🚛', label: 'Исполнители рядом' },
 ];
 
 // `?intro=0` in the address skips the titles too (ad landings, QA, links

@@ -19,8 +19,6 @@ const NAV_LINKS: NavLink[] = [
   { href: '/providers', label: 'Исполнители', tier: 'core' },
   { href: '/equipment', label: 'Техника', tier: 'core' },
   { href: '/map', label: 'Карта', tier: 'xl' },
-  { href: '/stroyka', label: 'Стройка', tier: 'xl' },
-  { href: '/dizain', label: 'Дизайн', tier: 'more' },
   { href: '/agents', label: 'ИИ-агенты', tier: 'more' },
   { href: '/contacts', label: 'Контакты', tier: 'more' },
 ];
@@ -160,12 +158,6 @@ export function SiteHeader() {
             </a>
           ))}
           <MoreMenu />
-          <a
-            href="/smeta"
-            className="rounded-full px-3 py-1.5 font-semibold text-amber-700 ring-2 ring-amber-400 transition hover:bg-amber-400 hover:text-slate-950"
-          >
-            Смета
-          </a>
           <AuthStatus />
           <a
             href="/#callback"
@@ -240,20 +232,6 @@ export function SiteHeader() {
               {link.label}
             </a>
           ))}
-          <a
-            href="/smeta"
-            onClick={() => setIsMenuOpen(false)}
-            className="flex min-h-11 items-center rounded-md bg-amber-100 px-2 font-semibold text-amber-800"
-          >
-            🧮 Рассчитать смету
-          </a>
-          <a
-            href="/smeta?mode=snab"
-            onClick={() => setIsMenuOpen(false)}
-            className="flex min-h-11 items-center rounded-md bg-amber-50 px-2 font-semibold text-amber-800"
-          >
-            📦 Смета для снабженца
-          </a>
           <div className="px-2 py-2">
             <AuthStatus />
           </div>

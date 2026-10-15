@@ -1,5 +1,4 @@
 import dynamic from 'next/dynamic';
-import Link from 'next/link';
 import { prisma } from '@specai/database';
 import { PUBLIC_AGENT_PROFILES } from '@specai/shared';
 import { CallbackForm } from '@/components/CallbackForm';
@@ -301,7 +300,7 @@ export default async function HomePage() {
               </a>
               <div className="grid grid-cols-2 gap-3">
                 {[
-                  { href: '/smeta', icon: '🧮', label: 'Рассчитать смету' },
+                  { href: '/orders#new', icon: '📝', label: 'Разместить заявку' },
                   { href: '/register?type=provider', icon: '🚛', label: 'Встать на линию' },
                 ].map((item) => (
                   <a
@@ -324,20 +323,6 @@ export default async function HomePage() {
                   <Icon name="phone" className="h-5 w-5" />
                   {SITE.phone}
                 </a>
-                {/* The film tour: a glass pill with a softly pulsing play button. A
-                    client-side link, so the tap that started the sound here keeps
-                    it playing on the site (a full page load would need a new tap). */}
-                <Link
-                  href="/stroyka"
-                  className="group inline-flex flex-1 items-center justify-center gap-3 rounded-full bg-white/10 py-2 pl-2 pr-5 text-base font-semibold text-white ring-1 ring-white/30 backdrop-blur-sm transition hover:bg-white/20 hover:ring-white/60 sm:flex-none"
-                >
-                  <span className="stroyka-ping relative grid h-9 w-9 place-items-center rounded-full bg-amber-400 text-slate-950 transition group-hover:scale-110">
-                    <svg viewBox="0 0 16 16" aria-hidden className="ml-0.5 h-4 w-4 fill-current">
-                      <path d="M4 2.5v11l9-5.5z" />
-                    </svg>
-                  </span>
-                  Войти на стройку
-                </Link>
               </div>
             </div>
             <nav
@@ -352,10 +337,10 @@ export default async function HomePage() {
                 Подобрать технику&nbsp;<span className="nudge">→</span>
               </a>
               <a
-                href="/kalkulyator"
+                href="/providers"
                 className="link-draw group inline-flex min-h-[44px] items-center hover:text-white"
               >
-                Калькулятор работ&nbsp;<span className="nudge">→</span>
+                Исполнители рядом&nbsp;<span className="nudge">→</span>
               </a>
             </nav>
             <p className="float-in mt-5 text-sm text-slate-400" style={{ animationDelay: '480ms' }}>
