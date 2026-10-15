@@ -8,6 +8,8 @@ export const STORAGE_KEYS = {
   appMode: 'specai.appMode',
   /** «На линии» исполнителя — хранится только на этом телефоне. */
   providerOnline: 'specai.providerOnline',
+  /** Машина, с которой исполнитель выходит на линию (id Equipment). */
+  lineEquipmentId: 'specai.lineEquipmentId',
 } as const;
 
 export async function getItem(key: string): Promise<string | null> {

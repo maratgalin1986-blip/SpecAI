@@ -1,8 +1,9 @@
 import * as WebBrowser from 'expo-web-browser';
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import { WebView, type WebViewMessageEvent } from 'react-native-webview';
-import { fetchProviderPins } from '@/lib/api';
+import { fetchProviderPins, type LiveMachine } from '@/lib/api';
+import { toLivePins } from '@/lib/line';
 import { providersMapHtml, type ProviderPin } from '@/lib/providersMap';
 import { SITE } from '@/lib/site';
 import { colors } from '@/theme';
@@ -16,12 +17,40 @@ import { colors } from '@/theme';
 export function ProvidersMap({
   style,
   onPick,
+  live = [],
+  me = null,
+  onMachine,
 }: {
   style?: StyleProp<ViewStyle>;
   /** A tap on the map: the work site for «Вызвать сюда» (QuickOrderSheet). */
   onPick?: (point: { lat: number; lon: number }) => void;
+  /** Техника «на линии» вокруг (GET /api/line/nearby): зелёные значки с подписью. */
+  live?: LiveMachine[];
+  /** Положение заказчика: синяя точка, карта центрируется на ней один раз. */
+  me?: { lat: number; lon: number } | null;
+  /** Нажатие на машину на линии. */
+  onMachine?: (equipmentId: string) => void;
 }) {
   const [pins, setPins] = useState<ProviderPin[] | null>(null);
+  const webRef = useRef<WebView>(null);
+  const [ready, setReady] = useState(false);
+  const centred = useRef(false);
+
+  // Живые значки и своя точка уходят в страницу карты без перезагрузки.
+  useEffect(() => {
+    if (!ready) return;
+    webRef.current?.injectJavaScript(
+      `window.setLive && window.setLive(${JSON.stringify(toLivePins(live))}); true;`,
+    );
+  }, [ready, live]);
+  useEffect(() => {
+    if (!ready || !me) return;
+    const center = !centred.current;
+    centred.current = true;
+    webRef.current?.injectJavaScript(
+      `window.setMe && window.setMe(${JSON.stringify(me)}, ${center}); true;`,
+    );
+  }, [ready, me]);
 
   useEffect(() => {
     let cancelled = false;
@@ -52,9 +81,14 @@ export function ProvidersMap({
       const message = JSON.parse(event.nativeEvent.data) as {
         type?: string;
         catalogUrl?: string;
+        equipmentId?: string;
         lat?: number;
         lon?: number;
       };
+      if (message.type === 'machine' && typeof message.equipmentId === 'string') {
+        onMachine?.(message.equipmentId);
+        return;
+      }
       if (
         message.type === 'point' &&
         typeof message.lat === 'number' &&
@@ -75,6 +109,8 @@ export function ProvidersMap({
     <View style={[styles.screen, style]}>
       {html ? (
         <WebView
+          ref={webRef}
+          onLoadEnd={() => setReady(true)}
           source={{ html, baseUrl: SITE.url }}
           originWhitelist={['*']}
           style={styles.webView}

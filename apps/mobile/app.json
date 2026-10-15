@@ -27,6 +27,12 @@
       "expo-router",
       "expo-secure-store",
       [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Геопозиция нужна, чтобы заказчики видели вашу машину на линии, а вы — технику рядом."
+        }
+      ],
+      [
         "expo-image-picker",
         {
           "photosPermission": "Приложению нужен доступ к фото, чтобы добавлять снимки техники.",
