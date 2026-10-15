@@ -2,6 +2,7 @@ import * as Location from 'expo-location';
 import { useEffect, useRef, useState } from 'react';
 import { putLinePresence } from './api';
 import { REPORT_DISTANCE_M, REPORT_INTERVAL_MS } from './line';
+import { startBackgroundLine, stopBackgroundLine } from './lineTask';
 
 export type PositionPermission = 'unknown' | 'granted' | 'denied';
 
@@ -15,12 +16,16 @@ export function useLineReporter(online: boolean, equipmentId: string | null) {
   const [permission, setPermission] = useState<PositionPermission>('unknown');
   const [lastSentAt, setLastSentAt] = useState<Date | null>(null);
   const [error, setError] = useState<string | null>(null);
+  /** В APK положение уходит и с выключенным экраном (lineTask.ts). */
+  const [background, setBackground] = useState(false);
   const equipmentRef = useRef(equipmentId);
   equipmentRef.current = equipmentId;
 
   useEffect(() => {
     if (!online) {
       setLastSentAt(null);
+      setBackground(false);
+      void stopBackgroundLine();
       putLinePresence({ online: false }).catch(() => undefined);
       return;
     }
@@ -51,6 +56,11 @@ export function useLineReporter(online: boolean, equipmentId: string | null) {
         return;
       }
       setPermission('granted');
+      // В сборке APK — фоновая задача; в Expo Go её нет, остаётся слежение
+      // из открытого приложения ниже (оно нужно и в APK для статуса на экране).
+      startBackgroundLine()
+        .then((started) => !cancelled && setBackground(started))
+        .catch(() => undefined);
       subscription = await Location.watchPositionAsync(
         {
           accuracy: Location.Accuracy.Balanced,
@@ -82,5 +92,5 @@ export function useLineReporter(online: boolean, equipmentId: string | null) {
       .catch(() => undefined);
   }, [equipmentId]);
 
-  return { permission, lastSentAt, error };
+  return { permission, lastSentAt, error, background };
 }

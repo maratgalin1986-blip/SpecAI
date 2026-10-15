@@ -6,6 +6,8 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Loader } from '@/components/ui';
 import { AuthProvider, useAuth } from '@/lib/auth';
 import { usePushRegistration } from '@/lib/push';
+// Фоновая задача «на линии» регистрируется при старте приложения (и в фоне).
+import '@/lib/lineTask';
 import { colors } from '@/lib/theme';
 
 function RootNavigator() {

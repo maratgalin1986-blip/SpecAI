@@ -43,9 +43,12 @@ export function positionStatus(
   permission: 'unknown' | 'granted' | 'denied',
   lastSentAt: Date | null,
   now: Date = new Date(),
+  background = false,
 ): string {
   if (permission === 'denied') return 'Нет доступа к геопозиции — заказчики не видят вас на карте';
   if (!lastSentAt) return 'Определяем положение…';
   const minutes = Math.round((now.getTime() - lastSentAt.getTime()) / 60_000);
-  return minutes < 1 ? 'Вы на карте у заказчиков' : `На карте, обновлено ${minutes} мин назад`;
+  const where =
+    minutes < 1 ? 'Вы на карте у заказчиков' : `На карте, обновлено ${minutes} мин назад`;
+  return background ? `${where} · работает и с выключенным экраном` : where;
 }

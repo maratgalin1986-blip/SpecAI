@@ -541,7 +541,8 @@ export default function FeedScreen() {
   const lineMachine = available.find((item) => item.id === lineMachineId) ?? available[0] ?? null;
   const reporter = useLineReporter(online, lineMachine?.id ?? null);
   const lineStatus = online
-    ? (reporter.error ?? positionStatus(reporter.permission, reporter.lastSentAt))
+    ? (reporter.error ??
+      positionStatus(reporter.permission, reporter.lastSentAt, new Date(), reporter.background))
     : null;
   const base =
     pin && typeof pin.baseLat === 'number' && typeof pin.baseLon === 'number'
