@@ -144,3 +144,6 @@ app.*.symbols
 !**/ios/**/default.perspectivev3
 !/packages/flutter_tools/test/data/dart_dependencies_test/**/.packages
 !/dev/ci/**/Gemfile.lock
+# eas-cli run from the repo root creates these stubs; the app lives in apps/mobile
+/app.json
+/eas.json
