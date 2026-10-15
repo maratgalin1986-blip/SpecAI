@@ -81,6 +81,12 @@ background:${colors.dark};color:${colors.onDark};font:700 12px sans-serif;border
 box-shadow:0 2px 6px rgba(0,0,0,.35)}
 .pin.house{background:${colors.primary};width:40px;height:40px;border-radius:20px;font-size:13px}
 .pin.site{background:transparent;border:0;box-shadow:none;font-size:30px;line-height:34px}
+.pin.live{background:#1b8a3a;border-color:#fff}
+.pin.live.house{background:${colors.primary}}
+.me{width:18px;height:18px;border-radius:9px;background:#2b6cff;border:3px solid #fff;box-shadow:0 0 0 6px rgba(43,108,255,.25)}
+.leaflet-tooltip.bubble{background:#fff;color:${colors.text};border:0;border-radius:14px;padding:6px 10px;
+font:600 12px sans-serif;box-shadow:0 2px 8px rgba(0,0,0,.25);white-space:normal;max-width:220px}
+.leaflet-tooltip.bubble.house{border:2px solid ${colors.primary}}
 .card{min-width:180px;color:${colors.text}}
 .card b{display:block;font-size:15px;margin-bottom:2px}
 .card small{display:block;color:#5f6b73;margin:2px 0}
@@ -126,6 +132,39 @@ pins.slice().reverse().forEach(function (pin) {
   bounds.push([pin.lat, pin.lon]);
 });
 if (bounds.length > 1) map.fitBounds(bounds, { padding: [40, 40], maxZoom: 11 });
+// «На линии»: the app pushes the fresh online machines (window.setLive) and
+// the customer's own position (window.setMe); each machine is a green pin
+// with a bubble «Я на линии · машина · цена · имя». A tap on the pin sends
+// {type:'machine', equipmentId} to the app.
+var liveLayer = L.layerGroup().addTo(map);
+var meMarker = null;
+window.setLive = function (machines) {
+  liveLayer.clearLayers();
+  (machines || []).forEach(function (m) {
+    var icon = L.divIcon({
+      className: '',
+      html: '<div class="pin live' + (m.house ? ' house' : '') + '">' + text(m.short) + '</div>',
+      iconSize: [34, 34], iconAnchor: [17, 17]
+    });
+    var marker = L.marker([m.lat, m.lon], { icon: icon, zIndexOffset: 1500 })
+      .bindTooltip(text(m.bubble), { permanent: true, direction: 'top', offset: [0, -18], className: 'bubble' + (m.house ? ' house' : '') });
+    marker.on('click', function () {
+      if (window.ReactNativeWebView && m.equipmentId) {
+        window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'machine', equipmentId: m.equipmentId }));
+      }
+    });
+    liveLayer.addLayer(marker);
+  });
+};
+window.setMe = function (point, center) {
+  if (!point) return;
+  if (!meMarker) {
+    meMarker = L.marker([point.lat, point.lon], { icon: L.divIcon({ className: '', html: '<div class="me"></div>', iconSize: [18, 18], iconAnchor: [9, 9] }), zIndexOffset: 3000, interactive: false }).addTo(map);
+  } else {
+    meMarker.setLatLng([point.lat, point.lon]);
+  }
+  if (center) map.setView([point.lat, point.lon], Math.max(map.getZoom(), 12));
+};
 // «Вызвать сюда»: a tap on the map marks the work site and sends the point
 // to the order sheet ({type:'point', lat, lon}).
 var picked = null;

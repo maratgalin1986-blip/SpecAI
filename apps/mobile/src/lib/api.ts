@@ -63,7 +63,7 @@ export async function authHeaders(): Promise<Record<string, string>> {
 }
 
 interface RequestOptions {
-  method?: 'GET' | 'POST' | 'PATCH' | 'DELETE';
+  method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
   body?: unknown;
   /** Не подставлять Bearer (например, для входа). */
   anonymous?: boolean;
@@ -1197,4 +1197,61 @@ export function fetchProviders(params: { sort?: 'rating' | 'fleet' | 'newest' } 
     groups: { id: string; label: string }[];
     cities: string[];
   }>(`/api/providers${query ? `?${query}` : ''}`, { anonymous: true });
+}
+
+/** Машина «на линии» на карте заказчика (GET /api/line/nearby). */
+export interface LiveMachine {
+  id: string;
+  lat: number;
+  lon: number;
+  driver: string;
+  company: { id: string; name: string; verified: boolean; isHouse: boolean };
+  equipment: {
+    id: string;
+    name: string;
+    category: string | null;
+    categorySlug: string | null;
+    hourlyRate: number;
+    dailyRate: number;
+  } | null;
+  note: string | null;
+  distanceKm: number | null;
+  /** Подпись на карте: «Я на линии · машина · цена · имя». */
+  bubble: string;
+  updatedAt: string;
+}
+
+/** Техника на линии вокруг точки; без точки — вся свежая (карта по центру города). */
+export function fetchNearbyLine(around: { lat: number; lon: number } | null, km?: number) {
+  const q = new URLSearchParams();
+  if (around) {
+    q.set('lat', String(around.lat));
+    q.set('lon', String(around.lon));
+  }
+  if (km) q.set('km', String(km));
+  const query = q.toString();
+  return apiFetch<{ machines: LiveMachine[] }>(`/api/line/nearby${query ? `?${query}` : ''}`);
+}
+
+export interface LinePresence {
+  online: boolean;
+  lat: number;
+  lon: number;
+  equipmentId: string | null;
+  note: string | null;
+  updatedAt: string;
+}
+
+/** «На линии»: положение телефона и машина (PUT /api/line); offline — только { online: false }. */
+export function putLinePresence(input: {
+  online: boolean;
+  lat?: number;
+  lon?: number;
+  equipmentId?: string | null;
+  note?: string;
+}) {
+  return apiFetch<{ presence: LinePresence; throttled?: boolean }>('/api/line', {
+    method: 'PUT',
+    body: input,
+  });
 }

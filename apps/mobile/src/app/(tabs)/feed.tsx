@@ -56,7 +56,10 @@ import {
   priceByRate,
   relativeDay,
 } from '@/lib/orderFlow';
+import { positionStatus } from '@/lib/line';
 import { setProviderOnline, usePrefs } from '@/lib/prefs';
+import { STORAGE_KEYS, getItem, setItem } from '@/lib/storage';
+import { useLineReporter } from '@/lib/useLineReporter';
 import { colors, radius, shadow, spacing, TAP, typography } from '@/theme';
 
 /** На линии лента обновляется сама раз в минуту. */
@@ -83,7 +86,23 @@ const SHORT_STATUS: Record<string, string> = {
   RETIRED: 'снята',
 };
 
-function OnlineSwitch({ online, onToggle }: { online: boolean; onToggle: () => void }) {
+function OnlineSwitch({
+  online,
+  onToggle,
+  machines,
+  machineId,
+  onMachine,
+  status,
+}: {
+  online: boolean;
+  onToggle: () => void;
+  /** Свободные машины компании: с какой выходим на линию. */
+  machines: Equipment[];
+  machineId: string | null;
+  onMachine: (id: string) => void;
+  /** Что с геопозицией (useLineReporter). */
+  status: string | null;
+}) {
   return (
     <View style={[styles.lineCard, online && styles.lineCardOnline]}>
       <View style={styles.lineHeader}>
@@ -113,8 +132,30 @@ function OnlineSwitch({ online, onToggle }: { online: boolean; onToggle: () => v
         />
         <Text style={styles.lineButtonText}>{online ? 'Уйти с линии' : 'Выйти на линию'}</Text>
       </Pressable>
+      {machines.length > 1 ? (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.lineMachines}>
+          {machines.map((item) => (
+            <Pressable
+              key={item.id}
+              accessibilityRole="radio"
+              accessibilityState={{ selected: item.id === machineId }}
+              onPress={() => onMachine(item.id)}
+              style={[styles.lineChip, item.id === machineId && styles.lineChipOn]}
+            >
+              <Text
+                style={[styles.lineChipText, item.id === machineId && styles.lineChipTextOn]}
+                numberOfLines={1}
+              >
+                {item.name}
+              </Text>
+            </Pressable>
+          ))}
+        </ScrollView>
+      ) : null}
       <Text style={styles.lineNote}>
-        Статус хранится только на этом телефоне — заказчики его пока не видят.
+        {online
+          ? (status ?? 'Заказчики видят вашу машину на карте с ценой и именем.')
+          : 'На линии заказчики видят вашу машину на карте: «Я на линии, цена, имя».'}
       </Text>
     </View>
   );
@@ -387,6 +428,17 @@ function FeedCard({
  */
 export default function FeedScreen() {
   const { online } = usePrefs();
+  // С какой машиной выходим на линию — запоминается на телефоне.
+  const [lineMachineId, setLineMachineId] = useState<string | null>(null);
+  useEffect(() => {
+    getItem(STORAGE_KEYS.lineEquipmentId)
+      .then((value) => value && setLineMachineId(value))
+      .catch(() => undefined);
+  }, []);
+  const chooseLineMachine = (id: string) => {
+    setLineMachineId(id);
+    void setItem(STORAGE_KEYS.lineEquipmentId, id);
+  };
   const [orders, setOrders] = useState<Order[] | null>(null);
   const [equipment, setEquipment] = useState<Equipment[]>([]);
   const [bookings, setBookings] = useState<ProviderBooking[]>([]);
@@ -485,6 +537,12 @@ export default function FeedScreen() {
     () => equipment.filter((item) => item.status === 'AVAILABLE'),
     [equipment],
   );
+  // На линии — с выбранной машиной, иначе с первой свободной.
+  const lineMachine = available.find((item) => item.id === lineMachineId) ?? available[0] ?? null;
+  const reporter = useLineReporter(online, lineMachine?.id ?? null);
+  const lineStatus = online
+    ? (reporter.error ?? positionStatus(reporter.permission, reporter.lastSentAt))
+    : null;
   const base =
     pin && typeof pin.baseLat === 'number' && typeof pin.baseLon === 'number'
       ? { lat: pin.baseLat, lon: pin.baseLon }
@@ -606,7 +664,14 @@ export default function FeedScreen() {
 
   const header = (
     <View style={styles.header}>
-      <OnlineSwitch online={online} onToggle={() => setProviderOnline(!online)} />
+      <OnlineSwitch
+        online={online}
+        onToggle={() => setProviderOnline(!online)}
+        machines={available}
+        machineId={lineMachine?.id ?? null}
+        onMachine={chooseLineMachine}
+        status={lineStatus}
+      />
       {equipment.length > 0 ? <FleetStrip equipment={equipment} onChange={changeStatus} /> : null}
       <View style={styles.stats}>
         <StatTile
@@ -751,6 +816,19 @@ const styles = StyleSheet.create({
   lineDotOnline: { backgroundColor: '#3DDC84' },
   lineTitle: { ...typography.title, color: colors.onDark },
   lineHint: { color: colors.onDarkMuted, fontSize: 14, lineHeight: 20 },
+  lineMachines: { marginTop: spacing.xs, flexGrow: 0 },
+  lineChip: {
+    marginRight: spacing.xs,
+    minHeight: 36,
+    justifyContent: 'center',
+    paddingHorizontal: spacing.sm,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    maxWidth: 200,
+  },
+  lineChipOn: { backgroundColor: colors.primary },
+  lineChipText: { color: colors.onDark, fontSize: 13, fontWeight: '600' },
+  lineChipTextOn: { color: colors.onPrimary },
   lineButton: {
     marginTop: spacing.xs,
     minHeight: 60,

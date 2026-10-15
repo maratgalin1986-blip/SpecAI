@@ -58,6 +58,7 @@ model User {
   commentsWritten    Comment[]           @relation("CommentAuthor")
   commentsReceived   Comment[]           @relation("CommentTarget")
   operator           Operator?
+  linePresence       LinePresence?
 
   @@index([companyId])
   @@index([referralCode])
@@ -116,11 +117,12 @@ model Company {
   deliveryRadiusKm   Int      @default(100)
   deliveryPricePerKm Decimal? @db.Decimal(10, 2)
 
-  users     User[]
-  equipment Equipment[]
-  reviews   Review[]
-  comments  Comment[]
-  operators Operator[]
+  users         User[]
+  equipment     Equipment[]
+  reviews       Review[]
+  comments      Comment[]
+  operators     Operator[]
+  linePresences LinePresence[]
 
   @@index([locationId])
 }
@@ -207,6 +209,7 @@ model Equipment {
   reviews            Review[]
   documents          Document[]
   blocks             EquipmentBlock[]
+  linePresences      LinePresence[]
 
   @@index([categoryId])
   @@index([companyId])
@@ -803,4 +806,29 @@ model AdminFeedRead {
   id     String   @id @default(cuid())
   key    String   @unique
   readAt DateTime @default(now())
+}
+
+// «На линии» (owner, 2026-10-15, the Yandex Go picture): a provider's manager
+// or machinist who went online from the app, with the machine and its last
+// position. One row per user; off-line rows stay (online = false) so the
+// toggle is remembered. Customers see the fresh online rows on the home map
+// with a bubble «Я на линии · машина · цена · имя» (api/line/nearby).
+model LinePresence {
+  id          String     @id @default(cuid())
+  user        User       @relation(fields: [userId], references: [id])
+  userId      String     @unique
+  company     Company    @relation(fields: [companyId], references: [id])
+  companyId   String
+  equipment   Equipment? @relation(fields: [equipmentId], references: [id])
+  equipmentId String?
+  online      Boolean    @default(true)
+  lat         Float
+  lon         Float
+  // A short line the machinist writes for customers («Могу выехать сразу»).
+  note        String?
+  updatedAt   DateTime   @updatedAt
+  createdAt   DateTime   @default(now())
+
+  @@index([companyId])
+  @@index([online, updatedAt])
 }

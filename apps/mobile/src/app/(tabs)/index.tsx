@@ -7,6 +7,7 @@ import { ProvidersMap } from '@/components/ProvidersMap';
 import { QuickOrderSheet } from '@/components/QuickOrderSheet';
 import { fetchMyOrders, type Order } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
+import { useNearbyLine } from '@/lib/useNearbyLine';
 import { pluralizeRu } from '@/lib/format';
 import { categoryIcon, pointAddress } from '@/lib/orderFlow';
 import { isProviderMode, setAppMode, usePrefs } from '@/lib/prefs';
@@ -41,6 +42,8 @@ export default function HomeScreen() {
   const [active, setActive] = useState<Order | null>(null);
   // «Вызвать сюда»: a tap on the map becomes the order's address.
   const [pickedAddress, setPickedAddress] = useState<string | null>(null);
+  // Вы на карте и техника на линии вокруг (владелец, 2026-10-15).
+  const { me, machines } = useNearbyLine(!!user);
 
   useFocusEffect(
     useCallback(() => {
@@ -69,6 +72,9 @@ export default function HomeScreen() {
       <ProvidersMap
         style={StyleSheet.absoluteFill}
         onPick={(point) => setPickedAddress(pointAddress(point))}
+        live={machines}
+        me={me}
+        onMachine={(equipmentId) => router.push(`/equipment/${equipmentId}`)}
       />
 
       <View

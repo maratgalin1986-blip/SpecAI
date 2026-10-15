@@ -88,6 +88,13 @@ small so merges stay conflict-free.
   «no sign-up» note): at registration one chooses «Заказать технику» (customer)
   or «Встать на линию» (provider). No online payment; `/orders` keeps the guest
   form for visitors without an account.
+- «На линии» (owner, 2026-10-15): providers go online from the app with a
+  machine; the phone reports its position to `PUT /api/line` (`LinePresence`),
+  customers see fresh online machines on the app's home map with the bubble
+  «Я на линии · машина · цена · имя» (`GET /api/line/nearby`). The site's
+  /stroyka, /smeta, /kalkulyator and /dizain are removed from navigation and
+  redirect to the home page (owner, 2026-10-15); the page code stays until the
+  site session deletes it.
 - Auth: NextAuth credentials for the web, Bearer JWT for mobile; API routes
   use `getRequestUser(request)` so both work.
 - Payments: Stripe Checkout + webhook; refunds are manual

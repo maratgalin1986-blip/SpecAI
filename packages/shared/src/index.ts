@@ -10,4 +10,5 @@ export * from './schemas/lead';
 export * from './schemas/document';
 export * from './messageParser';
 export * from './schemas/shift';
+export * from './schemas/line';
 export * from './categories';
