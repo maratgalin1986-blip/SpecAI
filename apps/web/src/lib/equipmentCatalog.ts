@@ -9,7 +9,7 @@ import {
   type CategoryGroupSlug,
 } from '@specai/shared';
 import { defaultPhotoOf, type MachineType } from './machinePhotos';
-import { HOUSE_COMPANY_ID } from './fleet';
+import { HOUSE_COMPANY_ID, isHouseEquipment } from './fleet';
 import { houseRate } from './prices';
 
 /** The groups of packages/shared/src/categories.ts plus «Другая» for rows outside the tree. */
@@ -239,14 +239,8 @@ export function headlinePrices(item: { hourlyRate?: Amount; dailyRate?: Amount }
   return { hour, shift };
 }
 
-/**
- * The rates a customer sees. СпецПласт16's own machines: the hourly rate never
- * below the lib/prices.ts list (as on /arenda), the shift never below 8 such
- * hours. Other providers' machines show their own rates (an hour from the
- * shift and back when only one is set). Without `companyId` the machine is
- * treated as the house's (older callers).
- */
-export function customerRates(item: {
+/** A machine as customerRates() reads it: the stored rates with the name and category for the list price. */
+export interface RatedMachine {
   name: string;
   categoryName: string;
   companyId?: string | null;
@@ -254,7 +248,16 @@ export function customerRates(item: {
   dailyRate?: Amount;
   weeklyRate?: Amount;
   monthlyRate?: Amount;
-}): {
+}
+
+/**
+ * The rates a customer sees. СпецПласт16's own machines: the hourly rate never
+ * below the lib/prices.ts list (as on /arenda), the shift never below 8 such
+ * hours. Other providers' machines show their own rates (an hour from the
+ * shift and back when only one is set). Without `companyId` the machine is
+ * treated as the house's (older callers).
+ */
+export function customerRates(item: RatedMachine): {
   hourlyRate: number;
   dailyRate: number;
   weeklyRate: number | null;
@@ -285,6 +288,33 @@ export function customerRates(item: {
     weeklyRate: weekly === null ? null : Math.max(weekly, dailyRate * WEEK_SHIFTS),
     monthlyRate: monthly === null ? null : Math.max(monthly, dailyRate * MONTH_SHIFTS),
   };
+}
+
+/**
+ * `customerHourlyRate` / `customerDailyRate` for API responses: what the
+ * customer sees on the card, next to the stored rates the provider's edit
+ * form keeps. The bid forms prefill the shift price from these, so an offer
+ * never shows a second price for the same machine.
+ */
+export function customerRateFields(item: RatedMachine): {
+  customerHourlyRate: number;
+  customerDailyRate: number;
+} {
+  const rates = customerRates(item);
+  return { customerHourlyRate: rates.hourlyRate, customerDailyRate: rates.dailyRate };
+}
+
+/**
+ * The lowest shift price a bid on this machine may carry: the shift price the
+ * customer already sees on the card (customerRates), so an offer below it
+ * would show two prices for one machine. Only СпецПласт16's fleet has a
+ * floor; other providers bid at their own prices (null). `companyId` must be
+ * known here, unlike in customerRates.
+ */
+export function bidShiftFloor(item: RatedMachine & { companyId: string | null }): number | null {
+  if (!isHouseEquipment(item)) return null;
+  const floor = customerRates(item).dailyRate;
+  return floor > 0 ? floor : null;
 }
 
 /** "24 000 ₽", kept on one line by a non-breaking space before the sign. */

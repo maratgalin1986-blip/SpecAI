@@ -72,9 +72,11 @@ export async function POST(request: NextRequest) {
         .sort((x, y) => x.dailyRate - y.dailyRate)
         .slice(0, 3)
         .map((c) => ({ equipmentId: c.id, reason: `Подходит: ${task?.why}.` })),
-      followUpQuestion: task
-        ? undefined
-        : 'Опишите задачу подробнее: что нужно сделать (копать, поднять, вывезти, уплотнить…), объём и адрес.',
+      followUpQuestion: !task
+        ? 'Опишите задачу подробнее: что нужно сделать (копать, поднять, вывезти, уплотнить…), объём и адрес.'
+        : picked.length === 0
+          ? `Свободной техники «${task.category}» в каталоге сейчас нет. Разместите заявку — исполнители предложат цену.`
+          : undefined,
     };
   };
   let result;

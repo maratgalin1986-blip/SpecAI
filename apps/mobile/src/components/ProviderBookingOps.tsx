@@ -11,7 +11,7 @@ import {
   type Operator,
   type Shift,
 } from '@/lib/api';
-import { dayKey } from '@/lib/shifts';
+import { canOpenShiftToday, dayKey, isFutureShift } from '@/lib/shifts';
 import { colors, radius, spacing, TAP } from '@/theme';
 
 const POLL_MS = 30_000;
@@ -23,12 +23,17 @@ const POLL_MS = 30_000;
 export function ProviderBookingOps({
   bookingId,
   bookingStatus,
+  startDate,
+  endDate,
   operatorId,
   operators,
   onOperatorChanged,
 }: {
   bookingId: string;
   bookingStatus: BookingStatus;
+  /** Даты брони: смену открывают только в дни работ. */
+  startDate: string;
+  endDate: string;
   operatorId: string | null | undefined;
   operators: Operator[];
   onOperatorChanged?: (operatorId: string | null) => void;
@@ -156,10 +161,16 @@ export function ProviderBookingOps({
             </Text>
           ) : (
             shifts.map((shift) => (
-              <ShiftControls key={shift.id} shift={shift} role="provider" onChanged={replace} />
+              <ShiftControls
+                key={shift.id}
+                shift={shift}
+                role="provider"
+                readOnly={isFutureShift(shift.date)}
+                onChanged={replace}
+              />
             ))
           )}
-          {active && !hasToday ? (
+          {active && !hasToday && canOpenShiftToday({ startDate, endDate }) ? (
             <Button
               title="Открыть смену на сегодня"
               variant="secondary"

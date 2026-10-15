@@ -250,6 +250,12 @@ model Booking {
   notes       String?
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
+  // Who cancelled a CANCELLED booking (CANCELLED_BY in @specai/shared:
+  // CUSTOMER | PROVIDER | ADMIN — a plain column, not an enum, see CLAUDE.md)
+  // and when. Null on bookings cancelled before 2026-10-12: unknown, and the
+  // provider's cancellation share leaves them out (lib/reliability.ts).
+  cancelledBy String?
+  cancelledAt DateTime?
 
   equipment   Equipment @relation(fields: [equipmentId], references: [id])
   equipmentId String
@@ -791,7 +797,8 @@ model EquipmentBlock {
 // «Прочитано» in the admin's notification feed (/admin/feed): one row per
 // event the admin has seen. `key` is "<event kind>:<entity id>[:<state>]",
 // built in apps/web/src/lib/adminFeed.ts. A model only, no enum (CLAUDE.md,
-// rule 2); nothing else refers to it.
+// rule 2). The crons also keep their once-a-day markers here,
+// "cron:<job>:<Moscow day>" (apps/web/src/lib/cronOnce.ts).
 model AdminFeedRead {
   id     String   @id @default(cuid())
   key    String   @unique

@@ -140,7 +140,8 @@ export function calcText(machine: number, hours: number, hammer = false) {
 
 export function greeting() {
   return (
-    `Здравствуйте! Это бот ${SITE.name} — аренда своей спецтехники с машинистом в Набережных Челнах и рядом.\n\n` +
+    `Здравствуйте! Это бот ${SITE.platform} от ${SITE.name} — площадка аренды спецтехники с машинистом ` +
+    `в Набережных Челнах и рядом: техника ${SITE.name} и других компаний-исполнителей.\n\n` +
     `Три шага — и заявка у диспетчера. Какая техника нужна?`
   );
 }
@@ -173,7 +174,8 @@ export function askPhoneText(c: Extract<Callback, { step: 'place' }>) {
     `Отлично: ${machineName(c.machine).toLowerCase()}, ${CITIES[c.city]}.\n` +
     `Ориентировочно ${priceLine(c.machine)}.\n\n` +
     `Нажмите «📱 Поделиться номером» — диспетчер перезвонит и назовёт точную цену с подачей. ` +
-    `Отправляя номер, вы соглашаетесь на обработку персональных данных: ${siteUrl()}/privacy`
+    `Отправляя номер, вы соглашаетесь на обработку персональных данных: ${siteUrl()}/soglasie ` +
+    `(политика — ${siteUrl()}/privacy)`
   );
 }
 

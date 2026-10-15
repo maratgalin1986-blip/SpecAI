@@ -15,7 +15,6 @@ import { Badge, EmptyState, ErrorBanner, Segmented } from '@/components/ui';
 import { ApiError, fetchProviders, imageUri, type ProviderCard } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { pluralizeRu } from '@/lib/format';
-import { SITE } from '@/lib/site';
 import { colors, radius, shadow, spacing } from '@/theme';
 
 type Sort = 'rating' | 'fleet' | 'newest';
@@ -131,7 +130,7 @@ function ProviderRow({ card, onOrder }: { card: ProviderCard; onOrder: () => voi
     <View style={styles.card} accessibilityLabel={`Исполнитель ${card.name}`}>
       <View style={styles.cardHead}>
         <View style={styles.flex}>
-          <Text style={styles.eyebrow}>{card.isHouse ? `Парк ${SITE.name}` : card.city}</Text>
+          <Text style={styles.eyebrow}>{card.isHouse ? 'Парк СпецПласт16' : card.city}</Text>
           <Text style={styles.title} numberOfLines={2}>
             {card.name}
           </Text>

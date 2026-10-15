@@ -19,9 +19,15 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
   }
   const order = await prisma.order.findUnique({
     where: { id: params.id },
-    select: { id: true, source: true },
+    select: { id: true, source: true, booking: { select: { status: true } } },
   });
   if (!order) return NextResponse.json({ error: 'Заявка не найдена' }, { status: 404 });
+  if (order.booking && ['CONFIRMED', 'ACTIVE'].includes(order.booking.status)) {
+    return NextResponse.json(
+      { error: 'По заявке идёт подтверждённая бронь — сначала отмените её' },
+      { status: 409 },
+    );
+  }
   if (order.source === 'SITE') {
     return NextResponse.json(
       { error: 'Заявку с сайта отменяет её автор в личном кабинете' },

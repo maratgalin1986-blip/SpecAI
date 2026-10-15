@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { canSeeCustomerContacts } from '@/lib/customerPrivacy';
+import { maskContactsAndLinks } from '@/lib/privacy';
 import { z } from 'zod';
 import { prisma } from '@specai/database';
 import { getRequestUser } from '@/lib/requestUser';
@@ -14,6 +16,7 @@ import {
 import { findOverlappingBooking, lockEquipment } from '@/lib/bookingConflicts';
 import { isProvider } from '@/lib/fleet';
 import { BOOKING_STATUS_LABELS } from '@/lib/emailTemplates';
+import { CANCELLED_BY } from '@specai/shared';
 
 const updateSchema = z.object({
   status: z.enum(['CONFIRMED', 'ACTIVE', 'COMPLETED', 'CANCELLED']),
@@ -164,10 +167,20 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
       }
     }
     // Only move from the status we checked above: a double click or a second
-    // device must not overwrite a status that changed in between.
+    // device must not overwrite a status that changed in between. A
+    // cancellation records who did it: only the provider's own cancellations
+    // count against its reliability (lib/reliability.ts).
     const { count } = await tx.booking.updateMany({
       where: { id: booking.id, status: booking.status },
-      data: { status: nextStatus },
+      data: {
+        status: nextStatus,
+        ...(nextStatus === 'CANCELLED'
+          ? {
+              cancelledBy: isOwningProvider ? CANCELLED_BY.PROVIDER : CANCELLED_BY.CUSTOMER,
+              cancelledAt: new Date(),
+            }
+          : {}),
+      },
     });
     if (count === 0) {
       return { error: 'Статус бронирования уже изменён — обновите страницу' } as const;
@@ -237,5 +250,11 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
     }
   }
 
-  return NextResponse.json({ booking: updated });
+  // The customer's note may carry a phone: the provider reads it masked
+  // until the booking is confirmed, as in GET /api/bookings?as=provider.
+  const notes =
+    isOwningProvider && updated.notes && !canSeeCustomerContacts(updated.status)
+      ? maskContactsAndLinks(updated.notes)
+      : updated.notes;
+  return NextResponse.json({ booking: { ...updated, notes } });
 }

@@ -19,6 +19,8 @@ export function tomorrowRange(now: Date = new Date()): { start: Date; end: Date;
 export interface DigestOrder {
   id: string;
   categoryId: string | null;
+  /** acceptedCategoryIds(categoryId) — the machine types that can take it. */
+  categoryIds?: string[] | null;
   categoryName?: string | null;
   city?: string | null;
   lat?: number | null;
@@ -53,8 +55,10 @@ export function digestsForCompanies(
           !company.userIds.includes(order.customerId) &&
           providerMatchesOrder(company, {
             categoryId: order.categoryId,
+            categoryIds: order.categoryIds,
             lat: order.lat,
             lon: order.lon,
+            city: order.city,
           }),
       )
       .map(digestItem);

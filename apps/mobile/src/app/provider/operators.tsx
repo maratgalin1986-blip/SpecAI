@@ -18,6 +18,7 @@ import {
   type Operator,
   type OperatorInput,
 } from '@/lib/api';
+import { operatorLogin } from '@/lib/operatorForm';
 import { colors, spacing, typography } from '@/theme';
 
 interface FormState {
@@ -30,22 +31,27 @@ interface FormState {
 
 const EMPTY: FormState = { name: '', phone: '', licenseNumber: '', email: '', password: '' };
 
-function toInput(form: FormState): OperatorInput & { name: string } {
+/** savedEmail — вход, который уже есть у машиниста: без нового пароля он не меняется. */
+function toInput(form: FormState, savedEmail?: string | null): OperatorInput & { name: string } {
+  const login = operatorLogin(form, savedEmail);
   return {
     name: form.name.trim(),
     phone: form.phone.trim(),
     licenseNumber: form.licenseNumber.trim(),
-    ...(form.email.trim() ? { email: form.email.trim(), password: form.password } : {}),
+    ...(login.ok && login.login ? login.login : {}),
   };
 }
 
 function OperatorForm({
   initial,
+  savedEmail,
   submitLabel,
   onSubmit,
   onCancel,
 }: {
   initial: FormState;
+  /** E-mail входа, который уже есть у машиниста (при правке). */
+  savedEmail?: string | null;
   submitLabel: string;
   onSubmit: (form: FormState) => Promise<void>;
   onCancel?: () => void;
@@ -61,8 +67,9 @@ function OperatorForm({
       setError('Укажите имя машиниста');
       return;
     }
-    if (form.email.trim() && form.password.length < 8) {
-      setError('Временный пароль — не короче 8 символов');
+    const login = operatorLogin(form, savedEmail);
+    if (!login.ok) {
+      setError(login.error);
       return;
     }
     setSaving(true);
@@ -111,7 +118,7 @@ function OperatorForm({
         autoCapitalize="none"
         autoCorrect={false}
         maxLength={100}
-        placeholder="От 8 символов"
+        placeholder={savedEmail ? 'Оставьте пустым, чтобы не менять' : 'От 8 символов'}
       />
       {error ? <Text style={styles.error}>{error}</Text> : null}
       <Button title={submitLabel} loading={saving} onPress={() => void submit()} />
@@ -162,9 +169,10 @@ function OperatorRow({
           email: operator.email ?? '',
           password: '',
         }}
+        savedEmail={operator.email}
         submitLabel="Сохранить"
         onSubmit={async (form) => {
-          const result = await updateOperator(operator.id, toInput(form));
+          const result = await updateOperator(operator.id, toInput(form, operator.email));
           onChanged(result.operator);
           setEditing(false);
         }}

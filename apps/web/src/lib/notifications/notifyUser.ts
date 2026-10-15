@@ -13,7 +13,15 @@ import {
   serverChannels,
 } from './adapters';
 import { deliver, type DeliverDeps, type DeliverOptions, type DeliveryReport } from './deliver';
-import { prefsFrom, providerMatchesOrder, type NotificationEvent, type Recipient } from './routing';
+import { orderPoint } from '../geo';
+import { SITE } from '../site';
+import {
+  acceptedCategoryIds,
+  prefsFrom,
+  providerMatchesOrder,
+  type NotificationEvent,
+  type Recipient,
+} from './routing';
 
 function liveDeps(): DeliverDeps {
   return {
@@ -135,25 +143,37 @@ export async function notifyProvidersAboutOrder(orderId: string): Promise<void> 
     });
     if (!order || order.status !== 'OPEN') return;
 
-    const companies = await prisma.company.findMany({
-      where: { isProvider: true },
-      select: {
-        id: true,
-        baseLat: true,
-        baseLon: true,
-        deliveryRadiusKm: true,
-        equipment: {
-          where: { status: { not: 'RETIRED' } },
-          select: { categoryId: true },
-          distinct: ['categoryId'],
+    const [companies, categoryRows] = await Promise.all([
+      prisma.company.findMany({
+        where: { isProvider: true },
+        select: {
+          id: true,
+          baseLat: true,
+          baseLon: true,
+          baseAddress: true,
+          deliveryRadiusKm: true,
+          equipment: {
+            where: { status: { not: 'RETIRED' } },
+            select: { categoryId: true },
+            distinct: ['categoryId'],
+          },
+          users: {
+            where: { role: 'PROVIDER_ADMIN' },
+            select: { id: true },
+          },
         },
-        users: {
-          where: { role: 'PROVIDER_ADMIN' },
-          select: { id: true },
-        },
-      },
-      take: 1000,
-    });
+        take: 1000,
+      }),
+      prisma.equipmentCategory.findMany({ select: { id: true, slug: true, parentId: true } }),
+    ]);
+    const point = orderPoint(order.location, SITE.city);
+    const target = {
+      categoryId: order.categoryId,
+      categoryIds: acceptedCategoryIds(order.categoryId, categoryRows),
+      lat: point?.lat,
+      lon: point?.lon,
+      city: order.location?.city,
+    };
     const userIds = companies
       .filter((company) =>
         providerMatchesOrder(
@@ -162,12 +182,10 @@ export async function notifyProvidersAboutOrder(orderId: string): Promise<void> 
             baseLat: company.baseLat,
             baseLon: company.baseLon,
             radiusKm: company.deliveryRadiusKm,
+            baseAddress: company.baseAddress,
+            isHouse: company.id === HOUSE_COMPANY_ID,
           },
-          {
-            categoryId: order.categoryId,
-            lat: order.location?.latitude,
-            lon: order.location?.longitude,
-          },
+          target,
         ),
       )
       .flatMap((company) => company.users.map((user) => user.id))

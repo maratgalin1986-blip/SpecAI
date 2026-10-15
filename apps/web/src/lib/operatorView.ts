@@ -12,7 +12,10 @@ export interface OperatorBookingView {
   startDate: Date;
   endDate: Date;
   equipment: { id: string; name: string; imageUrls: string[] };
-  /** Site address from the delivery location; null when the customer gave none. */
+  /**
+   * Site address: the delivery location, else the address of the order the
+   * booking was made from; null when the customer gave none.
+   */
   siteAddress: string | null;
   /** The on-site contact phone, only while the booking is CONFIRMED or ACTIVE. */
   contactPhone: string | null;
@@ -34,12 +37,16 @@ export function bookingForOperator(
     equipment: { id: string; name: string; imageUrls?: string[] };
     customer?: { phone?: string | null } | null;
     deliveryLocation?: { addressLine: string; city: string } | null;
+    order?: { location?: { addressLine: string; city: string } | null } | null;
   },
   maskText: (text: string) => string = (text) => text,
 ): OperatorBookingView {
-  const location = booking.deliveryLocation;
+  const location = booking.deliveryLocation ?? booking.order?.location ?? null;
+  // The typed address often already names the city: do not repeat it.
   const siteAddress = location
-    ? [location.addressLine, location.city].filter(Boolean).join(', ')
+    ? location.city && !location.addressLine.toLowerCase().includes(location.city.toLowerCase())
+      ? [location.addressLine, location.city].filter(Boolean).join(', ')
+      : location.addressLine || location.city
     : null;
   return {
     id: booking.id,

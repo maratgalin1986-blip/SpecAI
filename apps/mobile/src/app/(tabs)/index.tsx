@@ -3,12 +3,12 @@ import { Redirect, useFocusEffect, useRouter } from 'expo-router';
 import React, { useCallback, useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { MapWebView } from '@/components/MapWebView';
+import { ProvidersMap } from '@/components/ProvidersMap';
 import { QuickOrderSheet } from '@/components/QuickOrderSheet';
 import { fetchMyOrders, type Order } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { pluralizeRu } from '@/lib/format';
-import { categoryIcon } from '@/lib/orderFlow';
+import { categoryIcon, pointAddress } from '@/lib/orderFlow';
 import { isProviderMode, setAppMode, usePrefs } from '@/lib/prefs';
 import { SITE } from '@/lib/site';
 import { colors, radius, shadow, spacing, TAP } from '@/theme';
@@ -39,6 +39,8 @@ export default function HomeScreen() {
   const { user } = useAuth();
   const isProvider = user?.role === 'PROVIDER_ADMIN';
   const [active, setActive] = useState<Order | null>(null);
+  // «Вызвать сюда»: a tap on the map becomes the order's address.
+  const [pickedAddress, setPickedAddress] = useState<string | null>(null);
 
   useFocusEffect(
     useCallback(() => {
@@ -53,6 +55,9 @@ export default function HomeScreen() {
   );
 
   const { loaded, mode } = usePrefs();
+  // Машинист видит только свои смены: после входа с экрана логина роутер
+  // открывает первую вкладку, поэтому уводим его отсюда.
+  if (user?.role === 'PROVIDER_OPERATOR') return <Redirect href="/(tabs)/shifts" />;
   // Исполнитель в своём кабинете начинает с «Ленты».
   if (isProvider && !loaded) return <View style={styles.screen} />;
   if (isProviderMode(user?.role, mode)) return <Redirect href="/(tabs)/feed" />;
@@ -61,7 +66,10 @@ export default function HomeScreen() {
 
   return (
     <View style={styles.screen}>
-      <MapWebView style={StyleSheet.absoluteFill} fallbackStyle={{ paddingTop: insets.top + 72 }} />
+      <ProvidersMap
+        style={StyleSheet.absoluteFill}
+        onPick={(point) => setPickedAddress(pointAddress(point))}
+      />
 
       <View
         style={[styles.topBar, { paddingTop: insets.top + spacing.sm }]}
@@ -145,7 +153,7 @@ export default function HomeScreen() {
             <Ionicons name="chevron-forward" size={20} color={colors.onDark} />
           </Pressable>
         ) : null}
-        <QuickOrderSheet />
+        <QuickOrderSheet pickedAddress={pickedAddress} />
       </KeyboardAvoidingView>
     </View>
   );

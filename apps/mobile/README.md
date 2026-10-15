@@ -205,10 +205,13 @@ npx eas build --platform all --profile production    # магазинные сб
   на сайте.
 
 Тестовая ссылка для проверки PR: обновление публикуется в ветку EAS с номером PR, например
-`pr-30` — `EXPO_PUBLIC_API_URL=<превью Vercel> npx eas update --branch pr-30 --environment preview
---message "PR #30"`; затем `npx eas update:list --branch pr-30` даёт ссылку
-`https://expo.dev/accounts/maratgalin1986s-team/projects/specai/updates/<group-id>`, которую
-открывают в Expo Go. Ветка `preview` остаётся для состояния `main`.
+`pr-30` — `EXPO_PUBLIC_API_URL=<превью Vercel> npx eas update --branch pr-30 --environment preview`
+(превью ветки `claude/expo-eas-publish`:
+`https://spec-ai-web-git-claude-expo-eas-publish-marat10.vercel.app`; хост
+`…-maratgalin1986s-projects.vercel.app` не открывается — 2026-10-14 три обновления ушли с ним
+и не работали). Команда:
+--message "PR #30"`; затем `npx eas update:list --branch pr-30`даёт ссылку`https://expo.dev/accounts/maratgalin1986s-team/projects/specai/updates/<group-id>`, которую
+открывают в Expo Go. Ветка `preview`остаётся для состояния`main`.
 
 ## Кабинет поставщика (роль PROVIDER_ADMIN)
 

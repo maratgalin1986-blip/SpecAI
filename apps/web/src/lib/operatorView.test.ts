@@ -37,6 +37,19 @@ describe('bookingForOperator', () => {
     expect(operatorCanCallSite('CANCELLED')).toBe(false);
   });
 
+  it('takes the site address from the order when the booking has no delivery location', () => {
+    const view = bookingForOperator({
+      ...booking,
+      deliveryLocation: null,
+      order: { location: { addressLine: 'проспект Мира, 10', city: 'Набережные Челны' } },
+    });
+    expect(view.siteAddress).toBe('проспект Мира, 10, Набережные Челны');
+    expect(
+      bookingForOperator({ ...booking, order: { location: { addressLine: 'x', city: 'y' } } })
+        .siteAddress,
+    ).toBe('ул. Ленина, 1, Казань');
+  });
+
   it('copes with a booking without a site or notes', () => {
     const view = bookingForOperator({
       ...booking,

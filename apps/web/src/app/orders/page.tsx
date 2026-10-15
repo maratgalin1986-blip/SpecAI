@@ -12,7 +12,7 @@ import { authOptions } from '@/lib/auth';
 import { isAdminRequest } from '@/lib/admin';
 import { isProvider } from '@/lib/fleet';
 import { SITE } from '@/lib/site';
-import { CallbackForm } from '@/components/CallbackForm';
+import { GuestOrderForm } from '@/components/GuestOrderForm';
 import { orderPrefill } from '@/lib/quickOrder';
 import {
   BOARD_SORT,
@@ -163,29 +163,46 @@ export default async function OrdersPage({ searchParams }: { searchParams: Order
   const hasFilters = Boolean(boardQuery.group || boardQuery.city || boardQuery.when !== 'all');
 
   const orderForm = !viewerIsProvider && (
-    <section id="new" className="scroll-mt-24">
+    <section id="new" data-order-form className="scroll-mt-24">
       <h2 className="mb-3 text-lg font-semibold">
         {forProvider ? `Заявка для «${forProvider.name}»` : 'Разместить заявку'}
       </h2>
-      <p className="mb-3 max-w-xl text-sm text-slate-600">
-        {forProvider
-          ? `Заявку увидит «${forProvider.name}» и другие исполнители — сравните предложения.`
-          : `Заявку увидят все исполнители со своей техникой, включая парк ${SITE.name}, и пришлют цены. Бесплатно.`}
-      </p>
+      {viewerId ? (
+        <p className="mb-3 max-w-xl text-sm text-slate-600">
+          {forProvider
+            ? `Заявку увидит «${forProvider.name}» и другие исполнители — сравните предложения.`
+            : `Заявку увидят все исполнители со своей техникой, включая парк ${SITE.name}, и пришлют цены. Бесплатно.`}
+        </p>
+      ) : (
+        // A guest's order goes on the board (POST /api/orders/guest); the
+        // phone stays hidden and opens to providers only on request.
+        <p className="mb-3 max-w-xl text-sm text-slate-600">
+          Без регистрации: заявку увидят{' '}
+          {forProvider ? `«${forProvider.name}» и другие исполнители` : 'все исполнители'} и пришлют
+          цены, а телефон откроется только по запросу исполнителя. С аккаунтом удобнее сравнивать
+          предложения:{' '}
+          <a href="/register" className="underline">
+            зарегистрируйтесь
+          </a>{' '}
+          или{' '}
+          <a href="/login" className="underline">
+            войдите
+          </a>{' '}
+          — это бесплатно.
+        </p>
+      )}
       {viewerId ? (
         <Card className="max-w-xl">
           <NewOrderForm provider={forProvider} initial={orderPrefill(searchParams)} />
         </Card>
       ) : (
         <div className="grid gap-4 lg:grid-cols-2">
+          {/* No account: the guest form puts the order on the board
+              (POST /api/orders/guest); providers bid as on any order. */}
           <Card>
-            <CallbackForm
-              source="orders"
-              title="Заявка без регистрации"
-              subtitle="Оставьте телефон и коротко опишите задачу — перезвоним и назовём цену."
-            />
+            <GuestOrderForm provider={forProvider} initial={orderPrefill(searchParams)} />
           </Card>
-          <Card className="flex flex-col justify-center gap-3">
+          <Card className="flex flex-col justify-center gap-3 self-start">
             <p className="font-semibold">Не знаете, какая техника нужна?</p>
             <p className="text-sm text-slate-600">
               Ответьте на 3 вопроса — подберём машину, покажем цену и погоду на день работ.
@@ -432,7 +449,8 @@ export default async function OrdersPage({ searchParams }: { searchParams: Order
           Найдено: {board.total}
           {board.totalPages > 1 && ` · страница ${board.page} из ${board.totalPages}`}
           {' · '}
-          заказчик виден как «Анна П.», контакты открываются после подтверждения брони
+          заказчик виден как «Анна П.», контакты — после подтверждения брони, а телефон из заявок
+          без аккаунта — по кнопке «Показать телефон»
         </p>
 
         {board.items.length === 0 ? (

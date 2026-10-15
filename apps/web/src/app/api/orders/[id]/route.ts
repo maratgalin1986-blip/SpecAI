@@ -1,13 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@specai/database';
 import { getRequestUser } from '@/lib/requestUser';
-import { isProvider, isHouseManager } from '@/lib/fleet';
+import { houseFirstBids, isProvider, isHouseManager } from '@/lib/fleet';
+import { loadCompanyStats } from '@/lib/companyStats';
+import { EMPTY_STATS, reliability } from '@/lib/reliability';
 import { customerShortName } from '@/lib/customerPrivacy';
 import { maskedContactFor } from '@/lib/chatOrders';
 import { updateOrderSchema } from '@specai/shared';
 import { INVALID_JSON_MESSAGE, readJson, zodErrorMessage } from '@/lib/apiInput';
 import { unreadMessagesByOrder } from '@/lib/orderChatAccess';
 import { maskContactsAndLinks } from '@/lib/privacy';
+import { bidForCustomer, bookedProviderSees } from '@/lib/bidPrivacy';
 
 export const dynamic = 'force-dynamic';
 
@@ -42,7 +45,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
         },
         orderBy: { price: 'asc' },
       },
-      booking: { select: { status: true } },
+      booking: { select: { status: true, equipment: { select: { companyId: true } } } },
     },
   });
   const isManager = isProvider(currentUser);
@@ -82,16 +85,37 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
   // Contacts open only with the booked company once it confirmed: until then
   // a provider's message to the customer (and the task text to providers)
   // goes without phones and links.
-  const contactsOpen = ['CONFIRMED', 'ACTIVE', 'COMPLETED'].includes(rest.booking?.status ?? '');
+  // The customer compares offers by trust signals as well as price (as on
+  // the web page): «Проверен», rating, completed orders, cancellations.
+  const trust = isOwner
+    ? await loadCompanyStats(rest.bids.map((bid) => bid.equipment.company.id)).catch(
+        () => new Map(),
+      )
+    : new Map();
+  const withTrust = <T extends (typeof rest.bids)[number]>(bid: T) => {
+    if (!isOwner) return bid;
+    const value = reliability(trust.get(bid.equipment.company.id) ?? EMPTY_STATS);
+    return {
+      ...bid,
+      equipment: {
+        ...bid.equipment,
+        company: {
+          ...bid.equipment.company,
+          verified: value.verified,
+          rating: value.rating,
+          ratingCount: value.ratingCount,
+          completed: value.completed,
+          cancelShare: value.cancelShare,
+          badges: value.badges,
+        },
+      },
+    };
+  };
+  // СпецПласт16 always leads the list (owner's rule), the rest by price.
+  const ordered = houseFirstBids(rest.bids, (bid) => bid.equipment.company.id).map(withTrust);
   const bids = isOwner
-    ? rest.bids.map((bid) => ({
-        ...bid,
-        message:
-          bid.message && !(contactsOpen && bid.status === 'ACCEPTED')
-            ? maskContactsAndLinks(bid.message)
-            : bid.message,
-      }))
-    : rest.bids.filter((bid) => bid.equipment.company.id === currentUser.companyId);
+    ? ordered.map((bid) => bidForCustomer(bid, rest.booking?.status))
+    : ordered.filter((bid) => bid.equipment.company.id === currentUser.companyId);
   const { booking, ...publicRest } = rest;
   void booking;
   // Unread chat messages for the «Открыть чат» badges in the app.
@@ -101,7 +125,9 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
   return NextResponse.json({
     order: {
       ...publicRest,
-      ...(isOwner ? {} : { description: maskContactsAndLinks(rest.description) }),
+      ...(isOwner || bookedProviderSees(rest.booking, currentUser.companyId)
+        ? {}
+        : { description: maskContactsAndLinks(rest.description) }),
       ...(isOwner ? { customerId } : {}),
       ...contact,
       ...(chatContact ? { chatContact } : {}),

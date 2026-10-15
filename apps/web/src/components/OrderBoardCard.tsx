@@ -1,4 +1,5 @@
 import { BID_NEEDS_PROVIDER_NOTE, bidLoginHref, type BoardCard } from '@/lib/orderBoard';
+import { CHAT_ORDER_REMOVAL_HREF } from '@/lib/chatOrders';
 
 // One card of the public orders board (lib/orderBoard.ts decides the text).
 // Graphite surfaces, one signal-orange action, as in the cabinets. Who looks
@@ -73,6 +74,12 @@ export function OrderBoardCard({
         </a>
         {viewer !== 'provider' && viewer !== 'owner' && (
           <span className="text-xs text-graphite-500">{BID_NEEDS_PROVIDER_NOTE}</span>
+        )}
+        {/* Orders imported from chats: how the author gets one removed (152-ФЗ ст. 18 ч. 3). */}
+        {card.sourceLabel && viewer !== 'owner' && (
+          <a href={CHAT_ORDER_REMOVAL_HREF} className="text-xs text-graphite-500 underline">
+            Это ваша заявка? Удалить
+          </a>
         )}
       </div>
     </article>

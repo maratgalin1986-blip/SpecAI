@@ -163,13 +163,13 @@ describe('contacts in messages', () => {
     expect(prepareChatMessage('x'.repeat(CHAT_MESSAGE_MAX_LENGTH + 1), true).ok).toBe(false);
   });
 
-  it('accepts only https attachments', () => {
+  it('accepts only files from our upload storage', () => {
+    const file = 'https://abc123.public.blob.vercel-storage.com/chat/a.jpg';
     expect(prepareAttachmentUrl(undefined)).toEqual({ ok: true, url: null });
     expect(prepareAttachmentUrl('')).toEqual({ ok: true, url: null });
-    expect(prepareAttachmentUrl('https://blob.vercel-storage.com/a.jpg')).toEqual({
-      ok: true,
-      url: 'https://blob.vercel-storage.com/a.jpg',
-    });
+    expect(prepareAttachmentUrl(file)).toEqual({ ok: true, url: file });
+    expect(prepareAttachmentUrl('https://t.me/someone').ok).toBe(false);
+    expect(prepareAttachmentUrl('https://blob.vercel-storage.com/a.jpg').ok).toBe(false);
     expect(prepareAttachmentUrl('http://x.ru/a.jpg').ok).toBe(false);
     expect(prepareAttachmentUrl('javascript:alert(1)').ok).toBe(false);
   });

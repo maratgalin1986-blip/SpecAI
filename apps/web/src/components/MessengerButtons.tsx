@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import { Icon } from '@/components/Icon';
 import { useJourneyInView } from '@/components/useJourneyInView';
 import { isOnShift, SHIFT, SITE } from '@/lib/site';
+import { hidesContactBar } from '@/lib/workPages';
 
 function WhatsAppIcon({ className = 'h-5 w-5' }: { className?: string }) {
   return (
@@ -53,8 +54,16 @@ export function MessengerButtons() {
     };
   }, []);
   const inJourney = useJourneyInView(pathname);
-  // /stroyka is full-screen with its own call buttons and no outbound links.
-  if (pathname?.startsWith('/admin') || pathname?.startsWith('/stroyka')) return null;
+  // /stroyka is full-screen with its own call buttons and no outbound links;
+  // cabinets, order pages and sign-in forms keep their buttons uncovered.
+  const hidden = hidesContactBar(pathname);
+  // Without the bar the chat button and the cookie strip move down (globals.css).
+  useEffect(() => {
+    const root = document.documentElement;
+    root.toggleAttribute('data-no-contact-bar', hidden);
+    return () => root.removeAttribute('data-no-contact-bar');
+  }, [hidden]);
+  if (hidden) return null;
   return (
     <>
       <nav
@@ -90,11 +99,11 @@ export function MessengerButtons() {
         <a
           href={pathname === '/' ? '#callback' : '/#callback'}
           onClick={(event) => {
-            // A page with its own callback form (landings, catalogue): go
-            // there instead of leaving for the home page.
+            // A page with its own callback or order form (landings, catalogue,
+            // a machine, the board): go there instead of leaving for the home page.
             const form =
               document.getElementById('callback') ??
-              document.querySelector<HTMLElement>('[data-callback-form]');
+              document.querySelector<HTMLElement>('[data-callback-form], [data-order-form]');
             if (!form) return;
             event.preventDefault();
             const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;

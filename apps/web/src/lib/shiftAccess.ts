@@ -28,6 +28,8 @@ export const bookingForShiftsInclude = {
   equipment: { select: { id: true, name: true, companyId: true, imageUrls: true } },
   customer: { select: { id: true, phone: true } },
   deliveryLocation: { select: { addressLine: true, city: true } },
+  // A booking made from an order has no delivery location: the site is the order's.
+  order: { select: { location: { select: { addressLine: true, city: true } } } },
 } satisfies Prisma.BookingInclude;
 
 export type BookingForShifts = Prisma.BookingGetPayload<{

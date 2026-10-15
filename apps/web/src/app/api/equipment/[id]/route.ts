@@ -6,7 +6,8 @@ import { getRequestUser } from '@/lib/requestUser';
 import { isProvider } from '@/lib/fleet';
 import { INVALID_JSON_MESSAGE, readJson, zodErrorMessage } from '@/lib/apiInput';
 import { listingPhoto } from '@/lib/equipmentPhoto';
-import { customerRates } from '@/lib/equipmentCatalog';
+import { maskContactsAndLinks, containsContact } from '@/lib/privacy';
+import { customerRateFields, customerRates } from '@/lib/equipmentCatalog';
 
 export const dynamic = 'force-dynamic';
 
@@ -31,9 +32,11 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     : null;
   if (own) {
     return NextResponse.json({
-      // The edit form saves imageUrls back: keep them as stored, add only the cover.
+      // The edit form saves imageUrls back: keep them as stored, add only the
+      // cover and the rates the customer sees (the bid form prefills from them).
       equipment: {
         ...own,
+        ...customerRateFields({ ...own, categoryName: own.category.name }),
         ...listingPhoto(own, request.nextUrl.origin),
         imageUrls: own.imageUrls,
       },
@@ -59,6 +62,9 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       ...equipment,
       // Prices as on the site (the house fleet never below lib/prices.ts).
       ...customerRates({ ...equipment, categoryName: equipment.category.name }),
+      ...customerRateFields({ ...equipment, categoryName: equipment.category.name }),
+      // As on the machine page: no phones or links in the public description.
+      description: equipment.description && maskContactsAndLinks(equipment.description),
       ...listingPhoto(equipment, request.nextUrl.origin),
     },
   });
@@ -73,7 +79,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
 export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
   const currentUser = await getRequestUser(request);
   if (!isProvider(currentUser)) {
-    return NextResponse.json({ error: 'Требуется аккаунт поставщика' }, { status: 403 });
+    return NextResponse.json({ error: 'Требуется аккаунт исполнителя' }, { status: 403 });
   }
 
   const body = await readJson(request);
@@ -85,6 +91,15 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
     return NextResponse.json({ error: zodErrorMessage(parsed.error) }, { status: 400 });
   }
   const input = parsed.data;
+  if (typeof input.name === 'string' && containsContact(input.name)) {
+    return NextResponse.json(
+      {
+        error:
+          'Уберите телефон, почту и ссылки из названия: контакты откроются заказчику после подтверждения брони',
+      },
+      { status: 400 },
+    );
+  }
   if (Object.keys(input).length === 0) {
     return NextResponse.json({ error: 'Нечего сохранять' }, { status: 400 });
   }

@@ -7,6 +7,7 @@ import {
   medianTimeToFirstBid,
   ordersInPeriod,
   parseFunnelPeriod,
+  staleOrders,
   stuckOrders,
   type FunnelOrder,
 } from './adminFunnel';
@@ -124,6 +125,47 @@ describe('stuckOrders', () => {
     ]);
     expect(stuck[0]!.hours).toBeCloseTo(60);
     expect(stuck[1]!.hours).toBeCloseTo(30);
+  });
+
+  it('flags a booking the provider has not confirmed for 24 h', () => {
+    const waiting = order({
+      id: 'unconfirmed',
+      status: 'MATCHED',
+      bookingStatus: 'PENDING',
+      bookingCreatedAt: hoursAgo(26),
+    });
+    const fresh = order({
+      id: 'fresh',
+      status: 'MATCHED',
+      bookingStatus: 'PENDING',
+      bookingCreatedAt: hoursAgo(3),
+    });
+    const confirmed = order({
+      id: 'confirmed',
+      status: 'MATCHED',
+      bookingStatus: 'CONFIRMED',
+      bookingCreatedAt: hoursAgo(50),
+    });
+    expect(
+      stuckOrders([waiting, fresh, confirmed], NOW).map((item) => [item.order.id, item.reason]),
+    ).toEqual([['unconfirmed', 'not_confirmed']]);
+  });
+
+  it('leaves orders whose dates have passed to staleOrders', () => {
+    // NOW is 10 October, 15:00 in Moscow.
+    const past = order({
+      id: 'past',
+      createdAt: hoursAgo(200),
+      desiredEndDate: new Date('2026-10-09T00:00:00+03:00'),
+    });
+    const today = order({
+      id: 'today',
+      createdAt: hoursAgo(200),
+      desiredEndDate: new Date('2026-10-10T00:00:00+03:00'),
+    });
+    expect(stuckOrders([past, today], NOW).map((item) => item.order.id)).toEqual(['today']);
+    expect(staleOrders([past, today], NOW).map((item) => item.id)).toEqual(['past']);
+    expect(staleOrders([{ ...past, status: 'CANCELLED' }], NOW)).toEqual([]);
   });
 });
 

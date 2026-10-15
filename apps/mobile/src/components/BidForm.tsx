@@ -4,7 +4,7 @@ import { Button, Chip, Input } from '@/components/ui';
 import { ApiError, createBid, type Equipment, type Order } from '@/lib/api';
 import { formatMoney } from '@/lib/format';
 import { orderDays, priceByRate } from '@/lib/orderFlow';
-import { bidTotal, parseAmount } from '@/lib/providerFeed';
+import { bidShiftRate, bidTotal, parseAmount } from '@/lib/providerFeed';
 import { colors, spacing } from '@/theme';
 
 /**
@@ -55,7 +55,10 @@ export function BidForm({
   const [error, setError] = useState<string | null>(null);
 
   const selected = equipment.find((item) => item.id === equipmentId);
-  const suggested = selected ? priceByRate(selected.dailyRate, days) : 0;
+  // The shift price the customer sees on the card (the house fleet by the
+  // price list) — the server refuses a house machine below it.
+  const cardShift = selected ? bidShiftRate(selected) : 0;
+  const suggested = selected ? priceByRate(cardShift, days) : 0;
   const shiftValue = parseAmount(shiftPrice);
   const shiftsValue = Math.max(1, Math.round(parseAmount(shifts) || 1));
   const deliveryValue = delivery.trim() === '' ? 0 : parseAmount(delivery);
@@ -144,7 +147,7 @@ export function BidForm({
             label="Смена"
             value={shiftPrice}
             onChangeText={setShiftPrice}
-            placeholder={selected ? String(Math.round(Number(selected.dailyRate))) : '0'}
+            placeholder={cardShift ? String(cardShift) : '0'}
             keyboardType="decimal-pad"
           />
         </View>
@@ -159,10 +162,10 @@ export function BidForm({
         </View>
       </View>
       <View style={styles.chips}>
-        {selected && !shiftPrice ? (
+        {selected && cardShift > 0 && !shiftPrice ? (
           <Chip
-            label={`Смена по прайсу: ${formatMoney(selected.dailyRate, selected.currency)}`}
-            onPress={() => setShiftPrice(String(Math.round(Number(selected.dailyRate))))}
+            label={`Смена по прайсу: ${formatMoney(cardShift, selected.currency)}`}
+            onPress={() => setShiftPrice(String(cardShift))}
             accessibilityLabel="Подставить цену смены по прайсу"
           />
         ) : null}

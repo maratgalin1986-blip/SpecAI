@@ -1,13 +1,15 @@
 // Company branding and contacts, in one place so they're easy to update.
 export const SITE = {
   name: 'СпецПласт16',
-  // The platform's own name (estimates, design, site tour); the company that
-  // does the work is always `name`.
+  // The platform (the aggregator) is `platform`, shown as «ИИСтройка24 от
+  // СпецПласт16»; `name` is the house provider, the materials seller and the
+  // legal operator of the site.
   platform: 'ИИСтройка24',
   tagline: 'Аренда спецтехники и строительные услуги в Татарстане',
   description:
-    'СпецПласт16 — аренда спецтехники с оператором в Набережных Челнах и по Татарстану: ' +
-    'экскаваторы-погрузчики, автокраны, погрузчики. ИИ-агенты подберут технику и оформят заявку.',
+    'ИИСтройка24 от СпецПласт16 — заказ спецтехники с машинистом в Набережных Челнах и по ' +
+    'Татарстану: экскаваторы-погрузчики, автокраны, погрузчики от СпецПласт16 и других ' +
+    'исполнителей. ИИ-агенты подберут технику и оформят заявку.',
   city: 'Набережные Челны',
   region: 'Республика Татарстан',
   phone: '+7 (927) 242-80-88',

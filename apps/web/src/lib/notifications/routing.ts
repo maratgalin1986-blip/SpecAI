@@ -163,13 +163,24 @@ export type NotificationEvent =
     }
   /** To providers at 19:00: tomorrow's open orders in their categories and radius. */
   | { type: 'digest.evening'; items: string[] }
-  /** To the customer at 19:00: the booking starts tomorrow. */
+  /** At 19:00, a CONFIRMED booking starts tomorrow: to the customer, the provider and the operator. */
   | {
       type: 'booking.tomorrow';
       bookingId: string;
       equipmentName: string;
       startDate: Date;
       providerName?: string | null;
+      /** Who reads it; 'customer' when not given. */
+      audience?: 'customer' | 'provider' | 'operator';
+    }
+  /** To СпецПласт16's managers: a bid on a guest or chat order, whose customer has no account to hear of it. */
+  | {
+      type: 'bid.relay';
+      orderId: string;
+      equipmentName: string;
+      price: string;
+      companyName?: string | null;
+      fromChat: boolean;
     }
   /** To the customer: the operator moved the shift (Выехал, На объекте, Работа…). */
   | {
@@ -301,10 +312,29 @@ export function renderNotification(event: NotificationEvent): RenderedNotificati
       };
     }
     case 'booking.tomorrow':
+      if (event.audience === 'provider' || event.audience === 'operator') {
+        return {
+          title: 'Завтра выезд на объект',
+          body:
+            `${event.equipmentName}, ${day(event.startDate)}. ` +
+            (event.audience === 'provider'
+              ? 'Проверьте машиниста и время подачи; адрес и контакты заказчика — в кабинете.'
+              : 'Адрес и время подачи — в приложении, отметьте «Выехал», когда тронетесь.'),
+          path: event.audience === 'provider' ? '/provider#bookings' : '/dashboard#shifts',
+        };
+      }
       return {
         title: 'Завтра начало работ',
         body: `${event.equipmentName}${event.providerName ? ` · ${event.providerName}` : ''}, ${day(event.startDate)}. Проверьте адрес и время подачи; исполнитель на связи в кабинете.`,
         path: '/dashboard#bookings',
+      };
+    case 'bid.relay':
+      return {
+        title: `Предложение по заявке ${event.fromChat ? 'из чата' : 'гостя с сайта'}`,
+        body:
+          `${event.equipmentName}${event.companyName ? ` · ${event.companyName}` : ''} — ${event.price}. ` +
+          'У заказчика нет кабинета: позвоните ему и передайте предложение.',
+        path: `/orders/${event.orderId}`,
       };
     case 'shift.status': {
       const time = event.at.toLocaleTimeString('ru-RU', {
@@ -373,35 +403,102 @@ export function distanceKm(a: { lat: number; lon: number }, b: { lat: number; lo
   return 2 * 6371 * Math.asin(Math.min(1, Math.sqrt(h)));
 }
 
+/**
+ * Machine types that stand in for each other in a new-order alert. The
+ * catalogue split of 2026-10-11 kept the old slugs (so every machine listed as
+ * «Экскаваторы» before is now «гусеничный») and added new leaves nobody owns
+ * yet; without this a «колёсный» or «мини» order reached no one.
+ */
+export const CATEGORY_FAMILIES: readonly (readonly string[])[] = [
+  ['excavators', 'wheeled-excavators', 'mini-excavators'],
+  ['cranes', 'crawler-cranes'],
+  ['aerial-platforms', 'scissor-lifts'],
+];
+
+export interface CategoryRow {
+  id: string;
+  slug: string;
+  parentId: string | null;
+}
+
+/**
+ * Ids of the categories whose machines can take an order of `categoryId`:
+ * the category itself, its family (CATEGORY_FAMILIES), its group (a machine
+ * filed under the group row itself) and, for an order filed under a group,
+ * every category of that group. Null for an order without a category.
+ */
+export function acceptedCategoryIds(
+  categoryId: string | null | undefined,
+  rows: readonly CategoryRow[],
+): string[] | null {
+  if (!categoryId) return null;
+  const row = rows.find((item) => item.id === categoryId);
+  if (!row) return [categoryId];
+  const ids = new Set([categoryId]);
+  if (row.parentId) ids.add(row.parentId);
+  for (const item of rows) if (item.parentId === row.id) ids.add(item.id);
+  const family = CATEGORY_FAMILIES.find((slugs) => slugs.includes(row.slug));
+  if (family) {
+    for (const item of rows) if (family.includes(item.slug)) ids.add(item.id);
+  }
+  return [...ids];
+}
+
 export interface ProviderForMatch {
   categoryIds: string[];
   baseLat?: number | null;
   baseLon?: number | null;
   /** The company's own delivery radius (Company.deliveryRadiusKm); ORDER_RADIUS_KM without it. */
   radiusKm?: number | null;
+  /** Company.baseAddress: matched against the city of an order with no known point. */
+  baseAddress?: string | null;
+  /** СпецПласт16's own company: its managers sort out orders nobody can place. */
+  isHouse?: boolean;
 }
 
 export interface OrderForMatch {
   categoryId?: string | null;
+  /** acceptedCategoryIds(categoryId); just [categoryId] when not given. */
+  categoryIds?: string[] | null;
+  /** The work site, or a known city's centre (lib/geo.ts orderPoint). */
   lat?: number | null;
   lon?: number | null;
+  /** The city text, for an order whose point is unknown. */
+  city?: string | null;
+}
+
+function normalizePlace(text: string): string {
+  return text.toLowerCase().replace(/ё/g, 'е').replace(/\s+/g, ' ').trim();
+}
+
+/** Whether a provider's base address names the city («Бавлы» in «Бавлы, ул. …»). */
+export function addressNamesCity(address: string | null | undefined, city: string): boolean {
+  const name = normalizePlace(city);
+  if (!address || name.length < 3) return false;
+  const stem = name.length > 4 ? name.slice(0, -1) : name;
+  return normalizePlace(address).includes(stem);
 }
 
 /**
- * A provider hears about an order when it has machinery of the order's
- * category (any, if the order has none) and, when both points are known, its
- * base is within its own delivery radius (ORDER_RADIUS_KM when none is set)
- * of the work site.
+ * A provider hears about an order when it has machinery that can take it
+ * (OrderForMatch.categoryIds; any, if the order has no category) and its base
+ * is within its own delivery radius (ORDER_RADIUS_KM when none is set) of the
+ * work site. A provider that has not set its base is not filtered by distance.
+ *
+ * An order whose place is unknown (a chat order from a city we cannot place)
+ * is never spread over the whole region: only the house company hears of it,
+ * plus providers whose base address names the order's city.
  */
 export function providerMatchesOrder(provider: ProviderForMatch, order: OrderForMatch): boolean {
   if (provider.categoryIds.length === 0) return false;
-  if (order.categoryId && !provider.categoryIds.includes(order.categoryId)) return false;
-  if (
-    order.lat != null &&
-    order.lon != null &&
-    provider.baseLat != null &&
-    provider.baseLon != null
-  ) {
+  const accepted = order.categoryIds ?? (order.categoryId ? [order.categoryId] : null);
+  if (accepted && !accepted.some((id) => provider.categoryIds.includes(id))) return false;
+  if (order.lat == null || order.lon == null) {
+    return Boolean(
+      provider.isHouse || (order.city && addressNamesCity(provider.baseAddress, order.city)),
+    );
+  }
+  if (provider.baseLat != null && provider.baseLon != null) {
     const km = distanceKm(
       { lat: order.lat, lon: order.lon },
       { lat: provider.baseLat, lon: provider.baseLon },

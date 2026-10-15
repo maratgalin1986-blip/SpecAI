@@ -42,6 +42,9 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
   if (!bid || bid.order.customerId !== currentUser.id) {
     return NextResponse.json({ error: 'Предложение не найдено' }, { status: 404 });
   }
+  if (currentUser.companyId && bid.equipment.companyId === currentUser.companyId) {
+    return NextResponse.json({ error: 'Нельзя заказывать собственную технику' }, { status: 403 });
+  }
   if (bid.order.status !== 'OPEN' || bid.status !== 'PENDING') {
     return NextResponse.json({ error: 'Заявка уже закрыта' }, { status: 409 });
   }

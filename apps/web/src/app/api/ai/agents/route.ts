@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { clientIp } from '@/lib/loginErrors';
 import { prisma } from '@specai/database';
 import {
   ORDER_STATUS_LABELS,
@@ -11,7 +12,8 @@ import { routeToAgent, runAgent, type AgentToolHandlers } from '@specai/ai-servi
 import { getRequestUser } from '@/lib/requestUser';
 import { formatRate } from '@/lib/money';
 import { customerRates } from '@/lib/equipmentCatalog';
-import { maskContacts, maskMessagesForAi } from '@/lib/privacy';
+import { maskContactsAndLinks, maskMessagesForAi } from '@/lib/privacy';
+import { EXCERPT_MAX } from '@/lib/orderBoard';
 import { LEAD_RATE_LIMIT, checkRateLimit } from '@/lib/rateLimit';
 import { HOUSE_FIRST_ORDER, PUBLIC_FLEET, isProvider, isPublicEquipment } from '@/lib/fleet';
 import { notifyTelegram } from '@/lib/notify';
@@ -76,7 +78,7 @@ export async function POST(request: NextRequest) {
   const user = await getRequestUser(request);
 
   // Guests can chat too, so limit by user or IP to keep AI costs bounded.
-  const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown';
+  const ip = clientIp(request);
   const rateKey = user ? `ai:agents:user:${user.id}` : `ai:agents:ip:${ip}`;
   for (const window of user ? AGENT_LIMITS_USER : AGENT_LIMITS_GUEST) {
     const rate = checkRateLimit(`${rateKey}:${window.windowMs}`, window);
@@ -238,7 +240,8 @@ export async function POST(request: NextRequest) {
         ...customerRates({ ...item, categoryName: item.category.name }),
         currency: item.currency,
         specs: item.specs,
-        description: item.description,
+        // As on the machine page: no phones or links reach the model.
+        description: item.description && maskContactsAndLinks(item.description),
         averageRating: ratings.length
           ? Math.round((ratings.reduce((a, b) => a + b, 0) / ratings.length) * 10) / 10
           : null,
@@ -340,8 +343,9 @@ export async function POST(request: NextRequest) {
       });
       return orders.map((o) => ({
         id: o.id,
-        // Contacts in orders imported from chats are hidden (152-ФЗ).
-        description: o.source === 'SITE' ? o.description : maskContacts(o.description),
+        // Contacts and links stay hidden whatever the source (152-ФЗ); an
+        // excerpt, as on the public board.
+        description: maskContactsAndLinks(o.description).slice(0, EXCERPT_MAX),
         category: o.category?.name ?? null,
         desiredStartDate: o.desiredStartDate.toISOString().slice(0, 10),
         desiredEndDate: o.desiredEndDate.toISOString().slice(0, 10),

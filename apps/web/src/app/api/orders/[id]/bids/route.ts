@@ -10,10 +10,14 @@ import { INVALID_JSON_MESSAGE, readJson, zodErrorMessage } from '@/lib/apiInput'
 import { BLOCKING_BOOKING_STATUSES, unavailableEquipmentMessage } from '@/lib/bookingRules';
 import { findOverlappingBooking } from '@/lib/bookingConflicts';
 import { isProvider } from '@/lib/fleet';
-import { notifyUser } from '@/lib/notifications/notifyUser';
+import { notifyCompany, notifyUser } from '@/lib/notifications/notifyUser';
+import { isRealEmail } from '@/lib/notifications/routing';
+import { HOUSE_COMPANY_ID } from '@/lib/fleet';
 import { bidBreakdownSchema, type BidBreakdownInput } from '@specai/shared';
-import { bidSumMatches, bidTotal } from '@/lib/offerBreakdown';
+import { bidSumMatches, bidTotal, houseFloorError, orderDays } from '@/lib/offerBreakdown';
+import { bidShiftFloor } from '@/lib/equipmentCatalog';
 import { isLateBid } from '@/lib/bidWindow';
+import { maskContactsAndLinks } from '@/lib/privacy';
 
 const requestSchema = z.object({
   // Not a cuid: the owner's own fleet uses readable ids like "sp16-jcb-4cx".
@@ -41,7 +45,7 @@ function breakdownData(data: BidBreakdownInput) {
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
   const currentUser = await getRequestUser(request);
   if (!isProvider(currentUser)) {
-    return NextResponse.json({ error: 'Требуется аккаунт поставщика' }, { status: 403 });
+    return NextResponse.json({ error: 'Требуется аккаунт исполнителя' }, { status: 403 });
   }
 
   const body = await readJson(request);
@@ -71,16 +75,30 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
 
   const order = await prisma.order.findUnique({
     where: { id: params.id },
-    include: { customer: { select: { email: true } } },
+    include: { customer: { select: { email: true, companyId: true } } },
   });
   if (!order || order.status !== 'OPEN') {
     return NextResponse.json({ error: 'Заявка не найдена или уже закрыта' }, { status: 404 });
+  }
+  // No offers on the company's own orders: a self-made deal would count as a
+  // completed order and let the company rate itself.
+  if (
+    order.customerId === currentUser.id ||
+    (!!currentUser.companyId && order.customer.companyId === currentUser.companyId)
+  ) {
+    return NextResponse.json(
+      { error: 'Нельзя предлагать технику на собственную заявку' },
+      { status: 403 },
+    );
   }
   // After bidsUntil the bid is still taken, but marked late for the customer.
   const late = isLateBid(order.bidsUntil);
   const lateNote = late ? ' — срок приёма предложений истёк, заказчик всё равно его увидит' : '';
 
-  const equipment = await prisma.equipment.findUnique({ where: { id: parsed.data.equipmentId } });
+  const equipment = await prisma.equipment.findUnique({
+    where: { id: parsed.data.equipmentId },
+    include: { category: { select: { name: true } } },
+  });
   if (!equipment || equipment.companyId !== currentUser.companyId) {
     return NextResponse.json(
       { error: 'Можно предлагать только собственную технику' },
@@ -93,6 +111,18 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       { error: `${unavailable} — предложить можно только доступную технику` },
       { status: 409 },
     );
+  }
+  // СпецПласт16's own machines are offered at no less than the shift price
+  // the customer already sees on the card (lib/equipmentCatalog.ts), so one
+  // machine never shows two prices; other providers set their own prices. A
+  // low price is refused with the minimum, never raised silently.
+  const floorError = houseFloorError(
+    parsed.data,
+    bidShiftFloor({ ...equipment, categoryName: equipment.category.name }),
+    orderDays(order.desiredStartDate, order.desiredEndDate),
+  );
+  if (floorError) {
+    return NextResponse.json({ error: floorError }, { status: 400 });
   }
 
   // The machine must be free on the order's dates.
@@ -158,7 +188,8 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       equipmentName: equipment.name,
       price: bid.price,
       currency: bid.currency,
-      message: bid.message,
+      // As on the order page: no phones or links before the booking.
+      message: bid.message && maskContactsAndLinks(bid.message),
     });
     // The customer's chosen channels; the e-mail is the newBidReceived letter.
     const company = await prisma.company.findUnique({
@@ -176,12 +207,24 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       },
       { email: template },
     );
-    if (order.source !== 'SITE') {
-      // Imported orders have no real customer account — tell the site owner instead.
+    if (!isRealEmail(order.customer.email)) {
+      // Chat-imported and guest orders belong to technical accounts (.invalid
+      // e-mail, no channels): nobody would hear of the bid, though the guest
+      // was promised a call. СпецПласт16's managers relay it.
+      const fromChat = order.source !== 'SITE';
       await notifyTelegram(
-        `💰 Предложение по заявке из чата: ${equipment.name} — ${formatMoney(bid.price, bid.currency)}\n` +
+        `💰 Предложение по заявке ${fromChat ? 'из чата' : 'гостя с сайта'}: ${equipment.name} — ${formatMoney(bid.price, bid.currency)}\n` +
+          (order.contactPhone ? `Позвоните заказчику: ${order.contactPhone}\n` : '') +
           `${order.description.slice(0, 200)}\n${siteUrl()}/orders/${order.id}`,
       );
+      await notifyCompany(HOUSE_COMPANY_ID, {
+        type: 'bid.relay',
+        orderId: order.id,
+        equipmentName: equipment.name,
+        price: formatMoney(bid.price, bid.currency),
+        companyName: company?.name,
+        fromChat,
+      });
     }
   } catch (error) {
     console.error('[notify] newBidReceived failed', error);

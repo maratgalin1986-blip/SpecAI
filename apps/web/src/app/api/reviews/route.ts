@@ -34,6 +34,9 @@ export async function POST(request: NextRequest) {
   if (!booking || booking.customerId !== currentUser.id) {
     return NextResponse.json({ error: 'Бронирование не найдено' }, { status: 404 });
   }
+  if (currentUser.companyId && booking.equipment.companyId === currentUser.companyId) {
+    return NextResponse.json({ error: 'Нельзя оценивать собственную компанию' }, { status: 403 });
+  }
   if (booking.status !== 'COMPLETED') {
     return NextResponse.json(
       { error: 'Отзыв можно оставить только на завершённое бронирование' },

@@ -1,6 +1,6 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Link, useFocusEffect, useRouter, type Href } from 'expo-router';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   FlatList,
@@ -26,6 +26,7 @@ import {
   ErrorBanner,
   Loader,
   SectionTitle,
+  Segmented,
 } from '@/components/ui';
 import {
   ApiError,
@@ -43,7 +44,7 @@ import {
   type Order,
   type ProviderBooking,
 } from '@/lib/api';
-import { deliveryEstimate, isBidWindowOpen } from '@/lib/providerFeed';
+import { bidShiftRate, deliveryEstimate, feedOrders } from '@/lib/providerFeed';
 import { EQUIPMENT_STATUS_OPTIONS, formatMoney, pluralizeRu } from '@/lib/format';
 import {
   addressFromDescription,
@@ -60,6 +61,13 @@ import { colors, radius, shadow, spacing, TAP, typography } from '@/theme';
 
 /** На линии лента обновляется сама раз в минуту. */
 const POLL_MS = 60_000;
+
+type FeedScope = 'near' | 'all';
+
+const SCOPES = [
+  { value: 'near', label: 'Подходят мне' },
+  { value: 'all', label: 'Все заявки' },
+] as const;
 
 const STATUS_COLORS: Record<string, string> = {
   AVAILABLE: colors.success,
@@ -288,7 +296,8 @@ function FeedCard({
   const distance = km !== null ? formatDistance(km) : null;
   const delivery = deliveryEstimate(km, pricePerKm);
   const ownBid = order.bids.find((bid) => bid.status === 'PENDING');
-  const byRate = machine ? priceByRate(machine.dailyRate, days) : 0;
+  // The shift price the customer sees on the card: the house fleet by the price list.
+  const byRate = machine ? priceByRate(bidShiftRate(machine), days) : 0;
   const bidCount = order.bidCount ?? order.bids.length;
 
   return (
@@ -311,7 +320,7 @@ function FeedCard({
           />
         ) : null}
       </View>
-      <BidCountdown bidsUntil={order.bidsUntil} />
+      <BidCountdown bidsUntil={order.bidsUntil} lateStillOpen />
       {address ? (
         <View style={styles.orderPlace}>
           <Ionicons name="location-outline" size={16} color={colors.primary} />
@@ -390,37 +399,72 @@ export default function FeedScreen() {
   const [openBidFor, setOpenBidFor] = useState<string | null>(null);
   const [takingId, setTakingId] = useState<string | null>(null);
   const [submittedIds, setSubmittedIds] = useState<Set<string>>(new Set());
+  // «Подходят мне» — виды техники компании в радиусе подачи от базы; «Все» — вся лента.
+  const [scope, setScope] = useState<FeedScope>('near');
+  const [nextOffset, setNextOffset] = useState<number | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const morePagesLoaded = useRef(false);
 
-  const load = useCallback(async (mode: 'initial' | 'refresh' | 'silent' = 'initial') => {
-    if (mode === 'refresh') setRefreshing(true);
-    if (mode !== 'silent') setError(null);
+  const load = useCallback(
+    async (mode: 'initial' | 'refresh' | 'silent' = 'initial') => {
+      if (mode === 'refresh') setRefreshing(true);
+      if (mode !== 'silent') setError(null);
+      try {
+        const [ordersResult, equipmentResult, bookingsResult, pinResult, documentsResult] =
+          await Promise.allSettled([
+            fetchOpenOrders({ scope }),
+            fetchMyEquipment(),
+            fetchProviderBookings(),
+            fetchMyCompanyPin(),
+            fetchMyDocuments(),
+          ]);
+        // Тихое обновление не сбрасывает уже догруженные страницы.
+        if (
+          ordersResult.status === 'fulfilled' &&
+          !(mode === 'silent' && morePagesLoaded.current)
+        ) {
+          morePagesLoaded.current = false;
+          setOrders(ordersResult.value.orders.filter((order) => order.status === 'OPEN'));
+          setNextOffset(ordersResult.value.nextOffset ?? null);
+          setNow(new Date());
+        }
+        if (equipmentResult.status === 'fulfilled') setEquipment(equipmentResult.value.equipment);
+        if (bookingsResult.status === 'fulfilled') setBookings(bookingsResult.value.bookings);
+        if (pinResult.status === 'fulfilled') setPin(pinResult.value.company);
+        if (documentsResult.status === 'fulfilled') setDocuments(documentsResult.value.summary);
+        if (ordersResult.status === 'rejected') throw ordersResult.reason;
+      } catch (caught) {
+        if (mode !== 'silent') {
+          setError(caught instanceof ApiError ? caught.message : 'Не удалось загрузить заявки');
+        }
+        setOrders((prev) => prev ?? []);
+      } finally {
+        setRefreshing(false);
+      }
+    },
+    [scope],
+  );
+
+  const loadMore = async () => {
+    if (nextOffset === null || loadingMore) return;
+    setLoadingMore(true);
     try {
-      const [ordersResult, equipmentResult, bookingsResult, pinResult, documentsResult] =
-        await Promise.allSettled([
-          fetchOpenOrders(),
-          fetchMyEquipment(),
-          fetchProviderBookings(),
-          fetchMyCompanyPin(),
-          fetchMyDocuments(),
-        ]);
-      if (ordersResult.status === 'fulfilled') {
-        setOrders(ordersResult.value.orders.filter((order) => order.status === 'OPEN'));
-        setNow(new Date());
-      }
-      if (equipmentResult.status === 'fulfilled') setEquipment(equipmentResult.value.equipment);
-      if (bookingsResult.status === 'fulfilled') setBookings(bookingsResult.value.bookings);
-      if (pinResult.status === 'fulfilled') setPin(pinResult.value.company);
-      if (documentsResult.status === 'fulfilled') setDocuments(documentsResult.value.summary);
-      if (ordersResult.status === 'rejected') throw ordersResult.reason;
+      const result = await fetchOpenOrders({ scope, offset: nextOffset });
+      morePagesLoaded.current = true;
+      setOrders((prev) => {
+        const seen = new Set((prev ?? []).map((order) => order.id));
+        return [
+          ...(prev ?? []),
+          ...result.orders.filter((order) => order.status === 'OPEN' && !seen.has(order.id)),
+        ];
+      });
+      setNextOffset(result.nextOffset ?? null);
     } catch (caught) {
-      if (mode !== 'silent') {
-        setError(caught instanceof ApiError ? caught.message : 'Не удалось загрузить заявки');
-      }
-      setOrders((prev) => prev ?? []);
+      setError(caught instanceof ApiError ? caught.message : 'Не удалось загрузить заявки');
     } finally {
-      setRefreshing(false);
+      setLoadingMore(false);
     }
-  }, []);
+  };
 
   useFocusEffect(
     useCallback(() => {
@@ -434,10 +478,8 @@ export default function FeedScreen() {
     const timer = setInterval(() => setNow(new Date()), 60_000);
     return () => clearInterval(timer);
   }, []);
-  const openOrders = useMemo(
-    () => (orders ?? []).filter((order) => isBidWindowOpen(order, now)),
-    [orders, now],
-  );
+  // Предзаказы с вышедшим сроком приёма предложений остаются (в конце ленты).
+  const openOrders = useMemo(() => feedOrders(orders ?? [], now), [orders, now]);
 
   const available = useMemo(
     () => equipment.filter((item) => item.status === 'AVAILABLE'),
@@ -472,7 +514,10 @@ export default function FeedScreen() {
 
   const take = (order: Order, machine: Equipment) => {
     const days = orderDays(order.desiredStartDate, order.desiredEndDate);
-    const price = priceByRate(machine.dailyRate, days);
+    // Same number as on the machine's card (customerDailyRate), so the
+    // customer sees one price and the server's price-list check passes.
+    const shiftRate = bidShiftRate(machine);
+    const price = priceByRate(shiftRate, days);
     Alert.alert(
       'Беру по прайсу',
       `${machine.name}: ${formatMoney(price, machine.currency)} за ${days === 1 ? '1 смену' : pluralizeRu(days, ['день', 'дня', 'дней'])}. Заказчик увидит предложение и сможет выбрать вас.`,
@@ -486,7 +531,7 @@ export default function FeedScreen() {
               await createBid(order.id, {
                 equipmentId: machine.id,
                 price,
-                message: `Беру по прайсу: ${machine.name}, ${formatMoney(machine.dailyRate, machine.currency)} за смену × ${days}.`,
+                message: `Беру по прайсу: ${machine.name}, ${formatMoney(shiftRate, machine.currency)} за смену × ${days}.`,
               });
               markSubmitted(order.id);
             } catch (caught) {
@@ -586,9 +631,19 @@ export default function FeedScreen() {
       {error ? <ErrorBanner message={error} onRetry={() => void load()} /> : null}
       <SectionTitle>
         {online
-          ? `Заявки заказчиков${openOrders.length > 0 ? ` · ${openOrders.length}` : ''}`
+          ? `Заявки заказчиков${openOrders.length > 0 ? ` · ${openOrders.length}${nextOffset !== null ? '+' : ''}` : ''}`
           : 'Заявки скрыты'}
       </SectionTitle>
+      {online ? (
+        <Segmented
+          options={SCOPES}
+          value={scope}
+          onChange={(value) => {
+            setOrders(null);
+            setScope(value);
+          }}
+        />
+      ) : null}
     </View>
   );
 
@@ -628,13 +683,38 @@ export default function FeedScreen() {
           />
         }
         ListHeaderComponent={header}
+        onEndReached={online ? () => void loadMore() : undefined}
+        onEndReachedThreshold={0.5}
+        ListFooterComponent={
+          online && nextOffset !== null ? (
+            <View style={styles.more}>
+              <Button
+                title="Показать ещё"
+                variant="secondary"
+                loading={loadingMore}
+                onPress={() => void loadMore()}
+              />
+            </View>
+          ) : null
+        }
         ListEmptyComponent={
           online ? (
             !error ? (
-              <EmptyState
-                title="Открытых заявок нет"
-                description="Как только заказчик опубликует заявку, она появится здесь."
-              />
+              scope === 'near' ? (
+                <EmptyState
+                  title="Рядом подходящих заявок нет"
+                  description={
+                    equipment.length === 0
+                      ? 'Добавьте технику — покажем заявки на ваши виды техники в радиусе подачи. Или откройте «Все заявки».'
+                      : 'Показываем заявки на вашу технику в радиусе подачи от базы. Откройте «Все заявки», чтобы увидеть остальные.'
+                  }
+                />
+              ) : (
+                <EmptyState
+                  title="Открытых заявок нет"
+                  description="Как только заказчик опубликует заявку, она появится здесь."
+                />
+              )
             ) : null
           ) : (
             <EmptyState
@@ -657,6 +737,7 @@ const styles = StyleSheet.create({
   pressed: { opacity: 0.85 },
   list: { padding: spacing.lg, paddingBottom: spacing.xxl, flexGrow: 1 },
   header: { gap: spacing.md, marginBottom: spacing.md },
+  more: { marginTop: spacing.md },
   lineCard: {
     backgroundColor: colors.dark,
     borderRadius: radius.xl,

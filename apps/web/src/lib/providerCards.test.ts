@@ -48,6 +48,7 @@ function row(overrides: Partial<ProviderRow> & Record<string, unknown> = {}): Pr
 const STATS: CompanyStats = {
   verified: true,
   bookings: { COMPLETED: 12, CANCELLED: 1, CONFIRMED: 2 },
+  cancelledBy: { PROVIDER: 1 },
   ratingSum: 47,
   ratingCount: 10,
   invitedProviders: 0,

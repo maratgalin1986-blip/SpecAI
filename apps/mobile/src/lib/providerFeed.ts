@@ -3,6 +3,7 @@
  * приёма предложений, оценка подачи по расстоянию, разбивка цены
  * предложения, тексты спроса. Покрыта тестами (providerFeed.test.ts).
  */
+import { moscowDayKey } from './shifts';
 
 /** Открыто ли ещё окно приёма предложений (без срока — всегда открыто). */
 export function isBidWindowOpen(
@@ -12,6 +13,26 @@ export function isBidWindowOpen(
   if (!order.bidsUntil) return true;
   const until = new Date(order.bidsUntil);
   return Number.isNaN(until.getTime()) || until.getTime() > now.getTime();
+}
+
+/**
+ * Заявки ленты: открытые и ещё не прошедшие (последний день работ — сегодня
+ * или позже). Заявка с вышедшим сроком приёма предложений не пропадает —
+ * сервер принимает поздние предложения, а предзаказ без ответов ждёт
+ * исполнителя; такие идут после заявок с живым сроком, порядок внутри
+ * групп сохраняется.
+ */
+export function feedOrders<
+  T extends { status: string; desiredEndDate: string; bidsUntil?: string | null },
+>(orders: T[], now: Date = new Date()): T[] {
+  const today = moscowDayKey(now);
+  const actual = orders.filter(
+    (order) => order.status === 'OPEN' && moscowDayKey(order.desiredEndDate) >= today,
+  );
+  return [
+    ...actual.filter((order) => isBidWindowOpen(order, now)),
+    ...actual.filter((order) => !isBidWindowOpen(order, now)),
+  ];
 }
 
 /** «осталось 1 ч 20 мин», «осталось 45 мин» или null, когда срок вышел. */
@@ -50,6 +71,23 @@ export function deliveryEstimate(
   const rate = Number(pricePerKm);
   if (!Number.isFinite(rate) || rate < 0 || !Number.isFinite(km)) return null;
   return Math.round(km * rate);
+}
+
+/**
+ * Цена смены для предложения — та, что заказчик видит на карточке машины
+ * (customerDailyRate из GET /api/equipment: парк СпецПласт16 не ниже прайса
+ * сайта, у остальных — своя), иначе сохранённая dailyRate. Так «Беру по
+ * прайсу» и подсказка в форме совпадают с каталогом, и сервер не откажет
+ * из-за цены ниже прайса.
+ */
+export function bidShiftRate(machine: {
+  dailyRate: string | number;
+  customerDailyRate?: number | null;
+}): number {
+  const customer = Number(machine.customerDailyRate);
+  if (Number.isFinite(customer) && customer > 0) return Math.round(customer);
+  const stored = Number(machine.dailyRate);
+  return Number.isFinite(stored) && stored > 0 ? Math.round(stored) : 0;
 }
 
 /** Итог предложения: подача + смена × смен (копейки округляются). */

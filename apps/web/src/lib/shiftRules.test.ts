@@ -26,6 +26,19 @@ describe('nextShiftStatuses', () => {
 });
 
 describe('applyShiftTransition', () => {
+  it('refuses to drive a shift planned for a later day', () => {
+    const tomorrow = new Date(T0.getTime() + 86_400_000);
+    const result = applyShiftTransition(
+      { status: 'PLANNED', date: tomorrow },
+      { status: 'EN_ROUTE' },
+      T0,
+    );
+    expect(result).toMatchObject({ ok: false });
+    expect(
+      applyShiftTransition({ status: 'PLANNED', date: T0 }, { status: 'EN_ROUTE' }, T0).ok,
+    ).toBe(true);
+  });
+
   it('stamps each milestone once and keeps the first photo as the start photo', () => {
     const start = applyShiftTransition(
       { status: 'PLANNED' },

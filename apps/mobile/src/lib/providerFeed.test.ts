@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
+  bidShiftRate,
   bidTotal,
   bidsLeftText,
   countdownTickMs,
   customerDemandText,
   deliveryEstimate,
+  feedOrders,
   isBidWindowOpen,
   offerParts,
   parseAmount,
@@ -12,6 +14,35 @@ import {
 
 const now = new Date('2026-10-08T09:00:00Z');
 const inMinutes = (minutes: number) => new Date(now.getTime() + minutes * 60_000).toISOString();
+
+describe('feedOrders', () => {
+  const order = (id: string, end: string, bidsUntil: string | null, status = 'OPEN') => ({
+    id,
+    status,
+    desiredEndDate: `${end}T00:00:00.000Z`,
+    bidsUntil,
+  });
+
+  it('keeps preorders whose bid window ended, after the live ones', () => {
+    const list = feedOrders(
+      [
+        order('late', '2026-10-21', inMinutes(-60)),
+        order('live', '2026-10-09', inMinutes(30)),
+        order('today', '2026-10-08', null),
+      ],
+      now,
+    );
+    expect(list.map((item) => item.id)).toEqual(['live', 'today', 'late']);
+  });
+
+  it('drops past and closed orders', () => {
+    const list = feedOrders(
+      [order('past', '2026-10-07', null), order('matched', '2026-10-20', null, 'MATCHED')],
+      now,
+    );
+    expect(list).toEqual([]);
+  });
+});
 
 describe('bid window', () => {
   it('is open until bidsUntil, and always without one', () => {
@@ -46,6 +77,14 @@ describe('prices', () => {
     expect(deliveryEstimate(null, 80)).toBeNull();
     expect(deliveryEstimate(10, null)).toBeNull();
     expect(deliveryEstimate(10, '')).toBeNull();
+  });
+
+  it('offers the shift at the price the customer sees, else the stored one', () => {
+    // The house fleet: the card shows the list price even when the row is lower.
+    expect(bidShiftRate({ dailyRate: '12000', customerDailyRate: 32000 })).toBe(32000);
+    // Other providers (and older servers): their own stored price.
+    expect(bidShiftRate({ dailyRate: '12000.4' })).toBe(12000);
+    expect(bidShiftRate({ dailyRate: 'junk', customerDailyRate: null })).toBe(0);
   });
 
   it('adds the delivery to the shifts', () => {

@@ -82,7 +82,8 @@ export function dueReminders<T extends DocumentLike>(
 ): DueReminder<T>[] {
   const due: DueReminder<T>[] = [];
   for (const doc of docs) {
-    if (!doc.expiresAt) continue;
+    // 1970-01-01 is a «без срока» document saved before the date fix.
+    if (!doc.expiresAt || doc.expiresAt.getTime() === 0) continue;
     const daysLeft = daysUntilExpiry(doc.expiresAt, now);
     if (daysLeft <= 0 && !doc.remindedAt0) {
       due.push({ doc, threshold: 0, daysLeft });

@@ -2,10 +2,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@specai/database';
 import { createOrderSchema } from '@specai/shared';
 import { getRequestUser } from '@/lib/requestUser';
-import { isHouseManager, isProvider } from '@/lib/fleet';
+import { isOperator, isProvider } from '@/lib/fleet';
+import { matchIncoming } from '@/lib/providerFeed';
+import { loadProviderMatch } from '@/lib/providerFeedData';
 import { bidsUntilFor } from '@/lib/bidWindow';
 import { maskedContactFor } from '@/lib/chatOrders';
-import { geocodeAddress } from '@/lib/geo';
+import { cityInText, geocodeAddress } from '@/lib/geo';
 import { notifyTelegram } from '@/lib/notify';
 import { notifyProvidersAboutOrder } from '@/lib/notifications/notifyUser';
 import { SITE } from '@/lib/site';
@@ -14,6 +16,7 @@ import { INVALID_JSON_MESSAGE, readJson, zodErrorMessage } from '@/lib/apiInput'
 import { checkBookingDates } from '@/lib/bookingRules';
 import { customerShortName } from '@/lib/customerPrivacy';
 import { unreadMessagesByOrder } from '@/lib/orderChatAccess';
+import { bidForCustomer } from '@/lib/bidPrivacy';
 import { maskContactsAndLinks } from '@/lib/privacy';
 import {
   assessWork,
@@ -27,9 +30,36 @@ import {
 
 export const dynamic = 'force-dynamic';
 
+/** One page of the open feed, and the most a client may ask for. */
+const FEED_PAGE = 50;
+const FEED_PAGE_MAX = 100;
+/** How many open orders the «near» feed checks against the radius at most. */
+const NEAR_SCAN = 1000;
+/** A company's open orders with its own waiting offers: more is not realistic. */
+const OWN_BIDS_MAX = 500;
+
+const ORDER_INCLUDE = {
+  category: { select: { id: true, name: true } },
+  customer: { select: { id: true, name: true } },
+  bids: { include: { equipment: { select: { companyId: true } } } },
+  booking: { select: { status: true } },
+  location: { select: { addressLine: true, city: true, latitude: true, longitude: true } },
+} as const;
+
+function intParam(value: string | null, fallback: number, max: number): number {
+  const n = Number.parseInt(value ?? '', 10);
+  return Number.isFinite(n) && n >= 0 ? Math.min(n, max) : fallback;
+}
+
 /**
  * Список заявок.
- * - `?open=1` — открытые заявки всех заказчиков (лента для любого исполнителя).
+ * - `?open=1` — открытые заявки всех заказчиков (лента для любого исполнителя),
+ *   постранично: `offset`, `limit` (по умолчанию 50), в ответе `nextOffset`.
+ *   `scope=near` — только виды техники компании в её радиусе подачи от базы
+ *   (как рассылка о новой заявке). На первой странице сначала идут заявки с
+ *   ожидающими предложениями самой компании, какими бы старыми они ни были.
+ * - `?open=1&mine=1` — все открытые заявки с ожидающими предложениями своей
+ *   компании («Мои предложения» в приложении).
  * - без параметра — все заявки текущего пользователя (любого статуса), требует входа;
  *   используется вкладкой «Заявки» мобильного приложения.
  * Формат ответа один и тот же: `{ orders }` с category, customer (id, name) и bids.
@@ -43,27 +73,82 @@ export async function GET(request: NextRequest) {
   if (!currentUser) {
     return NextResponse.json({ error: 'Необходимо войти в аккаунт' }, { status: 401 });
   }
-  let where: { status?: 'OPEN'; categoryId?: string; customerId?: string };
+  let orders;
+  let nextOffset: number | null = null;
   if (openFeed) {
     if (!isProvider(currentUser)) {
-      return NextResponse.json({ error: 'Доступно только поставщикам' }, { status: 403 });
+      return NextResponse.json({ error: 'Доступно только исполнителям' }, { status: 403 });
     }
-    where = { status: 'OPEN', categoryId };
+    const ownBids = {
+      status: 'OPEN' as const,
+      categoryId,
+      bids: {
+        some: { status: 'PENDING' as const, equipment: { companyId: currentUser.companyId } },
+      },
+    };
+    if (searchParams.get('mine') === '1') {
+      orders = await prisma.order.findMany({
+        where: ownBids,
+        include: ORDER_INCLUDE,
+        orderBy: { createdAt: 'desc' },
+        take: OWN_BIDS_MAX,
+      });
+    } else {
+      const offset = intParam(searchParams.get('offset'), 0, 100_000);
+      const limit = intParam(searchParams.get('limit'), FEED_PAGE, FEED_PAGE_MAX) || FEED_PAGE;
+      // The company's own pending bids lead the first page and are never paged out.
+      const own = await prisma.order.findMany({
+        where: ownBids,
+        include: ORDER_INCLUDE,
+        orderBy: { createdAt: 'desc' },
+        take: OWN_BIDS_MAX,
+      });
+      const where = {
+        status: 'OPEN' as const,
+        categoryId,
+        id: { notIn: own.map((order) => order.id) },
+      };
+      let page;
+      if (searchParams.get('scope') === 'near') {
+        // The rule of the new-order alert and the web cabinet's «Входящие
+        // заявки» (lib/providerFeed.ts): category family and group, the city's
+        // centre when only the city is known.
+        const { provider, categoryRows } = currentUser.companyId
+          ? await loadProviderMatch(currentUser.companyId)
+          : { provider: { categoryIds: [] }, categoryRows: [] };
+        const candidates =
+          provider.categoryIds.length === 0
+            ? []
+            : await prisma.order.findMany({
+                where,
+                include: ORDER_INCLUDE,
+                orderBy: { createdAt: 'desc' },
+                take: NEAR_SCAN,
+              });
+        const near = matchIncoming(provider, categoryRows, candidates);
+        page = near.slice(offset, offset + limit);
+        nextOffset = near.length > offset + limit ? offset + limit : null;
+      } else {
+        const rows = await prisma.order.findMany({
+          where,
+          include: ORDER_INCLUDE,
+          orderBy: { createdAt: 'desc' },
+          skip: offset,
+          take: limit + 1,
+        });
+        page = rows.slice(0, limit);
+        nextOffset = rows.length > limit ? offset + limit : null;
+      }
+      orders = offset === 0 ? [...own, ...page] : page;
+    }
   } else {
-    where = { customerId: currentUser.id, categoryId };
+    orders = await prisma.order.findMany({
+      where: { customerId: currentUser.id, categoryId },
+      include: ORDER_INCLUDE,
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+    });
   }
-
-  const orders = await prisma.order.findMany({
-    where,
-    include: {
-      category: { select: { id: true, name: true } },
-      customer: { select: { id: true, name: true } },
-      bids: { include: { equipment: { select: { companyId: true } } } },
-      location: { select: { addressLine: true, city: true, latitude: true, longitude: true } },
-    },
-    orderBy: { createdAt: 'desc' },
-    take: 50,
-  });
 
   // Never expose contacts of people whose requests were imported from chats.
   // In the open feed a provider sees only its own bids (and how many there
@@ -72,13 +157,23 @@ export async function GET(request: NextRequest) {
   const safeOrders = orders.map(
     ({ contactName, contactPhone, rawText, sourceUrl, externalId, fingerprint, ...order }) => {
       void [contactName, rawText, sourceUrl, externalId, fingerprint];
-      if (order.customerId === currentUser.id) return { ...order, bidCount: order.bids.length };
-      const { customerId, customer, ...rest } = order;
+      const { booking, ...withoutBooking } = order;
+      if (order.customerId === currentUser.id) {
+        // The customer's own list (the app's «Заявки»): offers as on the order page.
+        return {
+          ...withoutBooking,
+          bids: order.bids.map((bid) => bidForCustomer(bid, booking?.status)),
+          bidCount: order.bids.length,
+        };
+      }
+      const { customerId, customer, ...rest } = withoutBooking;
       void customerId;
       // A chat or guest order: the phone masked, «Показать телефон» opens it.
+      // The house manager too: it works these leads first, and the feed is
+      // its only place to call them from the app (every reveal is logged).
       const chatContact = maskedContactFor(
         { contactPhone },
-        { isProvider: isProvider(currentUser), isHouse: isHouseManager(currentUser) },
+        { isProvider: isProvider(currentUser), isHouse: false },
       );
       return {
         ...rest,
@@ -98,6 +193,7 @@ export async function GET(request: NextRequest) {
   ).catch(() => new Map<string, number>());
   return NextResponse.json({
     orders: safeOrders.map((order) => ({ ...order, unreadMessages: unread.get(order.id) ?? 0 })),
+    nextOffset,
   });
 }
 
@@ -105,6 +201,13 @@ export async function POST(request: NextRequest) {
   const currentUser = await getRequestUser(request);
   if (!currentUser) {
     return NextResponse.json({ error: 'Необходимо войти в аккаунт' }, { status: 401 });
+  }
+  // A machinist's account only works its shifts: no public orders in its name.
+  if (isOperator(currentUser)) {
+    return NextResponse.json(
+      { error: 'Аккаунт машиниста не может создавать заявки' },
+      { status: 403 },
+    );
   }
 
   const body = await readJson(request);
@@ -140,7 +243,8 @@ export async function POST(request: NextRequest) {
     ? await prisma.location.create({
         data: {
           addressLine: address,
-          city: place?.city ?? SITE.city,
+          // A failed lookup still keeps a city the address names («Елабуга, …»).
+          city: place?.city ?? cityInText(address)?.name ?? SITE.city,
           country: 'Россия',
           latitude: place?.lat ?? null,
           longitude: place?.lon ?? null,

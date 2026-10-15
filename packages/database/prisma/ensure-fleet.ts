@@ -157,7 +157,7 @@ const FLEET: FleetItem[] = [
     name: 'Колёсный экскаватор с гидромолотом',
     make: '',
     model: '',
-    categorySlug: 'excavators',
+    categorySlug: 'wheeled-excavators',
     hourlyRate: 4000,
     description:
       'Колёсный экскаватор с машинистом: земляные работы в городе, демонтаж и разбивка гидромолотом.',
@@ -252,6 +252,19 @@ async function main() {
     where: { slug: { in: [...new Set(FLEET.map((item) => item.categorySlug))] } },
   });
   const categoryId = new Map(categories.map((c) => [c.slug, c.id]));
+
+  // The catalogue split of 2026-10-11 renamed «Экскаваторы» to «гусеничные»
+  // and left the wheeled machine there. Move it once; a row the owner has put
+  // into another category by hand is left alone.
+  const crawlerId = categoryId.get('excavators');
+  const wheeledId = categoryId.get('wheeled-excavators');
+  if (crawlerId && wheeledId) {
+    const moved = await prisma.equipment.updateMany({
+      where: { id: 'sp16-excavator-wheeled', categoryId: crawlerId },
+      data: { categoryId: wheeledId },
+    });
+    if (moved.count > 0) console.log('Колёсный экскаватор перенесён в «Экскаваторы колёсные».');
+  }
 
   let created = 0;
   for (const item of FLEET) {

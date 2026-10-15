@@ -106,13 +106,13 @@ export function cityPageText(landing: Landing, city: City): CityPageText {
   const tasks = tasksFor(landing, city).map(lower).join('; ');
   const where =
     city.distanceKm === 0
-      ? `${machine} выезжает с базы СпецПласт16 ${city.inCity}, без перегона из другого города.`
-      : `${city.name} — ${distanceText(city)}: ${lower(machine)} СпецПласт16 выезжает на объект ${city.inCity} из собственного парка.`;
+      ? `${machine} — у исполнителей площадки, в том числе с базы СпецПласт16 ${city.inCity}, без перегона из другого города.`
+      : `${city.name} — ${distanceText(city)}: ${lower(machine)} выезжает на объект ${city.inCity} от исполнителей площадки, в том числе из парка СпецПласт16.`;
   return {
     h1: `Аренда ${landing.title} ${city.inCity} с машинистом`,
     title: `Аренда ${landing.title} ${city.inCity} — ${fromPerHour(rate)}`,
     description:
-      `${landing.short} СпецПласт16 ${city.around}: ${fromPerHour(rate)}, ` +
+      `${landing.short} с машинистом ${city.around} — СпецПласт16 и другие исполнители: ${fromPerHour(rate)}, ` +
       `смена ${SHIFT_HOURS} ч — от ${rub(rate * SHIFT_HOURS)} ₽. ${DELIVERY_NOTE}`,
     intro: `${where} Например: ${tasks}. ${DELIVERY_NOTE}`,
   };

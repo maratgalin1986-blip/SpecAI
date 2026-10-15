@@ -4,6 +4,8 @@ import {
   categoryIcon,
   distanceKm,
   formatDistance,
+  houseFirstBids,
+  pointAddress,
   monthIncome,
   orderDays,
   orderStage,
@@ -12,6 +14,32 @@ import {
   relativeDay,
   stageHeadline,
 } from './orderFlow';
+
+describe('houseFirstBids', () => {
+  it('puts the СпецПласт16 bid first and keeps the price order of the rest', () => {
+    type Row = { id: string; equipment?: { company: { id: string } } };
+    const bid = (id: string, company: string): Row => ({
+      id,
+      equipment: { company: { id: company } },
+    });
+    const sorted = houseFirstBids<Row>([
+      bid('a', 'c1'),
+      bid('b', 'c2'),
+      bid('h', 'specplast16-house'),
+      { id: 'x' },
+    ]);
+    expect(sorted.map((item) => item.id)).toEqual(['h', 'a', 'b', 'x']);
+  });
+
+  it('puts a declined house bid after the live ones', () => {
+    type Row = { id: string; status: string; equipment: { company: { id: string } } };
+    const sorted = houseFirstBids<Row>([
+      { id: 'h', status: 'REJECTED', equipment: { company: { id: 'specplast16-house' } } },
+      { id: 'a', status: 'PENDING', equipment: { company: { id: 'c1' } } },
+    ]);
+    expect(sorted.map((item) => item.id)).toEqual(['a', 'h']);
+  });
+});
 
 describe('categoryIcon', () => {
   it('maps machine types to icons', () => {
@@ -119,5 +147,13 @@ describe('dates and money', () => {
     expect(formatDistance(0.42)).toBe('400 м');
     expect(formatDistance(3.25)).toBe('3,3 км');
     expect(formatDistance(km)).toMatch(/^\d+ км$/);
+  });
+});
+
+describe('pointAddress', () => {
+  it('writes a map point the server reads as coordinates', () => {
+    expect(pointAddress({ lat: 55.743123, lon: 52.398111 })).toBe(
+      'Точка на карте: 55.74312, 52.39811',
+    );
   });
 });

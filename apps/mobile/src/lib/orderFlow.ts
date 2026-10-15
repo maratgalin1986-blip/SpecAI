@@ -4,6 +4,31 @@
  * (orderFlow.test.ts).
  */
 
+/** Компания СпецПласт16 на сервере (apps/web/src/lib/fleet.ts). */
+export const HOUSE_COMPANY_ID = 'specplast16-house';
+
+/**
+ * Предложение СпецПласт16 всегда первое (правило владельца, как на сайте),
+ * остальные сохраняют порядок сервера (по цене).
+ */
+export function houseFirstBids<
+  T extends { status?: string; equipment?: { company?: { id: string } | null } },
+>(bids: T[]): T[] {
+  // Отклонённые и отозванные — в конце: отказ СпецПласт16 не стоит над живым предложением.
+  const live = (bid: T) => !bid.status || bid.status === 'PENDING' || bid.status === 'ACCEPTED';
+  const isHouse = (bid: T) => Number(bid.equipment?.company?.id === HOUSE_COMPANY_ID);
+  return [...bids].sort((a, b) => Number(live(b)) - Number(live(a)) || isHouse(b) - isHouse(a));
+}
+
+/**
+ * Адрес из точки на карте — в том виде, который сервер понимает без
+ * геокодера (apps/web/src/lib/geo.ts parseCoordinates): «Точка на карте:
+ * 55.74312, 52.39811».
+ */
+export function pointAddress(point: { lat: number; lon: number }): string {
+  return `Точка на карте: ${point.lat.toFixed(5)}, ${point.lon.toFixed(5)}`;
+}
+
 /**
  * Значок типа техники. Сервер отдаёт `emoji` из общего списка категорий
  * (packages/shared/src/categories.ts); без него значок угадывается по названию.

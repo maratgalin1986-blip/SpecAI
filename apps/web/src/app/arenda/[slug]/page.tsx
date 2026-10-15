@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import type { MachineType } from '@/lib/machinePhotos';
 import { notFound } from 'next/navigation';
 import { prisma } from '@specai/database';
 import { Card, StatusBadge } from '@specai/ui';
@@ -41,6 +42,28 @@ async function loadEquipment(categorySlug: string) {
   }
 }
 
+/**
+ * «от … ₽/ч» of a landing: the house list price (lib/prices.ts), or less
+ * when another provider lists a cheaper machine of this type (the aggregator:
+ * the floor applies to СпецПласт16's fleet only).
+ */
+function landingFromRate(
+  machine: MachineType,
+  categoryName: string,
+  items: {
+    companyId: string | null;
+    name: string;
+    hourlyRate: number | string | { toString(): string } | null;
+    dailyRate: number | string | { toString(): string } | null;
+  }[],
+): number {
+  const others = items
+    .filter((item) => !isHouseEquipment(item))
+    .map((item) => customerRates({ ...item, categoryName }).hourlyRate)
+    .filter((rate) => rate > 0);
+  return Math.min(rateOf(machine), ...others);
+}
+
 export async function generateMetadata({
   params,
 }: {
@@ -48,8 +71,9 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const landing = landingBySlug(params.slug);
   if (!landing) return { title: 'Страница не найдена' };
-  // The price comes from lib/prices.ts, never from the database.
-  const title = `Аренда ${landing.title} в Набережных Челнах — ${fromPerHour(landing.machine)}`;
+  const items = await loadEquipment(landing.categorySlug);
+  const from = landingFromRate(landing.machine, landing.title, items);
+  const title = `Аренда ${landing.title} в Набережных Челнах — ${fromPerHour(from)}`;
   return {
     title,
     description: `${landing.intro} ${SITE.city} и ${SITE.region}. ${SITE.phone}`,
@@ -63,8 +87,9 @@ export default async function LandingPage({ params }: { params: { slug: string }
   if (!landing) notFound();
   const items = await loadEquipment(landing.categorySlug);
   const machine = landing.machine;
-  // «от …» in the title, header and structured data: lib/prices.ts only.
-  const from = rateOf(machine);
+  // «от …» in the title, header and structured data: the house list price or
+  // a cheaper third-party machine on this page.
+  const from = landingFromRate(machine, landing.title, items);
 
   const jsonLd = {
     '@context': 'https://schema.org',

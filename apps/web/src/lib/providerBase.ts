@@ -43,14 +43,19 @@ export function addressVariants(address: string): string[] {
   )
     .replace(/\s+/g, ' ')
     .trim();
-  const variants = [address, expanded];
-  if (
-    !/татарстан|челны|казан|елабуг|нижнекамск|альметьевск|менделеевск|заинск|бугульм/iu.test(
+  // Without a city the bare street matches anywhere in Russia («пр. Мира 10»
+  // is a проезд in Armavir), so the Набережные Челны variant goes first; the
+  // caller takes the first variant that lands in the service area.
+  const namesCity =
+    /татарстан|челны|казан|елабуг|нижнекамск|альметьевск|менделеевск|заинск|бугульм/iu.test(
       expanded,
-    )
-  ) {
-    variants.push(`${expanded}, Набережные Челны`);
-  }
+    );
+  // An address with a comma most likely names its own town (outside the
+  // list too, e.g. Москва): never move it to Набережные Челны first.
+  const variants =
+    namesCity || address.includes(',')
+      ? [address, expanded]
+      : [`${expanded}, Набережные Челны`, expanded, address];
   variants.push(`${expanded}, Республика Татарстан`);
   return [...new Set(variants)];
 }
@@ -75,17 +80,30 @@ export async function resolveProviderBase(input: {
     };
   }
   if (address.length < 3) return { ok: false, error: BASE_REQUIRED_MESSAGE };
-  let found = await lookupAddress(address);
-  for (const variant of addressVariants(address).slice(1)) {
-    if (found.status !== 'not_found') break;
-    found = await lookupAddress(variant);
+  // The first variant that lands in the service area wins; a match far away
+  // (a street of the same name in another region) does not stop the search.
+  let place: { lat: number; lon: number } | null = null;
+  let outside = false;
+  let unavailable = false;
+  for (const variant of addressVariants(address)) {
+    const found = await lookupAddress(variant);
+    // The geocoder is down or throttling: stop at once instead of hammering it.
+    if (found.status === 'unavailable') {
+      unavailable = true;
+      break;
+    }
+    if (found.status === 'not_found') continue;
+    if (inServiceArea(found.place.lat, found.place.lon)) {
+      place = found.place;
+      break;
+    }
+    outside = true;
   }
-  if (found.status === 'unavailable') {
-    return { ok: false, error: GEOCODER_UNAVAILABLE_MESSAGE, status: 503 };
+  if (!place) {
+    if (outside) return { ok: false, error: BASE_OUTSIDE_MESSAGE };
+    if (unavailable) return { ok: false, error: GEOCODER_UNAVAILABLE_MESSAGE, status: 503 };
+    return { ok: false, error: BASE_NOT_FOUND_MESSAGE };
   }
-  if (found.status === 'not_found') return { ok: false, error: BASE_NOT_FOUND_MESSAGE };
-  const place = found.place;
-  if (!inServiceArea(place.lat, place.lon)) return { ok: false, error: BASE_OUTSIDE_MESSAGE };
   const point = parseBaseCoords(place.lat, place.lon);
   if (!point.ok) return point;
   return {

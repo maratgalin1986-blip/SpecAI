@@ -14,6 +14,10 @@ export interface FunnelOrder {
   bids: { createdAt: Date; status: string }[];
   /** Status of the booking made from the accepted bid, if any. */
   bookingStatus?: string | null;
+  /** When that booking was made (the provider's confirmation is awaited from then). */
+  bookingCreatedAt?: Date | null;
+  /** The last desired day: an open order past it is stale, not stuck. */
+  desiredEndDate?: Date;
 }
 
 export interface FunnelStage {
@@ -92,7 +96,7 @@ export function conversionToProvider(stages: FunnelStage[]): number {
   return reached / total;
 }
 
-export type StuckReason = 'no_bids' | 'no_choice';
+export type StuckReason = 'no_bids' | 'no_choice' | 'not_confirmed';
 
 export interface StuckOrder<T extends FunnelOrder = FunnelOrder> {
   order: T;
@@ -103,21 +107,54 @@ export interface StuckOrder<T extends FunnelOrder = FunnelOrder> {
 
 export const STUCK_NO_BIDS_HOURS = 24;
 export const STUCK_NO_CHOICE_HOURS = 48;
+export const STUCK_NOT_CONFIRMED_HOURS = 24;
 
 export const STUCK_REASON_LABELS: Record<StuckReason, string> = {
   no_bids: 'Нет предложений',
   no_choice: 'Заказчик не выбрал',
+  not_confirmed: 'Исполнитель не подтвердил',
 };
 
+/** Moscow midnight of `now`'s day. */
+function todayStartMsk(now: Date): Date {
+  const key = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Moscow' }).format(now);
+  return new Date(`${key}T00:00:00+03:00`);
+}
+
+/** An order whose last desired day ended before today. */
+function isPast(order: FunnelOrder, now: Date): boolean {
+  return (
+    order.desiredEndDate !== undefined &&
+    order.desiredEndDate.getTime() < todayStartMsk(now).getTime()
+  );
+}
+
 /**
- * Orders that need a push from the admin: open for more than 24 h without a
- * single bid, or with bids the customer has not acted on for 48 h (the order
- * is still OPEN and the oldest bid is that old). Longest wait first. Looks at
- * every open order, not only the period's: an old stuck order is still stuck.
+ * Open orders whose dates have passed: nobody will take them any more. The
+ * admin closes them (/admin/funnel «Закрыть»); they are not «stuck».
+ */
+export function staleOrders<T extends FunnelOrder>(orders: T[], now: Date): T[] {
+  return orders.filter((order) => order.status === 'OPEN' && isPast(order, now));
+}
+
+/**
+ * Orders that need a call from the admin: open for more than 24 h without a
+ * single bid, with bids the customer has not acted on for 48 h (the order is
+ * still OPEN and the oldest bid is that old), or chosen but the provider has
+ * not confirmed the booking for 24 h. Longest wait first. Looks at every open
+ * order, not only the period's: an old stuck order is still stuck. Orders
+ * whose dates have passed are left to staleOrders.
  */
 export function stuckOrders<T extends FunnelOrder>(orders: T[], now: Date): StuckOrder<T>[] {
   const result: StuckOrder<T>[] = [];
   for (const order of orders) {
+    if (isPast(order, now)) continue;
+    if (order.status === 'MATCHED' && order.bookingStatus === 'PENDING' && order.bookingCreatedAt) {
+      const hours = hoursBetween(order.bookingCreatedAt, now);
+      if (hours >= STUCK_NOT_CONFIRMED_HOURS)
+        result.push({ order, reason: 'not_confirmed', hours });
+      continue;
+    }
     if (order.status !== 'OPEN') continue;
     if (order.bids.length === 0) {
       const hours = hoursBetween(order.createdAt, now);

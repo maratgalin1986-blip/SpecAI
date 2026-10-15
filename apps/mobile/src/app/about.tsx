@@ -37,8 +37,10 @@ export default function AboutScreen() {
         <Card style={styles.section}>
           <Text style={styles.description}>{SITE.description}</Text>
           <Text style={styles.description}>
-            Экскаваторы-погрузчики, автокраны и погрузчики с опытными операторами — от 2 300 ₽/ч.
-            ИИ-агенты круглосуточно подберут технику, посчитают стоимость и оформят заявку.
+            {/* Цены — из прайса сайта (apps/web/src/lib/prices.ts). */}
+            Техника СпецПласт16 с опытными машинистами: экскаваторы-погрузчики и экскаваторы — от 4
+            000 ₽/ч, автокраны — от 4 500 ₽/ч, самосвалы — от 3 300 ₽/ч. ИИ-агенты круглосуточно
+            подберут технику, посчитают стоимость и оформят заявку.
           </Text>
         </Card>
 
@@ -89,7 +91,7 @@ export default function AboutScreen() {
             onPress={() => void openSite('/register?type=provider')}
           />
           <LinkRow label="Контакты" onPress={() => void openSite('/contacts')} />
-          <LinkRow label="♥ Поддержать проект" onPress={() => void openSite('/support')} />
+          <LinkRow label="Правила площадки" onPress={() => void openSite('/pravila')} />
           <LinkRow label="Политика конфиденциальности" onPress={() => void openSite('/privacy')} />
         </Card>
 

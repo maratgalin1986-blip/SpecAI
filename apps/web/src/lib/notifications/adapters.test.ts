@@ -1,5 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { EXPO_PUSH_URL, isExpoPushToken, sendExpoPush, serverChannels } from './adapters';
+import {
+  EXPO_PUSH_URL,
+  isExpoPushToken,
+  sendExpoPush,
+  sendSms,
+  sendTelegramMessage,
+  sendWhatsApp,
+  serverChannels,
+} from './adapters';
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -76,5 +84,26 @@ describe('sendExpoPush', () => {
       ok: false,
       error: 'offline',
     });
+  });
+});
+
+describe('outgoing sends skip the Data Cache', () => {
+  // In a GET route handler (the cron jobs) Next caches fetch by URL and body,
+  // so an identical message would never be sent twice.
+  it('passes cache: no-store to Telegram, Expo, WhatsApp and SMS', async () => {
+    vi.stubEnv('TELEGRAM_BOT_TOKEN', '1:x');
+    vi.stubEnv('GREEN_API_INSTANCE_ID', '1101');
+    vi.stubEnv('GREEN_API_TOKEN', 'secret');
+    vi.stubEnv('SMSRU_API_ID', 'id');
+    const fetchMock = vi.fn(async () => Response.json({ data: [{ status: 'ok' }], status: 'OK' }));
+    vi.stubGlobal('fetch', fetchMock);
+    await sendTelegramMessage('1', 'hi');
+    await sendExpoPush(['ExponentPushToken[a]'], { title: 'T', body: 'B' });
+    await sendWhatsApp('79170000000', 'hi');
+    await sendSms('79170000000', 'hi');
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+    for (const call of fetchMock.mock.calls as unknown as [string, RequestInit][]) {
+      expect(call[1].cache).toBe('no-store');
+    }
   });
 });

@@ -1,6 +1,7 @@
 // The admin's CRM table of provider companies (/admin/providers): tags,
 // sorting, filters and search over rows the page loads. Pure functions,
 // unit-tested; dates are ISO strings so the rows pass to the client table.
+import { phoneMatches } from './adminSearch';
 
 export type ProviderTagId = 'verified' | 'new' | 'no_machines' | 'on_map' | 'docs_expired';
 
@@ -119,11 +120,12 @@ export function matchesFilter(row: ProviderRow, filter: ProviderFilter): boolean
   }
 }
 
-/** Search by name (any case, any part) or by ИНН digits. */
+/** Search by name (any case, any part), by ИНН digits or by phone. */
 export function matchesQuery(row: ProviderRow, query: string): boolean {
   const needle = query.trim().toLowerCase();
   if (!needle) return true;
   if (row.name.toLowerCase().includes(needle)) return true;
+  if (phoneMatches(row.phone, query)) return true;
   const digits = needle.replace(/\D/g, '');
   return digits.length > 0 && Boolean(row.taxId && row.taxId.replace(/\D/g, '').includes(digits));
 }

@@ -35,7 +35,14 @@ const WHEN_OPTIONS = [
  * Плитки — десять самых частых видов, дальше «Все виды техники» открывает
  * полный список по группам с поиском.
  */
-export function QuickOrderSheet({ bottomInset = 0 }: { bottomInset?: number }) {
+export function QuickOrderSheet({
+  bottomInset = 0,
+  pickedAddress = null,
+}: {
+  bottomInset?: number;
+  /** A point tapped on the map (ProvidersMap): fills the address field. */
+  pickedAddress?: string | null;
+}) {
   const router = useRouter();
   const { height } = useWindowDimensions();
   const today = useMemo(() => startOfDay(new Date()), []);
@@ -45,6 +52,9 @@ export function QuickOrderSheet({ bottomInset = 0 }: { bottomInset?: number }) {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [address, setAddress] = useState('');
   const [note, setNote] = useState('');
+  useEffect(() => {
+    if (pickedAddress) setAddress(pickedAddress);
+  }, [pickedAddress]);
   const [showNote, setShowNote] = useState(false);
   const [when, setWhen] = useState<When>('now');
   const [date, setDate] = useState(() => addDays(today, 1));
@@ -127,7 +137,7 @@ export function QuickOrderSheet({ bottomInset = 0 }: { bottomInset?: number }) {
             <TextInput
               value={address}
               onChangeText={setAddress}
-              placeholder="Куда подать технику: адрес объекта"
+              placeholder="Адрес объекта или точка на карте"
               placeholderTextColor={colors.textSoft}
               accessibilityLabel="Адрес объекта"
               style={styles.addressInput}

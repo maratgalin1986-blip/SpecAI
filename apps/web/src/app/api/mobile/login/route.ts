@@ -2,16 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { authenticateWithCredentials } from '@/lib/credentials';
 import { signMobileToken } from '@/lib/mobileAuth';
 import { checkRateLimit } from '@/lib/rateLimit';
-import { LoginError, WRONG_CREDENTIALS_MESSAGE, loginFailure } from '@/lib/loginErrors';
+import { LoginError, WRONG_CREDENTIALS_MESSAGE, loginFailure, clientIp } from '@/lib/loginErrors';
 
 export const runtime = 'nodejs';
 
 const RATE_LIMIT = { limit: 10, windowMs: 60_000 };
-
-function clientIp(request: NextRequest): string {
-  const forwarded = request.headers.get('x-forwarded-for');
-  return forwarded?.split(',')[0]?.trim() || request.headers.get('x-real-ip') || 'unknown';
-}
 
 /**
  * Вход для мобильного приложения: та же проверка e-mail/пароля, что и на сайте,

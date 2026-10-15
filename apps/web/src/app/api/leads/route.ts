@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { clientIp } from '@/lib/loginErrors';
 import { prisma } from '@specai/database';
 import { createLeadSchema } from '@specai/shared';
 import { notifyTelegram } from '@/lib/notify';
@@ -26,7 +27,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown';
+  const ip = clientIp(request);
   if (!checkRateLimit(`leads:${ip}`, LEAD_RATE_LIMIT).ok) {
     return NextResponse.json(
       { error: `Слишком много заявок. Позвоните нам: ${SITE.phone}` },

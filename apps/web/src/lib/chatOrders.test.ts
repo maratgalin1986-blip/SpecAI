@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import { maskContactsAndLinks } from './privacy';
 import {
+  CHAT_ORDER_REMOVAL,
   CHAT_PHONE_REVEALS_PER_DAY,
   ERASED_ORDER_DATA,
   chatOrderNote,
@@ -95,11 +97,13 @@ describe('revealDecision', () => {
 describe('chat order note and erasure', () => {
   it('says where the order was found', () => {
     expect(chatOrderNote('Стройка Челны')).toBe(
-      'Заявка найдена в открытом чате «Стройка Челны». Автор может попросить удалить её.',
+      'Заявка найдена в открытом чате «Стройка Челны». Автор может попросить удалить её — ' +
+        'как это сделать, сказано на странице заявки.',
     );
-    expect(chatOrderNote(undefined)).toBe(
-      'Заявка найдена в открытом чате. Автор может попросить удалить её.',
-    );
+    expect(chatOrderNote(undefined)).toMatch(/^Заявка найдена в открытом чате\. Автор может/);
+    // The board masks contacts in descriptions, so the note itself carries none.
+    expect(maskContactsAndLinks(chatOrderNote('Чат'))).toBe(chatOrderNote('Чат'));
+    expect(CHAT_ORDER_REMOVAL).toContain('specplast16@mail.ru');
   });
 
   it('erases every personal field', () => {

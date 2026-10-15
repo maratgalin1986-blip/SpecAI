@@ -255,8 +255,7 @@ export function IntroSplash() {
           </nav>
         </div>
 
-        {/* Sound is on by default (it starts at the first touch where the
-            browser asks for one); this button takes it away, or brings it back. */}
+        {/* Sound is off by default; this button turns it on, or off again. */}
         <button
           type="button"
           onClick={(event) => {

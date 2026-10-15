@@ -10,8 +10,9 @@ import { AcceptBidButton } from '@/components/AcceptBidButton';
 import { formatMoney } from '@/lib/money';
 import { isAdminRequest } from '@/lib/admin';
 import { SiteConditions } from '@/components/SiteConditions';
-import { houseFirst, isProvider, isHouseManager } from '@/lib/fleet';
+import { houseFirstBids, isHouseManager, isProvider } from '@/lib/fleet';
 import { isSafeHttpUrl, maskContactsAndLinks } from '@/lib/privacy';
+import { bookedProviderSees } from '@/lib/bidPrivacy';
 import { approvedComments } from '@/lib/commentAccess';
 import { CommentForm, CommentList } from '@/components/Comments';
 import { customerShortName } from '@/lib/customerPrivacy';
@@ -24,13 +25,16 @@ import { EMPTY_STATS, reliability } from '@/lib/reliability';
 import { providerPath } from '@/lib/providerSeo';
 import { pluralizeRu } from '@/lib/pluralize';
 import { EraseOrderButton, RevealPhoneButton } from '@/components/ChatOrderContact';
-import { maskPhone } from '@/lib/chatOrders';
+import { CHAT_ORDER_REMOVAL, CHAT_ORDER_REMOVAL_HREF, maskPhone } from '@/lib/chatOrders';
 import { SITE } from '@/lib/site';
 import { OrderChat } from '@/components/OrderChat';
 import { bidsLeftText, isLateBid } from '@/lib/bidWindow';
 import { orderDays } from '@/lib/offerBreakdown';
 import { distanceKm } from '@/lib/geo';
 import { bidLoginHref } from '@/lib/orderBoard';
+import { CloseOrderButton } from '@/components/AdminIntegrations';
+import { PhoneLink } from '@/components/admin/PhoneLink';
+import { isRealEmail } from '@/lib/notifications/routing';
 
 export const dynamic = 'force-dynamic';
 
@@ -43,9 +47,11 @@ export default async function OrderDetailPage({ params }: { params: { id: string
       category: true,
       customer: true,
       location: true,
-      booking: { select: { status: true } },
+      booking: { select: { status: true, equipment: { select: { companyId: true } } } },
       bids: {
-        include: { equipment: { include: { company: true } } },
+        include: {
+          equipment: { include: { company: true, category: { select: { name: true } } } },
+        },
         orderBy: { price: 'asc' },
       },
     },
@@ -69,7 +75,7 @@ export default async function OrderDetailPage({ params }: { params: { id: string
   if (!isOwner && !isAdmin && !isProvider(session?.user)) {
     redirect(session?.user ? '/orders#board' : bidLoginHref(order.id));
   }
-  const visibleBids = houseFirst(
+  const visibleBids = houseFirstBids(
     seesAllBids
       ? order.bids
       : order.bids.filter((bid) => bid.equipment.companyId === session?.user.companyId),
@@ -141,6 +147,35 @@ export default async function OrderDetailPage({ params }: { params: { id: string
         </span>
       </div>
       {(isOwner || isAdmin) && <OrderTimeline timeline={timeline} />}
+      {isAdmin && (
+        <Card className="border-amber-200 bg-amber-50">
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <h2 className="font-semibold">Контакты (видит только администратор)</h2>
+            {order.status === 'OPEN' && <CloseOrderButton orderId={order.id} />}
+          </div>
+          <ul className="mt-2 flex flex-col gap-1 text-sm">
+            <li>
+              Заказчик: {order.contactName ?? order.customer.name} ·{' '}
+              <PhoneLink phone={order.contactPhone ?? order.customer.phone} />
+              {!isImported && isRealEmail(order.customer.email) && (
+                <>
+                  {' '}
+                  ·{' '}
+                  <a href={`mailto:${order.customer.email}`} className="underline">
+                    {order.customer.email}
+                  </a>
+                </>
+              )}
+            </li>
+            {houseFirstBids(order.bids, (bid) => bid.equipment.companyId).map((bid) => (
+              <li key={bid.id}>
+                {bid.status === 'ACCEPTED' ? 'Выбран исполнитель' : 'Предложение'}: «
+                {bid.equipment.company.name}» · <PhoneLink phone={bid.equipment.company.phone} />
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
       {isOwner && order.status === 'OPEN' && <CancelOrderButton orderId={order.id} />}
       {isOwner && order.status === 'MATCHED' && (
         <p className="rounded-md border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
@@ -154,7 +189,9 @@ export default async function OrderDetailPage({ params }: { params: { id: string
       <Card>
         <h2 className="font-semibold">Описание</h2>
         <p className="mt-2 whitespace-pre-line text-sm text-slate-600">
-          {isOwner || isAdmin ? order.description : maskContactsAndLinks(order.description)}
+          {isOwner || isAdmin || bookedProviderSees(order.booking, session?.user.companyId)
+            ? order.description
+            : maskContactsAndLinks(order.description)}
         </p>
       </Card>
 
@@ -200,8 +237,14 @@ export default async function OrderDetailPage({ params }: { params: { id: string
             </div>
           ) : null}
           <p className="mt-2 text-xs text-slate-500">
-            Найдена в открытом чате, куда бот добавлен администраторами чата. Автор может попросить
-            удалить заявку.
+            {order.sourceChat?.startsWith('Личное сообщение')
+              ? 'Отправлена личным сообщением боту площадки.'
+              : 'Найдена в открытой группе мессенджера, к которой подключена площадка.'}{' '}
+            {CHAT_ORDER_REMOVAL} (
+            <a href={CHAT_ORDER_REMOVAL_HREF} className="underline">
+              подробнее
+            </a>
+            ).
           </p>
           {isAdmin && (
             <div className="mt-2">
@@ -396,6 +439,7 @@ function OfferBody({
       dailyRate: unknown;
       companyId: string;
       company: { name: string };
+      category: { name: string };
     };
   };
   start: Date;
@@ -405,7 +449,15 @@ function OfferBody({
   /** Sent after the order's bid deadline (Order.bidsUntil). */
   late?: boolean;
 }) {
-  const parts = offerBreakdown(bid.price, start, end, bid.equipment, bid);
+  // The card rates are the machine page's numbers (customerRates): a house
+  // machine never shows a lower price here than in the catalogue.
+  const parts = offerBreakdown(
+    bid.price,
+    start,
+    end,
+    { ...bid.equipment, categoryName: bid.equipment.category.name },
+    bid,
+  );
   return (
     <div className="flex min-w-0 flex-col gap-2">
       <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">

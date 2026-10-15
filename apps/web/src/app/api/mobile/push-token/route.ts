@@ -7,6 +7,8 @@ import { isExpoPushToken } from '@/lib/notifications/adapters';
 export const dynamic = 'force-dynamic';
 
 const MAX_DEVICES = 10;
+/** A token idle this long may move to another account on the same device. */
+const TAKEOVER_AFTER_MS = 7 * 86_400_000;
 
 function readToken(body: unknown) {
   if (!body || typeof body !== 'object') return null;
@@ -17,7 +19,10 @@ function readToken(body: unknown) {
 /**
  * Приложение регистрирует Expo push-токен устройства (Bearer):
  * { token: "ExponentPushToken[…]", platform?: "ios" | "android" }.
- * Токен, ранее принадлежавший другому аккаунту на этом устройстве, переходит к текущему.
+ * Приложение удаляет токен при выходе (DELETE), поэтому токен, который ещё
+ * живёт у другого аккаунта, не перепривязывается (409): иначе чужие
+ * уведомления можно было бы увести на своё устройство. Токен, молчавший
+ * неделю (выход без сети, переустановка), переходит к текущему аккаунту.
  */
 export async function POST(request: NextRequest) {
   const user = await getRequestUser(request);
@@ -29,6 +34,21 @@ export async function POST(request: NextRequest) {
   const rawPlatform = (body as Record<string, unknown>).platform;
   const platform =
     typeof rawPlatform === 'string' && /^(ios|android|web)$/.test(rawPlatform) ? rawPlatform : null;
+
+  const existing = await prisma.pushToken.findUnique({
+    where: { token },
+    select: { userId: true, updatedAt: true },
+  });
+  if (
+    existing &&
+    existing.userId !== user.id &&
+    Date.now() - existing.updatedAt.getTime() < TAKEOVER_AFTER_MS
+  ) {
+    return NextResponse.json(
+      { error: 'Этот push-токен привязан к другому аккаунту' },
+      { status: 409 },
+    );
+  }
 
   await prisma.pushToken.upsert({
     where: { token },

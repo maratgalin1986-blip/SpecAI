@@ -6,6 +6,8 @@
 // provider company per day. The author may ask to remove the order — the
 // admin erases it. Pure functions only; the route handlers do the database work.
 
+import { SITE } from './site';
+
 export const CHAT_PHONE_REVEALS_PER_DAY = 30;
 export const DAY_MS = 24 * 60 * 60_000;
 
@@ -21,10 +23,23 @@ export function maskPhone(phone: string | null | undefined): string | null {
   return `${digits.slice(0, 3)}•••••${last}`;
 }
 
+/**
+ * How the author of an imported order asks to remove it (152-ФЗ ст. 18 ч. 3
+ * notice). Shown next to the order, outside its description: descriptions are
+ * shown with phones and e-mails masked, which would hide these contacts.
+ */
+export const CHAT_ORDER_REMOVAL = `Автор может попросить удалить её: ${SITE.email} или ${SITE.phone}`;
+
+/** Where the board and the order page send the author who wants the order removed. */
+export const CHAT_ORDER_REMOVAL_HREF = '/privacy#iz-chatov';
+
 /** The line added to the description of every order imported from a chat. */
 export function chatOrderNote(chatTitle?: string | null): string {
   const chat = chatTitle?.trim() ? ` «${chatTitle.trim().slice(0, 80)}»` : '';
-  return `Заявка найдена в открытом чате${chat}. Автор может попросить удалить её.`;
+  return (
+    `Заявка найдена в открытом чате${chat}. Автор может попросить удалить её — ` +
+    'как это сделать, сказано на странице заявки.'
+  );
 }
 
 export const ERASED_DESCRIPTION = 'Заявка удалена по запросу автора.';

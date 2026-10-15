@@ -12,6 +12,8 @@ import { moscowDateKey } from './bookingRules';
 
 export interface ShiftLike {
   status: string;
+  /** The shift's day (UTC midnight of the Moscow day, see shiftDay). */
+  date?: Date | null;
   startedAt?: Date | null;
   arrivedAt?: Date | null;
   workStartedAt?: Date | null;
@@ -67,6 +69,11 @@ export function applyShiftTransition(
   input: { status: ShiftStatus; note?: string; photoUrl?: string },
   now: Date = new Date(),
 ): ShiftTransitionResult {
+  // A shift planned for a later day cannot be driven yet (the app hides the
+  // buttons; the server refuses too).
+  if (shift.date && moscowDateKey(shift.date) > moscowDateKey(now)) {
+    return { ok: false, error: 'Эта смена ещё не наступила — откройте её в свой день' };
+  }
   const allowed = nextShiftStatuses(shift.status);
   if (!allowed.includes(input.status)) {
     return {

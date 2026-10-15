@@ -48,6 +48,8 @@ import {
   ORDER_STAGES,
   addressFromDescription,
   categoryIcon,
+  HOUSE_COMPANY_ID,
+  houseFirstBids,
   orderDays,
   orderStage,
   relativeDay,
@@ -133,10 +135,26 @@ function OfferCard({
             {company?.name ?? 'Исполнитель'}
           </Text>
           <View style={styles.offerBadges}>
-            {company?.verified ? <Badge text="Проверен" tone="success" /> : null}
-            {typeof company?.rating === 'number' ? (
-              <Text style={styles.rating}>★ {company.rating.toFixed(1)}</Text>
-            ) : null}
+            {company?.id === HOUSE_COMPANY_ID ? <Badge text="СпецПласт16" tone="dark" /> : null}
+            {company?.badges ? (
+              // Надёжность как на сайте: «Проверен», ★, выполненные заказы, отмены.
+              company.badges.map((text) =>
+                text === 'Проверен' ? (
+                  <Badge key={text} text={text} tone="success" />
+                ) : (
+                  <Text key={text} style={styles.rating}>
+                    {text}
+                  </Text>
+                ),
+              )
+            ) : (
+              <>
+                {company?.verified ? <Badge text="Проверен" tone="success" /> : null}
+                {typeof company?.rating === 'number' ? (
+                  <Text style={styles.rating}>★ {company.rating.toFixed(1)}</Text>
+                ) : null}
+              </>
+            )}
             {best ? <Badge text="Лучшая цена" tone="accent" /> : null}
             {bid.status !== 'PENDING' ? (
               <Badge text={BID_STATUS_LABELS[bid.status]} tone={BID_TONES[bid.status]} />
@@ -460,7 +478,7 @@ export default function OrderDetailScreen() {
                 </Text>
               </Card>
             ) : (
-              order.bids.map((bid) => (
+              houseFirstBids(order.bids).map((bid) => (
                 <OfferCard
                   key={bid.id}
                   bid={bid}

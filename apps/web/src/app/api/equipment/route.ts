@@ -6,7 +6,8 @@ import { EQUIPMENT_ORDER_BY, totalPagesFor } from '@/lib/pagination';
 import { PUBLIC_FLEET, PUBLISHED_FLEET, isProvider } from '@/lib/fleet';
 import { INVALID_JSON_MESSAGE, readJson, zodErrorMessage } from '@/lib/apiInput';
 import { listingPhoto } from '@/lib/equipmentPhoto';
-import { customerRates } from '@/lib/equipmentCatalog';
+import { maskContactsAndLinks, containsContact } from '@/lib/privacy';
+import { customerRateFields, customerRates } from '@/lib/equipmentCatalog';
 
 export async function GET(request: NextRequest) {
   const { mine, ...params } = Object.fromEntries(request.nextUrl.searchParams.entries());
@@ -17,7 +18,7 @@ export async function GET(request: NextRequest) {
   if (ownFleet) {
     const currentUser = await getRequestUser(request);
     if (!isProvider(currentUser)) {
-      return NextResponse.json({ error: 'Требуется аккаунт поставщика' }, { status: 403 });
+      return NextResponse.json({ error: 'Требуется аккаунт исполнителя' }, { status: 403 });
     }
     params.companyId = currentUser.companyId;
   }
@@ -68,7 +69,11 @@ export async function GET(request: NextRequest) {
     prisma.equipment.count({ where }),
     prisma.equipment.findMany({
       where,
-      include: { category: true, location: true, company: true },
+      include: {
+        category: true,
+        location: true,
+        company: { select: { id: true, name: true, verified: true } },
+      },
       skip: (page - 1) * pageSize,
       take: pageSize,
       orderBy: EQUIPMENT_ORDER_BY[sort],
@@ -82,8 +87,15 @@ export async function GET(request: NextRequest) {
       ...item,
       // Customers see prices as on the site (the house fleet never below
       // lib/prices.ts); the provider's own list keeps the stored ones, which
-      // its edit form saves.
+      // its edit form saves. customerHourlyRate/customerDailyRate are what
+      // the customer sees either way: the bid forms prefill from them.
       ...(ownFleet ? {} : customerRates({ ...item, categoryName: item.category.name })),
+      // Contacts in the description stay hidden from customers, as on the
+      // machine page; the provider's own list keeps the text it edits.
+      ...(ownFleet || !item.description
+        ? {}
+        : { description: maskContactsAndLinks(item.description) }),
+      ...customerRateFields({ ...item, categoryName: item.category.name }),
       ...listingPhoto(item, origin),
     })),
     total,
@@ -96,7 +108,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   const currentUser = await getRequestUser(request);
   if (!isProvider(currentUser)) {
-    return NextResponse.json({ error: 'Требуется аккаунт поставщика' }, { status: 403 });
+    return NextResponse.json({ error: 'Требуется аккаунт исполнителя' }, { status: 403 });
   }
 
   const body = await readJson(request);
@@ -108,6 +120,15 @@ export async function POST(request: NextRequest) {
 
   if (!parsed.success) {
     return NextResponse.json({ error: zodErrorMessage(parsed.error) }, { status: 400 });
+  }
+  if (containsContact(parsed.data.name)) {
+    return NextResponse.json(
+      {
+        error:
+          'Уберите телефон, почту и ссылки из названия: контакты откроются заказчику после подтверждения брони',
+      },
+      { status: 400 },
+    );
   }
   const category = await prisma.equipmentCategory.findUnique({
     where: { id: parsed.data.categoryId },

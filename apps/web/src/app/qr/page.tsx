@@ -5,7 +5,7 @@ import { SITE } from '@/lib/site';
 
 export const metadata: Metadata = {
   title: 'QR-код сайта',
-  description: `Наведите камеру телефона — откроется сайт ${SITE.name}. Для визиток, техники и объявлений.`,
+  description: `Наведите камеру телефона — откроется сайт ${SITE.platform} от ${SITE.name}. Для визиток, техники и объявлений.`,
   robots: { index: false },
 };
 
@@ -47,9 +47,9 @@ export default async function QrPage() {
 
         <div className="flex flex-col gap-4">
           <div>
-            <div className="text-3xl font-extrabold tracking-tight">{SITE.name}</div>
+            <div className="text-3xl font-extrabold tracking-tight">{SITE.platform}</div>
             <p className="mt-1 text-white/70 print:text-slate-600">
-              Аренда спецтехники с машинистом · {SITE.city}
+              от {SITE.name} · аренда спецтехники с машинистом · {SITE.city}
             </p>
           </div>
           <a

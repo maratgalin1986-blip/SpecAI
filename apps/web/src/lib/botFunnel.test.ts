@@ -4,6 +4,7 @@ import { rateOf, SHIFT_HOURS } from './prices';
 import {
   calcText,
   draftMessage,
+  greeting,
   machineKeyboard,
   parseCalcStart,
   parseCallback,
@@ -98,5 +99,11 @@ describe('bot funnel', () => {
       7,
     );
     expect(reminderText(draft)).toMatch(/^Вы выбирали самосвал, завтра, Елабуга — от 3/);
+  });
+
+  it('greets as the platform with many providers, not an own fleet', () => {
+    expect(greeting()).toContain('ИИСтройка24 от СпецПласт16');
+    expect(greeting()).toContain('других компаний-исполнителей');
+    expect(greeting()).not.toContain('своей');
   });
 });

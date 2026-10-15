@@ -37,7 +37,7 @@ export function VerifyEmailBanner({ emailEnabled = true }: { emailEnabled?: bool
             ? 'Письмо отправлено. Проверьте почту и перейдите по ссылке из письма.'
             : emailEnabled
               ? 'Ссылка для подтверждения уходит на ваш e-mail при регистрации. Не пришло? Отправим ещё раз.'
-              : 'Отправка писем пока не настроена — подтвердить e-mail можно будет позже.'}
+              : 'Подтвердить e-mail можно будет позже.'}
         </p>
         {error && <p className="mt-1 text-red-700">{error}</p>}
       </div>
