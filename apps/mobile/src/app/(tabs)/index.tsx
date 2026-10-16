@@ -42,8 +42,13 @@ export default function HomeScreen() {
   const [active, setActive] = useState<Order | null>(null);
   // «Вызвать сюда»: a tap on the map becomes the order's address.
   const [pickedAddress, setPickedAddress] = useState<string | null>(null);
-  // Вы на карте и техника на линии вокруг (владелец, 2026-10-15).
-  const { me, machines } = useNearbyLine(!!user);
+  const { loaded, mode } = usePrefs();
+  // Вы на карте и техника на линии вокруг (владелец, 2026-10-15) — только
+  // когда карта заказчика действительно показана: исполнителя и машиниста
+  // уводят отсюда ниже, им ни запрос геопозиции, ни опрос карты не нужны.
+  const showsCustomerMap =
+    !!user && user.role !== 'PROVIDER_OPERATOR' && (!isProvider || (loaded && mode === 'customer'));
+  const { me, machines } = useNearbyLine(showsCustomerMap);
 
   useFocusEffect(
     useCallback(() => {
@@ -57,7 +62,6 @@ export default function HomeScreen() {
     }, []),
   );
 
-  const { loaded, mode } = usePrefs();
   // Машинист видит только свои смены: после входа с экрана логина роутер
   // открывает первую вкладку, поэтому уводим его отсюда.
   if (user?.role === 'PROVIDER_OPERATOR') return <Redirect href="/(tabs)/shifts" />;
