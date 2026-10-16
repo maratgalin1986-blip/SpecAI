@@ -5,6 +5,7 @@ import {
   CHAT_PHONE_REVEALS_PER_DAY,
   ERASED_ORDER_DATA,
   chatOrderNote,
+  eraseBlockedByBooking,
   maskPhone,
   maskedContactFor,
   revealDecision,
@@ -115,6 +116,16 @@ describe('chat order note and erasure', () => {
       sourceUrl: null,
       sourceChat: null,
     });
+  });
+
+  it('erases with a pending booking, refuses a confirmed or running one', () => {
+    expect(eraseBlockedByBooking(null)).toBe(false);
+    expect(eraseBlockedByBooking(undefined)).toBe(false);
+    expect(eraseBlockedByBooking('PENDING')).toBe(false);
+    expect(eraseBlockedByBooking('CANCELLED')).toBe(false);
+    expect(eraseBlockedByBooking('COMPLETED')).toBe(false);
+    expect(eraseBlockedByBooking('CONFIRMED')).toBe(true);
+    expect(eraseBlockedByBooking('ACTIVE')).toBe(true);
   });
 });
 

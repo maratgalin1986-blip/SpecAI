@@ -84,10 +84,11 @@ export function prefersReducedMotion(): boolean {
 }
 
 /**
- * Pages for reading (consent, policy, credits): no cinema layer and no sound
- * director, so no sound switch either (CinemaLayer, SoundToggle).
+ * Pages for reading (consents, policy, rules, credits): no cinema layer and
+ * no sound director, so no sound switch either (CinemaLayer, SoundToggle).
+ * Covers /soglasie and /soglasie-rasprostranenie alike.
  */
-export const DOCUMENT_PAGES = /^\/(soglasie|privacy|credits)(\/|$)/;
+export const DOCUMENT_PAGES = /^\/(soglasie(-[a-z-]+)?|privacy|pravila|credits)(\/|$)/;
 
 export function soundEnabled(): boolean {
   return enabled;

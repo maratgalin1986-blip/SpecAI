@@ -177,6 +177,12 @@ function Section({
       ) : (
         <ul className="divide-y divide-graphite-100 text-sm">{children}</ul>
       )}
+      {/* The lists stop at SHOW rows without saying so otherwise. */}
+      {count >= SHOW && (
+        <p className="text-xs text-graphite-500">
+          Показаны первые {SHOW} — уточните запрос, чтобы увидеть остальные.
+        </p>
+      )}
     </section>
   );
 }

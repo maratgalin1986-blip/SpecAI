@@ -12,6 +12,7 @@ import { CHAT_PHONE_REVEALS_PER_DAY } from '@/lib/chatOrders';
 export const metadata: Metadata = {
   title: 'Политика конфиденциальности',
   description: `Политика обработки персональных данных площадки ${SITE.platform} от ${SITE.name}`,
+  alternates: { canonical: '/privacy' },
 };
 
 export default function PrivacyPage() {

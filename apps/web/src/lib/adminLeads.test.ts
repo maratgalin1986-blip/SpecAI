@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { filterLeads, leadFilterCounts, parseLeadFilter, sortLeads } from './adminLeads';
+import {
+  filterLeads,
+  leadFilterCounts,
+  leadSourceLabel,
+  parseLeadFilter,
+  sortLeads,
+} from './adminLeads';
 
 const at = (day: number) => new Date(`2026-10-${String(day).padStart(2, '0')}T10:00:00Z`);
 const leads = [
@@ -30,5 +36,18 @@ describe('admin leads', () => {
     expect(parseLeadFilter(['done'])).toBe('done');
     expect(parseLeadFilter('junk')).toBe('all');
     expect(parseLeadFilter(undefined)).toBe('all');
+  });
+
+  it('labels the source the way the marketing table does', () => {
+    expect(leadSourceLabel('home · Яндекс Директ')).toBe('Главная, форма звонка · Яндекс Директ');
+    expect(leadSourceLabel('estimate:abc · Прямой заход')).toBe(
+      'Расчёт на странице техники · Прямой заход',
+    );
+    expect(leadSourceLabel('yandex|hero')).toBe('Главная, форма звонка · Яндекс Директ');
+    expect(leadSourceLabel('site|contacts')).toBe('Контакты · Сайт');
+    expect(leadSourceLabel('contacts')).toBe('Контакты');
+    expect(leadSourceLabel('telegram')).toBe('Telegram');
+    expect(leadSourceLabel('')).toBeNull();
+    expect(leadSourceLabel(null)).toBeNull();
   });
 });

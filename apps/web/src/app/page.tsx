@@ -16,6 +16,7 @@ import { MachinePhoto } from '@/components/MachinePhoto';
 import { MarketplaceBlock } from '@/components/MarketplaceBlock';
 import { Reveal } from '@/components/Reveal';
 import { TiltCard } from '@/components/TiltCard';
+import type { Metadata } from 'next';
 import type { MachineType } from '@/lib/machinePhotos';
 import { pluralizeRu } from '@/lib/pluralize';
 import { SITE } from '@/lib/site';
@@ -151,6 +152,13 @@ const STEPS = [
   },
   { title: 'Работайте', text: 'Диспетчер на связи, оплата по факту.' },
 ];
+
+// Title and description come from the root layout; the home page adds the
+// canonical (UTM and ?agent= variants of «/» otherwise count as duplicates).
+export const metadata: Metadata = {
+  alternates: { canonical: '/' },
+  openGraph: { url: '/' },
+};
 
 // Service cards link to their catalog category (matched by slug) and show how
 // much equipment is listed there. Falls back to plain cards without a database.

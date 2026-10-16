@@ -34,6 +34,8 @@ export const metadata = {
   title: 'Каталог спецтехники',
   description:
     'Аренда экскаваторов-погрузчиков, автокранов, погрузчиков и другой спецтехники с машинистом в Набережных Челнах и по Татарстану.',
+  // Filters live in the query: one canonical for the whole catalogue.
+  alternates: { canonical: '/equipment' },
 };
 
 export const dynamic = 'force-dynamic';

@@ -55,6 +55,15 @@ export const ERASED_ORDER_DATA = {
   sourceChat: null,
 };
 
+/**
+ * Whether «Удалить по запросу» may run with this booking on the order:
+ * a pending booking is cancelled along with the order, a confirmed or
+ * running one must be cancelled by hand first (the machine may be on its way).
+ */
+export function eraseBlockedByBooking(bookingStatus: string | null | undefined): boolean {
+  return bookingStatus === 'CONFIRMED' || bookingStatus === 'ACTIVE';
+}
+
 export interface RevealViewer {
   userId: string;
   role: string;
