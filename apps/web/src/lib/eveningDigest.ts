@@ -2,7 +2,10 @@
 // one message with tomorrow's open orders in its categories and radius, and
 // customers whose booking starts tomorrow are reminded. Pure, unit-tested.
 import { moscowDateKey } from './bookingRules';
+import { stripChatOrderNote } from './chatOrders';
 import { providerMatchesOrder, type ProviderForMatch } from './notifications/routing';
+import { maskContacts } from './privacy';
+import { SITE } from './site';
 
 const DAY_MS = 86_400_000;
 
@@ -26,6 +29,11 @@ export interface DigestOrder {
   lat?: number | null;
   lon?: number | null;
   customerId: string;
+  /** The order text: its first words tell nine «экскаваторы» apart. */
+  description?: string | null;
+  /** Work dates: shown when the job runs past tomorrow («17–19.10»). */
+  startDate?: Date | null;
+  endDate?: Date | null;
 }
 
 export interface DigestCompany extends ProviderForMatch {
@@ -33,10 +41,45 @@ export interface DigestCompany extends ProviderForMatch {
   userIds: string[];
 }
 
-/** «экскаватор, Елабуга» — one line of the digest. */
-export function digestItem(order: { categoryName?: string | null; city?: string | null }) {
+/** How many characters of the order text go into a digest line. */
+export const DIGEST_EXCERPT = 40;
+
+function shortDay(date: Date): string {
+  return date.toLocaleDateString('ru-RU', {
+    timeZone: 'Europe/Moscow',
+    day: '2-digit',
+    month: '2-digit',
+  });
+}
+
+/**
+ * «экскаватор, Елабуга, 17–19.10: копать траншею 100 м» — one line of the
+ * digest. An order without an address is a home-city one (SITE.city), as the
+ * matching assumes; the excerpt is masked and never carries the chat notice.
+ */
+export function digestItem(order: {
+  categoryName?: string | null;
+  city?: string | null;
+  description?: string | null;
+  startDate?: Date | null;
+  endDate?: Date | null;
+}) {
   const what = (order.categoryName ?? 'техника').toLowerCase();
-  return order.city ? `${what}, ${order.city}` : what;
+  const where = order.city?.trim() || SITE.city;
+  const parts = [`${what}, ${where}`];
+  if (
+    order.startDate &&
+    order.endDate &&
+    moscowDateKey(order.endDate) > moscowDateKey(order.startDate)
+  ) {
+    parts.push(`${shortDay(order.startDate)}–${shortDay(order.endDate)}`);
+  }
+  const text = order.description
+    ? maskContacts(stripChatOrderNote(order.description)).replace(/\s+/g, ' ').trim()
+    : '';
+  const excerpt =
+    text.length > DIGEST_EXCERPT ? `${text.slice(0, DIGEST_EXCERPT - 1).trimEnd()}…` : text;
+  return excerpt ? `${parts.join(', ')}: ${excerpt}` : parts.join(', ');
 }
 
 /**

@@ -81,6 +81,17 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
         photoUrl: parsed.data.photoUrl ?? null,
       },
     });
+    // The machine is on its way or at work: a CONFIRMED booking becomes
+    // ACTIVE by itself (the same guard as PATCH /api/bookings), so the
+    // customer and the income report do not see «Подтверждена» all day. The
+    // last shift finishing does not complete the booking — that stays the
+    // provider's decision.
+    if (access.booking.status === 'CONFIRMED') {
+      await tx.booking.updateMany({
+        where: { id: access.booking.id, status: 'CONFIRMED' },
+        data: { status: 'ACTIVE' },
+      });
+    }
     return tx.shift.findUniqueOrThrow({ where: { id: shift.id }, include: shiftInclude });
   });
   if (!updated) {

@@ -33,6 +33,7 @@ export async function loadMachineIncome(
         equipmentId: true,
         status: true,
         startDate: true,
+        endDate: true,
         totalPrice: true,
         shifts: {
           select: {

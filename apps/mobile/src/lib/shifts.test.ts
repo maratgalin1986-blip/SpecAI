@@ -72,7 +72,14 @@ describe('calendar helpers', () => {
 
   it('formats days', () => {
     expect(shortDay('2026-10-08')).toBe('08.10');
-    expect(dayKey(new Date(2026, 9, 8))).toBe('2026-10-08');
+  });
+
+  it('counts «сегодня» in Moscow, as the server dates the shifts', () => {
+    // 23:30 Moscow on the 7th is still the 7th; 00:30 Moscow (21:30 UTC) is the 8th —
+    // whatever the phone's own time zone says.
+    expect(dayKey(new Date('2026-10-07T20:30:00Z'))).toBe('2026-10-07');
+    expect(dayKey(new Date('2026-10-07T21:30:00Z'))).toBe('2026-10-08');
+    expect(dayKey(new Date('2026-10-08T12:00:00Z'))).toBe(moscowDayKey('2026-10-08T12:00:00Z'));
   });
 });
 

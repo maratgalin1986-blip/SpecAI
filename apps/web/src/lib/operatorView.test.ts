@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bookingForOperator, operatorCanCallSite } from './operatorView';
+import { bookingForOperator, operatorCanCallSite, siteContactPhone } from './operatorView';
 
 const booking = {
   id: 'b1',
@@ -24,6 +24,7 @@ describe('bookingForOperator', () => {
       equipment: { id: 'm1', name: 'JCB 3CX', imageUrls: ['https://x.ru/a.jpg'] },
       siteAddress: 'ул. Ленина, 1, Казань',
       contactPhone: '+79170000000',
+      contactKind: 'customer',
       notes: 'Звоните прорабу ***',
     });
     // Never the price, the name or the e-mail.
@@ -48,6 +49,39 @@ describe('bookingForOperator', () => {
       bookingForOperator({ ...booking, order: { location: { addressLine: 'x', city: 'y' } } })
         .siteAddress,
     ).toBe('ул. Ленина, 1, Казань');
+  });
+
+  it('falls back to the order contact and then to the dispatcher when the customer has no phone', () => {
+    // A chat or guest order: the technical customer account has no phone, the order has.
+    const chat = bookingForOperator(
+      { ...booking, customer: { phone: null }, order: { contactPhone: '+79175550606' } },
+      (text) => text,
+      '+7 (927) 242-80-88',
+    );
+    expect(chat.contactPhone).toBe('+79175550606');
+    expect(chat.contactKind).toBe('order');
+    // A signed-in customer who left no phone: the dispatcher's number.
+    const noPhone = bookingForOperator(
+      { ...booking, customer: { phone: '' }, order: null },
+      (text) => text,
+      '+7 (927) 242-80-88',
+    );
+    expect(noPhone.contactPhone).toBe('+7 (927) 242-80-88');
+    expect(noPhone.contactKind).toBe('dispatcher');
+    // Nothing known at all.
+    expect(bookingForOperator({ ...booking, customer: null }).contactPhone).toBeNull();
+    // Never before confirmation, whatever the source.
+    expect(
+      bookingForOperator(
+        { ...booking, status: 'PENDING', order: { contactPhone: '+79175550606' } },
+        (text) => text,
+        '+7 (927) 242-80-88',
+      ).contactPhone,
+    ).toBeNull();
+    expect(siteContactPhone({ customer: { phone: ' +79170000000 ' } })).toEqual({
+      phone: '+79170000000',
+      kind: 'customer',
+    });
   });
 
   it('copes with a booking without a site or notes', () => {

@@ -11,6 +11,8 @@ export interface IncomeBooking {
   equipmentId: string;
   status: string;
   startDate: Date;
+  /** Last day of the booking (inclusive); the start day when not given. */
+  endDate?: Date | null;
   totalPrice: Money;
   /** Timesheets of the booking's shifts (any state). */
   timesheets: {
@@ -47,22 +49,32 @@ function num(value: Money | null | undefined): number {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+/** Calendar days of a booking (Moscow), both ends inclusive; at least one. */
+export function bookingDays(booking: Pick<IncomeBooking, 'startDate' | 'endDate'>): number {
+  const end = booking.endDate ?? booking.startDate;
+  const days = Math.round((end.getTime() - booking.startDate.getTime()) / 86_400_000) + 1;
+  return Number.isFinite(days) && days > 0 ? days : 1;
+}
+
 /**
- * The money of one booking: when a timesheet confirmed by both sides exists,
- * the confirmed hours × the machine's hourly rate replace the booking price;
- * without an hourly rate (or without a final timesheet) the price stands.
+ * The money of one booking, day by day: a day whose timesheet both sides
+ * confirmed counts as its hours × the machine's hourly rate; every other day
+ * of the booking keeps its share of the booking price (price / days). So a
+ * three-day booking with one confirmed day is not cut to that day's hours.
+ * Without an hourly rate (or without any final timesheet) the price stands.
  */
 export function bookingIncome(
-  booking: Pick<IncomeBooking, 'totalPrice' | 'timesheets'>,
+  booking: Pick<IncomeBooking, 'startDate' | 'endDate' | 'totalPrice' | 'timesheets'>,
   hourlyRate: Money | null | undefined,
 ): { income: number; confirmedHours: number } {
   const confirmed = booking.timesheets.filter(isTimesheetFinal);
   const confirmedHours = confirmed.reduce((sum, row) => sum + num(row.hoursWorked), 0);
   const rate = num(hourlyRate);
-  if (confirmed.length > 0 && rate > 0) {
-    return { income: confirmedHours * rate, confirmedHours };
-  }
-  return { income: num(booking.totalPrice), confirmedHours };
+  const price = num(booking.totalPrice);
+  if (confirmed.length === 0 || rate <= 0) return { income: price, confirmedHours };
+  const days = bookingDays(booking);
+  const openDays = Math.max(0, days - confirmed.length);
+  return { income: confirmedHours * rate + (price / days) * openDays, confirmedHours };
 }
 
 /**

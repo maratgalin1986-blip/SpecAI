@@ -3,7 +3,7 @@ import { analyzeChatMessage } from '@specai/ai-service';
 import { parseEquipmentRequest, requestFingerprint } from '@specai/shared';
 import { notifyTelegram } from '@/lib/notify';
 import { bidsUntilFor } from '@/lib/bidWindow';
-import { chatOrderNote } from '@/lib/chatOrders';
+import { chatOrderNote, placeInText } from '@/lib/chatOrders';
 import { notifyProvidersAboutOrder } from '@/lib/notifications/notifyUser';
 import { isSafeHttpUrl, maskContacts } from '@/lib/privacy';
 import { SITE } from '@/lib/site';
@@ -117,6 +117,12 @@ export async function ingestMessage(message: IncomingMessage): Promise<IngestRes
   }
 
   if (!isRequest) return { status: 'ignored', reason: heuristic.signals.join('; ') };
+
+  // A town the parsers do not know («в Бавлы») still gets a Location with its
+  // name: without one the order would count as a home-city order and reach
+  // every provider around Набережные Челны (lib/geo.ts orderPoint). With the
+  // name, only the house and providers whose base names that town hear of it.
+  city = city ?? placeInText(text) ?? undefined;
 
   const category = categorySlug
     ? await prisma.equipmentCategory.findUnique({ where: { slug: categorySlug } })

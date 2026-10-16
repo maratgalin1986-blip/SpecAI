@@ -5,6 +5,7 @@
 // Privacy (CLAUDE.md): a provider never gets the customer's full name, phone
 // or e-mail in a notification — only «Анна П.» — and texts that come from
 // users or chats are passed through maskContacts.
+import { stripChatOrderNote } from '../chatOrders';
 import { maskContacts } from '../privacy';
 
 export const CHANNELS = ['telegram', 'push', 'email', 'whatsapp', 'sms'] as const;
@@ -116,13 +117,32 @@ export type NotificationEvent =
       startDate: Date;
       fromChat?: boolean;
     }
-  /** To the customer: a provider bid on their order. */
+  /** To the customer: a provider bid on their order (or changed its bid: `updated`). */
   | {
       type: 'bid.new';
       orderId: string;
       equipmentName: string;
       price: string;
       companyName?: string | null;
+      updated?: boolean;
+    }
+  /** To the provider's managers: a customer booked a machine directly (PENDING, awaits confirmation). */
+  | {
+      type: 'booking.new';
+      bookingId: string;
+      equipmentName: string;
+      startDate: Date;
+      endDate: Date;
+      /** Always the short form («Анна П.»). */
+      customerShortName: string;
+    }
+  /** To the companies whose bids were pending: the customer cancelled the open order. */
+  | {
+      type: 'order.cancelled';
+      orderId: string;
+      equipmentName: string;
+      categoryName?: string | null;
+      startDate: Date;
     }
   /** To the provider: the customer accepted their bid (booking created). */
   | {
@@ -222,6 +242,13 @@ function day(date: Date): string {
   return date.toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow' });
 }
 
+/** «16.10.2026» or «16.10.2026 – 18.10.2026». */
+function dateRange(start: Date, end: Date): string {
+  const from = day(start);
+  const to = day(end);
+  return from === to ? from : `${from} – ${to}`;
+}
+
 function clip(text: string, max: number): string {
   const clean = text.replace(/\s+/g, ' ').trim();
   return clean.length > max ? `${clean.slice(0, max - 1)}…` : clean;
@@ -232,19 +259,40 @@ export function renderNotification(event: NotificationEvent): RenderedNotificati
     case 'order.new': {
       const what = event.categoryName ?? 'Техника';
       const where = event.city ? `, ${event.city}` : '';
+      // A chat order's description ends with the removal notice (lib/chatOrders.ts):
+      // the alert says «найдена в открытом чате» once, in its own line.
+      const text = stripChatOrderNote(event.description);
       return {
         title: `Новая заявка: ${what}${where}`,
         body:
-          `${day(event.startDate)} · ${clip(maskContacts(event.description), 180)}` +
+          `${day(event.startDate)} · ${clip(maskContacts(text), 180)}` +
           (event.fromChat ? '\nНайдена в открытом чате.' : ''),
         path: `/orders/${event.orderId}`,
       };
     }
     case 'bid.new':
       return {
-        title: 'Новое предложение по вашей заявке',
+        title: event.updated
+          ? 'Предложение по вашей заявке обновлено'
+          : 'Новое предложение по вашей заявке',
         body: `${event.equipmentName}${event.companyName ? ` · ${event.companyName}` : ''} — ${event.price}`,
         path: `/orders/${event.orderId}`,
+      };
+    case 'booking.new':
+      return {
+        title: `Новая бронь: ${event.equipmentName}`,
+        body:
+          `${event.customerShortName} бронирует ${event.equipmentName} на ${dateRange(event.startDate, event.endDate)}. ` +
+          'Подтвердите или отклоните бронь — заказчик ждёт ответа.',
+        path: '/provider#bookings',
+      };
+    case 'order.cancelled':
+      return {
+        title: 'Заявка отменена заказчиком',
+        body:
+          `Ваше предложение (${event.equipmentName}) снято: заказчик отменил заявку` +
+          `${event.categoryName ? ` «${event.categoryName}»` : ''} на ${day(event.startDate)}. Машина снова свободна.`,
+        path: '/orders',
       };
     case 'bid.accepted':
       return {
@@ -358,7 +406,11 @@ export function renderNotification(event: NotificationEvent): RenderedNotificati
         final: 'Табель смены подтверждён обеими сторонами',
       };
       return {
-        title: titles[event.step],
+        // The company's manager hears that his machinist filled in the timesheet.
+        title:
+          event.step === 'submitted' && event.audience === 'provider'
+            ? 'Машинист заполнил табель — подтвердите'
+            : titles[event.step],
         body:
           `${event.equipmentName}: ${event.hoursWorked} ч` +
           (event.note ? ` — ${clip(maskContacts(event.note), 160)}` : ''),
@@ -383,8 +435,36 @@ export function plainText(
   channel: Channel,
 ): string {
   const link = `${baseUrl.replace(/\/+$/, '')}${message.path}`;
-  if (channel === 'sms') return clip(`${message.title}. ${link}`, 140);
+  // SMS: the title is clipped, never the link — a cut link would open nothing.
+  if (channel === 'sms')
+    return `${clip(message.title, Math.max(SMS_MAX - link.length - 2, 8))}. ${link}`;
   return `${message.title}\n${message.body}\n${link}`;
+}
+
+const SMS_MAX = 140;
+
+/**
+ * Events the legacy owner alert (lib/notify.ts notifyTelegram → TELEGRAM_CHAT_ID)
+ * already covers: a new order, a bid on a guest or chat order, a comment for
+ * moderation. When the owner also linked that very chat to his account, the
+ * dispatcher skips Telegram for him, so he reads each of them once.
+ */
+export const OWNER_TELEGRAM_EVENTS: readonly NotificationEvent['type'][] = [
+  'order.new',
+  'bid.relay',
+  'comment.pending',
+];
+
+export function coveredByOwnerTelegram(
+  event: NotificationEvent,
+  recipient: Recipient,
+  ownerChatId: string | null | undefined,
+): boolean {
+  if (!ownerChatId || !recipient.telegramChatId) return false;
+  return (
+    recipient.telegramChatId.trim() === ownerChatId.trim() &&
+    OWNER_TELEGRAM_EVENTS.includes(event.type)
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -483,29 +563,29 @@ export function addressNamesCity(address: string | null | undefined, city: strin
  * A provider hears about an order when it has machinery that can take it
  * (OrderForMatch.categoryIds; any, if the order has no category) and its base
  * is within its own delivery radius (ORDER_RADIUS_KM when none is set) of the
- * work site. A provider that has not set its base is not filtered by distance.
+ * work site.
  *
- * An order whose place is unknown (a chat order from a city we cannot place)
- * is never spread over the whole region: only the house company hears of it,
- * plus providers whose base address names the order's city.
+ * A provider without base coordinates is never sent everything: it hears only
+ * of orders whose city text its base address names (the house company hears
+ * of every order). The same rule covers an order whose place is unknown (a
+ * chat order from a town we cannot place): it is never spread over the whole
+ * region — only the house company and providers whose base address names
+ * that town.
  */
 export function providerMatchesOrder(provider: ProviderForMatch, order: OrderForMatch): boolean {
   if (provider.categoryIds.length === 0) return false;
   const accepted = order.categoryIds ?? (order.categoryId ? [order.categoryId] : null);
   if (accepted && !accepted.some((id) => provider.categoryIds.includes(id))) return false;
-  if (order.lat == null || order.lon == null) {
-    return Boolean(
-      provider.isHouse || (order.city && addressNamesCity(provider.baseAddress, order.city)),
-    );
-  }
-  if (provider.baseLat != null && provider.baseLon != null) {
-    const km = distanceKm(
-      { lat: order.lat, lon: order.lon },
-      { lat: provider.baseLat, lon: provider.baseLon },
-    );
-    const radius =
-      provider.radiusKm != null && provider.radiusKm > 0 ? provider.radiusKm : ORDER_RADIUS_KM;
-    if (km > radius) return false;
-  }
-  return true;
+  const byCity = Boolean(
+    provider.isHouse || (order.city && addressNamesCity(provider.baseAddress, order.city)),
+  );
+  if (order.lat == null || order.lon == null) return byCity;
+  if (provider.baseLat == null || provider.baseLon == null) return byCity;
+  const km = distanceKm(
+    { lat: order.lat, lon: order.lon },
+    { lat: provider.baseLat, lon: provider.baseLon },
+  );
+  const radius =
+    provider.radiusKm != null && provider.radiusKm > 0 ? provider.radiusKm : ORDER_RADIUS_KM;
+  return km <= radius;
 }
