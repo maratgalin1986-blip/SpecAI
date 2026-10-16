@@ -21,6 +21,15 @@ export function houseFirstBids<
 }
 
 /**
+ * Следующая страница списка заявок поверх уже загруженных: без дублей —
+ * заявка могла сдвинуться между страницами, пока приходили новые.
+ */
+export function appendOrders<T extends { id: string }>(prev: T[], next: T[]): T[] {
+  const seen = new Set(prev.map((order) => order.id));
+  return [...prev, ...next.filter((order) => !seen.has(order.id))];
+}
+
+/**
  * Адрес из точки на карте — в том виде, который сервер понимает без
  * геокодера (apps/web/src/lib/geo.ts parseCoordinates): «Точка на карте:
  * 55.74312, 52.39811».

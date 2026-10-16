@@ -49,6 +49,13 @@ export function scriptJson(value: unknown): string {
 }
 
 const LEAFLET = 'https://unpkg.com/leaflet@1.9.4/dist';
+/**
+ * Тайлы OSM — через кэширующий прокси сайта (apps/web/src/app/api/tiles), как на
+ * сайте: быстрее, надёжнее и по политике OSM. Хост — тот же, что у API (копия
+ * правила из lib/api.ts без импорта: этот модуль чистый и крутится в vitest);
+ * без EXPO_PUBLIC_API_URL — боевой сайт, localhost с телефона недоступен.
+ */
+export const TILES_URL = `${(process.env.EXPO_PUBLIC_API_URL || 'https://spec-ai-web.vercel.app').replace(/\/+$/, '')}/api/tiles/{z}/{x}/{y}`;
 
 /**
  * Страница карты: маркеры компаний, СпецПласт16 выделен цветом бренда.
@@ -100,8 +107,8 @@ background:${colors.dark};color:${colors.onDark};font:700 14px sans-serif}
 var pins = ${scriptJson(data)};
 var map = L.map('map', { zoomControl: false, attributionControl: true })
   .setView([${MAP_CENTER.lat}, ${MAP_CENTER.lon}], 10);
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-  maxZoom: 18, attribution: '&copy; OpenStreetMap'
+L.tileLayer(${JSON.stringify(TILES_URL)}, {
+  minZoom: 6, maxZoom: 18, attribution: '&copy; OpenStreetMap'
 }).addTo(map);
 function text(value) { var el = document.createElement('span'); el.textContent = value; return el.innerHTML; }
 function send(pin) {

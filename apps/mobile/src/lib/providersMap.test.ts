@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  TILES_URL,
   machinesLabel,
   providersMapHtml,
   scriptJson,
@@ -43,6 +44,13 @@ describe('providers map', () => {
     expect(scriptJson({ name: '</script><b>' })).not.toContain('</script>');
     const html = providersMapHtml([pin({ name: '</script><img src=x>' })], COLORS);
     expect(html.match(/<\/script>/g)).toHaveLength(2);
+  });
+
+  it('loads tiles through the site proxy, not from OSM directly', () => {
+    const html = providersMapHtml([pin({})], COLORS);
+    expect(TILES_URL).toMatch(/^https:\/\/.+\/api\/tiles\/\{z\}\/\{x\}\/\{y\}$/);
+    expect(html).toContain('/api/tiles/{z}/{x}/{y}');
+    expect(html).not.toContain('tile.openstreetmap.org');
   });
 
   it('builds a page with every pin', () => {

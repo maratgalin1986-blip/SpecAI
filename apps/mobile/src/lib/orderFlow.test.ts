@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   addressFromDescription,
+  appendOrders,
   categoryIcon,
   distanceKm,
   formatDistance,
@@ -155,5 +156,16 @@ describe('pointAddress', () => {
     expect(pointAddress({ lat: 55.743123, lon: 52.398111 })).toBe(
       'Точка на карте: 55.74312, 52.39811',
     );
+  });
+
+  describe('appendOrders', () => {
+    it('adds the next page without duplicates', () => {
+      const merged = appendOrders([{ id: 'a' }, { id: 'b' }], [{ id: 'b' }, { id: 'c' }]);
+      expect(merged.map((order) => order.id)).toEqual(['a', 'b', 'c']);
+    });
+
+    it('keeps the first page as is when the next one is empty', () => {
+      expect(appendOrders([{ id: 'a' }], [])).toEqual([{ id: 'a' }]);
+    });
   });
 });

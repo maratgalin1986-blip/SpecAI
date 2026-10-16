@@ -2,10 +2,18 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { Link, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
 import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
-import { Badge, EmptyState, ErrorBanner, Loader, Segmented, type BadgeTone } from '@/components/ui';
+import {
+  Badge,
+  Button,
+  EmptyState,
+  ErrorBanner,
+  Loader,
+  Segmented,
+  type BadgeTone,
+} from '@/components/ui';
 import { ApiError, fetchMyOrders, type Order, type OrderStatus } from '@/lib/api';
 import { ORDER_STATUS_LABELS, formatDate, pluralizeRu } from '@/lib/format';
-import { categoryIcon } from '@/lib/orderFlow';
+import { appendOrders, categoryIcon } from '@/lib/orderFlow';
 import { colors, radius, shadow, spacing } from '@/theme';
 import BookingsScreen from './bookings';
 
@@ -81,10 +89,17 @@ function OrderCard({ order }: { order: Order }) {
   );
 }
 
+/**
+ * Список заявок заказчика постранично: сервер отдаёт `nextOffset`, пока есть
+ * ещё; без него (старый сервер) показываем первую страницу как раньше.
+ */
 function OrdersScreen() {
   const [orders, setOrders] = useState<Order[] | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [nextOffset, setNextOffset] = useState<number | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [moreError, setMoreError] = useState<string | null>(null);
 
   const load = useCallback(async (mode: 'initial' | 'refresh' = 'initial') => {
     if (mode === 'refresh') setRefreshing(true);
@@ -92,6 +107,8 @@ function OrdersScreen() {
     try {
       const data = await fetchMyOrders();
       setOrders(data.orders);
+      setNextOffset(typeof data.nextOffset === 'number' ? data.nextOffset : null);
+      setMoreError(null);
     } catch (caught) {
       setError(caught instanceof ApiError ? caught.message : 'Не удалось загрузить заявки');
       setOrders((prev) => prev ?? []);
@@ -99,6 +116,21 @@ function OrdersScreen() {
       setRefreshing(false);
     }
   }, []);
+
+  const loadMore = useCallback(async () => {
+    if (nextOffset === null || loadingMore) return;
+    setLoadingMore(true);
+    setMoreError(null);
+    try {
+      const data = await fetchMyOrders({ offset: nextOffset });
+      setOrders((prev) => appendOrders(prev ?? [], data.orders));
+      setNextOffset(typeof data.nextOffset === 'number' ? data.nextOffset : null);
+    } catch (caught) {
+      setMoreError(caught instanceof ApiError ? caught.message : 'Не удалось загрузить ещё');
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [nextOffset, loadingMore]);
 
   // Обновляем при каждом возврате на вкладку (после создания заявки или принятия предложения).
   useFocusEffect(
@@ -134,6 +166,21 @@ function OrdersScreen() {
             </View>
           ) : null
         }
+        onEndReached={nextOffset !== null ? () => void loadMore() : undefined}
+        onEndReachedThreshold={0.5}
+        ListFooterComponent={
+          nextOffset !== null ? (
+            <View style={styles.more}>
+              {moreError ? <Text style={styles.moreError}>{moreError}</Text> : null}
+              <Button
+                title="Показать ещё"
+                variant="secondary"
+                loading={loadingMore}
+                onPress={() => void loadMore()}
+              />
+            </View>
+          ) : null
+        }
         ListEmptyComponent={
           !error ? (
             <EmptyState
@@ -149,7 +196,7 @@ function OrdersScreen() {
           accessibilityLabel="Новая заявка"
           style={({ pressed }) => [styles.fab, pressed && styles.fabPressed]}
         >
-          <Ionicons name="add" size={22} color="#fff" />
+          <Ionicons name="add" size={22} color={colors.onPrimary} />
           <Text style={styles.fabText}>Новая заявка</Text>
         </Pressable>
       </Link>
@@ -198,5 +245,7 @@ const styles = StyleSheet.create({
     ...shadow.card,
   },
   fabPressed: { opacity: 0.85 },
-  fabText: { color: '#fff', fontSize: 15, fontWeight: '600' },
+  fabText: { color: colors.onPrimary, fontSize: 15, fontWeight: '600' },
+  more: { paddingTop: spacing.lg, gap: spacing.sm },
+  moreError: { fontSize: 14, color: colors.danger, textAlign: 'center' },
 });
