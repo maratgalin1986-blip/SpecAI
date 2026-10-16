@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { positionStatus, shortLabel, toLivePins } from './line';
+import { LIVE_PERMANENT_MAX, positionStatus, shortLabel, splitBubble, toLivePins } from './line';
 import type { LiveMachine } from './api';
 
 const machine: LiveMachine = {
-  id: 'u1',
+  id: 'p1',
   lat: 55.74,
   lon: 52.4,
   driver: 'Марат Г.',
@@ -31,8 +31,22 @@ describe('live pins', () => {
     expect(toLivePins([machine])[0]).toMatchObject({
       equipmentId: 'e1',
       house: true,
-      bubble: machine.bubble,
+      head: 'Я на линии',
+      body: 'JCB 3CX · от 4 000 ₽/ч · Марат Г.',
+      note: null,
     });
+    expect(toLivePins([{ ...machine, note: ' Могу выехать сразу ' }])[0]?.note).toBe(
+      'Могу выехать сразу',
+    );
+  });
+
+  it('splits the bubble into a small first line and the rest', () => {
+    expect(splitBubble('Я на линии · JCB · от 4 000 ₽/ч')).toEqual({
+      head: 'Я на линии',
+      body: 'JCB · от 4 000 ₽/ч',
+    });
+    expect(splitBubble('Я на линии')).toEqual({ head: 'Я на линии', body: '' });
+    expect(LIVE_PERMANENT_MAX).toBe(8);
   });
 
   it('describes the reporter state', () => {

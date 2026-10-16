@@ -5,16 +5,21 @@ import { getRequestUser } from '@/lib/requestUser';
 import { isOperator, isProvider } from '@/lib/fleet';
 import { INVALID_JSON_MESSAGE, readJson, zodErrorMessage } from '@/lib/apiInput';
 import { checkRateLimit } from '@/lib/rateLimit';
-import { maskContactsAndLinks } from '@/lib/privacy';
-import { PRESENCE_MIN_INTERVAL_MS } from '@/lib/linePresence';
+import {
+  machineUnavailableReason,
+  noteHasContacts,
+  PRESENCE_MIN_INTERVAL_MS,
+} from '@/lib/linePresence';
+import { operatorOf } from '@/lib/shiftAccess';
 
 export const dynamic = 'force-dynamic';
 
 /**
  * «На линии»: PUT {online, lat, lon, equipmentId?, note?} from the app of a
  * provider's manager or machinist. One row per user (LinePresence): online
- * with the phone's position, or offline. Customers see the fresh online rows
- * on their home map (api/line/nearby). GET returns the caller's own row.
+ * with the phone's position and an AVAILABLE machine of the company, or
+ * offline. Customers see the fresh online rows on their home map
+ * (api/line/nearby). GET returns the caller's own row.
  */
 export async function GET(request: NextRequest) {
   const user = await getRequestUser(request);
@@ -37,8 +42,25 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json({ error: zodErrorMessage(parsed.error) }, { status: 400 });
   }
   const input = parsed.data;
+  // A machinist switched off by the company admin is not on the line.
+  if (isOperator(user)) {
+    const operator = await operatorOf(user);
+    if (!operator || !operator.active) {
+      return NextResponse.json({ error: 'Доступ машиниста отключён' }, { status: 403 });
+    }
+  }
+  if (input.online && !input.equipmentId) {
+    return NextResponse.json(
+      { error: 'Выберите машину, с которой выходите на линию' },
+      { status: 400 },
+    );
+  }
+  // The bubble is public: a phone or a link in the note is refused outright.
+  if (input.note && noteHasContacts(input.note)) {
+    return NextResponse.json({ error: 'В заметке нельзя указывать контакты' }, { status: 400 });
+  }
   let equipmentId: string | null = null;
-  if (input.equipmentId) {
+  if (input.online && input.equipmentId) {
     const machine = await prisma.equipment.findUnique({
       where: { id: input.equipmentId },
       select: { companyId: true, status: true },
@@ -49,28 +71,34 @@ export async function PUT(request: NextRequest) {
         { status: 403 },
       );
     }
-    if (machine.status === 'RETIRED') {
-      return NextResponse.json({ error: 'Эта машина снята с линии' }, { status: 409 });
-    }
+    const reason = machineUnavailableReason(machine.status);
+    if (reason) return NextResponse.json({ error: reason }, { status: 409 });
     equipmentId = input.equipmentId;
   }
 
-  // A phone reports at most once per PRESENCE_MIN_INTERVAL_MS; a wrong
-  // machine above is refused before the throttle counts.
-  if (
+  const existing = await prisma.linePresence.findUnique({ where: { userId: user.id } });
+  const note = input.online ? (input.note ?? null) : null;
+  // A phone reports at most once per PRESENCE_MIN_INTERVAL_MS, but only a pure
+  // position update is throttled: going online, changing the machine or the
+  // note is always applied (so offline → online within 15 s works).
+  const pureMove =
+    existing !== null &&
+    existing.online &&
     input.online &&
-    !checkRateLimit(`line:${user.id}`, { limit: 1, windowMs: PRESENCE_MIN_INTERVAL_MS }).ok
-  ) {
-    const presence = await prisma.linePresence.findUnique({ where: { userId: user.id } });
-    return NextResponse.json({ presence, throttled: true });
+    existing.equipmentId === equipmentId &&
+    (existing.note ?? null) === note;
+  const limited =
+    input.online &&
+    !checkRateLimit(`line:${user.id}`, { limit: 1, windowMs: PRESENCE_MIN_INTERVAL_MS }).ok;
+  if (limited && pureMove) {
+    return NextResponse.json({ presence: existing, throttled: true });
   }
 
   const data = {
     companyId: user.companyId,
     online: input.online,
     equipmentId,
-    // The bubble is public: no phones or links in it.
-    note: input.note ? maskContactsAndLinks(input.note) : null,
+    note,
     ...(input.online ? { lat: input.lat as number, lon: input.lon as number } : {}),
   };
   const presence = await prisma.linePresence.upsert({

@@ -6,8 +6,10 @@ import { STORAGE_KEYS, getItem, setItem } from './storage';
  * (на сервере для них полей нет):
  * - `mode` — «provider» (кабинет исполнителя) или «customer» (исполнитель
  *   заказывает технику как заказчик);
- * - `online` — «На линии / Не на линии». Пока это подсказка для самого
- *   исполнителя: лента обновляется сама, а заказчики статус не видят.
+ * - `online` — «На линии / Не на линии». Пока включено, телефон отправляет
+ *   своё положение и выбранную машину на карту заказчиков (useLineReporter),
+ *   поэтому по умолчанию и при любой ошибке хранилища — выключено: на линию
+ *   исполнитель выходит только сам, кнопкой.
  * Хранятся в SecureStore (есть в Expo Go), при ошибке — в памяти.
  */
 export type AppMode = 'provider' | 'customer';
@@ -18,8 +20,14 @@ interface PrefsState {
   online: boolean;
 }
 
-// По умолчанию исполнитель «на линии», чтобы лента не была пустой при первом входе.
-let state: PrefsState = { loaded: false, mode: 'provider', online: true };
+export const DEFAULT_PREFS: PrefsState = { loaded: false, mode: 'provider', online: false };
+
+/** Что означает сохранённое значение «на линии»: только явная «1» — онлайн. */
+export function parseOnline(stored: string | null | undefined): boolean {
+  return stored === '1';
+}
+
+let state: PrefsState = DEFAULT_PREFS;
 const listeners = new Set<() => void>();
 let loading: Promise<void> | null = null;
 
@@ -38,9 +46,9 @@ function ensureLoaded() {
     emit({
       loaded: true,
       mode: mode === 'customer' ? 'customer' : 'provider',
-      online: online !== '0',
+      online: parseOnline(online),
     });
-  })().catch(() => emit({ loaded: true }));
+  })().catch(() => emit({ loaded: true, online: false }));
 }
 
 function subscribe(listener: () => void) {

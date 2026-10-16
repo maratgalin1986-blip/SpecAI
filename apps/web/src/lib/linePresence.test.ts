@@ -1,8 +1,20 @@
 import { describe, expect, it } from 'vitest';
-import { isFresh, liveMachines, presenceBubble, type PresenceRow } from './linePresence';
+import {
+  isFresh,
+  liveMachines,
+  machineUnavailableReason,
+  noteHasContacts,
+  presenceBubble,
+  publicNote,
+  type PresenceRow,
+} from './linePresence';
+import { HIDDEN_CONTACT, HIDDEN_LINK } from './privacy';
 
 const now = new Date('2026-10-15T09:00:00Z');
+// «от 4 000 ₽/ч» with the locale's group separator and a no-break space.
+const RATE = `от ${(4000).toLocaleString('ru-RU')}\u00a0₽/ч`;
 const row = (over: Partial<PresenceRow> & { userId: string }): PresenceRow => ({
+  id: `p-${over.userId}`,
   lat: 55.74,
   lon: 52.4,
   online: true,
@@ -11,8 +23,9 @@ const row = (over: Partial<PresenceRow> & { userId: string }): PresenceRow => ({
   user: { name: 'Марат Галин' },
   company: { id: 'c1', name: 'ООО Ромашка', verified: false },
   equipment: {
-    id: 'e1',
+    id: `e-${over.userId}`,
     name: 'Экскаватор JCB 3CX',
+    status: 'AVAILABLE',
     hourlyRate: 4000,
     dailyRate: 32000,
     category: { name: 'Экскаваторы-погрузчики', slug: 'backhoe-loaders' },
@@ -21,13 +34,51 @@ const row = (over: Partial<PresenceRow> & { userId: string }): PresenceRow => ({
 });
 
 describe('presenceBubble', () => {
-  it('reads «Я на линии · машина · цена · имя · заметка»', () => {
+  it('reads «Я на линии · машина · цена · имя», the note travels separately', () => {
     expect(presenceBubble(row({ userId: 'u', note: 'Могу выехать сразу' }))).toBe(
-      'Я на линии · Экскаватор JCB 3CX · от 4 000 ₽/ч · Марат Г. · Могу выехать сразу',
+      `Я на линии · Экскаватор JCB 3CX · ${RATE} · Марат Г.`,
     );
     expect(presenceBubble(row({ userId: 'u', equipment: null, user: { name: null } }))).toBe(
       'Я на линии',
     );
+  });
+
+  it('cuts a long machine name', () => {
+    const name = 'Экскаватор-погрузчик JCB 4CX с гидромолотом и узким ковшом 2026';
+    const bubble = presenceBubble(
+      row({ userId: 'u', equipment: { ...row({ userId: 'u' }).equipment!, name } }),
+    );
+    expect(bubble).toContain('…');
+    expect(bubble).not.toContain(name);
+    expect(bubble.split(' · ')[1]?.length).toBeLessThanOrEqual(40);
+  });
+});
+
+describe('note', () => {
+  it('refuses a note with a phone, an e-mail or a link', () => {
+    expect(noteHasContacts('Могу выехать сразу')).toBe(false);
+    expect(noteHasContacts('Звоните +7 917 123-45-67')).toBe(true);
+    expect(noteHasContacts('пишите на mail@example.com')).toBe(true);
+    expect(noteHasContacts('сайт specplast16.ru')).toBe(true);
+    expect(noteHasContacts(`уже ${HIDDEN_CONTACT}`)).toBe(true);
+  });
+
+  it('shows old rows without the masked tokens and on one line', () => {
+    expect(
+      publicNote(`Свободен, звоните ${HIDDEN_CONTACT}, ${HIDDEN_CONTACT} или ${HIDDEN_LINK}`),
+    ).toBe('Свободен, звоните, или');
+    expect(publicNote(`${HIDDEN_CONTACT}`)).toBeNull();
+    expect(publicNote('  Могу\nвыехать   сразу ')).toBe('Могу выехать сразу');
+    expect(publicNote(null)).toBeNull();
+  });
+});
+
+describe('machineUnavailableReason', () => {
+  it('lets only AVAILABLE machines go online', () => {
+    expect(machineUnavailableReason('AVAILABLE')).toBeNull();
+    expect(machineUnavailableReason('RENTED')).toMatch(/занята/);
+    expect(machineUnavailableReason('IN_MAINTENANCE')).toMatch(/в ремонте/);
+    expect(machineUnavailableReason('RETIRED')).toMatch(/снята с публикации/);
   });
 });
 
@@ -47,10 +98,61 @@ describe('liveMachines', () => {
       row({ userId: 'here' }),
     ];
     const list = liveMachines(rows, { lat: 55.74, lon: 52.4 }, 60, now);
-    expect(list.map((m) => m.id)).toEqual(['here', 'house', 'other']);
+    expect(list.map((m) => m.id)).toEqual(['p-here', 'p-house', 'p-other']);
     expect(list[1]?.company.isHouse).toBe(true);
     expect(list[0]?.distanceKm).toBe(0);
-    expect(liveMachines(rows, null, 60, now).map((m) => m.id)).toContain('far');
+    expect(liveMachines(rows, null, 60, now).map((m) => m.id)).toContain('p-far');
+  });
+
+  it('never gives out the driver account id', () => {
+    const base = row({ userId: 'a' }).equipment!;
+    const [machine] = liveMachines(
+      [row({ userId: 'secret-user-id', id: 'p1', equipment: { ...base, id: 'e1' } })],
+      null,
+      60,
+      now,
+    );
+    expect(machine?.id).toBe('p1');
+    expect(JSON.stringify(machine)).not.toContain('secret-user-id');
+  });
+
+  it('hides machines that are rented, under repair or taken off publication', () => {
+    const base = row({ userId: 'a' }).equipment!;
+    const rows = [
+      row({ userId: 'ok' }),
+      row({ userId: 'rented', equipment: { ...base, id: 'e-rented', status: 'RENTED' } }),
+      row({ userId: 'repair', equipment: { ...base, id: 'e-repair', status: 'IN_MAINTENANCE' } }),
+      row({ userId: 'retired', equipment: { ...base, id: 'e-retired', status: 'RETIRED' } }),
+    ];
+    expect(liveMachines(rows, null, 60, now).map((m) => m.id)).toEqual(['p-ok']);
+  });
+
+  it('shows one machine once, at its freshest position', () => {
+    const base = row({ userId: 'a' }).equipment!;
+    const shared = { ...base, id: 'e-shared' };
+    const rows = [
+      row({
+        userId: 'manager',
+        equipment: shared,
+        updatedAt: new Date(now.getTime() - 5 * 60_000),
+        lat: 55.7,
+      }),
+      row({ userId: 'driver', equipment: shared, lat: 55.75, user: { name: 'Пётр Иванов' } }),
+    ];
+    const list = liveMachines(rows, null, 60, now);
+    expect(list).toHaveLength(1);
+    expect(list[0]).toMatchObject({ id: 'p-driver', lat: 55.75, driver: 'Пётр И.' });
+  });
+
+  it('cleans the note of masked contacts', () => {
+    const [machine] = liveMachines(
+      [row({ userId: 'n', note: `Свободен, звоните ${HIDDEN_CONTACT}` })],
+      null,
+      60,
+      now,
+    );
+    expect(machine?.note).toBe('Свободен, звоните');
+    expect(machine?.bubble).not.toContain(HIDDEN_CONTACT);
   });
 
   it('treats a 15-minute-old position as stale', () => {

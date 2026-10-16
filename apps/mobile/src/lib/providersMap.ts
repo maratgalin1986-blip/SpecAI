@@ -5,6 +5,8 @@
  * (providersMap.test.ts); экран — components/ProvidersMap.tsx.
  */
 
+import { LIVE_PERMANENT_MAX } from './line';
+
 export interface ProviderPin {
   id: string;
   name: string;
@@ -91,8 +93,12 @@ box-shadow:0 2px 6px rgba(0,0,0,.35)}
 .pin.live{background:#1b8a3a;border-color:#fff}
 .pin.live.house{background:${colors.primary}}
 .me{width:18px;height:18px;border-radius:9px;background:#2b6cff;border:3px solid #fff;box-shadow:0 0 0 6px rgba(43,108,255,.25)}
-.leaflet-tooltip.bubble{background:#fff;color:${colors.text};border:0;border-radius:14px;padding:6px 10px;
-font:600 12px sans-serif;box-shadow:0 2px 8px rgba(0,0,0,.25);white-space:normal;max-width:220px}
+.leaflet-tooltip.bubble{background:#fff;color:${colors.text};border:0;border-radius:14px;padding:5px 10px;
+font:600 12px/15px sans-serif;box-shadow:0 2px 8px rgba(0,0,0,.25);white-space:normal;width:max-content;max-width:220px;
+text-align:left;overflow-wrap:anywhere}
+.leaflet-tooltip.bubble small{display:block;font:500 10px/12px sans-serif;color:#5f6b73}
+.leaflet-tooltip.bubble .note{display:block;font:500 11px/13px sans-serif;color:#5f6b73;margin-top:1px}
+.leaflet-tooltip.bubble:before{display:none}
 .leaflet-tooltip.bubble.house{border:2px solid ${colors.primary}}
 .card{min-width:180px;color:${colors.text}}
 .card b{display:block;font-size:15px;margin-bottom:2px}
@@ -141,28 +147,55 @@ pins.slice().reverse().forEach(function (pin) {
 if (bounds.length > 1) map.fitBounds(bounds, { padding: [40, 40], maxZoom: 11 });
 // «На линии»: the app pushes the fresh online machines (window.setLive) and
 // the customer's own position (window.setMe); each machine is a green pin
-// with a bubble «Я на линии · машина · цена · имя». A tap on the pin sends
-// {type:'machine', equipmentId} to the app.
+// with a bubble: a small «Я на линии» line, then «машина · цена · имя» and
+// the driver's note. With more than PERMANENT_MAX machines in view the
+// bubbles open on tap, so neighbours do not cover each other; a tap on a pin
+// whose bubble is open sends {type:'machine', equipmentId} to the app.
+var PERMANENT_MAX = ${LIVE_PERMANENT_MAX};
 var liveLayer = L.layerGroup().addTo(map);
 var meMarker = null;
-window.setLive = function (machines) {
+var liveMachines = [];
+var livePermanent = null;
+function bubbleHtml(m) {
+  return '<small>' + text(m.head) + '</small>' + text(m.body) +
+    (m.note ? '<span class="note">' + text(m.note) + '</span>' : '');
+}
+function visibleCount(machines) {
+  var bounds = map.getBounds();
+  var count = 0;
+  machines.forEach(function (m) { if (bounds.contains([m.lat, m.lon])) count++; });
+  return count;
+}
+function renderLive() {
+  var permanent = visibleCount(liveMachines) <= PERMANENT_MAX;
+  livePermanent = permanent;
   liveLayer.clearLayers();
-  (machines || []).forEach(function (m) {
+  liveMachines.forEach(function (m) {
     var icon = L.divIcon({
       className: '',
       html: '<div class="pin live' + (m.house ? ' house' : '') + '">' + text(m.short) + '</div>',
       iconSize: [34, 34], iconAnchor: [17, 17]
     });
-    var marker = L.marker([m.lat, m.lon], { icon: icon, zIndexOffset: 1500 })
-      .bindTooltip(text(m.bubble), { permanent: true, direction: 'top', offset: [0, -18], className: 'bubble' + (m.house ? ' house' : '') });
+    var marker = L.marker([m.lat, m.lon], { icon: icon, zIndexOffset: 1500 });
+    // Registered before bindTooltip, so isTooltipOpen() is the state before
+    // Leaflet's own click handler opens the bubble.
     marker.on('click', function () {
+      if (!permanent && !marker.isTooltipOpen()) return;
       if (window.ReactNativeWebView && m.equipmentId) {
         window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'machine', equipmentId: m.equipmentId }));
       }
     });
+    marker.bindTooltip(bubbleHtml(m), { permanent: permanent, direction: 'top', offset: [0, -18], opacity: 1, className: 'bubble' + (m.house ? ' house' : '') });
     liveLayer.addLayer(marker);
   });
+}
+window.setLive = function (machines) {
+  liveMachines = machines || [];
+  renderLive();
 };
+map.on('moveend', function () {
+  if (liveMachines.length && (visibleCount(liveMachines) <= PERMANENT_MAX) !== livePermanent) renderLive();
+});
 window.setMe = function (point, center) {
   if (!point) return;
   if (!meMarker) {
