@@ -14,8 +14,10 @@ import { isOperator, isProvider, isPublicEquipment } from '@/lib/fleet';
 import {
   canSeeCustomerContacts,
   customerForProvider,
+  customerShortName,
   providerForCustomer,
 } from '@/lib/customerPrivacy';
+import { notifyCompany } from '@/lib/notifications/notifyUser';
 import { maskContactsAndLinks } from '@/lib/privacy';
 import { HOUSE_COMPANY_ID } from '@/lib/fleet';
 import { SITE } from '@/lib/site';
@@ -204,7 +206,7 @@ export async function POST(request: NextRequest) {
           notes,
         },
       });
-      return { status: 201, booking } as const;
+      return { status: 201, booking, equipment } as const;
     });
   } catch (error) {
     if (prismaErrorCode(error) === 'P2003') {
@@ -216,5 +218,15 @@ export async function POST(request: NextRequest) {
   if (result.status !== 201) {
     return NextResponse.json({ error: result.error }, { status: result.status });
   }
+  // The provider's managers hear of the new PENDING booking at once — the
+  // customer waits for their confirmation. Only the short name (privacy rules).
+  void notifyCompany(result.equipment.companyId, {
+    type: 'booking.new',
+    bookingId: result.booking.id,
+    equipmentName: result.equipment.name,
+    startDate: result.booking.startDate,
+    endDate: result.booking.endDate,
+    customerShortName: customerShortName(currentUser.name),
+  }).catch((error) => console.error('[notify] booking.new failed', error));
   return NextResponse.json({ booking: result.booking }, { status: 201 });
 }

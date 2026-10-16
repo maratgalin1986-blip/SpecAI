@@ -51,6 +51,9 @@ async function sendEveningNotifications() {
         id: true,
         customerId: true,
         categoryId: true,
+        description: true,
+        desiredStartDate: true,
+        desiredEndDate: true,
         category: { select: { name: true } },
         location: { select: { city: true, addressLine: true, latitude: true, longitude: true } },
       },
@@ -107,9 +110,13 @@ async function sendEveningNotifications() {
         categoryId: order.categoryId,
         categoryIds: acceptedCategoryIds(order.categoryId, categoryRows),
         categoryName: order.category?.name,
-        city: order.location?.city,
+        // No location at all = a home-city order (orderPoint falls back to it).
+        city: order.location ? order.location.city : SITE.city,
         lat: point?.lat,
         lon: point?.lon,
+        description: order.description,
+        startDate: order.desiredStartDate,
+        endDate: order.desiredEndDate,
       };
     }),
   );

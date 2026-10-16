@@ -36,6 +36,7 @@ function liveDeps(): DeliverDeps {
     },
     onInvalidPushTokens: (tokens) =>
       prisma.pushToken.deleteMany({ where: { token: { in: tokens } } }).catch(() => undefined),
+    ownerTelegramChatId: process.env.TELEGRAM_CHAT_ID?.trim() || null,
   };
 }
 
@@ -172,7 +173,9 @@ export async function notifyProvidersAboutOrder(orderId: string): Promise<void> 
       categoryIds: acceptedCategoryIds(order.categoryId, categoryRows),
       lat: point?.lat,
       lon: point?.lon,
-      city: order.location?.city,
+      // An order without any location is a home-city order (orderPoint falls
+      // back to it): providers without base coordinates match it by that city text.
+      city: order.location ? order.location.city : SITE.city,
     };
     const userIds = companies
       .filter((company) =>

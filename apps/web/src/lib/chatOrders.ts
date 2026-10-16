@@ -42,6 +42,88 @@ export function chatOrderNote(chatTitle?: string | null): string {
   );
 }
 
+/**
+ * The description without the chatOrderNote line — for alerts and digest
+ * lines, where the notice would eat the text budget and repeat «найдена в
+ * открытом чате».
+ */
+export function stripChatOrderNote(description: string): string {
+  return description.replace(/\s*Заявка найдена в открытом чате[\s\S]*$/u, '').trim();
+}
+
+const PLACE_STOP_WORDS = new Set([
+  'аренду',
+  'аренда',
+  'наличии',
+  'наличие',
+  'работу',
+  'работе',
+  'час',
+  'смену',
+  'смена',
+  'день',
+  'сутки',
+  'срочно',
+  'общем',
+  'основном',
+  'итоге',
+  'целом',
+  'ближайшее',
+  'течение',
+  'районе',
+  'район',
+  'городе',
+  'город',
+  'связи',
+  'принципе',
+  'этом',
+  'этот',
+  'эту',
+  'следующем',
+  'начале',
+  'конце',
+  'понедельник',
+  'вторник',
+  'среду',
+  'четверг',
+  'пятницу',
+  'субботу',
+  'воскресенье',
+  'январе',
+  'феврале',
+  'марте',
+  'апреле',
+  'мае',
+  'июне',
+  'июле',
+  'августе',
+  'сентябре',
+  'октябре',
+  'ноябре',
+  'декабре',
+]);
+
+/**
+ * The place a chat message names after «в/во/г./город/с./пос.» («в Бавлы»,
+ * «г. Уруссу»): capitalised, 3+ letters, so an order from a town the parser
+ * does not know still gets a city text instead of silently becoming a
+ * home-city order. Null when nothing looks like a place.
+ */
+export function placeInText(text: string | null | undefined): string | null {
+  if (!text) return null;
+  // The preposition in either case («В Бавлы» opens a sentence), the place capitalised.
+  const pattern =
+    /(?:^|[\s,.;:(«"])(?:[вВ]о?|[гГ]\.|[гГ]ород|[сС]\.|[сС]ело|[пП]ос\.|[пП]осёлок|[пП]оселок|пгт|[дД]\.|[дД]еревня)\s+([А-ЯЁ][а-яё]{2,}(?:[- ][А-ЯЁ][а-яё]{2,})?)(?=$|[\s,.;:!?)»"])/gu;
+  for (const match of text.matchAll(pattern)) {
+    const place = match[1]?.trim();
+    if (!place) continue;
+    const first = place.split(/[- ]/)[0]?.toLowerCase().replace(/ё/g, 'е') ?? '';
+    if (PLACE_STOP_WORDS.has(first)) continue;
+    return place;
+  }
+  return null;
+}
+
 export const ERASED_DESCRIPTION = 'Заявка удалена по запросу автора.';
 
 /** Fields cleared when the admin erases an order on the author's request. */

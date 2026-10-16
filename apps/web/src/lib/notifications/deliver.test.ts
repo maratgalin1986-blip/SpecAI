@@ -87,6 +87,26 @@ describe('deliver', () => {
     expect(Object.keys(report)).toEqual(['push']);
   });
 
+  it('sends the owner no second Telegram copy of what lib/notify.ts already sent', async () => {
+    const deps = { ...fakeDeps(), ownerTelegramChatId: '42' };
+    const order = {
+      type: 'order.new' as const,
+      orderId: 'o1',
+      description: 'Нужен экскаватор',
+      startDate: new Date('2026-10-20T06:00:00Z'),
+    };
+    // The owner (recipient chat 42 = TELEGRAM_CHAT_ID): push and e-mail only.
+    const report = await deliver(RECIPIENT, DEFAULT_PREFS, order, deps);
+    expect(Object.keys(report).sort()).toEqual(['email', 'push']);
+    expect(deps.send.telegram).not.toHaveBeenCalled();
+    // Another provider with his own chat still gets Telegram.
+    await deliver({ ...RECIPIENT, telegramChatId: '7' }, DEFAULT_PREFS, order, deps);
+    expect(deps.send.telegram).toHaveBeenCalledTimes(1);
+    // The owner still gets Telegram for events the legacy alert does not cover.
+    await deliver(RECIPIENT, DEFAULT_PREFS, EVENT, deps);
+    expect(deps.send.telegram).toHaveBeenCalledTimes(2);
+  });
+
   it('sends nothing when nothing is chosen', async () => {
     const deps = fakeDeps();
     const none = { ...DEFAULT_PREFS, telegram: false, push: false, email: false };

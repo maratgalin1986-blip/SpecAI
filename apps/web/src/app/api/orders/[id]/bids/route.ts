@@ -176,6 +176,36 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         ...breakdownData(parsed.data),
       },
     });
+    // The customer compares offers: a changed price or machine is news too
+    // (one message; for a guest or chat order the house managers relay it).
+    try {
+      const company = await prisma.company.findUnique({
+        where: { id: equipment.companyId },
+        select: { name: true },
+      });
+      const price = formatMoney(bid.price, bid.currency);
+      if (isRealEmail(order.customer.email)) {
+        await notifyUser(order.customerId, {
+          type: 'bid.new',
+          orderId: order.id,
+          equipmentName: equipment.name,
+          price,
+          companyName: company?.name,
+          updated: true,
+        });
+      } else {
+        await notifyCompany(HOUSE_COMPANY_ID, {
+          type: 'bid.relay',
+          orderId: order.id,
+          equipmentName: equipment.name,
+          price,
+          companyName: company?.name,
+          fromChat: order.source !== 'SITE',
+        });
+      }
+    } catch (error) {
+      console.error('[notify] bid updated failed', error);
+    }
     return NextResponse.json(
       { bid, late, message: `Предложение обновлено${lateNote}` },
       { status: 200 },

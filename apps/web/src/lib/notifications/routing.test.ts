@@ -4,6 +4,7 @@ import {
   ORDER_RADIUS_KM,
   acceptedCategoryIds,
   addressNamesCity,
+  coveredByOwnerTelegram,
   distanceKm,
   phoneDigits,
   pickChannels,
@@ -179,9 +180,129 @@ describe('plainText', () => {
     );
   });
 
-  it('keeps SMS short', () => {
+  it('keeps SMS short and never cuts the link', () => {
     const long = { ...message, title: 'Т'.repeat(300) };
-    expect(plainText(long, 'https://site.ru', 'sms').length).toBeLessThanOrEqual(140);
+    const sms = plainText(long, 'https://site.ru', 'sms');
+    expect(sms.length).toBeLessThanOrEqual(140);
+    expect(sms.endsWith('. https://site.ru/orders/o1')).toBe(true);
+    expect(plainText(message, 'https://site.ru', 'sms')).toBe(
+      'Новое предложение. https://site.ru/orders/o1',
+    );
+  });
+});
+
+describe('coveredByOwnerTelegram', () => {
+  const owner: Recipient = { userId: 'owner', telegramChatId: '999' };
+  const order = {
+    type: 'order.new' as const,
+    orderId: 'o1',
+    description: 'x',
+    startDate: new Date(),
+  };
+
+  it('skips Telegram for the owner on events lib/notify.ts already sent him', () => {
+    expect(coveredByOwnerTelegram(order, owner, '999')).toBe(true);
+    expect(coveredByOwnerTelegram(order, owner, ' 999 ')).toBe(true);
+    expect(
+      coveredByOwnerTelegram(
+        { type: 'comment.pending', authorShortName: 'И.', about: 'о', text: 't' },
+        owner,
+        '999',
+      ),
+    ).toBe(true);
+  });
+
+  it('keeps every other recipient and every other event', () => {
+    expect(coveredByOwnerTelegram(order, { ...owner, telegramChatId: '1' }, '999')).toBe(false);
+    expect(coveredByOwnerTelegram(order, owner, null)).toBe(false);
+    expect(coveredByOwnerTelegram(order, { userId: 'u' }, '999')).toBe(false);
+    expect(
+      coveredByOwnerTelegram(
+        { type: 'bid.new', orderId: 'o1', equipmentName: 'JCB', price: '1 ₽' },
+        owner,
+        '999',
+      ),
+    ).toBe(false);
+  });
+});
+
+describe('renderNotification: bookings, cancellations and bid updates', () => {
+  const start = new Date('2026-12-01T06:00:00Z');
+
+  it('tells the managers about a direct booking, with the short name only', () => {
+    const message = renderNotification({
+      type: 'booking.new',
+      bookingId: 'b1',
+      equipmentName: 'JCB 4CX',
+      startDate: start,
+      endDate: new Date('2026-12-02T06:00:00Z'),
+      customerShortName: 'Анна П.',
+    });
+    expect(message.title).toBe('Новая бронь: JCB 4CX');
+    expect(message.body).toContain('Анна П.');
+    expect(message.body).toContain('01.12.2026 – 02.12.2026');
+    expect(message.body).toContain('Подтвердите');
+    expect(message.path).toBe('/provider#bookings');
+  });
+
+  it('tells a bidder that the customer cancelled the order', () => {
+    const message = renderNotification({
+      type: 'order.cancelled',
+      orderId: 'o1',
+      equipmentName: 'JCB 4CX',
+      categoryName: 'Экскаваторы',
+      startDate: start,
+    });
+    expect(message.title).toBe('Заявка отменена заказчиком');
+    expect(message.body).toContain('JCB 4CX');
+    expect(message.body).toContain('01.12.2026');
+    expect(message.path).toBe('/orders');
+  });
+
+  it('marks an updated bid as such', () => {
+    const base = {
+      type: 'bid.new' as const,
+      orderId: 'o1',
+      equipmentName: 'JCB',
+      price: '24 000 ₽',
+    };
+    expect(renderNotification(base).title).toBe('Новое предложение по вашей заявке');
+    expect(renderNotification({ ...base, updated: true }).title).toBe(
+      'Предложение по вашей заявке обновлено',
+    );
+  });
+
+  it('tells the company that its machinist filled in the timesheet', () => {
+    const base = {
+      type: 'timesheet' as const,
+      bookingId: 'b1',
+      equipmentName: 'JCB',
+      step: 'submitted' as const,
+      hoursWorked: '6',
+    };
+    expect(renderNotification({ ...base, audience: 'provider' }).title).toBe(
+      'Машинист заполнил табель — подтвердите',
+    );
+    expect(renderNotification({ ...base, audience: 'provider' }).path).toBe('/provider#bookings');
+    expect(renderNotification({ ...base, audience: 'customer' }).title).toBe(
+      'Табель смены ждёт подтверждения',
+    );
+  });
+
+  it('says «найдена в открытом чате» once for a chat order', () => {
+    const message = renderNotification({
+      type: 'order.new',
+      orderId: 'o1',
+      description:
+        'Нужен экскаватор в Бавлы завтра на 2 дня.\n\nЗаявка найдена в открытом чате «Стройчат». Автор может попросить удалить её — как это сделать, сказано на странице заявки.',
+      categoryName: 'Экскаваторы',
+      city: 'Бавлы',
+      startDate: start,
+      fromChat: true,
+    });
+    expect(message.body.match(/открытом чате/g)).toHaveLength(1);
+    expect(message.body).not.toContain('Автор может');
+    expect(message.body).toContain('Нужен экскаватор в Бавлы');
   });
 });
 
@@ -189,27 +310,27 @@ describe('providerMatchesOrder', () => {
   const chelny = { lat: 55.74, lon: 52.4 };
   const kazan = { lat: 55.79, lon: 49.12 };
   const moscow = { lat: 55.75, lon: 37.62 };
+  // A provider based in Chelny with machinery of the given categories.
+  const based = (categoryIds: string[]) => ({
+    categoryIds,
+    baseLat: chelny.lat,
+    baseLon: chelny.lon,
+  });
 
   it('needs machinery of the order category', () => {
-    expect(providerMatchesOrder({ categoryIds: ['exc'] }, { categoryId: 'exc', ...chelny })).toBe(
-      true,
-    );
-    expect(providerMatchesOrder({ categoryIds: ['crane'] }, { categoryId: 'exc', ...chelny })).toBe(
-      false,
-    );
+    expect(providerMatchesOrder(based(['exc']), { categoryId: 'exc', ...chelny })).toBe(true);
+    expect(providerMatchesOrder(based(['crane']), { categoryId: 'exc', ...chelny })).toBe(false);
   });
 
   it('takes the accepted categories (family, group) when given', () => {
     const order = { categoryId: 'mini', categoryIds: ['mini', 'exc', 'earth'], ...chelny };
-    expect(providerMatchesOrder({ categoryIds: ['exc'] }, order)).toBe(true);
-    expect(providerMatchesOrder({ categoryIds: ['crane'] }, order)).toBe(false);
+    expect(providerMatchesOrder(based(['exc']), order)).toBe(true);
+    expect(providerMatchesOrder(based(['crane']), order)).toBe(false);
   });
 
   it('sends orders without a category to every provider with machinery', () => {
-    expect(providerMatchesOrder({ categoryIds: ['crane'] }, { categoryId: null, ...chelny })).toBe(
-      true,
-    );
-    expect(providerMatchesOrder({ categoryIds: [] }, { categoryId: null, ...chelny })).toBe(false);
+    expect(providerMatchesOrder(based(['crane']), { categoryId: null, ...chelny })).toBe(true);
+    expect(providerMatchesOrder(based([]), { categoryId: null, ...chelny })).toBe(false);
   });
 
   it('keeps an order with an unknown place to the house and providers of that city', () => {
@@ -238,10 +359,29 @@ describe('providerMatchesOrder', () => {
     expect(
       providerMatchesOrder(provider, { categoryId: 'exc', lat: 55.6, lon: 52.0 }), // ~30 km
     ).toBe(true);
-    // Unknown base or site: not filtered out.
+  });
+
+  it('never sends everything to a provider without base coordinates', () => {
+    const noBase = { categoryIds: ['exc'], baseAddress: 'Набережные Челны, Промзона' };
+    // No city text at all: nothing (it used to get every order in Russia).
+    expect(providerMatchesOrder(noBase, { categoryId: 'exc', ...moscow })).toBe(false);
     expect(providerMatchesOrder({ categoryIds: ['exc'] }, { categoryId: 'exc', ...moscow })).toBe(
-      true,
+      false,
     );
+    // Only orders whose city its base address names.
+    expect(providerMatchesOrder(noBase, { categoryId: 'exc', ...moscow, city: 'Москва' })).toBe(
+      false,
+    );
+    expect(
+      providerMatchesOrder(noBase, { categoryId: 'exc', ...chelny, city: 'Набережные Челны' }),
+    ).toBe(true);
+    // The house company hears of everything regardless.
+    expect(
+      providerMatchesOrder(
+        { categoryIds: ['exc'], isHouse: true },
+        { categoryId: 'exc', ...moscow },
+      ),
+    ).toBe(true);
   });
 
   it("uses the company's own delivery radius when it has one", () => {
