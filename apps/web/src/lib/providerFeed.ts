@@ -59,7 +59,7 @@ export function matchIncoming<T extends IncomingCandidate>(
     typeof company.baseLat === 'number' && typeof company.baseLon === 'number'
       ? { lat: company.baseLat, lon: company.baseLon }
       : null;
-  const matched: { order: T; km: number | null }[] = [];
+  const matched: { order: T; km: number | null; placed: boolean }[] = [];
   for (const order of orders) {
     const point = orderPoint(order.location, homeCity);
     const fits = providerMatchesOrder(company, {
@@ -69,9 +69,30 @@ export function matchIncoming<T extends IncomingCandidate>(
       lon: point?.lon,
       city: order.location?.city,
     });
-    if (fits) matched.push({ order, km: base && point ? distanceKm(base, point) : null });
+    if (fits) {
+      matched.push({
+        order,
+        km: base && point ? distanceKm(base, point) : null,
+        placed: hasPlace(order.location),
+      });
+    }
   }
-  // «Рядом» means nearest first; orders with no known place keep their order
-  // (newest first) after them.
-  return matched.sort((a, b) => (a.km ?? Infinity) - (b.km ?? Infinity)).map((item) => item.order);
+  // «Рядом» means nearest first among the orders with a real point or a named
+  // city. An order with no location at all only stands at the home city as a
+  // fallback (0 km from a base in the centre), so it goes after them; orders
+  // with a place nobody can locate come last. Ties keep the input order
+  // (newest first).
+  return matched
+    .sort((a, b) => {
+      if (a.placed !== b.placed) return a.placed ? -1 : 1;
+      return (a.km ?? Infinity) - (b.km ?? Infinity);
+    })
+    .map((item) => item.order);
+}
+
+/** Whether the order names a place at all: coordinates, a city or an address. */
+function hasPlace(location: IncomingCandidate['location']): boolean {
+  if (!location) return false;
+  if (location.latitude != null && location.longitude != null) return true;
+  return Boolean(location.city?.trim() || location.addressLine?.trim());
 }

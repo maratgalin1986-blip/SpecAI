@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { bidSumMatches, bidTotal, offerBreakdown, orderDays } from './offerBreakdown';
+import {
+  bidSumMatches,
+  bidTotal,
+  offerBreakdown,
+  orderDays,
+  shiftsOverDaysError,
+} from './offerBreakdown';
 
 const start = new Date('2026-10-10T00:00:00Z');
 const end = new Date('2026-10-12T00:00:00Z');
@@ -9,6 +15,21 @@ describe('orderDays', () => {
     expect(orderDays(start, end)).toBe(3);
     expect(orderDays(start, start)).toBe(1);
     expect(orderDays(end, start)).toBe(1);
+  });
+});
+
+describe('shiftsOverDaysError', () => {
+  it('allows up to one shift per day of the order', () => {
+    expect(shiftsOverDaysError(3, 3)).toBeNull();
+    expect(shiftsOverDaysError(1, 3)).toBeNull();
+    expect(shiftsOverDaysError(undefined, 1)).toBeNull();
+    expect(shiftsOverDaysError(null, 1)).toBeNull();
+  });
+
+  it('refuses more shifts than days and names the days', () => {
+    expect(shiftsOverDaysError(2, 1)).toBe('В заявке 1 день работ — укажите не больше 1 смены');
+    expect(shiftsOverDaysError(10, 3)).toBe('В заявке 3 дня работ — укажите не больше 3 смен');
+    expect(shiftsOverDaysError(6, 5)).toBe('В заявке 5 дней работ — укажите не больше 5 смен');
   });
 });
 

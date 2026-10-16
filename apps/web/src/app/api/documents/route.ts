@@ -4,7 +4,7 @@ import { createProviderDocumentSchema } from '@specai/shared';
 import { INVALID_JSON_MESSAGE, readJson, zodErrorMessage } from '@/lib/apiInput';
 import { documentsSummary, withStatus } from '@/lib/documents';
 import { isProvider } from '@/lib/fleet';
-import { isSafeHttpUrl } from '@/lib/privacy';
+import { isHttpsUrl } from '@/lib/privacy';
 import { checkRateLimit } from '@/lib/rateLimit';
 import { getRequestUser } from '@/lib/requestUser';
 
@@ -66,7 +66,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Можно прикрепить только свою технику' }, { status: 403 });
     }
   }
-  if (data.fileUrl && !isSafeHttpUrl(data.fileUrl)) {
+  if (data.fileUrl && !isHttpsUrl(data.fileUrl)) {
     return NextResponse.json({ error: 'Ссылка на файл должна быть https' }, { status: 400 });
   }
   const document = await prisma.providerDocument.create({

@@ -147,12 +147,22 @@ export function freeFromLabel(key: string | null, today: Date = new Date()): str
   return `Свободна с ${day}.${month}`;
 }
 
-/** Month navigation: "2026-10" → { year, month }, or null. */
-export function parseMonth(value: string | null | undefined, now: Date = new Date()) {
-  if (value && /^\d{4}-\d{2}$/.test(value)) {
-    const [year, month] = value.split('-').map(Number) as [number, number];
-    if (month >= 1 && month <= 12 && year >= 2000 && year <= 2100) return { year, month };
+export const MONTH_FORMAT_MESSAGE = 'Месяц в формате ГГГГ-ММ';
+
+/**
+ * Month navigation: "2026-10" → { year, month }; no value → the current
+ * Moscow month; anything else («2026-13», «abc») → null, so the caller can
+ * answer 400 instead of silently showing another month.
+ */
+export function parseMonth(
+  value: string | null | undefined,
+  now: Date = new Date(),
+): { year: number; month: number } | null {
+  if (value === null || value === undefined || value === '') {
+    const [year, month] = moscowDateKey(now).split('-').map(Number) as [number, number, number];
+    return { year, month };
   }
-  const [year, month] = moscowDateKey(now).split('-').map(Number) as [number, number, number];
-  return { year, month };
+  if (!/^\d{4}-\d{2}$/.test(value)) return null;
+  const [year, month] = value.split('-').map(Number) as [number, number];
+  return month >= 1 && month <= 12 && year >= 2000 && year <= 2100 ? { year, month } : null;
 }

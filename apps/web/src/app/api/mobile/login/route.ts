@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { authenticateWithCredentials } from '@/lib/credentials';
 import { signMobileToken } from '@/lib/mobileAuth';
-import { checkRateLimit } from '@/lib/rateLimit';
+import { isRateLimited, recordAttempt, resetRateLimit } from '@/lib/rateLimit';
 import { LoginError, WRONG_CREDENTIALS_MESSAGE, loginFailure, clientIp } from '@/lib/loginErrors';
 
 export const runtime = 'nodejs';
 
+/** Неудачные входы с одного адреса за минуту (успешные не считаются). */
 const RATE_LIMIT = { limit: 10, windowMs: 60_000 };
 
 /**
@@ -13,7 +14,8 @@ const RATE_LIMIT = { limit: 10, windowMs: 60_000 };
  * но вместо cookie-сессии выдаётся JWT на 30 дней для заголовка Authorization.
  */
 export async function POST(request: NextRequest) {
-  const rate = checkRateLimit(`mobile:login:ip:${clientIp(request)}`, RATE_LIMIT);
+  const rateKey = `mobile:login:ip:${clientIp(request)}`;
+  const rate = isRateLimited(rateKey, RATE_LIMIT);
   if (!rate.ok) {
     return NextResponse.json(
       { error: 'Слишком много попыток входа, попробуйте позже' },
@@ -25,6 +27,7 @@ export async function POST(request: NextRequest) {
   try {
     body = await request.json();
   } catch {
+    recordAttempt(rateKey, RATE_LIMIT);
     return NextResponse.json({ error: 'Некорректный JSON' }, { status: 400 });
   }
 
@@ -44,8 +47,10 @@ export async function POST(request: NextRequest) {
     );
   }
   if (!user) {
+    recordAttempt(rateKey, RATE_LIMIT);
     return NextResponse.json({ error: WRONG_CREDENTIALS_MESSAGE }, { status: 401 });
   }
+  resetRateLimit(rateKey);
 
   const token = await signMobileToken({ userId: user.id, role: user.role });
 

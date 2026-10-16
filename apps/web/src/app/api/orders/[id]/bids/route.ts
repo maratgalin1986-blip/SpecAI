@@ -14,7 +14,13 @@ import { notifyCompany, notifyUser } from '@/lib/notifications/notifyUser';
 import { isRealEmail } from '@/lib/notifications/routing';
 import { HOUSE_COMPANY_ID } from '@/lib/fleet';
 import { bidBreakdownSchema, type BidBreakdownInput } from '@specai/shared';
-import { bidSumMatches, bidTotal, houseFloorError, orderDays } from '@/lib/offerBreakdown';
+import {
+  bidSumMatches,
+  bidTotal,
+  houseFloorError,
+  orderDays,
+  shiftsOverDaysError,
+} from '@/lib/offerBreakdown';
 import { bidShiftFloor } from '@/lib/equipmentCatalog';
 import { isLateBid } from '@/lib/bidWindow';
 import { maskContactsAndLinks } from '@/lib/privacy';
@@ -91,6 +97,12 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       { status: 403 },
     );
   }
+  // The breakdown cannot promise more shifts than the order has days.
+  const days = orderDays(order.desiredStartDate, order.desiredEndDate);
+  const shiftsError = shiftsOverDaysError(parsed.data.shifts, days);
+  if (shiftsError) {
+    return NextResponse.json({ error: shiftsError, days }, { status: 400 });
+  }
   // After bidsUntil the bid is still taken, but marked late for the customer.
   const late = isLateBid(order.bidsUntil);
   const lateNote = late ? ' — срок приёма предложений истёк, заказчик всё равно его увидит' : '';
@@ -119,7 +131,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
   const floorError = houseFloorError(
     parsed.data,
     bidShiftFloor({ ...equipment, categoryName: equipment.category.name }),
-    orderDays(order.desiredStartDate, order.desiredEndDate),
+    days,
   );
   if (floorError) {
     return NextResponse.json({ error: floorError }, { status: 400 });

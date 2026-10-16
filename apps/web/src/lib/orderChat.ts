@@ -12,8 +12,13 @@ import { isOurBlobUrl } from './blob';
 
 export const CHAT_MESSAGE_MAX_LENGTH = 2000;
 
-/** Shown to the sender while contacts are still masked. */
-export const CONTACTS_AFTER_CONFIRM_CHAT = 'Контакты откроются после подтверждения брони';
+/**
+ * Shown while contacts are still masked. Messages are stored masked, so a
+ * phone sent before the booking is confirmed never reappears: the notice
+ * says so instead of promising that it will open.
+ */
+export const CONTACTS_AFTER_CONFIRM_CHAT =
+  'Контакты скрыты до подтверждения брони — в уже отправленных сообщениях они останутся скрытыми, после подтверждения напишите номер заново';
 
 /** Frequency limits per sender: a burst and a daily cap. */
 export const CHAT_RATE_LIMITS = [
@@ -104,7 +109,13 @@ export function resolveThreadCompany(
       ? { ok: true, companyId: viewer.companyId }
       : { ok: false, error: 'Сначала предложите технику по заявке', status: 403 };
   }
-  if (!requested) return { ok: false, error: 'Укажите исполнителя (company)', status: 400 };
+  if (!requested) {
+    return {
+      ok: false,
+      error: 'Выберите исполнителя, с которым хотите переписываться',
+      status: 400,
+    };
+  }
   if (viewer.id === order.customerId || viewer.isAdmin || viewer.role === 'PLATFORM_ADMIN') {
     return chatCompanyIds(order).includes(requested)
       ? { ok: true, companyId: requested }

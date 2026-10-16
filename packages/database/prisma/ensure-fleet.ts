@@ -240,7 +240,14 @@ async function main() {
       taxId: '1650412557',
       description: 'Аренда спецтехники с оператором по Татарстану.',
       locationId: LOCATION_ID,
+      verified: true,
     },
+  });
+  // The house company is the platform's own: always «Проверен» for customers,
+  // never «Новый на сервисе». Idempotent: only a row still unverified changes.
+  await prisma.company.updateMany({
+    where: { id: COMPANY_ID, verified: false },
+    data: { verified: true },
   });
   // A point on the providers map (/map) until the owner moves it in the cabinet.
   await prisma.company.updateMany({

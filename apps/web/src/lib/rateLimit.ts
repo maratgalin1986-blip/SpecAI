@@ -33,16 +33,40 @@ export function checkRateLimit(
   { limit, windowMs }: RateLimitOptions,
 ): RateLimitResult {
   const now = Date.now();
+  const limited = isRateLimited(key, { limit, windowMs }, now);
+  if (!limited.ok) return limited;
+  recordAttempt(key, { limit, windowMs }, now);
+  return { ok: true, retryAfterSec: 0 };
+}
+
+/**
+ * Только проверка, без учёта этого вызова: для лимитов, где считаются не
+ * запросы, а неудачи (вход с неверным паролем). Неудачу затем записывает
+ * recordAttempt, успех сбрасывает resetRateLimit.
+ */
+export function isRateLimited(
+  key: string,
+  { limit, windowMs }: RateLimitOptions,
+  now: number = Date.now(),
+): RateLimitResult {
   const windowStart = now - windowMs;
-
   const recent = (buckets.get(key)?.timestamps ?? []).filter((ts) => ts > windowStart);
-
   if (recent.length >= limit) {
     buckets.set(key, { windowMs, timestamps: recent });
     const oldest = recent[0] ?? now;
     return { ok: false, retryAfterSec: Math.max(1, Math.ceil((oldest + windowMs - now) / 1000)) };
   }
+  return { ok: true, retryAfterSec: 0 };
+}
 
+/** Записывает одну попытку по ключу (окно нужно, чтобы бакет чистился по нему). */
+export function recordAttempt(
+  key: string,
+  { windowMs }: RateLimitOptions,
+  now: number = Date.now(),
+): void {
+  const windowStart = now - windowMs;
+  const recent = (buckets.get(key)?.timestamps ?? []).filter((ts) => ts > windowStart);
   recent.push(now);
   buckets.set(key, { windowMs, timestamps: recent });
 
@@ -54,6 +78,9 @@ export function checkRateLimit(
       if (bucket.timestamps.every((ts) => ts <= bucketStart)) buckets.delete(k);
     }
   }
+}
 
-  return { ok: true, retryAfterSec: 0 };
+/** Забывает попытки по ключу — после успешного входа. */
+export function resetRateLimit(key: string): void {
+  buckets.delete(key);
 }

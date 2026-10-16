@@ -3,7 +3,7 @@ import { prisma } from '@specai/database';
 import { createOrderSchema } from '@specai/shared';
 import { getRequestUser } from '@/lib/requestUser';
 import { isOperator, isProvider } from '@/lib/fleet';
-import { matchIncoming } from '@/lib/providerFeed';
+import { matchIncoming, todayStartMsk } from '@/lib/providerFeed';
 import { loadProviderMatch } from '@/lib/providerFeedData';
 import { bidsUntilFor } from '@/lib/bidWindow';
 import { maskedContactFor } from '@/lib/chatOrders';
@@ -61,7 +61,11 @@ function intParam(value: string | null, fallback: number, max: number): number {
  * - `?open=1&mine=1` — все открытые заявки с ожидающими предложениями своей
  *   компании («Мои предложения» в приложении).
  * - без параметра — все заявки текущего пользователя (любого статуса), требует входа;
- *   используется вкладкой «Заявки» мобильного приложения.
+ *   используется вкладкой «Заявки» мобильного приложения; постранично так же
+ *   (`offset`, `limit`, `nextOffset`).
+ * В ленту (с `mine=1` тоже) не попадают заявки, срок работ которых уже прошёл
+ * (desiredEndDate раньше сегодняшнего дня по Москве) — правило
+ * lib/providerFeed.ts incomingOrdersWhere.
  * Формат ответа один и тот же: `{ orders }` с category, customer (id, name) и bids.
  */
 export async function GET(request: NextRequest) {
@@ -75,13 +79,18 @@ export async function GET(request: NextRequest) {
   }
   let orders;
   let nextOffset: number | null = null;
+  const offset = intParam(searchParams.get('offset'), 0, 100_000);
+  const limit = intParam(searchParams.get('limit'), FEED_PAGE, FEED_PAGE_MAX) || FEED_PAGE;
   if (openFeed) {
     if (!isProvider(currentUser)) {
       return NextResponse.json({ error: 'Доступно только исполнителям' }, { status: 403 });
     }
+    // Work dates already over: nothing to offer, whoever bid on it.
+    const notOver = { desiredEndDate: { gte: todayStartMsk() } };
     const ownBids = {
       status: 'OPEN' as const,
       categoryId,
+      ...notOver,
       bids: {
         some: { status: 'PENDING' as const, equipment: { companyId: currentUser.companyId } },
       },
@@ -94,8 +103,6 @@ export async function GET(request: NextRequest) {
         take: OWN_BIDS_MAX,
       });
     } else {
-      const offset = intParam(searchParams.get('offset'), 0, 100_000);
-      const limit = intParam(searchParams.get('limit'), FEED_PAGE, FEED_PAGE_MAX) || FEED_PAGE;
       // The company's own pending bids lead the first page and are never paged out.
       const own = await prisma.order.findMany({
         where: ownBids,
@@ -106,6 +113,7 @@ export async function GET(request: NextRequest) {
       const where = {
         status: 'OPEN' as const,
         categoryId,
+        ...notOver,
         id: { notIn: own.map((order) => order.id) },
       };
       let page;
@@ -142,12 +150,15 @@ export async function GET(request: NextRequest) {
       orders = offset === 0 ? [...own, ...page] : page;
     }
   } else {
-    orders = await prisma.order.findMany({
+    const rows = await prisma.order.findMany({
       where: { customerId: currentUser.id, categoryId },
       include: ORDER_INCLUDE,
       orderBy: { createdAt: 'desc' },
-      take: 50,
+      skip: offset,
+      take: limit + 1,
     });
+    orders = rows.slice(0, limit);
+    nextOffset = rows.length > limit ? offset + limit : null;
   }
 
   // Never expose contacts of people whose requests were imported from chats.

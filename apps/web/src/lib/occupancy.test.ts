@@ -100,12 +100,17 @@ describe('nextFreeDate', () => {
 });
 
 describe('parseMonth', () => {
-  it('reads YYYY-MM and falls back to the current Moscow month', () => {
+  it('reads YYYY-MM and defaults to the current Moscow month', () => {
     expect(parseMonth('2026-11')).toEqual({ year: 2026, month: 11 });
-    expect(parseMonth('2026-13', new Date('2026-10-31T22:00:00Z'))).toEqual({
-      year: 2026,
-      month: 11,
-    });
     expect(parseMonth(null, new Date('2026-10-15T12:00:00Z'))).toEqual({ year: 2026, month: 10 });
+    // 22:00 UTC on the 31st is already November in Moscow.
+    expect(parseMonth('', new Date('2026-10-31T22:00:00Z'))).toEqual({ year: 2026, month: 11 });
+  });
+
+  it('rejects a month it cannot read instead of showing another one', () => {
+    expect(parseMonth('2026-13')).toBeNull();
+    expect(parseMonth('2026-00')).toBeNull();
+    expect(parseMonth('abc')).toBeNull();
+    expect(parseMonth('1999-05')).toBeNull();
   });
 });
