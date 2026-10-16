@@ -5,7 +5,7 @@ import { expect, test, type Page } from 'playwright/test';
 // brand is never shortened to «СП16». Nothing is ever sent: every non-GET
 // request (leads, photos, chat) is answered here.
 
-const PAGES = ['/?intro=0', '/smeta', '/dizain', '/soglasie', '/privacy', '/arenda/samosval'];
+const PAGES = ['/?intro=0', '/pravila', '/contacts', '/soglasie', '/privacy', '/arenda/samosval'];
 
 const ALLOWED_EXTERNAL = [
   /^tel:/,
@@ -130,11 +130,11 @@ test('hero CTA: phone field ready within 1 s', async ({ page }, testInfo) => {
   expect(errors, 'page errors').toEqual([]);
 });
 
-// /stroyka is a full-screen layer: the consent strip must still be seen and
-// tapped there (Metrika waits for it).
-test('cookie strip visible and clickable on /stroyka', async ({ page }) => {
+// The consent strip must be seen and tapped on the home page over the hero
+// (Metrika waits for it).
+test('cookie strip visible and clickable on the home page', async ({ page }) => {
   const errors = await guard(page);
-  await page.goto('/stroyka?nointro=1', { waitUntil: 'load' });
+  await page.goto('/?intro=0', { waitUntil: 'load' });
   const strip = page.getByTestId('cookie-strip');
   await expect(strip).toBeVisible({ timeout: 10_000 });
   await expect(strip).toBeInViewport();
@@ -170,63 +170,13 @@ test('hero order button above the fold on a phone', async ({ page }, testInfo) =
   }
 });
 
-// The default tour plays real footage per zone; the strip switches zones and
-// the one order button («К заказу» in the top bar) stays on top of the film.
-test('stroyka film tour', async ({ page }) => {
+// «Вход на стройку», «Смета» and «Дизайн» are gone from the site (owner,
+// 2026-10-15): their old addresses land on the home page, nothing else.
+test('removed pages redirect to the home page', async ({ page }) => {
   const errors = await guard(page);
-  await page.route('**/film/zones/*.mp4', (route) => route.abort());
-  await page.goto('/stroyka?nointro=1', { waitUntil: 'load' });
-  await expect(page.getByTestId('zone-film')).toBeVisible({ timeout: 15_000 });
-  const strip = page.getByTestId('zone-strip');
-  await expect(strip).toBeVisible();
-  await strip.locator('button').nth(1).click();
-  await page.waitForTimeout(800);
-  await expect(page.getByTestId('skip-to-order')).toBeVisible();
-  await page.getByTestId('skip-to-order').click();
-  await expect(page.getByTestId('order-panel')).toBeVisible();
-  expect(errors, 'page errors').toEqual([]);
-});
-
-// The personal film: a chapter card that never takes a click, and the offer to
-// remember the visitor that stores nothing personal until «Да».
-test('stroyka chapter card and memory offer', async ({ page }) => {
-  const errors = await guard(page);
-  await page.route('**/film/zones/*.mp4', (route) => route.abort());
-  await page.goto('/stroyka?nointro=1', { waitUntil: 'load' });
-  await expect(page.getByTestId('zone-film')).toBeVisible({ timeout: 15_000 });
-  await page.getByTestId('zone-strip').locator('button').nth(1).click();
-  const card = page.getByTestId('chapter-card');
-  await expect(card).toContainText('Котлован');
-  expect(await card.evaluate((el) => getComputedStyle(el).pointerEvents)).toBe('none');
-  await expect(page.getByTestId('memory-consent')).toBeVisible({ timeout: 8_000 });
-  await expect(card).toHaveCount(0);
-  const stored = () => page.evaluate(() => localStorage.getItem('stroyka.memory.v1') ?? '');
-  expect(await stored()).not.toContain('consent');
-  await page.getByTestId('memory-no').click();
-  await expect(page.getByTestId('memory-consent')).toHaveCount(0);
-  expect(await stored()).toContain('declinedAt');
-  expect(errors, 'page errors').toEqual([]);
-});
-
-// The story goes on after the visitor engaged, and the amber order button
-// opens Света's form right in the film (no other page).
-test('stroyka order stays in the film', async ({ page }) => {
-  const errors = await guard(page);
-  await page.route('**/film/zones/*.mp4', (route) => route.abort());
-  await page.goto('/stroyka?nointro=1', { waitUntil: 'load' });
-  await expect(page.getByTestId('dialogue')).toBeVisible({ timeout: 15_000 });
-  // Phones show a subtitle bar: the replies are behind «Ответить».
-  const expand = async () => {
-    const button = page.getByTestId('dialogue-expand');
-    if (await button.isVisible()) await button.click();
-  };
-  await expand();
-  await page.getByRole('button', { name: 'Копать котлован или траншею' }).click();
-  await page.getByTestId('zone-strip').getByRole('tab', { name: 'Котлован', exact: true }).click();
-  await expect(page.getByTestId('dialogue')).toContainText('Ринат');
-  await expand();
-  await page.getByTestId('replies').getByRole('button', { name: 'Оформить у Светы' }).click();
-  await expect(page.getByTestId('dialogue').locator('input[name="phone"]')).toBeVisible();
-  expect(new URL(page.url()).pathname).toBe('/stroyka');
+  for (const path of ['/stroyka', '/stroyka/kotlovan', '/smeta', '/kalkulyator', '/dizain']) {
+    await page.goto(path, { waitUntil: 'load' });
+    expect(new URL(page.url()).pathname, path).toBe('/');
+  }
   expect(errors, 'page errors').toEqual([]);
 });
