@@ -184,7 +184,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     paddingVertical: spacing.xs,
   },
-  success: { gap: spacing.md, backgroundColor: colors.successLight, borderColor: '#bbf7d0' },
-  successTitle: { fontSize: 20, fontWeight: '700', color: '#14532d' },
-  successText: { fontSize: 15, color: '#166534', lineHeight: 22 },
+  success: { gap: spacing.md, backgroundColor: colors.successLight, borderColor: colors.success },
+  successTitle: { fontSize: 20, fontWeight: '700', color: colors.success },
+  successText: { fontSize: 15, color: colors.text, lineHeight: 22 },
 });

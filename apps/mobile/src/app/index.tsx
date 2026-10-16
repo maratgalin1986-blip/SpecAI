@@ -4,7 +4,11 @@ import { Loader } from '@/components/ui';
 import { useAuth } from '@/lib/auth';
 import { isProviderMode, usePrefs } from '@/lib/prefs';
 
-/** Точка входа: вход, «Лента» исполнителя или главная заказчика (карта). */
+/**
+ * Точка входа: вход, «Лента» исполнителя, «Смены» машиниста или главная
+ * заказчика (карта). Открывается при старте и сразу после входа (первый экран
+ * корневого Stack), поэтому главная с картой у исполнителя не монтируется.
+ */
 export default function Index() {
   const { token, user } = useAuth();
   const { loaded, mode } = usePrefs();
