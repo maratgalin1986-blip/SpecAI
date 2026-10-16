@@ -8,6 +8,7 @@ import { CinemaHero } from '@/components/CinemaHero';
 export const metadata: Metadata = {
   title: 'Контакты',
   description: `Телефон, e-mail и заявка на звонок — ${SITE.name}, ${SITE.city}`,
+  alternates: { canonical: '/contacts' },
 };
 
 export default function ContactsPage() {

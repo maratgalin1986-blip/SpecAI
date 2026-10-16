@@ -21,9 +21,11 @@ import {
   LEAD_FILTERS,
   filterLeads,
   leadFilterCounts,
+  leadSourceLabel,
   parseLeadFilter,
   sortLeads,
 } from '@/lib/adminLeads';
+import { capList, parseShowAll, showAllHref } from '@/lib/adminList';
 
 export const dynamic = 'force-dynamic';
 export const metadata: Metadata = { title: 'Заявки на звонок', robots: { index: false } };
@@ -34,6 +36,9 @@ const SOURCE_LABELS: Record<string, string> = {
   WHATSAPP: 'WhatsApp',
   OTHER: 'Другое',
 };
+
+/** Callbacks loaded for the list and the 30-day marketing table. */
+const LEADS_LOADED = 200;
 
 function siteOrigin() {
   const h = headers();
@@ -68,11 +73,15 @@ export default async function AdminPage({ searchParams = {} }: { searchParams?: 
   }
 
   // Bot drafts without a phone are not leads yet (lib/botDrafts.ts).
-  const leads = await prisma.lead.findMany({
-    where: { NOT: { phone: '' } },
-    orderBy: { createdAt: 'desc' },
-    take: 200,
-  });
+  const leadsWhere = { NOT: { phone: '' } };
+  const [leads, leadsTotal] = await Promise.all([
+    prisma.lead.findMany({
+      where: leadsWhere,
+      orderBy: { createdAt: 'desc' },
+      take: LEADS_LOADED,
+    }),
+    prisma.lead.count({ where: leadsWhere }),
+  ]);
   const [pendingOrders, importedStats] = await Promise.all([
     prisma.order.findMany({
       where: { status: 'PENDING_REVIEW' },
@@ -132,10 +141,15 @@ export default async function AdminPage({ searchParams = {} }: { searchParams?: 
   const whatsappToken = whatsappWebhookToken();
   const inboundToken = inboundApiToken();
   const newCount = leads.filter((lead) => lead.status === 'NEW').length;
-  // Callbacks first on the page: new ones on top, a status filter.
+  const moderationCount = pendingOrders.length;
+  const commentsCount = pendingComments.length + pendingReviews.length;
+  // Callbacks: new ones on top, a status filter, the first 30 and «Показать ещё».
   const leadFilter = parseLeadFilter(searchParams.leads);
+  const showAll = parseShowAll(searchParams.all);
   const leadCounts = leadFilterCounts(leads);
-  const shownLeads = filterLeads(sortLeads(leads), leadFilter);
+  const leadList = capList(filterLeads(sortLeads(leads), leadFilter), showAll);
+  const leadsHref = (filter: string) =>
+    filter === 'all' ? '/admin#leads' : `/admin?leads=${filter}#leads`;
   // Marketing: which channels and which forms brought requests in 30 days.
   const monthAgo = Date.now() - 30 * 86_400_000;
   const recentLeads = leads.filter((lead) => lead.createdAt.getTime() >= monthAgo);
@@ -167,20 +181,33 @@ export default async function AdminPage({ searchParams = {} }: { searchParams?: 
           <h1 className="text-2xl font-bold">Панель управления</h1>
           <p className="text-slate-600">
             Заявок на звонок — новых:{' '}
-            <span className="font-semibold text-amber-700">{newCount}</span> · всего {leads.length}
+            <span className="font-semibold text-amber-700">{newCount}</span> · всего {leadsTotal}
           </p>
         </div>
+        {/* The day's work with its counters first, then the other sections. */}
         <nav aria-label="Разделы CRM" className="flex flex-wrap gap-1.5 text-xs">
-          <a href="#leads" className="cab-chip hover:border-graphite-800">
-            Звонки
+          <a href="#leads" className={chipClass(false)}>
+            Звонки{newCount > 0 ? ` · ${newCount}` : ''}
           </a>
-          <a href="/admin/providers" className="cab-chip hover:border-graphite-800">
+          <a
+            href="#moderation"
+            className={`${chipClass(false)} ${moderationCount > 0 ? 'border-amber-400' : ''}`}
+          >
+            Модерация{moderationCount > 0 ? ` · ${moderationCount}` : ''}
+          </a>
+          <a
+            href="#comments"
+            className={`${chipClass(false)} ${commentsCount > 0 ? 'border-amber-400' : ''}`}
+          >
+            Комментарии{commentsCount > 0 ? ` · ${commentsCount}` : ''}
+          </a>
+          <a href="/admin/providers" className={chipClass(false)}>
             Исполнители
           </a>
-          <a href="/admin/funnel" className="cab-chip hover:border-graphite-800">
+          <a href="/admin/funnel" className={chipClass(false)}>
             Воронка
           </a>
-          <a href="/admin/feed" className="cab-chip hover:border-graphite-800">
+          <a href="/admin/feed" className={chipClass(false)}>
             Уведомления
           </a>
         </nav>
@@ -199,6 +226,111 @@ export default async function AdminPage({ searchParams = {} }: { searchParams?: 
         </button>
       </form>
 
+      {/* Daily actions right under the top: moderation of chat orders,
+          comments and reviews. Empty ones take one line; the calls follow. */}
+      <Card className="flex scroll-mt-24 flex-col gap-3" id="moderation">
+        <div>
+          <h2 className="font-semibold">
+            Заявки из мессенджеров на модерации{' '}
+            <span className="text-amber-700">({moderationCount})</span>
+          </h2>
+          <p className="text-sm text-slate-600">
+            Уверенные заявки из чатов публикуются на торгах сразу, сомнительные ждут здесь. За 7
+            дней импортировано:{' '}
+            {importedStats.length === 0
+              ? '0'
+              : importedStats.map((s) => `${SOURCE_LABELS[s.source]} — ${s._count}`).join(', ')}
+            .
+          </p>
+        </div>
+        {pendingOrders.length === 0 && (
+          <p className="text-sm text-slate-500">Заявок на модерации нет.</p>
+        )}
+        {pendingOrders.map((order) => (
+          <div
+            key={order.id}
+            className="flex flex-col gap-2 border-t border-slate-100 pt-3 sm:flex-row sm:justify-between"
+          >
+            <div className="min-w-0 text-sm">
+              <p className="whitespace-pre-wrap">{order.rawText ?? order.description}</p>
+              <p className="mt-1 text-xs text-slate-500">
+                {SOURCE_LABELS[order.source]}
+                {order.sourceChat ? ` · ${order.sourceChat}` : ''}
+                {order.category ? ` · ${order.category.name}` : ''}
+                {order.location ? ` · ${order.location.city}` : ''}
+                {order.contactName ? ` · ${order.contactName}` : ''}
+                {order.contactPhone && (
+                  <>
+                    {' · '}
+                    <PhoneLink phone={order.contactPhone} />
+                  </>
+                )}
+              </p>
+            </div>
+            <div className="flex flex-col items-start gap-2">
+              <ModerationButtons orderId={order.id} />
+              <EraseOrderButton orderId={order.id} />
+            </div>
+          </div>
+        ))}
+      </Card>
+
+      <Card className="flex scroll-mt-24 flex-col gap-3" id="comments">
+        <div>
+          <h2 className="font-semibold">
+            Комментарии и отзывы на модерации{' '}
+            <span className="text-amber-700">({commentsCount})</span>
+          </h2>
+          <p className="text-sm text-slate-600">
+            Заказчики пишут об исполнителях, исполнители — о заказчиках. На сайте и в приложении
+            видны только опубликованные; телефоны, e-mail и ссылки скрыты автоматически. У отзывов
+            звёзды видны сразу, текст — после публикации.
+          </p>
+        </div>
+        {commentsCount === 0 && (
+          <p className="text-sm text-slate-500">Новых комментариев и отзывов нет.</p>
+        )}
+        {pendingReviews.map((review) => (
+          <div
+            key={review.id}
+            className="flex flex-col gap-2 border-t border-slate-100 pt-3 sm:flex-row sm:justify-between"
+          >
+            <div className="min-w-0 text-sm">
+              <p className="text-amber-500">
+                {'★'.repeat(review.rating)}
+                {'☆'.repeat(5 - review.rating)}{' '}
+                <span className="text-xs font-semibold text-slate-600">Отзыв</span>
+              </p>
+              <p className="whitespace-pre-wrap break-words">{review.comment}</p>
+              <p className="mt-1 text-xs text-slate-500">
+                {review.author.name} ({review.author.email}) → «{review.company.name}»
+                {review.equipment ? `, ${review.equipment.name}` : ''} ·{' '}
+                {review.createdAt.toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' })}
+              </p>
+            </div>
+            <CommentModerationButtons commentId={review.id} kind="reviews" />
+          </div>
+        ))}
+        {pendingComments.map((comment) => (
+          <div
+            key={comment.id}
+            className="flex flex-col gap-2 border-t border-slate-100 pt-3 sm:flex-row sm:justify-between"
+          >
+            <div className="min-w-0 text-sm">
+              <p className="whitespace-pre-wrap break-words">{comment.text}</p>
+              <p className="mt-1 text-xs text-slate-500">
+                {comment.author.name} ({comment.author.email}) →{' '}
+                {comment.targetCompany
+                  ? `исполнитель «${comment.targetCompany.name}»`
+                  : `заказчик ${comment.targetUser?.name ?? ''}`}{' '}
+                · {comment.createdAt.toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' })}
+              </p>
+            </div>
+            <CommentModerationButtons commentId={comment.id} />
+          </div>
+        ))}
+      </Card>
+
       <section className="flex scroll-mt-24 flex-col gap-3" id="leads">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h2 className="font-semibold">Заявки на звонок</h2>
@@ -206,7 +338,7 @@ export default async function AdminPage({ searchParams = {} }: { searchParams?: 
             {LEAD_FILTERS.map((item) => (
               <a
                 key={item.id}
-                href={item.id === 'all' ? '/admin#leads' : `/admin?leads=${item.id}#leads`}
+                href={leadsHref(item.id)}
                 aria-current={item.id === leadFilter ? 'page' : undefined}
                 className={chipClass(item.id === leadFilter)}
               >
@@ -215,14 +347,14 @@ export default async function AdminPage({ searchParams = {} }: { searchParams?: 
             ))}
           </nav>
         </div>
-        {shownLeads.length === 0 ? (
+        {leadList.shown.length === 0 ? (
           <Card>
             {leads.length === 0
               ? 'Заявок пока нет. Они появятся здесь, как только клиенты заполнят форму.'
               : 'В этом списке заявок нет.'}
           </Card>
         ) : (
-          shownLeads.map((lead) => (
+          leadList.shown.map((lead) => (
             <Card
               key={lead.id}
               className={`flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between ${
@@ -238,7 +370,7 @@ export default async function AdminPage({ searchParams = {} }: { searchParams?: 
                 )}
                 <p className="mt-1 text-xs text-slate-500">
                   {lead.createdAt.toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' })}
-                  {lead.source ? ` · ${lead.source}` : ''}
+                  {leadSourceLabel(lead.source) ? ` · ${leadSourceLabel(lead.source)}` : ''}
                 </p>
               </div>
               <div className="flex flex-col items-end gap-2">
@@ -247,6 +379,30 @@ export default async function AdminPage({ searchParams = {} }: { searchParams?: 
               </div>
             </Card>
           ))
+        )}
+        {leadList.hidden > 0 && (
+          <p className="flex flex-wrap items-center gap-3 text-sm text-slate-600">
+            Показаны {leadList.shown.length} из {leadList.total}.
+            <a
+              href={showAllHref(
+                '/admin',
+                { leads: leadFilter === 'all' ? undefined : leadFilter },
+                'leads',
+              )}
+              className="cab-action"
+            >
+              Показать ещё {leadList.hidden}
+            </a>
+          </p>
+        )}
+        {showAll && leadsTotal > leads.length && (
+          <p className="text-xs text-slate-500">
+            Загружены последние {leads.length} из {leadsTotal}; более старые —{' '}
+            <a href="/admin/search" className="underline">
+              через поиск
+            </a>
+            .
+          </p>
         )}
       </section>
 
@@ -299,103 +455,6 @@ export default async function AdminPage({ searchParams = {} }: { searchParams?: 
             ? `подключена, счётчик ${SITE.metrikaId}. Цели: lead (заявка), call, whatsapp, telegram, email.`
             : 'не подключена. Создайте бесплатный счётчик на metrika.yandex.ru и пришлите номер — пропишем NEXT_PUBLIC_YANDEX_METRIKA_ID.'}
         </p>
-      </Card>
-
-      <Card className="flex flex-col gap-3">
-        <div>
-          <h2 className="font-semibold">
-            Заявки из мессенджеров на модерации{' '}
-            <span className="text-amber-700">({pendingOrders.length})</span>
-          </h2>
-          <p className="text-sm text-slate-600">
-            Уверенные заявки из чатов публикуются на торгах сразу, сомнительные ждут здесь. За 7
-            дней импортировано:{' '}
-            {importedStats.length === 0
-              ? '0'
-              : importedStats.map((s) => `${SOURCE_LABELS[s.source]} — ${s._count}`).join(', ')}
-            .
-          </p>
-        </div>
-        {pendingOrders.map((order) => (
-          <div
-            key={order.id}
-            className="flex flex-col gap-2 border-t border-slate-100 pt-3 sm:flex-row sm:justify-between"
-          >
-            <div className="min-w-0 text-sm">
-              <p className="whitespace-pre-wrap">{order.rawText ?? order.description}</p>
-              <p className="mt-1 text-xs text-slate-500">
-                {SOURCE_LABELS[order.source]}
-                {order.sourceChat ? ` · ${order.sourceChat}` : ''}
-                {order.category ? ` · ${order.category.name}` : ''}
-                {order.location ? ` · ${order.location.city}` : ''}
-                {order.contactName ? ` · ${order.contactName}` : ''}
-                {order.contactPhone ? ` · ${order.contactPhone}` : ''}
-              </p>
-            </div>
-            <div className="flex flex-col items-start gap-2">
-              <ModerationButtons orderId={order.id} />
-              <EraseOrderButton orderId={order.id} />
-            </div>
-          </div>
-        ))}
-      </Card>
-
-      <Card className="flex flex-col gap-3" id="comments">
-        <div>
-          <h2 className="font-semibold">
-            Комментарии и отзывы на модерации{' '}
-            <span className="text-amber-700">
-              ({pendingComments.length + pendingReviews.length})
-            </span>
-          </h2>
-          <p className="text-sm text-slate-600">
-            Заказчики пишут об исполнителях, исполнители — о заказчиках. На сайте и в приложении
-            видны только опубликованные; телефоны, e-mail и ссылки скрыты автоматически. У отзывов
-            звёзды видны сразу, текст — после публикации.
-          </p>
-        </div>
-        {pendingComments.length === 0 && pendingReviews.length === 0 && (
-          <p className="text-sm text-slate-500">Новых комментариев и отзывов нет.</p>
-        )}
-        {pendingReviews.map((review) => (
-          <div
-            key={review.id}
-            className="flex flex-col gap-2 border-t border-slate-100 pt-3 sm:flex-row sm:justify-between"
-          >
-            <div className="min-w-0 text-sm">
-              <p className="text-amber-500">
-                {'★'.repeat(review.rating)}
-                {'☆'.repeat(5 - review.rating)}{' '}
-                <span className="text-xs font-semibold text-slate-600">Отзыв</span>
-              </p>
-              <p className="whitespace-pre-wrap break-words">{review.comment}</p>
-              <p className="mt-1 text-xs text-slate-500">
-                {review.author.name} ({review.author.email}) → «{review.company.name}»
-                {review.equipment ? `, ${review.equipment.name}` : ''} ·{' '}
-                {review.createdAt.toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' })}
-              </p>
-            </div>
-            <CommentModerationButtons commentId={review.id} kind="reviews" />
-          </div>
-        ))}
-        {pendingComments.map((comment) => (
-          <div
-            key={comment.id}
-            className="flex flex-col gap-2 border-t border-slate-100 pt-3 sm:flex-row sm:justify-between"
-          >
-            <div className="min-w-0 text-sm">
-              <p className="whitespace-pre-wrap break-words">{comment.text}</p>
-              <p className="mt-1 text-xs text-slate-500">
-                {comment.author.name} ({comment.author.email}) →{' '}
-                {comment.targetCompany
-                  ? `исполнитель «${comment.targetCompany.name}»`
-                  : `заказчик ${comment.targetUser?.name ?? ''}`}{' '}
-                · {comment.createdAt.toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' })}
-              </p>
-            </div>
-            <CommentModerationButtons commentId={comment.id} />
-          </div>
-        ))}
       </Card>
 
       {/* Reference and one-time setup: collapsed, the daily work is above. */}

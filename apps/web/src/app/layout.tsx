@@ -6,6 +6,7 @@ import { TelegramMiniApp } from '@/components/TelegramMiniApp';
 import { Providers } from '@/components/Providers';
 import { SiteHeader } from '@/components/SiteHeader';
 import { SiteFooter } from '@/components/SiteFooter';
+import { PublicOnly } from '@/components/PublicOnly';
 import { AgentChatWidget } from '@/components/AgentChatWidget';
 import { YandexMetrika } from '@/components/YandexMetrika';
 import { MarketingTracker } from '@/components/MarketingTracker';
@@ -139,7 +140,10 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           >
             {children}
           </main>
-          <SiteFooter />
+          {/* The CRM (/admin) keeps the page to its own bar: no public footer. */}
+          <PublicOnly>
+            <SiteFooter />
+          </PublicOnly>
           {/* Multi-agent assistant (works for guests too). The streaming single
               assistant (/api/ai/chat) stays available to API/mobile clients. */}
           <AgentChatWidget />

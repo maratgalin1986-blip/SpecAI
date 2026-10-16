@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { JOURNEY_SELECTOR } from '@/components/useJourneyInView';
 import { SoundToggle } from '@/components/SoundToggle';
+import { isAdminArea } from '@/components/PublicOnly';
 import { SITE } from '@/lib/site';
 
 import { AuthStatus } from '@/components/AuthStatus';
@@ -75,6 +76,9 @@ export function SiteHeader() {
   // /stroyka is a full-screen layer over the page: the header and footer
   // behind it must not take keyboard focus (or be read out) while it is open.
   const behindStroyka = !!pathname?.startsWith('/stroyka');
+  // The CRM (/admin/*) has its own section bar: the public menu, the call
+  // button and the sound switch stay off; the logo leads back to the site.
+  const adminArea = isAdminArea(pathname);
   useEffect(() => {
     const chrome = [headerRef.current, document.querySelector('[data-site-footer]')];
     chrome.forEach((el) => el?.toggleAttribute('inert', behindStroyka));
@@ -144,79 +148,94 @@ export function SiteHeader() {
           </span>
         </a>
 
-        <nav
-          aria-label="Основное меню"
-          className="hidden items-center gap-3 whitespace-nowrap text-sm font-medium text-slate-600 lg:flex xl:gap-5"
-        >
-          {NAV_LINKS.filter((link) => link.tier !== 'more').map((link) => (
+        {adminArea && (
+          <a
+            href="/"
+            className="ml-auto inline-flex min-h-11 items-center text-sm font-medium text-slate-600 hover:text-slate-900"
+          >
+            На сайт →
+          </a>
+        )}
+
+        {!adminArea && (
+          <nav
+            aria-label="Основное меню"
+            className="hidden items-center gap-3 whitespace-nowrap text-sm font-medium text-slate-600 lg:flex xl:gap-5"
+          >
+            {NAV_LINKS.filter((link) => link.tier !== 'more').map((link) => (
+              <a
+                key={link.href}
+                href={link.href}
+                className={`hover:text-slate-900 ${link.tier === 'xl' ? 'hidden xl:inline' : ''}`}
+              >
+                {link.label}
+              </a>
+            ))}
+            <MoreMenu />
+            <AuthStatus />
             <a
-              key={link.href}
-              href={link.href}
-              className={`hover:text-slate-900 ${link.tier === 'xl' ? 'hidden xl:inline' : ''}`}
+              href="/#callback"
+              className="group inline-flex items-center gap-1.5 rounded-full bg-slate-900 px-4 py-2 text-white transition hover:bg-amber-500 hover:text-slate-950"
             >
-              {link.label}
+              Заказать технику
+              <span className="transition group-hover:translate-x-0.5">→</span>
             </a>
-          ))}
-          <MoreMenu />
-          <AuthStatus />
-          <a
-            href="/#callback"
-            className="group inline-flex items-center gap-1.5 rounded-full bg-slate-900 px-4 py-2 text-white transition hover:bg-amber-500 hover:text-slate-950"
-          >
-            Заказать технику
-            <span className="transition group-hover:translate-x-0.5">→</span>
-          </a>
-          <SoundToggle iconOnly large />
-        </nav>
+            <SoundToggle iconOnly large />
+          </nav>
+        )}
 
-        <div className="ml-auto flex items-center gap-2 lg:hidden">
-          <SoundToggle iconOnPhone large />
-          <a
-            href={SITE.phoneHref}
-            aria-label="Позвонить"
-            className="vt-phone inline-flex min-h-11 min-w-11 items-center justify-center rounded-full bg-slate-900 px-3 text-sm font-semibold text-white"
-          >
-            {/* The smallest phones (360 px): the icon, so the menu button stays on screen. */}
-            <span className="max-[379px]:hidden">Позвонить</span>
-            <span aria-hidden className="min-[380px]:hidden">
-              📞
-            </span>
-          </a>
-        </div>
+        {!adminArea && (
+          <div className="ml-auto flex items-center gap-2 lg:hidden">
+            <SoundToggle iconOnPhone large />
+            <a
+              href={SITE.phoneHref}
+              aria-label="Позвонить"
+              className="vt-phone inline-flex min-h-11 min-w-11 items-center justify-center rounded-full bg-slate-900 px-3 text-sm font-semibold text-white"
+            >
+              {/* The smallest phones (360 px): the icon, so the menu button stays on screen. */}
+              <span className="max-[379px]:hidden">Позвонить</span>
+              <span aria-hidden className="min-[380px]:hidden">
+                📞
+              </span>
+            </a>
+          </div>
+        )}
 
-        <button
-          type="button"
-          onClick={() => setIsMenuOpen((open) => !open)}
-          aria-label={isMenuOpen ? 'Закрыть меню' : 'Открыть меню'}
-          aria-expanded={isMenuOpen}
-          aria-controls="mobile-nav"
-          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-slate-600 hover:bg-slate-100 lg:hidden"
-        >
-          {isMenuOpen ? (
-            <svg
-              viewBox="0 0 24 24"
-              className="h-6 w-6"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth={2}
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
-            </svg>
-          ) : (
-            <svg
-              viewBox="0 0 24 24"
-              className="h-6 w-6"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth={2}
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
-            </svg>
-          )}
-        </button>
+        {!adminArea && (
+          <button
+            type="button"
+            onClick={() => setIsMenuOpen((open) => !open)}
+            aria-label={isMenuOpen ? 'Закрыть меню' : 'Открыть меню'}
+            aria-expanded={isMenuOpen}
+            aria-controls="mobile-nav"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-slate-600 hover:bg-slate-100 lg:hidden"
+          >
+            {isMenuOpen ? (
+              <svg
+                viewBox="0 0 24 24"
+                className="h-6 w-6"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={2}
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+              </svg>
+            ) : (
+              <svg
+                viewBox="0 0 24 24"
+                className="h-6 w-6"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={2}
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+            )}
+          </button>
+        )}
       </div>
 
-      {isMenuOpen && (
+      {!adminArea && isMenuOpen && (
         <nav
           id="mobile-nav"
           aria-label="Меню"

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Button } from '@specai/ui';
 import { CategorySelect, type SelectableCategory } from '@/components/CategorySelect';
 import { ConsentText } from '@/components/ConsentText';
@@ -42,6 +42,7 @@ export function GuestOrderForm({
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [done, setDone] = useState<string | null>(null);
+  const doneRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     fetch('/api/categories')
@@ -49,6 +50,17 @@ export function GuestOrderForm({
       .then((data) => setCategories(data.categories ?? []))
       .catch(() => setCategories([]));
   }, []);
+
+  // The form sits far down /orders on a phone: when it turns into the short
+  // confirmation the page gets shorter and the browser is left on the footer.
+  // Bring the message into view and read it out.
+  useEffect(() => {
+    if (!done) return;
+    const el = doneRef.current;
+    if (!el) return;
+    el.scrollIntoView({ block: 'center' });
+    el.focus({ preventScroll: true });
+  }, [done]);
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -96,8 +108,11 @@ export function GuestOrderForm({
   if (done) {
     return (
       <div
+        ref={doneRef}
         role="status"
-        className="flex flex-col gap-2 rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-900"
+        tabIndex={-1}
+        data-guest-order-done
+        className="flex scroll-mt-24 flex-col gap-2 rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-900 outline-none"
       >
         <p className="font-semibold">Заявка принята</p>
         <p>{done}</p>

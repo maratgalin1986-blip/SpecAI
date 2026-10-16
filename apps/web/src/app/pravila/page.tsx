@@ -11,6 +11,7 @@ import { CHAT_PHONE_REVEALS_PER_DAY } from '@/lib/chatOrders';
 export const metadata: Metadata = {
   title: 'Правила площадки',
   description: `Правила площадки ${SITE.platform} от ${SITE.name}: кто исполнитель, как работают заявки, брони, отзывы и что запрещено.`,
+  alternates: { canonical: '/pravila' },
 };
 
 export default function TermsPage() {

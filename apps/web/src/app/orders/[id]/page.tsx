@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import { notFound, redirect } from 'next/navigation';
 import { getServerSession } from 'next-auth';
 import { prisma } from '@specai/database';
@@ -12,7 +13,9 @@ import { isAdminRequest } from '@/lib/admin';
 import { SiteConditions } from '@/components/SiteConditions';
 import { houseFirstBids, isHouseManager, isProvider } from '@/lib/fleet';
 import { isSafeHttpUrl, maskContactsAndLinks } from '@/lib/privacy';
-import { bookedProviderSees } from '@/lib/bidPrivacy';
+import { bookedProviderSees, contactsOpenFor } from '@/lib/bidPrivacy';
+import { BookingActionButtons } from '@/components/BookingActionButtons';
+import { CONTACTS_AFTER_CONFIRM } from '@/lib/customerPrivacy';
 import { approvedComments } from '@/lib/commentAccess';
 import { CommentForm, CommentList } from '@/components/Comments';
 import { customerShortName } from '@/lib/customerPrivacy';
@@ -38,6 +41,23 @@ import { isRealEmail } from '@/lib/notifications/routing';
 
 export const dynamic = 'force-dynamic';
 
+const msk = (date: Date) => date.toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow' });
+
+/** Its own tab title («Заявка · Автокран · 20.10.2026»); never indexed. */
+export async function generateMetadata({ params }: { params: { id: string } }): Promise<Metadata> {
+  const order = await prisma.order
+    .findUnique({
+      where: { id: params.id },
+      select: { status: true, desiredStartDate: true, category: { select: { name: true } } },
+    })
+    .catch(() => null);
+  const title =
+    order && order.status !== 'PENDING_REVIEW'
+      ? `Заявка · ${order.category?.name ?? 'любая техника'} · ${msk(order.desiredStartDate)}`
+      : 'Заявка';
+  return { title, robots: { index: false, follow: false } };
+}
+
 export default async function OrderDetailPage({ params }: { params: { id: string } }) {
   const session = await getServerSession(authOptions);
 
@@ -47,7 +67,7 @@ export default async function OrderDetailPage({ params }: { params: { id: string
       category: true,
       customer: true,
       location: true,
-      booking: { select: { status: true, equipment: { select: { companyId: true } } } },
+      booking: { select: { id: true, status: true, equipment: { select: { companyId: true } } } },
       bids: {
         include: {
           equipment: { include: { company: true, category: { select: { name: true } } } },
@@ -127,6 +147,16 @@ export default async function OrderDetailPage({ params }: { params: { id: string
         ) * Number(viewerCompany.deliveryPricePerKm)
       : null;
   const bidsLeft = order.status === 'OPEN' ? bidsLeftText(order.bidsUntil) : null;
+  // The provider the customer chose: confirms the booking right here, and
+  // reads the customer's contacts once it is confirmed (CLAUDE.md: contacts
+  // only on CONFIRMED/ACTIVE/COMPLETED).
+  const viewerBooking =
+    viewerIsProvider &&
+    order.booking &&
+    session?.user.companyId &&
+    order.booking.equipment.companyId === session.user.companyId
+      ? order.booking
+      : null;
 
   return (
     <div className="flex flex-col gap-6">
@@ -184,6 +214,51 @@ export default async function OrderDetailPage({ params }: { params: { id: string
             Мои брони
           </a>
         </p>
+      )}
+      {viewerBooking?.status === 'PENDING' && (
+        <Card className="border-amber-300 bg-amber-50" id="confirm">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
+            <div className="min-w-0">
+              <h2 className="font-semibold">Заказчик выбрал вас — подтвердите бронь</h2>
+              <p className="mt-1 text-sm text-slate-700">
+                {CONTACTS_AFTER_CONFIRM}. Бронь есть и в кабинете:{' '}
+                <a href="/provider#bookings" className="font-semibold underline">
+                  Бронирования
+                </a>
+                .
+              </p>
+            </div>
+            <BookingActionButtons
+              bookingId={viewerBooking.id}
+              availableTransitions={['CONFIRMED', 'CANCELLED']}
+            />
+          </div>
+        </Card>
+      )}
+      {viewerBooking && contactsOpenFor(viewerBooking.status) && (
+        <Card className="border-green-200 bg-green-50" id="contacts">
+          <h2 className="font-semibold">Контакты заказчика</h2>
+          <p className="mt-2 text-sm">
+            {order.contactName ?? order.customer.name} ·{' '}
+            <PhoneLink phone={order.contactPhone ?? order.customer.phone} />
+            {!isImported && isRealEmail(order.customer.email) && (
+              <>
+                {' '}
+                ·{' '}
+                <a href={`mailto:${order.customer.email}`} className="underline">
+                  {order.customer.email}
+                </a>
+              </>
+            )}
+          </p>
+          <p className="mt-1 text-xs text-slate-600">
+            Бронь подтверждена — договоритесь о времени подачи. Статус брони:{' '}
+            <a href="/provider#bookings" className="underline">
+              в кабинете
+            </a>
+            .
+          </p>
+        </Card>
       )}
 
       <Card>

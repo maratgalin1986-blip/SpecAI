@@ -22,6 +22,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     ...JOBS.map((job) => `/raboty/${job.slug}`),
     '/equipment',
     '/map',
+    '/orders',
     '/providers',
     '/agents',
     '/contacts',
