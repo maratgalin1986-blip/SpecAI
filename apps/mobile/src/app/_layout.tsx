@@ -51,7 +51,7 @@ function RootNavigator() {
         <Stack.Screen name="demand" options={{ title: 'Карта спроса' }} />
         <Stack.Screen name="become-provider" options={{ title: 'Стать исполнителем' }} />
       </Stack.Protected>
-      {/* Доступны и без входа: каталог, карточка техники, карта, звонок, о компании. */}
+      {/* Доступны и без входа: каталог, карточка техники, карта, звонок, о компании, предложения. */}
       <Stack.Screen name="catalog" options={{ title: 'Каталог техники' }} />
       <Stack.Screen name="equipment/[id]" options={{ title: 'Техника' }} />
       <Stack.Screen name="callback" options={{ title: 'Заказать звонок', presentation: 'modal' }} />
@@ -60,6 +60,7 @@ function RootNavigator() {
       <Stack.Screen name="providers" options={{ title: 'Исполнители' }} />
       <Stack.Screen name="guide" options={{ title: 'Как пользоваться' }} />
       <Stack.Screen name="support" options={{ title: 'Поддержать приложение' }} />
+      <Stack.Screen name="proposals" options={{ title: 'Предложения и партнёрство' }} />
       {/*
         Меню администратора: вход по паролю админки, а не по аккаунту, поэтому
         доступно и без входа (экраны сами просят пароль — AdminGate).
@@ -70,6 +71,7 @@ function RootNavigator() {
       <Stack.Screen name="admin/orders" options={{ title: 'Заявки из чатов' }} />
       <Stack.Screen name="admin/providers" options={{ title: 'Исполнители' }} />
       <Stack.Screen name="admin/support" options={{ title: 'Поддержка (донаты)' }} />
+      <Stack.Screen name="admin/proposals" options={{ title: 'Предложения' }} />
     </Stack>
   );
 }

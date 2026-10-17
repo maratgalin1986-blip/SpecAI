@@ -31,6 +31,8 @@ export interface AdminStats {
   /** Orders imported from chats, waiting for the owner (PENDING_REVIEW). */
   chatOrders: number;
   moderation: { reviews: number; comments: number };
+  /** New messages in «Предложения и партнёрство». */
+  proposals: number;
   generatedAt: string;
 }
 
@@ -72,6 +74,7 @@ export async function loadAdminStats(now: Date = new Date()): Promise<AdminStats
     chatOrders,
     reviews,
     comments,
+    proposals,
   ] = await Promise.all([
     countSince(
       (date) => prisma.user.count({ where: { role: 'CUSTOMER', ...REAL_EMAIL, ...since(date) } }),
@@ -91,6 +94,8 @@ export async function loadAdminStats(now: Date = new Date()): Promise<AdminStats
     prisma.order.count({ where: { status: 'PENDING_REVIEW' } }),
     prisma.review.count({ where: { textStatus: 'PENDING' } }),
     prisma.comment.count({ where: { status: 'PENDING' } }),
+    // A counter must not take the whole summary down (e.g. before `db push`).
+    prisma.proposal.count({ where: { status: 'NEW' } }).catch(() => 0),
   ]);
   return {
     customers,
@@ -102,6 +107,7 @@ export async function loadAdminStats(now: Date = new Date()): Promise<AdminStats
     activeBookings,
     chatOrders,
     moderation: { reviews, comments },
+    proposals,
     generatedAt: now.toISOString(),
   };
 }

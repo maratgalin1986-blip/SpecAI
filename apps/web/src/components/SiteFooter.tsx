@@ -59,6 +59,9 @@ export function SiteFooter() {
             Авторы фото и видео
           </a>
           <SupportFooterLink className={`${LINK} text-left`} />
+          <a href="/predlozheniya" className={LINK}>
+            Предложения и партнёрство
+          </a>
         </div>
         <div className="flex flex-col sm:gap-1">
           <div className="font-semibold text-white">Контакты</div>

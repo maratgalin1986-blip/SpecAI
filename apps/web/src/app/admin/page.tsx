@@ -20,6 +20,8 @@ import { AdminVerifyToggle } from '@/components/AdminVerifyToggle';
 import { providerPath } from '@/lib/providerSeo';
 import { chipClass } from '@/components/admin/AdminUi';
 import { PhoneLink } from '@/components/admin/PhoneLink';
+import { ProposalsCard } from '@/components/admin/ProposalsCard';
+import { ADMIN_PROPOSAL_SELECT } from '@/lib/proposals';
 import {
   LEAD_FILTERS,
   filterLeads,
@@ -119,6 +121,18 @@ export default async function AdminPage({ searchParams = {} }: { searchParams?: 
     orderBy: { createdAt: 'asc' },
     take: 100,
   });
+  // «Предложения и партнёрство»: every new one up to 100, then the latest read
+  // ones (separately, so read messages never push new ones out); no archive.
+  const loadProposals = (status: 'NEW' | 'READ', take: number) =>
+    prisma.proposal
+      .findMany({
+        where: { status },
+        select: ADMIN_PROPOSAL_SELECT,
+        orderBy: { createdAt: 'desc' },
+        take,
+      })
+      .catch(() => []);
+  const proposals = [...(await loadProposals('NEW', 100)), ...(await loadProposals('READ', 30))];
   // «Исполнители»: provider companies with the «Проверен» switch, unchecked first.
   const providers = await prisma.company.findMany({
     where: { isProvider: true },
@@ -147,6 +161,7 @@ export default async function AdminPage({ searchParams = {} }: { searchParams?: 
   const newCount = leads.filter((lead) => lead.status === 'NEW').length;
   const moderationCount = pendingOrders.length;
   const commentsCount = pendingComments.length + pendingReviews.length;
+  const proposalsCount = stats.proposals;
   // Callbacks: new ones on top, a status filter, the first 30 and «Показать ещё».
   const leadFilter = parseLeadFilter(searchParams.leads);
   const showAll = parseShowAll(searchParams.all);
@@ -204,6 +219,12 @@ export default async function AdminPage({ searchParams = {} }: { searchParams?: 
             className={`${chipClass(false)} ${commentsCount > 0 ? 'border-amber-400' : ''}`}
           >
             Комментарии{commentsCount > 0 ? ` · ${commentsCount}` : ''}
+          </a>
+          <a
+            href="#proposals"
+            className={`${chipClass(false)} ${proposalsCount > 0 ? 'border-amber-400' : ''}`}
+          >
+            Предложения{proposalsCount > 0 ? ` · ${proposalsCount}` : ''}
           </a>
           <a href="/admin/providers" className={chipClass(false)}>
             Исполнители
@@ -340,6 +361,8 @@ export default async function AdminPage({ searchParams = {} }: { searchParams?: 
           </div>
         ))}
       </Card>
+
+      <ProposalsCard proposals={proposals} />
 
       <section className="flex scroll-mt-24 flex-col gap-3" id="leads">
         <div className="flex flex-wrap items-center justify-between gap-2">

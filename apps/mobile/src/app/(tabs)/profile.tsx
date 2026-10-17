@@ -5,6 +5,7 @@ import { AdminLoginRow, AdminMenuCard } from '@/components/AdminEntry';
 import { ContactActions } from '@/components/ContactActions';
 import { Hint } from '@/components/Hint';
 import { ModeSwitchCard, ProfileShortcuts } from '@/components/ProfileShortcuts';
+import { ProposalsLink } from '@/components/ProposalsLink';
 import { NotificationSettingsCard } from '@/components/NotificationSettingsCard';
 import { SupportProfileRow } from '@/components/SupportCard';
 import { Badge, Button, Card } from '@/components/ui';
@@ -137,6 +138,7 @@ export default function ProfileScreen() {
       </Card>
 
       <SupportProfileRow />
+      <ProposalsLink />
       <Button title="Выйти" variant="danger" onPress={handleLogout} loading={loggingOut} />
       <AdminLoginRow />
     </ScrollView>
