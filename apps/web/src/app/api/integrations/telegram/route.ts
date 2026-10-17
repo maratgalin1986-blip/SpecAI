@@ -35,6 +35,7 @@ import {
   whenText,
 } from '@/lib/botFunnel';
 import { attachPhone, findDraft, saveDraft, sendDueReminders, unsubscribe } from '@/lib/botDrafts';
+import { tickDeferredOrderNotices } from '@/lib/deferredOrderNotices';
 import { checkRateLimit } from '@/lib/rateLimit';
 import { telegramApi } from '@/lib/telegramApi';
 import {
@@ -137,6 +138,8 @@ export async function POST(request: NextRequest) {
   } | null;
   // Due reminders ride on any incoming update (and on the hourly cron).
   await sendDueReminders().catch((error) => console.error('[telegram] reminders', error));
+  // So do the delayed new-order alerts of «Пригласи друга».
+  await tickDeferredOrderNotices('telegram');
   if (update?.callback_query) {
     await onCallback(update.callback_query);
     return NextResponse.json({ ok: true });

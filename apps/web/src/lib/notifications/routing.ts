@@ -7,6 +7,7 @@
 // users or chats are passed through maskContacts.
 import { stripChatOrderNote } from '../chatOrders';
 import { maskContacts } from '../privacy';
+import { EARLY_NOTICE_LINE, EARLY_NOTICE_MINUTES, priorityDate } from '../referralPriority';
 
 export const CHANNELS = ['telegram', 'push', 'email', 'whatsapp', 'sms'] as const;
 export type Channel = (typeof CHANNELS)[number];
@@ -116,7 +117,11 @@ export type NotificationEvent =
       city?: string | null;
       startDate: Date;
       fromChat?: boolean;
+      /** Sent 5 minutes before the other providers: the «Пригласи друга» bonus. */
+      early?: boolean;
     }
+  /** To the inviter: a friend signed up with their code; the bonus lasts until `until`. */
+  | { type: 'referral.bonus'; until: Date; provider: boolean }
   /** To the customer: a provider bid on their order (or changed its bid: `updated`). */
   | {
       type: 'bid.new';
@@ -266,8 +271,21 @@ export function renderNotification(event: NotificationEvent): RenderedNotificati
         title: `Новая заявка: ${what}${where}`,
         body:
           `${day(event.startDate)} · ${clip(maskContacts(text), 180)}` +
-          (event.fromChat ? '\nНайдена в открытом чате.' : ''),
+          (event.fromChat ? '\nНайдена в открытом чате.' : '') +
+          (event.early ? `\n${EARLY_NOTICE_LINE}` : ''),
         path: `/orders/${event.orderId}`,
+      };
+    }
+    case 'referral.bonus': {
+      const until = priorityDate(event.until);
+      const minutes = EARLY_NOTICE_MINUTES;
+      return {
+        title: 'Друг зарегистрировался по вашему приглашению',
+        // A customer has no orders to hear of: the bonus waits for his own machinery.
+        body: event.provider
+          ? `Ваш друг зарегистрировался по приглашению — до ${until} новые заявки рядом приходят вам на ${minutes} минут раньше остальных.`
+          : `Ваш друг зарегистрировался по приглашению — до ${until} новые заявки рядом будут приходить вам на ${minutes} минут раньше остальных, если вы подключите свою технику как исполнитель.`,
+        path: event.provider ? '/provider#invite' : '/dashboard#invite',
       };
     }
     case 'bid.new':

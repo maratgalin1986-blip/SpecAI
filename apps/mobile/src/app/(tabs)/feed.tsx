@@ -17,6 +17,7 @@ import { BidCountdown } from '@/components/BidCountdown';
 import { BidForm } from '@/components/BidForm';
 import { DemandCard } from '@/components/DemandCard';
 import { Hint } from '@/components/Hint';
+import { PriorityBadge } from '@/components/InviteCard';
 import { ModeSwitch } from '@/components/ModeSwitch';
 import { OrderContact } from '@/components/OrderContact';
 import { MachineIncomeCard } from '@/components/MachineIncomeCard';
@@ -695,6 +696,7 @@ export default function FeedScreen() {
   const header = (
     <View style={styles.header}>
       <ModeSwitch />
+      <PriorityBadge />
       {activity ? (
         <View style={styles.today} accessibilityRole="text">
           <View style={styles.todayDot} />

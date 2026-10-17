@@ -49,6 +49,11 @@ model User {
   // stop for confirmation; codes are random and checked in lib/referralStore.ts.
   referralCode String?
   referredById String?
+  // Акция «Пригласи друга» (owner, 2026-10-17): until this moment the user's
+  // company hears of new orders 5 minutes before the other providers
+  // (lib/referralPriority.ts). Each friend signed up with the user's code adds
+  // 7 days, never more than 30 days ahead.
+  priorityUntil DateTime?
 
   // Рассылка «Заявки рядом за неделю» (ФЗ «О рекламе» ст. 18): только тем, кто
   // сам отметил галочку (newsConsentAt). Отписка ставит newsUnsubscribedAt и
@@ -398,12 +403,21 @@ model Order {
   moderationReason   String?
   moderatedAt        DateTime?
 
+  // «Пригласи друга»: providers with the bonus heard of the order first
+  // (earlyNotifiedUserIds); the others are due at othersNotifyAt and were
+  // notified at othersNotifiedAt (lib/deferredOrderNotices.ts). Both null:
+  // everyone was notified at once.
+  earlyNotifiedUserIds String[]  @default([])
+  othersNotifyAt       DateTime?
+  othersNotifiedAt     DateTime?
+
   @@index([customerId])
   @@index([categoryId])
   @@index([status])
   @@index([fingerprint])
   @@index([externalId])
   @@index([moderatedAt])
+  @@index([othersNotifiedAt, othersNotifyAt])
 }
 
 enum OrderSource {

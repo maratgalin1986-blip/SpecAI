@@ -38,6 +38,7 @@ import {
 } from '@/lib/providerDashboard';
 import { ensureReferralCode, invitedCounts } from '@/lib/referralStore';
 import { referralLink } from '@/lib/referral';
+import { priorityBadgeText } from '@/lib/referralPriority';
 import { siteUrl } from '@/lib/siteUrl';
 import { providerPath } from '@/lib/providerSeo';
 import { customerShortName } from '@/lib/customerPrivacy';
@@ -138,41 +139,55 @@ export default async function ProviderPage({
   // Pro-like dashboard: summary, incoming orders, machine statuses, checklist.
   const companyId = session.user.companyId;
   const monthStart = monthStartMsk();
-  const [profile, fleet, monthBookings, activeBookings, incoming, trust, referralCode, invited] =
-    await Promise.all([
-      prisma.company.findUnique({
-        where: { id: companyId },
-        select: {
-          description: true,
-          phone: true,
-          verified: true,
-          deliveryRadiusKm: true,
-          deliveryPricePerKm: true,
-        },
-      }),
-      prisma.equipment.findMany({
-        where: { companyId, status: { not: 'RETIRED' } },
-        select: { id: true, name: true, status: true, imageUrls: true, hourlyRate: true },
-        orderBy: { createdAt: 'desc' },
-        take: 200,
-      }),
-      prisma.booking.findMany({
-        where: {
-          equipment: { companyId },
-          status: { in: [...INCOME_STATUSES] },
-          startDate: { gte: monthStart },
-        },
-        select: { status: true, startDate: true, totalPrice: true },
-        take: 1000,
-      }),
-      prisma.booking.count({
-        where: { equipment: { companyId }, status: { in: ['CONFIRMED', 'ACTIVE'] } },
-      }),
-      loadIncomingOrders(companyId),
-      companyReliability(companyId),
-      ensureReferralCode(session.user.id).catch(() => null),
-      invitedCounts(session.user.id).catch(() => ({ total: 0, providers: 0 })),
-    ]);
+  const [
+    profile,
+    fleet,
+    monthBookings,
+    activeBookings,
+    incoming,
+    trust,
+    referralCode,
+    invited,
+    bonus,
+  ] = await Promise.all([
+    prisma.company.findUnique({
+      where: { id: companyId },
+      select: {
+        description: true,
+        phone: true,
+        verified: true,
+        deliveryRadiusKm: true,
+        deliveryPricePerKm: true,
+      },
+    }),
+    prisma.equipment.findMany({
+      where: { companyId, status: { not: 'RETIRED' } },
+      select: { id: true, name: true, status: true, imageUrls: true, hourlyRate: true },
+      orderBy: { createdAt: 'desc' },
+      take: 200,
+    }),
+    prisma.booking.findMany({
+      where: {
+        equipment: { companyId },
+        status: { in: [...INCOME_STATUSES] },
+        startDate: { gte: monthStart },
+      },
+      select: { status: true, startDate: true, totalPrice: true },
+      take: 1000,
+    }),
+    prisma.booking.count({
+      where: { equipment: { companyId }, status: { in: ['CONFIRMED', 'ACTIVE'] } },
+    }),
+    loadIncomingOrders(companyId),
+    companyReliability(companyId),
+    ensureReferralCode(session.user.id).catch(() => null),
+    invitedCounts(session.user.id).catch(() => ({ total: 0, providers: 0 })),
+    // «Пригласи друга»: until when new orders come 5 minutes earlier.
+    prisma.user
+      .findUnique({ where: { id: session.user.id }, select: { priorityUntil: true } })
+      .catch(() => null),
+  ]);
+  const priorityBadge = priorityBadgeText(bonus?.priorityUntil, new Date());
   const { items: feed, total: feedTotal } = incoming;
   const income = monthIncome(monthBookings);
   // Documents (СТС, ПСМ, страховка…): expired ones mark the machine and the checklist.
@@ -254,6 +269,14 @@ export default async function ProviderPage({
               Я заказываю технику →
             </a>
           </div>
+          {priorityBadge && (
+            <a
+              href="#invite"
+              className="mt-1 inline-flex w-fit rounded-full bg-signal-50 px-3 py-1 text-sm font-semibold text-signal-800"
+            >
+              {priorityBadge}
+            </a>
+          )}
         </div>
         <div className="flex flex-col gap-3 sm:items-end">
           <ModeSwitch current="provider" />
@@ -616,6 +639,7 @@ export default async function ProviderPage({
           link={referralLink(siteUrl(), referralCode)}
           role="PROVIDER"
           invited={invited}
+          priorityUntil={bonus?.priorityUntil}
         />
       )}
       {session && <NotificationSettings />}
