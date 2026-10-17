@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Card } from '@specai/ui';
+import { NewsletterSetting } from './NewsletterSetting';
 
 // «Уведомления» in the cabinet: checkboxes for Telegram, push, e-mail,
 // WhatsApp and SMS (the last two «скоро» until set up on the server), linking
@@ -199,6 +200,7 @@ export function NotificationSettings() {
             ))}
           </ul>
         )}
+        <NewsletterSetting />
         {view && (
           <div>
             <button

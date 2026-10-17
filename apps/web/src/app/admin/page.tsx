@@ -25,6 +25,7 @@ import { AiDecisionsCard } from '@/components/admin/AiDecisionsCard';
 import { aiModerationEnabled, loadAiDecisions } from '@/lib/orderModeration';
 import { BotChatsCard } from '@/components/admin/BotChatsCard';
 import { loadBotChats } from '@/lib/groupBot';
+import { channelFromEnv, loadPickedChannelChatId } from '@/lib/channelTarget';
 import { ADMIN_PROPOSAL_SELECT } from '@/lib/proposals';
 import {
   LEAD_FILTERS,
@@ -84,6 +85,7 @@ export default async function AdminPage({ searchParams = {} }: { searchParams?: 
   // «Чаты с ботом», loaded alongside the rest; before the first deploy with
   // the table, an empty list.
   const botChatsLoad = loadBotChats().catch(() => ({ chats: [], active: 0 }));
+  const digestChatLoad = loadPickedChannelChatId().catch(() => null);
   // Bot drafts without a phone are not leads yet (lib/botDrafts.ts).
   const leadsWhere = { NOT: { phone: '' } };
   const [stats, leads, leadsTotal] = await Promise.all([
@@ -142,6 +144,7 @@ export default async function AdminPage({ searchParams = {} }: { searchParams?: 
       .catch(() => []);
   const proposals = [...(await loadProposals('NEW', 100)), ...(await loadProposals('READ', 30))];
   const botChats = await botChatsLoad;
+  const digestChatId = await digestChatLoad;
   // «Исполнители»: provider companies with the «Проверен» switch, unchecked first.
   const providers = await prisma.company.findMany({
     where: { isProvider: true },
@@ -315,7 +318,12 @@ export default async function AdminPage({ searchParams = {} }: { searchParams?: 
       </Card>
 
       <AiDecisionsCard decisions={aiDecisions} enabled={aiModerationEnabled()} />
-      <BotChatsCard chats={botChats.chats} active={botChats.active} />
+      <BotChatsCard
+        chats={botChats.chats}
+        active={botChats.active}
+        digestChatId={digestChatId}
+        digestFromEnv={channelFromEnv()}
+      />
 
       <Card className="flex scroll-mt-24 flex-col gap-3" id="comments">
         <div>

@@ -1,6 +1,8 @@
 // «Приветствие перед входом» (owner, 2026-10-17): two paths before signing up
 // — «Мне нужна техника» (a customer) and «У меня есть техника» (a provider).
-// The same texts are in the app (apps/mobile/src/lib/welcome.ts).
+// The same texts are in the app (apps/mobile/src/lib/welcome.ts). Both end
+// with the platform's promise (SITE.promise, owner 2026-10-17).
+import { SITE } from './site';
 
 export type AccountType = 'CUSTOMER' | 'PROVIDER';
 
@@ -19,14 +21,14 @@ export const WELCOME_PATHS: readonly WelcomePath[] = [
     accountType: 'CUSTOMER',
     role: 'customer',
     title: 'Мне нужна техника',
-    text: 'Разместите заявку: что, где и на какую дату. Исполнители рядом сами пришлют цены — выберете лучшую. Бесплатно.',
+    text: `Разместите заявку: что, где и на какую дату. Исполнители рядом сами пришлют цены — выберете подходящую. ${SITE.promise}.`,
     action: 'Заказать технику',
   },
   {
     accountType: 'PROVIDER',
     role: 'provider',
     title: 'У меня есть техника',
-    text: 'Зарегистрируйтесь один раз, выйдите на линию с машиной — заявки рядом приходят сами. Бесплатно, без комиссии.',
+    text: `Зарегистрируйтесь один раз, выйдите на линию с машиной — заявки рядом приходят сами, цену называете вы. ${SITE.promise}.`,
     action: 'Встать на линию',
   },
 ];

@@ -92,6 +92,52 @@ type Queued = { line: Line; radio: boolean; volume: number };
 
 const wait = (ms: number) => new Promise<void>((resolve) => window.setTimeout(resolve, ms));
 
+// ---- Prefetch: the sound is ready before the first touch ---------------------
+// Browsers allow no sound before the visitor's first gesture, so the files are
+// downloaded while the page is looked at (SoundDirector, at idle) and decoded
+// at the first touch: the opening sting and the music start at once instead
+// of after a download (owner, 2026-10-17: «звук должен быть первым»).
+
+/** The site bed of this visit, chosen once so the prefetch and startBeds agree. */
+const SITE_BED: SampleName = SITE_BEDS[Math.floor(Math.random() * SITE_BEDS.length)]!;
+
+/** What the first touch plays: the sting, the interface cues and the three beds. */
+export const FIRST_SOUNDS: readonly SampleName[] = [
+  ...CUE_SAMPLES.boom,
+  ...CUE_SAMPLES.whoosh,
+  ...CUE_SAMPLES.click,
+  ...CUE_SAMPLES.thunk,
+  MUSIC_BED,
+  SITE_BED,
+  CITY_BED,
+];
+
+const prefetched = new Map<SampleName, Promise<{ data: ArrayBuffer } | null>>();
+
+function sampleFormats(): string[] {
+  const probe = document.createElement('audio');
+  return probe.canPlayType('audio/webm; codecs=opus') !== '' ? ['webm', 'mp3'] : ['mp3'];
+}
+
+async function download(name: SampleName): Promise<{ data: ArrayBuffer } | null> {
+  for (const ext of sampleFormats()) {
+    try {
+      const res = await fetch(`/audio/${name}.${ext}`);
+      if (res.ok) return { data: await res.arrayBuffer() };
+    } catch {
+      /* try the next format */
+    }
+  }
+  return null;
+}
+
+/** Downloads (never plays) the given recordings; safe to call before any gesture. */
+export function prefetchSamples(names: readonly SampleName[] = FIRST_SOUNDS): void {
+  for (const name of names) {
+    if (!prefetched.has(name)) prefetched.set(name, download(name));
+  }
+}
+
 type SourceOptions = { gain?: number; rate?: number; pan?: number; when?: number; offset?: number };
 
 type Voice = { source: AudioBufferSourceNode; gain: GainNode; type: MachineType };
@@ -280,23 +326,15 @@ export class SoundEngine {
     return this.cached(key, () => this.fetchClip(url));
   }
 
-  /** A recording from /public/audio: Opus first, MP3 where Opus fails. */
+  /** A recording from /public/audio: Opus first, MP3 where Opus fails (prefetched when it can be). */
   private sample(name: SampleName) {
     return this.cached(`file:${name}`, async () => {
-      const probe = document.createElement('audio');
-      const opus = probe.canPlayType('audio/webm; codecs=opus') !== '';
-      const order = opus ? ['webm', 'mp3'] : ['mp3'];
-      for (const ext of order) {
-        try {
-          const res = await fetch(`/audio/${name}.${ext}`);
-          if (!res.ok) continue;
-          const data = await res.arrayBuffer();
-          return await this.ctx.decodeAudioData(data);
-        } catch {
-          /* try the next format */
-        }
-      }
-      return null;
+      // A prefetched file is used once (decoding detaches its buffer, and the
+      // compressed copy is not kept); a failed prefetch is downloaded again.
+      const early = prefetched.get(name);
+      prefetched.delete(name);
+      const file = (early && (await early)) ?? (await download(name));
+      return file ? await this.ctx.decodeAudioData(file.data) : null;
     });
   }
 
@@ -344,16 +382,17 @@ export class SoundEngine {
     this.music.gain.cancelScheduledValues(now);
     this.site.gain.cancelScheduledValues(now);
     this.natureBus.gain.cancelScheduledValues(now);
-    // Slow fades in: the sound arrives like a door opening onto the yard.
-    this.music.gain.setTargetAtTime(LEVEL.music, now, 2);
-    this.site.gain.setTargetAtTime(LEVEL.site, now, 1.5);
-    this.natureBus.gain.setTargetAtTime(LEVEL.nature, now, 0.8);
+    // Quick fades in: the sound is there with the first touch (owner,
+    // 2026-10-17), just without a click.
+    this.music.gain.setTargetAtTime(LEVEL.music, now, 0.4);
+    this.site.gain.setTargetAtTime(LEVEL.site, now, 0.35);
+    this.natureBus.gain.setTargetAtTime(LEVEL.nature, now, 0.3);
     // The small interface cues come along (a few KB each), so the first press
     // is heard at once.
     for (const name of [...CUE_SAMPLES.click, ...CUE_SAMPLES.thunk, ...CUE_SAMPLES.whoosh]) {
       void this.sample(name);
     }
-    const bedName = SITE_BEDS[Math.floor(Math.random() * SITE_BEDS.length)]!;
+    const bedName = SITE_BED;
     const [music, bed, city] = await Promise.all([
       this.sample(MUSIC_BED),
       this.sample(bedName),

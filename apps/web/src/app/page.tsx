@@ -226,6 +226,10 @@ const HOME_FAQ = [
     a: `Исполнители со своей техникой и машинистами, включая парк ${SITE.name} — он первый в списке. Заявку видят все, каждый называет свою цену, вы выбираете. Для заказчика сервис бесплатный.`,
   },
   {
+    q: 'Сколько берёт площадка?',
+    a: `Ничего: ${SITE.promise.toLowerCase()}. ${SITE.promiseDetail} ${SITE.name} зарабатывает как любой исполнитель — работой своей техники, а ещё продаёт строительные материалы.`,
+  },
+  {
     q: 'Работаете с юридическими лицами?',
     a: `${SITE.name} — да: договор, оплата по безналу с НДС, закрывающие документы, в том числе через ЭДО. Условия других исполнителей — в их предложениях.`,
   },
@@ -279,17 +283,17 @@ export default async function HomePage() {
               className="float-in mt-3 max-w-xl text-base leading-snug text-slate-300 sm:hidden"
               style={{ animationDelay: '240ms' }}
             >
-              Одна заявка — предложения от исполнителей, включая парк {SITE.name} (
-              {fromPerHour(MIN_RATE)}). Вы выбираете лучшее, сервис бесплатный.
+              Одна заявка — цены исполнителей, включая парк {SITE.name} ({fromPerHour(MIN_RATE)}).{' '}
+              {SITE.promise}.
             </p>
             <p
               className="float-in mt-6 hidden max-w-xl text-lg leading-relaxed text-slate-300 sm:block"
               style={{ animationDelay: '240ms' }}
             >
               Экскаваторы-погрузчики, автокраны и погрузчики с машинистами по всей России.
-              Разместите заявку — исполнители рядом с вами пришлют цены, вы выберете лучшее; или
+              Разместите заявку — исполнители рядом с вами пришлют цены, вы выберете подходящее; или
               оставьте телефон — подберёт диспетчер. Парк {SITE.name} в Набережных Челнах —{' '}
-              {fromPerHour(MIN_RATE)}, с НДС. Сервис бесплатный.
+              {fromPerHour(MIN_RATE)}, с НДС. {SITE.promiseLine}
             </p>
             {/* Owner, 2026-10-03: order, estimate and design as real buttons,
                 «Заказать технику» the biggest and brightest; then the phone and
@@ -357,7 +361,13 @@ export default async function HomePage() {
               </a>
             </nav>
             <p className="float-in mt-5 text-sm text-slate-400" style={{ animationDelay: '480ms' }}>
-              Цены исполнителей · Машинист на каждой машине · Бесплатно для заказчика
+              Цены исполнителей · Машинист на каждой машине ·{' '}
+              <a
+                href={SITE.promiseHref}
+                className="underline-offset-2 hover:text-white hover:underline"
+              >
+                Расчёт напрямую с исполнителем
+              </a>
             </p>
           </div>
         </div>
@@ -535,7 +545,7 @@ export default async function HomePage() {
             <p className="mt-4 text-slate-600">
               {SITE.platform} — сервис заказа спецтехники по всей России: исполнители со своей
               техникой рядом с вашим объектом и парк {SITE.name} в Набережных Челнах. Заявку видят
-              все, вы выбираете цену и машину. Для заказчика — бесплатно.
+              все, вы выбираете цену и машину. {SITE.promise}.
             </p>
           </Reveal>
         </div>

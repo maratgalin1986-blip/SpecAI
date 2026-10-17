@@ -7,7 +7,7 @@ vi.mock('../client', () => ({
   getAnthropicClient: () => ({ messages: { stream: streamMock } }),
 }));
 
-import { streamAssistantReply, replyToCustomer } from '../assistant';
+import { ASSISTANT_SYSTEM_PROMPT, streamAssistantReply, replyToCustomer } from '../assistant';
 import { SEARCH_EQUIPMENT_TOOL_NAME } from '../assistantTools';
 
 type Block =
@@ -216,5 +216,14 @@ describe('streamAssistantReply', () => {
     const result = await replyToCustomer([{ role: 'user', content: 'Работаете?' }]);
 
     expect(result.text).toBe('Да.');
+  });
+});
+
+describe('ASSISTANT_SYSTEM_PROMPT', () => {
+  it('carries the platform promise and its honest detail (owner, 2026-10-17)', () => {
+    expect(ASSISTANT_SYSTEM_PROMPT).toContain('«Бесплатно и без посредников»');
+    expect(ASSISTANT_SYSTEM_PROMPT).toContain('расчёт — напрямую с ним');
+    expect(ASSISTANT_SYSTEM_PROMPT).toContain('площадка не берёт процент');
+    expect(ASSISTANT_SYSTEM_PROMPT).not.toContain('${');
   });
 });

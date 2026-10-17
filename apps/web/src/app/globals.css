@@ -1515,6 +1515,23 @@ html[data-install-hint] .chat-fab {
   background-color: rgb(255 255 255 / 0.18);
 }
 
+/* «Бесплатно · без посредников» under the logo: quiet, low contrast. */
+.promise-pill {
+  color: rgb(6 95 70); /* emerald-800 */
+  background-color: rgb(236 253 245 / 0.9); /* emerald-50 */
+  box-shadow: inset 0 0 0 1px rgb(167 243 208); /* emerald-200 */
+  transition:
+    background-color 0.2s,
+    color 0.2s;
+}
+.promise-pill:hover {
+  background-color: rgb(209 250 229); /* emerald-100 */
+}
+.site-header-vt[data-dark='true'] .promise-pill {
+  background-color: rgb(255 255 255 / 0.1);
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.2);
+}
+
 /* cinema content */
 
 /* CinemaBand: letterbox bars open once when the band scrolls into view, the

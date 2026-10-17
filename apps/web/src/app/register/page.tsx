@@ -3,11 +3,13 @@
 import { useEffect, useState } from 'react';
 import { signIn } from 'next-auth/react';
 import { Button, Card } from '@specai/ui';
+import { PromiseNote } from '@/components/PromiseNote';
 import { CinemaBackdrop } from '@/components/CinemaHero';
 import { BasePicker, type BaseValue } from '@/components/BasePicker';
 import { ConsentText } from '@/components/ConsentText';
 import { Hint } from '@/components/Hint';
 import { noteInstallMoment } from '@/lib/installHint';
+import { NEWS_CONSENT_LABEL } from '@/lib/newsConsent';
 import { normalizeReferralCode } from '@/lib/referral';
 import { useHydrated } from '@/lib/useHydrated';
 import { accountTypeFromQuery, WELCOME_PATHS, type AccountType } from '@/lib/welcome';
@@ -34,6 +36,8 @@ export default function RegisterPage() {
   // 152-ФЗ ст. 10.1: a provider's card (name, base address and point, machines)
   // is public, which needs a consent to distribution separate from `consent`.
   const [publicConsent, setPublicConsent] = useState(false);
+  // The weekly newsletter (ФЗ «О рекламе» ст. 18): optional and unticked.
+  const [newsConsent, setNewsConsent] = useState(false);
   const [base, setBase] = useState<BaseValue>({ address: '', lat: null, lon: null });
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -72,6 +76,7 @@ export default function RegisterPage() {
         ...(phone ? { phone } : {}),
         ...(referralCode ? { ref: referralCode } : {}),
         consent,
+        newsConsent,
       }),
     });
 
@@ -99,7 +104,7 @@ export default function RegisterPage() {
       <Card className="cine-sub shadow-2xl">
         <h1 className="cine-title mb-1 text-xl font-bold">Создать аккаунт</h1>
         <p className="mb-4 text-sm text-slate-600">
-          Что вам нужно? Всё бесплатно: регистрация, заявки и выход на линию.
+          Что вам нужно? Регистрация, заявки и выход на линию — бесплатно для обеих ролей.
         </p>
         {referralCode && (
           <p className="mb-4 rounded-md bg-signal-50 px-3 py-2 text-sm text-graphite-800">
@@ -241,6 +246,15 @@ export default function RegisterPage() {
               </span>
             </label>
           )}
+          <label className="flex items-start gap-2 text-xs text-slate-600">
+            <input
+              type="checkbox"
+              checked={newsConsent}
+              onChange={(e) => setNewsConsent(e.target.checked)}
+              className="mt-0.5"
+            />
+            <span>{NEWS_CONSENT_LABEL}</span>
+          </label>
           <p className="text-xs text-slate-500">
             Создавая аккаунт, вы принимаете{' '}
             <a href="/pravila" className="underline" target="_blank">
@@ -265,6 +279,7 @@ export default function RegisterPage() {
           <Button type="submit" disabled={!hydrated || isSubmitting}>
             {isSubmitting ? 'Создание аккаунта…' : 'Создать аккаунт'}
           </Button>
+          <PromiseNote />
         </form>
         <p className="mt-4 text-sm text-slate-500">
           Уже есть аккаунт?{' '}

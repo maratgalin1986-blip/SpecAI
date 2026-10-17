@@ -139,6 +139,41 @@ export function createBotDb() {
 
   const bid = { count: async () => state.bids };
 
+  // Only what onChatMigrated touches: the pick of the daily post (lib/channelTarget.ts).
+  const settings = new Map<string, string>();
+  const appSetting = {
+    findUnique: async ({ where }: { where: { key: string } }) => {
+      const value = settings.get(where.key);
+      return value === undefined ? null : { key: where.key, value };
+    },
+    upsert: async ({
+      where,
+      create,
+      update,
+    }: {
+      where: { key: string };
+      create: { key: string; value: string };
+      update: { value?: string };
+    }) => {
+      const value = settings.has(where.key)
+        ? (update.value ?? settings.get(where.key)!)
+        : create.value;
+      settings.set(where.key, value);
+      return { key: where.key, value };
+    },
+    updateMany: async ({
+      where,
+      data,
+    }: {
+      where: { key: string; value: string };
+      data: { value: string };
+    }) => {
+      if (settings.get(where.key) !== where.value) return { count: 0 };
+      settings.set(where.key, data.value);
+      return { count: 1 };
+    },
+  };
+
   // An interactive transaction: a throw rolls both tables back.
   const snapshot = (map: Map<string, Row>) => new Map([...map].map(([k, v]) => [k, { ...v }]));
   const restore = (map: Map<string, Row>, saved: Map<string, Row>) => {
@@ -156,16 +191,18 @@ export function createBotDb() {
       throw error;
     }
   }
-  const client = { botChat, botReply, bid };
+  const client = { botChat, botReply, bid, appSetting };
 
   return {
     prisma: { ...client, $transaction },
+    settings,
     chats,
     replies,
     state,
     reset() {
       chats.clear();
       replies.clear();
+      settings.clear();
       state.bids = 0;
     },
   };

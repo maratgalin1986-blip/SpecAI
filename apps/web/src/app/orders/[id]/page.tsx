@@ -41,7 +41,7 @@ import { Hint } from '@/components/Hint';
 import { CUSTOMER_MODE_HREF } from '@/lib/cabinetMode';
 import { OrderPublicView } from '@/components/OrderPublicView';
 import { ShareButtons } from '@/components/ShareButtons';
-import { orderCardText, orderShareText } from '@/lib/orderCard';
+import { orderCardText, orderShareText, orderShareTitle } from '@/lib/orderCard';
 import { siteUrl } from '@/lib/siteUrl';
 
 export const dynamic = 'force-dynamic';
@@ -72,7 +72,7 @@ export async function generateMetadata({ params }: { params: { id: string } }): 
     location: order.location,
     desiredStartDate: order.desiredStartDate,
   });
-  const description = 'Исполнители со своей техникой присылают цены, заказчик выбирает.';
+  const description = `Исполнители со своей техникой присылают цены, заказчик выбирает. ${SITE.promise}.`;
   return {
     title: `Заявка · ${order.category?.name ?? 'любая техника'} · ${msk(order.desiredStartDate)}`,
     description,
@@ -171,6 +171,12 @@ export default async function OrderDetailPage({ params }: { params: { id: string
     },
     order.id,
   );
+  // «Поделиться заявкой»: the kind, the city and the day only (lib/orderCard.ts).
+  const shareCard = {
+    categoryName: order.category?.name,
+    location: order.location,
+    desiredStartDate: order.desiredStartDate,
+  };
   // The house bid leads the list (houseFirst), so the cheapest is not always first.
   const cheapest =
     visibleBids.length > 1 ? Math.min(...visibleBids.map((bid) => Number(bid.price))) : null;
@@ -264,11 +270,8 @@ export default async function OrderDetailPage({ params }: { params: { id: string
         // a work chat. The link previews as the card (opengraph-image.tsx).
         <ShareButtons
           url={`${siteUrl()}/orders/${encodeURIComponent(order.id)}`}
-          text={orderShareText({
-            categoryName: order.category?.name,
-            location: order.location,
-            desiredStartDate: order.desiredStartDate,
-          })}
+          text={orderShareText(shareCard)}
+          title={orderShareTitle(shareCard)}
           label="Поделиться заявкой"
         />
       )}

@@ -8,6 +8,7 @@
 // Pure functions, safe for client components and tests.
 import { publicCity } from './activity';
 import { withShareUtm } from './share';
+import { SITE } from './site';
 
 export interface OrderCardInput {
   categoryName?: string | null;
@@ -135,9 +136,17 @@ export function orderShareUrl(base: string, orderId: string, source = 'share', m
   return withShareUtm(`${base}/orders/${encodeURIComponent(orderId)}`, source, medium);
 }
 
-/** «Помогите найти технику: нужен автокран · Елабуга · 20 октября». */
-export function orderShareText(input: OrderCardInput): string {
+/** «Помогите найти технику: нужен автокран · Елабуга · 20 октября» (the share sheet title). */
+export function orderShareTitle(input: OrderCardInput): string {
   return `Помогите найти технику: ${lowerFirst(orderCardText(input).line)}`;
+}
+
+/**
+ * «Помогите найти технику: нужен автокран · Елабуга · 20 октября. Заявка на
+ * ИИСтройка24: бесплатно и без посредников» — the order, then the promise.
+ */
+export function orderShareText(input: OrderCardInput): string {
+  return `${orderShareTitle(input)}. Заявка на ${SITE.platform}: ${SITE.promise.toLowerCase()}`;
 }
 
 export interface OrderOgText {
@@ -151,6 +160,8 @@ export interface OrderOgText {
   /** «Ждёт предложений» and the like, or null for the generic card. */
   status: string | null;
   brand: string;
+  /** The platform's promise for the corner of the card: «Бесплатно и без посредников». */
+  promise: string;
 }
 
 const OG_STATUS: Record<string, string> = {
@@ -178,6 +189,7 @@ export function orderOgText(
       details: null,
       status: null,
       brand,
+      promise: SITE.promise,
     };
   }
   const card = orderCardText(order);
@@ -188,5 +200,6 @@ export function orderOgText(
     details: [card.city, card.date].filter(Boolean).join(' · '),
     status,
     brand,
+    promise: SITE.promise,
   };
 }

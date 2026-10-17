@@ -1,4 +1,5 @@
 import { HOUSE_COMPANY_ID, prisma } from '@specai/database';
+import { newsletterAdminCounts } from './newsletterData';
 import { todayStartMsk } from './providerFeed';
 
 /**
@@ -33,6 +34,8 @@ export interface AdminStats {
   moderation: { reviews: number; comments: number };
   /** New messages in «Предложения и партнёрство». */
   proposals: number;
+  /** «Заявки рядом за неделю»: subscribers now, letters sent in 7 days. */
+  newsletter: { subscribers: number; sentWeek: number };
   generatedAt: string;
 }
 
@@ -75,6 +78,7 @@ export async function loadAdminStats(now: Date = new Date()): Promise<AdminStats
     reviews,
     comments,
     proposals,
+    newsletter,
   ] = await Promise.all([
     countSince(
       (date) => prisma.user.count({ where: { role: 'CUSTOMER', ...REAL_EMAIL, ...since(date) } }),
@@ -96,6 +100,7 @@ export async function loadAdminStats(now: Date = new Date()): Promise<AdminStats
     prisma.comment.count({ where: { status: 'PENDING' } }),
     // A counter must not take the whole summary down (e.g. before `db push`).
     prisma.proposal.count({ where: { status: 'NEW' } }).catch(() => 0),
+    newsletterAdminCounts(now).catch(() => ({ subscribers: 0, sentWeek: 0 })),
   ]);
   return {
     customers,
@@ -108,6 +113,7 @@ export async function loadAdminStats(now: Date = new Date()): Promise<AdminStats
     chatOrders,
     moderation: { reviews, comments },
     proposals,
+    newsletter,
     generatedAt: now.toISOString(),
   };
 }

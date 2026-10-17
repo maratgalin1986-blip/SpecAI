@@ -3,10 +3,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 import { CinemaVideo } from '@/components/CinemaVideo';
+import { useSoundLive } from '@/components/useSoundLive';
 import { AB_INLINE } from '@/lib/ab';
 import { SITE } from '@/lib/site';
 import { reachGoal } from '@/lib/marketing';
-import { setSoundEnabled, soundEnabled, storedSoundChoice, subscribeSound } from '@/lib/sound';
+import { setSoundEnabled, soundEnabled, startedByPress, subscribeSound } from '@/lib/sound';
 
 // Opening titles of the home page, about 6 seconds, cut like a TV channel
 // ident: light beams over a drone shot, «ООО «СпецПласт 16» представляет»,
@@ -86,6 +87,9 @@ export function IntroSplash() {
   const [done, setDone] = useState(false);
   // The visitor switched the sound off earlier: no «tap for sound» hint.
   const [soundOff, setSoundOff] = useState(false);
+  // The sound is playing (SoundDirector sets data-sound-live): until then a
+  // tap on the button must start it, not switch it off.
+  const soundLive = useSoundLive();
   const finishing = useRef(false);
   const finish = () => {
     if (finishing.current) return;
@@ -126,7 +130,8 @@ export function IntroSplash() {
       setDone(true);
       return keepFormAnchored();
     }
-    setSoundOff(!storedSoundChoice());
+    // The store, not only the saved choice: under reduced motion it starts off.
+    setSoundOff(!soundEnabled());
     const offSound = subscribeSound(() => setSoundOff(!soundEnabled()));
     markSeen();
     // A link to the form while the titles play (the header «Заказать
@@ -255,20 +260,24 @@ export function IntroSplash() {
           </nav>
         </div>
 
-        {/* Sound is off by default; this button turns it on, or off again. */}
+        {/* Sound is on by default but starts only with the first touch: until it
+            plays, this button starts it (a plain tap SoundDirector hears); once
+            it plays, it switches it off, or on again. */}
         <button
           type="button"
           onClick={(event) => {
             event.stopPropagation();
+            // This tap is the one that started the sound: nothing more to do.
+            if (startedByPress(event.currentTarget)) return;
             setSoundEnabled(soundOff);
           }}
-          // Same switch as the header one: pressing it must not wake the
-          // sound first (SoundDirector skips gestures on [data-sound-toggle]).
-          data-sound-toggle
-          aria-pressed={!soundOff}
+          // As the header switch, a press that toggles must not wake the sound
+          // first (SoundDirector skips gestures on [data-sound-toggle]).
+          data-sound-toggle={soundOff || soundLive ? '' : undefined}
+          aria-pressed={!soundOff && soundLive}
           className="intro-sound-hint absolute bottom-6 left-4 flex min-h-11 items-center gap-2 rounded-full bg-white px-4 py-2.5 text-sm font-bold text-slate-950 shadow-lg ring-1 ring-white/40 hover:bg-amber-300 sm:left-6"
         >
-          {soundOff ? '🔊 Включить звук' : '🔇 Выключить звук'}
+          {soundOff || !soundLive ? '🔊 Включить звук' : '🔇 Выключить звук'}
         </button>
         <button
           type="button"

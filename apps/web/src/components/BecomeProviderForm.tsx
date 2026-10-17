@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { BasePicker, type BaseValue } from '@/components/BasePicker';
+import { PromiseNote } from '@/components/PromiseNote';
 import { modeCookie } from '@/lib/cabinetMode';
 import { useHydrated } from '@/lib/useHydrated';
 
@@ -83,6 +84,7 @@ export function BecomeProviderForm() {
           Добавьте свою технику и получайте заявки — под этим же логином. Ваши заказы останутся
           здесь, переключаться можно в одно касание.
         </p>
+        <PromiseNote className="mt-1" />
       </div>
       {!open ? (
         <button

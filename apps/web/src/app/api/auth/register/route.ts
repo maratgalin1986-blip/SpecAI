@@ -10,6 +10,7 @@ import { resolveProviderBase, type ProviderBase } from '@/lib/providerBase';
 import { checkRateLimit } from '@/lib/rateLimit';
 import { REFERRAL_COOKIE } from '@/lib/referral';
 import { findReferrer, freeReferralCode } from '@/lib/referralStore';
+import { newsConsentFrom } from '@/lib/newsConsent';
 
 export async function POST(request: NextRequest) {
   const body = (await request.json().catch(() => null)) as {
@@ -63,6 +64,8 @@ export async function POST(request: NextRequest) {
     referralCode: await freeReferralCode(),
     ...(referrer ? { referredById: referrer.id } : {}),
   };
+  // The weekly newsletter: only a ticked box (`newsConsent: true`) subscribes.
+  const newsConsentAt = newsConsentFrom(body);
 
   // Aggregator: a provider signs up together with its company, which then
   // publishes its fleet and answers customers' orders.
@@ -81,6 +84,7 @@ export async function POST(request: NextRequest) {
           role: 'PROVIDER_ADMIN',
           companyId: company.id,
           ...referral,
+          newsConsentAt,
         },
       });
     }
@@ -92,6 +96,7 @@ export async function POST(request: NextRequest) {
         passwordHash,
         role: 'CUSTOMER',
         ...referral,
+        newsConsentAt,
       },
     });
   });

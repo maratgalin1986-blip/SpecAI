@@ -16,6 +16,7 @@ import { checkRateLimit } from '@/lib/rateLimit';
 import { SITE } from '@/lib/site';
 import { siteUrl } from '@/lib/siteUrl';
 import { telegramRequest, type TelegramResponse } from '@/lib/telegramApi';
+import { CHANNEL_CHAT_KEY, autoPickOwnersChat } from './channelTarget';
 
 /** Replies (and follow-ups) per chat: a chat must never feel spammed. */
 export const REPLY_LIMITS = { perHour: 3, perDay: 15 } as const;
@@ -77,6 +78,7 @@ export function aboutText(): string {
   return (
     `Бот ${SITE.platform} отвечает на заявки о спецтехнике ссылкой, где исполнители присылают цены. ` +
     `Не пишет в личку и не рассылает рекламу; админ чата выключает его командой /quiet.\n` +
+    `${SITE.promiseLine}\n` +
     `Подробнее: ${siteUrl()}${BOT_PAGE_PATH}`
   );
 }
@@ -385,6 +387,8 @@ export interface MyChatMemberUpdate {
   chat: TgChat;
   new_chat_member: { status: string; is_member?: boolean; can_send_messages?: boolean };
   old_chat_member: { status: string; is_member?: boolean };
+  /** Who added or removed the bot. */
+  from?: { id: number };
 }
 
 const inChat = (member: { status: string; is_member?: boolean }) =>
@@ -415,7 +419,15 @@ export async function onMyChatMember(
       update: { title, username, canWrite, removedAt: null, ...(was ? {} : { addedAt: now }) },
     });
     if (was) return 'changed';
-    await notifyTelegram(`Бот добавлен в чат: ${title ?? chatId}`);
+    const digestHere = await autoPickOwnersChat(chatId, update.from?.id).catch((error) => {
+      console.error('[telegram] could not pick the chat for the daily post', error);
+      return false;
+    });
+    await notifyTelegram(
+      digestHere
+        ? `Бот добавлен в чат: ${title ?? chatId}. Сюда каждый вечер в 19:00 по Москве будет выходить сводка заявок за сутки (изменить — /admin → «Чаты с ботом»).`
+        : `Бот добавлен в чат: ${title ?? chatId}`,
+    );
     // One short hello so members and admins know what the bot does and how
     // to switch it off; no reply-to, no notification.
     if (canWrite && isGroupChat(update.chat.type)) {
@@ -454,6 +466,11 @@ export async function onChatMigrated(oldChatId: number, newChatId: number): Prom
   await prisma.botChat.update({
     where: { chatId: String(oldChatId) },
     data: { removedAt: new Date(), canWrite: false },
+  });
+  // The owner's pick for the daily post follows the chat to its new id.
+  await prisma.appSetting.updateMany({
+    where: { key: CHANNEL_CHAT_KEY, value: String(oldChatId) },
+    data: { value: String(newChatId) },
   });
 }
 

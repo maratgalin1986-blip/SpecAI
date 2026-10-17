@@ -1,5 +1,6 @@
 import { Card } from '@specai/ui';
 import { AdminTag } from '@/components/admin/AdminUi';
+import { ChannelPickButton } from '@/components/admin/ChannelPickButton';
 import { moscowDateKey } from '@/lib/bookingRules';
 import { REPLY_LIMITS } from '@/lib/groupBot';
 
@@ -24,7 +25,19 @@ export function repliesToday(
 }
 
 /** «Чаты с ботом»: the groups whose admins added the Telegram bot (lib/groupBot.ts). */
-export function BotChatsCard({ chats, active }: { chats: BotChatRow[]; active: number }) {
+export function BotChatsCard({
+  chats,
+  active,
+  digestChatId = null,
+  digestFromEnv = false,
+}: {
+  chats: BotChatRow[];
+  active: number;
+  /** The chat picked for the daily «Заявки за сутки» post (lib/channelTarget.ts). */
+  digestChatId?: string | null;
+  /** TELEGRAM_CHANNEL_ID is set: it wins, the buttons are hidden. */
+  digestFromEnv?: boolean;
+}) {
   return (
     <Card className="flex scroll-mt-24 flex-col gap-3" id="bot-chats">
       <div>
@@ -35,6 +48,10 @@ export function BotChatsCard({ chats, active }: { chats: BotChatRow[]; active: n
           Бот отвечает под опубликованными заявками ссылкой на торги: не больше{' '}
           {REPLY_LIMITS.perHour} ответов в час и {REPLY_LIMITS.perDay} в день на чат. Админ чата
           выключает его командой /quiet — тогда бот не отвечает и не собирает заявки.
+        </p>
+        <p className="text-sm text-slate-600">
+          «Сводка заявок сюда» — в этот чат (ваш канал или группу) каждый вечер в 19:00 по Москве
+          бот публикует заявки за сутки. Выбирайте только свой чат.
         </p>
       </div>
       {chats.length === 0 && (
@@ -64,6 +81,14 @@ export function BotChatsCard({ chats, active }: { chats: BotChatRow[]; active: n
             добавлен {chat.addedAt.toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow' })} ·
             ответов сегодня: {repliesToday(chat)}
           </span>
+          {!digestFromEnv &&
+            (chat.chatId === digestChatId || (!chat.removedAt && chat.canWrite && !chat.quiet)) && (
+              <ChannelPickButton
+                chatId={chat.chatId}
+                title={chat.title ?? `Чат ${chat.chatId}`}
+                picked={chat.chatId === digestChatId}
+              />
+            )}
         </div>
       ))}
     </Card>

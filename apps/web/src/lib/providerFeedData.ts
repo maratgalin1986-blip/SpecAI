@@ -10,24 +10,30 @@ const CANDIDATES = 1000;
  * radius), and the category tree: what lib/providerFeed.ts matchIncoming needs.
  */
 export async function loadProviderMatch(companyId: string) {
-  const [company, categoryRows] = await Promise.all([
-    prisma.company.findUnique({
-      where: { id: companyId },
-      select: {
-        baseLat: true,
-        baseLon: true,
-        baseAddress: true,
-        deliveryRadiusKm: true,
-        equipment: {
-          where: { status: { not: 'RETIRED' } },
-          select: { categoryId: true },
-          distinct: ['categoryId'],
-        },
-      },
-    }),
+  const [provider, categoryRows] = await Promise.all([
+    loadProviderForMatch(companyId),
     prisma.equipmentCategory.findMany({ select: { id: true, slug: true, parentId: true } }),
   ]);
-  const provider: ProviderForMatch = {
+  return { provider, categoryRows };
+}
+
+/** The company alone (its machine types, base and radius), for matchIncoming. */
+export async function loadProviderForMatch(companyId: string): Promise<ProviderForMatch> {
+  const company = await prisma.company.findUnique({
+    where: { id: companyId },
+    select: {
+      baseLat: true,
+      baseLon: true,
+      baseAddress: true,
+      deliveryRadiusKm: true,
+      equipment: {
+        where: { status: { not: 'RETIRED' } },
+        select: { categoryId: true },
+        distinct: ['categoryId'],
+      },
+    },
+  });
+  return {
     categoryIds: company?.equipment.map((item) => item.categoryId) ?? [],
     baseLat: company?.baseLat,
     baseLon: company?.baseLon,
@@ -35,7 +41,6 @@ export async function loadProviderMatch(companyId: string) {
     baseAddress: company?.baseAddress,
     isHouse: companyId === HOUSE_COMPANY_ID,
   };
-  return { provider, categoryRows };
 }
 
 /**

@@ -3,6 +3,7 @@
 import { useId, useRef, useState } from 'react';
 import { Icon } from '@/components/Icon';
 import { SITE } from '@/lib/site';
+import { PromiseNote } from '@/components/PromiseNote';
 import { submitLead, leadErrorText } from '@/lib/submitLead';
 import { LeadSuccess } from '@/components/LeadSuccess';
 import { ConsentText } from '@/components/ConsentText';
@@ -159,6 +160,7 @@ export function QuickOrder({
             {status === 'sending' ? 'Отправляем…' : 'Жду звонка'}
             <Icon name="arrow" className="h-4 w-4 transition group-hover:translate-x-0.5" />
           </button>
+          <PromiseNote />
         </form>
       )}
     </div>

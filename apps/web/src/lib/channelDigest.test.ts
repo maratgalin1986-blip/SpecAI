@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const keys = new Map<string, Date>();
+const settings = new Map<string, string>();
 let orders: unknown[] = [];
 let orderTotal = 0;
 const findMany = vi.fn(async () => orders);
@@ -8,6 +9,20 @@ const count = vi.fn(async () => orderTotal);
 vi.mock('@specai/database', () => ({
   prisma: {
     order: { findMany, count },
+    appSetting: {
+      findUnique: vi.fn(async ({ where }: { where: { key: string } }) => {
+        const value = settings.get(where.key);
+        return value === undefined ? null : { key: where.key, value };
+      }),
+    },
+    botChat: {
+      findUnique: vi.fn(async ({ where }: { where: { chatId: string } }) => ({
+        chatId: where.chatId,
+        removedAt: null,
+        canWrite: true,
+        quiet: false,
+      })),
+    },
     adminFeedRead: {
       create: vi.fn(async ({ data }: { data: { key: string } }) => {
         if (keys.has(data.key)) throw Object.assign(new Error('unique'), { code: 'P2002' });
@@ -31,6 +46,7 @@ vi.mock('./telegramApi', () => ({ telegramApi }));
 const { CHANNEL_JOB, CHANNEL_TITLE, channelDigestText, postChannelDigest } =
   await import('./channelDigest');
 const { cronRunKey } = await import('./cronOnce');
+const { SITE } = await import('./site');
 
 const BASE = 'https://spec-ai-web.vercel.app';
 // 19:00 Moscow on 17 October; the order wants 20 October (Moscow).
@@ -54,6 +70,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  settings.clear();
   vi.unstubAllEnvs();
 });
 
@@ -72,6 +89,22 @@ describe('channelDigestText', () => {
     expect(text).toMatch(
       /Исполнители — выходите на линию в приложении: https:\/\/spec-ai-web\.vercel\.app\/register\?type=provider/,
     );
+    // The platform's promise closes every post (owner, 2026-10-17).
+    expect(text?.endsWith(`\n\n${SITE.promiseLine}`)).toBe(true);
+    expect(SITE.promiseLine).toMatch(/^Бесплатно и без посредников: цену назначает/);
+  });
+
+  it('stays well under the Telegram message limit with the promise on a full day', () => {
+    const rows = Array.from({ length: 12 }, (_, i) =>
+      row(
+        `cm${'x'.repeat(23)}${i}`,
+        'Снегоуборочная техника и коммунальные машины',
+        'Петропавловск-Камчатский',
+      ),
+    );
+    const text = channelDigestText(rows, BASE, 40) ?? '';
+    expect(text).toContain(SITE.promiseLine);
+    expect(text.length).toBeLessThan(4096 - 500);
   });
 
   it('is null on a day without orders — never filler', () => {
@@ -143,6 +176,14 @@ describe('postChannelDigest', () => {
     expect(await postChannelDigest(NOW)).toEqual({ skipped: 'preview' });
     expect(telegramApi).not.toHaveBeenCalled();
     expect(keys.size).toBe(0);
+  });
+
+  it('posts to the chat picked in /admin when the variable is not set', async () => {
+    vi.stubEnv('TELEGRAM_CHANNEL_ID', '');
+    settings.set('channel.chatId', '-1001234');
+    orders = [row('o1', 'Автокраны', 'Елабуга')];
+    expect(await postChannelDigest(NOW)).toEqual({ posted: 1 });
+    expect(telegramApi.mock.calls[0]?.[1]).toMatchObject({ chat_id: '-1001234' });
   });
 
   it('releases the day when Telegram rejects the post, so a retry can send it', async () => {

@@ -54,7 +54,9 @@ describe('orderShare', () => {
         'http://192.168.1.5:3000',
       ),
     ).toBe(
-      `Помогите найти технику: автокраны · Елабуга · 20 октября\n${PRODUCTION_SITE_URL}/orders/abc?utm_source=app&utm_medium=share`,
+      'Помогите найти технику: автокраны · Елабуга · 20 октября. ' +
+        'Заявка на ИИСтройка24: бесплатно и без посредников\n' +
+        `${PRODUCTION_SITE_URL}/orders/abc?utm_source=app&utm_medium=share`,
     );
   });
 });
