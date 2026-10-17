@@ -4,6 +4,7 @@
 // providerMap.ts and are unit-tested there.
 
 import { GEOCODER_UNAVAILABLE_MESSAGE, inServiceArea, lookupAddress } from './geo';
+import { addressVariants } from './addressVariants';
 import {
   BASE_OUTSIDE_MESSAGE,
   BASE_REQUIRED_MESSAGE,
@@ -24,41 +25,7 @@ function cleanAddress(value: unknown): string {
   return typeof value === 'string' ? value.replace(/\s+/g, ' ').trim().slice(0, 200) : '';
 }
 
-// `\b` knows only Latin letters, so the boundaries are spelled out.
-const ABBREVIATIONS: [RegExp, string][] = [
-  [/(?<![\p{L}-])(?:пр-т|просп\.|пр\.)(?=\s)/giu, 'проспект'],
-  [/(?<![\p{L}-])ул\.(?=\s)/giu, 'улица'],
-  [/(?<![\p{L}-])пер\.(?=\s)/giu, 'переулок'],
-  [/(?<![\p{L}-])(?:б-р|бул\.)(?=\s)/giu, 'бульвар'],
-  [/(?<![\p{L}-])ш\.(?=\s)/giu, 'шоссе'],
-  [/(?<![\p{L}-])д\.\s*(?=\d)/giu, ''],
-  [/(?<![\p{L}-])г\.\s*(?=\p{Lu})/giu, ''],
-];
-
-/** «пр. Мира 10» → «проспект Мира 10»; without a city the republic is added. */
-export function addressVariants(address: string): string[] {
-  const expanded = ABBREVIATIONS.reduce(
-    (text, [pattern, word]) => text.replace(pattern, word),
-    address,
-  )
-    .replace(/\s+/g, ' ')
-    .trim();
-  // Without a city the bare street matches anywhere in Russia («пр. Мира 10»
-  // is a проезд in Armavir), so the Набережные Челны variant goes first; the
-  // caller takes the first variant that lands in the service area.
-  const namesCity =
-    /татарстан|челны|казан|елабуг|нижнекамск|альметьевск|менделеевск|заинск|бугульм/iu.test(
-      expanded,
-    );
-  // An address with a comma most likely names its own town (outside the
-  // list too, e.g. Москва): never move it to Набережные Челны first.
-  const variants =
-    namesCity || address.includes(',')
-      ? [address, expanded]
-      : [`${expanded}, Набережные Челны`, expanded, address];
-  variants.push(`${expanded}, Республика Татарстан`);
-  return [...new Set(variants)];
-}
+export { addressVariants } from './addressVariants';
 
 export async function resolveProviderBase(input: {
   baseAddress?: unknown;

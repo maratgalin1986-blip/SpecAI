@@ -41,8 +41,9 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
 
 /**
  * Takes the machine off the calendar for a range of days (both inclusive).
- * Refused when a confirmed or active booking already holds one of the days;
- * pending requests are left to the provider to decline.
+ * Refused when another block already covers one of the days (409) or a
+ * confirmed or active booking holds one; pending requests are left to the
+ * provider to decline.
  */
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
   const machine = await ownMachine(request, params.id);
@@ -62,11 +63,18 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
   }
   const result = await prisma.$transaction(async (tx) => {
     await lockEquipment(tx, machine.id);
-    const same = await tx.equipmentBlock.findFirst({
-      where: { equipmentId: machine.id, from: { lte: from }, to: { gte: to } },
-      select: { id: true },
+    // Any overlap with an existing block, not only a range inside one: two
+    // blocks on the same days would show twice in the calendar.
+    const overlapping = await tx.equipmentBlock.findFirst({
+      where: { equipmentId: machine.id, from: { lte: to }, to: { gte: from } },
+      select: { from: true, to: true },
     });
-    if (same) return { error: 'Эти дни уже закрыты' } as const;
+    if (overlapping) {
+      const day = (date: Date) => date.toLocaleDateString('ru-RU', { timeZone: BOOKING_TIME_ZONE });
+      return {
+        error: `Эти дни уже закрыты (${day(overlapping.from)} – ${day(overlapping.to)})`,
+      } as const;
+    }
     const booked = await findOverlappingBooking(tx, {
       equipmentId: machine.id,
       startDate: from,

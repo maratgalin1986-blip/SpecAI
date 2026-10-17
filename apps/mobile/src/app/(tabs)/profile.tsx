@@ -11,10 +11,10 @@ import { SITE } from '@/lib/site';
 import { colors, spacing } from '@/lib/theme';
 
 const ROLE_LABELS: Record<UserRole, string> = {
-  CUSTOMER: 'Клиент',
+  CUSTOMER: 'Заказчик',
   PROVIDER_ADMIN: 'Исполнитель',
   PROVIDER_OPERATOR: 'Машинист',
-  ADMIN: 'Администратор',
+  PLATFORM_ADMIN: 'Администратор платформы',
 };
 
 export default function ProfileScreen() {

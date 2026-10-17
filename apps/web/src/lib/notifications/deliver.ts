@@ -4,6 +4,7 @@
 import { escapeHtml, type EmailTemplate } from '../emailTemplates';
 import type { DeliveryResult } from './adapters';
 import {
+  coveredByOwnerTelegram,
   phoneDigits,
   pickChannels,
   plainText,
@@ -33,6 +34,12 @@ export interface DeliverDeps {
   send: Senders;
   /** Called with push tokens Expo reported as gone. */
   onInvalidPushTokens?: (tokens: string[]) => Promise<unknown> | unknown;
+  /**
+   * TELEGRAM_CHAT_ID — the owner's chat that lib/notify.ts already alerts
+   * about new orders, relayed bids and comments. A recipient who linked that
+   * chat gets no second Telegram copy of those (routing.ts coveredByOwnerTelegram).
+   */
+  ownerTelegramChatId?: string | null;
 }
 
 export interface DeliverOptions {
@@ -68,6 +75,9 @@ export async function deliver(
   const message = renderNotification(event);
   let channels = pickChannels(prefs, recipient, deps.server);
   if (options.only) channels = channels.filter((channel) => options.only!.includes(channel));
+  if (coveredByOwnerTelegram(event, recipient, deps.ownerTelegramChatId)) {
+    channels = channels.filter((channel) => channel !== 'telegram');
+  }
 
   const send = async (channel: Channel): Promise<DeliveryResult> => {
     switch (channel) {

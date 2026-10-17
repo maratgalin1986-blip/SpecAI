@@ -23,6 +23,12 @@ describe('addressVariants', () => {
     expect(variants).toContain('пр. Мира 10');
   });
 
+  it('tries Набережные Челны first for a street with a comma but no town', () => {
+    expect(addressVariants('пр-т Мира, 10')[0]).toBe('проспект Мира, 10, Набережные Челны');
+    expect(addressVariants('Москва, Тверская 3')[0]).toBe('Москва, Тверская 3');
+    expect(addressVariants('ул Мира 10')[0]).toBe('улица Мира 10, Набережные Челны');
+  });
+
   it('keeps a full address as is and only appends the republic', () => {
     const variants = addressVariants('Казань, ул. Декабристов 1');
     expect(variants[0]).toBe('Казань, ул. Декабристов 1');

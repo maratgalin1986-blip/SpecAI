@@ -116,6 +116,10 @@ describe('registerSchema', () => {
       consent: true,
     });
     expect(providerWithoutCompany.success).toBe(false);
+    // A missing field names itself in Russian, not zod's «Required».
+    expect(
+      providerWithoutCompany.success ? null : providerWithoutCompany.error.issues[0]?.message,
+    ).toBe('Укажите название компании');
 
     const shortPassword = registerSchema.safeParse({
       accountType: 'CUSTOMER',

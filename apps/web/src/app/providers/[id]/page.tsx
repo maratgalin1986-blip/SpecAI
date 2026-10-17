@@ -16,6 +16,7 @@ import {
   providerMetaDescription,
   providerPath,
 } from '@/lib/providerSeo';
+import { sinceLabel } from '@/lib/providerCards';
 import { SITE } from '@/lib/site';
 import { siteUrl } from '@/lib/siteUrl';
 import { HOUSE_COMPANY_ID } from '@/lib/fleet';
@@ -142,7 +143,7 @@ export default async function ProviderPublicPage({ params }: { params: { id: str
 
       <header className="cab-dark flex flex-col gap-4 sm:p-8">
         <p className="cab-eyebrow text-signal-300">
-          {house ? 'Собственный парк СпецПласт16' : 'Исполнитель на СпецПласт16'}
+          {house ? `Собственный парк ${SITE.name}` : `Исполнитель на ${SITE.platform}`}
         </p>
         <h1 className="break-words text-3xl font-extrabold tracking-tight sm:text-5xl">
           {provider.name}
@@ -163,9 +164,7 @@ export default async function ProviderPublicPage({ params }: { params: { id: str
           </div>
           <div>
             <dt className="text-graphite-300">На сервисе</dt>
-            <dd className="font-semibold">
-              с {provider.createdAt.toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' })}
-            </dd>
+            <dd className="font-semibold">{sinceLabel(provider.createdAt)}</dd>
           </div>
         </dl>
         {provider.pinNote && (

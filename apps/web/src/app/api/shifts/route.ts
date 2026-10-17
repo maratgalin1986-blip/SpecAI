@@ -14,6 +14,7 @@ import {
   shiftToJson,
 } from '@/lib/shiftAccess';
 import { shiftDay, shiftDayWithinBooking } from '@/lib/shiftRules';
+import { SITE } from '@/lib/site';
 
 export const dynamic = 'force-dynamic';
 
@@ -64,7 +65,8 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({
     operator: { name: operator.name, active: true },
     bookings: bookings.map((booking) => ({
-      ...bookingForOperator(booking, maskContacts),
+      // No customer phone: the order's contact (guest/chat orders), else the dispatcher.
+      ...bookingForOperator(booking, maskContacts, SITE.phone),
       shifts: booking.shifts.map((shift) => shiftToJson(shift, now)),
     })),
   });

@@ -4,7 +4,7 @@
 Татарстан) на [Expo](https://expo.dev) (React Native, SDK 57, expo-router). Работает поверх
 API сайта из `apps/web`: вход и регистрация, каталог техники с поиском и пагинацией, карточка
 техники с бронированием, мои бронирования и оплата через Stripe Checkout, заявки и
-предложения поставщиков, отзывы, чат с ИИ-ассистентом, профиль, заявка на обратный звонок и
+предложения исполнителей, отзывы, чат с ИИ-ассистентом, профиль, заявка на обратный звонок и
 экран «О компании». Пакет по-прежнему называется `@specai/mobile`, slug/scheme — `specai`,
 идентификаторы `com.specai.app` (см. `app.json`); в магазинах приложение называется
 «СпецПласт16».
@@ -52,8 +52,18 @@ API сайта из `apps/web`: вход и регистрация, катало
   открывается через `expo-web-browser` (`openBrowserAsync`); после закрытия браузера список
   перечитывается. Статус оплаты приходит из `depositPaid` и `payment.status` в `GET /api/bookings`
   (его выставляет webhook Stripe, поэтому обновление может быть с задержкой).
-- **Заявки.** `GET /api/orders` — мои заявки (все статусы; `?open=1` — лента открытых заявок для поставщиков), `GET /api/orders/[id]` — заявка
-  с предложениями (`bids` с техникой и компанией) и флагом `isOwner`, `POST /api/bids/[id]/accept`.
+- **Заявки.** `GET /api/orders` — мои заявки (все статусы) постранично: `offset`/`limit`, в
+  ответе `nextOffset` (вкладка «Заявки» дозагружает по кнопке «Показать ещё» и при прокрутке;
+  без `nextOffset` показывает первую страницу); `?open=1` — лента открытых заявок для
+  исполнителей. `GET /api/orders/[id]` — заявка с предложениями (`bids` с техникой и компанией)
+  и флагом `isOwner`, `POST /api/bids/[id]/accept`. Исполнитель на чужой открытой заявке видит
+  «Предложить цену» (`BidForm`, `POST /api/orders/[id]/bids`, только свободная техника) и после
+  предложения — чат с заказчиком; уведомление о новой заявке открывает именно этот экран.
+- **Карта.** Тайлы OSM во WebView идут через кэширующий прокси сайта
+  `${API_URL}/api/tiles/{z}/{x}/{y}` (`src/lib/providersMap.ts`, zoom 6–18), как на сайте.
+- **Вход.** Точка входа `src/app/index.tsx` объявлена первым экраном корневого Stack: после
+  входа исполнитель попадает в «Ленту», машинист — в «Смены», заказчик — на главную; главная с
+  картой у исполнителя не монтируется.
 - **Восстановление пароля** — на сайте: ссылка «Забыли пароль?» открывает
   `${API_URL}/forgot-password` во встроенном браузере.
 - **Монорепо.** `metro.config.js` следит за корнем репозитория и ищет модули в
@@ -150,8 +160,23 @@ npx eas build --platform all --profile production    # магазинные сб
   с доступом к команде.
 - **Google Play Console** (разовый взнос 25 $) — для публикации Android; для тестовых APK
   аккаунт не нужен. Keystore EAS генерирует и хранит сам.
-- Идентификаторы уже заданы в `app.json`: `com.specai.app` (iOS bundle id и Android package),
+- Идентификаторы уже заданы в `app.json`: `com.specai.app` (iOS bundle id) и `com.specai.specai` (Android package, как в проекте Firebase `specai-dev`),
   scheme `specai`.
+
+Первая APK-сборка сделана 2026-10-15 (профиль `preview`, канал `preview`, versionCode 1,
+keystore создан и хранится на EAS): `cd apps/mobile && npx eas build --platform android
+--profile preview --non-interactive --no-wait`, затем `npx eas build:view <id> --json` до
+статуса FINISHED и ссылка `artifacts.buildUrl` на APK. Команду запускать только из
+`apps/mobile`: из корня репозитория eas-cli создаёт лишние `app.json`/`eas.json`.
+
+В APK работают фоновая геопозиция «на линии» (`src/lib/lineTask.ts`, уведомление
+«Вы на линии» пока исполнитель на линии) и push-уведомления. Для push на Android
+используется проект Firebase `specai-dev` (создан в июле 2026 с аккаунта владельца):
+`google-services.json` для пакета `com.specai.specai` лежит рядом с `app.json`. Чтобы Expo
+мог отправлять push, на expo.dev → проект specai → Credentials → Android →
+Push Notifications (FCM V1) нужно один раз загрузить ключ сервисного аккаунта из консоли
+Firebase (Project settings → Service accounts → Generate new private key). Без ключа APK
+ставится и работает, но push не приходят.
 
 Публикация: `npx eas submit --platform ios|android` после успешной production-сборки.
 Профили `preview` и `production` в `eas.json` привязаны к одноимённым каналам EAS Update,
@@ -160,7 +185,8 @@ npx eas build --platform all --profile production    # магазинные сб
 
 ## Ограничения
 
-- Регистрация в приложении — только для клиентов; аккаунт поставщика создаётся на сайте.
+- Фоновая геопозиция «на линии» работает только в APK/магазинной сборке; в Expo Go положение
+  уходит, пока приложение открыто.
 - Восстановление пароля и сама страница Stripe Checkout открываются во встроенном браузере,
   не нативно.
 - После оплаты приложение не получает push/deep link — статус «Оплачено» появляется после
@@ -213,9 +239,9 @@ npx eas build --platform all --profile production    # магазинные сб
 --message "PR #30"`; затем `npx eas update:list --branch pr-30`даёт ссылку`https://expo.dev/accounts/maratgalin1986s-team/projects/specai/updates/<group-id>`, которую
 открывают в Expo Go. Ветка `preview`остаётся для состояния`main`.
 
-## Кабинет поставщика (роль PROVIDER_ADMIN)
+## Кабинет исполнителя (роль PROVIDER_ADMIN)
 
-Вкладка «Кабинет» показывается только поставщикам: «Моя техника» (`GET /api/equipment?mine=1`)
+Вкладка «Кабинет» показывается только исполнителям: «Моя техника» (`GET /api/equipment?mine=1`)
 и «Бронирования» техники компании (`GET /api/bookings?as=provider`) с кнопками смены статуса
 (`PATCH /api/bookings/[id]`, те же переходы, что на сайте). Экран `provider/equipment/new` —
 добавление техники: фото через `expo-image-picker` → `POST /api/uploads` (multipart, Bearer),

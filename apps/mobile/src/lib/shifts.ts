@@ -142,15 +142,17 @@ export function leadingBlanks(year: number, month: number): number {
   return (new Date(Date.UTC(year, month - 1, 1)).getUTCDay() + 6) % 7;
 }
 
-/** YYYY-MM-DD в локальной зоне телефона. */
-export function dayKey(date: Date): string {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, '0');
-  const d = String(date.getDate()).padStart(2, '0');
-  return `${y}-${m}-${d}`;
-}
-
 const MSK_OFFSET_MS = 3 * 3_600_000;
+
+/**
+ * YYYY-MM-DD того дня, которым сервер считает «сегодня» — по Москве, как
+ * shift.date из /api/shifts и даты брони. Экран смен сравнивает с ним
+ * shift.date: телефон в другом часовом поясе иначе видел бы «Начать смену
+ * сегодня» рядом с уже открытой сегодняшней сменой.
+ */
+export function dayKey(date: Date): string {
+  return moscowDayKey(date);
+}
 
 /** YYYY-MM-DD по Москве — так сервер считает день смены и даты брони. */
 export function moscowDayKey(date: Date | string): string {

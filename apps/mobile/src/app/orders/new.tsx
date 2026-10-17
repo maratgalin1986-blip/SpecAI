@@ -182,7 +182,7 @@ export default function NewOrderScreen() {
           loading={submitting}
         />
         <Text style={styles.footer}>
-          Поставщики увидят заявку и предложат технику с ценой. Вы выбираете лучшее предложение.
+          Исполнители увидят заявку и предложат технику с ценой. Вы выбираете лучшее предложение.
         </Text>
       </ScrollView>
     </KeyboardAvoidingView>

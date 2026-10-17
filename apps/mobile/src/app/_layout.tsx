@@ -6,6 +6,8 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Loader } from '@/components/ui';
 import { AuthProvider, useAuth } from '@/lib/auth';
 import { usePushRegistration } from '@/lib/push';
+// Фоновая задача «на линии» регистрируется при старте приложения (и в фоне).
+import '@/lib/lineTask';
 import { colors } from '@/lib/theme';
 
 function RootNavigator() {
@@ -28,6 +30,13 @@ function RootNavigator() {
         contentStyle: { backgroundColor: colors.background },
       }}
     >
+      {/*
+        Точка входа объявлена первой: когда после входа группа (auth) исчезает,
+        навигатор открывает первый доступный экран — index разводит по ролям
+        (исполнителя — в «Ленту», машиниста — в «Смены»), и главная заказчика
+        с картой и запросом геолокации у них не монтируется.
+      */}
+      <Stack.Screen name="index" options={{ headerShown: false }} />
       <Stack.Protected guard={!isSignedIn}>
         <Stack.Screen name="(auth)" options={{ headerShown: false }} />
       </Stack.Protected>

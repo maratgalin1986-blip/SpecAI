@@ -71,6 +71,32 @@ describe('matchIncoming', () => {
     expect(matchIncoming(company, rows, noLocation, 'Москва')).toHaveLength(0);
   });
 
+  it('sorts orders with no address after those with a point or a city', () => {
+    // A base right in the city centre: an order with no location would be 0 km.
+    const centre = { ...company, baseLat: 55.7961, baseLon: 49.1064 };
+    const ids = matchIncoming(
+      centre,
+      rows,
+      [
+        { id: 'old-no-address', categoryId: 'exc', location: null },
+        { id: 'newer-no-address', categoryId: 'exc', location: null },
+        { id: 'far-point', categoryId: 'exc', location: { latitude: 55.9, longitude: 49.5 } },
+        { id: 'city-only', categoryId: 'exc', location: { city: 'Казань' } },
+        { id: 'near-point', categoryId: 'exc', location: kazan },
+      ],
+      'Казань',
+    ).map((order) => order.id);
+    // The city centre itself, the point 1 km away, the point 30 km away, then
+    // the orders with no address in their own (newest first) order.
+    expect(ids).toEqual([
+      'city-only',
+      'near-point',
+      'far-point',
+      'old-no-address',
+      'newer-no-address',
+    ]);
+  });
+
   it('keeps an unknown place for a base in that city and for the house fleet', () => {
     const bavly = { ...company, baseAddress: 'г. Бавлы, промзона' };
     expect(matchIncoming(bavly, rows, orders).map((order) => order.id)).toContain('unknown');

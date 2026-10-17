@@ -3,7 +3,7 @@ import { prisma } from '@specai/database';
 import { timesheetSubmitSchema } from '@specai/shared';
 import { getRequestUser } from '@/lib/requestUser';
 import { INVALID_JSON_MESSAGE, readJson, zodErrorMessage } from '@/lib/apiInput';
-import { notifyUser } from '@/lib/notifications/notifyUser';
+import { notifyCompany, notifyUser } from '@/lib/notifications/notifyUser';
 import { NO_ACCESS, loadBookingAccess, shiftInclude, shiftToJson } from '@/lib/shiftAccess';
 
 export const dynamic = 'force-dynamic';
@@ -68,15 +68,25 @@ export async function POST(request: NextRequest) {
     update: data,
   });
 
-  void notifyUser(access.booking.customerId, {
-    type: 'timesheet',
+  const event = {
+    type: 'timesheet' as const,
     bookingId: access.booking.id,
     equipmentName: access.booking.equipment.name,
-    step: 'submitted',
+    step: 'submitted' as const,
     hoursWorked: timesheet.hoursWorked.toString(),
-    audience: 'customer',
     note,
-  }).catch((error) => console.error('[notify] timesheet submitted failed', error));
+  };
+  void notifyUser(access.booking.customerId, { ...event, audience: 'customer' }).catch((error) =>
+    console.error('[notify] timesheet submitted failed', error),
+  );
+  // A machinist's timesheet waits for his company's confirmation too: the
+  // managers hear of it at once instead of finding it in the cabinet.
+  if (access.role === 'operator') {
+    void notifyCompany(access.booking.equipment.companyId, {
+      ...event,
+      audience: 'provider',
+    }).catch((error) => console.error('[notify] timesheet submitted (provider) failed', error));
+  }
 
   const updated = await prisma.shift.findUniqueOrThrow({
     where: { id: shift.id },

@@ -5,12 +5,40 @@ import {
   CHAT_PHONE_REVEALS_PER_DAY,
   ERASED_ORDER_DATA,
   chatOrderNote,
+  eraseBlockedByBooking,
   maskPhone,
   maskedContactFor,
+  placeInText,
   revealDecision,
   revealNote,
+  stripChatOrderNote,
   type RevealViewer,
 } from './chatOrders';
+
+describe('stripChatOrderNote', () => {
+  it('drops the removal notice and keeps the request', () => {
+    const text = `Нужен экскаватор в Бавлы завтра на 2 дня.\n\n${chatOrderNote('Стройчат Бавлы')}`;
+    expect(stripChatOrderNote(text)).toBe('Нужен экскаватор в Бавлы завтра на 2 дня.');
+    expect(stripChatOrderNote('Нужен кран на 3 дня')).toBe('Нужен кран на 3 дня');
+  });
+});
+
+describe('placeInText', () => {
+  it('finds a town after a preposition, in any form', () => {
+    expect(placeInText('Нужен экскаватор в Бавлы завтра на 2 дня')).toBe('Бавлы');
+    expect(placeInText('Срочно кран 25 т, г. Уруссу, звоните')).toBe('Уруссу');
+    expect(placeInText('ищу погрузчик в Набережные Челны на неделю')).toBe('Набережные Челны');
+    expect(placeInText('В Актаныше нужен бульдозер')).toBe('Актаныше');
+  });
+
+  it('ignores words that are not places', () => {
+    expect(placeInText('сдаю экскаватор в Аренду, в Наличии два')).toBeNull();
+    expect(placeInText('нужен кран в Понедельник, в Октябре')).toBeNull();
+    expect(placeInText('нужен кран в казань')).toBeNull();
+    expect(placeInText('')).toBeNull();
+    expect(placeInText(null)).toBeNull();
+  });
+});
 
 const PROVIDER: RevealViewer = {
   userId: 'u1',
@@ -115,6 +143,16 @@ describe('chat order note and erasure', () => {
       sourceUrl: null,
       sourceChat: null,
     });
+  });
+
+  it('erases with a pending booking, refuses a confirmed or running one', () => {
+    expect(eraseBlockedByBooking(null)).toBe(false);
+    expect(eraseBlockedByBooking(undefined)).toBe(false);
+    expect(eraseBlockedByBooking('PENDING')).toBe(false);
+    expect(eraseBlockedByBooking('CANCELLED')).toBe(false);
+    expect(eraseBlockedByBooking('COMPLETED')).toBe(false);
+    expect(eraseBlockedByBooking('CONFIRMED')).toBe(true);
+    expect(eraseBlockedByBooking('ACTIVE')).toBe(true);
   });
 });
 

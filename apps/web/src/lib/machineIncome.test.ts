@@ -1,26 +1,83 @@
 import { describe, expect, it } from 'vitest';
-import { bookingIncome, incomeByMachine } from './machineIncome';
+import { bookingDays, bookingIncome, incomeByMachine } from './machineIncome';
 
 const now = new Date('2026-10-15T12:00:00Z');
 const both = { customerConfirmedAt: now, providerConfirmedAt: now };
+const oneDay = {
+  startDate: new Date('2026-10-02T00:00:00Z'),
+  endDate: new Date('2026-10-02T00:00:00Z'),
+};
 
 describe('bookingIncome', () => {
   it('uses confirmed hours × hourly rate instead of the booking price', () => {
     expect(
-      bookingIncome({ totalPrice: '24000', timesheets: [{ hoursWorked: '7.5', ...both }] }, '3000'),
+      bookingIncome(
+        { ...oneDay, totalPrice: '24000', timesheets: [{ hoursWorked: '7.5', ...both }] },
+        '3000',
+      ),
     ).toEqual({ income: 22500, confirmedHours: 7.5 });
   });
 
   it('keeps the price without a final timesheet or an hourly rate', () => {
     expect(
       bookingIncome(
-        { totalPrice: 24000, timesheets: [{ hoursWorked: 9, customerConfirmedAt: now }] },
+        {
+          ...oneDay,
+          totalPrice: 24000,
+          timesheets: [{ hoursWorked: 9, customerConfirmedAt: now }],
+        },
         3000,
       ),
     ).toEqual({ income: 24000, confirmedHours: 0 });
     expect(
-      bookingIncome({ totalPrice: 24000, timesheets: [{ hoursWorked: 9, ...both }] }, null),
+      bookingIncome(
+        { ...oneDay, totalPrice: 24000, timesheets: [{ hoursWorked: 9, ...both }] },
+        null,
+      ),
     ).toEqual({ income: 24000, confirmedHours: 9 });
+  });
+
+  it('replaces only the confirmed days of a multi-day booking', () => {
+    // Three days at 66 000 ₽ (22 000 a day); day one confirmed at 6 h × 2 500 ₽.
+    const threeDays = {
+      startDate: new Date('2026-10-15T00:00:00Z'),
+      endDate: new Date('2026-10-17T00:00:00Z'),
+      totalPrice: '66000',
+    };
+    expect(bookingDays(threeDays)).toBe(3);
+    expect(
+      bookingIncome({ ...threeDays, timesheets: [{ hoursWorked: '6', ...both }] }, '2500'),
+    ).toEqual({ income: 15000 + 44000, confirmedHours: 6 });
+    // Two days confirmed, one still to be worked.
+    expect(
+      bookingIncome(
+        {
+          ...threeDays,
+          timesheets: [
+            { hoursWorked: '6', ...both },
+            { hoursWorked: '8', ...both },
+            { hoursWorked: '8', customerConfirmedAt: now },
+          ],
+        },
+        '2500',
+      ),
+    ).toEqual({ income: 35000 + 22000, confirmedHours: 14 });
+    // Every day confirmed: hours × rate alone.
+    expect(
+      bookingIncome(
+        {
+          ...threeDays,
+          timesheets: [
+            { hoursWorked: '6', ...both },
+            { hoursWorked: '8', ...both },
+            { hoursWorked: '8', ...both },
+          ],
+        },
+        '2500',
+      ),
+    ).toEqual({ income: 55000, confirmedHours: 22 });
+    // A booking without an end date is a one-day one.
+    expect(bookingDays({ startDate: new Date('2026-10-15T00:00:00Z') })).toBe(1);
   });
 });
 
@@ -40,6 +97,7 @@ describe('incomeByMachine', () => {
           equipmentId: 'm1',
           status: 'COMPLETED',
           startDate: new Date('2026-10-02T06:00:00Z'),
+          endDate: new Date('2026-10-02T06:00:00Z'),
           totalPrice: '24000',
           timesheets: [
             { hoursWorked: 8, ...both },
@@ -51,6 +109,7 @@ describe('incomeByMachine', () => {
           equipmentId: 'm1',
           status: 'CONFIRMED',
           startDate: new Date('2026-10-20T06:00:00Z'),
+          endDate: new Date('2026-10-20T06:00:00Z'),
           totalPrice: '10000',
           timesheets: [],
         },
@@ -59,6 +118,7 @@ describe('incomeByMachine', () => {
           equipmentId: 'm2',
           status: 'ACTIVE',
           startDate: new Date('2026-10-05T06:00:00Z'),
+          endDate: new Date('2026-10-05T06:00:00Z'),
           totalPrice: 18000,
           timesheets: [{ hoursWorked: 10, ...both }],
         },
@@ -67,6 +127,7 @@ describe('incomeByMachine', () => {
           equipmentId: 'm2',
           status: 'PENDING',
           startDate: new Date('2026-10-06T06:00:00Z'),
+          endDate: new Date('2026-10-06T06:00:00Z'),
           totalPrice: 99999,
           timesheets: [],
         },
@@ -75,6 +136,7 @@ describe('incomeByMachine', () => {
           equipmentId: 'm3',
           status: 'COMPLETED',
           startDate: new Date('2026-09-29T06:00:00Z'),
+          endDate: new Date('2026-09-29T06:00:00Z'),
           totalPrice: 50000,
           timesheets: [],
         },
@@ -83,6 +145,7 @@ describe('incomeByMachine', () => {
           equipmentId: 'unknown',
           status: 'COMPLETED',
           startDate: new Date('2026-10-10T06:00:00Z'),
+          endDate: new Date('2026-10-10T06:00:00Z'),
           totalPrice: 50000,
           timesheets: [],
         },

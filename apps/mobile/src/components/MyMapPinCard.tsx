@@ -162,7 +162,7 @@ export function MyMapPinCard() {
             onPress={() => setImage(null)}
             style={[styles.photo, styles.standard, image === null && styles.selected]}
           >
-            <Ionicons name="construct" size={26} color="#fbbf24" />
+            <Ionicons name="construct" size={26} color={colors.accent} />
           </Pressable>
           {photos.map((url) => (
             <Pressable

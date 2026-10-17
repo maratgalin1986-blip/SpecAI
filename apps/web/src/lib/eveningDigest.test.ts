@@ -58,7 +58,15 @@ describe('digestsForCompanies', () => {
           baseLon: chelny.lon,
           radiusKm: 100,
         },
-        { id: 'c2', userIds: ['u3'], categoryIds: ['crane'], baseLat: null, baseLon: null },
+        // No base coordinates: matched by the city its address names.
+        {
+          id: 'c2',
+          userIds: ['u3'],
+          categoryIds: ['crane'],
+          baseLat: null,
+          baseLon: null,
+          baseAddress: 'Набережные Челны, Промзона',
+        },
         { id: 'own', userIds: ['cust'], categoryIds: ['exc'] },
         { id: 'none', userIds: ['u4'], categoryIds: ['truck'] },
         { id: 'nobody', userIds: [], categoryIds: ['exc'] },
@@ -75,7 +83,30 @@ describe('digestsForCompanies', () => {
     ]);
   });
 
-  it('formats an item without a city', () => {
-    expect(digestItem({ categoryName: null, city: null })).toBe('техника');
+  it('names the home city for an order without an address', () => {
+    expect(digestItem({ categoryName: null, city: null })).toBe('техника, Набережные Челны');
+  });
+
+  it('tells orders apart by the excerpt and the dates', () => {
+    expect(
+      digestItem({
+        categoryName: 'Экскаваторы гусеничные',
+        city: 'Бавлы',
+        description:
+          'Нужен экскаватор, копать траншею 100 м под кабель, звоните +7 917 123-45-67.\n\nЗаявка найдена в открытом чате «Стройчат». Автор может попросить удалить её — как это сделать, сказано на странице заявки.',
+        startDate: new Date('2026-10-17T00:00:00Z'),
+        endDate: new Date('2026-10-19T00:00:00Z'),
+      }),
+    ).toBe('экскаваторы гусеничные, Бавлы, 17.10–19.10: Нужен экскаватор, копать траншею 100 м…');
+    // A one-day job shows no dates (the digest is about tomorrow anyway).
+    expect(
+      digestItem({
+        categoryName: 'Автокран',
+        city: 'Казань',
+        description: 'Поднять плиты',
+        startDate: new Date('2026-10-17T00:00:00Z'),
+        endDate: new Date('2026-10-17T00:00:00Z'),
+      }),
+    ).toBe('автокран, Казань: Поднять плиты');
   });
 });

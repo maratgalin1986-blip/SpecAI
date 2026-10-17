@@ -12,6 +12,7 @@ import {
   View,
 } from 'react-native';
 import { BidCountdown } from '@/components/BidCountdown';
+import { BidForm } from '@/components/BidForm';
 import { OfferBreakdown } from '@/components/OfferBreakdown';
 import { OrderContact } from '@/components/OrderContact';
 import {
@@ -30,12 +31,17 @@ import {
   cancelBooking,
   cancelOrder,
   fetchMyBookings,
+  fetchMyCompanyPin,
+  fetchMyEquipment,
   fetchOrderById,
   type Bid,
   type BidStatus,
   type Booking,
+  type CompanyPin,
+  type Equipment,
   type Order,
 } from '@/lib/api';
+import { useAuth } from '@/lib/auth';
 import {
   BID_STATUS_LABELS,
   BOOKING_STATUS_LABELS,
@@ -48,6 +54,7 @@ import {
   ORDER_STAGES,
   addressFromDescription,
   categoryIcon,
+  distanceKm,
   HOUSE_COMPANY_ID,
   houseFirstBids,
   orderDays,
@@ -55,6 +62,7 @@ import {
   relativeDay,
   stageHeadline,
 } from '@/lib/orderFlow';
+import { deliveryEstimate } from '@/lib/providerFeed';
 import { colors, radius, spacing, TAP, typography } from '@/theme';
 
 const BID_TONES: Record<BidStatus, BadgeTone> = {
@@ -180,10 +188,20 @@ function OfferCard({
   );
 }
 
+/** Свободная техника и база компании исполнителя — для формы «Предложить цену». */
+interface Fleet {
+  available: Equipment[];
+  pin: CompanyPin | null;
+}
+
 export default function OrderDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
+  const { user } = useAuth();
   const [order, setOrder] = useState<Order | null>(null);
+  const [fleet, setFleet] = useState<Fleet | null>(null);
+  const [fleetError, setFleetError] = useState<string | null>(null);
+  const [bidOpen, setBidOpen] = useState(false);
   const [booking, setBooking] = useState<Booking | null>(null);
   const [isOwner, setIsOwner] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -222,6 +240,35 @@ export default function OrderDetailScreen() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  // Исполнитель на чужой открытой заявке предлагает цену прямо здесь (как на
+  // сайте): уведомление о новой заявке открывает именно этот экран.
+  const viewerIsProvider = !isOwner && user?.role === 'PROVIDER_ADMIN';
+  const canBid = viewerIsProvider && order?.status === 'OPEN';
+
+  const loadFleet = useCallback(async () => {
+    setFleetError(null);
+    try {
+      const [equipmentResult, pinResult] = await Promise.allSettled([
+        fetchMyEquipment(),
+        fetchMyCompanyPin(),
+      ]);
+      if (equipmentResult.status === 'rejected') throw equipmentResult.reason;
+      setFleet({
+        // Сервер не примет занятую машину — как в ленте, только свободные.
+        available: equipmentResult.value.equipment.filter((item) => item.status === 'AVAILABLE'),
+        pin: pinResult.status === 'fulfilled' ? pinResult.value.company : null,
+      });
+    } catch (caught) {
+      setFleetError(
+        caught instanceof ApiError ? caught.message : 'Не удалось загрузить вашу технику',
+      );
+    }
+  }, []);
+
+  useEffect(() => {
+    if (canBid && fleet === null && fleetError === null) void loadFleet();
+  }, [canBid, fleet, fleetError, loadFleet]);
 
   const searching = isOwner && order?.status === 'OPEN';
   useFocusEffect(
@@ -290,6 +337,24 @@ export default function OrderDetailScreen() {
   const canCancelBooking =
     booking !== null && (booking.status === 'PENDING' || booking.status === 'CONFIRMED');
   const phone = booking?.provider?.phone ?? null;
+  const ownBid = viewerIsProvider ? order.bids.find((bid) => bid.status === 'PENDING') : undefined;
+  // Подача по расстоянию от базы × цена за км компании — подсказка в форме.
+  const base =
+    fleet?.pin && typeof fleet.pin.baseLat === 'number' && typeof fleet.pin.baseLon === 'number'
+      ? { lat: fleet.pin.baseLat, lon: fleet.pin.baseLon }
+      : null;
+  const orderLat = order.location?.latitude;
+  const orderLon = order.location?.longitude;
+  const km =
+    base && typeof orderLat === 'number' && typeof orderLon === 'number'
+      ? distanceKm(base, { lat: orderLat, lon: orderLon })
+      : null;
+  const suggestedDelivery = deliveryEstimate(km, fleet?.pin?.deliveryPricePerKm);
+
+  const handleBidSubmitted = () => {
+    setBidOpen(false);
+    void load('refresh');
+  };
 
   const confirmCancel = () => {
     const title = canCancelBooking ? 'Отменить заказ?' : 'Отменить заявку?';
@@ -470,12 +535,17 @@ export default function OrderDetailScreen() {
                   : 'Ваше предложение'}
             </SectionTitle>
             {order.bids.length === 0 ? (
-              <Card>
+              <Card style={styles.section}>
                 <Text style={styles.hint}>
                   {isOwner
                     ? 'Пока никто не предложил технику. Мы покажем предложения, как только они придут.'
-                    : 'Вы ещё не отправили предложение по этой заявке.'}
+                    : canBid
+                      ? 'Вы ещё не предложили цену. Заказчик сравнит предложения и откроет чат с выбранными исполнителями.'
+                      : 'Вы ещё не отправили предложение по этой заявке.'}
                 </Text>
+                {canBid && !bidOpen ? (
+                  <Button title="Предложить цену" onPress={() => setBidOpen(true)} />
+                ) : null}
               </Card>
             ) : (
               houseFirstBids(order.bids).map((bid) => (
@@ -499,6 +569,30 @@ export default function OrderDetailScreen() {
                 />
               ))
             )}
+            {canBid && ownBid && !bidOpen ? (
+              <Button
+                title="Изменить предложение"
+                variant="secondary"
+                onPress={() => setBidOpen(true)}
+              />
+            ) : null}
+            {canBid && bidOpen ? (
+              <Card>
+                {fleetError ? (
+                  <ErrorBanner message={fleetError} onRetry={() => void loadFleet()} />
+                ) : fleet === null ? (
+                  <ActivityIndicator color={colors.primary} />
+                ) : (
+                  <BidForm
+                    order={order}
+                    equipment={fleet.available}
+                    suggestedDelivery={suggestedDelivery}
+                    onSubmitted={handleBidSubmitted}
+                    onCancel={() => setBidOpen(false)}
+                  />
+                )}
+              </Card>
+            ) : null}
             {!isOwner && order.bids.length > 0 ? (
               <OrderChatButton
                 orderId={order.id}
@@ -506,6 +600,11 @@ export default function OrderDetailScreen() {
                 unread={order.unreadMessages}
                 variant="primary"
               />
+            ) : canBid ? (
+              // Сервер открывает переписку исполнителю только после его предложения.
+              <Text style={styles.chatHint}>
+                Чат с заказчиком откроется, как только вы предложите цену.
+              </Text>
             ) : null}
           </>
         ) : null}
@@ -600,5 +699,6 @@ const styles = StyleSheet.create({
   contactRow: { flexDirection: 'row', gap: spacing.sm },
   meta: { fontSize: 14, color: colors.textMuted },
   hint: { fontSize: 14, color: colors.textMuted, lineHeight: 20 },
+  chatHint: { fontSize: 13, color: colors.textSoft, lineHeight: 18, textAlign: 'center' },
   description: { fontSize: 16, lineHeight: 22, color: colors.text },
 });

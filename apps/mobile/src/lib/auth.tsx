@@ -1,5 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { ApiError, fetchMe, login as apiLogin, type ApiUser } from './api';
+import { ApiError, fetchMe, login as apiLogin, putLinePresence, type ApiUser } from './api';
+import { stopBackgroundLine } from './lineTask';
+import { setAppMode, setProviderOnline } from './prefs';
 import { STORAGE_KEYS, getItem, removeItem, setItem } from './storage';
 
 interface AuthContextValue {
@@ -21,12 +23,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setLoading] = useState(true);
 
   const clear = useCallback(async () => {
+    // Выход из аккаунта = уход с линии: машина снимается с карты заказчиков
+    // (пока токен ещё действует), фоновая задача останавливается, настройка
+    // «на линии» сбрасывается — следующий вход начинается офлайн.
+    await stopBackgroundLine();
+    await putLinePresence({ online: false }).catch(() => undefined);
+    setProviderOnline(false);
+    setAppMode('provider');
     setToken(null);
     setUser(null);
     await Promise.all([
       removeItem(STORAGE_KEYS.token),
       removeItem(STORAGE_KEYS.user),
       removeItem(STORAGE_KEYS.conversationId),
+      removeItem(STORAGE_KEYS.lineEquipmentId),
     ]);
   }, []);
 

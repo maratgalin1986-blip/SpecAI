@@ -4,7 +4,7 @@ import { updateProviderDocumentSchema } from '@specai/shared';
 import { INVALID_JSON_MESSAGE, readJson, zodErrorMessage } from '@/lib/apiInput';
 import { documentStatus } from '@/lib/documents';
 import { isProvider } from '@/lib/fleet';
-import { isSafeHttpUrl } from '@/lib/privacy';
+import { isHttpsUrl } from '@/lib/privacy';
 import { getRequestUser } from '@/lib/requestUser';
 
 export const dynamic = 'force-dynamic';
@@ -46,7 +46,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
       return NextResponse.json({ error: 'Можно прикрепить только свою технику' }, { status: 403 });
     }
   }
-  if (typeof data.fileUrl === 'string' && !isSafeHttpUrl(data.fileUrl)) {
+  if (typeof data.fileUrl === 'string' && !isHttpsUrl(data.fileUrl)) {
     return NextResponse.json({ error: 'Ссылка на файл должна быть https' }, { status: 400 });
   }
   if ('expiresAt' in data) {

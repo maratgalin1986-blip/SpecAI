@@ -3,18 +3,22 @@ import { prisma } from '@specai/database';
 import { getRequestUser } from '@/lib/requestUser';
 import { PUBLISHED_FLEET, isProvider } from '@/lib/fleet';
 import { loadMachineCalendar } from '@/lib/calendarStore';
-import { parseMonth } from '@/lib/occupancy';
+import { MONTH_FORMAT_MESSAGE, parseMonth } from '@/lib/occupancy';
 
 export const dynamic = 'force-dynamic';
 
 /**
  * Occupancy calendar of a machine for a month (`?month=YYYY-MM`, the current
- * one by default). The owning provider gets the bookings and blocks behind
- * the days; anyone else only sees which days are free (a published machine).
+ * one by default; an unreadable month is a 400). The owning provider gets the
+ * bookings and blocks behind the days; anyone else only sees which days are
+ * free (a published machine).
  */
 export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
   const currentUser = await getRequestUser(request);
   const period = parseMonth(request.nextUrl.searchParams.get('month'));
+  if (!period) {
+    return NextResponse.json({ error: MONTH_FORMAT_MESSAGE }, { status: 400 });
+  }
   const own = isProvider(currentUser)
     ? await prisma.equipment.findFirst({
         where: { id: params.id, companyId: currentUser.companyId },

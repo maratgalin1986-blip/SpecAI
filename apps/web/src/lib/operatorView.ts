@@ -19,11 +19,39 @@ export interface OperatorBookingView {
   siteAddress: string | null;
   /** The on-site contact phone, only while the booking is CONFIRMED or ACTIVE. */
   contactPhone: string | null;
+  /**
+   * Whose phone it is: the customer's own, the contact of the order the
+   * booking was made from (guest and chat orders), or the dispatcher's — the
+   * site phone, when the customer left none.
+   */
+  contactKind: 'customer' | 'order' | 'dispatcher' | null;
   notes: string | null;
 }
 
 export function operatorCanCallSite(bookingStatus: string): boolean {
   return (OPERATOR_CONTACT_STATUSES as readonly string[]).includes(bookingStatus);
+}
+
+/**
+ * The phone the operator calls on site: the customer's own, else the contact
+ * of the order the booking came from (guest and chat orders carry one while
+ * their technical customer account has no phone), else the dispatcher's —
+ * `fallbackPhone`, the site phone. Null when none is known.
+ */
+export function siteContactPhone(
+  booking: {
+    customer?: { phone?: string | null } | null;
+    order?: { contactPhone?: string | null } | null;
+  },
+  fallbackPhone: string | null = null,
+): { phone: string; kind: 'customer' | 'order' | 'dispatcher' } | null {
+  const customer = booking.customer?.phone?.trim();
+  if (customer) return { phone: customer, kind: 'customer' };
+  const order = booking.order?.contactPhone?.trim();
+  if (order) return { phone: order, kind: 'order' };
+  const dispatcher = fallbackPhone?.trim();
+  if (dispatcher) return { phone: dispatcher, kind: 'dispatcher' };
+  return null;
 }
 
 /** Strip a booking row to what the assigned operator may see. */
@@ -37,9 +65,14 @@ export function bookingForOperator(
     equipment: { id: string; name: string; imageUrls?: string[] };
     customer?: { phone?: string | null } | null;
     deliveryLocation?: { addressLine: string; city: string } | null;
-    order?: { location?: { addressLine: string; city: string } | null } | null;
+    order?: {
+      contactPhone?: string | null;
+      location?: { addressLine: string; city: string } | null;
+    } | null;
   },
   maskText: (text: string) => string = (text) => text,
+  /** The dispatcher's phone (the site phone) when the customer left none. */
+  fallbackPhone: string | null = null,
 ): OperatorBookingView {
   const location = booking.deliveryLocation ?? booking.order?.location ?? null;
   // The typed address often already names the city: do not repeat it.
@@ -47,6 +80,9 @@ export function bookingForOperator(
     ? location.city && !location.addressLine.toLowerCase().includes(location.city.toLowerCase())
       ? [location.addressLine, location.city].filter(Boolean).join(', ')
       : location.addressLine || location.city
+    : null;
+  const contact = operatorCanCallSite(booking.status)
+    ? siteContactPhone(booking, fallbackPhone)
     : null;
   return {
     id: booking.id,
@@ -59,7 +95,8 @@ export function bookingForOperator(
       imageUrls: booking.equipment.imageUrls ?? [],
     },
     siteAddress,
-    contactPhone: operatorCanCallSite(booking.status) ? (booking.customer?.phone ?? null) : null,
+    contactPhone: contact?.phone ?? null,
+    contactKind: contact?.kind ?? null,
     // The customer's notes may hold contacts: shown masked, as chat orders are.
     notes: booking.notes ? maskText(booking.notes) : null,
   };

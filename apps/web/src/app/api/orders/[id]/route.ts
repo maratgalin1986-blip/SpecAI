@@ -11,6 +11,8 @@ import { INVALID_JSON_MESSAGE, readJson, zodErrorMessage } from '@/lib/apiInput'
 import { unreadMessagesByOrder } from '@/lib/orderChatAccess';
 import { maskContactsAndLinks } from '@/lib/privacy';
 import { bidForCustomer, bookedProviderSees } from '@/lib/bidPrivacy';
+import { notifyCompany } from '@/lib/notifications/notifyUser';
+import { matchedOrderCancelError } from '@/lib/orderCancel';
 
 export const dynamic = 'force-dynamic';
 
@@ -142,7 +144,8 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
 
 /**
  * Заказчик отменяет свою открытую заявку: { status: 'CANCELLED' }. Ожидающие
- * предложения отклоняются. Заявку с выбранным исполнителем отменяют через бронь.
+ * предложения отклоняются, их авторы получают уведомление. Заявку с выбранным
+ * исполнителем отменяют через бронь.
  */
 export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
   const currentUser = await getRequestUser(request);
@@ -159,34 +162,57 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
   }
   const order = await prisma.order.findUnique({
     where: { id: params.id },
-    select: { id: true, customerId: true, status: true },
+    select: {
+      id: true,
+      customerId: true,
+      status: true,
+      desiredStartDate: true,
+      category: { select: { name: true } },
+      booking: { select: { status: true } },
+    },
   });
   if (!order || order.customerId !== currentUser.id) {
     return NextResponse.json({ error: 'Заявка не найдена' }, { status: 404 });
   }
-  const cancelled = await prisma.$transaction(async (tx) => {
+  const rejected = await prisma.$transaction(async (tx) => {
     const { count } = await tx.order.updateMany({
       where: { id: order.id, status: 'OPEN' },
       data: { status: 'CANCELLED' },
     });
-    if (count > 0) {
-      await tx.bid.updateMany({
-        where: { orderId: order.id, status: 'PENDING' },
-        data: { status: 'REJECTED' },
-      });
-    }
-    return count > 0;
+    if (count === 0) return null;
+    // Whose offers are being turned down: told below, once per company.
+    const pending = await tx.bid.findMany({
+      where: { orderId: order.id, status: 'PENDING' },
+      select: { equipment: { select: { name: true, companyId: true } } },
+    });
+    await tx.bid.updateMany({
+      where: { orderId: order.id, status: 'PENDING' },
+      data: { status: 'REJECTED' },
+    });
+    return pending;
   });
-  if (!cancelled) {
+  if (!rejected) {
     return NextResponse.json(
       {
         error:
           order.status === 'MATCHED'
-            ? 'Исполнитель уже выбран — отмените бронь в личном кабинете'
+            ? matchedOrderCancelError(order.booking?.status)
             : 'Заявка уже закрыта',
       },
       { status: 409 },
     );
+  }
+  // Each company whose bid waited hears of it once (its latest machine named).
+  const byCompany = new Map<string, string>();
+  for (const bid of rejected) byCompany.set(bid.equipment.companyId, bid.equipment.name);
+  for (const [companyId, equipmentName] of byCompany) {
+    void notifyCompany(companyId, {
+      type: 'order.cancelled',
+      orderId: order.id,
+      equipmentName,
+      categoryName: order.category?.name,
+      startDate: order.desiredStartDate,
+    }).catch((error) => console.error('[notify] order cancelled failed', error));
   }
   return NextResponse.json({ ok: true, message: 'Заявка отменена' });
 }

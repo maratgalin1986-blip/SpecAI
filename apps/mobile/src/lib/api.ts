@@ -122,7 +122,8 @@ export async function apiFetch<T>(path: string, options: RequestOptions = {}): P
 
 // ---- Типы ответов API (подмножество полей, которые использует приложение) ----
 
-export type UserRole = 'CUSTOMER' | 'PROVIDER_ADMIN' | 'PROVIDER_OPERATOR' | 'ADMIN';
+/** Роли как в enum UserRole на сервере (packages/database/prisma/schema.prisma). */
+export type UserRole = 'CUSTOMER' | 'PROVIDER_ADMIN' | 'PROVIDER_OPERATOR' | 'PLATFORM_ADMIN';
 
 export interface ApiUser {
   id: string;
@@ -290,7 +291,7 @@ export interface Order {
 }
 
 /**
- * Бронирование техники поставщика (GET /api/bookings?as=provider): заказчик как
+ * Бронирование техники исполнителя (GET /api/bookings?as=provider): заказчик как
  * «Анна П.»; телефон и e-mail — только после подтверждения брони.
  */
 export interface ProviderBooking extends Booking {
@@ -460,9 +461,19 @@ export function fetchCategories() {
   });
 }
 
-export function fetchMyOrders() {
-  // Без параметров роут отдаёт заявки текущего пользователя (с ?open=1 — ленту открытых).
-  return apiFetch<{ orders: Order[] }>('/api/orders');
+/**
+ * Мои заявки (все статусы), постранично: `offset`/`limit`, в ответе `nextOffset`
+ * (null или отсутствует — это последняя страница). Без параметров роут отдаёт
+ * первую страницу; с ?open=1 — ленту открытых заявок (fetchOpenOrders).
+ */
+export function fetchMyOrders(params: { offset?: number; limit?: number } = {}) {
+  const query = new URLSearchParams();
+  if (params.offset) query.set('offset', String(params.offset));
+  if (params.limit) query.set('limit', String(params.limit));
+  const suffix = query.toString();
+  return apiFetch<{ orders: Order[]; nextOffset?: number | null }>(
+    `/api/orders${suffix ? `?${suffix}` : ''}`,
+  );
 }
 
 export function fetchOrderById(id: string) {
@@ -519,7 +530,7 @@ export function sendAgentMessage(messages: { role: 'user' | 'assistant'; content
   });
 }
 
-// ---- Сторона поставщика (роль PROVIDER_ADMIN) ----
+// ---- Сторона исполнителя (роль PROVIDER_ADMIN) ----
 
 /**
  * Своя машина для формы правки: с токеном, в любом статусе и с ценами из
@@ -529,7 +540,7 @@ export function fetchMyEquipmentById(id: string) {
   return apiFetch<{ equipment: Equipment }>(`/api/equipment/${encodeURIComponent(id)}?mine=1`);
 }
 
-/** Техника компании текущего поставщика. */
+/** Техника компании текущего исполнителя. */
 export function fetchMyEquipment(params: { page?: number; pageSize?: number } = {}) {
   const search = new URLSearchParams({ mine: '1' });
   search.set('page', String(params.page ?? 1));
@@ -598,7 +609,7 @@ export async function uploadFile(file: { uri: string; name: string; type: string
 
 // ---- Карта исполнителей ----
 
-/** Точка поставщика на карте (/map) — GET/PATCH /api/companies/me. */
+/** Точка исполнителя на карте (/map) — GET/PATCH /api/companies/me. */
 export interface CompanyPin {
   id: string;
   name: string;
@@ -629,7 +640,7 @@ export function updateMyCompanyPin(input: {
 }
 
 /**
- * Открытые заявки клиентов (для предложений поставщика), постранично.
+ * Открытые заявки заказчиков (для предложений исполнителя), постранично.
  * scope 'near' — только виды техники компании в её радиусе подачи; заявки со
  * своими ожидающими предложениями сервер ставит в начало первой страницы.
  */

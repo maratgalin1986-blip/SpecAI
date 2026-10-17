@@ -14,14 +14,26 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.specai.app"
+      "bundleIdentifier": "com.specai.app",
+      "infoPlist": {
+        "UIBackgroundModes": ["location"]
+      }
     },
     "android": {
-      "package": "com.specai.app",
+      "package": "com.specai.specai",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#D97706"
-      }
+      },
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_BACKGROUND_LOCATION",
+        "FOREGROUND_SERVICE",
+        "FOREGROUND_SERVICE_LOCATION",
+        "POST_NOTIFICATIONS"
+      ],
+      "googleServicesFile": "./google-services.json"
     },
     "plugins": [
       "expo-router",
@@ -29,7 +41,10 @@
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "Геопозиция нужна, чтобы заказчики видели вашу машину на линии, а вы — технику рядом."
+          "locationWhenInUsePermission": "Геопозиция нужна, чтобы заказчики видели вашу машину на линии, а вы — технику рядом.",
+          "locationAlwaysAndWhenInUsePermission": "Фоновая геопозиция нужна, чтобы ваша машина оставалась на карте у заказчиков, пока вы на линии, даже с выключенным экраном.",
+          "isAndroidBackgroundLocationEnabled": true,
+          "isAndroidForegroundServiceEnabled": true
         }
       ],
       [
@@ -46,7 +61,15 @@
           "image": "./assets/splash-icon.png",
           "imageWidth": 160
         }
-      ]
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#D97706"
+        }
+      ],
+      "expo-task-manager"
     ],
     "extra": {
       "router": {},

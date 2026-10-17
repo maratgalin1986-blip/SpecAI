@@ -17,6 +17,7 @@ import {
   type FunnelStageId,
 } from '@/lib/adminFunnel';
 import { clipText } from '@/lib/adminFeed';
+import { capList, parseShowAll, showAllHref } from '@/lib/adminList';
 import { CloseOrderButton, CloseStaleOrdersButton } from '@/components/AdminIntegrations';
 import { PhoneLink } from '@/components/admin/PhoneLink';
 
@@ -45,6 +46,7 @@ export default async function AdminFunnelPage({ searchParams }: { searchParams: 
 
   const now = new Date();
   const period = parseFunnelPeriod(searchParams.period);
+  const showAll = parseShowAll(searchParams.all);
   // The longest period's orders plus every open order (an old one can be stuck).
   const orders = await prisma.order.findMany({
     where: {
@@ -89,6 +91,8 @@ export default async function AdminFunnelPage({ searchParams }: { searchParams: 
   const conversion = conversionToProvider(stages);
   const median = medianTimeToFirstBid(inPeriod);
   const stuck = stuckOrders(rows, now);
+  // The longest-waiting first; the first 30 on the page, «Показать ещё» for the rest.
+  const stuckList = capList(stuck, showAll);
   const stale = staleOrders(rows, now);
   const pendingReview = rows.filter((order) => order.status === 'PENDING_REVIEW').length;
   const maxCount = Math.max(1, ...stages.map((stage) => stage.count));
@@ -185,7 +189,7 @@ export default async function AdminFunnelPage({ searchParams }: { searchParams: 
           <p className="text-sm text-graphite-500">Таких заявок нет.</p>
         ) : (
           <ul className="divide-y divide-graphite-100">
-            {stuck.map(({ order, reason, hours }) => (
+            {stuckList.shown.map(({ order, reason, hours }) => (
               <li
                 key={order.id}
                 className="flex flex-col gap-1 py-2 text-sm sm:flex-row sm:items-center sm:justify-between"
@@ -230,6 +234,17 @@ export default async function AdminFunnelPage({ searchParams }: { searchParams: 
               </li>
             ))}
           </ul>
+        )}
+        {stuckList.hidden > 0 && (
+          <p className="flex flex-wrap items-center gap-3 text-sm text-graphite-600">
+            Показаны {stuckList.shown.length} из {stuckList.total}, самые давние.
+            <a
+              href={showAllHref('/admin/funnel', { period: String(period) })}
+              className="cab-action"
+            >
+              Показать ещё {stuckList.hidden}
+            </a>
+          </p>
         )}
       </section>
 

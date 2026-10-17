@@ -16,7 +16,11 @@ export function normalizeEmail(value: string): string {
 }
 
 const baseRegistration = {
-  name: z.string().trim().min(1, 'Укажите имя').max(200, 'Слишком длинное имя'),
+  name: z
+    .string({ required_error: 'Укажите имя', invalid_type_error: 'Укажите имя' })
+    .trim()
+    .min(1, 'Укажите имя')
+    .max(200, 'Слишком длинное имя'),
   email: emailSchema,
   password: z
     .string()
@@ -36,8 +40,13 @@ export type RegisterCustomerInput = z.infer<typeof registerCustomerSchema>;
 export const registerProviderSchema = z.object({
   accountType: z.literal('PROVIDER'),
   ...baseRegistration,
+  // Without `required_error` a missing field reports zod's English «Required»,
+  // which the API replaces with a generic message.
   companyName: z
-    .string()
+    .string({
+      required_error: 'Укажите название компании',
+      invalid_type_error: 'Укажите название компании',
+    })
     .trim()
     .min(1, 'Укажите название компании')
     .max(200, 'Слишком длинное название компании'),

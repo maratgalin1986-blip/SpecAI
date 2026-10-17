@@ -53,6 +53,13 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
           ...(active !== undefined ? { active } : {}),
         },
       });
+      // A switched-off machinist leaves the customers' live map at once.
+      if (active === false && operator.userId) {
+        await tx.linePresence.updateMany({
+          where: { userId: operator.userId },
+          data: { online: false, equipmentId: null },
+        });
+      }
       if (operator.userId && (name !== undefined || phone !== undefined)) {
         await tx.user.update({
           where: { id: operator.userId },

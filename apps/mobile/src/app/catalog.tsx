@@ -67,8 +67,9 @@ function EquipmentCard({ item }: { item: Equipment }) {
 
 export default function CatalogScreen() {
   const { user } = useAuth();
-  // Исполнителю следующий шаг показывается в «Кабинете».
-  const showGuide = user?.role !== 'PROVIDER_ADMIN';
+  // Исполнителю следующий шаг показывается во вкладке «Техника»; машинисту
+  // сервер отдаёт путь заказчика (у него нет своего), поэтому не показываем.
+  const showGuide = user?.role !== 'PROVIDER_ADMIN' && user?.role !== 'PROVIDER_OPERATOR';
   const [query, setQuery] = useState('');
   const [appliedQuery, setAppliedQuery] = useState('');
   const [items, setItems] = useState<Equipment[]>([]);
@@ -219,8 +220,8 @@ const styles = StyleSheet.create({
     right: 8,
     bottom: 6,
     fontSize: 11,
-    color: '#fff',
-    textShadowColor: 'rgba(0,0,0,0.6)',
+    color: colors.onDark,
+    textShadowColor: colors.overlay,
     textShadowRadius: 3,
   },
   screen: { flex: 1, backgroundColor: colors.background },

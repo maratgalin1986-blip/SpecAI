@@ -6,6 +6,7 @@
 
 import { customerRates } from './equipmentCatalog';
 import { formatMoney } from './money';
+import { pluralizeRu } from './pluralize';
 
 export interface OfferBreakdown {
   total: number;
@@ -35,6 +36,19 @@ const DAY = 86_400_000;
 export function orderDays(start: Date, end: Date): number {
   const days = Math.round((end.getTime() - start.getTime()) / DAY) + 1;
   return Number.isFinite(days) && days > 0 ? days : 1;
+}
+
+/**
+ * A breakdown may not promise more shifts than the order has days: the
+ * customer would read «2 смены × 20 000 ₽» on a one-day job. The message
+ * names the days, so the provider sees what to correct.
+ */
+export function shiftsOverDaysError(
+  shifts: number | null | undefined,
+  days: number,
+): string | null {
+  if (shifts === null || shifts === undefined || shifts <= days) return null;
+  return `В заявке ${pluralizeRu(days, ['день', 'дня', 'дней'])} работ — укажите не больше ${days} ${days === 1 ? 'смены' : 'смен'}`;
 }
 
 const num = (value: unknown): number | null => {

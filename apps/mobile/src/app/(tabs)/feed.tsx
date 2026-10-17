@@ -132,7 +132,7 @@ function OnlineSwitch({
         />
         <Text style={styles.lineButtonText}>{online ? 'Уйти с линии' : 'Выйти на линию'}</Text>
       </Pressable>
-      {machines.length > 1 ? (
+      {machines.length > 0 ? (
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.lineMachines}>
           {machines.map((item) => (
             <Pressable
@@ -541,7 +541,8 @@ export default function FeedScreen() {
   const lineMachine = available.find((item) => item.id === lineMachineId) ?? available[0] ?? null;
   const reporter = useLineReporter(online, lineMachine?.id ?? null);
   const lineStatus = online
-    ? (reporter.error ?? positionStatus(reporter.permission, reporter.lastSentAt))
+    ? (reporter.error ??
+      positionStatus(reporter.permission, reporter.lastSentAt, new Date(), reporter.background))
     : null;
   const base =
     pin && typeof pin.baseLat === 'number' && typeof pin.baseLon === 'number'
@@ -666,7 +667,17 @@ export default function FeedScreen() {
     <View style={styles.header}>
       <OnlineSwitch
         online={online}
-        onToggle={() => setProviderOnline(!online)}
+        onToggle={() => {
+          // На линию — только с машиной: сервер иначе откажет (400).
+          if (!online && !lineMachine) {
+            Alert.alert(
+              'Нужна свободная машина',
+              'Отметьте хотя бы одну машину «Свободна» или добавьте технику — с ней вы выйдете на линию.',
+            );
+            return;
+          }
+          setProviderOnline(!online);
+        }}
         machines={available}
         machineId={lineMachine?.id ?? null}
         onMachine={chooseLineMachine}

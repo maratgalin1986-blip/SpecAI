@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { clientIp } from '@/lib/loginErrors';
-import { GEOCODER_UNAVAILABLE_MESSAGE, lookupAddress } from '@/lib/geo';
+import { GEOCODER_UNAVAILABLE_MESSAGE, findAddress } from '@/lib/geo';
 import { checkRateLimit } from '@/lib/rateLimit';
 
 // Address → coordinates for the order form's map preview:
@@ -16,7 +16,7 @@ export async function GET(request: NextRequest) {
   if (!checkRateLimit(`geocode:${ip}`, { limit: 20, windowMs: 60_000 }).ok) {
     return NextResponse.json({ error: 'Слишком часто, попробуйте через минуту' }, { status: 429 });
   }
-  const result = await lookupAddress(q);
+  const result = await findAddress(q);
   if (result.status === 'unavailable') {
     return NextResponse.json(
       { error: GEOCODER_UNAVAILABLE_MESSAGE, reason: 'unavailable' },
