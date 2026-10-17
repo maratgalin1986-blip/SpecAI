@@ -5,7 +5,7 @@ import { notifyTelegram } from '@/lib/notify';
 import { bidsUntilFor } from '@/lib/bidWindow';
 import { chatOrderNote, placeInText } from '@/lib/chatOrders';
 import { notifyProvidersAboutOrder } from '@/lib/notifications/notifyUser';
-import { autoModerateOrder } from '@/lib/orderModeration';
+import { aiModerationEnabled, autoModerateOrder } from '@/lib/orderModeration';
 import { isSafeHttpUrl, maskContacts } from '@/lib/privacy';
 import { SITE } from '@/lib/site';
 import { siteUrl } from '@/lib/siteUrl';
@@ -156,21 +156,24 @@ export async function ingestMessage(message: IncomingMessage): Promise<IngestRes
     },
   });
 
+  // The owner does not moderate orders himself (2026-10-17): with the AI
+  // moderator on, he hears only about published ones.
   const sourceLabel = message.source === 'WHATSAPP' ? 'WhatsApp' : 'Telegram';
-  await notifyTelegram(
-    [
-      `${published ? '🆕 Новая заявка из чата' : '🕵️ Заявка на модерации'} — ${SITE.name}`,
-      `Источник: ${sourceLabel}${message.chatTitle ? ` · ${message.chatTitle}` : ''}`,
-      category ? `Техника: ${category.name}` : null,
-      city ? `Где: ${city}` : null,
-      `Текст: ${text.slice(0, 300)}`,
-      message.authorName ? `Автор: ${message.authorName}` : null,
-      phone ? `Телефон: ${phone}` : null,
-      `${siteUrl()}${published ? `/orders/${order.id}` : '/admin'}`,
-    ]
-      .filter(Boolean)
-      .join('\n'),
-  );
+  if (published || !aiModerationEnabled())
+    await notifyTelegram(
+      [
+        `${published ? '🆕 Новая заявка из чата' : '🕵️ Заявка на модерации'} — ${SITE.name}`,
+        `Источник: ${sourceLabel}${message.chatTitle ? ` · ${message.chatTitle}` : ''}`,
+        category ? `Техника: ${category.name}` : null,
+        city ? `Где: ${city}` : null,
+        `Текст: ${text.slice(0, 300)}`,
+        message.authorName ? `Автор: ${message.authorName}` : null,
+        phone ? `Телефон: ${phone}` : null,
+        `${siteUrl()}${published ? `/orders/${order.id}` : '/admin'}`,
+      ]
+        .filter(Boolean)
+        .join('\n'),
+    );
 
   // Providers with this kind of machinery nearby hear about it at once.
   if (published) await notifyProvidersAboutOrder(order.id);

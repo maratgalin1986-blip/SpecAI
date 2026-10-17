@@ -18,11 +18,15 @@ vi.mock('@specai/database', () => ({
 }));
 const analyzeChatMessage = vi.fn();
 vi.mock('@specai/ai-service', () => ({ analyzeChatMessage }));
-vi.mock('@/lib/notify', () => ({ notifyTelegram: vi.fn().mockResolvedValue(true) }));
+const notifyTelegram = vi.fn().mockResolvedValue(true);
+vi.mock('@/lib/notify', () => ({ notifyTelegram }));
 const notifyProvidersAboutOrder = vi.fn();
 vi.mock('@/lib/notifications/notifyUser', () => ({ notifyProvidersAboutOrder }));
 const autoModerateOrder = vi.fn();
-vi.mock('@/lib/orderModeration', () => ({ autoModerateOrder }));
+vi.mock('@/lib/orderModeration', () => ({
+  autoModerateOrder,
+  aiModerationEnabled: () => Boolean(process.env.ANTHROPIC_API_KEY),
+}));
 
 const { ingestMessage } = await import('./ingest');
 
@@ -45,6 +49,7 @@ describe('ingestMessage and the AI moderator', () => {
     analyzeChatMessage.mockReset();
     notifyProvidersAboutOrder.mockReset();
     autoModerateOrder.mockReset();
+    notifyTelegram.mockClear();
     order.findFirst.mockResolvedValue(null);
     order.create.mockImplementation(({ data }: { data: { status: string } }) =>
       Promise.resolve({ id: 'o1', ...data }),
@@ -64,6 +69,21 @@ describe('ingestMessage and the AI moderator', () => {
     expect(autoModerateOrder).toHaveBeenCalledWith('o1', { timeoutMs: 6000 });
     expect(result).toEqual({ status: 'created', orderId: 'o1', published: false });
     expect(notifyProvidersAboutOrder).not.toHaveBeenCalled();
+    // The owner does not moderate by hand: no «на модерации» ping.
+    expect(notifyTelegram).not.toHaveBeenCalled();
+  });
+
+  it('still pings the owner about a doubtful import when the AI is off', async () => {
+    vi.stubEnv('ANTHROPIC_API_KEY', '');
+    autoModerateOrder.mockResolvedValue({ status: 'skipped' });
+
+    const result = await ingestMessage({
+      ...MESSAGE,
+      text: 'Кто знает, экскаватор нужен или нет, подскажите',
+    });
+
+    expect(result).toMatchObject({ status: 'created', published: false });
+    expect(notifyTelegram.mock.calls[0]?.[0]).toContain('Заявка на модерации');
   });
 
   it('does not ask the moderator about a confident import', async () => {
