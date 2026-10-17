@@ -5,6 +5,7 @@ import {
   activitySummary,
   buildActivity,
   categoryWord,
+  isLiveLine,
   lineEventText,
   onlineCount,
   publicCity,
@@ -30,6 +31,7 @@ const order = (over: Partial<ActivityOrderRow> = {}): ActivityOrderRow => ({
 const line = (over: Partial<ActivityLineRow> = {}): ActivityLineRow => ({
   online: true,
   onlineSince: minutesAgo(5),
+  timeZone: null,
   updatedAt: minutesAgo(1),
   lat: 55.74,
   lon: 52.4,
@@ -127,6 +129,7 @@ describe('event lines', () => {
       lineEventText({
         online: true,
         onlineSince: now,
+        timeZone: null,
         updatedAt: now,
         lat: 56.84,
         lon: 60.6,
@@ -235,5 +238,22 @@ describe('categoryWord', () => {
     expect(categoryWord('Самосвалы')).toBe('самосвалы');
     expect(categoryWord('КМУ')).toBe('КМУ');
     expect(categoryWord('  ')).toBeNull();
+  });
+});
+
+describe('isLiveLine and the evening cutoff', () => {
+  const since = new Date('2026-10-17T07:00:00Z'); // 10:00 in Moscow
+
+  it('drops a machine the 21:00 cutoff took off, though the phone still sends', () => {
+    const late = new Date('2026-10-17T19:00:00Z'); // 22:00 in Moscow
+    const row = line({ onlineSince: since, updatedAt: late, timeZone: 'Europe/Moscow' });
+    expect(isLiveLine(row, late)).toBe(false);
+  });
+
+  it('judges the cutoff by the provider’s own time zone', () => {
+    const evening = new Date('2026-10-17T18:00:00Z'); // 21:00 Moscow, 20:00 Kaliningrad
+    const row = line({ onlineSince: since, updatedAt: evening, timeZone: 'Europe/Kaliningrad' });
+    expect(isLiveLine(row, evening)).toBe(true);
+    expect(isLiveLine({ ...row, timeZone: 'Europe/Moscow' }, evening)).toBe(false);
   });
 });

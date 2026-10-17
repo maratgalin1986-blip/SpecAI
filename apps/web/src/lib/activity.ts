@@ -12,7 +12,7 @@
 import { cityByName } from '@specai/shared';
 import { HOUSE_COMPANY_ID } from './fleet';
 import { cityInText, nearestCity } from './geo';
-import { isFresh } from './linePresence';
+import { isOnLine } from './linePresence';
 import { sourceLabel, timeAgo } from './orderBoard';
 import { pluralizeRu } from './pluralize';
 import { todayStartMsk } from './providerFeed';
@@ -43,6 +43,7 @@ export interface ActivityOrderRow {
 export interface ActivityLineRow {
   online: boolean;
   onlineSince: Date | null;
+  timeZone: string | null;
   updatedAt: Date;
   lat: number;
   lon: number;
@@ -144,9 +145,9 @@ export function bookingEventText(row: ActivityBookingRow): string {
   return what ? `Бронь подтверждена: ${what}${house}` : `Бронь подтверждена${house}`;
 }
 
-/** A machine really on the line now: online, fresh and free to book. */
+/** A machine really on the line now: online, fresh, not past the evening cutoff, free to book. */
 export function isLiveLine(row: ActivityLineRow, now: Date): boolean {
-  return row.online && isFresh(row.updatedAt, now) && row.equipment?.status === 'AVAILABLE';
+  return isOnLine(row, now) && row.equipment?.status === 'AVAILABLE';
 }
 
 /** Machines on the line now, each machine once. */
