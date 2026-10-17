@@ -1,9 +1,11 @@
 import { createHash, timingSafeEqual } from 'node:crypto';
-import { cookies } from 'next/headers';
+import { cookies, headers } from 'next/headers';
 
 // The admin area (callback requests) is protected by a single password set in
 // the ADMIN_PASSWORD environment variable. Without it the admin area is off.
 export const ADMIN_COOKIE = 'sp16_admin';
+/** The app sends the same session value in this header (no cookies there). */
+export const ADMIN_HEADER = 'x-admin-session';
 
 function sessionToken(password: string) {
   return createHash('sha256')
@@ -28,11 +30,21 @@ export function adminSessionValue() {
   return password ? sessionToken(password) : null;
 }
 
-export function isAdminRequest() {
-  const expected = adminSessionValue();
-  const actual = cookies().get(ADMIN_COOKIE)?.value;
-  if (!expected || !actual) return false;
+function sameSession(actual: string | null | undefined, expected: string) {
+  if (!actual) return false;
   const a = Buffer.from(actual);
   const b = Buffer.from(expected);
   return a.length === b.length && timingSafeEqual(a, b);
+}
+
+/** Signed in to the admin area: the site's cookie or the app's header. */
+export function isAdminRequest() {
+  const expected = adminSessionValue();
+  if (!expected) return false;
+  if (sameSession(cookies().get(ADMIN_COOKIE)?.value, expected)) return true;
+  try {
+    return sameSession(headers().get(ADMIN_HEADER), expected);
+  } catch {
+    return false;
+  }
 }

@@ -71,7 +71,8 @@ export async function POST(request: NextRequest) {
         equipmentId: booking.equipmentId,
         rating: parsed.data.rating,
         comment: text,
-        textStatus: text ? 'PENDING' : 'APPROVED',
+        // The owner approves every review (stars and text) before anyone sees it.
+        textStatus: 'PENDING',
       },
     });
   } catch (error) {
@@ -91,9 +92,7 @@ export async function POST(request: NextRequest) {
   return NextResponse.json(
     {
       review,
-      message: text
-        ? 'Спасибо! Оценка уже видна, текст отзыва появится после проверки'
-        : 'Спасибо за оценку!',
+      message: 'Спасибо! Отзыв появится после проверки',
     },
     { status: 201 },
   );

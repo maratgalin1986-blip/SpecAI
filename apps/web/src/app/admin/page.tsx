@@ -1,4 +1,6 @@
 import type { Metadata } from 'next';
+import { SignupCounters } from '@/components/admin/SignupCounters';
+import { loadAdminStats } from '@/lib/adminStats';
 import { HOUSE_COMPANY_ID, prisma } from '@specai/database';
 import { Card } from '@specai/ui';
 import { AdminLogin } from '@/components/AdminLogin';
@@ -74,6 +76,7 @@ export default async function AdminPage({ searchParams = {} }: { searchParams?: 
 
   // Bot drafts without a phone are not leads yet (lib/botDrafts.ts).
   const leadsWhere = { NOT: { phone: '' } };
+  const stats = await loadAdminStats();
   const [leads, leadsTotal] = await Promise.all([
     prisma.lead.findMany({
       where: leadsWhere,
@@ -106,7 +109,7 @@ export default async function AdminPage({ searchParams = {} }: { searchParams?: 
     take: 100,
   });
   const pendingReviews = await prisma.review.findMany({
-    where: { textStatus: 'PENDING', comment: { not: null } },
+    where: { textStatus: 'PENDING' },
     include: {
       author: { select: { name: true, email: true } },
       company: { select: { name: true } },
@@ -226,6 +229,8 @@ export default async function AdminPage({ searchParams = {} }: { searchParams?: 
         </button>
       </form>
 
+      <SignupCounters stats={stats} />
+
       {/* Daily actions right under the top: moderation of chat orders,
           comments and reviews. Empty ones take one line; the calls follow. */}
       <Card className="flex scroll-mt-24 flex-col gap-3" id="moderation">
@@ -283,8 +288,8 @@ export default async function AdminPage({ searchParams = {} }: { searchParams?: 
           </h2>
           <p className="text-sm text-slate-600">
             Заказчики пишут об исполнителях, исполнители — о заказчиках. На сайте и в приложении
-            видны только опубликованные; телефоны, e-mail и ссылки скрыты автоматически. У отзывов
-            звёзды видны сразу, текст — после публикации.
+            видны только опубликованные; телефоны, e-mail и ссылки скрыты автоматически. Отзыв
+            целиком (звёзды и текст) появляется и входит в рейтинг только после публикации.
           </p>
         </div>
         {commentsCount === 0 && (
@@ -301,7 +306,11 @@ export default async function AdminPage({ searchParams = {} }: { searchParams?: 
                 {'☆'.repeat(5 - review.rating)}{' '}
                 <span className="text-xs font-semibold text-slate-600">Отзыв</span>
               </p>
-              <p className="whitespace-pre-wrap break-words">{review.comment}</p>
+              {review.comment ? (
+                <p className="whitespace-pre-wrap break-words">{review.comment}</p>
+              ) : (
+                <p className="text-slate-500">Только оценка, без текста</p>
+              )}
               <p className="mt-1 text-xs text-slate-500">
                 {review.author.name} ({review.author.email}) → «{review.company.name}»
                 {review.equipment ? `, ${review.equipment.name}` : ''} ·{' '}

@@ -49,6 +49,8 @@ async function loadProvider(id: string) {
         take: 60,
       },
       reviews: {
+        // Stars and text appear once the owner approves the review.
+        where: { textStatus: 'APPROVED' },
         include: { author: { select: { name: true } } },
         orderBy: { createdAt: 'desc' },
         take: 20,
