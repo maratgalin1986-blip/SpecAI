@@ -870,3 +870,37 @@ model Proposal {
   @@index([status, createdAt])
   @@index([userId])
 }
+
+// Telegram groups the bot was added to by their admins (my_chat_member, or
+// the first message from a chat it already sat in). `quiet` is the chat's
+// opt-out (/quiet by a chat admin): no replies and no import. The daily reply
+// counter is per Moscow day (`repliesDay` = "YYYY-MM-DD"); the hourly limit
+// counts BotReply rows (apps/web/src/lib/groupBot.ts).
+model BotChat {
+  chatId       String    @id
+  title        String?
+  // The public @handle of the group, if it has one (utm_campaign of the links).
+  username     String?
+  quiet        Boolean   @default(false)
+  // False once Telegram refuses the bot's messages (restricted or removed).
+  canWrite     Boolean   @default(true)
+  removedAt    DateTime?
+  repliesToday Int       @default(0)
+  repliesDay   String?
+  addedAt      DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+}
+
+// The bot's public reply under an order message in its chat: one per order.
+// `followUpAt` keeps the «уже N предложений» follow-up to one per order.
+model BotReply {
+  orderId    String    @id
+  chatId     String
+  // The order message in the chat (the bot replies to it) and its forum topic.
+  messageId  Int
+  threadId   Int?
+  createdAt  DateTime  @default(now())
+  followUpAt DateTime?
+
+  @@index([chatId, createdAt])
+}
