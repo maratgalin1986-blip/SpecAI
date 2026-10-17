@@ -111,8 +111,16 @@ cd apps/mobile
 npx eas whoami                                   # должен показать аккаунт
 EXPO_PUBLIC_API_URL=https://spec-ai-web.vercel.app npx eas update --branch preview \
   --environment preview --message "описание изменений" --platform all
+# та же версия для Expo Go: он просит runtime «exposdk:57.0.0», а не «0.1.0» APK
+EXPO_GO_UPDATE=1 EXPO_PUBLIC_API_URL=https://spec-ai-web.vercel.app npx eas update \
+  --branch preview --environment preview --message "описание изменений" --platform all
 npx eas update:list --branch preview             # id и ссылки на обновления
 ```
+
+Публиковать **обе** команды и **всегда `--platform all`**: 2026‑10‑16/17 обновления ушли
+только для Android, и iPhone в Expo Go показал «AppLoaderTask encountered an unexpected
+error». Ссылка для Expo Go на iPhone:
+`exp://u.expo.dev/e14d6fd4-d51a-4611-b084-e1da96f98879?channel-name=preview`.
 
 Флаг `--environment` обязателен в `--non-interactive` режиме (CI); `expo-updates` уже в
 зависимостях — его добавил `eas update:configure`, для Expo Go он не нужен, но нужен сборкам

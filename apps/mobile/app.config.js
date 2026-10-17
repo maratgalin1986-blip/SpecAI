@@ -10,11 +10,18 @@
 // (apps/mobile/README.md).
 const base = require('./app.json');
 
+// Expo Go asks EAS Update for the runtime «exposdk:<SDK>», not the app
+// version an APK uses (runtimeVersion policy appVersion). EXPO_GO_UPDATE=1 at
+// publish time stamps the update for Expo Go, so the same channel serves both:
+//   EXPO_GO_UPDATE=1 npx eas update --branch preview --platform all ...
+const EXPO_GO_RUNTIME = `exposdk:${require('expo/package.json').version.split('.')[0]}.0.0`;
+
 module.exports = ({ config }) => {
   const expo = { ...base.expo, ...config };
   const googleServicesFile = process.env.GOOGLE_SERVICES_JSON;
   return {
     ...expo,
+    ...(process.env.EXPO_GO_UPDATE === '1' ? { runtimeVersion: EXPO_GO_RUNTIME } : {}),
     android: {
       ...expo.android,
       ...(googleServicesFile ? { googleServicesFile } : {}),
