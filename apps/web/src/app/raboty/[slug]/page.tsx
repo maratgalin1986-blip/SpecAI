@@ -4,7 +4,7 @@ import { CallbackForm } from '@/components/CallbackForm';
 import { CinemaLayer } from '@/components/CinemaHero';
 import { TelegramButton } from '@/components/TelegramButton';
 import { TrustBadges } from '@/components/TrustBadges';
-import { CITIES, cityPath, DELIVERY_NOTE, NEARBY_CITIES, shiftExample } from '@/lib/cities';
+import { cityPath, DELIVERY_NOTE, HOUSE_CITIES, NEARBY_CITIES, shiftExample } from '@/lib/cities';
 import {
   JOBS,
   jobBySlug,
@@ -58,7 +58,8 @@ export default function JobPage({ params }: { params: { slug: string } }) {
     name: job.name,
     serviceType: `${job.name} спецтехникой с машинистом`,
     description: job.short,
-    areaServed: CITIES.map((city) => ({ '@type': 'City', name: city.name })),
+    // СпецПласт16's own prices: the towns its fleet serves.
+    areaServed: HOUSE_CITIES.map((city) => ({ '@type': 'City', name: city.name })),
     provider: {
       '@type': 'LocalBusiness',
       name: SITE.legalName || SITE.name,

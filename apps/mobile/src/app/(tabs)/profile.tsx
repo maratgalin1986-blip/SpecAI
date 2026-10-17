@@ -129,7 +129,7 @@ export default function ProfileScreen() {
       <Card style={styles.card}>
         <Text style={styles.companyTitle}>{SITE.name}</Text>
         <Text style={styles.companyText}>
-          {SITE.tagline}. {SITE.city}, {SITE.region}. {SITE.workingHours}.
+          {SITE.tagline}. Офис СпецПласт16 — {SITE.city}, {SITE.region}. {SITE.workingHours}.
         </Text>
         <ContactActions source="mobile:profile" />
         <Link href="/about" style={styles.aboutLink}>

@@ -30,9 +30,9 @@ import { ModeSwitch } from '@/components/ModeSwitch';
 import { Hint } from '@/components/Hint';
 
 export const metadata: Metadata = {
-  title: 'Заявки на спецтехнику в Татарстане — доска заказов',
+  title: 'Заявки на спецтехнику по всей России — доска заказов',
   description:
-    'Открытые заявки заказчиков на экскаваторы, краны, самосвалы и другую технику с машинистом в Набережных Челнах и по Татарстану. Исполнители предлагают цену, заказчик выбирает. Разместить заявку бесплатно.',
+    'Открытые заявки заказчиков на экскаваторы, краны, самосвалы и другую технику с машинистом по всей России. Исполнители рядом с объектом предлагают цену, заказчик выбирает. Разместить заявку бесплатно.',
   alternates: { canonical: '/orders' },
 };
 
@@ -236,7 +236,7 @@ export default async function OrdersPage({ searchParams }: { searchParams: Order
   return (
     <div className="flex flex-col gap-8">
       <CinemaHero
-        eyebrow="Доска заказов · Татарстан"
+        eyebrow="Доска заказов · вся Россия"
         title="Заявки на спецтехнику"
         clips={['workers', 'house-frame']}
         camera={4}

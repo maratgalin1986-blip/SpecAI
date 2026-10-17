@@ -14,8 +14,9 @@ export interface ProviderSeoInput {
   rating: number | null;
   ratingCount: number;
   machines: { name: string; category: string }[];
-  city: string;
-  region: string;
+  /** The company's own city and region; null when unknown (never another company's). */
+  city: string | null;
+  region: string | null;
 }
 
 export function providerPath(id: string): string {
@@ -45,12 +46,12 @@ export function providerJsonLd(p: ProviderSeoInput, base: string): Record<string
     name: p.name,
     url,
     description: p.description?.trim() || providerMetaDescription(p),
-    areaServed: p.region,
+    ...(p.region ? { areaServed: p.region } : {}),
     address: {
       '@type': 'PostalAddress',
       ...(p.baseAddress ? { streetAddress: p.baseAddress } : {}),
-      addressLocality: p.city,
-      addressRegion: p.region,
+      ...(p.city ? { addressLocality: p.city } : {}),
+      ...(p.region ? { addressRegion: p.region } : {}),
       addressCountry: 'RU',
     },
   };

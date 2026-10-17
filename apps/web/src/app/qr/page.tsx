@@ -49,7 +49,7 @@ export default async function QrPage() {
           <div>
             <div className="text-3xl font-extrabold tracking-tight">{SITE.platform}</div>
             <p className="mt-1 text-white/70 print:text-slate-600">
-              от {SITE.name} · аренда спецтехники с машинистом · {SITE.city}
+              от {SITE.name} · заказ спецтехники с машинистом по всей России
             </p>
           </div>
           <a

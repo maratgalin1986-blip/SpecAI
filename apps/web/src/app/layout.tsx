@@ -41,12 +41,13 @@ export const metadata: Metadata = {
   description: SITE.description,
   applicationName: SITE.platform,
   keywords: [
-    'аренда спецтехники Набережные Челны',
+    'заказ спецтехники с машинистом',
+    'аренда спецтехники по России',
     'аренда экскаватора-погрузчика',
     'аренда экскаватора',
     'аренда автокрана',
     'аренда самосвала',
-    'спецтехника Татарстан',
+    'аренда спецтехники Набережные Челны',
     SITE.name,
     SITE.platform,
   ],
@@ -90,7 +91,9 @@ const ORGANIZATION_JSON_LD = {
     addressRegion: SITE.region,
     addressCountry: 'RU',
   },
-  areaServed: SITE.region,
+  // The company sits in Набережные Челны; the platform it runs serves all of
+  // Russia (owner, 2026-10-17).
+  areaServed: { '@type': 'Country', name: 'Россия' },
   // Shown by Yandex and Google in the business card of the search results.
   image: `${siteUrl()}/opengraph-image.png`,
   priceRange: fromPrice(MIN_RATE),

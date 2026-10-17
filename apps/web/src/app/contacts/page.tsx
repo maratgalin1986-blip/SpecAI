@@ -7,7 +7,7 @@ import { CinemaHero } from '@/components/CinemaHero';
 
 export const metadata: Metadata = {
   title: 'Контакты',
-  description: `Телефон, e-mail и заявка на звонок — ${SITE.name}, ${SITE.city}`,
+  description: `Телефон, e-mail и заявка на звонок — ${SITE.platform} от ${SITE.name}: заказ спецтехники по всей России, офис в городе ${SITE.city}`,
   alternates: { canonical: '/contacts' },
 };
 
@@ -15,7 +15,7 @@ export default function ContactsPage() {
   return (
     <div className="flex flex-col gap-6">
       <CinemaHero
-        eyebrow={`${SITE.city} · ${SITE.region}`}
+        eyebrow={`Вся Россия · офис ${SITE.name} — ${SITE.city}`}
         title="Контакты"
         clips={['crane-sun', 'building-sun']}
         camera={5}
@@ -37,9 +37,15 @@ export default function ContactsPage() {
             </a>
           </div>
           <div>
-            <div className="text-sm text-slate-500">Регион работы</div>
+            <div className="text-sm text-slate-500">Где работаем</div>
             <div className="font-medium">
-              {SITE.city} и {SITE.region}
+              По всей России — заявку видят исполнители рядом с объектом
+            </div>
+          </div>
+          <div>
+            <div className="text-sm text-slate-500">Офис {SITE.name}</div>
+            <div className="font-medium">
+              {SITE.city}, {SITE.region}
             </div>
           </div>
           <div>
