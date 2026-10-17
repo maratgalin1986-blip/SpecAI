@@ -39,12 +39,16 @@ export const authOptions: AuthOptions = {
       if (token.id && typeof token.iat === 'number') {
         const record = await prisma.user.findUnique({
           where: { id: token.id },
-          select: { passwordChangedAt: true },
+          select: { passwordChangedAt: true, role: true, companyId: true },
         });
         if (!record || isTokenIssuedBeforePasswordChange(token.iat, record.passwordChangedAt)) {
           // Исключение в jwt-callback: next-auth очищает cookie сессии и возвращает пустую сессию.
           throw new Error('Session invalidated: password changed after token was issued');
         }
+        // «Стать исполнителем» меняет роль и компанию: сессия берёт их из базы,
+        // без повторного входа.
+        token.role = record.role;
+        token.companyId = record.companyId;
       }
       return token;
     },
