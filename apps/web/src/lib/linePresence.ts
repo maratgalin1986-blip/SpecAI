@@ -5,6 +5,7 @@
 import { HOUSE_COMPANY_ID } from './fleet';
 import { distanceKm } from './geo';
 import { shortAuthorName } from './comments';
+import { presenceAutoOff } from './lineDay';
 import { HIDDEN_CONTACT, HIDDEN_LINK, maskContactsAndLinks } from './privacy';
 import { SITE } from './site';
 
@@ -55,6 +56,10 @@ export interface PresenceRow {
   online: boolean;
   note: string | null;
   updatedAt: Date;
+  /** When this session began; with `timeZone`, ends it at the evening cutoff (lib/lineDay.ts). */
+  onlineSince?: Date | null;
+  /** The phone's IANA time zone; Moscow when unknown. */
+  timeZone?: string | null;
   user: { name: string | null };
   company: { id: string; name: string; verified: boolean };
   equipment: {
@@ -91,6 +96,18 @@ export interface LiveMachine {
 
 export function isFresh(updatedAt: Date, now: Date = new Date()): boolean {
   return now.getTime() - updatedAt.getTime() <= PRESENCE_FRESH_MS;
+}
+
+/**
+ * Really on the line now: online, fresh, and the session not ended by the
+ * evening cutoff in the provider's own time zone (a phone left on after
+ * 21:00 keeps sending, but customers no longer see it).
+ */
+export function isOnLine(
+  row: Pick<PresenceRow, 'online' | 'updatedAt' | 'onlineSince' | 'timeZone'>,
+  now: Date = new Date(),
+): boolean {
+  return row.online && isFresh(row.updatedAt, now) && !presenceAutoOff(row, now);
 }
 
 /** «4 000 ₽/ч» with a no-break space; «договорная» when the machine has no price. */
@@ -139,7 +156,8 @@ export function presenceBubble(row: {
 
 /**
  * The online machines around a point, nearest first and СпецПласт16's ahead
- * at equal distance; stale rows, machines that are not AVAILABLE (taken off
+ * at equal distance; stale rows, sessions past the evening cutoff
+ * (isOnLine), machines that are not AVAILABLE (taken off
  * publication, rented, under repair) are left out, and one machine is shown
  * once — at its freshest position. Without a point every fresh row is
  * returned (the map centred on the city).
@@ -153,14 +171,14 @@ export function liveMachines(
   const result: LiveMachine[] = [];
   const freshest = new Map<string, Date>();
   for (const row of rows) {
-    if (row.equipment && row.online && isFresh(row.updatedAt, now)) {
+    if (row.equipment && isOnLine(row, now)) {
       const seen = freshest.get(row.equipment.id);
       if (!seen || seen < row.updatedAt) freshest.set(row.equipment.id, row.updatedAt);
     }
   }
   const shown = new Set<string>();
   for (const row of rows) {
-    if (!row.online || !isFresh(row.updatedAt, now)) continue;
+    if (!isOnLine(row, now)) continue;
     // No machine (deleted after going online) or not «Свободна»: nothing to book.
     if (!row.equipment || row.equipment.status !== 'AVAILABLE') continue;
     if (freshest.get(row.equipment.id) !== row.updatedAt || shown.has(row.equipment.id)) continue;

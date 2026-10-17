@@ -1,8 +1,19 @@
 import { useFocusEffect } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
-import { AppState, Linking, StyleSheet, Switch, Text, View } from 'react-native';
+import { AppState, Linking, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
 import { Badge, Button, Card } from '@/components/ui';
 import { ApiError } from '@/lib/api';
+import { useAuth } from '@/lib/auth';
+import { eveningOffTime } from '@/lib/line';
+import {
+  DEFAULT_LINE_REMINDER,
+  LINE_REMINDER_TIMES,
+  lineReminderEligible,
+  lineReminderHint,
+  loadLineReminder,
+  type LineReminderSettings,
+} from '@/lib/lineReminder';
+import { applyLineReminder } from '@/lib/useLineReminder';
 import {
   createTelegramLink,
   fetchNotificationSettings,
@@ -13,15 +24,94 @@ import {
   type NotificationSettings,
 } from '@/lib/notifications';
 import { pushSupportHint } from '@/lib/push';
-import { colors, spacing } from '@/lib/theme';
+import { colors, radius, spacing, TAP } from '@/lib/theme';
 
 function messageOf(error: unknown, fallback: string) {
   return error instanceof ApiError ? error.message : fallback;
 }
 
 /**
+ * «Утреннее напоминание о линии» — только у исполнителя: локальное
+ * уведомление на этом телефоне (lib/lineReminder.ts), вкл/выкл и время.
+ */
+function LineReminderSetting() {
+  const { user } = useAuth();
+  const [settings, setSettings] = useState<LineReminderSettings>(DEFAULT_LINE_REMINDER);
+  const [problem, setProblem] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const role = user?.role;
+
+  useEffect(() => {
+    let cancelled = false;
+    void loadLineReminder().then((stored) => !cancelled && setSettings(stored));
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  if (!lineReminderEligible(role)) return null;
+
+  const change = async (next: LineReminderSettings) => {
+    setSettings(next);
+    setSaving(true);
+    try {
+      const result = await applyLineReminder(next, role);
+      setProblem(
+        result === 'no-permission'
+          ? 'Разрешите уведомления для приложения в настройках телефона — иначе напоминание не придёт.'
+          : result === 'unsupported'
+            ? 'На этом устройстве напоминание не работает.'
+            : null,
+      );
+    } catch {
+      setProblem('Не удалось поставить напоминание. Попробуйте ещё раз.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <View style={styles.channel}>
+      <View style={styles.row}>
+        <Text style={[styles.label, styles.reminderLabel]}>Утреннее напоминание о линии</Text>
+        <Switch
+          value={settings.enabled}
+          disabled={saving}
+          accessibilityLabel="Утреннее напоминание о линии"
+          onValueChange={(enabled) => void change({ ...settings, enabled })}
+          trackColor={{ true: colors.primary }}
+        />
+      </View>
+      <Text style={styles.hint}>{lineReminderHint(settings, eveningOffTime())}</Text>
+      {settings.enabled ? (
+        <View style={styles.times} accessibilityRole="radiogroup">
+          {LINE_REMINDER_TIMES.map((time) => {
+            const active = time === settings.time;
+            return (
+              <Pressable
+                key={time}
+                accessibilityRole="radio"
+                accessibilityState={{ selected: active, disabled: saving }}
+                accessibilityLabel={`Напоминать в ${time}`}
+                disabled={saving}
+                onPress={() => !active && void change({ ...settings, time })}
+                style={[styles.time, active && styles.timeActive]}
+              >
+                <Text style={[styles.timeText, active && styles.timeTextActive]}>{time}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      ) : null}
+      {problem ? <Text style={styles.error}>{problem}</Text> : null}
+    </View>
+  );
+}
+
+/**
  * «Уведомления» в профиле: Telegram, push, e-mail, WhatsApp и SMS
- * («скоро», пока не настроены на сервере), привязка Telegram и проверка.
+ * («скоро», пока не настроены на сервере), привязка Telegram и проверка;
+ * у исполнителя — ещё утреннее напоминание о линии.
  */
 export function NotificationSettingsCard() {
   const [settings, setSettings] = useState<NotificationSettings | null>(null);
@@ -151,6 +241,7 @@ export function NotificationSettingsCard() {
           ) : null}
         </View>
       ))}
+      <LineReminderSetting />
       {settings ? (
         <Button
           title="Проверить уведомления"
@@ -176,6 +267,22 @@ const styles = StyleSheet.create({
   label: { fontSize: 15, fontWeight: '500', color: colors.text },
   disabled: { color: colors.textMuted },
   hint: { fontSize: 12, color: colors.textMuted },
+  reminderLabel: { flexShrink: 1, paddingRight: spacing.sm },
+  times: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
+  time: {
+    minHeight: TAP,
+    minWidth: 64,
+    paddingHorizontal: spacing.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.card,
+  },
+  timeActive: { borderColor: colors.primary, backgroundColor: colors.primaryLight },
+  timeText: { fontSize: 15, fontWeight: '600', color: colors.text },
+  timeTextActive: { color: colors.primaryDark },
   notice: { fontSize: 14, color: colors.success },
   error: { fontSize: 14, color: colors.danger },
 });

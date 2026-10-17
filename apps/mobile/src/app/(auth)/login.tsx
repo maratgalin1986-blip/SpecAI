@@ -101,6 +101,9 @@ export default function LoginScreen() {
             <Link href="/(auth)/register" style={styles.link}>
               Нет аккаунта? Зарегистрироваться
             </Link>
+            <Link href="/(auth)/welcome" style={styles.link}>
+              Как это работает
+            </Link>
           </View>
 
           <View style={styles.guestLinks}>

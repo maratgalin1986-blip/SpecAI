@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 
 const findMany = vi.fn();
@@ -76,6 +76,11 @@ describe('GET /api/line/nearby', () => {
     expect(args.where.lat).toBeUndefined();
     expect(args.orderBy).toEqual({ updatedAt: 'desc' });
     expect(args.take).toBe(200);
+    // Sessions begun over a day ago (phones left on) do not use up the cap.
+    expect(args.where.OR[0]).toEqual({ onlineSince: null });
+    expect(Date.now() - args.where.OR[1].onlineSince.gte.getTime()).toBeGreaterThanOrEqual(
+      24 * 60 * 60_000 - 1000,
+    );
   });
 
   it('with only one coordinate behaves as without a point', async () => {
@@ -137,5 +142,57 @@ describe('GET /api/line/nearby', () => {
     expect(body.base.map((pin: { id: string }) => pin.id)).toEqual(['sp16-jcb']);
     const wide = await get('?lat=55.74312&lon=52.39811&km=300');
     expect(wide.body.base.map((pin: { id: string }) => pin.id)).toEqual(['sp16-jcb', 'sp16-far']);
+  });
+
+  describe('the evening cutoff', () => {
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('hides a machine whose session the cutoff ended, in the phone’s own zone', async () => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      // 21:30 in Moscow, 20:30 in Kaliningrad; both sessions began at 08:00 local.
+      const now = new Date('2026-10-17T18:30:00Z');
+      vi.setSystemTime(now);
+      findMany.mockResolvedValue([
+        {
+          ...presence,
+          updatedAt: now,
+          onlineSince: new Date('2026-10-17T05:00:00Z'),
+          timeZone: 'Europe/Moscow',
+        },
+        {
+          ...presence,
+          id: 'p2',
+          userId: 'other-driver',
+          equipmentId: 'e2',
+          equipment: { ...presence.equipment, id: 'e2' },
+          updatedAt: now,
+          onlineSince: new Date('2026-10-17T06:00:00Z'),
+          timeZone: 'Europe/Kaliningrad',
+        },
+      ]);
+      const { body } = await get();
+      expect(body.machines.map((machine: { id: string }) => machine.id)).toEqual(['p2']);
+    });
+
+    it('hides a session begun yesterday, shows one begun after the cutoff', async () => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      const now = new Date('2026-10-17T19:00:00Z'); // 22:00 MSK
+      vi.setSystemTime(now);
+      findMany.mockResolvedValue([
+        { ...presence, updatedAt: now, onlineSince: new Date('2026-10-16T06:00:00Z') },
+        {
+          ...presence,
+          id: 'p2',
+          equipmentId: 'e2',
+          equipment: { ...presence.equipment, id: 'e2' },
+          updatedAt: now,
+          onlineSince: new Date('2026-10-17T18:40:00Z'),
+        },
+      ]);
+      const { body } = await get();
+      expect(body.machines.map((machine: { id: string }) => machine.id)).toEqual(['p2']);
+    });
   });
 });

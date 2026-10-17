@@ -1,5 +1,5 @@
-import { Link } from 'expo-router';
-import React, { useState } from 'react';
+import { Link, useLocalSearchParams } from 'expo-router';
+import React, { useEffect, useState } from 'react';
 import {
   Keyboard,
   KeyboardAvoidingView,
@@ -18,8 +18,7 @@ import { API_URL, ApiError, register } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { SITE } from '@/lib/site';
 import { colors, spacing } from '@/lib/theme';
-
-type AccountType = 'CUSTOMER' | 'PROVIDER';
+import { accountTypeFromRole, type AccountType } from '@/lib/welcome';
 
 const ACCOUNT_TYPES: { value: AccountType; label: string; hint: string }[] = [
   { value: 'CUSTOMER', label: 'Заказать технику', hint: 'Заявка, предложения исполнителей, брони' },
@@ -29,11 +28,20 @@ const ACCOUNT_TYPES: { value: AccountType; label: string; hint: string }[] = [
 /**
  * Регистрация (поля как у веб-формы) с автологином: заказчик или исполнитель.
  * Исполнитель указывает компанию и адрес базы — сервер найдёт его на карте и
- * проверит регион (как на сайте).
+ * проверит регион (как на сайте). Роль приходит из приветствия
+ * (`?role=customer|provider`) и остаётся переключаемой.
  */
 export default function RegisterScreen() {
   const { login } = useAuth();
-  const [accountType, setAccountType] = useState<AccountType>('CUSTOMER');
+  const { role } = useLocalSearchParams<{ role?: string }>();
+  const [accountType, setAccountType] = useState<AccountType>(
+    () => accountTypeFromRole(role) ?? 'CUSTOMER',
+  );
+  // Снова пришли из приветствия с другой карточкой — экран уже открыт.
+  useEffect(() => {
+    const preset = accountTypeFromRole(role);
+    if (preset) setAccountType(preset);
+  }, [role]);
   const [companyName, setCompanyName] = useState('');
   const [baseAddress, setBaseAddress] = useState('');
   const [name, setName] = useState('');

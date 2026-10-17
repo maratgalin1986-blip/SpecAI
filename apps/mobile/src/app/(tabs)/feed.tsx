@@ -59,8 +59,8 @@ import {
   relativeDay,
 } from '@/lib/orderFlow';
 import { feedTodayText } from '@/lib/activity';
-import { positionStatus } from '@/lib/line';
-import { setProviderOnline, usePrefs } from '@/lib/prefs';
+import { lineAutoOffMessage, lineOffAtText, positionStatus } from '@/lib/line';
+import { setLineAutoOff, setProviderOnline, usePrefs } from '@/lib/prefs';
 import { STORAGE_KEYS, getItem, setItem } from '@/lib/storage';
 import { useActivity } from '@/lib/useActivity';
 import { useLineReporter } from '@/lib/useLineReporter';
@@ -97,6 +97,9 @@ function OnlineSwitch({
   machineId,
   onMachine,
   status,
+  autoOffText,
+  onDismissAutoOff,
+  offAt,
 }: {
   online: boolean;
   onToggle: () => void;
@@ -106,6 +109,11 @@ function OnlineSwitch({
   onMachine: (id: string) => void;
   /** Что с геопозицией (useLineReporter). */
   status: string | null;
+  /** «Линия выключилась в 21:00. Завтра утром включите снова.» — после вечернего выключения. */
+  autoOffText: string | null;
+  onDismissAutoOff: () => void;
+  /** «В 21:00 линия выключится сама.» */
+  offAt: string;
 }) {
   return (
     <View style={[styles.lineCard, online && styles.lineCardOnline]}>
@@ -115,9 +123,24 @@ function OnlineSwitch({
       </View>
       <Text style={styles.lineHint}>
         {online
-          ? 'Новые заявки появляются в ленте, она обновляется сама.'
+          ? `Новые заявки появляются в ленте, она обновляется сама. ${offAt}`
           : 'Выйдите на линию, чтобы видеть заявки и брать заказы.'}
       </Text>
+      {!online && autoOffText ? (
+        <View style={styles.autoOff} accessibilityRole="alert">
+          <Ionicons name="moon-outline" size={18} color={colors.onDark} />
+          <Text style={styles.autoOffText}>{autoOffText}</Text>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Понятно, скрыть"
+            onPress={onDismissAutoOff}
+            hitSlop={8}
+            style={({ pressed }) => [styles.autoOffClose, pressed && styles.pressed]}
+          >
+            <Text style={styles.autoOffCloseText}>Понятно</Text>
+          </Pressable>
+        </View>
+      ) : null}
       <Pressable
         accessibilityRole="switch"
         accessibilityLabel="На линии"
@@ -431,7 +454,7 @@ function FeedCard({
  * «Предложить цену». Данные — из существующих API; «На линии» — только на телефоне.
  */
 export default function FeedScreen() {
-  const { online } = usePrefs();
+  const { online, onlineSince, autoOff } = usePrefs();
   // «Сегодня N новых заявок» по всей площадке — настоящее число за московский день.
   const activity = useActivity();
   // С какой машиной выходим на линию — запоминается на телефоне.
@@ -695,6 +718,9 @@ export default function FeedScreen() {
         machineId={lineMachine?.id ?? null}
         onMachine={chooseLineMachine}
         status={lineStatus}
+        autoOffText={autoOff ? lineAutoOffMessage(autoOff, now) : null}
+        onDismissAutoOff={() => setLineAutoOff(null)}
+        offAt={lineOffAtText(onlineSince ? new Date(onlineSince) : null)}
       />
       {/* Пока открыта форма цены, подсказка — в ней; здесь не дублируем. */}
       <Hint ids={online ? 'feed.online' : 'feed.start'} hidden={openBidFor !== null} />
@@ -868,6 +894,23 @@ const styles = StyleSheet.create({
   lineButtonOff: { backgroundColor: 'rgba(255,255,255,0.12)' },
   lineButtonText: { color: colors.onDark, fontSize: 18, fontWeight: '800' },
   lineNote: { color: colors.onDarkMuted, fontSize: 12 },
+  autoOff: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    padding: spacing.md,
+    borderRadius: radius.md,
+    backgroundColor: 'rgba(255,255,255,0.10)',
+  },
+  autoOffText: { flex: 1, color: colors.onDark, fontSize: 14, lineHeight: 20 },
+  autoOffClose: {
+    minHeight: 44,
+    minWidth: 44,
+    paddingHorizontal: spacing.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  autoOffCloseText: { color: colors.accent, fontSize: 14, fontWeight: '700' },
   fleet: { gap: spacing.sm, paddingVertical: 2 },
   fleetChip: {
     flexDirection: 'row',
