@@ -345,7 +345,9 @@ describe('onMyChatMember', () => {
 
   it('moves the chat to its new supergroup id', async () => {
     await chatInDb({ quiet: true });
+    db.settings.set('channel.chatId', String(GROUP.id));
     await onChatMigrated(GROUP.id, -1009);
+    expect(db.settings.get('channel.chatId')).toBe('-1009');
     expect(db.chats.get('-1009')).toMatchObject({ quiet: true, title: GROUP.title });
     expect(db.chats.get(String(GROUP.id))!.canWrite).toBe(false);
   });

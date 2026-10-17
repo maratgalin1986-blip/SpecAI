@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const keys = new Map<string, Date>();
+const settings = new Map<string, string>();
 let orders: unknown[] = [];
 let orderTotal = 0;
 const findMany = vi.fn(async () => orders);
@@ -8,6 +9,20 @@ const count = vi.fn(async () => orderTotal);
 vi.mock('@specai/database', () => ({
   prisma: {
     order: { findMany, count },
+    appSetting: {
+      findUnique: vi.fn(async ({ where }: { where: { key: string } }) => {
+        const value = settings.get(where.key);
+        return value === undefined ? null : { key: where.key, value };
+      }),
+    },
+    botChat: {
+      findUnique: vi.fn(async ({ where }: { where: { chatId: string } }) => ({
+        chatId: where.chatId,
+        removedAt: null,
+        canWrite: true,
+        quiet: false,
+      })),
+    },
     adminFeedRead: {
       create: vi.fn(async ({ data }: { data: { key: string } }) => {
         if (keys.has(data.key)) throw Object.assign(new Error('unique'), { code: 'P2002' });
@@ -55,6 +70,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  settings.clear();
   vi.unstubAllEnvs();
 });
 
@@ -160,6 +176,14 @@ describe('postChannelDigest', () => {
     expect(await postChannelDigest(NOW)).toEqual({ skipped: 'preview' });
     expect(telegramApi).not.toHaveBeenCalled();
     expect(keys.size).toBe(0);
+  });
+
+  it('posts to the chat picked in /admin when the variable is not set', async () => {
+    vi.stubEnv('TELEGRAM_CHANNEL_ID', '');
+    settings.set('channel.chatId', '-1001234');
+    orders = [row('o1', 'Автокраны', 'Елабуга')];
+    expect(await postChannelDigest(NOW)).toEqual({ posted: 1 });
+    expect(telegramApi.mock.calls[0]?.[1]).toMatchObject({ chat_id: '-1001234' });
   });
 
   it('releases the day when Telegram rejects the post, so a retry can send it', async () => {

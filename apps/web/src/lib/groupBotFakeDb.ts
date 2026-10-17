@@ -139,6 +139,22 @@ export function createBotDb() {
 
   const bid = { count: async () => state.bids };
 
+  // Only what onChatMigrated touches: the pick of the daily post (lib/channelTarget.ts).
+  const settings = new Map<string, string>();
+  const appSetting = {
+    updateMany: async ({
+      where,
+      data,
+    }: {
+      where: { key: string; value: string };
+      data: { value: string };
+    }) => {
+      if (settings.get(where.key) !== where.value) return { count: 0 };
+      settings.set(where.key, data.value);
+      return { count: 1 };
+    },
+  };
+
   // An interactive transaction: a throw rolls both tables back.
   const snapshot = (map: Map<string, Row>) => new Map([...map].map(([k, v]) => [k, { ...v }]));
   const restore = (map: Map<string, Row>, saved: Map<string, Row>) => {
@@ -156,10 +172,11 @@ export function createBotDb() {
       throw error;
     }
   }
-  const client = { botChat, botReply, bid };
+  const client = { botChat, botReply, bid, appSetting };
 
   return {
     prisma: { ...client, $transaction },
+    settings,
     chats,
     replies,
     state,

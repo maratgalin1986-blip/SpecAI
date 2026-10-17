@@ -1,8 +1,9 @@
 // «Заявки на спецтехнику за сутки»: once a day the daily cron posts the
 // orders of the last 24 hours to the platform's OWN Telegram channel. The
-// owner creates the channel, adds the bot (TELEGRAM_BOT_TOKEN) as an admin and
-// sets TELEGRAM_CHANNEL_ID (the @username or the numeric id); without it
-// nothing is posted. Never into anyone else's chat.
+// owner adds the bot (TELEGRAM_BOT_TOKEN) as an admin of his channel or group
+// and either sets TELEGRAM_CHANNEL_ID or picks the chat in /admin → «Чаты с
+// ботом» (lib/channelTarget.ts); without either nothing is posted. Never into
+// anyone else's chat: only the owner picks.
 //
 // Honest by design: only real orders placed on the platform (the site, the
 // app, the guest form) that are still open; no post at all on a day without
@@ -11,6 +12,7 @@
 // descriptions or bid prices. Orders found in other people's chats are left
 // out — their authors wrote to that chat, not to our channel.
 import { prisma } from '@specai/database';
+import { loadChannelChatId } from './channelTarget';
 import { onceADay } from './cronOnce';
 import { categoryEmoji } from './orderBoard';
 import { orderCardText, orderShareUrl, type OrderCardInput } from './orderCard';
@@ -110,10 +112,11 @@ export type ChannelDigestResult =
  * it; the caller (the daily cron) catches.
  */
 export async function postChannelDigest(now: Date = new Date()): Promise<ChannelDigestResult> {
-  const chatId = process.env.TELEGRAM_CHANNEL_ID?.trim();
-  if (!chatId || !process.env.TELEGRAM_BOT_TOKEN) return { skipped: 'off' };
+  if (!process.env.TELEGRAM_BOT_TOKEN) return { skipped: 'off' };
   // Previews share the bot and the database settings: never post from them.
   if (process.env.VERCEL_ENV === 'preview') return { skipped: 'preview' };
+  const chatId = await loadChannelChatId();
+  if (!chatId) return { skipped: 'off' };
   const result = await onceADay(
     CHANNEL_JOB,
     async () => {

@@ -16,6 +16,7 @@ import { checkRateLimit } from '@/lib/rateLimit';
 import { SITE } from '@/lib/site';
 import { siteUrl } from '@/lib/siteUrl';
 import { telegramRequest, type TelegramResponse } from '@/lib/telegramApi';
+import { CHANNEL_CHAT_KEY } from './channelTarget';
 
 /** Replies (and follow-ups) per chat: a chat must never feel spammed. */
 export const REPLY_LIMITS = { perHour: 3, perDay: 15 } as const;
@@ -455,6 +456,11 @@ export async function onChatMigrated(oldChatId: number, newChatId: number): Prom
   await prisma.botChat.update({
     where: { chatId: String(oldChatId) },
     data: { removedAt: new Date(), canWrite: false },
+  });
+  // The owner's pick for the daily post follows the chat to its new id.
+  await prisma.appSetting.updateMany({
+    where: { key: CHANNEL_CHAT_KEY, value: String(oldChatId) },
+    data: { value: String(newChatId) },
   });
 }
 
