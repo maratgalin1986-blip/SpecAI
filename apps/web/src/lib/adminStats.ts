@@ -28,6 +28,8 @@ export interface AdminStats {
   machines: number;
   openOrders: number;
   activeBookings: number;
+  /** Orders imported from chats, waiting for the owner (PENDING_REVIEW). */
+  chatOrders: number;
   moderation: { reviews: number; comments: number };
   generatedAt: string;
 }
@@ -60,26 +62,36 @@ async function countSince(
 
 export async function loadAdminStats(now: Date = new Date()): Promise<AdminStats> {
   const since = (date?: Date) => (date ? { createdAt: { gte: date } } : {});
-  const [customers, providers, operators, machines, openOrders, activeBookings, reviews, comments] =
-    await Promise.all([
-      countSince(
-        (date) => prisma.user.count({ where: { role: 'CUSTOMER', ...REAL_EMAIL, ...since(date) } }),
-        now,
-      ),
-      countSince(
-        (date) =>
-          prisma.company.count({
-            where: { isProvider: true, id: { not: HOUSE_COMPANY_ID }, ...since(date) },
-          }),
-        now,
-      ),
-      prisma.user.count({ where: { role: 'PROVIDER_OPERATOR', ...REAL_EMAIL } }),
-      prisma.equipment.count({ where: { status: { not: 'RETIRED' } } }),
-      prisma.order.count({ where: { status: 'OPEN' } }),
-      prisma.booking.count({ where: { status: { in: ['CONFIRMED', 'ACTIVE'] } } }),
-      prisma.review.count({ where: { textStatus: 'PENDING' } }),
-      prisma.comment.count({ where: { status: 'PENDING' } }),
-    ]);
+  const [
+    customers,
+    providers,
+    operators,
+    machines,
+    openOrders,
+    activeBookings,
+    chatOrders,
+    reviews,
+    comments,
+  ] = await Promise.all([
+    countSince(
+      (date) => prisma.user.count({ where: { role: 'CUSTOMER', ...REAL_EMAIL, ...since(date) } }),
+      now,
+    ),
+    countSince(
+      (date) =>
+        prisma.company.count({
+          where: { isProvider: true, id: { not: HOUSE_COMPANY_ID }, ...since(date) },
+        }),
+      now,
+    ),
+    prisma.user.count({ where: { role: 'PROVIDER_OPERATOR', ...REAL_EMAIL } }),
+    prisma.equipment.count({ where: { status: { not: 'RETIRED' } } }),
+    prisma.order.count({ where: { status: 'OPEN' } }),
+    prisma.booking.count({ where: { status: { in: ['CONFIRMED', 'ACTIVE'] } } }),
+    prisma.order.count({ where: { status: 'PENDING_REVIEW' } }),
+    prisma.review.count({ where: { textStatus: 'PENDING' } }),
+    prisma.comment.count({ where: { status: 'PENDING' } }),
+  ]);
   return {
     customers,
     providers,
@@ -88,6 +100,7 @@ export async function loadAdminStats(now: Date = new Date()): Promise<AdminStats
     machines,
     openOrders,
     activeBookings,
+    chatOrders,
     moderation: { reviews, comments },
     generatedAt: now.toISOString(),
   };
