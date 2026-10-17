@@ -27,6 +27,10 @@ export function SignupCounters({ stats }: { stats: AdminStats }) {
           ? ` · ждут модерации: отзывы ${stats.moderation.reviews}, комментарии ${stats.moderation.comments}`
           : ''}
       </p>
+      <p className="text-xs text-slate-600">
+        Рассылка «Заявки рядом»: подписчиков {stats.newsletter.subscribers} · писем за неделю{' '}
+        {stats.newsletter.sentWeek}
+      </p>
     </section>
   );
 }

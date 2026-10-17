@@ -13,6 +13,8 @@ export type SendEmailInput = {
   subject: string;
   html: string;
   text?: string;
+  /** Extra headers, e.g. List-Unsubscribe of the newsletter (lib/newsletter.ts). */
+  headers?: Record<string, string>;
 };
 
 export type SendEmailResult =
@@ -85,6 +87,7 @@ export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult>
       subject: input.subject,
       html: input.html,
       text: input.text,
+      ...(input.headers ? { headers: input.headers } : {}),
     });
     if (error) {
       console.error('[email] send failed', { to: recipients, subject: input.subject, error });

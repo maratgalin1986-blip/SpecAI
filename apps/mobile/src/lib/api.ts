@@ -445,6 +445,8 @@ export type RegisterInput = {
   password: string;
   phone?: string;
   consent: true;
+  /** Еженедельное письмо: true только если человек сам включил переключатель. */
+  newsConsent?: boolean;
 } & (
   | { accountType: 'CUSTOMER' }
   | {
