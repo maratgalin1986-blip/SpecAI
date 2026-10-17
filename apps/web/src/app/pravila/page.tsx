@@ -29,8 +29,8 @@ export default function TermsPage() {
       </p>
 
       <h2>1. Кто с кем заключает договор</h2>
-      {/* TODO владелец: confirm that providers pay nothing to the platform (no fee or
-          commission is described here) and who the contracting party is for СпецПласт16. */}
+      {/* Providers pay nothing (owner, 2026-10-17: «бесплатно и без посредников» for
+          both roles). TODO владелец: who the contracting party is for СпецПласт16. */}
       <ul>
         <li>
           Площадка соединяет заказчиков и исполнителей. Договор аренды техники или оказания услуг
@@ -54,8 +54,9 @@ export default function TermsPage() {
           исполнителем.
         </li>
         <li>
-          Для заказчика Площадка бесплатна. Онлайн-оплаты на Площадке нет: заказчик платит
-          исполнителю напрямую, по договору с ним.
+          Площадка бесплатна для заказчика и для исполнителя и не берёт процент со сделок.
+          Онлайн-оплаты на Площадке нет: цену назначает исполнитель, заказчик платит ему напрямую,
+          по договору с ним.
         </li>
       </ul>
 

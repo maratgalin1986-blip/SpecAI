@@ -52,7 +52,6 @@ describe('where the promise is shown', () => {
     for (const name of [
       'NewOrderForm',
       'GuestOrderForm',
-      'CallbackForm',
       'QuickOrder',
       'CabinetQuickOrder',
       'BecomeProviderForm',
@@ -60,5 +59,8 @@ describe('where the promise is shown', () => {
     ]) {
       expect(component(name), name).toContain('<PromiseNote');
     }
+    // The callback form is a manager of СпецПласт16 picking the machine and the
+    // price: «без посредников» would not be true there.
+    expect(component('CallbackForm')).not.toContain('PromiseNote');
   });
 });

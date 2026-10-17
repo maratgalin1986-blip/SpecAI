@@ -4,7 +4,8 @@
 // the token and the letter live in lib/newsletter.ts.
 
 /** The checkbox at sign-up and the switch in the settings (the app uses the same text). */
-export { NEWS_CONSENT_LABEL } from '@specai/shared';
+// From the file, not the package index: client bundles skip zod and the city list.
+export { NEWS_CONSENT_LABEL } from '@specai/shared/src/newsConsent';
 
 /** Who can subscribe: machinists work under their company's account and get nothing. */
 export const NEWS_ROLES = ['CUSTOMER', 'PROVIDER_ADMIN', 'PLATFORM_ADMIN'] as const;

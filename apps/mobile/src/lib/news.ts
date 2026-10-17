@@ -5,7 +5,7 @@ import { apiFetch } from './api';
 // (packages/shared newsConsent.ts); apps/web lib/newsConsent.test.ts сверяет их.
 
 export const NEWS_CONSENT_LABEL =
-  'Присылать раз в неделю заявки рядом и новости площадки (можно отписаться в один клик)';
+  'Присылать не чаще раза в неделю заявки рядом и новости площадки (отписаться можно в любой момент по ссылке в письме)';
 
 export interface NewsSubscription {
   /** false — машинист: рассылка не для него, переключатель не показываем. */
