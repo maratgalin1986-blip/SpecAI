@@ -1477,8 +1477,13 @@ html[data-cookie-strip] .chat-fab,
 html[data-tg-chip] .chat-fab {
   bottom: calc(7.25rem + env(safe-area-inset-bottom));
 }
+/* The «Установить» card (InstallPrompt) is taller than the chip: up over it. */
+html[data-install-hint] .chat-fab {
+  bottom: calc(10.5rem + env(safe-area-inset-bottom));
+}
 @media (min-width: 640px) {
-  html[data-tg-chip] .chat-fab {
+  html[data-tg-chip] .chat-fab,
+  html[data-install-hint] .chat-fab {
     bottom: 1rem;
   }
   .chat-fab {
@@ -1986,6 +1991,23 @@ html[data-vt-kind='fade']::view-transition-group(root) {
     margin: 0.75rem 0.5rem calc(0.75rem + env(safe-area-inset-bottom));
   }
   html[data-no-contact-bar][data-cookie-strip] body {
+    padding-bottom: 0;
+  }
+  /* The «Установить» card over the contact bar: the end of the page and a
+     focused field stay clear of it. Without the bar (cabinets, forms) it
+     stands at the end of the page, like the cookie strip. */
+  html[data-install-hint] {
+    scroll-padding-bottom: 13rem;
+  }
+  html[data-install-hint] body {
+    padding-bottom: 4.5rem;
+  }
+  html[data-no-contact-bar] .install-hint {
+    position: relative;
+    inset: auto;
+    margin: 0.75rem 0.5rem calc(0.75rem + env(safe-area-inset-bottom));
+  }
+  html[data-no-contact-bar][data-install-hint] body {
     padding-bottom: 0;
   }
   html[data-no-contact-bar] .chat-fab {

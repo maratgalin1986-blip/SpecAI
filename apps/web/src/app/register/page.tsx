@@ -7,6 +7,7 @@ import { CinemaBackdrop } from '@/components/CinemaHero';
 import { BasePicker, type BaseValue } from '@/components/BasePicker';
 import { ConsentText } from '@/components/ConsentText';
 import { Hint } from '@/components/Hint';
+import { noteInstallMoment } from '@/lib/installHint';
 import { normalizeReferralCode } from '@/lib/referral';
 import { useHydrated } from '@/lib/useHydrated';
 
@@ -82,6 +83,9 @@ export default function RegisterPage() {
       return;
     }
 
+    // The customer's cabinet may offer «Установить на экран». Not to providers:
+    // going online with a machine needs the app (background location).
+    if (accountType === 'CUSTOMER') noteInstallMoment();
     // Sign straight in and go to the right cabinet.
     await signIn('credentials', {
       email,
