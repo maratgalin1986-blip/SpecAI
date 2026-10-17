@@ -6,10 +6,12 @@ import {
   DOCUMENT_PAGES,
   setSoundEnabled,
   soundEnabled,
+  startedByPress,
   subscribeSound,
   SOUND_HINT_KEY,
 } from '@/lib/sound';
 import { isCabinetPage } from '@/lib/workPages';
+import { useSoundLive } from '@/components/useSoundLive';
 
 const HINT_MS = 5000;
 
@@ -36,9 +38,12 @@ export function SoundToggle({
   /** A 44 px tap target (the site header); 36 px with a 44 px hit area on desktop. */
   large?: boolean;
 }) {
-  // On by default: the server render shows «Выключить звук» too, and the
-  // client store starts from the saved choice (lib/sound.ts), so no flicker.
-  const on = useSyncExternalStore(subscribeSound, soundEnabled, () => true);
+  // On by default (the saved choice, lib/sound.ts), but browsers play it only
+  // after the first touch: until then the button says «Включить звук».
+  const enabled = useSyncExternalStore(subscribeSound, soundEnabled, () => true);
+  // Enabled but not yet playing (no touch yet): the button offers to start it.
+  const live = useSoundLive();
+  const on = enabled && live;
   const pathname = usePathname() ?? '';
   // Cabinets have no sound director (CinemaLayer): no switch there either.
   const silentPage = DOCUMENT_PAGES.test(pathname) || isCabinetPage(pathname);
@@ -84,8 +89,8 @@ export function SoundToggle({
   }, []);
 
   useEffect(() => {
-    if (on) setHint(false);
-  }, [on]);
+    if (enabled) setHint(false);
+  }, [enabled]);
 
   if (silentPage) return null;
 
@@ -93,8 +98,14 @@ export function SoundToggle({
     <span className={`relative inline-flex ${className}`}>
       <button
         type="button"
-        data-sound-toggle
-        onClick={() => setSoundEnabled(!soundEnabled())}
+        // A press that toggles must not wake the sound first; a press while the
+        // sound waits for its first touch is that touch (SoundDirector hears it).
+        data-sound-toggle={enabled && !live ? undefined : ''}
+        onClick={(event) => {
+          // This press is the one that started the sound: nothing more to do.
+          if (startedByPress(event.currentTarget)) return;
+          setSoundEnabled(!soundEnabled());
+        }}
         aria-pressed={on}
         aria-label={on ? 'Выключить звук' : 'Включить звук'}
         title={on ? 'Выключить звук' : 'Включить звук — как в кино'}

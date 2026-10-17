@@ -90,6 +90,27 @@ export function prefersReducedMotion(): boolean {
  */
 export const DOCUMENT_PAGES = /^\/(soglasie(-[a-z-]+)?|privacy|pravila|credits)(\/|$)/;
 
+// The touch that started the sound (SoundDirector notes it). A sound button
+// pressed while the sound waits for its first touch is that touch: its click,
+// which comes after the sound already runs, must not switch it straight off.
+let wakeTarget: EventTarget | null = null;
+let wakeAt = 0;
+
+export function noteWakeGesture(target: EventTarget | null): void {
+  wakeTarget = target;
+  wakeAt = Date.now();
+}
+
+/** This press of `button` is the one that just started the sound (used once). */
+export function startedByPress(button: Element): boolean {
+  const target = wakeTarget;
+  const fresh = Date.now() - wakeAt < 3000;
+  const playing = document.documentElement.hasAttribute('data-sound-live');
+  if (!(target instanceof Node) || !fresh || !playing || !button.contains(target)) return false;
+  wakeTarget = null;
+  return true;
+}
+
 export function soundEnabled(): boolean {
   return enabled;
 }
