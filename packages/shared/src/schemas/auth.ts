@@ -61,6 +61,10 @@ export type RegisterProviderInput = z.infer<typeof registerProviderSchema>;
 export const becomeProviderSchema = z.object({
   companyName: registerProviderSchema.shape.companyName,
   phone: z.string().trim().max(30, 'Слишком длинный телефон').optional(),
+  /** 152-ФЗ ст. 10.1: the provider's card (name, base, phone) is public. */
+  publicConsent: z.literal(true, {
+    errorMap: () => ({ message: 'Нужно согласие на публикацию карточки исполнителя' }),
+  }),
 });
 export type BecomeProviderInput = z.infer<typeof becomeProviderSchema>;
 

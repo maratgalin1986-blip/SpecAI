@@ -119,6 +119,8 @@ export function createHintStore(storage: HintStorage, key: string = STORAGE_KEYS
   let state: HintsState = { loaded: false, dismissed: new Set() };
   const listeners = new Set<() => void>();
   let loading: Promise<void> | null = null;
+  /** «Показать снова» нажали, пока список ещё читался: прочитанное не возвращаем. */
+  let resetDuringLoad = false;
 
   const emit = (next: HintsState) => {
     state = next;
@@ -133,8 +135,9 @@ export function createHintStore(storage: HintStorage, key: string = STORAGE_KEYS
       } catch {
         // Не прочитали — подсказки покажутся, закрытые спрячутся до перезапуска.
       }
-      // Закрытые до окончания чтения не теряются.
-      emit({ loaded: true, dismissed: new Set([...parseDismissed(stored), ...state.dismissed]) });
+      // Закрытые до окончания чтения не теряются; после «Показать снова» старый список не нужен.
+      const fromStorage = resetDuringLoad ? [] : parseDismissed(stored);
+      emit({ loaded: true, dismissed: new Set([...fromStorage, ...state.dismissed]) });
     })();
     return loading;
   };
@@ -163,6 +166,7 @@ export function createHintStore(storage: HintStorage, key: string = STORAGE_KEYS
     },
     /** «Показать подсказки снова». */
     async reset(): Promise<void> {
+      if (!state.loaded) resetDuringLoad = true;
       emit({ loaded: true, dismissed: new Set() });
       try {
         await storage.removeItem(key);

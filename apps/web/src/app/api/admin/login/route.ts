@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { ADMIN_COOKIE, adminSessionValue, checkAdminPassword } from '@/lib/admin';
+import {
+  ADMIN_COOKIE,
+  adminSessionValue,
+  checkAdminPassword,
+  issueAdminAppToken,
+} from '@/lib/admin';
 import { ADMIN_LOGIN_LIMIT, clientIpFrom } from '@/lib/loginErrors';
 import { checkRateLimit } from '@/lib/rateLimit';
 
@@ -22,9 +27,12 @@ export async function POST(request: NextRequest) {
     await new Promise((resolve) => setTimeout(resolve, 800));
     return NextResponse.json({ error: 'Неверный пароль' }, { status: 401 });
   }
-  // The app keeps the session in its secure storage and sends it back in the
-  // x-admin-session header; the site gets the httpOnly cookie as before.
-  const response = NextResponse.json(body?.app === true ? { ok: true, session } : { ok: true });
+  // The app keeps its own expiring session (issueAdminAppToken) in secure
+  // storage and sends it in the x-admin-session header; the site gets the
+  // httpOnly cookie as before.
+  const response = NextResponse.json(
+    body?.app === true ? { ok: true, session: issueAdminAppToken() } : { ok: true },
+  );
   response.cookies.set(ADMIN_COOKIE, session, {
     httpOnly: true,
     sameSite: 'lax',

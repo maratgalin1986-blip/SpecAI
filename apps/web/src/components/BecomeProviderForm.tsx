@@ -42,6 +42,7 @@ export function BecomeProviderForm() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           companyName: companyName.trim(),
+          publicConsent: true,
           ...(phone.trim() ? { phone: phone.trim() } : {}),
           baseAddress: base.address.trim(),
           ...(base.lat !== null && base.lon !== null

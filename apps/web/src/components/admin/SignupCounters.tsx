@@ -18,12 +18,11 @@ export function SignupCounters({ stats }: { stats: AdminStats }) {
     <section aria-label="Регистрации" className="flex flex-col gap-2" id="counters">
       <div className="grid grid-cols-2 gap-3">
         <Counter title="Заказчики" counts={stats.customers} />
-        <Counter title="Исполнители" counts={stats.providers} />
+        <Counter title="Исполнители (компании)" counts={stats.providers} />
       </div>
       <p className="text-xs text-slate-600">
-        Компаний-исполнителей {stats.providerCompanies} · машинистов {stats.operators} · техники{' '}
-        {stats.machines} · открытых заявок {stats.openOrders} · броней в работе{' '}
-        {stats.activeBookings}
+        Машинистов {stats.operators} · техники {stats.machines} · открытых заявок {stats.openOrders}{' '}
+        · броней в работе {stats.activeBookings}
         {stats.moderation.reviews + stats.moderation.comments > 0
           ? ` · ждут модерации: отзывы ${stats.moderation.reviews}, комментарии ${stats.moderation.comments}`
           : ''}

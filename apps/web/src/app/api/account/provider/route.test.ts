@@ -19,11 +19,11 @@ vi.mock('@/lib/providerBase', () => ({ resolveProviderBase }));
 const { POST } = await import('./route');
 
 let n = 0;
-async function post(body: unknown) {
+async function post(body: Record<string, unknown>, consent = true) {
   const response = await POST(
     new NextRequest('http://localhost/api/account/provider', {
       method: 'POST',
-      body: JSON.stringify(body),
+      body: JSON.stringify(consent ? { publicConsent: true, ...body } : body),
     }),
   );
   return { status: response.status, body: await response.json() };
@@ -99,6 +99,15 @@ describe('POST /api/account/provider: «Стать исполнителем»', 
     resolveProviderBase.mockResolvedValue({ ok: false, error: 'Укажите адрес базы' });
     const noBase = await post({ companyName: 'A' });
     expect(noBase).toMatchObject({ status: 400, body: { error: 'Укажите адрес базы' } });
+    expect(companyCreate).not.toHaveBeenCalled();
+  });
+
+  it('needs the consent to publish the provider card', async () => {
+    const result = await post({ companyName: 'A', baseAddress: 'Мира 1' }, false);
+    expect(result).toMatchObject({
+      status: 400,
+      body: { error: 'Нужно согласие на публикацию карточки исполнителя' },
+    });
     expect(companyCreate).not.toHaveBeenCalled();
   });
 

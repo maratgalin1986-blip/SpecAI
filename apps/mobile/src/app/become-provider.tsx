@@ -4,13 +4,16 @@ import {
   Keyboard,
   KeyboardAvoidingView,
   Platform,
+  Pressable,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   View,
 } from 'react-native';
+import * as WebBrowser from 'expo-web-browser';
 import { Button, Card, Input } from '@/components/ui';
-import { ApiError, becomeProvider } from '@/lib/api';
+import { API_URL, ApiError, becomeProvider } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { checkBecomeProvider, modeSwitchKind, type BecomeProviderForm } from '@/lib/modes';
 import { setAppMode } from '@/lib/prefs';
@@ -37,6 +40,8 @@ export default function BecomeProviderScreen() {
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  // 152-ФЗ ст. 10.1: карточка исполнителя (название, база, телефон) публичная.
+  const [publicConsent, setPublicConsent] = useState(false);
   // После успеха роль уже «исполнитель» — форма остаётся на экране до перехода.
   const [finished, setFinished] = useState(false);
 
@@ -60,6 +65,10 @@ export default function BecomeProviderScreen() {
       return;
     }
     setFieldError(null);
+    if (!publicConsent) {
+      setError('Нужно согласие на публикацию карточки исполнителя');
+      return;
+    }
     setSubmitting(true);
     try {
       const { user: updated } = await becomeProvider(checked.value);
@@ -153,6 +162,30 @@ export default function BecomeProviderScreen() {
           <Text style={styles.note}>
             По телефону с вами свяжется заказчик, когда вы подтвердите его бронь.
           </Text>
+          <Pressable
+            style={styles.consentRow}
+            onPress={() => setPublicConsent((value) => !value)}
+            accessibilityRole="checkbox"
+            accessibilityState={{ checked: publicConsent }}
+          >
+            <Switch
+              value={publicConsent}
+              onValueChange={setPublicConsent}
+              trackColor={{ true: colors.primary }}
+            />
+            <Text style={styles.consentText}>
+              Согласен(на) на публикацию карточки исполнителя (название, где стоит техника, телефон)
+              по{' '}
+              <Text
+                style={styles.consentLink}
+                onPress={() =>
+                  void WebBrowser.openBrowserAsync(`${API_URL}/soglasie-rasprostranenie`)
+                }
+              >
+                условиям согласия
+              </Text>
+            </Text>
+          </Pressable>
           {error ? (
             <Text style={styles.error} accessibilityRole="alert">
               {error}
@@ -177,4 +210,7 @@ const styles = StyleSheet.create({
   card: { gap: spacing.md },
   note: { fontSize: 13, lineHeight: 18, color: colors.textMuted, marginTop: -spacing.xs },
   error: { color: colors.danger, fontSize: 14, lineHeight: 20 },
+  consentRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, minHeight: 44 },
+  consentText: { flex: 1, fontSize: 13, lineHeight: 18, color: colors.textMuted },
+  consentLink: { color: colors.primary, textDecorationLine: 'underline' },
 });

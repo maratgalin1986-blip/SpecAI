@@ -131,4 +131,21 @@ describe('hints', () => {
       'profile.switch',
     ]);
   });
+
+  it('«Показать снова» before the saved list is read is not undone by the read', async () => {
+    let release: (value: string | null) => void = () => undefined;
+    const storage = memoryStorage();
+    storage.getItem.mockImplementationOnce(
+      () =>
+        new Promise<string | null>((resolve) => {
+          release = resolve;
+        }),
+    );
+    const store = createHintStore(storage, 'specai.hints');
+    const loading = store.load();
+    await store.reset();
+    release('["home.order","home.sheet"]');
+    await loading;
+    expect(store.getSnapshot()).toEqual({ loaded: true, dismissed: new Set() });
+  });
 });

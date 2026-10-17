@@ -441,7 +441,11 @@ export function becomeProvider(input: {
 }) {
   return apiFetch<{
     user: { id: string; email: string; name: string; role: UserRole; companyId: string | null };
-  }>('/api/account/provider', { method: 'POST', body: input });
+  }>('/api/account/provider', {
+    method: 'POST',
+    // The screen does not send without the switch on (152-ФЗ ст. 10.1).
+    body: { ...input, publicConsent: true },
+  });
 }
 
 export function sendVerificationEmail() {
@@ -463,7 +467,10 @@ export function createCheckout(bookingId: string) {
 }
 
 export function createReview(input: { bookingId: string; rating: number; comment?: string }) {
-  return apiFetch<{ review: { id: string } }>('/api/reviews', { method: 'POST', body: input });
+  return apiFetch<{ review: { id: string }; message?: string }>('/api/reviews', {
+    method: 'POST',
+    body: input,
+  });
 }
 
 export function fetchCategories() {

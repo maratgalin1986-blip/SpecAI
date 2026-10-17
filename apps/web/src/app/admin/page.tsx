@@ -76,8 +76,8 @@ export default async function AdminPage({ searchParams = {} }: { searchParams?: 
 
   // Bot drafts without a phone are not leads yet (lib/botDrafts.ts).
   const leadsWhere = { NOT: { phone: '' } };
-  const stats = await loadAdminStats();
-  const [leads, leadsTotal] = await Promise.all([
+  const [stats, leads, leadsTotal] = await Promise.all([
+    loadAdminStats(),
     prisma.lead.findMany({
       where: leadsWhere,
       orderBy: { createdAt: 'desc' },
