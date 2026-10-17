@@ -60,12 +60,21 @@ export function appRouteFor(path: string | undefined): string | null {
   return null;
 }
 
-type NotificationsModule = typeof import('expo-notifications');
+export type NotificationsModule = typeof import('expo-notifications');
 
 let handlerSet = false;
 
-async function loadNotifications(): Promise<NotificationsModule | null> {
-  if (pushSupport() !== 'supported') return null;
+/**
+ * expo-notifications, загруженный лениво. `local: true` — для локальных
+ * уведомлений (утреннее «Пора на линию»): они работают и в Expo Go на
+ * Android, где нет только удалённых push.
+ */
+export async function loadNotifications(
+  options: { local?: boolean } = {},
+): Promise<NotificationsModule | null> {
+  const support = pushSupport();
+  if (support === 'web') return null;
+  if (support !== 'supported' && !options.local) return null;
   try {
     const Notifications = await import('expo-notifications');
     if (!handlerSet) {

@@ -11,6 +11,13 @@ import {
   noteHasContacts,
   PRESENCE_MIN_INTERVAL_MS,
 } from '@/lib/linePresence';
+import {
+  afterEveningCutoff,
+  withinLineDay,
+  LINE_DEFAULT_TIME_ZONE,
+  lineSessionExpired,
+  validTimeZone,
+} from '@/lib/lineDay';
 import { operatorOf } from '@/lib/shiftAccess';
 
 export const dynamic = 'force-dynamic';
@@ -21,6 +28,13 @@ export const dynamic = 'force-dynamic';
  * with the phone's position and an AVAILABLE machine of the company, or
  * offline. Customers see the fresh online rows on their home map
  * (api/line/nearby). GET returns the caller's own row.
+ *
+ * The evening cutoff (lib/lineDay.ts, 21:00 in the phone's `timeZone`): the
+ * app switches itself off; should a phone left on keep reporting from its
+ * background task (`source: 'background'`) after the session's cutoff, the
+ * report is refused with `{ online: false, autoOff: true }` and the row goes
+ * offline. The provider switching on again from the open app
+ * (`source: 'foreground'`) starts a new session, visible until midnight.
  */
 export async function GET(request: NextRequest) {
   const user = await getRequestUser(request);
@@ -50,6 +64,34 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'Доступ машиниста отключён' }, { status: 403 });
     }
   }
+  const now = new Date();
+  const existing = await prisma.linePresence.findUnique({ where: { userId: user.id } });
+  const reportedZone = validTimeZone(input.timeZone);
+  const timeZone = reportedZone ?? validTimeZone(existing?.timeZone) ?? LINE_DEFAULT_TIME_ZONE;
+  // The running session (online, with its start) is over by the evening cutoff.
+  const sessionOver = Boolean(
+    existing?.online &&
+    existing.onlineSince &&
+    lineSessionExpired(existing.onlineSince, now, timeZone),
+  );
+  if (input.online && input.source === 'background') {
+    // A background report continues a live session; it never starts one
+    // after the cutoff, nor keeps one the cutoff has ended.
+    const continues = Boolean(existing?.online && existing.onlineSince);
+    if (continues ? sessionOver : afterEveningCutoff(now, timeZone)) {
+      const presence = existing?.online
+        ? await prisma.linePresence.update({
+            where: { userId: user.id },
+            data: {
+              online: false,
+              note: null,
+              ...(reportedZone ? { timeZone: reportedZone } : {}),
+            },
+          })
+        : existing;
+      return NextResponse.json({ presence, online: false, autoOff: true });
+    }
+  }
   if (input.online && !input.equipmentId) {
     return NextResponse.json(
       { error: 'Выберите машину, с которой выходите на линию' },
@@ -77,12 +119,20 @@ export async function PUT(request: NextRequest) {
     equipmentId = input.equipmentId;
   }
 
-  const existing = await prisma.linePresence.findUnique({ where: { userId: user.id } });
   const note = input.online ? (input.note ?? null) : null;
+  // The provider switched on again from the open app after the cutoff: a new
+  // session. An older app (no `source`) cannot tell a phone left on from a
+  // provider at work, so its session ends at the cutoff and is renewed only
+  // the next morning — never on the evening itself.
+  const renewed =
+    input.online &&
+    sessionOver &&
+    (input.source === 'foreground' || (input.source === undefined && withinLineDay(now, timeZone)));
   // A phone reports at most once per PRESENCE_MIN_INTERVAL_MS, but only a pure
   // position update is throttled: going online, changing the machine or the
   // note is always applied (so offline → online within 15 s works).
   const pureMove =
+    !renewed &&
     existing !== null &&
     existing.online &&
     input.online &&
@@ -102,14 +152,16 @@ export async function PUT(request: NextRequest) {
     input.online &&
     (!existing ||
       !existing.online ||
+      renewed ||
       existing.equipmentId !== equipmentId ||
-      !isFresh(existing.updatedAt));
+      !isFresh(existing.updatedAt, now));
   const data = {
     companyId: user.companyId,
     online: input.online,
     equipmentId,
     note,
-    ...(wentOnline ? { onlineSince: new Date() } : {}),
+    ...(reportedZone ? { timeZone: reportedZone } : {}),
+    ...(wentOnline ? { onlineSince: now } : {}),
     ...(input.online ? { lat: input.lat as number, lon: input.lon as number } : {}),
   };
   const presence = await prisma.linePresence.upsert({

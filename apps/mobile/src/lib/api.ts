@@ -1335,15 +1335,27 @@ export interface LinePresence {
   updatedAt: string;
 }
 
-/** «На линии»: положение телефона и машина (PUT /api/line); offline — только { online: false }. */
+/**
+ * «На линии»: положение телефона и машина (PUT /api/line); offline — только
+ * { online: false }. `source` — кто отправляет (открытое приложение или
+ * фоновая задача), `timeZone` — пояс телефона для вечернего выключения.
+ * `autoOff` в ответе: вечер, фоновой задаче вернуть машину на линию нельзя.
+ */
 export function putLinePresence(input: {
   online: boolean;
   lat?: number;
   lon?: number;
   equipmentId?: string | null;
   note?: string;
+  source?: 'foreground' | 'background';
+  timeZone?: string;
 }) {
-  return apiFetch<{ presence: LinePresence; throttled?: boolean }>('/api/line', {
+  return apiFetch<{
+    presence: LinePresence | null;
+    throttled?: boolean;
+    autoOff?: boolean;
+    online?: boolean;
+  }>('/api/line', {
     method: 'PUT',
     body: input,
   });

@@ -834,6 +834,10 @@ model LinePresence {
   // When this machine last went online (offline → online or another machine),
   // for «Машина вышла на линию» in the activity strip. Null on older rows.
   onlineSince DateTime?
+  // The phone's IANA time zone («Asia/Novosibirsk»), sent with every report:
+  // the line switches itself off at 21:00 in the provider's own time
+  // (lib/lineDay.ts). Null on older rows — Moscow then.
+  timeZone    String?
   updatedAt   DateTime   @updatedAt
   createdAt   DateTime   @default(now())
 

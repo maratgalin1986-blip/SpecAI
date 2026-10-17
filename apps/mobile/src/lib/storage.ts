@@ -10,6 +10,14 @@ export const STORAGE_KEYS = {
   providerOnline: 'specai.providerOnline',
   /** Машина, с которой исполнитель выходит на линию (id Equipment). */
   lineEquipmentId: 'specai.lineEquipmentId',
+  /** Когда исполнитель вышел на линию (мс): вечером линия выключается сама. */
+  lineOnlineSince: 'specai.lineOnlineSince',
+  /** «Линия выключилась в 21:00…» — показать в ленте, пока не закроют или не выйдут снова. */
+  lineAutoOff: 'specai.lineAutoOff',
+  /** Утреннее напоминание «Пора на линию» (JSON: включено и время) — только на этом телефоне. */
+  lineReminder: 'specai.lineReminder',
+  /** Приветствие перед входом уже пройдено (выбран путь) — «1». */
+  welcomeSeen: 'specai.welcomeSeen',
   /** Закрытые подсказки (JSON-массив ключей) — только на этом телефоне. */
   hints: 'specai.hints',
   /** Сессия меню администратора (вход по паролю админки), не связана с аккаунтом. */

@@ -1,8 +1,10 @@
 import * as Location from 'expo-location';
 import { useEffect, useRef, useState } from 'react';
+import { AppState } from 'react-native';
 import { ApiError, putLinePresence } from './api';
-import { REPORT_DISTANCE_M, REPORT_INTERVAL_MS } from './line';
+import { deviceTimeZone, lineAutoOff, REPORT_DISTANCE_M, REPORT_INTERVAL_MS } from './line';
 import { startBackgroundLine, stopBackgroundLine } from './lineTask';
+import { lineOnlineSince, setLineAutoOff, setProviderOnline } from './prefs';
 import { STORAGE_KEYS, setItem } from './storage';
 
 export type PositionPermission = 'unknown' | 'granted' | 'denied';
@@ -10,6 +12,22 @@ export type PositionPermission = 'unknown' | 'granted' | 'denied';
 type Coords = { latitude: number; longitude: number };
 
 const NO_MACHINE_TEXT = 'Отметьте машину «Свободна» — без машины заказчики вас не видят';
+
+/**
+ * Вечер по времени телефона (21:00, line.ts): выключает переключатель «На
+ * линии» и оставляет в ленте объяснение. Сам уход с линии (PUT online:false и
+ * остановку фоновой задачи) делает эффект ниже, увидев выключенный
+ * переключатель. true — линия выключена.
+ */
+export function switchOffIfEvening(now: Date = new Date()): boolean {
+  const since = lineOnlineSince();
+  if (since === null) return false;
+  const off = lineAutoOff(new Date(since), now);
+  if (!off) return false;
+  setLineAutoOff(off);
+  setProviderOnline(false);
+  return true;
+}
 
 /** Ошибки, после которых повторять отправку бессмысленно: решает исполнитель. */
 export function isFinalLineError(error: unknown): boolean {
@@ -23,7 +41,9 @@ export function isFinalLineError(error: unknown): boolean {
  * REPORT_INTERVAL_MS с последним известным положением, чтобы стоящая машина
  * не пропадала с карты. Выбранная машина записывается в хранилище, чтобы
  * фоновая задача (lineTask.ts) отправляла ту же. Выключение переключателя
- * снимает машину с карты заказчиков.
+ * снимает машину с карты заказчиков. Вечером в 21:00 по времени телефона
+ * переключатель выключается сам (switchOffIfEvening) — и при каждой
+ * отправке, и по таймеру, и при возвращении в приложение.
  */
 export function useLineReporter(online: boolean, equipmentId: string | null) {
   const [permission, setPermission] = useState<PositionPermission>('unknown');
@@ -55,15 +75,20 @@ export function useLineReporter(online: boolean, equipmentId: string | null) {
       if (!wasOnline.current) return;
       wasOnline.current = false;
       void stopBackgroundLine();
-      putLinePresence({ online: false }).catch(() => undefined);
+      putLinePresence({ online: false, timeZone: deviceTimeZone() }).catch(() => undefined);
       return;
     }
     wasOnline.current = true;
+    // Линию включили вчера и не выключили — утром приложение открывают уже
+    // с выключенной: эффект перезапустится с online=false и снимет машину
+    // с карты (wasOnline уже true).
+    if (switchOffIfEvening()) return;
     let cancelled = false;
     let subscription: Location.LocationSubscription | null = null;
     let heartbeat: ReturnType<typeof setInterval> | null = null;
     const send = async (coords: Coords) => {
       lastCoords.current = coords;
+      if (switchOffIfEvening()) return;
       // Без машины сервер откажет (400): не шлём, а сразу говорим исполнителю.
       if (!equipmentRef.current) {
         if (!cancelled) setError(NO_MACHINE_TEXT);
@@ -75,6 +100,8 @@ export function useLineReporter(online: boolean, equipmentId: string | null) {
           lat: coords.latitude,
           lon: coords.longitude,
           equipmentId: equipmentRef.current,
+          source: 'foreground',
+          timeZone: deviceTimeZone(),
         });
         if (cancelled) return;
         setError(null);
@@ -110,7 +137,7 @@ export function useLineReporter(online: boolean, equipmentId: string | null) {
       );
       // Пульс: стоящая машина отправляет последнее известное положение раз в минуту.
       heartbeat = setInterval(() => {
-        if (cancelled) return;
+        if (cancelled || switchOffIfEvening()) return;
         if (lastCoords.current) {
           void send(lastCoords.current);
           return;
@@ -122,9 +149,14 @@ export function useLineReporter(online: boolean, equipmentId: string | null) {
           .catch(() => undefined);
       }, REPORT_INTERVAL_MS);
     })().catch(() => !cancelled && setPermission('denied'));
+    // Вернулись в приложение после вечера — линия выключается сразу, не через минуту.
+    const appState = AppState.addEventListener('change', (next) => {
+      if (next === 'active' && !cancelled) switchOffIfEvening();
+    });
     return () => {
       cancelled = true;
       subscription?.remove();
+      appState.remove();
       if (heartbeat) clearInterval(heartbeat);
     };
   }, [online]);
@@ -139,12 +171,14 @@ export function useLineReporter(online: boolean, equipmentId: string | null) {
       : Location.getLastKnownPositionAsync().then((position) => position?.coords ?? null)
     )
       .then((coords) => {
-        if (!coords) return;
+        if (!coords || switchOffIfEvening()) return;
         return putLinePresence({
           online: true,
           lat: coords.latitude,
           lon: coords.longitude,
           equipmentId,
+          source: 'foreground',
+          timeZone: deviceTimeZone(),
         }).then((result) => {
           setError(null);
           if (!result.throttled) setLastSentAt(new Date());

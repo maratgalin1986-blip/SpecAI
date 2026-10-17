@@ -6,14 +6,17 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Loader } from '@/components/ui';
 import { AuthProvider, useAuth } from '@/lib/auth';
 import { usePushRegistration } from '@/lib/push';
+import { useLineReminderSync } from '@/lib/useLineReminder';
 // Фоновая задача «на линии» регистрируется при старте приложения (и в фоне).
 import '@/lib/lineTask';
 import { colors } from '@/lib/theme';
 
 function RootNavigator() {
-  const { token, isLoading } = useAuth();
+  const { token, user, isLoading } = useAuth();
   // Push: registers this device after sign-in, forgets it on sign-out.
   usePushRegistration(token);
+  // Утреннее «Пора на линию» на телефоне исполнителя (локальное, ежедневное).
+  useLineReminderSync(token, user?.role);
 
   if (isLoading) {
     return <Loader />;
