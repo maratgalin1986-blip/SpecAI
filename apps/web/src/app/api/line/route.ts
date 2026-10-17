@@ -6,6 +6,7 @@ import { isOperator, isProvider } from '@/lib/fleet';
 import { INVALID_JSON_MESSAGE, readJson, zodErrorMessage } from '@/lib/apiInput';
 import { checkRateLimit } from '@/lib/rateLimit';
 import {
+  isFresh,
   machineUnavailableReason,
   noteHasContacts,
   PRESENCE_MIN_INTERVAL_MS,
@@ -94,11 +95,21 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json({ presence: existing, throttled: true });
   }
 
+  // «Машина вышла на линию» (lib/activity.ts): the moment it went online,
+  // kept while the same machine stays online; a phone back after its row went
+  // stale (customers stopped seeing it) is a new start.
+  const wentOnline =
+    input.online &&
+    (!existing ||
+      !existing.online ||
+      existing.equipmentId !== equipmentId ||
+      !isFresh(existing.updatedAt));
   const data = {
     companyId: user.companyId,
     online: input.online,
     equipmentId,
     note,
+    ...(wentOnline ? { onlineSince: new Date() } : {}),
     ...(input.online ? { lat: input.lat as number, lon: input.lon as number } : {}),
   };
   const presence = await prisma.linePresence.upsert({

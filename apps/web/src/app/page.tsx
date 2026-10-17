@@ -1,6 +1,7 @@
 import dynamic from 'next/dynamic';
 import { prisma } from '@specai/database';
 import { PUBLIC_AGENT_PROFILES } from '@specai/shared';
+import { ActivityBlock } from '@/components/ActivityBlock';
 import { CallbackForm } from '@/components/CallbackForm';
 import { CallbackIris } from '@/components/CallbackIris';
 import { TelegramButton } from '@/components/TelegramButton';
@@ -19,6 +20,7 @@ import { TiltCard } from '@/components/TiltCard';
 import type { Metadata } from 'next';
 import type { MachineType } from '@/lib/machinePhotos';
 import { pluralizeRu } from '@/lib/pluralize';
+import { loadActivity } from '@/lib/activityData';
 import { SITE } from '@/lib/site';
 import { fromPerHour, HAMMER_RATE, MIN_RATE, priceFaqAnswer, SHIFT_HOURS } from '@/lib/prices';
 
@@ -238,7 +240,10 @@ const HOME_FAQ = [
 ];
 
 export default async function HomePage() {
-  const { links: categoryLinks, available } = await loadCategoryLinks();
+  const [{ links: categoryLinks, available }, activity] = await Promise.all([
+    loadCategoryLinks(),
+    loadActivity(),
+  ]);
   const stats = [
     ...(available > 0
       ? [{ prefix: '', value: available, suffix: '', label: 'единиц техники свободно' }]
@@ -375,6 +380,9 @@ export default async function HomePage() {
           </div>
         ))}
       </section>
+
+      {/* «Сейчас на площадке»: today's real counts and anonymous events (lib/activity.ts). */}
+      <ActivityBlock initial={activity} />
 
       {/* Owner, 2026-10-11: the marketplace itself — two doors and the live board. */}
       <div className="depth">

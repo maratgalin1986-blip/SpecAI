@@ -1256,7 +1256,33 @@ export interface LiveMachine {
   updatedAt: string;
 }
 
-/** Техника на линии вокруг точки; без точки — вся свежая (карта по центру города). */
+/**
+ * Свободная машина СпецПласт16 на базе (GET /api/line/nearby → base): цена
+ * по прайсу, подпись «СпецПласт16 · машина · от N ₽/ч · на базе».
+ */
+export interface BaseMachine {
+  id: string;
+  lat: number;
+  lon: number;
+  company: { name: string; isHouse: true };
+  equipment: {
+    id: string;
+    name: string;
+    category: string | null;
+    categorySlug: string | null;
+    hourlyRate: number;
+    dailyRate: number;
+  };
+  /** «от 2 500 ₽/ч» или «цена договорная». */
+  priceText: string;
+  distanceKm: number | null;
+  bubble: string;
+}
+
+/**
+ * Техника на линии вокруг точки; без точки — вся свежая (карта по центру
+ * города). `base` — машины СпецПласт16 на базе (старый сервер его не шлёт).
+ */
 export function fetchNearbyLine(around: { lat: number; lon: number } | null, km?: number) {
   const q = new URLSearchParams();
   if (around) {
@@ -1265,7 +1291,21 @@ export function fetchNearbyLine(around: { lat: number; lon: number } | null, km?
   }
   if (km) q.set('km', String(km));
   const query = q.toString();
-  return apiFetch<{ machines: LiveMachine[] }>(`/api/line/nearby${query ? `?${query}` : ''}`);
+  return apiFetch<{ machines: LiveMachine[]; base?: BaseMachine[] }>(
+    `/api/line/nearby${query ? `?${query}` : ''}`,
+  );
+}
+
+/** «Сейчас на площадке» (GET /api/activity): реальные числа за московский день. */
+export interface Activity {
+  today: { orders: number; online: number; confirmed: number };
+  summary: string;
+  events: { kind: 'order' | 'line' | 'booking'; text: string; ago: string; at: string }[];
+  updatedAt: string;
+}
+
+export function fetchActivity() {
+  return apiFetch<Activity>('/api/activity', { anonymous: true });
 }
 
 export interface LinePresence {

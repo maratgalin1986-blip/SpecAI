@@ -1,6 +1,6 @@
 import * as Location from 'expo-location';
 import { useEffect, useState } from 'react';
-import { fetchNearbyLine, type LiveMachine } from './api';
+import { fetchNearbyLine, type BaseMachine, type LiveMachine } from './api';
 import { LIVE_REFRESH_MS } from './line';
 
 /**
@@ -11,6 +11,8 @@ import { LIVE_REFRESH_MS } from './line';
 export function useNearbyLine(enabled: boolean) {
   const [me, setMe] = useState<{ lat: number; lon: number } | null>(null);
   const [machines, setMachines] = useState<LiveMachine[]>([]);
+  // Свободные машины СпецПласт16 на базе (тот же ответ, поле base).
+  const [base, setBase] = useState<BaseMachine[]>([]);
   const [asked, setAsked] = useState(false);
 
   useEffect(() => {
@@ -43,7 +45,11 @@ export function useNearbyLine(enabled: boolean) {
     let cancelled = false;
     const load = () =>
       fetchNearbyLine(me)
-        .then((data) => !cancelled && setMachines(data.machines))
+        .then((data) => {
+          if (cancelled) return;
+          setMachines(data.machines);
+          setBase(data.base ?? []);
+        })
         .catch(() => undefined);
     void load();
     const timer = setInterval(() => void load(), LIVE_REFRESH_MS);
@@ -53,5 +59,5 @@ export function useNearbyLine(enabled: boolean) {
     };
   }, [enabled, asked, me]);
 
-  return { me, machines };
+  return { me, machines, base };
 }

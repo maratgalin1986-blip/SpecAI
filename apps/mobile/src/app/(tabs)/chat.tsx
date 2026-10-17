@@ -11,9 +11,20 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { EmptyState } from '@/components/ui';
+import { AI_TYPING, AI_UNAVAILABLE, aiDispatcherGreeting } from '@/lib/aiDispatcher';
 import { ApiError, fetchGuide, sendAgentMessage } from '@/lib/api';
+import { SITE } from '@/lib/site';
 import { colors, radius, spacing } from '@/lib/theme';
+
+/**
+ * Первое сообщение — всегда на экране и не уходит на сервер: диспетчер
+ * представляется программой (правило владельца: автоматическое подписано).
+ */
+const GREETING: UiMessage = {
+  id: 'greeting',
+  role: 'assistant',
+  content: aiDispatcherGreeting(SITE),
+};
 
 interface UiMessage {
   id: string;
@@ -38,14 +49,15 @@ function plainText(reply: string): string {
 /**
  * Чат — тот же диспетчер, что на сайте (POST /api/ai/agents): с ИИ-ключом
  * отвечают ИИ-агенты, без ключа — правиловые ответы и приём заявки по
- * телефону. История диалога живёт на экране и уходит с каждым сообщением.
+ * телефону. Отвечает всегда программа, и экран так и подписан: шапка
+ * «ИИ-диспетчер ИИСтройка24» и первое сообщение. История диалога живёт на
+ * экране и уходит с каждым сообщением (приветствие — нет).
  */
 export default function ChatScreen() {
   const insets = useSafeAreaInsets();
   const [messages, setMessages] = useState<UiMessage[]>([]);
   const [input, setInput] = useState('');
   const [streaming, setStreaming] = useState(false);
-  const ready = true;
   const listRef = useRef<FlatList<UiMessage>>(null);
 
   const scrollToEnd = useCallback(() => {
@@ -108,7 +120,7 @@ export default function ChatScreen() {
       .then((result) => patchAssistant({ content: plainText(result.reply), pending: false }))
       .catch((caught: unknown) =>
         patchAssistant({
-          content: caught instanceof ApiError ? caught.message : 'Ассистент сейчас недоступен',
+          content: caught instanceof ApiError ? caught.message : AI_UNAVAILABLE,
           pending: false,
           error: true,
         }),
@@ -137,20 +149,15 @@ export default function ChatScreen() {
         renderItem={({ item }) => <MessageBubble message={item} />}
         contentContainerStyle={styles.list}
         onContentSizeChange={scrollToEnd}
-        ListEmptyComponent={
-          ready ? (
-            <EmptyState
-              title="Чем помочь?"
-              description="Спросите, какая техника подойдёт под задачу, или уточните статус ваших бронирований."
-            />
-          ) : null
-        }
         ListHeaderComponent={
-          messages.length > 0 ? (
-            <Pressable onPress={startNewConversation} style={styles.newChat}>
-              <Text style={styles.newChatText}>Начать новый диалог</Text>
-            </Pressable>
-          ) : null
+          <View style={styles.header}>
+            {messages.length > 0 ? (
+              <Pressable onPress={startNewConversation} style={styles.newChat}>
+                <Text style={styles.newChatText}>Начать новый диалог</Text>
+              </Pressable>
+            ) : null}
+            <MessageBubble message={GREETING} />
+          </View>
         }
         keyboardShouldPersistTaps="handled"
       />
@@ -212,7 +219,7 @@ function MessageBubble({ message }: { message: UiMessage }) {
             message.error && styles.bubbleTextError,
           ]}
         >
-          {message.pending && !message.content ? 'Ассистент печатает…' : message.content}
+          {message.pending && !message.content ? AI_TYPING : message.content}
         </Text>
       </View>
     </View>
@@ -222,7 +229,8 @@ function MessageBubble({ message }: { message: UiMessage }) {
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.background },
   list: { padding: spacing.lg, gap: spacing.sm, flexGrow: 1 },
-  newChat: { alignSelf: 'center', paddingVertical: spacing.xs, marginBottom: spacing.sm },
+  header: { gap: spacing.sm },
+  newChat: { alignSelf: 'center', paddingVertical: spacing.xs },
   newChatText: { color: colors.primaryDark, fontSize: 13, fontWeight: '600' },
   bubbleRow: { flexDirection: 'row', justifyContent: 'flex-start' },
   bubbleRowUser: { justifyContent: 'flex-end' },

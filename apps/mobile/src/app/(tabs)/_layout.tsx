@@ -3,7 +3,9 @@ import { Tabs } from 'expo-router';
 import React from 'react';
 import type { ColorValue } from 'react-native';
 import { HelpButton } from '@/components/ModeSwitch';
+import { aiDispatcherTitle } from '@/lib/aiDispatcher';
 import { useAuth } from '@/lib/auth';
+import { SITE } from '@/lib/site';
 import { isProviderMode, usePrefs } from '@/lib/prefs';
 import { useUnreadMessages } from '@/lib/unread';
 import { colors } from '@/theme';
@@ -95,6 +97,8 @@ export default function TabsLayout() {
         name="chat"
         options={{
           title: 'Помощник',
+          // Отвечает программа — так и написано в шапке.
+          headerTitle: aiDispatcherTitle(SITE.name),
           tabBarIcon: tabIcon('chatbubble-ellipses-outline'),
           href: forCustomer,
         }}

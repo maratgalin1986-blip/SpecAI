@@ -117,7 +117,9 @@ async function markPaid(session: Stripe.Checkout.Session) {
         depositPaid: true,
         // Only a PENDING booking is auto-confirmed; an already CONFIRMED one
         // (the provider confirmed before payment) keeps its status.
-        ...(payment.booking.status === 'PENDING' ? { status: 'CONFIRMED' } : {}),
+        ...(payment.booking.status === 'PENDING'
+          ? { status: 'CONFIRMED', confirmedAt: new Date() }
+          : {}),
       },
     });
 
