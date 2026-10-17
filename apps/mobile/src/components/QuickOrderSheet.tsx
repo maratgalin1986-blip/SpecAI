@@ -17,6 +17,7 @@ import { DemandHint } from '@/components/DemandHint';
 import { Hint } from '@/components/Hint';
 import { Button, Segmented } from '@/components/ui';
 import { ApiError, createOrder, fetchCategories, type Category } from '@/lib/api';
+import { phoneNear } from '@/lib/phoneNear';
 import { popularCategories } from '@/lib/categoryGroups';
 import { addDays, pluralizeRu, startOfDay, toIsoDate } from '@/lib/format';
 import { categoryIcon, quickOrderDescription } from '@/lib/orderFlow';
@@ -101,6 +102,8 @@ export function QuickOrderSheet({
         desiredEndDate: toIsoDate(addDays(start, days - 1)),
         categoryId: category?.id,
         address: address.trim() || undefined,
+        // Улица без города ищется в городе телефона, а не где-то в России.
+        near: address.trim() ? await phoneNear() : null,
       });
       setNote('');
       router.push({ pathname: '/orders/[id]', params: { id: order.id } });

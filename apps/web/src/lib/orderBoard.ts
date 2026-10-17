@@ -296,8 +296,8 @@ export function isUrgent(desiredStartDate: Date, now: Date = new Date()): boolea
 }
 
 export const ANY_CATEGORY = 'Любая техника';
-/** An order without a city (the platform serves all of Russia, owner 2026-10-17). */
-export const DEFAULT_PLACE = 'Город уточняется';
+// An order whose place is unknown: no default region (the platform serves all of Russia).
+export const DEFAULT_PLACE = 'Место не указано';
 
 /** One row → one card. Only the fields listed here leave the server. */
 export function toBoardCard(row: BoardOrderRow, now: Date = new Date()): BoardCard {

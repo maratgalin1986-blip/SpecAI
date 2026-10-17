@@ -5,7 +5,6 @@
 // orderPoint). Pure, unit-tested; providerFeedData.ts loads the rows.
 import { moscowDateKey } from './bookingRules';
 import { distanceKm, orderPoint } from './geo';
-import { SITE } from './site';
 import {
   acceptedCategoryIds,
   providerMatchesOrder,
@@ -53,7 +52,6 @@ export function matchIncoming<T extends IncomingCandidate>(
   company: ProviderForMatch,
   categoryRows: readonly CategoryRow[],
   orders: readonly T[],
-  homeCity: string = SITE.city,
 ): T[] {
   const base =
     typeof company.baseLat === 'number' && typeof company.baseLon === 'number'
@@ -61,14 +59,15 @@ export function matchIncoming<T extends IncomingCandidate>(
       : null;
   const matched: { order: T; km: number | null; placed: boolean }[] = [];
   for (const order of orders) {
-    const point = orderPoint(order.location, homeCity);
+    const point = orderPoint(order.location);
     const fits = providerMatchesOrder(company, {
       categoryId: order.categoryId,
       categoryIds: acceptedCategoryIds(order.categoryId, categoryRows),
       lat: point?.lat,
       lon: point?.lon,
-      // No location at all is a home-city order, as in notifyProvidersAboutOrder.
-      city: order.location?.city ?? homeCity,
+      // As in notifyProvidersAboutOrder: no default town for an order whose
+      // place is unknown — only the house fleet and bases naming the town.
+      city: order.location?.city || null,
     });
     if (fits) {
       matched.push({
@@ -79,10 +78,9 @@ export function matchIncoming<T extends IncomingCandidate>(
     }
   }
   // «Рядом» means nearest first among the orders with a real point or a named
-  // city. An order with no location at all only stands at the home city as a
-  // fallback (0 km from a base in the centre), so it goes after them; orders
-  // with a place nobody can locate come last. Ties keep the input order
-  // (newest first).
+  // city; orders without any place (only the house fleet sees them) and
+  // orders with a place nobody can locate come after them. Ties keep the
+  // input order (newest first).
   return matched
     .sort((a, b) => {
       if (a.placed !== b.placed) return a.placed ? -1 : 1;

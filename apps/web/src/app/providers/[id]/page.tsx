@@ -17,6 +17,7 @@ import {
   providerPath,
 } from '@/lib/providerSeo';
 import { sinceLabel } from '@/lib/providerCards';
+import { cityInText, nearestCity } from '@/lib/geo';
 import { SITE } from '@/lib/site';
 import { siteUrl } from '@/lib/siteUrl';
 import { HOUSE_COMPANY_ID } from '@/lib/fleet';
@@ -73,6 +74,11 @@ function companyPlace(provider: {
 }
 
 function seoInput(provider: NonNullable<Awaited<ReturnType<typeof loadProvider>>>) {
+  const baseCity =
+    cityInText(provider.baseAddress) ??
+    (provider.baseLat != null && provider.baseLon != null
+      ? nearestCity(provider.baseLat, provider.baseLon, 40)
+      : null);
   const ratingCount = provider.reviews.length;
   const rating = ratingCount
     ? Math.round(
@@ -89,9 +95,10 @@ function seoInput(provider: NonNullable<Awaited<ReturnType<typeof loadProvider>>
     rating,
     ratingCount,
     machines: provider.equipment.map((item) => ({ name: item.name, category: item.category.name })),
-    // The platform serves all of Russia: a provider's own city, never
-    // СпецПласт16's (that one only for the house company).
-    ...companyPlace(provider),
+    // The platform serves all of Russia: the city of the provider's own base,
+    // else its own location (СпецПласт16's contacts only for the house company).
+    city: baseCity?.name ?? companyPlace(provider).city,
+    region: baseCity?.region ?? companyPlace(provider).region,
   };
 }
 

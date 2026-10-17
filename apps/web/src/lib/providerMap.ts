@@ -25,7 +25,7 @@ export type Checked<T> = { ok: true; value: T } | { ok: false; error: string };
 export const BASE_REQUIRED_MESSAGE =
   'Укажите, где стоит техника: адрес базы или точку на карте — по ней вас найдут заказчики';
 export const BASE_OUTSIDE_MESSAGE =
-  'Точка базы должна быть в Татарстане или соседних регионах — проверьте адрес или точку на карте';
+  'Точка базы должна быть в России — проверьте адрес или точку на карте';
 export const PIN_NOTE_CONTACTS_MESSAGE =
   'В подписи не указывайте телефон, e-mail и ссылки: заказчики связываются через заявку на сайте';
 
@@ -45,7 +45,7 @@ export function hasCoords(lat: unknown, lon: unknown): boolean {
 
 /**
  * A provider's base: both coordinates as numbers (or numeric strings), inside
- * Tatarstan and the neighbouring regions, rounded to six decimals (~10 cm).
+ * Russia (a rough box), rounded to six decimals (~10 cm).
  */
 export function parseBaseCoords(lat: unknown, lon: unknown): Checked<{ lat: number; lon: number }> {
   const la = toNumber(lat);

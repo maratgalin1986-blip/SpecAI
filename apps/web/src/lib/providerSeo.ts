@@ -46,7 +46,7 @@ export function providerJsonLd(p: ProviderSeoInput, base: string): Record<string
     name: p.name,
     url,
     description: p.description?.trim() || providerMetaDescription(p),
-    ...(p.region ? { areaServed: p.region } : {}),
+    areaServed: p.region ?? 'Россия',
     address: {
       '@type': 'PostalAddress',
       ...(p.baseAddress ? { streetAddress: p.baseAddress } : {}),

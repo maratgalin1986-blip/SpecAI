@@ -5,7 +5,7 @@ import { createGuestOrderSchema } from '@specai/shared';
 import { INVALID_JSON_MESSAGE, readJson, zodErrorMessage } from '@/lib/apiInput';
 import { bidsUntilFor } from '@/lib/bidWindow';
 import { checkBookingDates } from '@/lib/bookingRules';
-import { cityInText, geocodeAddress } from '@/lib/geo';
+import { addressCity, geocodeAddress, parseNear } from '@/lib/geo';
 import { GUEST_ORDER_SUCCESS } from '@/lib/guestOrder';
 import { technicalUserId } from '@/lib/ingest';
 import { notifyTelegram } from '@/lib/notify';
@@ -56,13 +56,17 @@ export async function POST(request: NextRequest) {
   }
 
   const address = parsed.data.address;
-  const place = address ? await geocodeAddress(address) : null;
+  // The phone's position (the app sends it when allowed): a bare street is
+  // looked up in the customer's town first, else across Russia.
+  const near = parseNear((body as { near?: unknown }).near);
+  const place = address ? await geocodeAddress(address, { near }) : null;
   const location = address
     ? await prisma.location.create({
         data: {
           addressLine: address,
-          // A failed lookup still keeps a city the address names («Елабуга, …»).
-          city: place?.city ?? cityInText(address)?.name ?? SITE.city,
+          // A failed lookup still keeps a city the address names («Елабуга, …»);
+          // otherwise the city stays empty (unknown), never a default town.
+          city: addressCity(address, place),
           country: 'Россия',
           latitude: place?.lat ?? null,
           longitude: place?.lon ?? null,

@@ -12,8 +12,8 @@ import {
   UNKNOWN_CITY,
 } from './providerCards';
 import { HOUSE_COMPANY_ID } from './fleet';
-import { EMPTY_STATS } from './reliability';
 import { SITE } from './site';
+import { EMPTY_STATS } from './reliability';
 
 export interface ProviderList {
   cards: ProviderCard[];

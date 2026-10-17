@@ -19,8 +19,16 @@ export interface ProviderPin {
   catalogUrl: string;
 }
 
-/** Набережные Челны — центр карты, пока точек нет. */
-export const MAP_CENTER = { lat: 55.7436, lon: 52.3958 } as const;
+/**
+ * Площадка работает по всей России: без точек и без положения телефона карта
+ * открывается обзором страны (её европейской части на экране телефона), с
+ * одной точкой — на ней, с несколькими — по их границам; положение заказчика
+ * (window.setMe) переносит карту к нему.
+ */
+export const MAP_CENTER = { lat: 57, lon: 55 } as const;
+export const MAP_OVERVIEW_ZOOM = 3;
+/** Тайлы прокси сайта есть с этого масштаба (apps/web/src/lib/geo.ts TILE_MIN_ZOOM). */
+export const MAP_MIN_ZOOM = 3;
 
 /** СпецПласт16 первым (правило владельца), остальные — у кого больше техники. */
 export function sortPins(pins: ProviderPin[]): ProviderPin[] {
@@ -117,9 +125,9 @@ background:#f3f4f6;color:${colors.text};border-radius:12px;padding:6px 10px;text
 <script>
 var pins = ${scriptJson(data)};
 var map = L.map('map', { zoomControl: false, attributionControl: true })
-  .setView([${MAP_CENTER.lat}, ${MAP_CENTER.lon}], 10);
+  .setView([${MAP_CENTER.lat}, ${MAP_CENTER.lon}], ${MAP_OVERVIEW_ZOOM});
 L.tileLayer(${JSON.stringify(TILES_URL)}, {
-  minZoom: 6, maxZoom: 18, attribution: '&copy; OpenStreetMap'
+  minZoom: ${MAP_MIN_ZOOM}, maxZoom: 18, attribution: '&copy; OpenStreetMap'
 }).addTo(map);
 function text(value) { var el = document.createElement('span'); el.textContent = value; return el.innerHTML; }
 function send(pin) {
@@ -152,6 +160,7 @@ pins.slice().reverse().forEach(function (pin) {
   bounds.push([pin.lat, pin.lon]);
 });
 if (bounds.length > 1) map.fitBounds(bounds, { padding: [40, 40], maxZoom: 11 });
+else if (bounds.length === 1) map.setView(bounds[0], 10);
 // «На линии»: the app pushes the fresh online machines (window.setLive) and
 // the customer's own position (window.setMe); each machine is a green pin
 // with a bubble: a small «Я на линии» line, then «машина · цена · имя» and

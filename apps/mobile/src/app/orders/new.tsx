@@ -13,6 +13,7 @@ import { CategoryPickerModal } from '@/components/CategoryPickerModal';
 import { DateField } from '@/components/DateField';
 import { Button, Card, Chip, Input } from '@/components/ui';
 import { ApiError, createOrder, fetchCategories, type Category } from '@/lib/api';
+import { phoneNear } from '@/lib/phoneNear';
 import { popularCategories } from '@/lib/categoryGroups';
 import { addDays, bookingDays, pluralizeRu, startOfDay, toIsoDate } from '@/lib/format';
 import { categoryIcon } from '@/lib/orderFlow';
@@ -76,6 +77,8 @@ export default function NewOrderScreen() {
         desiredEndDate: toIsoDate(endDate),
         categoryId: categoryId ?? undefined,
         address: address.trim() || undefined,
+        // Улица без города ищется в городе телефона, а не где-то в России.
+        near: address.trim() ? await phoneNear() : null,
       });
       router.replace({ pathname: '/orders/[id]', params: { id: order.id } });
     } catch (caught) {

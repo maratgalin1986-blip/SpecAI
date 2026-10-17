@@ -5,7 +5,6 @@ import { moscowDateKey } from './bookingRules';
 import { stripChatOrderNote } from './chatOrders';
 import { providerMatchesOrder, type ProviderForMatch } from './notifications/routing';
 import { maskContacts } from './privacy';
-import { SITE } from './site';
 
 const DAY_MS = 86_400_000;
 
@@ -54,8 +53,8 @@ function shortDay(date: Date): string {
 
 /**
  * «экскаватор, Елабуга, 17–19.10: копать траншею 100 м» — one line of the
- * digest. An order without an address is a home-city one (SITE.city), as the
- * matching assumes; the excerpt is masked and never carries the chat notice.
+ * digest. An order without a city names none («экскаватор, 17–19.10: …»):
+ * no default town. The excerpt is masked and never carries the chat notice.
  */
 export function digestItem(order: {
   categoryName?: string | null;
@@ -65,8 +64,8 @@ export function digestItem(order: {
   endDate?: Date | null;
 }) {
   const what = (order.categoryName ?? 'техника').toLowerCase();
-  const where = order.city?.trim() || SITE.city;
-  const parts = [`${what}, ${where}`];
+  const where = order.city?.trim();
+  const parts = [where ? `${what}, ${where}` : what];
   if (
     order.startDate &&
     order.endDate &&

@@ -53,6 +53,18 @@ describe('providers map', () => {
     expect(html).not.toContain('tile.openstreetmap.org');
   });
 
+  it('opens on Russia, not on one city, until there are points or a position', () => {
+    const html = providersMapHtml([], COLORS);
+    expect(html).toContain('.setView([57, 55], 3)');
+    expect(html).toContain('minZoom: 3');
+    expect(html).not.toContain('55.7436');
+    // One company: the map opens on it; several: on their bounds.
+    expect(html).toContain('else if (bounds.length === 1) map.setView(bounds[0], 10);');
+    expect(html).toContain('map.fitBounds(bounds');
+    // The customer's own position moves the map to them (window.setMe).
+    expect(html).toContain('if (center) map.setView([point.lat, point.lon]');
+  });
+
   it('builds a page with every pin', () => {
     const html = providersMapHtml(
       [pin({ id: 'x1', note: 'Подача бесплатно' }), pin({ id: 'house', isHouse: true })],

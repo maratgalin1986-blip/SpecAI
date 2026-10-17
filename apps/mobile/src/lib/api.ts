@@ -1,3 +1,4 @@
+import type { NearPoint } from './near';
 import type { ProviderPin } from './providersMap';
 import { STORAGE_KEYS, getItem } from './storage';
 
@@ -445,7 +446,13 @@ export type RegisterInput = {
   consent: true;
 } & (
   | { accountType: 'CUSTOMER' }
-  | { accountType: 'PROVIDER'; companyName: string; baseAddress: string }
+  | {
+      accountType: 'PROVIDER';
+      companyName: string;
+      baseAddress: string;
+      /** Положение телефона (lib/near.ts): город для адреса базы без города. */
+      near?: NearPoint | null;
+    }
 );
 
 /** Регистрация заказчика или исполнителя (с компанией и адресом базы). */
@@ -462,6 +469,7 @@ export function becomeProvider(input: {
   companyName: string;
   baseAddress: string;
   phone?: string;
+  near?: NearPoint | null;
 }) {
   return apiFetch<{
     user: { id: string; email: string; name: string; role: UserRole; companyId: string | null };
@@ -529,6 +537,8 @@ export function createOrder(input: {
   categoryId?: string;
   /** Адрес объекта: сервер геокодирует его для погоды и карты. */
   address?: string;
+  /** Положение телефона (lib/near.ts): адрес ищется сначала рядом. */
+  near?: NearPoint | null;
 }) {
   return apiFetch<{ order: Order }>('/api/orders', { method: 'POST', body: input });
 }
@@ -673,6 +683,7 @@ export function fetchMyCompanyPin() {
 
 export function updateMyCompanyPin(input: {
   baseAddress?: string;
+  near?: NearPoint | null;
   pinImageUrl?: string | null;
   pinNote?: string;
   deliveryRadiusKm?: number;

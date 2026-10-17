@@ -15,6 +15,7 @@ import * as WebBrowser from 'expo-web-browser';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button, Input } from '@/components/ui';
 import { API_URL, ApiError, register } from '@/lib/api';
+import { phoneNear } from '@/lib/phoneNear';
 import { useAuth } from '@/lib/auth';
 import { SITE } from '@/lib/site';
 import { colors, spacing } from '@/lib/theme';
@@ -92,6 +93,7 @@ export default function RegisterScreen() {
               accountType,
               companyName: companyName.trim(),
               baseAddress: baseAddress.trim(),
+              near: await phoneNear(),
             }
           : { ...payload, accountType },
       );

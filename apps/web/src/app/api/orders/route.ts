@@ -7,7 +7,7 @@ import { matchIncoming, todayStartMsk } from '@/lib/providerFeed';
 import { loadProviderMatch } from '@/lib/providerFeedData';
 import { bidsUntilFor } from '@/lib/bidWindow';
 import { maskedContactFor } from '@/lib/chatOrders';
-import { cityInText, geocodeAddress } from '@/lib/geo';
+import { addressCity, geocodeAddress, parseNear } from '@/lib/geo';
 import { notifyTelegram } from '@/lib/notify';
 import { notifyProvidersAboutOrder } from '@/lib/notifications/notifyUser';
 import { SITE } from '@/lib/site';
@@ -20,7 +20,6 @@ import { bidForCustomer } from '@/lib/bidPrivacy';
 import { maskContactsAndLinks } from '@/lib/privacy';
 import {
   assessWork,
-  CHELNY,
   fetchForecast,
   machineGroup,
   mskParts,
@@ -249,13 +248,17 @@ export async function POST(request: NextRequest) {
 
   // The work site: geocoded once here, used for the weather and the map.
   const address = parsed.data.address;
-  const place = address ? await geocodeAddress(address) : null;
+  // The phone's position (the app sends it when allowed): a bare street is
+  // looked up in the customer's town first, else across Russia.
+  const near = parseNear((body as { near?: unknown }).near);
+  const place = address ? await geocodeAddress(address, { near }) : null;
   const location = address
     ? await prisma.location.create({
         data: {
           addressLine: address,
-          // A failed lookup still keeps a city the address names («Елабуга, …»).
-          city: place?.city ?? cityInText(address)?.name ?? SITE.city,
+          // A failed lookup still keeps a city the address names («Елабуга, …»);
+          // otherwise the city stays empty (unknown), never a default town.
+          city: addressCity(address, place),
           country: 'Россия',
           latitude: place?.lat ?? null,
           longitude: place?.lon ?? null,
@@ -296,8 +299,8 @@ async function orderMessage(
   place: { lat: number; lon: number; label: string } | null,
   origin: string,
 ) {
-  const where = place ?? { ...CHELNY, label: SITE.city };
-  const points = await fetchForecast(where.lat, where.lon);
+  // The weather only for a known place: no forecast for a town we guessed.
+  const points = place ? await fetchForecast(place.lat, place.lon) : null;
   const weather = points
     ? shiftWeather(points, mskParts(order.desiredStartDate.toISOString()).date)
     : null;

@@ -78,7 +78,7 @@ function ProviderListCard({ card }: { card: ProviderCard }) {
           <div>
             <dt className="text-graphite-400">База</dt>
             <dd className="font-semibold text-graphite-800">
-              {card.isHouse ? SITE.city : card.city}
+              {card.isHouse ? SITE.city : card.city || 'не указана'}
             </dd>
           </div>
           <div>

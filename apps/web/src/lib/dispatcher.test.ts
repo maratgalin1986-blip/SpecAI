@@ -69,6 +69,13 @@ describe('faqAnswers and wantsPrice', () => {
     expect(faqAnswers('сколько часов смена').join(' ')).toContain('8 часов');
     expect(faqAnswers('привет')).toEqual([]);
   });
+  it('says the platform works all over Russia, the house fleet in Tatarstan', () => {
+    for (const question of ['Где вы работаете?', 'В каком регионе?', 'Работаете по России?']) {
+      const answer = faqAnswers(question).join(' ');
+      expect(answer).toContain('по всей России');
+      expect(answer).toContain('Набережных Челнах и Татарстане');
+    }
+  });
   it('explains the aggregator: providers bid, the house fleet among them', () => {
     const answer = faqAnswers('Вы посредник или своя техника?').join(' ');
     expect(answer).toContain('исполнители');

@@ -6,7 +6,7 @@ import { LIVE_REFRESH_MS } from './line';
 /**
  * Карта заказчика: положение телефона (если разрешено) и техника на линии
  * вокруг него, перечитывается каждые LIVE_REFRESH_MS. Без разрешения —
- * вся свежая техника, карта по центру города.
+ * вся свежая техника, карта по точкам исполнителей или обзором России.
  */
 export function useNearbyLine(enabled: boolean) {
   const [me, setMe] = useState<{ lat: number; lon: number } | null>(null);

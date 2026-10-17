@@ -2,7 +2,13 @@
 
 import { useEffect, useRef, useState } from 'react';
 import type { Map as LeafletMap, Marker } from 'leaflet';
-import { CHELNY, createBaseMap, loadLeaflet, pinIcon } from '@/components/leaflet';
+import {
+  centreOnVisitor,
+  createBaseMap,
+  loadLeaflet,
+  nearParam,
+  pinIcon,
+} from '@/components/leaflet';
 import { ConsentText } from '@/components/ConsentText';
 import { LeadSuccess } from '@/components/LeadSuccess';
 import { formatCoords, inServiceArea } from '@/lib/geo';
@@ -44,14 +50,12 @@ export function OrderMap({ embed = false }: { embed?: boolean }) {
     loadLeaflet()
       .then((L) => {
         if (cancelled || !element.current || mapRef.current) return;
-        const map = createBaseMap(L, element.current, {
-          center: [CHELNY.lat, CHELNY.lon],
-          zoom: 12,
-        });
+        const map = createBaseMap(L, element.current);
         mapRef.current = map;
+        centreOnVisitor(map);
         const place = (lat: number, lon: number, zoom?: number) => {
           if (!inServiceArea(lat, lon)) {
-            setHint('Работаем в Татарстане и соседних регионах — поставьте точку ближе');
+            setHint('Поставьте точку в России');
             return;
           }
           setHint(null);
@@ -102,7 +106,9 @@ export function OrderMap({ embed = false }: { embed?: boolean }) {
     if (query.trim().length < 3) return;
     setSearching(true);
     try {
-      const res = await fetch(`/api/geocode?q=${encodeURIComponent(query.trim())}`);
+      const res = await fetch(
+        `/api/geocode?q=${encodeURIComponent(query.trim())}${nearParam(mapRef.current)}`,
+      );
       const body = await res.json().catch(() => null);
       if (res.ok && body?.place) placeRef.current(body.place.lat, body.place.lon, 16);
       else setHint(body?.error ?? 'Адрес не найден — поставьте точку на карте');

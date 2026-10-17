@@ -83,8 +83,10 @@ describe('digestsForCompanies', () => {
     ]);
   });
 
-  it('names the home city for an order without an address', () => {
-    expect(digestItem({ categoryName: null, city: null })).toBe('техника, Набережные Челны');
+  it('names no town for an order without an address', () => {
+    expect(digestItem({ categoryName: null, city: null })).toBe('техника');
+    expect(digestItem({ categoryName: 'Автокраны', city: '  ' })).toBe('автокраны');
+    expect(digestItem({ categoryName: 'Автокраны', city: 'Самара' })).toBe('автокраны, Самара');
   });
 
   it('tells orders apart by the excerpt and the dates', () => {
