@@ -4,6 +4,7 @@ import * as WebBrowser from 'expo-web-browser';
 import React from 'react';
 import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { ContactActions } from '@/components/ContactActions';
+import { ProposalsLink } from '@/components/ProposalsLink';
 import { Card } from '@/components/ui';
 import { SERVICES, SITE } from '@/lib/site';
 import { colors, radius, spacing } from '@/lib/theme';
@@ -94,6 +95,8 @@ export default function AboutScreen() {
           <LinkRow label="Правила площадки" onPress={() => void openSite('/pravila')} />
           <LinkRow label="Политика конфиденциальности" onPress={() => void openSite('/privacy')} />
         </Card>
+
+        <ProposalsLink />
 
         <Text style={styles.legal}>
           © {new Date().getFullYear()} {SITE.legalName} · ИНН {SITE.inn} · КПП {SITE.kpp}

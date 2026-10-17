@@ -13,6 +13,7 @@ const PAGES = [
   '/privacy',
   '/arenda/samosval',
   '/kak-polzovatsya',
+  '/predlozheniya',
 ];
 
 const ALLOWED_EXTERNAL = [
@@ -109,6 +110,35 @@ test('callback form sends a lead without a name', async ({ page }) => {
   await form.getByRole('button', { name: 'Жду звонка' }).click();
   await expect(page.getByText(/Заявка у диспетчера/)).toBeVisible();
   expect(sent.body?.phone).toBe('+7 927 000-00-00');
+  expect(errors, 'page errors').toEqual([]);
+});
+
+// «Предложения и партнёрство»: errors under the fields, then the thank-you.
+test('proposal form: inline errors, then sent', async ({ page }) => {
+  const errors = await guard(page);
+  const sent: { body?: Record<string, unknown> } = {};
+  await page.route('**/api/proposals', (route) => {
+    sent.body = route.request().postDataJSON();
+    return route.fulfill({ status: 201, contentType: 'application/json', body: '{"ok":true}' });
+  });
+  await page.goto('/predlozheniya', { waitUntil: 'load' });
+  await page.getByRole('button', { name: 'Отправить' }).click();
+  await expect(page.getByText('Как к вам обращаться?')).toBeVisible();
+  await expect(page.getByText('Нужно согласие на обработку персональных данных')).toBeVisible();
+  expect(sent.body).toBeUndefined();
+
+  await page.getByText('Сотрудничество и партнёрство').click();
+  await page.getByLabel('Имя').fill('Тест');
+  await page.getByLabel('Телефон или e-mail для ответа').fill('test@example.com');
+  await page.getByLabel('Расскажите подробнее').fill('Предлагаем совместную рекламу техники.');
+  await page.locator('input[name="consent"]').check();
+  await page.getByRole('button', { name: 'Отправить' }).click();
+  await expect(page.getByText('Спасибо! Мы прочитаем и ответим.')).toBeVisible();
+  expect(sent.body).toMatchObject({
+    kind: 'PARTNERSHIP',
+    contact: 'test@example.com',
+    consent: true,
+  });
   expect(errors, 'page errors').toEqual([]);
 });
 

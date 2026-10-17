@@ -3,6 +3,7 @@ import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSwitchMode } from '@/components/ModeSwitch';
+import { ProposalsLink } from '@/components/ProposalsLink';
 import { Button, Card } from '@/components/ui';
 import { useAuth } from '@/lib/auth';
 import { resetHints } from '@/lib/hints';
@@ -110,6 +111,7 @@ export default function GuideScreen() {
       <Text style={styles.note}>
         Подсказки появляются на каждом шаге и прячутся по «Понятно». Вопрос — звоните {SITE.phone}.
       </Text>
+      <ProposalsLink />
     </ScrollView>
   );
 }

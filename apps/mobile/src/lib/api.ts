@@ -404,6 +404,24 @@ export function fetchEquipmentById(id: string) {
   });
 }
 
+/**
+ * «Предложения и партнёрство» — доступно без входа; вошедший отправляет свой
+ * токен, и сервер сам привязывает сообщение к аккаунту.
+ */
+export function sendProposal(body: {
+  kind: 'IDEA' | 'PARTNERSHIP';
+  name: string;
+  contact: string;
+  message: string;
+  company?: string;
+  consent: true;
+}) {
+  return apiFetch<{ ok: boolean; message?: string }>('/api/proposals', {
+    method: 'POST',
+    body,
+  });
+}
+
 /** Заказ обратного звонка — доступен без входа. `consent` обязателен (152-ФЗ). */
 export function createLead(input: CreateLeadInput) {
   return apiFetch<{ ok: boolean }>('/api/leads', {

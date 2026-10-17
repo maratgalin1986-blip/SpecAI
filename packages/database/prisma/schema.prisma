@@ -59,6 +59,7 @@ model User {
   commentsReceived   Comment[]           @relation("CommentTarget")
   operator           Operator?
   linePresence       LinePresence?
+  proposals          Proposal[]
 
   @@index([companyId])
   @@index([referralCode])
@@ -848,4 +849,24 @@ model AppSetting {
   key       String   @id
   value     String
   updatedAt DateTime @updatedAt
+}
+
+// «Предложения и партнёрство» (owner, 2026-10-17): ideas about the service and
+// partnership offers from anyone, guests included (POST /api/proposals). The
+// owner reads them in the admin area. Strings, not enums (CLAUDE.md, rule 2):
+// kind "IDEA" | "PARTNERSHIP", status "NEW" | "READ" | "ARCHIVED".
+model Proposal {
+  id        String   @id @default(cuid())
+  kind      String
+  name      String
+  contact   String
+  message   String
+  company   String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  userId    String?
+  status    String   @default("NEW")
+  createdAt DateTime @default(now())
+
+  @@index([status, createdAt])
+  @@index([userId])
 }

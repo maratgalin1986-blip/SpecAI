@@ -70,6 +70,13 @@ function AdminMenu() {
       href: '/admin/orders',
     },
     {
+      icon: 'bulb-outline',
+      title: 'Предложения',
+      text: 'Идеи по сервису и предложения о сотрудничестве',
+      badge: badgeCount(stats?.proposals),
+      href: '/admin/proposals',
+    },
+    {
       icon: 'business-outline',
       title: 'Исполнители',
       text: 'Компании и отметка «Проверен»',
