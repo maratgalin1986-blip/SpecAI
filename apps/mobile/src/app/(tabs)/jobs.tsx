@@ -10,6 +10,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import { Hint } from '@/components/Hint';
 import { ProviderBookingOps } from '@/components/ProviderBookingOps';
 import {
   Badge,
@@ -328,6 +329,7 @@ export default function JobsScreen() {
   const header = (
     <View style={styles.header}>
       <Segmented options={VIEWS} value={view} onChange={setView} />
+      <Hint ids="jobs.list" />
       {error ? <ErrorBanner message={error} onRetry={() => void load()} /> : null}
     </View>
   );

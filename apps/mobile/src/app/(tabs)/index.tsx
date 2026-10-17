@@ -3,6 +3,7 @@ import { Redirect, useFocusEffect, useRouter } from 'expo-router';
 import React, { useCallback, useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { HelpButton, ModeSwitch } from '@/components/ModeSwitch';
 import { ProvidersMap } from '@/components/ProvidersMap';
 import { QuickOrderSheet } from '@/components/QuickOrderSheet';
 import { fetchMyOrders, type Order } from '@/lib/api';
@@ -10,7 +11,7 @@ import { useAuth } from '@/lib/auth';
 import { useNearbyLine } from '@/lib/useNearbyLine';
 import { pluralizeRu } from '@/lib/format';
 import { categoryIcon, pointAddress } from '@/lib/orderFlow';
-import { isProviderMode, setAppMode, usePrefs } from '@/lib/prefs';
+import { isProviderMode, usePrefs } from '@/lib/prefs';
 import { SITE } from '@/lib/site';
 import { colors, radius, shadow, spacing, TAP } from '@/theme';
 
@@ -31,8 +32,8 @@ function pickActiveOrder(orders: Order[]): Order | null {
 
 /**
  * Главная заказчика: карта исполнителей на весь экран и шторка быстрого
- * заказа снизу. Сверху — бренд, каталог и (у исполнителя в «Режиме
- * заказчика») кнопка возврата в кабинет.
+ * заказа снизу. Сверху — бренд, каталог, «?» (как пользоваться) и у
+ * исполнителя переключатель «Заказчик | Исполнитель».
  */
 export default function HomeScreen() {
   const router = useRouter();
@@ -94,20 +95,6 @@ export default function HomeScreen() {
           </Text>
         </View>
         <View style={styles.topActions}>
-          {isProvider ? (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Вернуться в кабинет исполнителя"
-              onPress={() => {
-                setAppMode('provider');
-                router.replace('/(tabs)/feed');
-              }}
-              style={({ pressed }) => [styles.modePill, pressed && styles.pressed]}
-            >
-              <Ionicons name="swap-horizontal" size={16} color={colors.onDark} />
-              <Text style={styles.modePillText}>В кабинет</Text>
-            </Pressable>
-          ) : null}
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Исполнители"
@@ -133,6 +120,15 @@ export default function HomeScreen() {
             <Ionicons name="expand-outline" size={22} color={colors.text} />
           </Pressable>
         </View>
+      </View>
+      <View
+        style={[styles.secondRow, { top: insets.top + spacing.sm + TAP + spacing.sm }]}
+        pointerEvents="box-none"
+      >
+        {/* Исполнитель в режиме заказчика возвращается к ленте одним касанием. */}
+        <ModeSwitch style={styles.modeSwitch} />
+        <View style={styles.flex} pointerEvents="none" />
+        <HelpButton />
       </View>
 
       <KeyboardAvoidingView
@@ -207,17 +203,16 @@ const styles = StyleSheet.create({
   brandMarkText: { color: colors.primary, fontWeight: '900', fontSize: 15 },
   brandText: { fontSize: 15, fontWeight: '800', color: colors.text, flexShrink: 1 },
   topActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  modePill: {
+  secondRow: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    paddingHorizontal: spacing.lg,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.xs,
-    minHeight: TAP,
-    paddingHorizontal: spacing.md,
-    borderRadius: radius.pill,
-    backgroundColor: colors.dark,
-    ...shadow.card,
+    gap: spacing.sm,
   },
-  modePillText: { color: colors.onDark, fontWeight: '700', fontSize: 13 },
+  modeSwitch: { width: 250, flexShrink: 1 },
   roundButton: {
     width: TAP,
     height: TAP,

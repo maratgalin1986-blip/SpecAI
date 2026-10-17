@@ -16,6 +16,8 @@ import {
 import { BidCountdown } from '@/components/BidCountdown';
 import { BidForm } from '@/components/BidForm';
 import { DemandCard } from '@/components/DemandCard';
+import { Hint } from '@/components/Hint';
+import { ModeSwitch } from '@/components/ModeSwitch';
 import { OrderContact } from '@/components/OrderContact';
 import { MachineIncomeCard } from '@/components/MachineIncomeCard';
 import {
@@ -665,6 +667,7 @@ export default function FeedScreen() {
 
   const header = (
     <View style={styles.header}>
+      <ModeSwitch />
       <OnlineSwitch
         online={online}
         onToggle={() => {
@@ -683,6 +686,8 @@ export default function FeedScreen() {
         onMachine={chooseLineMachine}
         status={lineStatus}
       />
+      {/* Пока открыта форма цены, подсказка — в ней; здесь не дублируем. */}
+      <Hint ids={online ? 'feed.online' : 'feed.start'} hidden={openBidFor !== null} />
       {equipment.length > 0 ? <FleetStrip equipment={equipment} onChange={changeStatus} /> : null}
       <View style={styles.stats}>
         <StatTile

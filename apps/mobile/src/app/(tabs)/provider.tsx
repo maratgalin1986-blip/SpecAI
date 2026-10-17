@@ -1,5 +1,5 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { Link, useFocusEffect } from 'expo-router';
+import { Link, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useState } from 'react';
 import {
   Alert,
@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { DeliverySettingsCard } from '@/components/DeliverySettingsCard';
 import { DocumentsCard } from '@/components/DocumentsCard';
+import { Hint, HintCard } from '@/components/Hint';
 import { EquipmentDocBadge } from '@/components/EquipmentDocBadge';
 import { MachineIncomeCard } from '@/components/MachineIncomeCard';
 import { MyMapPinCard } from '@/components/MyMapPinCard';
@@ -136,6 +137,9 @@ function EquipmentRow({
  * Брони переехали во вкладку «Мои заказы»; здесь — напоминание о неподтверждённых.
  */
 export default function ProviderFleetScreen() {
+  const router = useRouter();
+  // «Стать исполнителем» открывает «Технику» с ?welcome=1 — зелёная «Готово!».
+  const { welcome } = useLocalSearchParams<{ welcome?: string }>();
   const [equipment, setEquipment] = useState<Equipment[] | null>(null);
   const [waiting, setWaiting] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
@@ -191,6 +195,16 @@ export default function ProviderFleetScreen() {
           </Pressable>
         </Link>
       ) : null}
+      {welcome === '1' ? (
+        <HintCard
+          tone="success"
+          icon="checkmark-circle-outline"
+          text="Готово! Вы исполнитель. Добавьте первую машину — с ценой за смену и фото, и заказчики увидят её."
+          onClose={() => router.setParams({ welcome: undefined })}
+        />
+      ) : (
+        <Hint ids="fleet.list" />
+      )}
       <NextStepCard />
       {error ? <ErrorBanner message={error} onRetry={() => void load()} /> : null}
       <Link href="/provider/equipment/new" asChild>
