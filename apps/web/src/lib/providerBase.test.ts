@@ -23,9 +23,16 @@ describe('addressVariants', () => {
     expect(variants).toContain('пр. Мира 10');
   });
 
+  it('treats a bare street name as a Набережные Челны street, not a town', () => {
+    // «Мира» alone: a street the provider typed without the city.
+    expect(addressVariants('Мира')[0]).toBe('Мира, Набережные Челны');
+    expect(addressVariants('Тверская')[0]).toBe('Тверская, Набережные Челны');
+    // A comma part without digits or street words does name a town.
+    expect(addressVariants('Москва, Тверская 3')[0]).toBe('Москва, Тверская 3');
+  });
+
   it('tries Набережные Челны first for a street with a comma but no town', () => {
     expect(addressVariants('пр-т Мира, 10')[0]).toBe('проспект Мира, 10, Набережные Челны');
-    expect(addressVariants('Москва, Тверская 3')[0]).toBe('Москва, Тверская 3');
     expect(addressVariants('ул Мира 10')[0]).toBe('улица Мира 10, Набережные Челны');
   });
 

@@ -160,11 +160,10 @@ export function liveMachines(
   const shown = new Set<string>();
   for (const row of rows) {
     if (!row.online || !isFresh(row.updatedAt, now)) continue;
-    if (row.equipment && row.equipment.status !== 'AVAILABLE') continue;
-    if (row.equipment) {
-      if (freshest.get(row.equipment.id) !== row.updatedAt || shown.has(row.equipment.id)) continue;
-      shown.add(row.equipment.id);
-    }
+    // No machine (deleted after going online) or not «Свободна»: nothing to book.
+    if (!row.equipment || row.equipment.status !== 'AVAILABLE') continue;
+    if (freshest.get(row.equipment.id) !== row.updatedAt || shown.has(row.equipment.id)) continue;
+    shown.add(row.equipment.id);
     const km = around ? distanceKm(around, { lat: row.lat, lon: row.lon }) : null;
     if (km !== null && km > radiusKm) continue;
     result.push({

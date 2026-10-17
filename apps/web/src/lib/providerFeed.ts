@@ -67,7 +67,8 @@ export function matchIncoming<T extends IncomingCandidate>(
       categoryIds: acceptedCategoryIds(order.categoryId, categoryRows),
       lat: point?.lat,
       lon: point?.lon,
-      city: order.location?.city,
+      // No location at all is a home-city order, as in notifyProvidersAboutOrder.
+      city: order.location?.city ?? homeCity,
     });
     if (fits) {
       matched.push({

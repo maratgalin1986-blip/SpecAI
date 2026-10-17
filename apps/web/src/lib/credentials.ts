@@ -72,8 +72,9 @@ export async function authenticateWithCredentials(
     return failed();
   }
 
+  // Only the address's own counter: clearing the IP's would let one valid
+  // account at that IP wipe the limit after every batch of guesses.
   resetRateLimit(emailKey);
-  if (ipKey) resetRateLimit(ipKey);
   return {
     id: user.id,
     email: user.email,

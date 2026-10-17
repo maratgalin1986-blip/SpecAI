@@ -18,9 +18,16 @@ const ABBREVIATIONS: [RegExp, string][] = [
 const STREET_WORD =
   /^(ул|улица|пр|просп|проспект|пер|переулок|б-р|бул|бульвар|ш|шоссе|наб|набережная|пл|площадь|проезд|тракт|тупик|аллея|линия|квартал|мкр|микрорайон|комплекс|посёлок|поселок|снт|д|дом|корп|стр|к)\.?$/iu;
 
-/** A comma part such as «Москва» or «Нижний Новгород»: no digits, no street words. */
+/**
+ * A comma part such as «Москва» or «Нижний Новгород»: no digits, no street
+ * words. A bare word without a comma («Мира», «Тверская») is a street the
+ * visitor typed without the city, not a town, so it is tried in Набережные
+ * Челны first.
+ */
 export function namesTown(address: string): boolean {
-  return address.split(',').some((part) => {
+  const parts = address.split(',');
+  if (parts.length < 2) return false;
+  return parts.some((part) => {
     const words = part.trim().split(/\s+/).filter(Boolean);
     return (
       words.length > 0 &&

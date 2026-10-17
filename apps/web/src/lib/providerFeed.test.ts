@@ -71,6 +71,21 @@ describe('matchIncoming', () => {
     expect(matchIncoming(company, rows, noLocation, 'Москва')).toHaveLength(0);
   });
 
+  it('shows a location-less order to a provider whose address names the home city', () => {
+    // No base coordinates yet, only an address: the alert treats such an
+    // order as a home-city one, so the feed must agree.
+    const noLocation = [{ id: 'home', categoryId: 'exc', location: null }];
+    const addressOnly = {
+      categoryIds: ['exc'],
+      baseLat: null,
+      baseLon: null,
+      baseAddress: 'Казань, ул. Баумана 1',
+      radiusKm: 100,
+    };
+    expect(matchIncoming(addressOnly, rows, noLocation, 'Казань')).toHaveLength(1);
+    expect(matchIncoming(addressOnly, rows, noLocation, 'Москва')).toHaveLength(0);
+  });
+
   it('sorts orders with no address after those with a point or a city', () => {
     // A base right in the city centre: an order with no location would be 0 km.
     const centre = { ...company, baseLat: 55.7961, baseLon: 49.1064 };
