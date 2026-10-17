@@ -17,6 +17,7 @@ import {
   providerPath,
 } from '@/lib/providerSeo';
 import { sinceLabel } from '@/lib/providerCards';
+import { cityInText, nearestCity } from '@/lib/geo';
 import { SITE } from '@/lib/site';
 import { siteUrl } from '@/lib/siteUrl';
 import { HOUSE_COMPANY_ID } from '@/lib/fleet';
@@ -60,6 +61,11 @@ async function loadProvider(id: string) {
 }
 
 function seoInput(provider: NonNullable<Awaited<ReturnType<typeof loadProvider>>>) {
+  const baseCity =
+    cityInText(provider.baseAddress) ??
+    (provider.baseLat != null && provider.baseLon != null
+      ? nearestCity(provider.baseLat, provider.baseLon, 40)
+      : null);
   const ratingCount = provider.reviews.length;
   const rating = ratingCount
     ? Math.round(
@@ -76,8 +82,9 @@ function seoInput(provider: NonNullable<Awaited<ReturnType<typeof loadProvider>>
     rating,
     ratingCount,
     machines: provider.equipment.map((item) => ({ name: item.name, category: item.category.name })),
-    city: SITE.city,
-    region: SITE.region,
+    // The city and region of the base, not of the platform (all of Russia).
+    city: baseCity?.name ?? null,
+    region: baseCity?.region ?? null,
   };
 }
 
@@ -154,7 +161,7 @@ export default async function ProviderPublicPage({ params }: { params: { id: str
         <dl className="grid gap-3 text-sm sm:grid-cols-3">
           <div>
             <dt className="text-graphite-300">База</dt>
-            <dd className="font-semibold">{provider.baseAddress ?? SITE.city}</dd>
+            <dd className="font-semibold">{provider.baseAddress ?? 'не указана'}</dd>
           </div>
           <div>
             <dt className="text-graphite-300">Техника</dt>

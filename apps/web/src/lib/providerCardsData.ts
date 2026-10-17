@@ -11,7 +11,6 @@ import {
   type ProviderQuery,
 } from './providerCards';
 import { EMPTY_STATS } from './reliability';
-import { SITE } from './site';
 
 export interface ProviderList {
   cards: ProviderCard[];
@@ -66,7 +65,8 @@ export async function loadProviderCards(query: ProviderQuery): Promise<ProviderL
     const created = new Map(listed.map((company) => [company.id, company.createdAt.getTime()]));
     const all = listed.map((company) =>
       toProviderCard(company, stats.get(company.id) ?? EMPTY_STATS, {
-        fallbackCity: SITE.city,
+        // No default town: a company whose base names no known city has none.
+        fallbackCity: '',
         groupOf: (categoryId) => groupOfCategory.get(categoryId),
       }),
     );

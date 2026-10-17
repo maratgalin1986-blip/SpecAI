@@ -45,62 +45,59 @@ describe('matchIncoming', () => {
   const company = { categoryIds: ['exc'], baseLat: 55.8, baseLon: 49.1, radiusKm: 100 };
 
   it('matches like the new-order alert: category family and the radius', () => {
-    const ids = matchIncoming(company, rows, orders, 'Казань').map((order) => order.id);
+    const ids = matchIncoming(company, rows, orders).map((order) => order.id);
     expect([...ids].sort()).toEqual(['any', 'city-only', 'family']);
   });
 
   it('lists the nearest orders first, unplaced ones after', () => {
     const chelny = { latitude: 55.74, longitude: 52.4, city: 'Набережные Челны' };
     const wide = { ...company, radiusKm: 400, isHouse: true };
-    const ids = matchIncoming(
-      wide,
-      rows,
-      [
-        { id: 'far', categoryId: 'exc', location: chelny },
-        { id: 'unknown', categoryId: 'exc', location: { city: 'Бавлы' } },
-        { id: 'near', categoryId: 'exc', location: kazan },
-      ],
-      'Казань',
-    ).map((order) => order.id);
+    const ids = matchIncoming(wide, rows, [
+      { id: 'far', categoryId: 'exc', location: chelny },
+      { id: 'unknown', categoryId: 'exc', location: { city: 'Бавлы' } },
+      { id: 'near', categoryId: 'exc', location: kazan },
+    ]).map((order) => order.id);
     expect(ids).toEqual(['near', 'far', 'unknown']);
   });
 
-  it('places an order with no location at the home city', () => {
-    const noLocation = [{ id: 'home', categoryId: 'exc', location: null }];
-    expect(matchIncoming(company, rows, noLocation, 'Казань')).toHaveLength(1);
-    expect(matchIncoming(company, rows, noLocation, 'Москва')).toHaveLength(0);
+  it('never places an order with no location in a default town', () => {
+    const noLocation = [{ id: 'nowhere', categoryId: 'exc', location: null }];
+    // A provider right in Набережные Челны or in Казань: no distance to an
+    // unknown place, so not offered.
+    expect(matchIncoming(company, rows, noLocation)).toHaveLength(0);
+    const chelny = { ...company, baseLat: 55.74, baseLon: 52.4 };
+    expect(matchIncoming(chelny, rows, noLocation)).toHaveLength(0);
+    // The house fleet sorts out orders nobody can place.
+    expect(matchIncoming({ ...company, isHouse: true }, rows, noLocation)).toHaveLength(1);
   });
 
-  it('shows a location-less order to a provider whose address names the home city', () => {
-    // No base coordinates yet, only an address: the alert treats such an
-    // order as a home-city one, so the feed must agree.
-    const noLocation = [{ id: 'home', categoryId: 'exc', location: null }];
-    const addressOnly = {
-      categoryIds: ['exc'],
-      baseLat: null,
-      baseLon: null,
-      baseAddress: 'Казань, ул. Баумана 1',
-      radiusKm: 100,
-    };
-    expect(matchIncoming(addressOnly, rows, noLocation, 'Казань')).toHaveLength(1);
-    expect(matchIncoming(addressOnly, rows, noLocation, 'Москва')).toHaveLength(0);
+  it('shows a location-less order to no provider by its address alone', () => {
+    const noLocation = [{ id: 'nowhere', categoryId: 'exc', location: null }];
+    for (const baseAddress of ['Казань, ул. Баумана 1', 'Набережные Челны, Промзона']) {
+      const addressOnly = { categoryIds: ['exc'], baseLat: null, baseLon: null, baseAddress };
+      expect(matchIncoming(addressOnly, rows, noLocation)).toHaveLength(0);
+    }
+  });
+
+  it('places a city named anywhere in Russia at its centre', () => {
+    const samara = { ...company, baseLat: 53.2, baseLon: 50.15 };
+    const ids = matchIncoming(samara, rows, [
+      { id: 'samara', categoryId: 'exc', location: { city: 'Самара' } },
+      { id: 'tolyatti', categoryId: 'exc', location: { addressLine: 'в Тольятти, промзона' } },
+      { id: 'kazan', categoryId: 'exc', location: { city: 'Казань' } },
+    ]).map((order) => order.id);
+    expect(ids).toEqual(['samara', 'tolyatti']);
   });
 
   it('sorts orders with no address after those with a point or a city', () => {
-    // A base right in the city centre: an order with no location would be 0 km.
-    const centre = { ...company, baseLat: 55.7961, baseLon: 49.1064 };
-    const ids = matchIncoming(
-      centre,
-      rows,
-      [
-        { id: 'old-no-address', categoryId: 'exc', location: null },
-        { id: 'newer-no-address', categoryId: 'exc', location: null },
-        { id: 'far-point', categoryId: 'exc', location: { latitude: 55.9, longitude: 49.5 } },
-        { id: 'city-only', categoryId: 'exc', location: { city: 'Казань' } },
-        { id: 'near-point', categoryId: 'exc', location: kazan },
-      ],
-      'Казань',
-    ).map((order) => order.id);
+    const house = { ...company, baseLat: 55.7961, baseLon: 49.1064, isHouse: true };
+    const ids = matchIncoming(house, rows, [
+      { id: 'old-no-address', categoryId: 'exc', location: null },
+      { id: 'newer-no-address', categoryId: 'exc', location: null },
+      { id: 'far-point', categoryId: 'exc', location: { latitude: 55.9, longitude: 49.5 } },
+      { id: 'city-only', categoryId: 'exc', location: { city: 'Казань' } },
+      { id: 'near-point', categoryId: 'exc', location: kazan },
+    ]).map((order) => order.id);
     // The city centre itself, the point 1 km away, the point 30 km away, then
     // the orders with no address in their own (newest first) order.
     expect(ids).toEqual([

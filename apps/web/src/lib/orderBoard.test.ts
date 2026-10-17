@@ -76,10 +76,11 @@ describe('toBoardCard', () => {
     expect(card.href).toBe('/orders/ord1');
   });
 
-  it('falls back to «Любая техника» and «Татарстан»', () => {
+  it('falls back to «Любая техника» and «Место не указано», not to a region', () => {
     const card = toBoardCard(row({ category: null, location: null }), NOW);
     expect(card.categoryName).toBe(ANY_CATEGORY);
     expect(card.place).toBe(DEFAULT_PLACE);
+    expect(DEFAULT_PLACE).toBe('Место не указано');
     expect(card.emoji).toBe('🛠️');
   });
 

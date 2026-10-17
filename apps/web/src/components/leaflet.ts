@@ -3,16 +3,16 @@
 // Shared Leaflet setup for the providers map and the base picker: the library
 // is loaded on demand in the browser (it touches `window`), tiles come through
 // the site's cached OSM proxy (/api/tiles) with the OpenStreetMap credit, and
-// the view stays around Tatarstan and its neighbours, where the proxy serves
-// tiles.
+// the view stays over Russia, where the proxy serves tiles. Without a point of
+// its own a map opens on the whole country (RUSSIA_VIEW) and moves to the
+// visitor's town only when the browser already has their permission.
 
 import 'leaflet/dist/leaflet.css';
 import type * as Leaflet from 'leaflet';
-import { SERVICE_AREA, TILE_MIN_ZOOM } from '@/lib/geo';
+import type { Map as LeafletMap } from 'leaflet';
+import { RUSSIA_VIEW, SERVICE_AREA, TILE_MIN_ZOOM } from '@/lib/geo';
 
 export type LeafletModule = typeof Leaflet;
-
-export const CHELNY = { lat: 55.7436, lon: 52.3959 } as const;
 
 let loading: Promise<LeafletModule> | null = null;
 
@@ -31,9 +31,11 @@ export function createBaseMap(
     [SERVICE_AREA.south, SERVICE_AREA.west],
     [SERVICE_AREA.north, SERVICE_AREA.east],
   );
+  // The country fits a desktop at z4; a phone shows its European part at z3.
+  const overviewZoom = element.clientWidth >= 700 ? RUSSIA_VIEW.zoom + 1 : RUSSIA_VIEW.zoom;
   const map = L.map(element, {
-    center: options.center ?? [CHELNY.lat, CHELNY.lon],
-    zoom: options.zoom ?? 9,
+    center: options.center ?? [RUSSIA_VIEW.lat, RUSSIA_VIEW.lon],
+    zoom: options.zoom ?? overviewZoom,
     minZoom: TILE_MIN_ZOOM,
     maxZoom: 18,
     maxBounds: bounds.pad(0.05),
@@ -50,6 +52,54 @@ export function createBaseMap(
     attribution: '<a href="/credits">© участники OpenStreetMap</a>',
   }).addTo(map);
   return map;
+}
+
+/**
+ * Moves a map to the visitor's town when the browser already lets the site
+ * know the position (nothing is asked here: the «Моё местоположение» buttons
+ * ask). The position itself is not sent anywhere; an address search sends
+ * only the map's centre, rounded (nearParam).
+ */
+export function centreOnVisitor(map: LeafletMap, zoom = 11): void {
+  if (typeof navigator === 'undefined' || !navigator.geolocation || !navigator.permissions) return;
+  // Once the visitor taps, drags or searches, the map is theirs: a position
+  // arriving later does not move it away from their point.
+  const start = map.getCenter();
+  const startZoom = map.getZoom();
+  let touched = false;
+  map.once('mousedown dragstart keydown', () => {
+    touched = true;
+  });
+  const untouched = () => !touched && map.getZoom() === startZoom && map.getCenter().equals(start);
+  navigator.permissions
+    .query({ name: 'geolocation' })
+    .then((permission) => {
+      if (permission.state !== 'granted') return;
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          try {
+            if (!untouched()) return;
+            map.setView([position.coords.latitude, position.coords.longitude], zoom);
+          } catch {
+            // The map was closed meanwhile.
+          }
+        },
+        () => undefined,
+        { maximumAge: 10 * 60_000, timeout: 10_000 },
+      );
+    })
+    .catch(() => undefined);
+}
+
+/**
+ * «&near=lat,lon» for /api/geocode when the map shows a town (zoom 9 and
+ * closer): a bare street is then looked up there first. Empty on the country
+ * overview, where the search covers all of Russia.
+ */
+export function nearParam(map: LeafletMap | null): string {
+  if (!map || map.getZoom() < 9) return '';
+  const centre = map.getCenter();
+  return `&near=${centre.lat.toFixed(2)},${centre.lng.toFixed(2)}`;
 }
 
 /** Text for innerHTML of a marker (names come from users). */

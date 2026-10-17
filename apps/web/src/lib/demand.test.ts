@@ -38,7 +38,10 @@ describe('orderCity and nearestCity', () => {
     expect(orderCity({ city: 'набережные челны' })?.name).toBe('Набережные Челны');
     expect(orderCity({ city: 'Деревня', lat: 55.75, lon: 52.07 })?.name).toBe('Елабуга');
     expect(orderCity({ city: null })).toBeNull();
-    expect(nearestCity(55.75, 37.62)).toBeNull(); // Moscow is too far
+    // Any city of Russia now, not only Tatarstan.
+    expect(orderCity({ city: 'Самара' })?.name).toBe('Самара');
+    expect(nearestCity(55.75, 37.62)?.name).toBe('Москва');
+    expect(nearestCity(75, 80)).toBeNull(); // the Kara Sea is far from every city
   });
 });
 

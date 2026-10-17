@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import type { Map as LeafletMap } from 'leaflet';
-import { CHELNY, createBaseMap, escapeHtml, loadLeaflet } from '@/components/leaflet';
+import { createBaseMap, escapeHtml, loadLeaflet } from '@/components/leaflet';
 import { DEMAND_COLORS, DEMAND_LABELS, type CityDemand, type DemandLevel } from '@/lib/demand';
 
 interface DemandResponse {
@@ -12,7 +12,7 @@ interface DemandResponse {
 }
 
 /**
- * The demand map (/map?layer=demand): a coloured circle per Tatarstan city —
+ * The demand map (/map?layer=demand): a coloured circle per city —
  * green, amber or red for низкий / средний / высокий demand of the last two
  * weeks (GET /api/demand). The app's «Карта спроса» screen embeds it.
  */
@@ -39,11 +39,15 @@ export function DemandMap({ embed = false }: { embed?: boolean }) {
     loadLeaflet()
       .then((L) => {
         if (cancelled || !element.current || mapRef.current) return;
-        const map = createBaseMap(L, element.current, {
-          center: [CHELNY.lat, CHELNY.lon],
-          zoom: 8,
-        });
+        const map = createBaseMap(L, element.current);
         mapRef.current = map;
+        // The cities with demand, or the whole country when there are none.
+        if (data.cities.length > 0) {
+          map.fitBounds(
+            L.latLngBounds(data.cities.map((city) => [city.lat, city.lon] as [number, number])),
+            { padding: [40, 40], maxZoom: 8 },
+          );
+        }
         for (const city of data.cities) {
           const radius = 6000 + Math.min(city.orders, 20) * 900;
           L.circle([city.lat, city.lon], {
@@ -85,7 +89,7 @@ export function DemandMap({ embed = false }: { embed?: boolean }) {
       <div
         ref={element}
         role="img"
-        aria-label="Карта спроса по городам Татарстана"
+        aria-label="Карта спроса по городам"
         className="h-[60vh] min-h-[320px] w-full overflow-hidden rounded-2xl bg-slate-100 ring-1 ring-slate-200"
       />
       {failed && (

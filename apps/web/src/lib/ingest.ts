@@ -1,6 +1,6 @@
 import { prisma, type OrderSource } from '@specai/database';
 import { analyzeChatMessage } from '@specai/ai-service';
-import { parseEquipmentRequest, requestFingerprint } from '@specai/shared';
+import { cityByName, parseEquipmentRequest, requestFingerprint } from '@specai/shared';
 import { notifyTelegram } from '@/lib/notify';
 import { bidsUntilFor } from '@/lib/bidWindow';
 import { chatOrderNote, placeInText } from '@/lib/chatOrders';
@@ -68,7 +68,9 @@ async function locationFor(city: string | undefined) {
   const existing = await prisma.location.findFirst({ where: { city, addressLine: city } });
   if (existing) return existing.id;
   const created = await prisma.location.create({
-    data: { addressLine: city, city, region: 'Республика Татарстан', country: 'Россия' },
+    // The region of a known city («Самара» → Самарская область); none for a
+    // town the list does not have — never a default region.
+    data: { addressLine: city, city, region: cityByName(city)?.region ?? null, country: 'Россия' },
   });
   return created.id;
 }
@@ -119,9 +121,9 @@ export async function ingestMessage(message: IncomingMessage): Promise<IngestRes
   if (!isRequest) return { status: 'ignored', reason: heuristic.signals.join('; ') };
 
   // A town the parsers do not know («в Бавлы») still gets a Location with its
-  // name: without one the order would count as a home-city order and reach
-  // every provider around Набережные Челны (lib/geo.ts orderPoint). With the
-  // name, only the house and providers whose base names that town hear of it.
+  // name: only the house fleet and providers whose base names that town hear
+  // of it (lib/geo.ts orderPoint has no point for it). An order with no place
+  // at all reaches only the house fleet.
   city = city ?? placeInText(text) ?? undefined;
 
   const category = categorySlug

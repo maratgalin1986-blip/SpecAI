@@ -5,6 +5,7 @@ import {
   activitySummary,
   buildActivity,
   categoryWord,
+  lineEventText,
   onlineCount,
   publicCity,
   type ActivityBookingRow,
@@ -106,6 +107,33 @@ describe('event lines', () => {
     ]) {
       expect(json).not.toContain(secret);
     }
+  });
+
+  it('names any city of Russia, from the list or from the geocoder', () => {
+    expect(publicCity({ city: 'Самара' })).toBe('Самара');
+    expect(publicCity({ city: 'в Екатеринбурге, ул. Ленина 5' })).toBe('Екатеринбург');
+    // A geocoded place: its city came from the geocoder, a small town is fine.
+    expect(publicCity({ city: 'Бавлы', latitude: 54.4, longitude: 53.25 })).toBe('Бавлы');
+    // Without coordinates the same word is the visitor's text: not shown.
+    expect(publicCity({ city: 'Бавлы' })).toBeNull();
+    // Even geocoded, anything but a plain name falls back to the nearest city.
+    expect(publicCity({ city: 'Самара, ул. Ленина 5', latitude: 53.2, longitude: 50.1 })).toBe(
+      'Самара',
+    );
+    expect(publicCity({ city: 'Дом 5', latitude: 53.2, longitude: 50.1 })).toBe('Самара');
+    expect(publicCity({ city: 'дом +7 917', latitude: 60, longitude: 100 })).toBeNull();
+    // A machine on the line far from Tatarstan gets its own city.
+    expect(
+      lineEventText({
+        online: true,
+        onlineSince: now,
+        updatedAt: now,
+        lat: 56.84,
+        lon: 60.6,
+        companyId: 'other',
+        equipment: { id: 'e', status: 'AVAILABLE', category: { name: 'Экскаваторы' } },
+      }),
+    ).toBe('Машина вышла на линию: экскаваторы · Екатеринбург');
   });
 
   it('shows an unknown place as nothing rather than as the raw text', () => {

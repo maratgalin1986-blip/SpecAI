@@ -14,6 +14,7 @@ import {
 import * as WebBrowser from 'expo-web-browser';
 import { Button, Card, Input } from '@/components/ui';
 import { API_URL, ApiError, becomeProvider } from '@/lib/api';
+import { phoneNear } from '@/lib/phoneNear';
 import { useAuth } from '@/lib/auth';
 import { checkBecomeProvider, modeSwitchKind, type BecomeProviderForm } from '@/lib/modes';
 import { setAppMode } from '@/lib/prefs';
@@ -71,7 +72,10 @@ export default function BecomeProviderScreen() {
     }
     setSubmitting(true);
     try {
-      const { user: updated } = await becomeProvider(checked.value);
+      const { user: updated } = await becomeProvider({
+        ...checked.value,
+        near: await phoneNear(),
+      });
       mergeUser({ role: updated.role });
       void refreshUser();
       openFleet();

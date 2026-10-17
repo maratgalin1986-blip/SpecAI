@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import type { Map as LeafletMap, Marker } from 'leaflet';
-import { CHELNY, createBaseMap, loadLeaflet, pinIcon } from '@/components/leaflet';
+import { centreOnVisitor, createBaseMap, loadLeaflet, pinIcon } from '@/components/leaflet';
 import { formatCoords, inServiceArea } from '@/lib/geo';
 import type { MapPoint } from '@/lib/mapPoint';
 
@@ -35,15 +35,16 @@ export function PointPicker({
     let cancelled = false;
     void loadLeaflet().then((L) => {
       if (cancelled || !element.current || mapRef.current) return;
-      const start = point ?? { lat: CHELNY.lat, lon: CHELNY.lon };
-      const map = createBaseMap(L, element.current, {
-        center: [start.lat, start.lon],
-        zoom: point ? 16 : 12,
-      });
+      const map = createBaseMap(
+        L,
+        element.current,
+        point ? { center: [point.lat, point.lon], zoom: 16 } : {},
+      );
       mapRef.current = map;
+      if (!point) centreOnVisitor(map, 12);
       const place = (lat: number, lon: number) => {
         if (!inServiceArea(lat, lon)) {
-          setStatus('Работаем в Татарстане и соседних регионах — поставьте точку ближе');
+          setStatus('Поставьте точку в России');
           return;
         }
         setStatus(null);

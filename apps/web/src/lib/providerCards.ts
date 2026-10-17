@@ -6,7 +6,7 @@
 // after a confirmed booking, CLAUDE.md). The query is in lib/providerCardsData.ts.
 
 import { HOUSE_COMPANY_ID } from './fleet';
-import { TATARSTAN_CITIES } from './geo';
+import { cityInText } from './geo';
 import { pluralizeRu } from './pluralize';
 import { isDisplayableImage } from './providerMap';
 import { providerPath } from './providerSeo';
@@ -102,29 +102,19 @@ export interface ProviderCard {
   mapHref: string;
 }
 
-const CITY_NAMES = TATARSTAN_CITIES.map((city) => city.name);
-
 /**
- * The city a company is based in: a Tatarstan city named in the base address
- * (any case, «г. Казань» or «Казани»), else its location, else the fallback.
+ * The city a company is based in: a known Russian city named in the base
+ * address (any case, «г. Казань» or «Казани»), else its location, else the
+ * fallback (empty: the city is unknown).
  */
 export function cityOf(
   baseAddress: string | null | undefined,
   locationCity: string | null | undefined,
   fallback: string,
 ): string {
-  const address = baseAddress?.toLowerCase() ?? '';
-  if (address) {
-    for (const name of CITY_NAMES) {
-      // «Набережные Челны» → stems «набережн», «чел», so «в Набережных
-      // Челнах» matches too; each stem must start a word.
-      const stems = name
-        .toLowerCase()
-        .split(' ')
-        .map((word) => word.slice(0, Math.max(3, word.length - 2)));
-      if (stems.every((stem) => new RegExp(`(^|[^а-яё])${stem}`).test(address))) return name;
-    }
-  }
+  // «в Набережных Челнах», «г. Казань»: any case form (findCityInText).
+  const named = cityInText(baseAddress);
+  if (named) return named.name;
   const city = locationCity?.trim();
   return city || fallback;
 }
@@ -270,5 +260,7 @@ export function sortProviderCards(
 
 /** Distinct base cities of the listed companies, for the filter. */
 export function providerCities(cards: readonly ProviderCard[]): string[] {
-  return [...new Set(cards.map((card) => card.city))].sort((a, b) => a.localeCompare(b, 'ru'));
+  return [...new Set(cards.map((card) => card.city).filter(Boolean))].sort((a, b) =>
+    a.localeCompare(b, 'ru'),
+  );
 }

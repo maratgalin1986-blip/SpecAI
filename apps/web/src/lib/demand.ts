@@ -1,10 +1,11 @@
 // Demand indicator and demand map («индекс спроса» from Yandex Taxi, see
 // docs/yandex-taxi-research.md): orders of the last 14 days grouped by
 // machine category and by district (the order's city or the nearest of the
-// Tatarstan cities in lib/geo.ts), compared with the free machines of that
+// known Russian cities in lib/geo.ts), compared with the free machines of that
 // category → низкий / средний / высокий. Pure, unit-tested; GET /api/demand
 // loads the rows.
-import { TATARSTAN_CITIES, distanceKm, nearestCity, type CityPoint } from './geo';
+import { cityByName } from '@specai/shared';
+import { distanceKm, nearestCity, type CityPoint } from './geo';
 
 export const DEMAND_WINDOW_DAYS = 14;
 const DAY_MS = 86_400_000;
@@ -86,9 +87,7 @@ export function orderCity(order: {
   lat?: number | null;
   lon?: number | null;
 }): CityPoint | null {
-  const byName = order.city
-    ? TATARSTAN_CITIES.find((city) => city.name.toLowerCase() === order.city!.trim().toLowerCase())
-    : undefined;
+  const byName = cityByName(order.city);
   if (byName) return byName;
   if (order.lat != null && order.lon != null) return nearestCity(order.lat, order.lon);
   return null;

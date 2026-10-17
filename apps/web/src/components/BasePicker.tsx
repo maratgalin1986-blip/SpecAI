@@ -2,7 +2,13 @@
 
 import { useEffect, useRef, useState } from 'react';
 import type { Map as LeafletMap, Marker } from 'leaflet';
-import { CHELNY, createBaseMap, loadLeaflet, pinIcon } from '@/components/leaflet';
+import {
+  centreOnVisitor,
+  createBaseMap,
+  loadLeaflet,
+  nearParam,
+  pinIcon,
+} from '@/components/leaflet';
 import { formatCoords, inServiceArea } from '@/lib/geo';
 import { baseAfterAddressEdit } from '@/lib/providerMap';
 
@@ -45,18 +51,18 @@ export function BasePicker({
     void loadLeaflet().then((L) => {
       if (cancelled || !element.current || mapRef.current) return;
       const start = valueRef.current;
-      const map = createBaseMap(L, element.current, {
-        center:
-          start.lat !== null && start.lon !== null
-            ? [start.lat, start.lon]
-            : [CHELNY.lat, CHELNY.lon],
-        zoom: start.lat !== null ? 14 : 10,
-      });
+      const saved = start.lat !== null && start.lon !== null;
+      const map = createBaseMap(
+        L,
+        element.current,
+        saved ? { center: [start.lat as number, start.lon as number], zoom: 14 } : {},
+      );
       mapRef.current = map;
+      if (!saved) centreOnVisitor(map);
       map.on('click', (event) => {
         const { lat, lng } = event.latlng;
         if (!inServiceArea(lat, lng)) {
-          setStatus('Точка должна быть в Татарстане или соседних регионах');
+          setStatus('Точка должна быть в России');
           return;
         }
         setStatus(null);
@@ -89,7 +95,7 @@ export function BasePicker({
             const point = markerRef.current?.getLatLng();
             if (!point) return;
             if (!inServiceArea(point.lat, point.lng)) {
-              setStatus('Точка должна быть в Татарстане или соседних регионах');
+              setStatus('Точка должна быть в России');
               return;
             }
             foundFor.current = null;
@@ -112,7 +118,9 @@ export function BasePicker({
     setSearching(true);
     setStatus(null);
     try {
-      const response = await fetch(`/api/geocode?q=${encodeURIComponent(query)}`);
+      const response = await fetch(
+        `/api/geocode?q=${encodeURIComponent(query)}${nearParam(mapRef.current)}`,
+      );
       const body = (await response.json().catch(() => null)) as {
         place?: { lat: number; lon: number; label: string };
         error?: string;
@@ -130,7 +138,7 @@ export function BasePicker({
       }
       const { lat, lon, label } = body.place;
       if (!inServiceArea(lat, lon)) {
-        setStatus('Адрес вне Татарстана и соседних регионов — проверьте его');
+        setStatus('Адрес вне России — проверьте его');
         return;
       }
       foundFor.current = query;

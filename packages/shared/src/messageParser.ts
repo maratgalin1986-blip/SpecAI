@@ -6,6 +6,7 @@
 // the seed, the pickers and this parser).
 
 import { detectCategory } from './categories';
+import { findCityInText } from './cities';
 
 export interface ParsedEquipmentRequest {
   isRequest: boolean;
@@ -61,21 +62,10 @@ const OFFER_PATTERNS: RegExp[] = [
   re(/\bрассмотр(ю|им)\b.*предложени/),
 ];
 
-const CITIES: { name: string; pattern: RegExp }[] = [
-  { name: 'Набережные Челны', pattern: re(/набережн\w* челн|\bчелн(ы|ах|ов)\b|\bнч\b/) },
-  { name: 'Нижнекамск', pattern: re(/нижнекамск/) },
-  { name: 'Елабуга', pattern: re(/елабуг/) },
-  { name: 'Казань', pattern: re(/казан/) },
-  { name: 'Альметьевск', pattern: re(/альметьевск/) },
-  { name: 'Менделеевск', pattern: re(/менделеевск/) },
-  { name: 'Заинск', pattern: re(/заинск/) },
-  { name: 'Мензелинск', pattern: re(/мензелинск/) },
+// Cities come from ./cities (every Russian city of ~100 000 people and more,
+// with case forms); a district the list has no row for is matched here.
+const DISTRICTS: { name: string; pattern: RegExp }[] = [
   { name: 'Тукаевский район', pattern: re(/тукаев/) },
-  { name: 'Бугульма', pattern: re(/бугульм/) },
-  { name: 'Чистополь', pattern: re(/чистопол/) },
-  { name: 'Лениногорск', pattern: re(/лениногорск/) },
-  { name: 'Азнакаево', pattern: re(/азнака/) },
-  { name: 'Агрыз', pattern: re(/агрыз/) },
 ];
 
 const MONTHS: Record<string, number> = {
@@ -175,7 +165,9 @@ export function parseEquipmentRequest(raw: string, now: Date = new Date()): Pars
   if (requestHits) signals.push(`признаки запроса: ${requestHits}`);
   if (offerHits) signals.push(`признаки рекламы: ${offerHits}`);
 
-  const city = CITIES.find((c) => c.pattern.test(text))?.name;
+  // The original text: names that are also ordinary words («Киров», «Шахты»)
+  // count only capitalised.
+  const city = findCityInText(raw)?.city.name ?? DISTRICTS.find((d) => d.pattern.test(text))?.name;
   if (city) signals.push(`город: ${city}`);
   const phone = extractPhone(raw);
   const dates = extractDates(text, now);

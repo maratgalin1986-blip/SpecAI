@@ -6,7 +6,6 @@ import { digestsForCompanies, tomorrowRange } from '@/lib/eveningDigest';
 import { orderPoint } from '@/lib/geo';
 import { acceptedCategoryIds } from '@/lib/notifications/routing';
 import { notifyCompany, notifyUser, notifyUsers } from '@/lib/notifications/notifyUser';
-import { SITE } from '@/lib/site';
 
 export const dynamic = 'force-dynamic';
 // A GET handler: without this Next keeps outgoing sends (Telegram, push,
@@ -103,15 +102,16 @@ async function sendEveningNotifications() {
       isHouse: company.id === HOUSE_COMPANY_ID,
     })),
     orders.map((order) => {
-      const point = orderPoint(order.location, SITE.city);
+      const point = orderPoint(order.location);
       return {
         id: order.id,
         customerId: order.customerId,
         categoryId: order.categoryId,
         categoryIds: acceptedCategoryIds(order.categoryId, categoryRows),
         categoryName: order.category?.name,
-        // No location at all = a home-city order (orderPoint falls back to it).
-        city: order.location ? order.location.city : SITE.city,
+        // No location (or an unknown town): no point; the city text, if any,
+        // reaches providers whose base names it, and the house fleet.
+        city: order.location?.city || null,
         lat: point?.lat,
         lon: point?.lon,
         description: order.description,
