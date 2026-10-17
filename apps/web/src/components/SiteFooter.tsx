@@ -1,5 +1,6 @@
 import { LANDINGS } from '@/lib/landings';
 import { SITE } from '@/lib/site';
+import { PromiseNote } from '@/components/PromiseNote';
 import { SupportFooterLink } from '@/components/SupportCard';
 
 // At least 44 px tap height on phones; compact rows from sm up.
@@ -14,6 +15,7 @@ export function SiteFooter() {
             {SITE.platform} <span className="text-amber-400">от {SITE.name}</span>
           </div>
           <p className="mt-2">{SITE.tagline}.</p>
+          <PromiseNote dark large className="mt-3" />
           <p className="mt-3 text-xs italic text-slate-400">
             Копаем, поднимаем, вывозим — техника {SITE.name} и других исполнителей с машинистом.
           </p>

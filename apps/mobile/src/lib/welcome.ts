@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { PROMISE } from './promise';
 import { STORAGE_KEYS, getItem, setItem } from './storage';
 
 /**
@@ -24,13 +25,13 @@ export const WELCOME_PATHS: readonly WelcomePath[] = [
     accountType: 'CUSTOMER',
     role: 'customer',
     title: 'Мне нужна техника',
-    text: 'Разместите заявку: что, где и на какую дату. Исполнители рядом сами пришлют цены — выберете лучшую. Бесплатно.',
+    text: `Разместите заявку: что, где и на какую дату. Исполнители рядом сами пришлют цены — выберете подходящую. ${PROMISE}.`,
   },
   {
     accountType: 'PROVIDER',
     role: 'provider',
     title: 'У меня есть техника',
-    text: 'Зарегистрируйтесь один раз, выйдите на линию с машиной — заявки рядом приходят сами. Бесплатно, без комиссии.',
+    text: `Зарегистрируйтесь один раз, выйдите на линию с машиной — заявки рядом приходят сами, цену называете вы. ${PROMISE}.`,
   },
 ];
 

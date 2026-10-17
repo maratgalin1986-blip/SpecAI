@@ -2,7 +2,9 @@
 // заявку знакомым или в рабочий чат. В тексте — только вид техники, город и
 // дата (как на сайте, apps/web/src/lib/orderCard.ts): ни имени, ни телефона,
 // ни адреса. Превью ссылки — картинка с сайта (orders/[id]/opengraph-image).
-// Чистые функции (крутятся в vitest).
+// Чистые функции (крутятся в vitest). После заявки — обещание площадки
+// (владелец, 2026-10-17), как в тексте «Поделиться» на сайте.
+import { PLATFORM_NAME, PROMISE } from './promise';
 
 export const PRODUCTION_SITE_URL = 'https://spec-ai-web.vercel.app';
 
@@ -71,10 +73,13 @@ export function orderShareText(order: {
   return `Помогите найти технику: ${parts.join(' · ')}`;
 }
 
-/** Текст для системного «Поделиться»: фраза и ссылка с новой строки. */
+/** «Заявка на ИИСтройка24: бесплатно и без посредников», как на сайте (orderShareText). */
+export const SHARE_PROMISE = `Заявка на ${PLATFORM_NAME}: ${PROMISE.toLowerCase()}`;
+
+/** Текст для системного «Поделиться»: фраза, обещание и ссылка с новой строки. */
 export function orderShareMessage(
   order: Parameters<typeof orderShareText>[0] & { id: string },
   apiUrl: string | null | undefined,
 ): string {
-  return `${orderShareText(order)}\n${orderShareLink(shareBaseUrl(apiUrl), order.id)}`;
+  return `${orderShareText(order)}. ${SHARE_PROMISE}\n${orderShareLink(shareBaseUrl(apiUrl), order.id)}`;
 }

@@ -77,6 +77,7 @@ export function aboutText(): string {
   return (
     `Бот ${SITE.platform} отвечает на заявки о спецтехнике ссылкой, где исполнители присылают цены. ` +
     `Не пишет в личку и не рассылает рекламу; админ чата выключает его командой /quiet.\n` +
+    `${SITE.promiseLine}\n` +
     `Подробнее: ${siteUrl()}${BOT_PAGE_PATH}`
   );
 }

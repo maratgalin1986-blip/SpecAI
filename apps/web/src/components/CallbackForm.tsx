@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { SITE } from '@/lib/site';
+import { PromiseNote } from '@/components/PromiseNote';
 import { readLeadDraft, submitLead, leadErrorText } from '@/lib/submitLead';
 import { LeadSuccess } from '@/components/LeadSuccess';
 import { PointPicker } from '@/components/PointPicker';
@@ -167,6 +168,7 @@ export function CallbackForm({
       >
         {status === 'sending' ? 'Отправляем…' : 'Жду звонка'}
       </button>
+      <PromiseNote dark={dark} />
     </form>
   );
 }

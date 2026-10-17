@@ -5,6 +5,7 @@ import { KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, View } fro
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ActivityStrip } from '@/components/ActivityStrip';
 import { HelpButton, ModeSwitch } from '@/components/ModeSwitch';
+import { PromiseChip } from '@/components/Promise';
 import { ProvidersMap } from '@/components/ProvidersMap';
 import { QuickOrderSheet } from '@/components/QuickOrderSheet';
 import { AI_ENTRY_HINT, AI_ENTRY_TITLE } from '@/lib/aiDispatcher';
@@ -14,6 +15,7 @@ import { useActivity } from '@/lib/useActivity';
 import { useNearbyLine } from '@/lib/useNearbyLine';
 import { pluralizeRu } from '@/lib/format';
 import { categoryIcon, pointAddress } from '@/lib/orderFlow';
+import { showsModePill } from '@/lib/modes';
 import { isProviderMode, usePrefs } from '@/lib/prefs';
 import { SITE } from '@/lib/site';
 import { colors, radius, shadow, spacing, TAP } from '@/theme';
@@ -76,6 +78,9 @@ export default function HomeScreen() {
   if (isProviderMode(user?.role, mode)) return <Redirect href="/(tabs)/feed" />;
 
   const activeBids = active ? (active.bidCount ?? active.bids.length) : 0;
+  // «Бесплатно · без посредников» (владелец, 2026-10-17): во втором ряду,
+  // где у заказчика пусто; у исполнителя там переключатель — тогда в третьем.
+  const modePill = showsModePill(user?.role) && loaded;
 
   return (
     <View style={styles.screen}>
@@ -133,6 +138,7 @@ export default function HomeScreen() {
       >
         {/* Исполнитель в режиме заказчика возвращается к ленте одним касанием. */}
         <ModeSwitch style={styles.modeSwitch} />
+        {modePill ? null : <PromiseChip />}
         <View style={styles.flex} pointerEvents="none" />
         <HelpButton />
       </View>
@@ -140,6 +146,7 @@ export default function HomeScreen() {
         style={[styles.thirdRow, { top: insets.top + spacing.sm + (TAP + spacing.sm) * 2 }]}
         pointerEvents="box-none"
       >
+        {modePill ? <PromiseChip style={styles.chipAbove} /> : null}
         {/* «рядом» — только когда карта знает, где заказчик. */}
         <ActivityStrip activity={activity} nearOnline={me ? machines.length : null} />
       </View>
@@ -247,6 +254,7 @@ const styles = StyleSheet.create({
   },
   modeSwitch: { width: 250, flexShrink: 1 },
   thirdRow: { position: 'absolute', left: 0, right: 0, paddingHorizontal: spacing.lg },
+  chipAbove: { marginBottom: spacing.xs },
   flexShrink: { flexShrink: 1 },
   aiCard: {
     flexDirection: 'row',

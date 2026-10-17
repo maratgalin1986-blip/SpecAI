@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { SITE } from '@/lib/site';
+import { PROMISE_POINTS } from '@/lib/promise';
 import { ResetHintsButton } from '@/components/ResetHintsButton';
 
 // A short help page (owner, 2026-10-17: «краткая справка, как пользоваться
@@ -8,7 +9,7 @@ import { ResetHintsButton } from '@/components/ResetHintsButton';
 
 export const metadata: Metadata = {
   title: 'Как пользоваться',
-  description: `Как заказать спецтехнику и как исполнителю получать заявки на ${SITE.platform}: шаги, один логин для двух ролей, приложение с картой «на линии».`,
+  description: `Как заказать спецтехнику и как исполнителю получать заявки на ${SITE.platform}: шаги, ${SITE.promise.toLowerCase()} — как это, один логин для двух ролей, приложение с картой «на линии».`,
   alternates: { canonical: '/kak-polzovatsya' },
 };
 
@@ -100,6 +101,24 @@ export default function HowToPage() {
           .
         </p>
       </header>
+
+      {/* The header pill «Бесплатно · без посредников» and every promise note
+          link here (owner, 2026-10-17). Keep it true: if a commission or online
+          payment is ever introduced, this block changes in the same PR. */}
+      <section
+        id="besplatno"
+        aria-labelledby="besplatno-title"
+        className="flex scroll-mt-24 flex-col gap-2 rounded-2xl border border-emerald-200 bg-emerald-50/60 p-5"
+      >
+        <h2 id="besplatno-title" className="text-xl font-bold text-slate-900">
+          {SITE.promise} — как это?
+        </h2>
+        <ul className="ml-5 list-disc space-y-1.5 text-sm">
+          {PROMISE_POINTS.map((point) => (
+            <li key={point}>{point}</li>
+          ))}
+        </ul>
+      </section>
 
       <section id="zakazchik" aria-labelledby="zakazchik-title" className="scroll-mt-24">
         <h2 id="zakazchik-title" className="mb-4 text-xl font-bold text-slate-900">

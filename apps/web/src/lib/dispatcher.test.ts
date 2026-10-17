@@ -81,6 +81,30 @@ describe('faqAnswers and wantsPrice', () => {
     expect(answer).toContain('исполнители');
     expect(answer).toContain('СпецПласт16');
     expect(answer).not.toContain('единственный');
+    expect(answer).toContain('Бесплатно и без посредников');
+  });
+  it('answers «commission?» and «is it free?» with the promise: direct payment, no percentage', () => {
+    for (const question of [
+      'Какая у вас комиссия?',
+      'Это бесплатно?',
+      'Сколько процентов берёт площадка?',
+      'Площадка бесплатная?',
+      'А бесплатно ли это?',
+    ]) {
+      const answer = faqAnswers(question).join(' ');
+      expect(answer).toContain('Бесплатно и без посредников');
+      expect(answer).toContain('напрямую');
+      expect(answer).toContain('не берёт процент');
+    }
+  });
+  it('does not answer about the platform when the question is about something else', () => {
+    for (const question of [
+      'Доставка материалов бесплатная?',
+      'Какой процент уплотнения грунта нужен?',
+      'Сколько берёт самосвал кубов?',
+    ]) {
+      expect(faqAnswers(question).join(' ')).not.toContain('Бесплатно и без посредников');
+    }
   });
   it('detects price questions', () => {
     expect(wantsPrice('Сколько стоит самосвал?')).toBe(true);

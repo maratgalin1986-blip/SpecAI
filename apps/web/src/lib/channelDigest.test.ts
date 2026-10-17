@@ -31,6 +31,7 @@ vi.mock('./telegramApi', () => ({ telegramApi }));
 const { CHANNEL_JOB, CHANNEL_TITLE, channelDigestText, postChannelDigest } =
   await import('./channelDigest');
 const { cronRunKey } = await import('./cronOnce');
+const { SITE } = await import('./site');
 
 const BASE = 'https://spec-ai-web.vercel.app';
 // 19:00 Moscow on 17 October; the order wants 20 October (Moscow).
@@ -72,6 +73,22 @@ describe('channelDigestText', () => {
     expect(text).toMatch(
       /Исполнители — выходите на линию в приложении: https:\/\/spec-ai-web\.vercel\.app\/register\?type=provider/,
     );
+    // The platform's promise closes every post (owner, 2026-10-17).
+    expect(text?.endsWith(`\n\n${SITE.promiseLine}`)).toBe(true);
+    expect(SITE.promiseLine).toMatch(/^Бесплатно и без посредников: цену назначает/);
+  });
+
+  it('stays well under the Telegram message limit with the promise on a full day', () => {
+    const rows = Array.from({ length: 12 }, (_, i) =>
+      row(
+        `cm${'x'.repeat(23)}${i}`,
+        'Снегоуборочная техника и коммунальные машины',
+        'Петропавловск-Камчатский',
+      ),
+    );
+    const text = channelDigestText(rows, BASE, 40) ?? '';
+    expect(text).toContain(SITE.promiseLine);
+    expect(text.length).toBeLessThan(4096 - 500);
   });
 
   it('is null on a day without orders — never filler', () => {

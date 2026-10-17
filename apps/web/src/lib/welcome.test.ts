@@ -27,7 +27,9 @@ describe('welcome before sign-up', () => {
       'Мне нужна техника',
       'У меня есть техника',
     ]);
-    for (const path of WELCOME_PATHS) expect(path.text).toContain('Бесплатно');
+    for (const path of WELCOME_PATHS) expect(path.text).toContain('Бесплатно и без посредников');
+    // No superlatives next to the promise (REVIEW.md, ФЗ «О рекламе», ст. 5).
+    for (const path of WELCOME_PATHS) expect(path.text).not.toMatch(/лучш|самы[ейх]|гарант/i);
     for (const path of WELCOME_PATHS) expect(query(`role=${path.role}`)).toBe(path.accountType);
   });
 });
