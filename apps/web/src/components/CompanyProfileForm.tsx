@@ -51,7 +51,7 @@ export function CompanyProfileForm({
           maxLength={1000}
           value={description}
           onChange={(e) => setDescription(e.target.value)}
-          placeholder="Например: 6 единиц техники, свои машинисты с допусками, работаем с НДС, выезд по Челнам и району"
+          placeholder="Например: 6 единиц техники, свои машинисты с допусками, работаем с НДС, выезд по городу и области"
           className="rounded-xl border border-graphite-200 px-3 py-2"
         />
         <span className="text-xs text-graphite-500">

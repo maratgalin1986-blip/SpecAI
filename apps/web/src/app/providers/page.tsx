@@ -16,7 +16,8 @@ export const dynamic = 'force-dynamic';
 
 export const metadata: Metadata = {
   title: 'Исполнители — компании со своей спецтехникой',
-  description: `Компании и частники со своей спецтехникой в ${SITE.city} и по Татарстану: парк, база, рейтинг и отзывы. Заявка бесплатно — исполнители сами пришлют цены.`,
+  description:
+    'Компании и частники со своей спецтехникой по всей России: парк, база, рейтинг и отзывы. Заявка бесплатно — исполнители рядом с объектом сами пришлют цены.',
   alternates: { canonical: '/providers' },
 };
 
@@ -123,7 +124,7 @@ export default async function ProvidersPage({
   return (
     <div className="flex flex-col gap-6">
       <header className="cab-dark flex flex-col gap-3 sm:p-8">
-        <p className="cab-eyebrow text-signal-300">Исполнители · {SITE.city} и Татарстан</p>
+        <p className="cab-eyebrow text-signal-300">Исполнители · вся Россия</p>
         <h1 className="text-3xl font-extrabold tracking-tight sm:text-4xl">
           Компании со своей техникой
         </h1>

@@ -34,7 +34,7 @@ import {
 export const metadata = {
   title: 'Каталог спецтехники',
   description:
-    'Аренда экскаваторов-погрузчиков, автокранов, погрузчиков и другой спецтехники с машинистом в Набережных Челнах и по Татарстану.',
+    'Аренда экскаваторов-погрузчиков, автокранов, погрузчиков и другой спецтехники с машинистом по всей России: техника исполнителей площадки и парк СпецПласт16.',
   // Filters live in the query: one canonical for the whole catalogue.
   alternates: { canonical: '/equipment' },
 };
@@ -219,7 +219,7 @@ export default async function EquipmentCatalogPage({
   return (
     <div className="flex flex-col gap-8">
       <CinemaHero
-        eyebrow={`Каталог · ${SITE.city} и Татарстан`}
+        eyebrow="Каталог · вся Россия"
         title="Спецтехника в аренду"
         clips={['site-aerial', 'excavator-truck', 'city-cranes']}
         camera={2}

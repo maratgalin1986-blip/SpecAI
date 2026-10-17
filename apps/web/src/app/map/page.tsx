@@ -7,8 +7,8 @@ export const metadata: Metadata = {
   // The layout's template adds «· ИИСтройка24 · СпецПласт16».
   title: 'Где нужна техника — отметьте на карте',
   description:
-    'Отметьте на карте объект в Набережных Челнах или по Татарстану, выберите технику — ' +
-    'диспетчер перезвонит и назовёт цену с подачей до этого места. Сервис бесплатный.',
+    'Отметьте на карте объект в своём городе, выберите технику — исполнители рядом ' +
+    'и диспетчер назовут цену с подачей до этого места. Сервис бесплатный.',
   alternates: { canonical: '/map' },
 };
 
@@ -36,7 +36,7 @@ main { max-width: none !important; padding: 0 0 16px !important; }`}</style>
         <>
           {!embed && (
             <header className="flex flex-col gap-2">
-              <p className="eyebrow text-amber-700">Карта · {SITE.city} и Татарстан</p>
+              <p className="eyebrow text-amber-700">Карта · вся Россия</p>
               <h1 className="text-3xl font-extrabold tracking-tight sm:text-4xl">
                 Где нужна техника?
               </h1>

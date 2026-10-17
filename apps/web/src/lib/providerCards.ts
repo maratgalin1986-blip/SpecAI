@@ -268,7 +268,12 @@ export function sortProviderCards(
   );
 }
 
+/** The card of a company whose city is unknown (never shown as a city in the filter). */
+export const UNKNOWN_CITY = 'Город не указан';
+
 /** Distinct base cities of the listed companies, for the filter. */
 export function providerCities(cards: readonly ProviderCard[]): string[] {
-  return [...new Set(cards.map((card) => card.city))].sort((a, b) => a.localeCompare(b, 'ru'));
+  return [...new Set(cards.map((card) => card.city))]
+    .filter((city) => city !== UNKNOWN_CITY)
+    .sort((a, b) => a.localeCompare(b, 'ru'));
 }

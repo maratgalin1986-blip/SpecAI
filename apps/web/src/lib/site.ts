@@ -5,11 +5,15 @@ export const SITE = {
   // СпецПласт16»; `name` is the house provider, the materials seller and the
   // legal operator of the site.
   platform: 'ИИСтройка24',
-  tagline: 'Аренда спецтехники и строительные услуги в Татарстане',
+  // The platform serves all of Russia (owner, 2026-10-17); СпецПласт16 is one
+  // provider, based in Набережные Челны. Customer-facing texts never limit the
+  // service to Tatarstan (site.test.ts checks it).
+  tagline: 'Заказ спецтехники с машинистом по всей России',
   description:
-    'ИИСтройка24 от СпецПласт16 — заказ спецтехники с машинистом в Набережных Челнах и по ' +
-    'Татарстану: экскаваторы-погрузчики, автокраны, погрузчики от СпецПласт16 и других ' +
-    'исполнителей. ИИ-агенты подберут технику и оформят заявку.',
+    'ИИСтройка24 от СпецПласт16 — заказ спецтехники с машинистом по всей России: одна заявка — ' +
+    'предложения исполнителей рядом с вами. Свой парк СпецПласт16 — в Набережных Челнах.',
+  // The company's own contacts (the legal owner and the house provider), not
+  // the service area: never show them as «где работаем».
   city: 'Набережные Челны',
   region: 'Республика Татарстан',
   phone: '+7 (927) 242-80-88',

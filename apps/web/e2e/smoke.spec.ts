@@ -12,6 +12,8 @@ const PAGES = [
   '/soglasie',
   '/privacy',
   '/arenda/samosval',
+  // A city of the all-Russia list (lib/cities.ts); without a database nobody serves it yet.
+  '/arenda/ekskavator-pogruzchik/kazan',
   '/kak-polzovatsya',
   '/predlozheniya',
 ];
@@ -78,6 +80,16 @@ for (const path of PAGES) {
     if (path.startsWith('/arenda/samosval')) {
       expect(spaced(await page.title())).toContain('от 3 300 ₽/ч');
       expect(spaced(await page.getByTestId('landing-price').innerText())).toContain('от 3 300 ₽');
+    }
+
+    // An honest city page: no providers there yet → no invented machines or prices.
+    if (path.endsWith('/kazan')) {
+      await expect(page.getByRole('heading', { level: 1 })).toContainText('в Казани');
+      await expect(page.getByTestId('city-joining')).toContainText(
+        'Исполнители в Казани подключаются — оставьте заявку, мы найдём технику.',
+      );
+      await expect(page.getByTestId('landing-price')).toHaveCount(0);
+      await expect(page.getByTestId('fleet-card-price')).toHaveCount(0);
     }
 
     expect(errors, 'page errors').toEqual([]);

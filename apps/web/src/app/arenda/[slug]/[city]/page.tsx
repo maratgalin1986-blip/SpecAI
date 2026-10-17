@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
+import { Card } from '@specai/ui';
 import { CallbackForm } from '@/components/CallbackForm';
 import { CinemaBand } from '@/components/CinemaBand';
 import { CinemaLayer } from '@/components/CinemaHero';
@@ -7,26 +8,36 @@ import { MachineAmbience } from '@/components/MachineAmbience';
 import { TelegramButton } from '@/components/TelegramButton';
 import { TrustBadges } from '@/components/TrustBadges';
 import {
-  CITIES,
   cityBySlug,
-  cityPages,
   cityPageText,
   cityPath,
   DELIVERY_NOTE,
+  HOUSE_CITIES,
+  joiningText,
+  nearestCities,
   shiftExample,
 } from '@/lib/cities';
+import { loadCityOffer } from '@/lib/cityFleetData';
 import { landingClips } from '@/lib/landingClips';
 import { landingLoop } from '@/lib/loops';
 import { Reveal } from '@/components/Reveal';
-import { landingBySlug } from '@/lib/landings';
-import { rateOf, rub } from '@/lib/prices';
+import { LANDINGS, landingBySlug } from '@/lib/landings';
+import { rub } from '@/lib/prices';
 import { SITE } from '@/lib/site';
 import { siteUrl } from '@/lib/siteUrl';
 
 type Params = { slug: string; city: string };
 
+// Machines and prices follow the providers' fleets: refreshed every 10 minutes
+// (a page built while the database was unreachable does not stay long). The
+// cities of СпецПласт16's own area are built ahead; the rest of Russia on the
+// first visit (dynamicParams), then cached the same way.
+export const revalidate = 600;
+
 export function generateStaticParams(): Params[] {
-  return cityPages();
+  return LANDINGS.flatMap((landing) =>
+    HOUSE_CITIES.map((city) => ({ slug: landing.slug, city: city.slug })),
+  );
 }
 
 function resolve(params: Params) {
@@ -35,42 +46,48 @@ function resolve(params: Params) {
   return landing && city ? { landing, city } : null;
 }
 
-export function generateMetadata({ params }: { params: Params }): Metadata {
+export async function generateMetadata({ params }: { params: Params }): Promise<Metadata> {
   const page = resolve(params);
   if (!page) return { title: 'Страница не найдена' };
-  const text = cityPageText(page.landing, page.city);
+  const offer = await loadCityOffer(page.landing, page.city);
+  const text = cityPageText(page.landing, page.city, offer);
+  const path = cityPath(page.landing.slug, page.city.slug);
   return {
     title: text.title,
     description: text.description,
-    // The base city's page repeats the main landing: point search engines there.
-    alternates: {
-      canonical:
-        page.city.slug === 'naberezhnye-chelny'
-          ? `/arenda/${page.landing.slug}`
-          : cityPath(page.landing.slug, page.city.slug),
-    },
-    openGraph: { title: text.title, description: text.description },
+    alternates: { canonical: path },
+    openGraph: { title: text.title, description: text.description, url: path },
   };
 }
 
-export default function CityLandingPage({ params }: { params: Params }) {
+export default async function CityLandingPage({ params }: { params: Params }) {
   const page = resolve(params);
   if (!page) notFound();
   const { landing, city } = page;
   const machine = landing.machine;
-  // «от …» and the example shift: lib/prices.ts only.
-  const rate = rateOf(machine);
-  const text = cityPageText(landing, city);
+  const offer = await loadCityOffer(landing, city);
+  const text = cityPageText(landing, city, offer);
   const path = cityPath(landing.slug, city.slug);
+  // «от …» and the example shift: the lowest rate of the machines that serve
+  // this city (СпецПласт16's list price where its fleet goes), never invented.
+  const rate = offer.kind === 'available' ? offer.fromRate : null;
+  const machines = offer.kind === 'available' ? offer.machines : [];
 
   const jsonLd = {
     '@context': 'https://schema.org',
     '@type': 'Service',
     name: `Аренда ${landing.title} ${city.inCity}`,
     serviceType: `Аренда ${landing.title} с машинистом`,
-    areaServed: { '@type': 'City', name: city.name },
+    areaServed: {
+      '@type': 'City',
+      name: city.name,
+      ...(city.region !== city.name
+        ? { containedInPlace: { '@type': 'AdministrativeArea', name: city.region } }
+        : {}),
+    },
+    // The operator of the platform (СпецПласт16, Набережные Челны).
     provider: {
-      '@type': 'LocalBusiness',
+      '@type': 'Organization',
       name: SITE.legalName || SITE.name,
       telephone: SITE.phone,
       address: {
@@ -81,16 +98,20 @@ export default function CityLandingPage({ params }: { params: Params }) {
       },
     },
     url: `${siteUrl()}${path}`,
-    offers: {
-      '@type': 'Offer',
-      priceCurrency: 'RUB',
-      priceSpecification: {
-        '@type': 'UnitPriceSpecification',
-        price: rate,
-        priceCurrency: 'RUB',
-        unitText: 'час',
-      },
-    },
+    ...(rate !== null
+      ? {
+          offers: {
+            '@type': 'Offer',
+            priceCurrency: 'RUB',
+            priceSpecification: {
+              '@type': 'UnitPriceSpecification',
+              price: rate,
+              priceCurrency: 'RUB',
+              unitText: 'час',
+            },
+          },
+        }
+      : {}),
   };
 
   return (
@@ -116,13 +137,23 @@ export default function CityLandingPage({ params }: { params: Params }) {
             <p className="mt-4 text-slate-300" data-testid="city-intro">
               {text.intro}
             </p>
-            <p className="mt-5 text-3xl font-bold text-amber-400" data-testid="landing-price">
-              от {rub(rate)} ₽
-              <span className="text-base font-normal text-slate-300">/ч с машинистом</span>
-            </p>
-            <p className="mt-2 text-sm text-slate-300" data-testid="shift-example">
-              Пример смены: {shiftExample(rate)}
-            </p>
+            {rate !== null ? (
+              <>
+                <p className="mt-5 text-3xl font-bold text-amber-400" data-testid="landing-price">
+                  от {rub(rate)} ₽
+                  <span className="text-base font-normal text-slate-300">/ч с машинистом</span>
+                </p>
+                <p className="mt-2 text-sm text-slate-300" data-testid="shift-example">
+                  Пример смены: {shiftExample(rate)}
+                </p>
+              </>
+            ) : (
+              offer.kind === 'empty' && (
+                <p className="mt-5 text-xl font-bold text-amber-400" data-testid="city-joining">
+                  {joiningText(city)}
+                </p>
+              )
+            )}
             <div className="mt-6 flex flex-wrap gap-3">
               <a
                 href={SITE.phoneHref}
@@ -144,7 +175,12 @@ export default function CityLandingPage({ params }: { params: Params }) {
             <CallbackForm
               source={`landing:${landing.slug}:${city.slug}`}
               defaultMessage={`Нужна аренда ${landing.title} ${city.inCity}`}
-              subtitle={`${SITE.callbackPromise}.`}
+              title={offer.kind === 'empty' ? 'Заявка на технику' : undefined}
+              subtitle={
+                offer.kind === 'empty'
+                  ? `Оставьте телефон и задачу — найдём исполнителя ${city.inCity} и перезвоним.`
+                  : `${SITE.callbackPromise}.`
+              }
               dark
             />
             <p className="mt-3 text-xs text-slate-400">
@@ -156,10 +192,36 @@ export default function CityLandingPage({ params }: { params: Params }) {
         </div>
       </section>
 
-      <TrustBadges />
+      {offer.kind === 'available' && <TrustBadges />}
+
+      {machines.length > 0 && (
+        <section>
+          <h2 className="text-2xl font-bold">Техника исполнителей {city.inCity} и рядом</h2>
+          <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {machines.slice(0, 12).map((item) => (
+              <a key={item.id} href={`/equipment/${item.id}`}>
+                <Card className="flex h-full flex-col gap-2 hover:border-amber-400">
+                  <h3 className="font-semibold">{item.name}</h3>
+                  {item.isHouse && <p className="text-sm text-slate-500">Парк {SITE.name}</p>}
+                  {item.hourlyRate > 0 && (
+                    <p className="mt-auto text-lg font-semibold" data-testid="fleet-card-price">
+                      от {rub(item.hourlyRate)} ₽
+                      <span className="text-sm font-normal text-slate-500">/ч с машинистом</span>
+                    </p>
+                  )}
+                </Card>
+              </a>
+            ))}
+          </div>
+        </section>
+      )}
 
       <section>
-        <h2 className="text-2xl font-bold">Какие задачи решаем {city.inCity}</h2>
+        <h2 className="text-2xl font-bold">
+          {offer.kind === 'empty'
+            ? `Что можно заказать ${city.inCity}`
+            : `Какие задачи решаем ${city.inCity}`}
+        </h2>
         <Reveal stagger className="mt-4 grid gap-3 sm:grid-cols-2">
           {landing.tasks.map((task) => (
             <div key={task} className="rounded-xl border border-slate-200 bg-white p-4 text-sm">
@@ -169,34 +231,65 @@ export default function CityLandingPage({ params }: { params: Params }) {
         </Reveal>
       </section>
 
-      <section className="rounded-2xl border border-amber-200 bg-amber-50 p-6">
-        <h2 className="text-xl font-bold">Сколько стоит {city.inCity}</h2>
-        <ul className="mt-3 space-y-1 text-sm text-slate-700">
-          <li>
-            ✔ Час работы — от {rub(rate)} ₽ с машинистом, смена — {shiftExample(rate)}
-          </li>
-          <li>✔ Оплата по фактически отработанным часам</li>
-          <li>✔ Договор, счёт с НДС и закрывающие документы</li>
-          <li>
-            •{' '}
-            {city.distanceKm === 0
-              ? `Подача по городу — рассчитывается по адресу. ${DELIVERY_NOTE}`
-              : `До города ${city.name} — около ${city.distanceKm} км от базы. ${DELIVERY_NOTE}`}
-          </li>
-        </ul>
-      </section>
+      {offer.kind === 'empty' ? (
+        <section
+          className="rounded-2xl border border-amber-200 bg-amber-50 p-6"
+          data-testid="city-empty"
+        >
+          <h2 className="text-xl font-bold">Как это работает {city.inCity}</h2>
+          <ul className="mt-3 space-y-1 text-sm text-slate-700">
+            <li>✔ Оставьте заявку: задача, адрес объекта и сроки</li>
+            <li>✔ Её увидят диспетчер площадки и исполнители, которые выезжают к вам</li>
+            <li>✔ Они пришлют цены — машину и предложение выбираете вы</li>
+            <li>✔ Для заказчика сервис бесплатный, без комиссий</li>
+          </ul>
+          <a
+            href="/orders"
+            className="mt-4 inline-flex min-h-11 items-center justify-center rounded-md bg-amber-700 px-5 text-sm font-bold text-white transition-colors hover:bg-amber-800"
+          >
+            Разместить заявку для исполнителей
+          </a>
+        </section>
+      ) : (
+        <section className="rounded-2xl border border-amber-200 bg-amber-50 p-6">
+          <h2 className="text-xl font-bold">Сколько стоит {city.inCity}</h2>
+          <ul className="mt-3 space-y-1 text-sm text-slate-700">
+            {rate !== null && (
+              <li>
+                ✔ Час работы — от {rub(rate)} ₽ с машинистом, смена — {shiftExample(rate)}
+              </li>
+            )}
+            <li>✔ Оплата по фактически отработанным часам</li>
+            {offer.houseServes && (
+              <li>✔ У {SITE.name} — договор, счёт с НДС и закрывающие документы</li>
+            )}
+            <li>
+              •{' '}
+              {city.houseKm === 0
+                ? `Подача по городу — рассчитывается по адресу. ${DELIVERY_NOTE}`
+                : offer.houseServes && city.houseKm !== undefined
+                  ? `До города ${city.name} — около ${city.houseKm} км от базы ${SITE.name}. ${DELIVERY_NOTE}`
+                  : `Подача — от базы исполнителя до вашего объекта. ${DELIVERY_NOTE}`}
+            </li>
+          </ul>
+        </section>
+      )}
 
       <CinemaBand
         machine={machine}
         clip={landingLoop(landing.slug)}
         eyebrow={`Аренда ${landing.title} ${city.inCity}`}
-        phrase="Скажите задачу — приедет машина и машинист"
+        phrase={
+          offer.kind === 'empty'
+            ? 'Опишите задачу — найдём машину и машиниста'
+            : 'Скажите задачу — приедет машина и машинист'
+        }
       />
 
       <section className="flex flex-col gap-3 text-sm">
         <div className="flex flex-wrap gap-x-3 gap-y-2">
-          <span className="text-slate-500">{landing.short} в других городах:</span>
-          {CITIES.filter((c) => c.slug !== city.slug).map((c) => (
+          <span className="text-slate-500">{landing.short} рядом:</span>
+          {nearestCities(city).map((c) => (
             <a
               key={c.slug}
               href={cityPath(landing.slug, c.slug)}
@@ -210,7 +303,7 @@ export default function CityLandingPage({ params }: { params: Params }) {
           href={`/arenda/${landing.slug}`}
           className="inline-flex min-h-[44px] items-center text-amber-700 hover:underline"
         >
-          ← Аренда {landing.title}: вся информация и техника в наличии
+          ← Аренда {landing.title}: все города и техника
         </a>
         <a
           href="/raboty"

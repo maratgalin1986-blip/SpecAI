@@ -30,9 +30,7 @@ export default function AboutScreen() {
           <Text style={styles.name}>{SITE.name}</Text>
           <Text style={styles.tagline}>{SITE.byline}</Text>
           <Text style={styles.tagline}>{SITE.tagline}</Text>
-          <Text style={styles.region}>
-            {SITE.city} · {SITE.region}
-          </Text>
+          <Text style={styles.region}>Вся Россия · офис СпецПласт16 — {SITE.city}</Text>
         </View>
 
         <Card style={styles.section}>
@@ -61,8 +59,13 @@ export default function AboutScreen() {
           />
           <ContactRow
             icon="location-outline"
-            label="Регион работы"
-            value={`${SITE.city} и ${SITE.region}`}
+            label="Где работаем"
+            value="По всей России — заявку видят исполнители рядом с объектом"
+          />
+          <ContactRow
+            icon="business-outline"
+            label="Офис СпецПласт16"
+            value={`${SITE.city}, ${SITE.region}`}
           />
           <ContactRow
             icon="time-outline"
