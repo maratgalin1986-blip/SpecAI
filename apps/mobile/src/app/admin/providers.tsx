@@ -13,6 +13,7 @@ import { AdminGate } from '@/components/AdminGate';
 import { Badge, Card, EmptyState, ErrorBanner, Loader } from '@/components/ui';
 import { fetchAdminCompanies, setCompanyVerified, type AdminCompany } from '@/lib/adminApi';
 import { formatCount, moscowDate } from '@/lib/adminFormat';
+import { without } from '@/lib/adminModeration';
 import { ApiError } from '@/lib/api';
 import { phoneToHref } from '@/lib/format';
 import { useAdminData } from '@/lib/useAdminData';
@@ -26,16 +27,15 @@ export default function AdminProvidersScreen() {
   );
 }
 
-function omitKey<V>(record: Record<string, V>, key: string): Record<string, V> {
-  const next = { ...record };
-  delete next[key];
-  return next;
-}
-
 function AdminProviders() {
   const { data, setData, error, loading, refreshing, refresh } = useAdminData(fetchAdminCompanies);
   const [saving, setSaving] = useState<Record<string, boolean>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
+  // Отметки, сохранённые на этом экране: список, запрошенный раньше, их не перетирает.
+  const [saved, setSaved] = useState<Record<string, boolean>>({});
+  const rows = (data ?? []).map((item) =>
+    item.id in saved ? { ...item, verified: saved[item.id] ?? item.verified } : item,
+  );
 
   const setVerified = (company: AdminCompany, verified: boolean) => {
     if (saving[company.id]) return;
@@ -47,8 +47,9 @@ function AdminProviders() {
       );
     apply(verified);
     setSaving((prev) => ({ ...prev, [company.id]: true }));
-    setErrors((prev) => omitKey(prev, company.id));
+    setErrors((prev) => without(prev, company.id));
     setCompanyVerified(company.id, verified)
+      .then(() => setSaved((prev) => ({ ...prev, [company.id]: verified })))
       .catch((caught: unknown) => {
         apply(!verified);
         setErrors((prev) => ({
@@ -57,14 +58,14 @@ function AdminProviders() {
             caught instanceof ApiError ? caught.message : 'Не удалось сохранить отметку',
         }));
       })
-      .finally(() => setSaving((prev) => omitKey(prev, company.id)));
+      .finally(() => setSaving((prev) => without(prev, company.id)));
   };
 
   if (loading && !data) return <Loader />;
 
   return (
     <FlatList
-      data={data ?? []}
+      data={rows}
       keyExtractor={(item) => item.id}
       contentContainerStyle={styles.container}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void refresh()} />}

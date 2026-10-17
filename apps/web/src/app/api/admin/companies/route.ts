@@ -14,25 +14,29 @@ const ADMIN_COMPANIES_TAKE = 100;
  */
 export async function GET() {
   if (!isAdminRequest()) return NextResponse.json({ error: 'Нет доступа' }, { status: 401 });
-  const rows = await prisma.company.findMany({
-    where: { isProvider: true },
-    select: {
-      id: true,
-      name: true,
-      phone: true,
-      verified: true,
-      createdAt: true,
-      _count: { select: { equipment: { where: { status: { not: 'RETIRED' } } } } },
-    },
-    orderBy: { createdAt: 'desc' },
-    take: ADMIN_COMPANIES_TAKE,
-  });
-  const companies = rows
-    .map(({ _count, ...company }) => ({
-      ...company,
-      machines: _count.equipment,
-      isHouse: company.id === HOUSE_COMPANY_ID,
-    }))
-    .sort((a, b) => Number(b.isHouse) - Number(a.isHouse));
+  // СпецПласт16's own company is always in the list and first (REVIEW.md §3),
+  // however many providers sign up; then the newest.
+  const select = {
+    id: true,
+    name: true,
+    phone: true,
+    verified: true,
+    createdAt: true,
+    _count: { select: { equipment: { where: { status: { not: 'RETIRED' as const } } } } },
+  };
+  const [house, others] = await Promise.all([
+    prisma.company.findFirst({ where: { id: HOUSE_COMPANY_ID, isProvider: true }, select }),
+    prisma.company.findMany({
+      where: { isProvider: true, id: { not: HOUSE_COMPANY_ID } },
+      select,
+      orderBy: { createdAt: 'desc' },
+      take: ADMIN_COMPANIES_TAKE,
+    }),
+  ]);
+  const companies = [...(house ? [house] : []), ...others].map(({ _count, ...company }) => ({
+    ...company,
+    machines: _count.equipment,
+    isHouse: company.id === HOUSE_COMPANY_ID,
+  }));
   return NextResponse.json({ companies });
 }

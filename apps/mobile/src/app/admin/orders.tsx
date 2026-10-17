@@ -44,6 +44,11 @@ function AdminOrders() {
       await moderateOrder(order.id, status);
       dispatch({ type: 'confirm', key: order.key });
     } catch (caught) {
+      // Уже решено на сайте (409) или удалено (404): здесь решать нечего.
+      if (caught instanceof ApiError && (caught.status === 409 || caught.status === 404)) {
+        dispatch({ type: 'confirm', key: order.key });
+        return;
+      }
       dispatch({
         type: 'restore',
         key: order.key,

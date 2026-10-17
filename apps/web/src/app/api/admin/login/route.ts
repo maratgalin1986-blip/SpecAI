@@ -28,11 +28,12 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Неверный пароль' }, { status: 401 });
   }
   // The app keeps its own expiring session (issueAdminAppToken) in secure
-  // storage and sends it in the x-admin-session header; the site gets the
-  // httpOnly cookie as before.
-  const response = NextResponse.json(
-    body?.app === true ? { ok: true, session: issueAdminAppToken() } : { ok: true },
-  );
+  // storage and sends it in the x-admin-session header — and gets no cookie,
+  // so «Выйти из админки» in the app really ends the session.
+  if (body?.app === true) {
+    return NextResponse.json({ ok: true, session: issueAdminAppToken() });
+  }
+  const response = NextResponse.json({ ok: true });
   response.cookies.set(ADMIN_COOKIE, session, {
     httpOnly: true,
     sameSite: 'lax',

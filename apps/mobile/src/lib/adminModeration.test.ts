@@ -63,6 +63,14 @@ describe('optimistic moderation list', () => {
     expect(state.errors).toEqual({});
   });
 
+  it('does not bring back a decided card from a list asked for before the decision', () => {
+    let state = optimisticReducer(loaded([a, b, c]), { type: 'remove', key: 'b' });
+    state = optimisticReducer(state, { type: 'confirm', key: 'b' });
+    // A refresh started before «Опубликовать» returns the old list with «b».
+    state = optimisticReducer(state, { type: 'load', items: [a, b, c] });
+    expect(state.items).toEqual([a, c]);
+  });
+
   it('ignores unknown keys', () => {
     const state = loaded([a]);
     expect(optimisticReducer(state, { type: 'remove', key: 'x' })).toBe(state);

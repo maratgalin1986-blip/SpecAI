@@ -1,5 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { ApiError, fetchMe, login as apiLogin, putLinePresence, type ApiUser } from './api';
+import { clearAdminSession } from './adminSession';
 import { stopBackgroundLine } from './lineTask';
 import { setAppMode, setProviderOnline } from './prefs';
 import { STORAGE_KEYS, getItem, removeItem, setItem } from './storage';
@@ -34,6 +35,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setAppMode('provider');
     setToken(null);
     setUser(null);
+    // Телефон могут передать другому человеку: меню администратора тоже закрываем.
+    await clearAdminSession().catch(() => undefined);
     await Promise.all([
       removeItem(STORAGE_KEYS.token),
       removeItem(STORAGE_KEYS.user),

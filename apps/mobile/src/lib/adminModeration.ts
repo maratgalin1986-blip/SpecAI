@@ -16,6 +16,8 @@ export interface OptimisticList<T extends Keyed> {
   inFlight: Record<string, { item: T; index: number }>;
   /** Ошибка под карточкой после неудачного решения. */
   errors: Record<string, string>;
+  /** Уже решённые: список, запрошенный до решения, их не возвращает. */
+  decided: Record<string, true>;
 }
 
 export type OptimisticAction<T extends Keyed> =
@@ -25,10 +27,10 @@ export type OptimisticAction<T extends Keyed> =
   | { type: 'restore'; key: string; error: string };
 
 export function emptyList<T extends Keyed>(): OptimisticList<T> {
-  return { items: [], inFlight: {}, errors: {} };
+  return { items: [], inFlight: {}, errors: {}, decided: {} };
 }
 
-function without<V>(record: Record<string, V>, key: string): Record<string, V> {
+export function without<V>(record: Record<string, V>, key: string): Record<string, V> {
   if (!(key in record)) return record;
   const next = { ...record };
   delete next[key];
@@ -43,7 +45,9 @@ export function optimisticReducer<T extends Keyed>(
     case 'load': {
       // Свежий список с сервера: то, что ещё ждёт ответа, не возвращаем, а
       // ошибки оставляем только у карточек, которые всё ещё в списке.
-      const items = action.items.filter((item) => !(item.key in state.inFlight));
+      const items = action.items.filter(
+        (item) => !(item.key in state.inFlight) && !(item.key in state.decided),
+      );
       const keys = new Set(items.map((item) => item.key));
       const errors = Object.fromEntries(
         Object.entries(state.errors).filter(([key]) => keys.has(key)),
@@ -55,19 +59,25 @@ export function optimisticReducer<T extends Keyed>(
       const item = state.items[index];
       if (!item) return state;
       return {
+        ...state,
         items: state.items.filter((entry) => entry.key !== action.key),
         inFlight: { ...state.inFlight, [action.key]: { item, index } },
         errors: without(state.errors, action.key),
       };
     }
     case 'confirm':
-      return { ...state, inFlight: without(state.inFlight, action.key) };
+      return {
+        ...state,
+        inFlight: without(state.inFlight, action.key),
+        decided: { ...state.decided, [action.key]: true },
+      };
     case 'restore': {
       const pending = state.inFlight[action.key];
       if (!pending) return state;
       const items = [...state.items];
       items.splice(Math.min(pending.index, items.length), 0, pending.item);
       return {
+        ...state,
         items,
         inFlight: without(state.inFlight, action.key),
         errors: { ...state.errors, [action.key]: action.error },
