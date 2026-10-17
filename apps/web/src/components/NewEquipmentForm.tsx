@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@specai/ui';
+import { Hint } from '@/components/Hint';
 import { suggestShiftRate } from '@/lib/shiftRate';
 import {
   EQUIPMENT_STATUS_OPTIONS,
@@ -328,6 +329,7 @@ export function EquipmentForm({
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+      <Hint id="equipment-form" />
       <label className="flex flex-col gap-1 text-sm">
         Название
         <input

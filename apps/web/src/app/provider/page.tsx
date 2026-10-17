@@ -48,6 +48,9 @@ import { documentStatus } from '@/lib/documents';
 import { ProviderOpsSection, loadOperatorOptions } from '@/components/shifts/ProviderOpsSection';
 import { OperatorSelect } from '@/components/shifts/OperatorSelect';
 import { ShiftPanel } from '@/components/shifts/ShiftPanel';
+import { ModeSwitch } from '@/components/ModeSwitch';
+import { Hint } from '@/components/Hint';
+import { CUSTOMER_MODE_HREF } from '@/lib/cabinetMode';
 
 export const dynamic = 'force-dynamic';
 export const metadata: Metadata = {
@@ -67,6 +70,8 @@ const PROVIDER_ALLOWED_TRANSITIONS: Record<string, string[]> = {
 interface ProviderSearchParams {
   page?: string;
   bookingsPage?: string;
+  /** Just became a provider under the same login (BecomeProviderForm). */
+  welcome?: string;
 }
 
 export default async function ProviderPage({
@@ -234,15 +239,40 @@ export default async function ProviderPage({
           <h1 className="text-2xl font-extrabold tracking-tight text-graphite-950">
             {isHouseManager(session.user) ? 'Кабинет парка СпецПласт16' : 'Техника, заявки и брони'}
           </h1>
-          <a
-            href={providerPath(companyId)}
-            className="text-sm font-semibold text-signal-700 hover:underline"
-          >
-            Моя публичная страница
-          </a>
+          <div className="flex flex-wrap gap-x-4">
+            <a
+              href={providerPath(companyId)}
+              className="inline-flex min-h-11 items-center text-sm font-semibold text-signal-700 hover:underline"
+            >
+              Моя публичная страница
+            </a>
+            <a
+              href={CUSTOMER_MODE_HREF}
+              className="inline-flex min-h-11 items-center text-sm font-semibold text-signal-700 hover:underline"
+            >
+              Я заказываю технику →
+            </a>
+          </div>
         </div>
-        <OnlineToggle />
+        <div className="flex flex-col gap-3 sm:items-end">
+          <ModeSwitch current="provider" />
+          <OnlineToggle />
+        </div>
       </div>
+
+      {searchParams.welcome === '1' && (
+        <p
+          role="status"
+          className="rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-900"
+        >
+          Готово, теперь вы исполнитель. Добавьте первую машину с ценой —{' '}
+          <a href="#add-equipment" className="font-semibold underline">
+            форма ниже
+          </a>
+          , и она появится в каталоге. Ваши заказы — в режиме «Заказчик».
+        </p>
+      )}
+      <Hint id="provider" />
 
       <section aria-label="Сводка" className="flex flex-col gap-3">
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">

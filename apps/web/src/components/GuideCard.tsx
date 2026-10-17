@@ -1,4 +1,4 @@
-import type { GuideResult } from '@/lib/guide';
+import { GUIDE_HELP_LINK, type GuideResult } from '@/lib/guide';
 
 /** «Помощник: ваш следующий шаг» with the checklist folded underneath. */
 export function GuideCard({ guide }: { guide: GuideResult }) {
@@ -53,6 +53,12 @@ export function GuideCard({ guide }: { guide: GuideResult }) {
           ))}
         </ol>
       </details>
+      <a
+        href={GUIDE_HELP_LINK.href}
+        className="inline-flex min-h-11 items-center text-sm font-medium text-amber-800 underline decoration-amber-300"
+      >
+        {GUIDE_HELP_LINK.label} →
+      </a>
     </section>
   );
 }

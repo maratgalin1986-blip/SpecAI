@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { getServerSession } from 'next-auth';
+import { cookies } from 'next/headers';
 import { prisma } from '@specai/database';
 import { ORDER_STATUS_LABELS, orderStatusSchema, type OrderStatus } from '@specai/shared';
 import { Card } from '@specai/ui';
@@ -24,6 +25,9 @@ import {
 } from '@/lib/orderBoard';
 import { loadOrderBoard } from '@/lib/orderBoardData';
 import { pluralizeRu } from '@/lib/pluralize';
+import { MODE_COOKIE, cabinetMode } from '@/lib/cabinetMode';
+import { ModeSwitch } from '@/components/ModeSwitch';
+import { Hint } from '@/components/Hint';
 
 export const metadata: Metadata = {
   title: 'Заявки на спецтехнику в Татарстане — доска заказов',
@@ -69,6 +73,8 @@ interface OrdersSearchParams {
   city?: string;
   when?: string;
   sort?: string;
+  /** One login, two modes: a provider orders machinery as a customer. */
+  mode?: string;
 }
 
 type OrderWhere = NonNullable<Parameters<typeof prisma.order.count>[0]>['where'];
@@ -116,7 +122,12 @@ export default async function OrdersPage({ searchParams }: { searchParams: Order
   // Aggregator: the board of open orders is public; a provider bids, a
   // customer also sees «Мои заявки», a guest is sent to sign in to bid.
   const session = await getServerSession(authOptions);
-  const viewerIsProvider = isProvider(session?.user);
+  const accountIsProvider = isProvider(session?.user);
+  // A provider in the customer mode places orders and sees «Мои заявки» here.
+  const customerMode =
+    accountIsProvider &&
+    cabinetMode(session?.user, searchParams.mode, cookies().get(MODE_COOKIE)?.value) === 'customer';
+  const viewerIsProvider = accountIsProvider && !customerMode;
   const isAdmin = isAdminRequest();
   const viewerId = session?.user.id;
   const viewerIsCustomer = Boolean(viewerId) && !viewerIsProvider;
@@ -138,11 +149,13 @@ export default async function OrdersPage({ searchParams }: { searchParams: Order
     viewerIsCustomer ? loadMyOrders(myWhere, parsePage(searchParams.mp)) : null,
   ]);
 
+  // A provider's own order (placed in the customer mode) is «Моя заявка»;
+  // other orders keep «Предложить цену» for a provider in either mode.
   const viewerFor = (customerId: string): BoardViewer =>
-    viewerIsProvider || isAdmin
-      ? 'provider'
-      : viewerId && viewerId === customerId
-        ? 'owner'
+    viewerId && viewerId === customerId
+      ? 'owner'
+      : accountIsProvider || isAdmin
+        ? 'provider'
         : viewerId
           ? 'customer'
           : 'guest';
@@ -191,6 +204,7 @@ export default async function OrdersPage({ searchParams }: { searchParams: Order
           — это бесплатно.
         </p>
       )}
+      {!viewerId && <Hint id="orders-guest" className="mb-3 max-w-xl" />}
       {viewerId ? (
         <Card className="max-w-xl">
           <NewOrderForm provider={forProvider} initial={orderPrefill(searchParams)} />
@@ -243,17 +257,41 @@ export default async function OrdersPage({ searchParams }: { searchParams: Order
               <a href="#new" className="cab-action" data-cta="place-order">
                 Разместить заявку
               </a>
-              <a
-                href="/register?type=provider"
-                className="cab-ghost border-white/40 bg-transparent text-white hover:border-white"
-                data-cta="join-provider"
-              >
-                Встать на линию
-              </a>
+              {accountIsProvider ? (
+                <a
+                  href="/provider"
+                  className="cab-ghost border-white/40 bg-transparent text-white hover:border-white"
+                >
+                  Кабинет исполнителя
+                </a>
+              ) : (
+                <a
+                  href="/register?type=provider"
+                  className="cab-ghost border-white/40 bg-transparent text-white hover:border-white"
+                  data-cta="join-provider"
+                >
+                  Встать на линию
+                </a>
+              )}
             </>
           )}
         </div>
       </CinemaHero>
+
+      {accountIsProvider && (
+        <div className="flex flex-wrap items-center gap-3">
+          <p className="text-sm text-graphite-600">
+            {customerMode
+              ? 'Вы заказываете технику как заказчик.'
+              : 'Вы смотрите заявки как исполнитель.'}
+          </p>
+          <ModeSwitch
+            current={customerMode ? 'customer' : 'provider'}
+            customerHref="/orders?mode=customer"
+            providerHref="/orders?mode=provider"
+          />
+        </div>
+      )}
 
       {cameToOrder && orderForm}
 

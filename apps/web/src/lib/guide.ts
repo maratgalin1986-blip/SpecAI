@@ -337,6 +337,33 @@ export function nextSteps(
   return { role, title, steps, next, progress: { done, total: steps.length } };
 }
 
+/** «Как пользоваться» — the short help page, linked under the guide card. */
+export const GUIDE_HELP_LINK: GuideLink = {
+  label: 'Как пользоваться площадкой',
+  href: '/kak-polzovatsya',
+};
+
+/** /dashboard#orders → /dashboard?mode=customer#orders; other links stay. */
+function customerModeHref(href: string): string {
+  const match = /^\/dashboard(?=$|[?#])(\?[^#]*)?(#.*)?$/.exec(href);
+  if (!match) return href;
+  const params = new URLSearchParams(match[1]?.slice(1) ?? '');
+  params.set('mode', 'customer');
+  return `/dashboard?${params.toString()}${match[2] ?? ''}`;
+}
+
+/**
+ * The customer guide of a provider who orders machinery (one login, two
+ * modes): its links to the dashboard keep the customer mode, so they do not
+ * bounce to the provider's own page.
+ */
+export function inCustomerMode(result: GuideResult): GuideResult {
+  const link = (action?: GuideLink) =>
+    action ? { ...action, href: customerModeHref(action.href) } : action;
+  const step = (item: GuideStep): GuideStep => ({ ...item, action: link(item.action) });
+  return { ...result, steps: result.steps.map(step), next: step(result.next) };
+}
+
 const WHAT_NEXT =
   /что\s+(?:мне\s+)?(?:дальше|делать)|следующ\p{L}*\s+шаг|с\s+чего\s+начать|^\s*дальше\s*\??\s*$/iu;
 
