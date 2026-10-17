@@ -57,6 +57,10 @@ export async function generateMetadata({ params }: { params: Params }): Promise<
     description: text.description,
     alternates: { canonical: path },
     openGraph: { title: text.title, description: text.description, url: path },
+    // A city nobody serves yet stays out of search: a thousand near-identical
+    // «исполнители подключаются» pages read as doorways to Яндекс. It opens to
+    // search by itself once a provider serves the city.
+    ...(offer.kind === 'empty' ? { robots: { index: false, follow: true } } : {}),
   };
 }
 

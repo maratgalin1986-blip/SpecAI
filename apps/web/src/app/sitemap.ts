@@ -1,7 +1,8 @@
 import type { MetadataRoute } from 'next';
 import { prisma } from '@specai/database';
 import { LANDINGS } from '@/lib/landings';
-import { cityPages, cityPath } from '@/lib/cities';
+import { cityBySlug, cityPages, cityPath } from '@/lib/cities';
+import { loadCityOffer } from '@/lib/cityFleetData';
 import { JOBS } from '@/lib/jobs';
 import { siteUrl } from '@/lib/siteUrl';
 import { PUBLIC_FLEET } from '@/lib/fleet';
@@ -9,13 +10,26 @@ import { providerPath } from '@/lib/providerSeo';
 
 export const revalidate = 3600;
 
+async function servedCityPaths(): Promise<string[]> {
+  const paths: string[] = [];
+  for (const page of cityPages()) {
+    const landing = LANDINGS.find((item) => item.slug === page.slug);
+    const city = cityBySlug(page.city);
+    if (!landing || !city) continue;
+    const offer = await loadCityOffer(landing, city).catch(() => null);
+    if (offer?.kind === 'available') paths.push(cityPath(page.slug, page.city));
+  }
+  return paths;
+}
+
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const base = siteUrl();
   const staticPages = [
     '',
     ...LANDINGS.map((landing) => `/arenda/${landing.slug}`),
-    // Every landing × city of Russia (lib/cities.ts); each page is its own canonical.
-    ...cityPages().map((page) => cityPath(page.slug, page.city)),
+    // City pages only where a provider really serves the city (the others are
+    // noindex until then, see app/arenda/[slug]/[city]).
+    ...(await servedCityPaths()),
     '/raboty',
     ...JOBS.map((job) => `/raboty/${job.slug}`),
     '/equipment',
