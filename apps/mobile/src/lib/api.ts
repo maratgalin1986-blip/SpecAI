@@ -453,6 +453,8 @@ export type RegisterInput = {
   consent: true;
   /** Еженедельное письмо: true только если человек сам включил переключатель. */
   newsConsent?: boolean;
+  /** Код приглашения друга: другу — бонус «заявки на 5 минут раньше». */
+  ref?: string;
 } & (
   | { accountType: 'CUSTOMER' }
   | {

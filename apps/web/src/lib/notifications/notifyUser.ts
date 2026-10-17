@@ -208,14 +208,17 @@ export async function matchOrderRecipients(orderId: string, now: Date = new Date
     );
     if (!matches) continue;
     const priority = companyHasPriority(company.users, now);
+    const house = company.id === HOUSE_COMPANY_ID;
     for (const user of company.users) {
       if (seen.has(user.id)) continue;
       seen.add(user.id);
-      recipients.push({ userId: user.id, priority });
+      recipients.push({ userId: user.id, priority, house });
     }
   }
-  // Stable sort: the bonus holders first, the rest keep their order.
-  recipients.sort((a, b) => Number(b.priority) - Number(a.priority));
+  // Stable sort: the bonus holders and the house fleet first, so the cap
+  // never cuts them; the rest keep their order.
+  const rank = (item: OrderRecipient) => (item.priority ? 2 : item.house ? 1 : 0);
+  recipients.sort((a, b) => rank(b) - rank(a));
   return { order, recipients: recipients.slice(0, MAX_ORDER_RECIPIENTS) };
 }
 
@@ -253,7 +256,7 @@ export async function notifyProvidersAboutOrder(orderId: string): Promise<void> 
         .update({
           where: { id: order.id },
           data: {
-            earlyNotifiedUserIds: plan.now,
+            earlyNotifiedUserIds: [...plan.now, ...plan.house],
             othersNotifyAt: new Date(now.getTime() + EARLY_NOTICE_MS),
             othersNotifiedAt: null,
           },
@@ -266,6 +269,7 @@ export async function notifyProvidersAboutOrder(orderId: string): Promise<void> 
         });
       if (deferred) {
         await notifyUsers(plan.now, orderNewEvent(order, true));
+        if (plan.house.length > 0) await notifyUsers(plan.house, orderNewEvent(order));
         return;
       }
     } else if (order.othersNotifyAt && !order.othersNotifiedAt) {
@@ -276,7 +280,7 @@ export async function notifyProvidersAboutOrder(orderId: string): Promise<void> 
         data: { othersNotifiedAt: now },
       });
     }
-    await notifyUsers([...plan.now, ...plan.later], orderNewEvent(order));
+    await notifyUsers([...plan.now, ...plan.house, ...plan.later], orderNewEvent(order));
   } catch (error) {
     console.error(`[notify] new order ${orderId}: providers were not notified`, error);
   }

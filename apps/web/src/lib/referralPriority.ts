@@ -44,23 +44,33 @@ export function companyHasPriority(
 export interface OrderRecipient {
   userId: string;
   priority: boolean;
+  /** СпецПласт16's own fleet: always hears at once, but gives nobody a delay. */
+  house?: boolean;
 }
 
 /**
  * Who hears of a new order now and who 5 minutes later. The delay exists only
  * when someone holds the bonus AND someone else does not: without a
  * competitor with the bonus everyone hears at once, as before the promotion.
+ * СпецПласт16's own fleet (owner's company) is never held back: it hears at
+ * once with the ordinary alert (`house`), and on its own causes no delay.
  */
 export function planOrderNotice(recipients: readonly OrderRecipient[]): {
   now: string[];
+  house: string[];
   later: string[];
 } {
   const early = recipients.filter((item) => item.priority).map((item) => item.userId);
-  const others = recipients.filter((item) => !item.priority).map((item) => item.userId);
+  const house = recipients
+    .filter((item) => !item.priority && item.house)
+    .map((item) => item.userId);
+  const others = recipients
+    .filter((item) => !item.priority && !item.house)
+    .map((item) => item.userId);
   if (early.length === 0 || others.length === 0) {
-    return { now: [...early, ...others], later: [] };
+    return { now: [...early, ...house, ...others], house: [], later: [] };
   }
-  return { now: early, later: others };
+  return { now: early, house, later: others };
 }
 
 /** «24 октября» — the Moscow day the bonus ends on. */

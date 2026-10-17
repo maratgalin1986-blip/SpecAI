@@ -40,6 +40,9 @@ export function InviteCard() {
   if (user.role !== 'PROVIDER_ADMIN' && user.role !== 'CUSTOMER') return null;
   const provider = user.role === 'PROVIDER_ADMIN';
   const invited = invitedLine(user.invited);
+  // The code itself (the link ends in /r/<code>): a friend who installs the app
+  // directly types it at sign-up («Код приглашения»).
+  const code = decodeURIComponent(link.split('/r/')[1] ?? '').trim();
 
   const share = async () => {
     try {
@@ -63,6 +66,11 @@ export function InviteCard() {
       <Text style={styles.link} selectable>
         {link}
       </Text>
+      {code ? (
+        <Text style={styles.note} selectable>
+          Ваш код приглашения: {code} — друг может ввести его при регистрации в приложении.
+        </Text>
+      ) : null}
       <Button title="Поделиться ссылкой" variant="secondary" onPress={share} />
       {invited ? <Text style={styles.note}>{invited}</Text> : null}
     </Card>

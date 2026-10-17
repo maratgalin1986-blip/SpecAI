@@ -68,20 +68,31 @@ describe('planOrderNotice', () => {
   it('splits when both bonus holders and others are matched', () => {
     expect(planOrderNotice([p('a'), o('b'), o('c'), p('d')])).toEqual({
       now: ['a', 'd'],
+      house: [],
       later: ['b', 'c'],
     });
   });
 
   it('tells everyone at once when nobody holds the bonus', () => {
-    expect(planOrderNotice([o('b'), o('c')])).toEqual({ now: ['b', 'c'], later: [] });
+    expect(planOrderNotice([o('b'), o('c')])).toEqual({ now: ['b', 'c'], house: [], later: [] });
   });
 
   it('tells everyone at once when everyone holds it', () => {
-    expect(planOrderNotice([p('a'), p('d')])).toEqual({ now: ['a', 'd'], later: [] });
+    expect(planOrderNotice([p('a'), p('d')])).toEqual({ now: ['a', 'd'], house: [], later: [] });
   });
 
   it('has nothing to send for nobody', () => {
-    expect(planOrderNotice([])).toEqual({ now: [], later: [] });
+    expect(planOrderNotice([])).toEqual({ now: [], house: [], later: [] });
+  });
+
+  it('never holds back СпецПласт16’s own fleet, and it alone delays nobody', () => {
+    const h = (userId: string) => ({ userId, priority: false, house: true });
+    expect(planOrderNotice([p('a'), h('h'), o('b')])).toEqual({
+      now: ['a'],
+      house: ['h'],
+      later: ['b'],
+    });
+    expect(planOrderNotice([h('h'), o('b')])).toEqual({ now: ['h', 'b'], house: [], later: [] });
   });
 });
 
