@@ -14,6 +14,8 @@ export const STORAGE_KEYS = {
   hints: 'specai.hints',
   /** Сессия меню администратора (вход по паролю админки), не связана с аккаунтом. */
   adminSession: 'specai.adminSession',
+  /** Брони, по которым закрыли «Поддержать ИИСтройка24» (JSON-массив id). */
+  supportDismissed: 'specai.supportDismissed',
 } as const;
 
 export async function getItem(key: string): Promise<string | null> {

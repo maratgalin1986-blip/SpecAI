@@ -58,9 +58,11 @@ import {
   priceByRate,
   relativeDay,
 } from '@/lib/orderFlow';
+import { feedTodayText } from '@/lib/activity';
 import { positionStatus } from '@/lib/line';
 import { setProviderOnline, usePrefs } from '@/lib/prefs';
 import { STORAGE_KEYS, getItem, setItem } from '@/lib/storage';
+import { useActivity } from '@/lib/useActivity';
 import { useLineReporter } from '@/lib/useLineReporter';
 import { colors, radius, shadow, spacing, TAP, typography } from '@/theme';
 
@@ -430,6 +432,8 @@ function FeedCard({
  */
 export default function FeedScreen() {
   const { online } = usePrefs();
+  // «Сегодня N новых заявок» по всей площадке — настоящее число за московский день.
+  const activity = useActivity();
   // С какой машиной выходим на линию — запоминается на телефоне.
   const [lineMachineId, setLineMachineId] = useState<string | null>(null);
   useEffect(() => {
@@ -668,6 +672,12 @@ export default function FeedScreen() {
   const header = (
     <View style={styles.header}>
       <ModeSwitch />
+      {activity ? (
+        <View style={styles.today} accessibilityRole="text">
+          <View style={styles.todayDot} />
+          <Text style={styles.todayText}>{feedTodayText(activity.today)}</Text>
+        </View>
+      ) : null}
       <OnlineSwitch
         online={online}
         onToggle={() => {
@@ -877,6 +887,9 @@ const styles = StyleSheet.create({
   fleetAdd: { borderStyle: 'dashed', borderColor: colors.primary },
   fleetAddText: { fontSize: 14, fontWeight: '700', color: colors.primaryDark },
   stats: { flexDirection: 'row', gap: spacing.sm },
+  today: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  todayDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.success },
+  todayText: { fontSize: 14, fontWeight: '700', color: colors.text },
   stat: {
     flex: 1,
     minHeight: 92,

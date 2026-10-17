@@ -1,4 +1,5 @@
-import type { LiveMachine } from './api';
+import type { BaseMachine, LiveMachine } from './api';
+import { pluralizeRu } from './format';
 
 /**
  * Что уходит в карту (window.setLive в providersMapHtml): короткая метка на
@@ -46,6 +47,62 @@ export function toLivePins(machines: LiveMachine[]): LivePin[] {
     note: machine.note?.trim() || null,
     house: machine.company.isHouse,
   }));
+}
+
+/**
+ * Точка машин СпецПласт16 на базе (window.setBase в providersMapHtml). Машины
+ * одной базы стоят в одной точке — это одна метка: подпись одной машины или
+ * «N машин · от … ₽/ч», нажатие открывает список, из него — страница машины.
+ */
+export interface BasePin {
+  lat: number;
+  lon: number;
+  /** «СпецПласт16 · на базе» — мелкая первая строка пузыря. */
+  head: string;
+  /** «JCB 3CX · от 2 500 ₽/ч» или «12 машин · от 2 500 ₽/ч». */
+  body: string;
+  items: { equipmentId: string; name: string; price: string }[];
+}
+
+/** «СпецПласт16 · JCB 3CX · от 2 500 ₽/ч · на базе» → голова «СпецПласт16 · на базе» и середина. */
+export function splitBaseBubble(bubble: string): { head: string; body: string } {
+  const parts = bubble.split(' · ');
+  if (parts.length < 3) return { head: bubble, body: '' };
+  return {
+    head: `${parts[0]} · ${parts[parts.length - 1]}`,
+    body: parts.slice(1, -1).join(' · '),
+  };
+}
+
+export function toBasePins(base: BaseMachine[]): BasePin[] {
+  const groups = new Map<string, BaseMachine[]>();
+  for (const machine of base) {
+    const key = `${machine.lat.toFixed(4)},${machine.lon.toFixed(4)}`;
+    groups.set(key, [...(groups.get(key) ?? []), machine]);
+  }
+  return [...groups.values()].map((machines) => {
+    const first = machines[0]!;
+    const { head, body } = splitBaseBubble(first.bubble);
+    const priced = machines
+      .filter((machine) => machine.equipment.hourlyRate > 0)
+      .sort((a, b) => a.equipment.hourlyRate - b.equipment.hourlyRate)[0];
+    return {
+      lat: first.lat,
+      lon: first.lon,
+      head,
+      body:
+        machines.length === 1
+          ? body
+          : [pluralizeRu(machines.length, ['машина', 'машины', 'машин']), priced?.priceText ?? null]
+              .filter(Boolean)
+              .join(' · '),
+      items: machines.map((machine) => ({
+        equipmentId: machine.equipment.id,
+        name: machine.equipment.name,
+        price: machine.priceText,
+      })),
+    };
+  });
 }
 
 /** Как часто карта заказчика перечитывает технику на линии. */

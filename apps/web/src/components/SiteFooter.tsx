@@ -1,5 +1,6 @@
 import { LANDINGS } from '@/lib/landings';
 import { SITE } from '@/lib/site';
+import { SupportFooterLink } from '@/components/SupportCard';
 
 // At least 44 px tap height on phones; compact rows from sm up.
 const LINK = 'flex min-h-11 items-center hover:text-white sm:min-h-0';
@@ -57,6 +58,7 @@ export function SiteFooter() {
           <a href="/credits" className={LINK}>
             Авторы фото и видео
           </a>
+          <SupportFooterLink className={`${LINK} text-left`} />
         </div>
         <div className="flex flex-col sm:gap-1">
           <div className="font-semibold text-white">Контакты</div>

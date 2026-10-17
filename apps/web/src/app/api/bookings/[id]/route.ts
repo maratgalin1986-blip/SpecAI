@@ -174,6 +174,8 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
       where: { id: booking.id, status: booking.status },
       data: {
         status: nextStatus,
+        // For «Бронь подтверждена» in the public activity strip (lib/activity.ts).
+        ...(nextStatus === 'CONFIRMED' ? { confirmedAt: new Date() } : {}),
         ...(nextStatus === 'CANCELLED'
           ? {
               cancelledBy: isOwningProvider ? CANCELLED_BY.PROVIDER : CANCELLED_BY.CUSTOMER,

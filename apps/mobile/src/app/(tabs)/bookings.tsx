@@ -3,6 +3,7 @@ import * as WebBrowser from 'expo-web-browser';
 import React, { useCallback, useState } from 'react';
 import { Alert, FlatList, Linking, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import { ShiftStatusView } from '@/components/ShiftStatusView';
+import { SupportPrompt } from '@/components/SupportCard';
 import {
   Badge,
   Button,
@@ -27,6 +28,7 @@ import {
   formatDate,
   formatMoney,
 } from '@/lib/format';
+import { completedBookingIds } from '@/lib/support';
 import { colors, spacing } from '@/lib/theme';
 
 const STATUS_TONES: Record<BookingStatus, BadgeTone> = {
@@ -259,11 +261,14 @@ export default function BookingsScreen() {
         />
       }
       ListHeaderComponent={
-        error ? (
-          <View style={styles.header}>
-            <ErrorBanner message={error} onRetry={() => void load()} />
-          </View>
-        ) : null
+        <>
+          {error ? (
+            <View style={styles.header}>
+              <ErrorBanner message={error} onRetry={() => void load()} />
+            </View>
+          ) : null}
+          <SupportPrompt completedIds={completedBookingIds(bookings)} style={styles.header} />
+        </>
       }
       ListEmptyComponent={
         !error ? (

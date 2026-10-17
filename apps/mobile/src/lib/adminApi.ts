@@ -13,7 +13,7 @@ export const ADMIN_SESSION_HEADER = 'x-admin-session';
 export const ADMIN_EXPIRED_MESSAGE = 'Вход в меню администратора истёк. Введите пароль ещё раз';
 
 interface AdminRequestOptions {
-  method?: 'GET' | 'PATCH';
+  method?: 'GET' | 'PATCH' | 'PUT';
   body?: unknown;
 }
 
@@ -173,4 +173,32 @@ export function setCompanyVerified(id: string, verified: boolean) {
     method: 'PATCH',
     body: { verified },
   });
+}
+
+/** «Поддержка (донаты)»: номер карты владельца, имя получателя, вкл/выкл. */
+export interface AdminSupportSettings {
+  /** Только цифры, '' — не задан. */
+  card: string;
+  cardFormatted: string;
+  recipient: string;
+  enabled: boolean;
+  updatedAt: string | null;
+}
+
+export async function fetchSupportSettings() {
+  return (await adminFetch<{ support: AdminSupportSettings }>('/api/admin/settings/support'))
+    .support;
+}
+
+export async function saveSupportSettings(value: {
+  card: string;
+  recipient: string;
+  enabled: boolean;
+}) {
+  return (
+    await adminFetch<{ support: AdminSupportSettings }>('/api/admin/settings/support', {
+      method: 'PUT',
+      body: value,
+    })
+  ).support;
 }

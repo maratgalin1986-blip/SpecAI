@@ -6,6 +6,8 @@ import { BookingStatusBadge, Card } from '@specai/ui';
 import { authOptions } from '@/lib/auth';
 import { NewEquipmentForm } from '@/components/NewEquipmentForm';
 import { BookingActionButtons } from '@/components/BookingActionButtons';
+import { SupportPrompt } from '@/components/SupportCard';
+import { completedBookingIds } from '@/lib/supportPrompt';
 import { formatMoney } from '@/lib/money';
 import { ProviderEquipmentCard } from '@/components/ProviderEquipmentCard';
 import { CONTACTS_AFTER_CONFIRM, customerForProvider } from '@/lib/customerPrivacy';
@@ -499,6 +501,9 @@ export default async function ProviderPage({
             Всего: {bookingsTotal}
             {bookingsTotalPages > 1 && ` · страница ${bookingsPage} из ${bookingsTotalPages}`}
           </p>
+        </div>
+        <div className="empty:hidden">
+          <SupportPrompt completedIds={completedBookingIds(bookings)} />
         </div>
         {bookings.length === 0 ? (
           <p className="text-sm text-slate-600">

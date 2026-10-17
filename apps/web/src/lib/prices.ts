@@ -105,3 +105,9 @@ export function priceFaqAnswer(): string {
   const list = PRICE_GROUPS.map((g) => `${g.names} — ${fromPrice(g.rate)}`).join(', ');
   return `${list}. Все цены — с машинистом, смена ${SHIFT_HOURS} часов.`;
 }
+
+/**
+ * «Поддержать площадку»: amount chips that only help choose a sum, ₽. The
+ * transfer itself happens in the person's bank app, and any sum is fine.
+ */
+export const SUPPORT_AMOUNTS: readonly number[] = [100, 300, 500];
