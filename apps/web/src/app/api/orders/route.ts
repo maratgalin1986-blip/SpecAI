@@ -10,6 +10,7 @@ import { maskedContactFor } from '@/lib/chatOrders';
 import { cityInText, geocodeAddress } from '@/lib/geo';
 import { notifyTelegram } from '@/lib/notify';
 import { notifyProvidersAboutOrder } from '@/lib/notifications/notifyUser';
+import { pingOrderBoard } from '@/lib/indexNow';
 import { SITE } from '@/lib/site';
 import { machineTypeOf } from '@/lib/equipmentCatalog';
 import { INVALID_JSON_MESSAGE, readJson, zodErrorMessage } from '@/lib/apiInput';
@@ -277,8 +278,9 @@ export async function POST(request: NextRequest) {
   });
 
   await notifyTelegram(await orderMessage(order, place, request.nextUrl.origin));
-  // Providers with machinery of this category nearby (Telegram, push, e-mail…).
-  await notifyProvidersAboutOrder(order.id);
+  // Providers with machinery of this category nearby (Telegram, push, e-mail…);
+  // Yandex hears that the board changed (IndexNow, best-effort).
+  await Promise.all([notifyProvidersAboutOrder(order.id), pingOrderBoard()]);
 
   return NextResponse.json({ order }, { status: 201 });
 }

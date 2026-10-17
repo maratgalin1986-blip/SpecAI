@@ -4,6 +4,7 @@ import { cronAllowed } from '@/lib/cronAuth';
 import { DOCUMENT_REMINDER_DAYS, documentTitle, dueReminders } from '@/lib/documents';
 import { notifyCompany } from '@/lib/notifications/notifyUser';
 import { GET as evening } from '../evening/route';
+import { postChannelDigest } from '@/lib/channelDigest';
 
 export const dynamic = 'force-dynamic';
 // A GET handler: without this Next keeps outgoing sends (Telegram, push,
@@ -58,5 +59,7 @@ export async function GET(request: NextRequest) {
   const digest = await evening(request)
     .then((response) => response.json() as Promise<unknown>)
     .catch((error: unknown) => ({ error: String(error) }));
-  return NextResponse.json({ ok: true, checked: candidates.length, sent, digest });
+  // «Заявки за сутки» in the platform's own Telegram channel (off without TELEGRAM_CHANNEL_ID).
+  const channel = await postChannelDigest().catch((error: unknown) => ({ error: String(error) }));
+  return NextResponse.json({ ok: true, checked: candidates.length, sent, digest, channel });
 }

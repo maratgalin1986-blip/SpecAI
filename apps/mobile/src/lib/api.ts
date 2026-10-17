@@ -282,6 +282,7 @@ export interface Order {
   /** Место работ; у старых заявок адрес может быть строкой «Адрес:» в описании. */
   location?: {
     addressLine?: string | null;
+    city?: string | null;
     latitude?: number | null;
     longitude?: number | null;
   } | null;
