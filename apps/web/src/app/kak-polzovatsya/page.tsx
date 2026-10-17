@@ -164,6 +164,14 @@ export default function HowToPage() {
         </p>
       </section>
 
+      <p className="text-sm">
+        Есть идея, как сделать площадку удобнее, или хотите сотрудничать?{' '}
+        <a href="/predlozheniya" className="font-semibold text-amber-700 underline">
+          Предложения и партнёрство
+        </a>
+        .
+      </p>
+
       <section aria-labelledby="hints-title" className="flex flex-col gap-2 border-t pt-6">
         <h2 id="hints-title" className="text-lg font-semibold text-slate-900">
           Подсказки на страницах

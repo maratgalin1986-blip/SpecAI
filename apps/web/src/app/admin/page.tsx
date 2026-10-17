@@ -20,6 +20,12 @@ import { AdminVerifyToggle } from '@/components/AdminVerifyToggle';
 import { providerPath } from '@/lib/providerSeo';
 import { chipClass } from '@/components/admin/AdminUi';
 import { PhoneLink } from '@/components/admin/PhoneLink';
+import { ProposalsCard } from '@/components/admin/ProposalsCard';
+import { AiDecisionsCard } from '@/components/admin/AiDecisionsCard';
+import { aiModerationEnabled, loadAiDecisions } from '@/lib/orderModeration';
+import { BotChatsCard } from '@/components/admin/BotChatsCard';
+import { loadBotChats } from '@/lib/groupBot';
+import { ADMIN_PROPOSAL_SELECT } from '@/lib/proposals';
 import {
   LEAD_FILTERS,
   filterLeads,
@@ -75,6 +81,9 @@ export default async function AdminPage({ searchParams = {} }: { searchParams?: 
     );
   }
 
+  // «Чаты с ботом», loaded alongside the rest; before the first deploy with
+  // the table, an empty list.
+  const botChatsLoad = loadBotChats().catch(() => ({ chats: [], active: 0 }));
   // Bot drafts without a phone are not leads yet (lib/botDrafts.ts).
   const leadsWhere = { NOT: { phone: '' } };
   const [stats, leads, leadsTotal] = await Promise.all([
@@ -86,7 +95,7 @@ export default async function AdminPage({ searchParams = {} }: { searchParams?: 
     }),
     prisma.lead.count({ where: leadsWhere }),
   ]);
-  const [pendingOrders, importedStats] = await Promise.all([
+  const [pendingOrders, importedStats, aiDecisions] = await Promise.all([
     prisma.order.findMany({
       where: { status: 'PENDING_REVIEW' },
       include: { category: true, location: true },
@@ -98,6 +107,7 @@ export default async function AdminPage({ searchParams = {} }: { searchParams?: 
       where: { source: { not: 'SITE' }, createdAt: { gte: new Date(Date.now() - 7 * 86_400_000) } },
       _count: true,
     }),
+    loadAiDecisions().catch(() => []),
   ]);
   const pendingComments = await prisma.comment.findMany({
     where: { status: 'PENDING' },
@@ -119,6 +129,19 @@ export default async function AdminPage({ searchParams = {} }: { searchParams?: 
     orderBy: { createdAt: 'asc' },
     take: 100,
   });
+  // «Предложения и партнёрство»: every new one up to 100, then the latest read
+  // ones (separately, so read messages never push new ones out); no archive.
+  const loadProposals = (status: 'NEW' | 'READ', take: number) =>
+    prisma.proposal
+      .findMany({
+        where: { status },
+        select: ADMIN_PROPOSAL_SELECT,
+        orderBy: { createdAt: 'desc' },
+        take,
+      })
+      .catch(() => []);
+  const proposals = [...(await loadProposals('NEW', 100)), ...(await loadProposals('READ', 30))];
+  const botChats = await botChatsLoad;
   // «Исполнители»: provider companies with the «Проверен» switch, unchecked first.
   const providers = await prisma.company.findMany({
     where: { isProvider: true },
@@ -147,6 +170,7 @@ export default async function AdminPage({ searchParams = {} }: { searchParams?: 
   const newCount = leads.filter((lead) => lead.status === 'NEW').length;
   const moderationCount = pendingOrders.length;
   const commentsCount = pendingComments.length + pendingReviews.length;
+  const proposalsCount = stats.proposals;
   // Callbacks: new ones on top, a status filter, the first 30 and «Показать ещё».
   const leadFilter = parseLeadFilter(searchParams.leads);
   const showAll = parseShowAll(searchParams.all);
@@ -205,6 +229,15 @@ export default async function AdminPage({ searchParams = {} }: { searchParams?: 
           >
             Комментарии{commentsCount > 0 ? ` · ${commentsCount}` : ''}
           </a>
+          <a
+            href="#proposals"
+            className={`${chipClass(false)} ${proposalsCount > 0 ? 'border-amber-400' : ''}`}
+          >
+            Предложения{proposalsCount > 0 ? ` · ${proposalsCount}` : ''}
+          </a>
+          <a href="#bot-chats" className={chipClass(false)}>
+            Чаты с ботом · {botChats.active}
+          </a>
           <a href="/admin/providers" className={chipClass(false)}>
             Исполнители
           </a>
@@ -241,8 +274,8 @@ export default async function AdminPage({ searchParams = {} }: { searchParams?: 
             <span className="text-amber-700">({moderationCount})</span>
           </h2>
           <p className="text-sm text-slate-600">
-            Уверенные заявки из чатов публикуются на торгах сразу, сомнительные ждут здесь. За 7
-            дней импортировано:{' '}
+            Уверенные заявки из чатов публикуются на торгах сразу, сомнительные проверяет ИИ (см.
+            «Решения ИИ»); здесь остаются те, что он ещё не решил. За 7 дней импортировано:{' '}
             {importedStats.length === 0
               ? '0'
               : importedStats.map((s) => `${SOURCE_LABELS[s.source]} — ${s._count}`).join(', ')}
@@ -280,6 +313,9 @@ export default async function AdminPage({ searchParams = {} }: { searchParams?: 
           </div>
         ))}
       </Card>
+
+      <AiDecisionsCard decisions={aiDecisions} enabled={aiModerationEnabled()} />
+      <BotChatsCard chats={botChats.chats} active={botChats.active} />
 
       <Card className="flex scroll-mt-24 flex-col gap-3" id="comments">
         <div>
@@ -340,6 +376,8 @@ export default async function AdminPage({ searchParams = {} }: { searchParams?: 
           </div>
         ))}
       </Card>
+
+      <ProposalsCard proposals={proposals} />
 
       <section className="flex scroll-mt-24 flex-col gap-3" id="leads">
         <div className="flex flex-wrap items-center justify-between gap-2">

@@ -384,6 +384,22 @@ describe('providerMatchesOrder', () => {
     ).toBe(true);
   });
 
+  it('sends an order with no place at all only to the house fleet', () => {
+    // No point and no city: orderPoint no longer puts it in Набережные Челны.
+    const nowhere = { categoryId: 'exc', lat: null, lon: null, city: null };
+    const inChelny = { categoryIds: ['exc'], baseLat: chelny.lat, baseLon: chelny.lon };
+    const chelnyAddress = { categoryIds: ['exc'], baseAddress: 'Набережные Челны, Промзона' };
+    expect(providerMatchesOrder(inChelny, nowhere)).toBe(false);
+    expect(providerMatchesOrder(chelnyAddress, nowhere)).toBe(false);
+    expect(providerMatchesOrder({ ...inChelny, isHouse: true }, nowhere)).toBe(true);
+    // An unknown town: the house and providers whose base names it.
+    const bavly = { ...nowhere, city: 'Бавлы' };
+    expect(
+      providerMatchesOrder({ categoryIds: ['exc'], baseAddress: 'Бавлы, ул. Ленина' }, bavly),
+    ).toBe(true);
+    expect(providerMatchesOrder(inChelny, bavly)).toBe(false);
+  });
+
   it("uses the company's own delivery radius when it has one", () => {
     const provider = { categoryIds: ['exc'], baseLat: chelny.lat, baseLon: chelny.lon };
     const site = { categoryId: 'exc', lat: 55.6, lon: 52.0 }; // ~30 km

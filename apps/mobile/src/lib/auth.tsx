@@ -2,7 +2,8 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useS
 import { ApiError, fetchMe, login as apiLogin, putLinePresence, type ApiUser } from './api';
 import { clearAdminSession } from './adminSession';
 import { stopBackgroundLine } from './lineTask';
-import { setAppMode, setProviderOnline } from './prefs';
+import { cancelLineReminderOnSignOut } from './useLineReminder';
+import { setAppMode, setLineAutoOff, setProviderOnline } from './prefs';
 import { STORAGE_KEYS, getItem, removeItem, setItem } from './storage';
 
 interface AuthContextValue {
@@ -32,6 +33,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await stopBackgroundLine();
     await putLinePresence({ online: false }).catch(() => undefined);
     setProviderOnline(false);
+    setLineAutoOff(null);
+    // Утреннее «Пора на линию» — только для вошедшего исполнителя.
+    await cancelLineReminderOnSignOut().catch(() => undefined);
     setAppMode('provider');
     setToken(null);
     setUser(null);

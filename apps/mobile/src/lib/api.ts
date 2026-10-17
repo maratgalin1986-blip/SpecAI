@@ -1,3 +1,4 @@
+import type { NearPoint } from './near';
 import type { ProviderPin } from './providersMap';
 import { STORAGE_KEYS, getItem } from './storage';
 
@@ -282,6 +283,7 @@ export interface Order {
   /** Место работ; у старых заявок адрес может быть строкой «Адрес:» в описании. */
   location?: {
     addressLine?: string | null;
+    city?: string | null;
     latitude?: number | null;
     longitude?: number | null;
   } | null;
@@ -404,6 +406,24 @@ export function fetchEquipmentById(id: string) {
   });
 }
 
+/**
+ * «Предложения и партнёрство» — доступно без входа; вошедший отправляет свой
+ * токен, и сервер сам привязывает сообщение к аккаунту.
+ */
+export function sendProposal(body: {
+  kind: 'IDEA' | 'PARTNERSHIP';
+  name: string;
+  contact: string;
+  message: string;
+  company?: string;
+  consent: true;
+}) {
+  return apiFetch<{ ok: boolean; message?: string }>('/api/proposals', {
+    method: 'POST',
+    body,
+  });
+}
+
 /** Заказ обратного звонка — доступен без входа. `consent` обязателен (152-ФЗ). */
 export function createLead(input: CreateLeadInput) {
   return apiFetch<{ ok: boolean }>('/api/leads', {
@@ -427,7 +447,13 @@ export type RegisterInput = {
   consent: true;
 } & (
   | { accountType: 'CUSTOMER' }
-  | { accountType: 'PROVIDER'; companyName: string; baseAddress: string }
+  | {
+      accountType: 'PROVIDER';
+      companyName: string;
+      baseAddress: string;
+      /** Положение телефона (lib/near.ts): город для адреса базы без города. */
+      near?: NearPoint | null;
+    }
 );
 
 /** Регистрация заказчика или исполнителя (с компанией и адресом базы). */
@@ -444,6 +470,7 @@ export function becomeProvider(input: {
   companyName: string;
   baseAddress: string;
   phone?: string;
+  near?: NearPoint | null;
 }) {
   return apiFetch<{
     user: { id: string; email: string; name: string; role: UserRole; companyId: string | null };
@@ -511,6 +538,8 @@ export function createOrder(input: {
   categoryId?: string;
   /** Адрес объекта: сервер геокодирует его для погоды и карты. */
   address?: string;
+  /** Положение телефона (lib/near.ts): адрес ищется сначала рядом. */
+  near?: NearPoint | null;
 }) {
   return apiFetch<{ order: Order }>('/api/orders', { method: 'POST', body: input });
 }
@@ -655,6 +684,7 @@ export function fetchMyCompanyPin() {
 
 export function updateMyCompanyPin(input: {
   baseAddress?: string;
+  near?: NearPoint | null;
   pinImageUrl?: string | null;
   pinNote?: string;
   deliveryRadiusKm?: number;
@@ -1317,15 +1347,27 @@ export interface LinePresence {
   updatedAt: string;
 }
 
-/** «На линии»: положение телефона и машина (PUT /api/line); offline — только { online: false }. */
+/**
+ * «На линии»: положение телефона и машина (PUT /api/line); offline — только
+ * { online: false }. `source` — кто отправляет (открытое приложение или
+ * фоновая задача), `timeZone` — пояс телефона для вечернего выключения.
+ * `autoOff` в ответе: вечер, фоновой задаче вернуть машину на линию нельзя.
+ */
 export function putLinePresence(input: {
   online: boolean;
   lat?: number;
   lon?: number;
   equipmentId?: string | null;
   note?: string;
+  source?: 'foreground' | 'background';
+  timeZone?: string;
 }) {
-  return apiFetch<{ presence: LinePresence; throttled?: boolean }>('/api/line', {
+  return apiFetch<{
+    presence: LinePresence | null;
+    throttled?: boolean;
+    autoOff?: boolean;
+    online?: boolean;
+  }>('/api/line', {
     method: 'PUT',
     body: input,
   });

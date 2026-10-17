@@ -5,6 +5,7 @@ import { Button } from '@specai/ui';
 import { CategorySelect, type SelectableCategory } from '@/components/CategorySelect';
 import { ConsentText } from '@/components/ConsentText';
 import { DemandHint } from '@/components/DemandHint';
+import { noteInstallMoment } from '@/lib/installHint';
 import { SITE } from '@/lib/site';
 import type { OrderPrefill } from '@/lib/quickOrder';
 
@@ -98,6 +99,8 @@ export function GuestOrderForm({
       setError(typeof body?.error === 'string' ? body.error : 'Не удалось отправить заявку');
       return;
     }
+    // A good moment to offer «Установить на экран» (InstallPrompt).
+    noteInstallMoment();
     setDone(
       typeof body?.message === 'string'
         ? body.message

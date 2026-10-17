@@ -17,6 +17,7 @@ import {
   providerPath,
 } from '@/lib/providerSeo';
 import { sinceLabel } from '@/lib/providerCards';
+import { cityInText, nearestCity } from '@/lib/geo';
 import { SITE } from '@/lib/site';
 import { siteUrl } from '@/lib/siteUrl';
 import { HOUSE_COMPANY_ID } from '@/lib/fleet';
@@ -42,6 +43,7 @@ async function loadProvider(id: string) {
       pinImageUrl: true,
       pinNote: true,
       createdAt: true,
+      location: { select: { city: true, region: true } },
       equipment: {
         where: { status: { not: 'RETIRED' } },
         include: { category: true, location: true },
@@ -59,7 +61,25 @@ async function loadProvider(id: string) {
   });
 }
 
+/** The company's city and region: СпецПласт16's contacts for the house, else its own location. */
+function companyPlace(provider: {
+  id: string;
+  location: { city: string; region: string | null } | null;
+}): { city: string | null; region: string | null } {
+  if (provider.id === HOUSE_COMPANY_ID) return { city: SITE.city, region: SITE.region };
+  return {
+    city: provider.location?.city?.trim() || null,
+    region: provider.location?.region ?? null,
+  };
+}
+
 function seoInput(provider: NonNullable<Awaited<ReturnType<typeof loadProvider>>>) {
+  const baseCity =
+    cityInText(provider.baseAddress) ??
+    (provider.baseLat != null && provider.baseLon != null
+      ? nearestCity(provider.baseLat, provider.baseLon, 40)
+      : null);
+  const place = companyPlace(provider);
   const ratingCount = provider.reviews.length;
   const rating = ratingCount
     ? Math.round(
@@ -76,8 +96,10 @@ function seoInput(provider: NonNullable<Awaited<ReturnType<typeof loadProvider>>
     rating,
     ratingCount,
     machines: provider.equipment.map((item) => ({ name: item.name, category: item.category.name })),
-    city: SITE.city,
-    region: SITE.region,
+    // The platform serves all of Russia: the city of the provider's own base,
+    // else its own location (СпецПласт16's contacts only for the house company).
+    city: baseCity?.name ?? place.city,
+    region: baseCity?.region ?? place.region,
   };
 }
 
@@ -154,7 +176,9 @@ export default async function ProviderPublicPage({ params }: { params: { id: str
         <dl className="grid gap-3 text-sm sm:grid-cols-3">
           <div>
             <dt className="text-graphite-300">База</dt>
-            <dd className="font-semibold">{provider.baseAddress ?? SITE.city}</dd>
+            <dd className="font-semibold">
+              {provider.baseAddress ?? companyPlace(provider).city ?? 'не указана'}
+            </dd>
           </div>
           <div>
             <dt className="text-graphite-300">Техника</dt>

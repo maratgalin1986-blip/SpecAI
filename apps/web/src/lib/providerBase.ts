@@ -1,19 +1,22 @@
 // Where a provider's fleet is based, from what the form sent: a point picked
 // on the map wins; otherwise the address is geocoded (Nominatim, cached).
-// Server only (it calls geocodeAddress); the checks themselves live in
+// Server only (it calls the geocoder); the checks themselves live in
 // providerMap.ts and are unit-tested there.
 
-import { GEOCODER_UNAVAILABLE_MESSAGE, inServiceArea, lookupAddress } from './geo';
-import { addressVariants } from './addressVariants';
-import {
-  BASE_OUTSIDE_MESSAGE,
-  BASE_REQUIRED_MESSAGE,
-  hasCoords,
-  parseBaseCoords,
-} from './providerMap';
+import { GEOCODER_UNAVAILABLE_MESSAGE, findAddress, parseNear } from './geo';
+import { namesPlace } from './addressVariants';
+import { BASE_REQUIRED_MESSAGE, hasCoords, parseBaseCoords } from './providerMap';
 
 export const BASE_NOT_FOUND_MESSAGE =
   'Адрес базы не найден — уточните город, улицу и дом или поставьте точку на карте';
+
+/**
+ * A street without a town matches streets of the same name all over Russia:
+ * the base would land in another city. With no position of the phone to tell
+ * the town, the provider is asked for it.
+ */
+export const BASE_CITY_MESSAGE =
+  'Укажите в адресе базы город, например «Казань, ул. Баумана, 1», или поставьте точку на карте';
 
 /** baseAddress is left out when the request had no address key: the saved one stays. */
 export type ProviderBase = { baseLat: number; baseLon: number; baseAddress?: string | null };
@@ -31,6 +34,8 @@ export async function resolveProviderBase(input: {
   baseAddress?: unknown;
   baseLat?: unknown;
   baseLon?: unknown;
+  /** The phone's position («lat,lon» or {lat, lon}): the town of a bare street. */
+  near?: unknown;
 }): Promise<ProviderBaseResult> {
   const hasAddressKey = input.baseAddress !== undefined;
   const address = cleanAddress(input.baseAddress);
@@ -47,31 +52,19 @@ export async function resolveProviderBase(input: {
     };
   }
   if (address.length < 3) return { ok: false, error: BASE_REQUIRED_MESSAGE };
-  // The first variant that lands in the service area wins; a match far away
-  // (a street of the same name in another region) does not stop the search.
-  let place: { lat: number; lon: number } | null = null;
-  let outside = false;
-  let unavailable = false;
-  for (const variant of addressVariants(address)) {
-    const found = await lookupAddress(variant);
-    // The geocoder is down or throttling: stop at once instead of hammering it.
-    if (found.status === 'unavailable') {
-      unavailable = true;
-      break;
-    }
-    if (found.status === 'not_found') continue;
-    if (inServiceArea(found.place.lat, found.place.lon)) {
-      place = found.place;
-      break;
-    }
-    outside = true;
+  const near = parseNear(input.near);
+  const named = namesPlace(address);
+  if (!near && !named) return { ok: false, error: BASE_CITY_MESSAGE };
+  // The whole of Russia for an address with its town; a bare street only
+  // around the phone (strict: a namesake far away is not taken).
+  const found = await findAddress(address, { near, strict: true });
+  if (found.status === 'unavailable') {
+    return { ok: false, error: GEOCODER_UNAVAILABLE_MESSAGE, status: 503 };
   }
-  if (!place) {
-    if (outside) return { ok: false, error: BASE_OUTSIDE_MESSAGE };
-    if (unavailable) return { ok: false, error: GEOCODER_UNAVAILABLE_MESSAGE, status: 503 };
-    return { ok: false, error: BASE_NOT_FOUND_MESSAGE };
+  if (found.status === 'not_found') {
+    return { ok: false, error: named ? BASE_NOT_FOUND_MESSAGE : BASE_CITY_MESSAGE };
   }
-  const point = parseBaseCoords(place.lat, place.lon);
+  const point = parseBaseCoords(found.place.lat, found.place.lon);
   if (!point.ok) return point;
   return {
     ok: true,

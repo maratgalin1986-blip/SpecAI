@@ -10,3 +10,4 @@ apps/mobile/.expo
 apps/mobile/expo-env.d.ts
 apps/mobile/dist
 apps/web/public/stroyka/*.json
+docs/site-banner/snippet.html

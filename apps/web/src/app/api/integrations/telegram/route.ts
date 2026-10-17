@@ -37,6 +37,15 @@ import {
 import { attachPhone, findDraft, saveDraft, sendDueReminders, unsubscribe } from '@/lib/botDrafts';
 import { checkRateLimit } from '@/lib/rateLimit';
 import { telegramApi } from '@/lib/telegramApi';
+import {
+  botChatState,
+  handleGroupCommand,
+  onChatMigrated,
+  onMyChatMember,
+  parseGroupCommand,
+  replyUnderOrder,
+  type MyChatMemberUpdate,
+} from '@/lib/groupBot';
 
 export const dynamic = 'force-dynamic';
 
@@ -53,6 +62,14 @@ interface TelegramMessage {
     is_bot?: boolean;
   };
   contact?: { phone_number?: string; user_id?: number };
+  /** The group itself for an anonymous admin; the channel for a channel post. */
+  sender_chat?: { id: number };
+  message_thread_id?: number;
+  is_topic_message?: boolean;
+  /** The group was upgraded to a supergroup with this new id. */
+  migrate_to_chat_id?: number;
+  /** This supergroup was the group with this id. */
+  migrate_from_chat_id?: number;
 }
 
 async function reply(chatId: number, text: string, markup?: unknown) {
@@ -116,6 +133,7 @@ export async function POST(request: NextRequest) {
     message?: TelegramMessage;
     channel_post?: TelegramMessage;
     callback_query?: CallbackQuery;
+    my_chat_member?: MyChatMemberUpdate;
   } | null;
   // Due reminders ride on any incoming update (and on the hourly cron).
   await sendDueReminders().catch((error) => console.error('[telegram] reminders', error));
@@ -123,7 +141,33 @@ export async function POST(request: NextRequest) {
     await onCallback(update.callback_query);
     return NextResponse.json({ ok: true });
   }
+  // The bot added to or removed from a group (lib/groupBot.ts). Errors are
+  // logged: Telegram would only retry the same update.
+  if (update?.my_chat_member) {
+    const result = await onMyChatMember(update.my_chat_member).catch((error) => {
+      console.error('[telegram] my_chat_member', error);
+      return 'error';
+    });
+    return NextResponse.json({ ok: true, result });
+  }
   const message = update?.message ?? update?.channel_post;
+  // A group upgraded to a supergroup: Telegram sends both service messages
+  // (old chat «to», new chat «from»). The chat's /quiet must move with it, so
+  // a database error asks Telegram to retry (the move is idempotent).
+  const migration = message?.migrate_to_chat_id
+    ? { from: message.chat.id, to: message.migrate_to_chat_id }
+    : message?.migrate_from_chat_id
+      ? { from: message.migrate_from_chat_id, to: message.chat.id }
+      : null;
+  if (migration) {
+    try {
+      await onChatMigrated(migration.from, migration.to);
+    } catch (error) {
+      console.error('[telegram] chat migration', error);
+      return NextResponse.json({ ok: false }, { status: 500 });
+    }
+    return NextResponse.json({ ok: true });
+  }
   // A shared contact (or a typed phone) completes a draft from the funnel.
   if (message && message.chat.type === 'private' && !message.from?.is_bot) {
     // Only the person's own contact counts, not a contact card of someone else.
@@ -147,6 +191,17 @@ export async function POST(request: NextRequest) {
     }
   }
   const text = message?.text ?? message?.caption;
+  // A group admin's /quiet, /resume or /about (before the bot check: an
+  // anonymous admin writes through Telegram's @GroupAnonymousBot).
+  const command =
+    message && message.chat.type !== 'private' && parseGroupCommand(text, SITE.telegramBot);
+  if (message && command) {
+    const result = await handleGroupCommand(message, command).catch((error) => {
+      console.error('[telegram] group command', error);
+      return 'error';
+    });
+    return NextResponse.json({ ok: true, result });
+  }
   // Always answer 200 so Telegram doesn't retry messages we deliberately skip.
   if (!message || !text || message.from?.is_bot) return NextResponse.json({ ok: true });
 
@@ -213,10 +268,27 @@ export async function POST(request: NextRequest) {
       : undefined,
   };
 
-  // Groups: a failure is retried by Telegram (non-200), nothing to answer.
+  // Groups: a failed import is retried by Telegram (non-200). A published
+  // order gets one public reply in the thread; the bot's own failures are
+  // logged and never turn into a retry.
   if (!isPrivate) {
+    let state: { quiet: boolean } | null = null;
+    try {
+      state = await botChatState(message.chat);
+    } catch (error) {
+      console.error('[telegram] chat state', error);
+    }
+    // The chat's admins said /quiet: neither import nor replies.
+    if (state?.quiet) return NextResponse.json({ ok: true, result: 'quiet' });
     const result = await ingestMessage(incoming);
-    return NextResponse.json({ ok: true, result: result.status });
+    const reply =
+      state && result.status === 'created' && result.published
+        ? await replyUnderOrder(message, result.orderId).catch((error) => {
+            console.error('[telegram] reply under the order', error);
+            return 'error';
+          })
+        : undefined;
+    return NextResponse.json({ ok: true, result: result.status, reply });
   }
 
   let result: IngestResult | null = null;

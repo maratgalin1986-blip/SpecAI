@@ -9,9 +9,11 @@ import {
   toProviderCard,
   type ProviderCard,
   type ProviderQuery,
+  UNKNOWN_CITY,
 } from './providerCards';
-import { EMPTY_STATS } from './reliability';
+import { HOUSE_COMPANY_ID } from './fleet';
 import { SITE } from './site';
+import { EMPTY_STATS } from './reliability';
 
 export interface ProviderList {
   cards: ProviderCard[];
@@ -66,7 +68,8 @@ export async function loadProviderCards(query: ProviderQuery): Promise<ProviderL
     const created = new Map(listed.map((company) => [company.id, company.createdAt.getTime()]));
     const all = listed.map((company) =>
       toProviderCard(company, stats.get(company.id) ?? EMPTY_STATS, {
-        fallbackCity: SITE.city,
+        // All of Russia: a company without a known city is not shown in СпецПласт16's.
+        fallbackCity: company.id === HOUSE_COMPANY_ID ? SITE.city : UNKNOWN_CITY,
         groupOf: (categoryId) => groupOfCategory.get(categoryId),
       }),
     );

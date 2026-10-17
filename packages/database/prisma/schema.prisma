@@ -59,6 +59,7 @@ model User {
   commentsReceived   Comment[]           @relation("CommentTarget")
   operator           Operator?
   linePresence       LinePresence?
+  proposals          Proposal[]
 
   @@index([companyId])
   @@index([referralCode])
@@ -378,11 +379,23 @@ model Order {
   // 24 h, capped at the start date (lib/bidWindow.ts). Later bids are late.
   bidsUntil    DateTime?
 
+  // Moderation of doubtful chat imports (owner, 2026-10-17: the AI decides,
+  // not the owner; apps/web/src/lib/orderModeration.ts). moderatedBy "ai" |
+  // "admin" (who decided last); moderationDecision is the AI's verdict
+  // "PUBLISH" | "REJECT" | "UNSURE", kept when the admin overrides it;
+  // moderatedAt is the last decision or AI attempt. Strings, not enums
+  // (CLAUDE.md, rule 2).
+  moderatedBy        String?
+  moderationDecision String?
+  moderationReason   String?
+  moderatedAt        DateTime?
+
   @@index([customerId])
   @@index([categoryId])
   @@index([status])
   @@index([fingerprint])
   @@index([externalId])
+  @@index([moderatedAt])
 }
 
 enum OrderSource {
@@ -833,6 +846,10 @@ model LinePresence {
   // When this machine last went online (offline → online or another machine),
   // for «Машина вышла на линию» in the activity strip. Null on older rows.
   onlineSince DateTime?
+  // The phone's IANA time zone («Asia/Novosibirsk»), sent with every report:
+  // the line switches itself off at 21:00 in the provider's own time
+  // (lib/lineDay.ts). Null on older rows — Moscow then.
+  timeZone    String?
   updatedAt   DateTime   @updatedAt
   createdAt   DateTime   @default(now())
 
@@ -848,4 +865,58 @@ model AppSetting {
   key       String   @id
   value     String
   updatedAt DateTime @updatedAt
+}
+
+// «Предложения и партнёрство» (owner, 2026-10-17): ideas about the service and
+// partnership offers from anyone, guests included (POST /api/proposals). The
+// owner reads them in the admin area. Strings, not enums (CLAUDE.md, rule 2):
+// kind "IDEA" | "PARTNERSHIP", status "NEW" | "READ" | "ARCHIVED".
+model Proposal {
+  id        String   @id @default(cuid())
+  kind      String
+  name      String
+  contact   String
+  message   String
+  company   String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  userId    String?
+  status    String   @default("NEW")
+  createdAt DateTime @default(now())
+
+  @@index([status, createdAt])
+  @@index([userId])
+}
+
+// Telegram groups the bot was added to by their admins (my_chat_member, or
+// the first message from a chat it already sat in). `quiet` is the chat's
+// opt-out (/quiet by a chat admin): no replies and no import. The daily reply
+// counter is per Moscow day (`repliesDay` = "YYYY-MM-DD"); the hourly limit
+// counts BotReply rows (apps/web/src/lib/groupBot.ts).
+model BotChat {
+  chatId       String    @id
+  title        String?
+  // The public @handle of the group, if it has one (utm_campaign of the links).
+  username     String?
+  quiet        Boolean   @default(false)
+  // False once Telegram refuses the bot's messages (restricted or removed).
+  canWrite     Boolean   @default(true)
+  removedAt    DateTime?
+  repliesToday Int       @default(0)
+  repliesDay   String?
+  addedAt      DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+}
+
+// The bot's public reply under an order message in its chat: one per order.
+// `followUpAt` keeps the «уже N предложений» follow-up to one per order.
+model BotReply {
+  orderId    String    @id
+  chatId     String
+  // The order message in the chat (the bot replies to it) and its forum topic.
+  messageId  Int
+  threadId   Int?
+  createdAt  DateTime  @default(now())
+  followUpAt DateTime?
+
+  @@index([chatId, createdAt])
 }

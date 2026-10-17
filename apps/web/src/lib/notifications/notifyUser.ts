@@ -14,7 +14,6 @@ import {
 } from './adapters';
 import { deliver, type DeliverDeps, type DeliverOptions, type DeliveryReport } from './deliver';
 import { orderPoint } from '../geo';
-import { SITE } from '../site';
 import {
   acceptedCategoryIds,
   prefsFrom,
@@ -167,15 +166,16 @@ export async function notifyProvidersAboutOrder(orderId: string): Promise<void> 
       }),
       prisma.equipmentCategory.findMany({ select: { id: true, slug: true, parentId: true } }),
     ]);
-    const point = orderPoint(order.location, SITE.city);
+    const point = orderPoint(order.location);
     const target = {
       categoryId: order.categoryId,
       categoryIds: acceptedCategoryIds(order.categoryId, categoryRows),
       lat: point?.lat,
       lon: point?.lon,
-      // An order without any location is a home-city order (orderPoint falls
-      // back to it): providers without base coordinates match it by that city text.
-      city: order.location ? order.location.city : SITE.city,
+      // The city text, for an order whose point is unknown: the house fleet and
+      // providers whose base names that town hear of it. No location at all:
+      // no city either — only the house fleet (no default town).
+      city: order.location?.city || null,
     };
     const userIds = companies
       .filter((company) =>

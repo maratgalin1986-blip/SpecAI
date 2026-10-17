@@ -15,6 +15,8 @@ import {
 
 export const dynamic = 'force-dynamic';
 
+const DAY_MS = 24 * 60 * 60_000;
+
 /** A query parameter as a coordinate, or null when it is missing or not a number. */
 function coordinate(raw: string | null, limit: number): number | null {
   if (raw === null || raw.trim() === '') return null;
@@ -28,7 +30,9 @@ function coordinate(raw: string | null, limit: number): number | null {
  * fresh list (the freshest NEARBY_MAX_ROWS rows), for a map centred on the
  * city. Each row carries the bubble text, the machine's customer price and
  * the driver's short name — never a phone, never the driver's account id.
- * Positions are the phones' own, as the drivers chose to show them.
+ * Positions are the phones' own, as the drivers chose to show them. A row
+ * whose session the evening cutoff ended (21:00 in the phone's time zone,
+ * lib/lineDay.ts) is left out even while that phone keeps reporting.
  *
  * `base`: СпецПласт16's own free machines at their base within the same
  * radius (lib/linePresence.ts baseMachines), priced by customerRates and
@@ -75,6 +79,10 @@ export async function GET(request: NextRequest) {
     where: {
       online: true,
       updatedAt: { gte: freshSince },
+      // A session begun over a day ago is past its evening cutoff in any
+      // zone: such phones left on do not use up the row cap. The exact
+      // cutoff (the phone's own zone) is applied in liveMachines.
+      OR: [{ onlineSince: null }, { onlineSince: { gte: new Date(now.getTime() - DAY_MS) } }],
       ...(around
         ? {
             lat: { gte: around.lat - latSpan, lte: around.lat + latSpan },

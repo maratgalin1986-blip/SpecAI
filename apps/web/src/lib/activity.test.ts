@@ -5,6 +5,8 @@ import {
   activitySummary,
   buildActivity,
   categoryWord,
+  isLiveLine,
+  lineEventText,
   onlineCount,
   publicCity,
   type ActivityBookingRow,
@@ -29,6 +31,7 @@ const order = (over: Partial<ActivityOrderRow> = {}): ActivityOrderRow => ({
 const line = (over: Partial<ActivityLineRow> = {}): ActivityLineRow => ({
   online: true,
   onlineSince: minutesAgo(5),
+  timeZone: null,
   updatedAt: minutesAgo(1),
   lat: 55.74,
   lon: 52.4,
@@ -106,6 +109,34 @@ describe('event lines', () => {
     ]) {
       expect(json).not.toContain(secret);
     }
+  });
+
+  it('names any city of Russia, from the list or from the geocoder', () => {
+    expect(publicCity({ city: 'Самара' })).toBe('Самара');
+    expect(publicCity({ city: 'в Екатеринбурге, ул. Ленина 5' })).toBe('Екатеринбург');
+    // A geocoded place: its city came from the geocoder, a small town is fine.
+    expect(publicCity({ city: 'Бавлы', latitude: 54.4, longitude: 53.25 })).toBe('Бавлы');
+    // Without coordinates the same word is the visitor's text: not shown.
+    expect(publicCity({ city: 'Бавлы' })).toBeNull();
+    // Even geocoded, anything but a plain name falls back to the nearest city.
+    expect(publicCity({ city: 'Самара, ул. Ленина 5', latitude: 53.2, longitude: 50.1 })).toBe(
+      'Самара',
+    );
+    expect(publicCity({ city: 'Дом 5', latitude: 53.2, longitude: 50.1 })).toBe('Самара');
+    expect(publicCity({ city: 'дом +7 917', latitude: 60, longitude: 100 })).toBeNull();
+    // A machine on the line far from Tatarstan gets its own city.
+    expect(
+      lineEventText({
+        online: true,
+        onlineSince: now,
+        timeZone: null,
+        updatedAt: now,
+        lat: 56.84,
+        lon: 60.6,
+        companyId: 'other',
+        equipment: { id: 'e', status: 'AVAILABLE', category: { name: 'Экскаваторы' } },
+      }),
+    ).toBe('Машина вышла на линию: экскаваторы · Екатеринбург');
   });
 
   it('shows an unknown place as nothing rather than as the raw text', () => {
@@ -207,5 +238,22 @@ describe('categoryWord', () => {
     expect(categoryWord('Самосвалы')).toBe('самосвалы');
     expect(categoryWord('КМУ')).toBe('КМУ');
     expect(categoryWord('  ')).toBeNull();
+  });
+});
+
+describe('isLiveLine and the evening cutoff', () => {
+  const since = new Date('2026-10-17T07:00:00Z'); // 10:00 in Moscow
+
+  it('drops a machine the 21:00 cutoff took off, though the phone still sends', () => {
+    const late = new Date('2026-10-17T19:00:00Z'); // 22:00 in Moscow
+    const row = line({ onlineSince: since, updatedAt: late, timeZone: 'Europe/Moscow' });
+    expect(isLiveLine(row, late)).toBe(false);
+  });
+
+  it('judges the cutoff by the provider’s own time zone', () => {
+    const evening = new Date('2026-10-17T18:00:00Z'); // 21:00 Moscow, 20:00 Kaliningrad
+    const row = line({ onlineSince: since, updatedAt: evening, timeZone: 'Europe/Kaliningrad' });
+    expect(isLiveLine(row, evening)).toBe(true);
+    expect(isLiveLine({ ...row, timeZone: 'Europe/Moscow' }, evening)).toBe(false);
   });
 });

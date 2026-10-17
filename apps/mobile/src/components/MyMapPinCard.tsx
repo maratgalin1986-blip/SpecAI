@@ -11,6 +11,7 @@ import {
   uploadFile,
   type CompanyPin,
 } from '@/lib/api';
+import { phoneNear } from '@/lib/phoneNear';
 import { colors, radius, spacing } from '@/lib/theme';
 
 /** Как PIN_NOTE_MAX и PIN_NOTE_EXAMPLES в apps/web/src/lib/providerMap.ts. */
@@ -18,7 +19,7 @@ const NOTE_MAX = 120;
 const NOTE_EXAMPLES = [
   'от 2 500 ₽/ч, скидка 10% от недели',
   'Работаем без выходных, подача за 2 часа',
-  'Подача по Челнам бесплатно',
+  'Подача по городу бесплатно',
 ];
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 
@@ -110,7 +111,7 @@ export function MyMapPinCard() {
       const { company: saved } = await updateMyCompanyPin({
         // Адрес отправляем, только если он изменился: сервер найдёт его на карте.
         ...(trimmed !== (company.baseAddress ?? '') || company.baseLat === null
-          ? { baseAddress: trimmed }
+          ? { baseAddress: trimmed, near: await phoneNear() }
           : {}),
         pinImageUrl: image,
         pinNote: note,

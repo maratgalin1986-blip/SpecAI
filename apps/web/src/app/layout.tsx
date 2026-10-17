@@ -41,12 +41,13 @@ export const metadata: Metadata = {
   description: SITE.description,
   applicationName: SITE.platform,
   keywords: [
-    'аренда спецтехники Набережные Челны',
+    'заказ спецтехники с машинистом',
+    'аренда спецтехники по России',
     'аренда экскаватора-погрузчика',
     'аренда экскаватора',
     'аренда автокрана',
     'аренда самосвала',
-    'спецтехника Татарстан',
+    'аренда спецтехники Набережные Челны',
     SITE.name,
     SITE.platform,
   ],
@@ -90,7 +91,9 @@ const ORGANIZATION_JSON_LD = {
     addressRegion: SITE.region,
     addressCountry: 'RU',
   },
-  areaServed: SITE.region,
+  // The company sits in Набережные Челны; the platform it runs serves all of
+  // Russia (owner, 2026-10-17).
+  areaServed: { '@type': 'Country', name: 'Россия' },
   // Shown by Yandex and Google in the business card of the search results.
   image: `${siteUrl()}/opengraph-image.png`,
   priceRange: fromPrice(MIN_RATE),
@@ -125,6 +128,16 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           dangerouslySetInnerHTML={{
             __html:
               "try{var k='cine-curtain-at',t=+sessionStorage.getItem(k)||0,n=Date.now();if(n-t<30000)document.documentElement.setAttribute('data-curtain','fast');sessionStorage.setItem(k,String(n))}catch(e){}",
+          }}
+        />
+        {/* Chrome may offer installation before React is up: keep the event for
+            the «Установить» card (components/InstallPrompt.tsx, keys in
+            lib/installHint.ts) instead of the browser's own mini-infobar; once
+            the card is closed for good, the browser's offer is left alone. */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html:
+              "addEventListener('beforeinstallprompt',function(e){window.__installPrompt=e;try{if(localStorage.getItem('specai:install-hint-dismissed')||localStorage.getItem('specai:install-prompt-dismissed-at'))return}catch(x){}e.preventDefault()})",
           }}
         />
         <script

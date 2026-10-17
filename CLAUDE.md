@@ -76,6 +76,10 @@ small so merges stay conflict-free.
   materials are sold by СпецПласт16 itself (`lib/smetaPrices.ts`). The platform is called «ИИСтройка24 от СпецПласт16» (owner, 2026-10-03; domains iistroyka24.ru and iistroyka.ru bought but not connected yet — the site stays on spec-ai-web.vercel.app, see owner-requests)
   (`SITE.platform`); prices live in `lib/prices.ts`. Details:
   `docs/owner-requests.md`. Do not switch to a single executor without the owner.
+- **Geography (owner, 2026-10-17): all of Russia, not only Tatarstan.** No code may
+  assume the order or the user is in Tatarstan: geocoding, service area, city parsing,
+  maps and texts start from the user's city or location, else the whole country.
+  СпецПласт16 stays a provider in Набережные Челны, listed first where it serves.
 - Work plan and lessons: `tasks/todo.md` (checkable plan) and `tasks/lessons.md`
   (read at session start; add a rule after every correction). How we work:
   `docs/ai-office.md` → «Как работаем».

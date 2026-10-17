@@ -129,3 +129,153 @@ export function positionStatus(
     minutes < 1 ? 'Вы на карте у заказчиков' : `На карте, обновлено ${minutes} мин назад`;
   return background ? `${where} · работает и с выключенным экраном` : where;
 }
+
+// ---------------------------------------------------------------------------
+// «Утром на линию — вечером автоматически снимаемся» (владелец, 2026-10-17).
+// Вечером линия выключается сама — по времени ТЕЛЕФОНА (Россия большая:
+// у машиниста в Новосибирске свой вечер). То же правило на сервере
+// (apps/web/src/lib/lineDay.ts) — страховка для телефона, оставленного включённым.
+// ---------------------------------------------------------------------------
+
+/** Час (по времени телефона), в который утренняя линия выключается сама. */
+export const LINE_EVENING_OFF_HOUR = 21;
+
+/** Почему линия выключилась сама: вечером в LINE_EVENING_OFF_HOUR или в полночь (поздняя линия). */
+export type LineAutoOffReason = 'evening' | 'midnight';
+
+/**
+ * Календарный день («2026-10-17») и час момента: по времени телефона, а в
+ * тестах — в заданном часовом поясе.
+ */
+export function localDayHour(date: Date, timeZone?: string): { day: string; hour: number } {
+  if (!timeZone) {
+    const pad = (value: number) => String(value).padStart(2, '0');
+    return {
+      day: `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`,
+      hour: date.getHours(),
+    };
+  }
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(date);
+  const part = (type: string) => parts.find((item) => item.type === type)?.value ?? '';
+  return {
+    day: `${part('year')}-${part('month')}-${part('day')}`,
+    hour: Number(part('hour')) % 24,
+  };
+}
+
+/**
+ * Пора ли снять с линии сессию, начатую в `since`: после её начала наступил
+ * вечерний час (начали до 21:00, сейчас 21:00 или позже) — «evening»; или
+ * начали в другой день — «evening», если начали до 21:00, иначе «midnight»
+ * (исполнитель сам включился поздно — линия работает до полуночи). null —
+ * линия продолжается.
+ */
+export function lineAutoOffReason(
+  since: Date,
+  now: Date,
+  timeZone?: string,
+  cutoffHour: number = LINE_EVENING_OFF_HOUR,
+): LineAutoOffReason | null {
+  if (now.getTime() <= since.getTime()) return null;
+  const start = localDayHour(since, timeZone);
+  const current = localDayHour(now, timeZone);
+  if (start.day !== current.day) return start.hour < cutoffHour ? 'evening' : 'midnight';
+  return start.hour < cutoffHour && current.hour >= cutoffHour ? 'evening' : null;
+}
+
+/** «21:00». */
+export function eveningOffTime(cutoffHour: number = LINE_EVENING_OFF_HOUR): string {
+  return `${String(cutoffHour).padStart(2, '0')}:00`;
+}
+
+/** Когда выключится идущая линия: утренняя — в 21:00, включённая позже — в полночь. */
+export function lineOffAtText(since: Date | null, timeZone?: string): string {
+  return since && localDayHour(since, timeZone).hour >= LINE_EVENING_OFF_HOUR
+    ? 'В полночь линия выключится сама.'
+    : `В ${eveningOffTime()} линия выключится сама.`;
+}
+
+/** Начало сегодняшнего дня по времени телефона (мс). */
+export function startOfLocalDay(now: Date): number {
+  return new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+}
+
+/**
+ * Линия выключилась сама: почему и в какой день (по времени телефона) —
+ * хранится до тех пор, пока исполнитель не закроет сообщение в ленте или
+ * снова не выйдет на линию; текст строится при показе (lineAutoOffMessage),
+ * чтобы «завтра» и «вчера» были верными и через день.
+ */
+export interface LineAutoOff {
+  reason: LineAutoOffReason;
+  /** День, когда линия выключилась («2026-10-17»): вечер — день начала, полночь — следующий. */
+  day: string;
+}
+
+/** Сессию `since` пора снять в `now` — что записать для ленты; null — линия идёт. */
+export function lineAutoOff(since: Date, now: Date): LineAutoOff | null {
+  const reason = lineAutoOffReason(since, now);
+  if (!reason) return null;
+  const offDay =
+    reason === 'evening'
+      ? since
+      : new Date(since.getFullYear(), since.getMonth(), since.getDate() + 1);
+  return { reason, day: localDayHour(offDay).day };
+}
+
+export function parseLineAutoOff(raw: string | null | undefined): LineAutoOff | null {
+  if (!raw) return null;
+  try {
+    const value = JSON.parse(raw) as Partial<LineAutoOff> | null;
+    if (value?.reason !== 'evening' && value?.reason !== 'midnight') return null;
+    return typeof value.day === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value.day)
+      ? { reason: value.reason, day: value.day }
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Сообщение в ленте после автоматического выключения — по сегодняшнему
+ * дню: в тот же вечер «Завтра утром включите снова», на следующий день
+ * «Вчера в 21:00…», позже — без дня.
+ */
+export function lineAutoOffMessage(off: LineAutoOff, now: Date = new Date()): string {
+  const today = localDayHour(now).day;
+  const yesterday = localDayHour(
+    new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1),
+  ).day;
+  const time = eveningOffTime();
+  if (off.reason === 'midnight') {
+    if (off.day === today && now.getHours() < LINE_MORNING_HOUR) {
+      return 'Линия выключилась в полночь. Утром включите снова.';
+    }
+    return 'Ночью линия выключилась сама. Включите снова, если сегодня работаете.';
+  }
+  if (off.day === today) return `Линия выключилась в ${time}. Завтра утром включите снова.`;
+  if (off.day === yesterday) {
+    return `Вчера в ${time} линия выключилась сама. Включите снова, если сегодня работаете.`;
+  }
+  return `Линия выключилась сама в ${time}. Включите снова, если сегодня работаете.`;
+}
+
+/** До этого часа ночь ещё не утро: «Утром включите снова». */
+export const LINE_MORNING_HOUR = 5;
+
+/** Часовой пояс телефона (IANA) для сервера; undefined, если движок его не знает. */
+export function deviceTimeZone(): string | undefined {
+  try {
+    const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    return typeof zone === 'string' && zone.length > 0 && zone.length <= 64 ? zone : undefined;
+  } catch {
+    return undefined;
+  }
+}

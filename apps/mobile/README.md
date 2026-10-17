@@ -1,13 +1,13 @@
 # @specai/mobile — мобильное приложение «СпецПласт16»
 
-Приложение компании **СпецПласт16** (аренда спецтехники с оператором, Набережные Челны и
-Татарстан) на [Expo](https://expo.dev) (React Native, SDK 57, expo-router). Работает поверх
+Приложение площадки ИИСтройка24 от **СпецПласт16** (заказ спецтехники с машинистом по всей
+России; компания — из Набережных Челнов) на [Expo](https://expo.dev) (React Native, SDK 57, expo-router). Работает поверх
 API сайта из `apps/web`: вход и регистрация, каталог техники с поиском и пагинацией, карточка
 техники с бронированием, мои бронирования и оплата через Stripe Checkout, заявки и
 предложения исполнителей, отзывы, чат с ИИ-ассистентом, профиль, заявка на обратный звонок и
 экран «О компании». Пакет по-прежнему называется `@specai/mobile`, slug/scheme — `specai`,
-идентификаторы `com.specai.app` (см. `app.json`); в магазинах приложение называется
-«СпецПласт16».
+идентификаторы `com.specai.app` (iOS) и `com.specai.specai` (Android, см. `app.json`); в
+магазинах приложение называется «ИИСтройка24 от СпецПласт16» (`docs/rustore.md`).
 
 ## Бренд и контакты
 
@@ -155,7 +155,8 @@ cd apps/mobile                 # eas-cli установлен как devDependen
 npx eas login                  # или EXPO_TOKEN в окружении
 npx eas build --platform android --profile preview   # APK для тестов (канал preview)
 npx eas build --platform ios --profile preview       # сборка для TestFlight / устройств
-npx eas build --platform all --profile production    # магазинные сборки (канал production)
+npx eas build --platform all --profile production    # магазинные сборки (канал production; Android — APK для RuStore)
+npx eas build --platform android --profile production-aab   # AAB для Google Play (канал production)
 ```
 
 Переменную `EXPO_PUBLIC_API_URL` для сборок задайте в профиле `eas.json`
@@ -190,6 +191,16 @@ Firebase (Project settings → Service accounts → Generate new private key). �
 Профили `preview` и `production` в `eas.json` привязаны к одноимённым каналам EAS Update,
 так что `eas update --channel production` доставит JS-обновление в магазинную сборку без
 пересборки.
+
+## Публикация в RuStore
+
+Пошагово — в [`docs/rustore.md`](../../docs/rustore.md): аккаунт разработчика (создаёт владелец
+через VK ID и Госуслуги), сборка `cd apps/mobile && npx eas-cli build --platform android
+--profile production` (подписанный release-APK, `versionCode` растёт сам — `autoIncrement` и
+`appVersionSource: remote`), готовые тексты карточки, список скриншотов, анкета рейтинга.
+Каждое JS-обновление публикуется и в `preview`, и в `production` (`--channel production`, обе
+команды — обычная и `EXPO_GO_UPDATE=1`, `--platform all`), иначе пользователи из RuStore
+останутся на старой версии.
 
 ## Ограничения
 

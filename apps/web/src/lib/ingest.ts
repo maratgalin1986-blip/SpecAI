@@ -1,10 +1,11 @@
 import { prisma, type OrderSource } from '@specai/database';
 import { analyzeChatMessage } from '@specai/ai-service';
-import { parseEquipmentRequest, requestFingerprint } from '@specai/shared';
+import { cityByName, parseEquipmentRequest, requestFingerprint } from '@specai/shared';
 import { notifyTelegram } from '@/lib/notify';
 import { bidsUntilFor } from '@/lib/bidWindow';
 import { chatOrderNote, placeInText } from '@/lib/chatOrders';
 import { notifyProvidersAboutOrder } from '@/lib/notifications/notifyUser';
+import { autoModerateOrder } from '@/lib/orderModeration';
 import { isSafeHttpUrl, maskContacts } from '@/lib/privacy';
 import { SITE } from '@/lib/site';
 import { siteUrl } from '@/lib/siteUrl';
@@ -68,7 +69,9 @@ async function locationFor(city: string | undefined) {
   const existing = await prisma.location.findFirst({ where: { city, addressLine: city } });
   if (existing) return existing.id;
   const created = await prisma.location.create({
-    data: { addressLine: city, city, region: 'Республика Татарстан', country: 'Россия' },
+    // The region of a known city («Самара» → Самарская область); none for a
+    // town the list does not have — never a default region.
+    data: { addressLine: city, city, region: cityByName(city)?.region ?? null, country: 'Россия' },
   });
   return created.id;
 }
@@ -119,9 +122,9 @@ export async function ingestMessage(message: IncomingMessage): Promise<IngestRes
   if (!isRequest) return { status: 'ignored', reason: heuristic.signals.join('; ') };
 
   // A town the parsers do not know («в Бавлы») still gets a Location with its
-  // name: without one the order would count as a home-city order and reach
-  // every provider around Набережные Челны (lib/geo.ts orderPoint). With the
-  // name, only the house and providers whose base names that town hear of it.
+  // name: only the house fleet and providers whose base names that town hear
+  // of it (lib/geo.ts orderPoint has no point for it). An order with no place
+  // at all reaches only the house fleet.
   city = city ?? placeInText(text) ?? undefined;
 
   const category = categorySlug
@@ -155,24 +158,42 @@ export async function ingestMessage(message: IncomingMessage): Promise<IngestRes
     },
   });
 
-  const sourceLabel = message.source === 'WHATSAPP' ? 'WhatsApp' : 'Telegram';
-  await notifyTelegram(
-    [
-      `${published ? '🆕 Новая заявка из чата' : '🕵️ Заявка на модерации'} — ${SITE.name}`,
-      `Источник: ${sourceLabel}${message.chatTitle ? ` · ${message.chatTitle}` : ''}`,
-      category ? `Техника: ${category.name}` : null,
-      city ? `Где: ${city}` : null,
-      `Текст: ${text.slice(0, 300)}`,
-      message.authorName ? `Автор: ${message.authorName}` : null,
-      phone ? `Телефон: ${phone}` : null,
-      `${siteUrl()}${published ? `/orders/${order.id}` : '/admin'}`,
-    ]
-      .filter(Boolean)
-      .join('\n'),
-  );
-
   // Providers with this kind of machinery nearby hear about it at once.
   if (published) await notifyProvidersAboutOrder(order.id);
+  // A doubtful one goes to the AI moderator at once (lib/orderModeration.ts),
+  // which notifies providers itself when it publishes; if the AI cannot be
+  // asked, the daily sweep retries it.
+  const moderation = published
+    ? null
+    : await autoModerateOrder(order.id, { timeoutMs: 6_000 }).catch((error: unknown) => {
+        console.error('[ingest] AI moderation failed, the sweep will retry', error);
+        return { status: 'skipped', reason: 'error' } as const;
+      });
+  const live = published || moderation?.status === 'published';
+  // The owner does not moderate orders himself (2026-10-17): he hears about
+  // published orders, and about a doubtful one only when no AI decided on it
+  // (the AI is off, its daily budget is spent or it could not be reached).
+  const waitsForOwner =
+    !live && moderation?.status === 'skipped' && moderation.reason !== 'not-pending';
 
-  return { status: 'created', orderId: order.id, published };
+  const sourceLabel = message.source === 'WHATSAPP' ? 'WhatsApp' : 'Telegram';
+  if (live || waitsForOwner)
+    await notifyTelegram(
+      [
+        `${live ? '🆕 Новая заявка из чата' : '🕵️ Заявка на модерации'} — ${SITE.name}`,
+        `Источник: ${sourceLabel}${message.chatTitle ? ` · ${message.chatTitle}` : ''}`,
+        category ? `Техника: ${category.name}` : null,
+        city ? `Где: ${city}` : null,
+        `Текст: ${text.slice(0, 300)}`,
+        message.authorName ? `Автор: ${message.authorName}` : null,
+        phone ? `Телефон: ${phone}` : null,
+        `${siteUrl()}${live ? `/orders/${order.id}` : '/admin'}`,
+      ]
+        .filter(Boolean)
+        .join('\n'),
+    );
+
+  // `published`: on the board now, by the import or by the AI (the group bot
+  // replies under such an order).
+  return { status: 'created', orderId: order.id, published: live };
 }

@@ -3,18 +3,27 @@ import { prisma } from '@specai/database';
 import { cronAllowed } from '@/lib/cronAuth';
 import { DOCUMENT_REMINDER_DAYS, documentTitle, dueReminders } from '@/lib/documents';
 import { notifyCompany } from '@/lib/notifications/notifyUser';
+import { notifyTelegram } from '@/lib/notify';
+import { onceADay } from '@/lib/cronOnce';
+import { aiModerationSummary, sweepPendingOrders } from '@/lib/orderModeration';
 import { GET as evening } from '../evening/route';
+import { postChannelDigest } from '@/lib/channelDigest';
 
 export const dynamic = 'force-dynamic';
 // A GET handler: without this Next keeps outgoing sends (Telegram, push,
 // e-mail) in its Data Cache and never repeats an identical one.
 export const fetchCache = 'force-no-store';
+// The AI moderation sweep makes up to 20 calls (four at a time).
+export const maxDuration = 60;
 
 /**
  * Daily cron (19:00 Moscow, apps/web/vercel.json): document reminders 30
  * days before the expiry and again on the day, each once per document
  * (remindedAt30 / remindedAt0), to the company's managers via notifyUser;
- * then the evening digest (api/cron/evening).
+ * then the evening digest (api/cron/evening); last, the AI moderator takes
+ * the chat orders still waiting (lib/orderModeration.ts). The sweep is last
+ * so that a slow AI can never cost the digest: what it publishes reaches the
+ * providers at once anyway.
  */
 export async function GET(request: NextRequest) {
   if (!cronAllowed(request)) return NextResponse.json({ error: 'forbidden' }, { status: 403 });
@@ -58,5 +67,26 @@ export async function GET(request: NextRequest) {
   const digest = await evening(request)
     .then((response) => response.json() as Promise<unknown>)
     .catch((error: unknown) => ({ error: String(error) }));
-  return NextResponse.json({ ok: true, checked: candidates.length, sent, digest });
+  // «Заявки за сутки» in the platform's own Telegram channel (off without TELEGRAM_CHANNEL_ID);
+  // before the AI sweep, which may use the rest of the function's time.
+  const channel = await postChannelDigest().catch((error: unknown) => ({ error: String(error) }));
+  const moderation = await sweepPendingOrders().catch((error: unknown) => {
+    console.error('[cron/daily] AI moderation sweep failed', error);
+    return { error: String(error) };
+  });
+  // One line a day for the owner instead of a message per decision.
+  const moderationSummary = await onceADay('ai-moderation', async () => {
+    const line = await aiModerationSummary();
+    if (line) await notifyTelegram(line);
+    return line;
+  }).catch(() => null);
+  return NextResponse.json({
+    ok: true,
+    checked: candidates.length,
+    sent,
+    moderation,
+    moderationSummary,
+    digest,
+    channel,
+  });
 }

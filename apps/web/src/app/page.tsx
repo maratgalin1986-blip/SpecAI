@@ -231,7 +231,7 @@ const HOME_FAQ = [
   },
   {
     q: 'Где вы работаете?',
-    a: 'В Набережных Челнах и по Татарстану. Стоимость подачи зависит от расстояния до объекта.',
+    a: `По всей России: заявку видят исполнители рядом с вашим объектом. Парк ${SITE.name} — в Набережных Челнах и окрестностях. Там, где исполнители ещё подключаются, оставьте заявку — мы найдём технику. Стоимость подачи зависит от расстояния до объекта.`,
   },
   {
     q: 'Можно заказать технику через ИИ-агента?',
@@ -265,7 +265,7 @@ export default async function HomePage() {
                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75 motion-reduce:animate-none" />
                 <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-400" />
               </span>
-              <span className="eyebrow text-slate-200">{SITE.city} · подача сегодня</span>
+              <span className="eyebrow text-slate-200">Вся Россия · исполнители рядом</span>
             </div>
             <h1
               className="float-in mt-4 text-[2.25rem] font-extrabold leading-[1.02] tracking-[-0.04em] sm:mt-6 sm:text-6xl"
@@ -286,9 +286,9 @@ export default async function HomePage() {
               className="float-in mt-6 hidden max-w-xl text-lg leading-relaxed text-slate-300 sm:block"
               style={{ animationDelay: '240ms' }}
             >
-              Экскаваторы-погрузчики, автокраны и погрузчики с машинистами в Набережных Челнах и по
-              Татарстану. Разместите заявку — исполнители со своей техникой пришлют цены, вы
-              выберете лучшее; или оставьте телефон — подберёт диспетчер. Парк {SITE.name} —{' '}
+              Экскаваторы-погрузчики, автокраны и погрузчики с машинистами по всей России.
+              Разместите заявку — исполнители рядом с вами пришлют цены, вы выберете лучшее; или
+              оставьте телефон — подберёт диспетчер. Парк {SITE.name} в Набережных Челнах —{' '}
               {fromPerHour(MIN_RATE)}, с НДС. Сервис бесплатный.
             </p>
             {/* Owner, 2026-10-03: order, estimate and design as real buttons,
@@ -533,10 +533,9 @@ export default async function HomePage() {
               Исполнители с техникой и машинистами
             </h2>
             <p className="mt-4 text-slate-600">
-              {SITE.platform} — сервис заказа спецтехники в{' '}
-              {SITE.city === 'Набережные Челны' ? 'Набережных Челнах' : SITE.city}: парк {SITE.name}
-              и другие исполнители со своей техникой. Заявку видят все, вы выбираете цену и машину.
-              Для заказчика — бесплатно.
+              {SITE.platform} — сервис заказа спецтехники по всей России: исполнители со своей
+              техникой рядом с вашим объектом и парк {SITE.name} в Набережных Челнах. Заявку видят
+              все, вы выбираете цену и машину. Для заказчика — бесплатно.
             </p>
           </Reveal>
         </div>
@@ -641,7 +640,7 @@ export default async function HomePage() {
               <ul className="mt-6 space-y-2 text-slate-200">
                 <li>✔ Подберём технику под задачу и бюджет</li>
                 <li>✔ Назовём точную цену с доставкой</li>
-                <li>✔ Работаем в Набережных Челнах и по всему Татарстану</li>
+                <li>✔ Работаем по всей России — исполнители рядом с вами</li>
               </ul>
               <a
                 href={SITE.phoneHref}
@@ -697,7 +696,7 @@ export default async function HomePage() {
             </a>
             <a href={`mailto:${SITE.email}`}>{SITE.email}</a>
             <span>
-              {SITE.city}, {SITE.region}
+              {SITE.name}: {SITE.city}, {SITE.region}
             </span>
             <span className="text-sm">{SITE.workingHours}</span>
           </div>

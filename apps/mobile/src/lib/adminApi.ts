@@ -78,6 +78,8 @@ export interface AdminStats {
   /** Заявки из чатов на модерации (нет в ответе старого сервера). */
   chatOrders?: number;
   moderation: { reviews: number; comments: number };
+  /** Новые «Предложения и партнёрство» (нет в ответе старого сервера). */
+  proposals?: number;
   generatedAt: string;
 }
 
@@ -201,4 +203,53 @@ export async function saveSupportSettings(value: {
       body: value,
     })
   ).support;
+}
+
+/** «Предложения и партнёрство»: NEW — новые, READ — прочитанные. */
+export type ProposalStatus = 'NEW' | 'READ' | 'ARCHIVED';
+
+export interface AdminProposal {
+  id: string;
+  kind: 'IDEA' | 'PARTNERSHIP' | string;
+  name: string;
+  contact: string;
+  company: string | null;
+  message: string;
+  status: ProposalStatus | string;
+  createdAt: string;
+}
+
+export async function fetchProposals(status: 'NEW' | 'READ' = 'NEW') {
+  return (
+    await adminFetch<{ proposals: AdminProposal[] }>(
+      `/api/admin/proposals?status=${encodeURIComponent(status)}`,
+    )
+  ).proposals;
+}
+
+/** «Прочитано» (READ) или «В архив» (ARCHIVED). */
+export function setProposalStatus(id: string, status: 'READ' | 'ARCHIVED') {
+  return adminFetch(`/api/admin/proposals/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    body: { status },
+  });
+}
+
+/** «Решения ИИ»: как ИИ-модератор решил по сомнительным заявкам из чатов. */
+export interface AiDecision {
+  id: string;
+  /** OPEN | MATCHED | CANCELLED | PENDING_REVIEW — где заявка сейчас. */
+  status: string;
+  excerpt: string;
+  decision: 'PUBLISH' | 'REJECT' | 'UNSURE' | string;
+  reason: string;
+  moderatedAt: string | null;
+  /** Администратор потом изменил решение на сайте. */
+  overridden: boolean;
+}
+
+export function fetchAiDecisions() {
+  return adminFetch<{ enabled: boolean; decisions: AiDecision[] }>(
+    '/api/admin/orders/ai-decisions',
+  );
 }

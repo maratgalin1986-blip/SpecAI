@@ -41,8 +41,13 @@ describe('parseBaseCoords', () => {
     expect(parseBaseCoords(Number.NaN, 52.4)).toEqual({ ok: false, error: BASE_REQUIRED_MESSAGE });
     expect(parseBaseCoords('abc', 52.4)).toEqual({ ok: false, error: BASE_REQUIRED_MESSAGE });
   });
-  it('refuses points far from Tatarstan and impossible values', () => {
-    expect(parseBaseCoords(55.7558, 37.6173)).toEqual({ ok: false, error: BASE_OUTSIDE_MESSAGE }); // Moscow
+  it('takes a base anywhere in Russia, refuses points abroad and impossible values', () => {
+    expect(parseBaseCoords(55.7558, 37.6173)).toEqual({
+      ok: true,
+      value: { lat: 55.7558, lon: 37.6173 },
+    }); // Moscow
+    expect(parseBaseCoords(43.1155, 131.8855).ok).toBe(true); // Vladivostok
+    expect(parseBaseCoords(48.8566, 2.3522)).toEqual({ ok: false, error: BASE_OUTSIDE_MESSAGE }); // Paris
     expect(parseBaseCoords(0, 0)).toEqual({ ok: false, error: BASE_OUTSIDE_MESSAGE });
     expect(parseBaseCoords(552, 52)).toEqual({ ok: false, error: BASE_OUTSIDE_MESSAGE });
     expect(parseBaseCoords(Infinity, 52)).toEqual({ ok: false, error: BASE_REQUIRED_MESSAGE });
@@ -194,7 +199,9 @@ describe('toMapPins', () => {
 
   it('skips companies without a base, outside the area or not providers', () => {
     expect(toMapPins([{ ...base, baseLat: null }])).toEqual([]);
-    expect(toMapPins([{ ...base, baseLat: 55.75, baseLon: 37.61 }])).toEqual([]);
+    expect(toMapPins([{ ...base, baseLat: 48.85, baseLon: 2.35 }])).toEqual([]); // Paris
+    // Moscow is in the area now: the whole of Russia.
+    expect(toMapPins([{ ...base, baseLat: 55.75, baseLon: 37.61 }])).toHaveLength(1);
     expect(toMapPins([{ ...base, isProvider: false }])).toEqual([]);
   });
 

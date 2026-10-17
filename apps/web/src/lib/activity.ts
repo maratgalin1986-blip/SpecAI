@@ -3,13 +3,16 @@
 // (GET /api/activity). Pure: the rows come from lib/activityData.ts.
 //
 // Only real events and real counts — nothing is made up or rounded up. An
-// event is anonymous: the machine type, a known city of Tatarstan and a
-// relative time. Never a name, phone, address, price of a bid or a company
-// name, except СпецПласт16 (the platform's own fleet).
+// event is anonymous: the machine type, a city and a relative time. Never a
+// name, phone, address, price of a bid or a company name, except СпецПласт16
+// (the platform's own fleet). The city is any city of Russia, but only a
+// normalised name: a known city (lib/geo.ts KNOWN_CITIES) or the geocoder's
+// city of an address — never the text people typed.
 
+import { cityByName } from '@specai/shared';
 import { HOUSE_COMPANY_ID } from './fleet';
 import { cityInText, nearestCity } from './geo';
-import { isFresh } from './linePresence';
+import { isOnLine } from './linePresence';
 import { sourceLabel, timeAgo } from './orderBoard';
 import { pluralizeRu } from './pluralize';
 import { todayStartMsk } from './providerFeed';
@@ -40,6 +43,7 @@ export interface ActivityOrderRow {
 export interface ActivityLineRow {
   online: boolean;
   onlineSince: Date | null;
+  timeZone: string | null;
   updatedAt: Date;
   lat: number;
   lon: number;
@@ -87,9 +91,16 @@ export function categoryWord(name: string | null | undefined): string | null {
   return trimmed.charAt(0).toLowerCase() + trimmed.slice(1);
 }
 
+/** A city name as the geocoder writes it: letters, spaces and hyphens only. */
+const CITY_NAME = /^[А-ЯЁ][а-яё]+(?:[ -][А-ЯЁа-яё][а-яё]+){0,3}$/u;
+
 /**
- * The city of a place as one of the known Tatarstan cities, else null: a
- * street, a house number or a village never leave the server.
+ * The city of a place, else null: a known city named in Location.city; the
+ * geocoder's city when the place was geocoded (it has coordinates, so the
+ * city came from Nominatim or Photon, not from the visitor); else the nearest
+ * known city within 40 km. A street, a house number or free text never leave
+ * the server. A geocoded village name is shown too: it is the same
+ * Location.city the public order board (lib/orderBoard.ts) already shows.
  */
 export function publicCity(
   place:
@@ -98,9 +109,11 @@ export function publicCity(
     | undefined,
 ): string | null {
   if (!place) return null;
-  const named = cityInText(place.city);
+  const named = cityByName(place.city) ?? cityInText(place.city);
   if (named) return named.name;
   if (typeof place.latitude === 'number' && typeof place.longitude === 'number') {
+    const geocoded = place.city?.trim() ?? '';
+    if (geocoded.length <= 40 && CITY_NAME.test(geocoded)) return geocoded;
     return nearestCity(place.latitude, place.longitude, 40)?.name ?? null;
   }
   return null;
@@ -132,9 +145,9 @@ export function bookingEventText(row: ActivityBookingRow): string {
   return what ? `Бронь подтверждена: ${what}${house}` : `Бронь подтверждена${house}`;
 }
 
-/** A machine really on the line now: online, fresh and free to book. */
+/** A machine really on the line now: online, fresh, not past the evening cutoff, free to book. */
 export function isLiveLine(row: ActivityLineRow, now: Date): boolean {
-  return row.online && isFresh(row.updatedAt, now) && row.equipment?.status === 'AVAILABLE';
+  return isOnLine(row, now) && row.equipment?.status === 'AVAILABLE';
 }
 
 /** Machines on the line now, each machine once. */

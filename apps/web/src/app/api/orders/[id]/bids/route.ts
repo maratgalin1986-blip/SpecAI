@@ -24,6 +24,7 @@ import {
 import { bidShiftFloor } from '@/lib/equipmentCatalog';
 import { isLateBid } from '@/lib/bidWindow';
 import { maskContactsAndLinks } from '@/lib/privacy';
+import { followUpOnBid } from '@/lib/groupBot';
 
 const requestSchema = z.object({
   // Not a cuid: the owner's own fleet uses readable ids like "sp16-jcb-4cx".
@@ -277,6 +278,10 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     }
   } catch (error) {
     console.error('[notify] newBidReceived failed', error);
+  }
+  // A chat order the bot answered: one public «уже N предложений» in its thread.
+  if (order.source === 'TELEGRAM') {
+    await followUpOnBid(order.id).catch((error) => console.error('[telegram] follow-up', error));
   }
 
   return NextResponse.json(

@@ -1,5 +1,43 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { isOnShift, nextShiftText } from './site';
+import { isOnShift, nextShiftText, SITE } from './site';
+
+// Owner, 2026-10-17: the platform serves all of Russia. The company's own
+// contacts (city, region, legal address) stay in Набережные Челны, but the
+// texts that describe the service never limit it to Tatarstan.
+describe('SITE texts: all of Russia', () => {
+  const TATARSTAN_ONLY = /Татарстан|в Набережных Челнах и/;
+
+  /** The string literals of one key of the app's SITE (apps/mobile/src/lib/site.ts). */
+  function mobileText(key: string, nextKey: string): string {
+    const source = readFileSync(join(__dirname, '../../../mobile/src/lib/site.ts'), 'utf8');
+    const start = source.indexOf(`\n  ${key}:`);
+    const end = source.indexOf(`\n  ${nextKey}:`, start);
+    expect(start).toBeGreaterThan(0);
+    const chunk = source.slice(start, end);
+    return [...chunk.matchAll(/'([^']*)'/g)].map((match) => match[1]).join('');
+  }
+
+  it('says the service covers Russia on the web', () => {
+    for (const text of [SITE.tagline, SITE.description]) {
+      expect(text).not.toMatch(TATARSTAN_ONLY);
+      expect(text).toContain('по всей России');
+    }
+    // СпецПласт16 stays a provider from Набережные Челны.
+    expect(SITE.description).toContain('СпецПласт16 — в Набережных Челнах');
+    expect(SITE.city).toBe('Набережные Челны');
+  });
+
+  it('says the same in the app', () => {
+    const tagline = mobileText('tagline', 'description');
+    const description = mobileText('description', 'city');
+    expect(tagline).toBe(SITE.tagline);
+    expect(description).toContain('по всей России');
+    expect(description).toContain('СпецПласт16 в Набережных Челнах');
+    for (const text of [tagline, description]) expect(text).not.toMatch(TATARSTAN_ONLY);
+  });
+});
 
 // Times are UTC; Moscow is UTC+3.
 describe('isOnShift', () => {

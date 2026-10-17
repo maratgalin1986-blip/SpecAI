@@ -123,6 +123,14 @@ describe('helpers', () => {
     expect(cityOf(null, '  ', 'Набережные Челны')).toBe('Набережные Челны');
   });
 
+  it('knows base cities all over Russia and has no default town', () => {
+    expect(cityOf('г. Екатеринбург, ул. Монтажников 4', null, '')).toBe('Екатеринбург');
+    expect(cityOf('в Нижнем Новгороде, промзона', null, '')).toBe('Нижний Новгород');
+    // A street named after a city is not the base city.
+    expect(cityOf('ул. Казанская 5', null, '')).toBe('');
+    expect(providerCities([{ city: '' }, { city: 'Самара' }] as never)).toEqual(['Самара']);
+  });
+
   it('pluralises the kinds of machinery', () => {
     expect(categoryPlural('Автокраны')).toBe('краны');
     expect(categoryPlural('Гусеничные экскаваторы')).toBe('экскаваторы');

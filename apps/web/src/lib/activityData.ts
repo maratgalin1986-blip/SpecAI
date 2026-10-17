@@ -35,6 +35,7 @@ export async function loadActivityUncached(now: Date = new Date()): Promise<Acti
       select: {
         online: true,
         onlineSince: true,
+        timeZone: true,
         updatedAt: true,
         lat: true,
         lon: true,

@@ -34,30 +34,56 @@ import { OrderChat } from '@/components/OrderChat';
 import { bidsLeftText, isLateBid } from '@/lib/bidWindow';
 import { orderDays } from '@/lib/offerBreakdown';
 import { distanceKm } from '@/lib/geo';
-import { bidLoginHref } from '@/lib/orderBoard';
 import { CloseOrderButton } from '@/components/AdminIntegrations';
 import { PhoneLink } from '@/components/admin/PhoneLink';
 import { isRealEmail } from '@/lib/notifications/routing';
 import { Hint } from '@/components/Hint';
 import { CUSTOMER_MODE_HREF } from '@/lib/cabinetMode';
+import { OrderPublicView } from '@/components/OrderPublicView';
+import { ShareButtons } from '@/components/ShareButtons';
+import { orderCardText, orderShareText } from '@/lib/orderCard';
+import { siteUrl } from '@/lib/siteUrl';
 
 export const dynamic = 'force-dynamic';
 
 const msk = (date: Date) => date.toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow' });
 
-/** Its own tab title («Заявка · Автокран · 20.10.2026»); never indexed. */
+/**
+ * Its own tab title («Заявка · Автокран · 20.10.2026»); never indexed. A shared
+ * link gets a preview: «Нужен автокран · Елабуга · 20 октября» and the card
+ * from opengraph-image.tsx — the kind of machine, the city and the day only.
+ */
 export async function generateMetadata({ params }: { params: { id: string } }): Promise<Metadata> {
   const order = await prisma.order
     .findUnique({
       where: { id: params.id },
-      select: { status: true, desiredStartDate: true, category: { select: { name: true } } },
+      select: {
+        status: true,
+        desiredStartDate: true,
+        category: { select: { name: true } },
+        location: { select: { city: true, latitude: true, longitude: true } },
+      },
     })
     .catch(() => null);
-  const title =
-    order && order.status !== 'PENDING_REVIEW'
-      ? `Заявка · ${order.category?.name ?? 'любая техника'} · ${msk(order.desiredStartDate)}`
-      : 'Заявка';
-  return { title, robots: { index: false, follow: false } };
+  const robots = { index: false, follow: false };
+  if (!order || order.status === 'PENDING_REVIEW') return { title: 'Заявка', robots };
+  const preview = orderCardText({
+    categoryName: order.category?.name,
+    location: order.location,
+    desiredStartDate: order.desiredStartDate,
+  });
+  const description = 'Исполнители со своей техникой присылают цены, заказчик выбирает.';
+  return {
+    title: `Заявка · ${order.category?.name ?? 'любая техника'} · ${msk(order.desiredStartDate)}`,
+    description,
+    robots,
+    openGraph: {
+      title: preview.line,
+      description,
+      url: `/orders/${encodeURIComponent(params.id)}`,
+      type: 'website',
+    },
+  };
 }
 
 export default async function OrderDetailPage({ params }: { params: { id: string } }) {
@@ -92,10 +118,33 @@ export default async function OrderDetailPage({ params }: { params: { id: string
   const isAdmin = isAdminRequest();
   const canSeeContact = isHouseManager(session?.user) || isAdmin;
   const seesAllBids = isOwner || isAdmin;
-  // A guest from the public board (/orders) signs in as a provider and comes
-  // back; another customer is shown the board instead of a 404.
+  // A visitor without an account (a shared link, the channel) sees the public
+  // card with a sign-in button; another customer is shown the board instead
+  // of a 404.
   if (!isOwner && !isAdmin && !isProvider(session?.user)) {
-    redirect(session?.user ? '/orders#board' : bidLoginHref(order.id));
+    if (!session?.user) {
+      // Only what the public card reads, not the loaded rows (customer, bids).
+      return (
+        <OrderPublicView
+          order={{
+            id: order.id,
+            status: order.status,
+            description: order.description,
+            desiredStartDate: order.desiredStartDate,
+            desiredEndDate: order.desiredEndDate,
+            createdAt: order.createdAt,
+            bidsUntil: order.bidsUntil,
+            source: order.source,
+            category: order.category,
+            customer: { name: order.customer.name },
+            contactName: order.contactName,
+            location: order.location,
+            bidCount: order.bids.length,
+          }}
+        />
+      );
+    }
+    redirect('/orders#board');
   }
   const visibleBids = houseFirstBids(
     seesAllBids
@@ -209,6 +258,19 @@ export default async function OrderDetailPage({ params }: { params: { id: string
             ))}
           </ul>
         </Card>
+      )}
+      {isOwner && order.status === 'OPEN' && (
+        // The customer may share the order by choice: a friend with machinery,
+        // a work chat. The link previews as the card (opengraph-image.tsx).
+        <ShareButtons
+          url={`${siteUrl()}/orders/${encodeURIComponent(order.id)}`}
+          text={orderShareText({
+            categoryName: order.category?.name,
+            location: order.location,
+            desiredStartDate: order.desiredStartDate,
+          })}
+          label="Поделиться заявкой"
+        />
       )}
       {isOwner && order.status === 'OPEN' && <CancelOrderButton orderId={order.id} />}
       {isOwner && order.status === 'MATCHED' && (

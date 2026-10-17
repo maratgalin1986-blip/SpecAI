@@ -7,6 +7,7 @@ import { Button, Card } from '@specai/ui';
 import { CinemaBackdrop } from '@/components/CinemaHero';
 import { homeForRole, loginErrorMessage } from '@/lib/loginErrors';
 import { useHydrated } from '@/lib/useHydrated';
+import { WELCOME_PATHS } from '@/lib/welcome';
 
 // Where to go after signing in: the page that sent the user here (same site
 // only, to avoid open redirects), otherwise null — then the user's own cabinet.
@@ -120,12 +121,21 @@ export default function LoginPage() {
             Забыли пароль?
           </a>
         </p>
-        <p className="mt-4 text-sm text-slate-500">
-          Нет аккаунта?{' '}
-          <a href="/register" className="font-medium text-amber-700">
-            Зарегистрироваться
-          </a>
-        </p>
+        {/* «Приветствие перед входом», коротко: the two paths of /register. */}
+        <div className="mt-4 text-sm text-slate-500">
+          <p>Нет аккаунта? Это бесплатно:</p>
+          <div className="mt-2 flex flex-col gap-2 sm:flex-row">
+            {WELCOME_PATHS.map((path) => (
+              <a
+                key={path.role}
+                href={`/register?role=${path.role}`}
+                className="flex min-h-11 flex-1 items-center justify-center rounded-md border border-amber-600 px-3 py-2 text-center font-medium text-amber-800 hover:bg-amber-50"
+              >
+                {path.action}
+              </a>
+            ))}
+          </div>
+        </div>
       </Card>
     </div>
   );

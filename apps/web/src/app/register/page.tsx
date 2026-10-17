@@ -7,22 +7,22 @@ import { CinemaBackdrop } from '@/components/CinemaHero';
 import { BasePicker, type BaseValue } from '@/components/BasePicker';
 import { ConsentText } from '@/components/ConsentText';
 import { Hint } from '@/components/Hint';
+import { noteInstallMoment } from '@/lib/installHint';
 import { normalizeReferralCode } from '@/lib/referral';
 import { useHydrated } from '@/lib/useHydrated';
-
-type AccountType = 'CUSTOMER' | 'PROVIDER';
+import { accountTypeFromQuery, WELCOME_PATHS, type AccountType } from '@/lib/welcome';
 
 export default function RegisterPage() {
-  // /register?type=provider opens the provider form directly.
-  // Read after mounting, so the server and the first client render match.
+  // /register?role=provider|customer (the welcome cards, /login) and the
+  // older ?type=provider open that form directly. Read after mounting, so
+  // the server and the first client render match.
   const [accountType, setAccountType] = useState<AccountType>('CUSTOMER');
   // «Пригласи коллегу»: the inviter's code from /r/<code> or ?ref=.
   const [referralCode, setReferralCode] = useState<string | null>(null);
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    if (params.get('type') === 'provider') {
-      setAccountType('PROVIDER');
-    }
+    const preset = accountTypeFromQuery(params);
+    if (preset) setAccountType(preset);
     setReferralCode(normalizeReferralCode(params.get('ref')));
   }, []);
   const [companyName, setCompanyName] = useState('');
@@ -82,6 +82,9 @@ export default function RegisterPage() {
       return;
     }
 
+    // The customer's cabinet may offer «Установить на экран». Not to providers:
+    // going online with a machine needs the app (background location).
+    if (accountType === 'CUSTOMER') noteInstallMoment();
     // Sign straight in and go to the right cabinet.
     await signIn('credentials', {
       email,
@@ -94,7 +97,10 @@ export default function RegisterPage() {
     <div className="mx-auto max-w-sm py-6 sm:py-12">
       <CinemaBackdrop clip="frame-sunset" />
       <Card className="cine-sub shadow-2xl">
-        <h1 className="cine-title mb-4 text-xl font-bold">Создать аккаунт</h1>
+        <h1 className="cine-title mb-1 text-xl font-bold">Создать аккаунт</h1>
+        <p className="mb-4 text-sm text-slate-600">
+          Что вам нужно? Всё бесплатно: регистрация, заявки и выход на линию.
+        </p>
         {referralCode && (
           <p className="mb-4 rounded-md bg-signal-50 px-3 py-2 text-sm text-graphite-800">
             Вас пригласил коллега — регистрация, заявки и предложения бесплатны.
@@ -102,27 +108,43 @@ export default function RegisterPage() {
         )}
 
         <Hint id="register" className="mb-3" />
-        <div className="mb-4 flex flex-col gap-2 text-sm sm:flex-row">
-          {(
-            [
-              ['CUSTOMER', 'Заказать технику'],
-              ['PROVIDER', 'Встать на линию'],
-            ] as const
-          ).map(([type, label]) => (
-            <button
-              key={type}
-              type="button"
-              onClick={() => setAccountType(type)}
-              className={`flex-1 rounded-md border px-3 py-2 font-medium ${
-                accountType === type
-                  ? 'border-amber-600 bg-amber-50 text-amber-800'
-                  : 'border-slate-300 text-slate-600'
-              }`}
-            >
-              {label}
-            </button>
-          ))}
+        {/* «Приветствие перед входом» (owner, 2026-10-17): two paths, one form. */}
+        <div role="radiogroup" aria-label="Тип аккаунта" className="mb-4 flex flex-col gap-2">
+          {WELCOME_PATHS.map((path) => {
+            const active = accountType === path.accountType;
+            return (
+              <button
+                key={path.accountType}
+                type="button"
+                role="radio"
+                aria-checked={active}
+                onClick={() => setAccountType(path.accountType)}
+                className={`min-h-11 rounded-lg border px-3 py-2.5 text-left ${
+                  active
+                    ? 'border-amber-600 bg-amber-50 ring-1 ring-amber-600'
+                    : 'border-slate-300 bg-white hover:border-amber-400'
+                }`}
+              >
+                <span
+                  className={`block text-base font-semibold ${active ? 'text-amber-800' : 'text-slate-800'}`}
+                >
+                  {path.title}
+                </span>
+                <span className="mt-0.5 block text-xs leading-snug text-slate-600">
+                  {path.text}
+                </span>
+              </button>
+            );
+          })}
         </div>
+        {accountType === 'CUSTOMER' && (
+          <p className="mb-3 text-xs text-slate-500">
+            Нужна машина один раз и без аккаунта?{' '}
+            <a href="/orders" className="font-medium text-amber-700 underline">
+              Оставьте заявку как гость
+            </a>
+          </p>
+        )}
 
         <form method="post" onSubmit={handleSubmit} className="ym-hide-content flex flex-col gap-3">
           {accountType === 'PROVIDER' && (
