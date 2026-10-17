@@ -1,14 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { put } from '@vercel/blob';
 import { getRequestUser } from '@/lib/requestUser';
 import { checkRateLimit } from '@/lib/rateLimit';
-import {
-  getBlobToken,
-  getUploadMaxBytes,
-  isAllowedUploadType,
-  uploadTooLargeMessage,
-} from '@/lib/blob';
+import { getUploadMaxBytes, isAllowedUploadType, uploadTooLargeMessage } from '@/lib/blob';
 import { isOperator, isProvider } from '@/lib/fleet';
+import { StoreFullError, storeFile } from '@/lib/fileStore';
 
 const RATE_LIMIT = { limit: 30, windowMs: 60_000 };
 
@@ -25,11 +20,6 @@ export async function POST(request: NextRequest) {
       { error: 'Слишком много запросов, попробуйте позже' },
       { status: 429, headers: { 'Retry-After': String(rate.retryAfterSec) } },
     );
-  }
-
-  const token = getBlobToken();
-  if (!token) {
-    return NextResponse.json({ error: 'Хранилище не настроено' }, { status: 503 });
   }
 
   let formData: FormData;
@@ -58,18 +48,16 @@ export async function POST(request: NextRequest) {
   const safeName = (file.name || 'file').replace(/[^\w.-]+/g, '_').slice(-80) || 'file';
 
   try {
-    const blob = await put(`equipment/${currentUser.companyId ?? 'unknown'}/${safeName}`, file, {
-      access: 'public',
-      addRandomSuffix: true,
-      contentType: file.type,
-      token,
-    });
-
-    return NextResponse.json(
-      { url: blob.url, contentType: file.type, size: file.size },
-      { status: 201 },
+    const url = await storeFile(
+      `equipment/${currentUser.companyId ?? 'unknown'}/${safeName}`,
+      file,
     );
-  } catch {
+
+    return NextResponse.json({ url, contentType: file.type, size: file.size }, { status: 201 });
+  } catch (error) {
+    if (error instanceof StoreFullError) {
+      return NextResponse.json({ error: error.message }, { status: 507 });
+    }
     return NextResponse.json({ error: 'Не удалось загрузить файл' }, { status: 502 });
   }
 }

@@ -9,6 +9,7 @@ export function integrationFlags(env: NodeJS.ProcessEnv = process.env) {
     email: set('RESEND_API_KEY') && set('EMAIL_FROM'),
     telegram: set('TELEGRAM_BOT_TOKEN') && set('TELEGRAM_CHAT_ID'),
     cronSecret: set('CRON_SECRET'),
-    files: set('BLOB_READ_WRITE_TOKEN'),
+    // Without Vercel Blob uploads are kept in the database (lib/fileStore.ts).
+    blob: set('BLOB_READ_WRITE_TOKEN'),
   };
 }

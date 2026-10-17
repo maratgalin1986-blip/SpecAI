@@ -1,8 +1,10 @@
+import { storedKeyFromUrl } from '@/lib/fileUrls';
+
 /**
  * Vercel Blob storage helpers.
  *
  * Токен читается лениво: без BLOB_READ_WRITE_TOKEN сборка и импорт модуля не
- * падают, а роуты, которым нужно хранилище, отвечают 503.
+ * падают, а загрузки идут в базу данных (lib/fileStore.ts).
  */
 
 export const UPLOAD_MAX_BYTES = 10 * 1024 * 1024; // 10 МБ (PDF)
@@ -50,6 +52,8 @@ export function isBlobConfigured(): boolean {
  * Используется, чтобы extract-specs скачивал только наши файлы, а не произвольные URL.
  */
 export function isOurBlobUrl(value: string): boolean {
+  // A file this site keeps in its own database (lib/fileStore.ts) counts too.
+  if (storedKeyFromUrl(value)) return true;
   let url: URL;
   try {
     url = new URL(value);

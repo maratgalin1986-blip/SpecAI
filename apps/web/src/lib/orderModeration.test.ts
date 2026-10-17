@@ -79,14 +79,50 @@ describe('autoModerateOrder', () => {
     vi.unstubAllEnvs();
   });
 
-  it('does nothing without an AI key: the order waits as before', async () => {
+  it('without an AI key the rules decide: a request with machinery is published', async () => {
     vi.stubEnv('ANTHROPIC_API_KEY', '');
-    await expect(autoModerateOrder('o1', { now: NOW })).resolves.toEqual({
-      status: 'skipped',
-      reason: 'no-ai',
-    });
-    expect(order.findUnique).not.toHaveBeenCalled();
+    const outcome = await autoModerateOrder('o1', { now: NOW });
+    expect(outcome).toMatchObject({ status: 'published' });
     expect(moderateChatOrder).not.toHaveBeenCalled();
+    expect(lastUpdate()?.data).toMatchObject({
+      status: 'OPEN',
+      moderatedBy: 'rules',
+      moderationDecision: 'PUBLISH',
+    });
+    expect(notifyProvidersAboutOrder).toHaveBeenCalledWith('o1');
+  });
+
+  it('without an AI key a request keeps the machinery type the import found', async () => {
+    vi.stubEnv('ANTHROPIC_API_KEY', '');
+    order.findUnique.mockResolvedValue(
+      pendingOrder({ rawText: 'Нужна техника завтра в Елабуге, кто свободен?' }),
+    );
+    await expect(autoModerateOrder('o1', { now: NOW })).resolves.toMatchObject({
+      status: 'published',
+    });
+  });
+
+  it('without an AI key an advert is rejected and a request without machinery waits', async () => {
+    vi.stubEnv('ANTHROPIC_API_KEY', '');
+    order.findUnique.mockResolvedValue(
+      pendingOrder({ rawText: 'Сдаю в аренду экскаватор, услуги экскаватора, звоните, недорого' }),
+    );
+    await expect(autoModerateOrder('o1', { now: NOW })).resolves.toMatchObject({
+      status: 'rejected',
+    });
+    expect(lastUpdate()?.data).toMatchObject({ status: 'CANCELLED', moderatedBy: 'rules' });
+
+    order.findUnique.mockResolvedValue(
+      pendingOrder({
+        rawText: 'Нужна помощь на участке завтра, кто может подъехать?',
+        categoryId: null,
+        category: null,
+      }),
+    );
+    await expect(autoModerateOrder('o1', { now: NOW })).resolves.toMatchObject({
+      status: expect.stringMatching(/unsure|rejected/),
+    });
+    expect(notifyProvidersAboutOrder).not.toHaveBeenCalled();
   });
 
   it('publishes a real request and tells the providers', async () => {
@@ -299,11 +335,13 @@ describe('sweepPendingOrders', () => {
     vi.unstubAllEnvs();
   });
 
-  it('does nothing without an AI key', async () => {
+  it('runs without an AI key too: the rules decide, no AI is called', async () => {
     vi.stubEnv('ANTHROPIC_API_KEY', '');
+    order.findMany.mockResolvedValue([{ id: 'a' }]);
+    order.findUnique.mockResolvedValue(pendingOrder({ id: 'a' }));
     const result = await sweepPendingOrders({ now: NOW });
-    expect(result).toMatchObject({ enabled: false, checked: 0 });
-    expect(order.findMany).not.toHaveBeenCalled();
+    expect(result).toMatchObject({ enabled: true, checked: 1, published: 1 });
+    expect(moderateChatOrder).not.toHaveBeenCalled();
   });
 
   it('takes the waiting orders, never tried and oldest first, at most 20', async () => {
@@ -454,16 +492,17 @@ describe('loadAiDecisions and the daily line', () => {
   });
 
   it('sums up the last day for the owner, or stays silent', async () => {
+    vi.stubEnv('ANTHROPIC_API_KEY', 'test-key');
     order.groupBy.mockResolvedValue([
       { moderationDecision: 'PUBLISH', _count: 4 },
       { moderationDecision: 'REJECT', _count: 9 },
       { moderationDecision: 'UNSURE', _count: 2 },
     ]);
     await expect(aiModerationSummary(NOW)).resolves.toBe(
-      '🤖 ИИ за сутки: опубликовал заявок — 4, отклонил — 9.',
+      '🤖 ИИ за сутки: опубликовано заявок — 4, отклонено — 9.',
     );
     expect(order.groupBy.mock.calls[0]?.[0].where).toEqual({
-      moderatedBy: 'ai',
+      moderatedBy: { in: ['ai', 'rules'] },
       moderatedAt: { gte: new Date(NOW.getTime() - 24 * HOUR) },
     });
 

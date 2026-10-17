@@ -4,7 +4,6 @@ import { getRequestUser } from '@/lib/requestUser';
 import { isProvider } from '@/lib/fleet';
 import { INVALID_JSON_MESSAGE, readJson } from '@/lib/apiInput';
 import { checkRateLimit } from '@/lib/rateLimit';
-import { getBlobToken } from '@/lib/blob';
 import { resolveProviderBase } from '@/lib/providerBase';
 import { isAllowedPinImage, pinPhotoChoices, sanitizePinNote } from '@/lib/providerMap';
 
@@ -86,7 +85,11 @@ export async function GET(request: NextRequest) {
     ownPhotos(user.companyId),
   ]);
   if (!company) return NextResponse.json({ error: 'Компания не найдена' }, { status: 404 });
-  return NextResponse.json({ company, photos, uploadsEnabled: Boolean(getBlobToken()) });
+  return NextResponse.json({
+    company,
+    photos, // Always: without Vercel Blob uploads go to the database (lib/fileStore.ts).
+    uploadsEnabled: true,
+  });
 }
 
 export async function PATCH(request: NextRequest) {

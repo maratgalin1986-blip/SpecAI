@@ -22,7 +22,6 @@ import { loadIncomingOrders } from '@/lib/providerFeedData';
 import { maskContactsAndLinks } from '@/lib/privacy';
 import { toPublicComment } from '@/lib/comments';
 import { MyMapPin } from '@/components/MyMapPin';
-import { getBlobToken } from '@/lib/blob';
 import { isDisplayableImage, pinPhotoChoices } from '@/lib/providerMap';
 import { OnlineToggle } from '@/components/OnlineToggle';
 import { MachineStatusChips } from '@/components/MachineStatusChips';
@@ -402,11 +401,7 @@ export default async function ProviderPage({
             </p>
           </div>
           <Card className="max-w-xl">
-            <MyMapPin
-              company={pinCompany}
-              photos={ownPhotos}
-              uploadsEnabled={Boolean(getBlobToken())}
-            />
+            <MyMapPin company={pinCompany} photos={ownPhotos} uploadsEnabled />
           </Card>
         </section>
       )}

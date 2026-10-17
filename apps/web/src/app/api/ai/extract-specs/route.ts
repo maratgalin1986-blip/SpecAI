@@ -9,6 +9,8 @@ import { getRequestUser } from '@/lib/requestUser';
 import { checkRateLimit } from '@/lib/rateLimit';
 import { getUploadMaxBytes, isImageMediaType, isOurBlobUrl } from '@/lib/blob';
 import { isProvider } from '@/lib/fleet';
+import { loadStoredFile } from '@/lib/fileStore';
+import { storedKeyFromUrl } from '@/lib/fileUrls';
 
 const requestSchema = z.union([
   z.object({ sourceText: z.string().min(1).max(8000) }),
@@ -27,6 +29,16 @@ class FileFetchError extends Error {
 }
 
 async function fetchBlobAsBase64(fileUrl: string) {
+  // A file this site keeps itself: read from the database, not over HTTP.
+  const storedKey = storedKeyFromUrl(fileUrl);
+  if (storedKey) {
+    const stored = await loadStoredFile(storedKey);
+    if (!stored) throw new FileFetchError('Не удалось скачать файл', 400);
+    if (!isSpecFileMediaType(stored.contentType)) {
+      throw new FileFetchError('Поддерживаются только JPEG, PNG, WebP и PDF', 415);
+    }
+    return { data: Buffer.from(stored.data).toString('base64'), mediaType: stored.contentType };
+  }
   const response = await fetch(fileUrl, { cache: 'no-store' });
   if (!response.ok) {
     throw new FileFetchError('Не удалось скачать файл', 400);

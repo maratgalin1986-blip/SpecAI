@@ -865,6 +865,20 @@ model LinePresence {
   @@index([online, updatedAt])
 }
 
+
+// Uploaded files kept in the database when Vercel Blob is not connected
+// (BLOB_READ_WRITE_TOKEN unset): machine photos, shift photos, documents.
+// Served by GET /api/files/<key>; `key` mirrors the Blob path
+// (`equipment/<companyId>/<random>-<name>`). With Blob connected new files go
+// there and this table only keeps the older ones.
+model StoredFile {
+  key         String   @id
+  data        Bytes
+  contentType String
+  size        Int
+  createdAt   DateTime @default(now())
+}
+
 // Small settings the owner changes from the admin menu (site and app), one row
 // per key. «Поддержать площадку» (owner, 2026-10-17): `support.card` (digits
 // only), `support.recipient` (how the bank shows the recipient) and

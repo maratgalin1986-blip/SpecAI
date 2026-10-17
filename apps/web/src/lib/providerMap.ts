@@ -9,6 +9,7 @@ import { maskContacts } from './privacy';
 import { pluralizeRu } from './pluralize';
 import { MACHINE_TYPES, photosOf } from './machinePhotos';
 import { providerPath } from './providerSeo';
+import { storedKeyFromUrl } from './fileUrls';
 
 export const PIN_NOTE_MAX = 120;
 
@@ -91,8 +92,10 @@ export function sanitizePinNote(input: unknown): Checked<string | null> {
   return { ok: true, value: text };
 }
 
-/** Where /api/uploads puts a provider's files on Vercel Blob. */
+/** Where /api/uploads puts a provider's files: Vercel Blob or the site's own store. */
 function isOwnUpload(url: URL, companyId: string) {
+  const stored = storedKeyFromUrl(url.href);
+  if (stored) return stored.startsWith(`equipment/${companyId}/`);
   return (
     url.protocol === 'https:' &&
     url.hostname.endsWith('.public.blob.vercel-storage.com') &&
