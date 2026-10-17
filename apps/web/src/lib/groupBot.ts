@@ -16,7 +16,7 @@ import { checkRateLimit } from '@/lib/rateLimit';
 import { SITE } from '@/lib/site';
 import { siteUrl } from '@/lib/siteUrl';
 import { telegramRequest, type TelegramResponse } from '@/lib/telegramApi';
-import { CHANNEL_CHAT_KEY } from './channelTarget';
+import { CHANNEL_CHAT_KEY, autoPickOwnersChat } from './channelTarget';
 
 /** Replies (and follow-ups) per chat: a chat must never feel spammed. */
 export const REPLY_LIMITS = { perHour: 3, perDay: 15 } as const;
@@ -387,6 +387,8 @@ export interface MyChatMemberUpdate {
   chat: TgChat;
   new_chat_member: { status: string; is_member?: boolean; can_send_messages?: boolean };
   old_chat_member: { status: string; is_member?: boolean };
+  /** Who added or removed the bot. */
+  from?: { id: number };
 }
 
 const inChat = (member: { status: string; is_member?: boolean }) =>
@@ -417,7 +419,15 @@ export async function onMyChatMember(
       update: { title, username, canWrite, removedAt: null, ...(was ? {} : { addedAt: now }) },
     });
     if (was) return 'changed';
-    await notifyTelegram(`Бот добавлен в чат: ${title ?? chatId}`);
+    const digestHere = await autoPickOwnersChat(chatId, update.from?.id).catch((error) => {
+      console.error('[telegram] could not pick the chat for the daily post', error);
+      return false;
+    });
+    await notifyTelegram(
+      digestHere
+        ? `Бот добавлен в чат: ${title ?? chatId}. Сюда каждый вечер в 19:00 по Москве будет выходить сводка заявок за сутки (изменить — /admin → «Чаты с ботом»).`
+        : `Бот добавлен в чат: ${title ?? chatId}`,
+    );
     // One short hello so members and admins know what the bot does and how
     // to switch it off; no reply-to, no notification.
     if (canWrite && isGroupChat(update.chat.type)) {

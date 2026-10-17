@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createBotDb } from './groupBotFakeDb';
 
 const db = createBotDb();
@@ -47,6 +47,10 @@ async function chatInDb(data: Record<string, unknown> = {}) {
     update: data,
   });
 }
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 beforeEach(() => {
   db.reset();
@@ -320,6 +324,41 @@ describe('onMyChatMember', () => {
     // Promoted to admin: no second hello.
     expect(await onMyChatMember(update('member', 'administrator'))).toBe('changed');
     expect(messages()).toHaveLength(1);
+  });
+
+  it('the owner adding the bot himself makes his chat the place of the daily post', async () => {
+    vi.stubEnv('TELEGRAM_CHAT_ID', '777');
+    vi.stubEnv('TELEGRAM_CHANNEL_ID', '');
+    // Someone else adds it: nothing is picked.
+    expect(await onMyChatMember({ ...update('left', 'member'), from: { id: 5 } })).toBe('added');
+    expect(db.settings.has('channel.chatId')).toBe(false);
+    db.reset();
+    expect(await onMyChatMember({ ...update('left', 'member'), from: { id: 777 } })).toBe('added');
+    expect(db.settings.get('channel.chatId')).toBe(String(GROUP.id));
+    expect(notifyTelegram.mock.calls.at(-1)?.[0]).toContain('сводка заявок');
+    // A live pick stays.
+    await db.prisma.botChat.upsert({
+      where: { chatId: '-555' },
+      create: { chatId: '-555', title: 'Мой канал' },
+      update: {},
+    });
+    db.settings.set('channel.chatId', '-555');
+    await onMyChatMember({ ...update('member', 'left'), from: { id: 777 } });
+    await onMyChatMember({ ...update('left', 'member'), from: { id: 777 } });
+    expect(db.settings.get('channel.chatId')).toBe('-555');
+  });
+
+  it('a dead pick gives way, a quiet chat is never picked', async () => {
+    vi.stubEnv('TELEGRAM_CHAT_ID', '777');
+    vi.stubEnv('TELEGRAM_CHANNEL_ID', '');
+    db.settings.set('channel.chatId', '-999'); // the bot is no longer there
+    await onMyChatMember({ ...update('left', 'member'), from: { id: 777 } });
+    expect(db.settings.get('channel.chatId')).toBe(String(GROUP.id));
+    db.reset();
+    await chatInDb({ quiet: true, removedAt: new Date() });
+    await onMyChatMember({ ...update('left', 'member'), from: { id: 777 } });
+    expect(db.settings.has('channel.chatId')).toBe(false);
+    expect(notifyTelegram.mock.calls.at(-1)?.[0]).not.toContain('сводка');
   });
 
   it('marks a removed bot and keeps a quiet chat quiet when it comes back', async () => {

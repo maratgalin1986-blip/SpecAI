@@ -142,6 +142,25 @@ export function createBotDb() {
   // Only what onChatMigrated touches: the pick of the daily post (lib/channelTarget.ts).
   const settings = new Map<string, string>();
   const appSetting = {
+    findUnique: async ({ where }: { where: { key: string } }) => {
+      const value = settings.get(where.key);
+      return value === undefined ? null : { key: where.key, value };
+    },
+    upsert: async ({
+      where,
+      create,
+      update,
+    }: {
+      where: { key: string };
+      create: { key: string; value: string };
+      update: { value?: string };
+    }) => {
+      const value = settings.has(where.key)
+        ? (update.value ?? settings.get(where.key)!)
+        : create.value;
+      settings.set(where.key, value);
+      return { key: where.key, value };
+    },
     updateMany: async ({
       where,
       data,
@@ -183,6 +202,7 @@ export function createBotDb() {
     reset() {
       chats.clear();
       replies.clear();
+      settings.clear();
       state.bids = 0;
     },
   };

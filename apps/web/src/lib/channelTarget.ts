@@ -63,3 +63,26 @@ export async function pickChannelChat(input: unknown): Promise<PickResult> {
   });
   return { ok: true, chatId: input };
 }
+
+/**
+ * The owner added the bot to a chat himself (the update's `from` is the
+ * owner's own Telegram chat, TELEGRAM_CHAT_ID — the private chat id of a
+ * person is their user id): with no channel chosen yet, the daily post goes
+ * there, without a visit to /admin. Anyone else adding the bot changes nothing.
+ */
+export async function autoPickOwnersChat(chatId: string, addedBy: number | undefined) {
+  const owner = process.env.TELEGRAM_CHAT_ID?.trim();
+  if (!owner || !addedBy || addedBy <= 0 || owner !== String(addedBy)) return false;
+  if (process.env.TELEGRAM_CHANNEL_ID?.trim()) return false;
+  // A live pick stays; a dead one (bot removed, /quiet) gives way.
+  if (await loadChannelChatId()) return false;
+  const chat = await prisma.botChat.findUnique({ where: { chatId } });
+  if (!postable(chat)) return false;
+  await prisma.appSetting.upsert({
+    where: { key: CHANNEL_CHAT_KEY },
+    update: { value: chatId },
+    create: { key: CHANNEL_CHAT_KEY, value: chatId },
+  });
+  // Two chats added at once: only the one that ended up stored says so.
+  return (await loadPickedChannelChatId()) === chatId;
+}
