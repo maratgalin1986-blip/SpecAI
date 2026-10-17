@@ -105,6 +105,11 @@ text-align:left;overflow-wrap:anywhere}
 .card small{display:block;color:#5f6b73;margin:2px 0}
 .card button{margin-top:8px;width:100%;min-height:40px;border:0;border-radius:20px;
 background:${colors.dark};color:${colors.onDark};font:700 14px sans-serif}
+.pin.base{width:44px;height:44px;border-radius:22px;font-size:12px}
+.card .list{max-height:240px;overflow-y:auto;margin-top:4px}
+.card button.row{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:6px;
+background:#f3f4f6;color:${colors.text};border-radius:12px;padding:6px 10px;text-align:left;font:600 13px sans-serif}
+.card button.row small{margin:0;white-space:nowrap}
 </style>
 </head><body>
 <div id="map"></div>
@@ -123,6 +128,7 @@ function send(pin) {
   }
 }
 var bounds = [];
+var houseMarkers = [];
 pins.slice().reverse().forEach(function (pin) {
   var icon = L.divIcon({
     className: '',
@@ -140,8 +146,9 @@ pins.slice().reverse().forEach(function (pin) {
   button.textContent = 'Техника исполнителя';
   button.onclick = function () { send(pin); };
   box.appendChild(button);
-  L.marker([pin.lat, pin.lon], { icon: icon, zIndexOffset: pin.house ? 1000 : 0 })
+  var marker = L.marker([pin.lat, pin.lon], { icon: icon, zIndexOffset: pin.house ? 1000 : 0 })
     .addTo(map).bindPopup(box);
+  if (pin.house) houseMarkers.push({ pin: pin, marker: marker, shown: true });
   bounds.push([pin.lat, pin.lon]);
 });
 if (bounds.length > 1) map.fitBounds(bounds, { padding: [40, 40], maxZoom: 11 });
@@ -196,6 +203,70 @@ window.setLive = function (machines) {
 map.on('moveend', function () {
   if (liveMachines.length && (visibleCount(liveMachines) <= PERMANENT_MAX) !== livePermanent) renderLive();
 });
+// СпецПласт16's free machines at the base (window.setBase, lib/line.ts
+// toBasePins): one pin per base with a bubble «СпецПласт16 · на базе» over
+// «машина · от N ₽/ч» (or «N машин · от …»). One machine opens its page on
+// tap; several open a list. The company's own pin at the same spot is
+// hidden while its machines stand there. With more than BASE_PERMANENT_MAX
+// bases the bubbles open on tap, so they do not cover the live machines.
+var BASE_PERMANENT_MAX = 3;
+var baseLayer = L.layerGroup().addTo(map);
+function samePlace(a, b) { return Math.abs(a.lat - b.lat) < 0.0005 && Math.abs(a.lon - b.lon) < 0.0005; }
+function postMachine(id) {
+  if (window.ReactNativeWebView && id) {
+    window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'machine', equipmentId: id }));
+  }
+}
+window.setBase = function (groups) {
+  groups = groups || [];
+  baseLayer.clearLayers();
+  houseMarkers.forEach(function (h) {
+    var covered = groups.some(function (g) { return samePlace(g, h.pin); });
+    if (covered && h.shown) { map.removeLayer(h.marker); h.shown = false; }
+    if (!covered && !h.shown) { h.marker.addTo(map); h.shown = true; }
+  });
+  var permanent = groups.length <= BASE_PERMANENT_MAX;
+  groups.forEach(function (g) {
+    var many = g.items.length > 1;
+    var icon = L.divIcon({
+      className: '',
+      html: '<div class="pin house base">' + (many ? 'СП·' + g.items.length : 'СП') + '</div>',
+      iconSize: [44, 44], iconAnchor: [22, 22]
+    });
+    var marker = L.marker([g.lat, g.lon], { icon: icon, zIndexOffset: 1200 });
+    if (many) {
+      var box = document.createElement('div');
+      box.className = 'card';
+      box.innerHTML = '<b>' + text(g.head) + '</b>';
+      var list = document.createElement('div');
+      list.className = 'list';
+      g.items.forEach(function (item) {
+        var row = document.createElement('button');
+        row.className = 'row';
+        row.innerHTML = '<span>' + text(item.name) + '</span><small>' + text(item.price) + '</small>';
+        row.onclick = function () { postMachine(item.equipmentId); };
+        list.appendChild(row);
+      });
+      box.appendChild(list);
+      var house = houseMarkers.filter(function (h) { return samePlace(g, h.pin); })[0];
+      if (house) {
+        var all = document.createElement('button');
+        all.textContent = 'Вся техника СпецПласт16';
+        all.onclick = function () { send(house.pin); };
+        box.appendChild(all);
+      }
+      marker.bindPopup(box);
+    } else {
+      // As with live machines: a hidden bubble opens first, then the page.
+      marker.on('click', function () {
+        if (!permanent && !marker.isTooltipOpen()) return;
+        postMachine(g.items[0] && g.items[0].equipmentId);
+      });
+    }
+    marker.bindTooltip(bubbleHtml({ head: g.head, body: g.body, note: null }), { permanent: permanent, direction: 'top', offset: [0, -24], opacity: 1, className: 'bubble house' });
+    baseLayer.addLayer(marker);
+  });
+};
 window.setMe = function (point, center) {
   if (!point) return;
   if (!meMarker) {

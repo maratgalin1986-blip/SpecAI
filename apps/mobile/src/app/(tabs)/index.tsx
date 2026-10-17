@@ -3,11 +3,14 @@ import { Redirect, useFocusEffect, useRouter } from 'expo-router';
 import React, { useCallback, useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { ActivityStrip } from '@/components/ActivityStrip';
 import { HelpButton, ModeSwitch } from '@/components/ModeSwitch';
 import { ProvidersMap } from '@/components/ProvidersMap';
 import { QuickOrderSheet } from '@/components/QuickOrderSheet';
+import { AI_ENTRY_HINT, AI_ENTRY_TITLE } from '@/lib/aiDispatcher';
 import { fetchMyOrders, type Order } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
+import { useActivity } from '@/lib/useActivity';
 import { useNearbyLine } from '@/lib/useNearbyLine';
 import { pluralizeRu } from '@/lib/format';
 import { categoryIcon, pointAddress } from '@/lib/orderFlow';
@@ -49,7 +52,9 @@ export default function HomeScreen() {
   // уводят отсюда ниже, им ни запрос геопозиции, ни опрос карты не нужны.
   const showsCustomerMap =
     !!user && user.role !== 'PROVIDER_OPERATOR' && (!isProvider || (loaded && mode === 'customer'));
-  const { me, machines } = useNearbyLine(showsCustomerMap);
+  const { me, machines, base } = useNearbyLine(showsCustomerMap);
+  // «Сегодня: N заявок · M машин на линии рядом» — настоящие числа площадки.
+  const activity = useActivity(showsCustomerMap);
 
   useFocusEffect(
     useCallback(() => {
@@ -78,6 +83,7 @@ export default function HomeScreen() {
         style={StyleSheet.absoluteFill}
         onPick={(point) => setPickedAddress(pointAddress(point))}
         live={machines}
+        base={base}
         me={me}
         onMachine={(equipmentId) => router.push(`/equipment/${equipmentId}`)}
       />
@@ -130,12 +136,39 @@ export default function HomeScreen() {
         <View style={styles.flex} pointerEvents="none" />
         <HelpButton />
       </View>
+      <View
+        style={[styles.thirdRow, { top: insets.top + spacing.sm + (TAP + spacing.sm) * 2 }]}
+        pointerEvents="box-none"
+      >
+        {/* «рядом» — только когда карта знает, где заказчик. */}
+        <ActivityStrip activity={activity} nearOnline={me ? machines.length : null} />
+      </View>
 
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.bottom}
         pointerEvents="box-none"
       >
+        {/* ИИ-диспетчер подписан как ИИ: в чате он сразу говорит, что он программа. */}
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`${AI_ENTRY_TITLE}. ${AI_ENTRY_HINT}`}
+          onPress={() => router.push('/(tabs)/chat')}
+          style={({ pressed }) => [styles.aiCard, pressed && styles.pressed]}
+        >
+          <View style={styles.aiBadge}>
+            <Text style={styles.aiBadgeText}>ИИ</Text>
+          </View>
+          <View style={styles.flexShrink}>
+            <Text style={styles.aiTitle} numberOfLines={1}>
+              {AI_ENTRY_TITLE}
+            </Text>
+            <Text style={styles.aiHint} numberOfLines={1}>
+              {AI_ENTRY_HINT}
+            </Text>
+          </View>
+          <Ionicons name="chatbubble-ellipses-outline" size={20} color={colors.primary} />
+        </Pressable>
         {active ? (
           <Pressable
             accessibilityRole="button"
@@ -213,6 +246,35 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   modeSwitch: { width: 250, flexShrink: 1 },
+  thirdRow: { position: 'absolute', left: 0, right: 0, paddingHorizontal: spacing.lg },
+  flexShrink: { flexShrink: 1 },
+  aiCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    maxWidth: '100%',
+    gap: spacing.sm,
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.sm,
+    paddingVertical: spacing.xs + 2,
+    paddingLeft: spacing.xs + 2,
+    paddingRight: spacing.md,
+    minHeight: TAP,
+    borderRadius: radius.pill,
+    backgroundColor: colors.card,
+    ...shadow.card,
+  },
+  aiBadge: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: colors.dark,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  aiBadgeText: { color: colors.primary, fontWeight: '900', fontSize: 12 },
+  aiTitle: { color: colors.text, fontSize: 14, fontWeight: '800' },
+  aiHint: { color: colors.textMuted, fontSize: 12 },
   roundButton: {
     width: TAP,
     height: TAP,

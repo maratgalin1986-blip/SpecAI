@@ -2,8 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@specai/database';
 import { getRequestUser } from '@/lib/requestUser';
 import { customerRates } from '@/lib/equipmentCatalog';
+import { OWN_FLEET } from '@/lib/fleet';
 import {
+  baseMachines,
   liveMachines,
+  NEARBY_BASE_SCAN,
   NEARBY_DEFAULT_KM,
   NEARBY_MAX_KM,
   NEARBY_MAX_ROWS,
@@ -26,6 +29,11 @@ function coordinate(raw: string | null, limit: number): number | null {
  * city. Each row carries the bubble text, the machine's customer price and
  * the driver's short name — never a phone, never the driver's account id.
  * Positions are the phones' own, as the drivers chose to show them.
+ *
+ * `base`: СпецПласт16's own free machines at their base within the same
+ * radius (lib/linePresence.ts baseMachines), priced by customerRates and
+ * labelled «на базе» — a house machine whose driver is online is in
+ * `machines` instead. Older apps read only `machines`.
  */
 export async function GET(request: NextRequest) {
   const user = await getRequestUser(request);
@@ -40,10 +48,33 @@ export async function GET(request: NextRequest) {
   // exact radius is applied in liveMachines.
   const latSpan = km / 111;
   const lonSpan = km / Math.max(0.1, 111 * Math.cos((around?.lat ?? 0) * (Math.PI / 180)));
-  const rows = await prisma.linePresence.findMany({
+  const freshSince = new Date(now.getTime() - PRESENCE_FRESH_MS);
+  const housePromise = prisma.equipment.findMany({
+    where: {
+      ...OWN_FLEET,
+      status: 'AVAILABLE',
+      // A machine whose driver is online is a live pin, not a base one.
+      linePresences: { none: { online: true, updatedAt: { gte: freshSince } } },
+    },
+    select: {
+      id: true,
+      name: true,
+      companyId: true,
+      status: true,
+      hourlyRate: true,
+      dailyRate: true,
+      category: { select: { name: true, slug: true } },
+      location: { select: { latitude: true, longitude: true } },
+      company: { select: { baseLat: true, baseLon: true } },
+    },
+    orderBy: { name: 'asc' },
+    // The radius and the nearest NEARBY_BASE_MAX are chosen in baseMachines.
+    take: NEARBY_BASE_SCAN,
+  });
+  const presencePromise = prisma.linePresence.findMany({
     where: {
       online: true,
-      updatedAt: { gte: new Date(now.getTime() - PRESENCE_FRESH_MS) },
+      updatedAt: { gte: freshSince },
       ...(around
         ? {
             lat: { gte: around.lat - latSpan, lte: around.lat + latSpan },
@@ -69,6 +100,7 @@ export async function GET(request: NextRequest) {
     orderBy: { updatedAt: 'desc' },
     take: NEARBY_MAX_ROWS,
   });
+  const [rows, houseRows] = await Promise.all([presencePromise, housePromise]);
   const machines = liveMachines(
     rows.map((row) => ({
       ...row,
@@ -90,5 +122,16 @@ export async function GET(request: NextRequest) {
     km,
     now,
   );
-  return NextResponse.json({ machines, around, km });
+  const liveIds = new Set(machines.flatMap((machine) => machine.equipment?.id ?? []));
+  const base = baseMachines(
+    houseRows.map((row) => {
+      // The house price list as the floor, the same numbers as on the card.
+      const rates = customerRates({ ...row, categoryName: row.category?.name ?? '' });
+      return { ...row, hourlyRate: rates.hourlyRate, dailyRate: rates.dailyRate };
+    }),
+    liveIds,
+    around,
+    km,
+  );
+  return NextResponse.json({ machines, base, around, km });
 }

@@ -1,11 +1,15 @@
 import { describe, expect, it } from 'vitest';
+import { HOUSE_COMPANY_ID } from './fleet';
 import {
+  basePoint,
+  baseMachines,
   isFresh,
   liveMachines,
   machineUnavailableReason,
   noteHasContacts,
   presenceBubble,
   publicNote,
+  type BaseMachineRow,
   type PresenceRow,
 } from './linePresence';
 import { HIDDEN_CONTACT, HIDDEN_LINK } from './privacy';
@@ -163,5 +167,71 @@ describe('liveMachines', () => {
   it('treats a 15-minute-old position as stale', () => {
     expect(isFresh(new Date(now.getTime() - 14 * 60_000), now)).toBe(true);
     expect(isFresh(new Date(now.getTime() - 16 * 60_000), now)).toBe(false);
+  });
+});
+
+describe('baseMachines (СпецПласт16 at the base)', () => {
+  const house = (over: Partial<BaseMachineRow> = {}): BaseMachineRow => ({
+    id: 'sp16-1',
+    name: 'Экскаватор JCB 3CX',
+    companyId: HOUSE_COMPANY_ID,
+    status: 'AVAILABLE',
+    hourlyRate: 4000,
+    dailyRate: 32000,
+    category: { name: 'Экскаваторы-погрузчики', slug: 'backhoe-loaders' },
+    location: { latitude: null, longitude: null },
+    company: { baseLat: 55.7436, baseLon: 52.3959 },
+    ...over,
+  });
+
+  it('labels the machine «на базе», never «Я на линии»', () => {
+    const [pin] = baseMachines([house()], new Set(), null, 60);
+    expect(pin?.bubble).toBe(`СпецПласт16 · Экскаватор JCB 3CX · ${RATE} · на базе`);
+    expect(pin?.priceText).toBe(RATE);
+    expect(pin?.bubble).not.toContain('Я на линии');
+  });
+
+  it('stands at the machine’s own point when it has one, else at the company base', () => {
+    expect(basePoint(house())).toEqual({ lat: 55.7436, lon: 52.3959 });
+    expect(basePoint(house({ location: { latitude: 55.75, longitude: 52.06 } }))).toEqual({
+      lat: 55.75,
+      lon: 52.06,
+    });
+    expect(basePoint(house({ company: { baseLat: null, baseLon: null } }))).toBeNull();
+  });
+
+  it('only the free house fleet, not machines on the line, within the radius', () => {
+    const rows = [
+      house(),
+      house({ id: 'other', companyId: 'c1' }),
+      house({ id: 'rented', status: 'RENTED' }),
+      house({ id: 'live' }),
+      house({ id: 'kazan', location: { latitude: 55.7963, longitude: 49.1088 } }),
+      house({ id: 'nowhere', company: { baseLat: null, baseLon: null } }),
+    ];
+    const ids = (around: { lat: number; lon: number } | null, km: number) =>
+      baseMachines(rows, new Set(['live']), around, km).map((pin) => pin.id);
+    expect(ids({ lat: 55.74, lon: 52.4 }, 60)).toEqual(['sp16-1']);
+    expect(ids({ lat: 55.74, lon: 52.4 }, 300)).toEqual(['sp16-1', 'kazan']);
+    // Without a point: every one of them, the radius does not apply.
+    expect(ids(null, 60)).toEqual(['sp16-1', 'kazan']);
+  });
+
+  it('keeps the nearest sixty, not the first sixty by name', () => {
+    const far = Array.from({ length: 70 }, (_, index) =>
+      house({
+        id: `far-${index}`,
+        name: `Авто ${index}`,
+        location: { latitude: 55.9, longitude: 52.4 },
+      }),
+    );
+    const near = house({
+      id: 'near',
+      name: 'Яма',
+      location: { latitude: 55.741, longitude: 52.4 },
+    });
+    const pins = baseMachines([...far, near], new Set(), { lat: 55.74, lon: 52.4 }, 60);
+    expect(pins).toHaveLength(60);
+    expect(pins[0]?.id).toBe('near');
   });
 });

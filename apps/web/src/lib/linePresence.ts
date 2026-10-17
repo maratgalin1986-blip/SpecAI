@@ -6,6 +6,7 @@ import { HOUSE_COMPANY_ID } from './fleet';
 import { distanceKm } from './geo';
 import { shortAuthorName } from './comments';
 import { HIDDEN_CONTACT, HIDDEN_LINK, maskContactsAndLinks } from './privacy';
+import { SITE } from './site';
 
 /**
  * A position older than this is stale: the phone went to sleep or lost the
@@ -199,4 +200,119 @@ export function liveMachines(
       Number(b.company.isHouse) - Number(a.company.isHouse) ||
       b.updatedAt.localeCompare(a.updatedAt),
   );
+}
+
+// ---------------------------------------------------------------------------
+// СпецПласт16's own machines at the base (owner, 2026-10-17): the house fleet
+// that is free to book is on the customer's map too, at its real base — the
+// machine's own location when it has coordinates, else the company's base.
+// Never «Я на линии»: that bubble belongs to a machine whose driver is
+// online, and such a machine is shown as a live one instead.
+// ---------------------------------------------------------------------------
+
+/** At most this many house machines at the base go to the map (the nearest ones). */
+export const NEARBY_BASE_MAX = 60;
+/**
+ * How many house machines the query reads before the radius and distance
+ * sort pick the NEARBY_BASE_MAX nearest: the whole house fleet in practice.
+ */
+export const NEARBY_BASE_SCAN = 500;
+
+export interface BaseMachineRow {
+  id: string;
+  name: string;
+  companyId: string;
+  status: EquipmentStatus | string;
+  /** The customer's rates (customerRates: never below the house price list). */
+  hourlyRate: number;
+  dailyRate: number;
+  category: { name: string; slug: string } | null;
+  location: { latitude: number | null; longitude: number | null } | null;
+  company: { baseLat: number | null; baseLon: number | null };
+}
+
+export interface BaseMachine {
+  /** The machine's id: the map opens its page. */
+  id: string;
+  lat: number;
+  lon: number;
+  company: { name: string; isHouse: true };
+  equipment: {
+    id: string;
+    name: string;
+    category: string | null;
+    categorySlug: string | null;
+    hourlyRate: number;
+    dailyRate: number;
+  };
+  /** «от 2 500 ₽/ч» or «цена договорная». */
+  priceText: string;
+  distanceKm: number | null;
+  /** «СпецПласт16 · Экскаватор-погрузчик JCB 3CX · от 2 500 ₽/ч · на базе». */
+  bubble: string;
+}
+
+export const BASE_LABEL = 'на базе';
+
+export function baseBubble(machine: { name: string; hourlyRate: number }): string {
+  return [SITE.name, shortName(machine.name), rateText(machine.hourlyRate), BASE_LABEL].join(' · ');
+}
+
+/** Where a house machine stands: its own point, else the company's base; null when neither is known. */
+export function basePoint(row: BaseMachineRow): { lat: number; lon: number } | null {
+  const own = row.location;
+  if (typeof own?.latitude === 'number' && typeof own.longitude === 'number') {
+    return { lat: own.latitude, lon: own.longitude };
+  }
+  const { baseLat, baseLon } = row.company;
+  return typeof baseLat === 'number' && typeof baseLon === 'number'
+    ? { lat: baseLat, lon: baseLon }
+    : null;
+}
+
+/**
+ * СпецПласт16's free machines at the base around a point: only the house
+ * fleet, only AVAILABLE, not the machines already on the line (`liveIds`),
+ * within the radius; nearest first, then by name. Without a point all of
+ * them (the map centred on the city).
+ */
+export function baseMachines(
+  rows: readonly BaseMachineRow[],
+  liveIds: ReadonlySet<string>,
+  around: { lat: number; lon: number } | null,
+  radiusKm: number,
+): BaseMachine[] {
+  const result: BaseMachine[] = [];
+  for (const row of rows) {
+    if (row.companyId !== HOUSE_COMPANY_ID || row.status !== 'AVAILABLE') continue;
+    if (liveIds.has(row.id)) continue;
+    const point = basePoint(row);
+    if (!point) continue;
+    const km = around ? distanceKm(around, point) : null;
+    if (km !== null && km > radiusKm) continue;
+    result.push({
+      id: row.id,
+      lat: point.lat,
+      lon: point.lon,
+      company: { name: SITE.name, isHouse: true },
+      equipment: {
+        id: row.id,
+        name: row.name,
+        category: row.category?.name ?? null,
+        categorySlug: row.category?.slug ?? null,
+        hourlyRate: row.hourlyRate,
+        dailyRate: row.dailyRate,
+      },
+      priceText: rateText(row.hourlyRate),
+      distanceKm: km === null ? null : Math.round(km * 10) / 10,
+      bubble: baseBubble(row),
+    });
+  }
+  return result
+    .sort(
+      (a, b) =>
+        (a.distanceKm ?? 0) - (b.distanceKm ?? 0) ||
+        a.equipment.name.localeCompare(b.equipment.name, 'ru'),
+    )
+    .slice(0, NEARBY_BASE_MAX);
 }

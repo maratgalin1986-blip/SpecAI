@@ -2,8 +2,8 @@ import * as WebBrowser from 'expo-web-browser';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import { WebView, type WebViewMessageEvent } from 'react-native-webview';
-import { fetchProviderPins, type LiveMachine } from '@/lib/api';
-import { toLivePins } from '@/lib/line';
+import { fetchProviderPins, type BaseMachine, type LiveMachine } from '@/lib/api';
+import { toBasePins, toLivePins } from '@/lib/line';
 import { providersMapHtml, type ProviderPin } from '@/lib/providersMap';
 import { SITE } from '@/lib/site';
 import { colors } from '@/theme';
@@ -18,6 +18,7 @@ export function ProvidersMap({
   style,
   onPick,
   live = [],
+  base = [],
   me = null,
   onMachine,
 }: {
@@ -26,6 +27,8 @@ export function ProvidersMap({
   onPick?: (point: { lat: number; lon: number }) => void;
   /** Техника «на линии» вокруг (GET /api/line/nearby): зелёные значки с подписью. */
   live?: LiveMachine[];
+  /** Свободные машины СпецПласт16 на базе: метка цвета бренда «на базе». */
+  base?: BaseMachine[];
   /** Положение заказчика: синяя точка, карта центрируется на ней один раз. */
   me?: { lat: number; lon: number } | null;
   /** Нажатие на машину на линии. */
@@ -43,6 +46,13 @@ export function ProvidersMap({
       `window.setLive && window.setLive(${JSON.stringify(toLivePins(live))}); true;`,
     );
   }, [ready, live]);
+  // Машины на базе перерисовываются, только когда список и правда изменился:
+  // опрос каждые 30 с не закрывает открытый список машин.
+  const baseJson = useMemo(() => JSON.stringify(toBasePins(base)), [base]);
+  useEffect(() => {
+    if (!ready) return;
+    webRef.current?.injectJavaScript(`window.setBase && window.setBase(${baseJson}); true;`);
+  }, [ready, baseJson]);
   useEffect(() => {
     if (!ready || !me) return;
     const center = !centred.current;
