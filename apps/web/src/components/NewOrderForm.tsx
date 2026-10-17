@@ -6,6 +6,7 @@ import { ConditionsPreview } from '@/components/ConditionsPreview';
 import { DemandHint } from '@/components/DemandHint';
 import { GuestOrderForm } from '@/components/GuestOrderForm';
 import { PointPicker } from '@/components/PointPicker';
+import { noteInstallMoment } from '@/lib/installHint';
 import { pointAddress, type MapPoint } from '@/lib/mapPoint';
 import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
@@ -95,6 +96,8 @@ export function NewOrderForm({
     setEndDate('');
     setAddress('');
     setPoint(null);
+    // A good moment to offer «Установить на экран» (InstallPrompt).
+    noteInstallMoment();
     if (created?.order?.id) {
       router.push(`/orders/${encodeURIComponent(created.order.id)}`);
       return;

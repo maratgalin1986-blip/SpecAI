@@ -127,6 +127,16 @@ export default function RootLayout({ children }: { children: ReactNode }) {
               "try{var k='cine-curtain-at',t=+sessionStorage.getItem(k)||0,n=Date.now();if(n-t<30000)document.documentElement.setAttribute('data-curtain','fast');sessionStorage.setItem(k,String(n))}catch(e){}",
           }}
         />
+        {/* Chrome may offer installation before React is up: keep the event for
+            the «Установить» card (components/InstallPrompt.tsx, keys in
+            lib/installHint.ts) instead of the browser's own mini-infobar; once
+            the card is closed for good, the browser's offer is left alone. */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html:
+              "addEventListener('beforeinstallprompt',function(e){window.__installPrompt=e;try{if(localStorage.getItem('specai:install-hint-dismissed')||localStorage.getItem('specai:install-prompt-dismissed-at'))return}catch(x){}e.preventDefault()})",
+          }}
+        />
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(ORGANIZATION_JSON_LD) }}

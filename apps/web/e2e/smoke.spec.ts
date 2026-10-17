@@ -218,3 +218,76 @@ test('removed pages redirect to the home page', async ({ page }) => {
   }
   expect(errors, 'page errors').toEqual([]);
 });
+
+// «Установить на экран»: not on the first visit, from the second one on; it
+// never covers the call bar, has 44 px buttons, and ✕ closes it for good.
+test('install hint on the second visit, closed for good', async ({ page }, testInfo) => {
+  const phone = testInfo.project.name === 'iphone-13';
+  const errors = await guard(page);
+  await page.addInitScript((native) => {
+    // Automated browsers never get the hint; this test plays a person.
+    Object.defineProperty(Navigator.prototype, 'webdriver', { get: () => false });
+    try {
+      localStorage.setItem('cookie-consent', 'yes');
+      if (!localStorage.getItem('specai:visits')) {
+        localStorage.setItem(
+          'specai:visits',
+          JSON.stringify({ count: 1, last: Date.now() - 2 * 3_600_000 }),
+        );
+      }
+    } catch {
+      /* storage blocked */
+    }
+    if (native) {
+      // Chrome on a computer (headless Chromium says «HeadlessChrome», a bot):
+      // the browser offers installation.
+      const ua = navigator.userAgent.replace('HeadlessChrome', 'Chrome');
+      Object.defineProperty(Navigator.prototype, 'userAgent', { get: () => ua });
+      addEventListener('DOMContentLoaded', () => {
+        const event = new Event('beforeinstallprompt', { cancelable: true });
+        Object.assign(event, {
+          prompt: () => Promise.resolve(),
+          userChoice: Promise.resolve({ outcome: 'dismissed', platform: 'web' }),
+        });
+        dispatchEvent(event);
+      });
+    }
+  }, !phone);
+  await page.goto('/?intro=0', { waitUntil: 'load' });
+  const hint = page.getByTestId('install-hint');
+  await expect(hint).toBeVisible({ timeout: 15_000 });
+  await expect(hint).toBeInViewport();
+  if (phone) {
+    // Chromium with the iPhone's user agent: Safari's two taps.
+    await expect(hint).toContainText('Установить ИИСтройка24 на телефон');
+    await expect(hint).toContainText('«На экран „Домой“»');
+    const bar = page.getByRole('navigation', { name: 'Быстрая связь' });
+    const barBox = (await bar.boundingBox())!;
+    const hintBox = (await hint.boundingBox())!;
+    expect(hintBox.y + hintBox.height, 'the hint sits above the call bar').toBeLessThanOrEqual(
+      barBox.y,
+    );
+    const callFree = await bar.locator('a[href^="tel:"]').evaluate((el) => {
+      const r = el.getBoundingClientRect();
+      const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+      return !!hit && el.contains(hit);
+    });
+    expect(callFree, 'nothing covers «Позвонить»').toBe(true);
+  } else {
+    const install = hint.getByRole('button', { name: 'Установить' });
+    await expect(install).toBeVisible();
+    expect((await install.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+  }
+  const close = hint.getByRole('button', { name: 'Закрыть подсказку об установке' });
+  expect((await close.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+  await close.click();
+  await expect(hint).toHaveCount(0);
+  const dismissed = await page.evaluate(() =>
+    localStorage.getItem('specai:install-hint-dismissed'),
+  );
+  expect(dismissed).toBe('1');
+  await page.reload({ waitUntil: 'load' });
+  await page.waitForTimeout(8_000);
+  await expect(hint).toHaveCount(0);
+  expect(errors, 'page errors').toEqual([]);
+});
