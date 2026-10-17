@@ -68,7 +68,7 @@ describe('POST /api/account/provider: «Стать исполнителем»', 
         baseLon: 52.4,
       }),
     });
-    expect(userUpdate.mock.calls[0][0].data).toMatchObject({
+    expect(userUpdate.mock.calls[0]?.[0].data).toMatchObject({
       role: 'PROVIDER_ADMIN',
       companyId: 'c-new',
       phone: '+79170000000',
@@ -111,6 +111,6 @@ describe('POST /api/account/provider: «Стать исполнителем»', 
   it('keeps the phone the account already has', async () => {
     userFind.mockResolvedValue({ role: 'CUSTOMER', phone: '+79171111111' });
     await post({ companyName: 'A', baseAddress: 'Мира 1', phone: '+79172222222' });
-    expect(userUpdate.mock.calls[0][0].data).not.toHaveProperty('phone');
+    expect(userUpdate.mock.calls[0]?.[0].data).not.toHaveProperty('phone');
   });
 });
