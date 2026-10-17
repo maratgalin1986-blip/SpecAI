@@ -16,7 +16,7 @@ describe('integrationFlags', () => {
       email: false,
       telegram: true,
       cronSecret: false,
-      files: false,
+      blob: false,
     });
     expect(JSON.stringify(result)).not.toMatch(/secret|abc|42/);
   });
