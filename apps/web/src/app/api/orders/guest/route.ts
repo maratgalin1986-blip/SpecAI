@@ -10,6 +10,7 @@ import { GUEST_ORDER_SUCCESS } from '@/lib/guestOrder';
 import { technicalUserId } from '@/lib/ingest';
 import { notifyTelegram } from '@/lib/notify';
 import { notifyProvidersAboutOrder } from '@/lib/notifications/notifyUser';
+import { pingOrderBoard } from '@/lib/indexNow';
 import { maskContacts } from '@/lib/privacy';
 import { LEAD_RATE_LIMIT, checkRateLimit } from '@/lib/rateLimit';
 import { SITE } from '@/lib/site';
@@ -110,8 +111,9 @@ export async function POST(request: NextRequest) {
       .filter(Boolean)
       .join('\n'),
   );
-  // Providers with this kind of machinery within their radius hear at once.
-  await notifyProvidersAboutOrder(order.id);
+  // Providers with this kind of machinery within their radius hear at once;
+  // Yandex hears that the board changed (IndexNow, best-effort).
+  await Promise.all([notifyProvidersAboutOrder(order.id), pingOrderBoard()]);
 
   return NextResponse.json(
     { ok: true, orderId: order.id, bidsUntil: order.bidsUntil, message: GUEST_ORDER_SUCCESS },

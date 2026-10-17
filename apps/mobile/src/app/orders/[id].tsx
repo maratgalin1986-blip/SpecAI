@@ -26,6 +26,7 @@ import {
   type BadgeTone,
 } from '@/components/ui';
 import { OrderChatButton } from '@/components/OrderChatButton';
+import { ShareOrderButton } from '@/components/ShareOrderButton';
 import {
   ApiError,
   acceptBid,
@@ -429,6 +430,8 @@ export default function OrderDetailScreen() {
         <Card>
           <Timeline index={stage.index} cancelled={stage.cancelled} />
         </Card>
+
+        {searching ? <ShareOrderButton order={order} /> : null}
 
         {!isOwner && order.status === 'OPEN' ? (
           <Card style={styles.section}>

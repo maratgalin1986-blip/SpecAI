@@ -7,6 +7,7 @@ import { notifyTelegram } from '@/lib/notify';
 import { onceADay } from '@/lib/cronOnce';
 import { aiModerationSummary, sweepPendingOrders } from '@/lib/orderModeration';
 import { GET as evening } from '../evening/route';
+import { postChannelDigest } from '@/lib/channelDigest';
 
 export const dynamic = 'force-dynamic';
 // A GET handler: without this Next keeps outgoing sends (Telegram, push,
@@ -76,6 +77,8 @@ export async function GET(request: NextRequest) {
     if (line) await notifyTelegram(line);
     return line;
   }).catch(() => null);
+  // «Заявки за сутки» in the platform's own Telegram channel (off without TELEGRAM_CHANNEL_ID).
+  const channel = await postChannelDigest().catch((error: unknown) => ({ error: String(error) }));
   return NextResponse.json({
     ok: true,
     checked: candidates.length,
@@ -83,5 +86,6 @@ export async function GET(request: NextRequest) {
     moderation,
     moderationSummary,
     digest,
+    channel,
   });
 }

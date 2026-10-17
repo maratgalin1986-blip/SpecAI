@@ -8,6 +8,7 @@ import { INVALID_JSON_MESSAGE, readJson, zodErrorMessage } from '@/lib/apiInput'
 import { listingPhoto } from '@/lib/equipmentPhoto';
 import { maskContactsAndLinks, containsContact } from '@/lib/privacy';
 import { customerRateFields, customerRates } from '@/lib/equipmentCatalog';
+import { pingNewMachine } from '@/lib/indexNow';
 
 export async function GET(request: NextRequest) {
   const { mine, ...params } = Object.fromEntries(request.nextUrl.searchParams.entries());
@@ -143,6 +144,16 @@ export async function POST(request: NextRequest) {
       ...parsed.data,
       specs: parsed.data.specs as Prisma.InputJsonValue | undefined,
     },
+  });
+  // Yandex hears of the new public page (IndexNow, best-effort); the first
+  // machine also brings the company's page (/providers/<id>) into the sitemap.
+  const machines = await prisma.equipment
+    .count({ where: { companyId: equipment.companyId, status: { not: 'RETIRED' } } })
+    .catch(() => 0);
+  await pingNewMachine({
+    equipmentId: equipment.id,
+    companyId: equipment.companyId,
+    firstMachine: machines === 1,
   });
   return NextResponse.json({ equipment }, { status: 201 });
 }
