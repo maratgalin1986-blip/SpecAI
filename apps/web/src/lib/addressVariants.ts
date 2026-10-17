@@ -20,6 +20,8 @@ const ABBREVIATIONS: [RegExp, string][] = [
 const STREET_WORD =
   /^(ул|улица|пр|просп|проспект|пер|переулок|б-р|бул|бульвар|ш|шоссе|наб|набережная|пл|площадь|проезд|тракт|тупик|аллея|линия|квартал|мкр|микрорайон|комплекс|посёлок|поселок|снт|д|дом|корп|стр|к)\.?$/iu;
 
+const HOUSE_NUMBER = /^\s*(?:(?:д|дом)\.?\s*)?\d+\s*\p{L}?(?:\s*[/-]\s*\d+)?\s*$/iu;
+
 /**
  * A comma part such as «Москва» or «Нижний Новгород»: no digits, no street
  * words. A bare word without a comma («Мира», «Тверская») is a street the
@@ -29,13 +31,15 @@ const STREET_WORD =
 export function namesTown(address: string): boolean {
   const parts = address.split(',');
   if (parts.length < 2) return false;
-  return parts.some((part) => {
+  return parts.some((part, index) => {
     const words = part.trim().split(/\s+/).filter(Boolean);
     return (
       words.length > 0 &&
       words.length <= 3 &&
       !/\d/.test(part) &&
-      !words.some((word) => STREET_WORD.test(word))
+      !words.some((word) => STREET_WORD.test(word)) &&
+      // «Ленина, 5»: a word followed by a bare house number is a street.
+      !HOUSE_NUMBER.test(parts[index + 1] ?? '')
     );
   });
 }

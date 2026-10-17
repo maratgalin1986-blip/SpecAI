@@ -67,6 +67,9 @@ export async function GET(request: NextRequest) {
   const digest = await evening(request)
     .then((response) => response.json() as Promise<unknown>)
     .catch((error: unknown) => ({ error: String(error) }));
+  // «Заявки за сутки» in the platform's own Telegram channel (off without TELEGRAM_CHANNEL_ID);
+  // before the AI sweep, which may use the rest of the function's time.
+  const channel = await postChannelDigest().catch((error: unknown) => ({ error: String(error) }));
   const moderation = await sweepPendingOrders().catch((error: unknown) => {
     console.error('[cron/daily] AI moderation sweep failed', error);
     return { error: String(error) };
@@ -77,8 +80,6 @@ export async function GET(request: NextRequest) {
     if (line) await notifyTelegram(line);
     return line;
   }).catch(() => null);
-  // «Заявки за сутки» in the platform's own Telegram channel (off without TELEGRAM_CHANNEL_ID).
-  const channel = await postChannelDigest().catch((error: unknown) => ({ error: String(error) }));
   return NextResponse.json({
     ok: true,
     checked: candidates.length,

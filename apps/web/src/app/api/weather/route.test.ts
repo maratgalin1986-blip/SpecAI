@@ -46,4 +46,12 @@ describe('GET /api/weather', () => {
     expect(response.status).toBe(200);
     expect(fetchForecast).toHaveBeenLastCalledWith(53.2, 50.1);
   });
+
+  it('looks a bare street up around the visitor when the form sends near', async () => {
+    geocodeAddress.mockResolvedValue({ lat: 55.79, lon: 49.11, label: 'Казань, Мира 10' });
+    await call(`&q=${encodeURIComponent('Мира 10')}&near=55.79,49.11`);
+    expect(geocodeAddress).toHaveBeenLastCalledWith('Мира 10', {
+      near: { lat: 55.8, lon: 49.1 },
+    });
+  });
 });

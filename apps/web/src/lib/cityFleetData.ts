@@ -75,3 +75,17 @@ export async function loadCityOffer(landing: Landing, city: City): Promise<CityO
   const { rows, house, loaded } = await loadCategoryFleet(landing.categorySlug);
   return cityOffer(landing, city, rows, houseArea(house), loaded);
 }
+
+/**
+ * The offers of one landing in many cities from a single read of the fleet
+ * (the sitemap); null when the database could not be read.
+ */
+export async function loadCityOffers(
+  landing: Landing,
+  cities: readonly City[],
+): Promise<Map<string, CityOffer> | null> {
+  const { rows, house, loaded } = await loadCategoryFleet(landing.categorySlug);
+  if (!loaded) return null;
+  const area = houseArea(house);
+  return new Map(cities.map((city) => [city.slug, cityOffer(landing, city, rows, area, loaded)]));
+}

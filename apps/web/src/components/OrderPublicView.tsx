@@ -1,6 +1,6 @@
 import { ORDER_STATUS_LABELS } from '@specai/shared';
 import { OrderBoardCard } from '@/components/OrderBoardCard';
-import { toBoardCard, type BoardOrderRow } from '@/lib/orderBoard';
+import { DEFAULT_PLACE, toBoardCard, type BoardOrderRow } from '@/lib/orderBoard';
 import { orderCardCity, type OrderCardInput } from '@/lib/orderCard';
 
 // /orders/<id> for a visitor without an account — someone who opened a link
@@ -22,7 +22,7 @@ export function OrderPublicView({
   // channel: never a street, and no home region assumed for an unknown place.
   const card = {
     ...toBoardCard({ ...order, location: null }),
-    place: orderCardCity(order.location) ?? 'Место не указано',
+    place: orderCardCity(order.location) ?? DEFAULT_PLACE,
   };
   return (
     <div className="flex flex-col gap-6">

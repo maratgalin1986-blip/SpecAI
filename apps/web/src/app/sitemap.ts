@@ -2,7 +2,7 @@ import type { MetadataRoute } from 'next';
 import { prisma } from '@specai/database';
 import { LANDINGS } from '@/lib/landings';
 import { cityBySlug, cityPages, cityPath } from '@/lib/cities';
-import { loadCityOffer } from '@/lib/cityFleetData';
+import { loadCityOffers } from '@/lib/cityFleetData';
 import { JOBS } from '@/lib/jobs';
 import { siteUrl } from '@/lib/siteUrl';
 import { PUBLIC_FLEET } from '@/lib/fleet';
@@ -12,12 +12,19 @@ export const revalidate = 3600;
 
 async function servedCityPaths(): Promise<string[]> {
   const paths: string[] = [];
-  for (const page of cityPages()) {
-    const landing = LANDINGS.find((item) => item.slug === page.slug);
-    const city = cityBySlug(page.city);
-    if (!landing || !city) continue;
-    const offer = await loadCityOffer(landing, city).catch(() => null);
-    if (offer?.kind === 'available') paths.push(cityPath(page.slug, page.city));
+  for (const landing of LANDINGS) {
+    const cities = cityPages()
+      .filter((page) => page.slug === landing.slug)
+      .map((page) => cityBySlug(page.city))
+      .filter((city): city is NonNullable<typeof city> => Boolean(city));
+    // One read per kind of machinery; without a database no city page is
+    // listed this hour rather than a guess.
+    const offers = await loadCityOffers(landing, cities).catch(() => null);
+    if (!offers) return [];
+    for (const city of cities) {
+      if (offers.get(city.slug)?.kind === 'available')
+        paths.push(cityPath(landing.slug, city.slug));
+    }
   }
   return paths;
 }

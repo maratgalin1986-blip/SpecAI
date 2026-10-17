@@ -79,6 +79,7 @@ function seoInput(provider: NonNullable<Awaited<ReturnType<typeof loadProvider>>
     (provider.baseLat != null && provider.baseLon != null
       ? nearestCity(provider.baseLat, provider.baseLon, 40)
       : null);
+  const place = companyPlace(provider);
   const ratingCount = provider.reviews.length;
   const rating = ratingCount
     ? Math.round(
@@ -97,8 +98,8 @@ function seoInput(provider: NonNullable<Awaited<ReturnType<typeof loadProvider>>
     machines: provider.equipment.map((item) => ({ name: item.name, category: item.category.name })),
     // The platform serves all of Russia: the city of the provider's own base,
     // else its own location (СпецПласт16's contacts only for the house company).
-    city: baseCity?.name ?? companyPlace(provider).city,
-    region: baseCity?.region ?? companyPlace(provider).region,
+    city: baseCity?.name ?? place.city,
+    region: baseCity?.region ?? place.region,
   };
 }
 

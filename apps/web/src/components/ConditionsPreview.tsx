@@ -24,11 +24,14 @@ type Result = {
 export function ConditionsPreview({
   date,
   address,
+  near,
   categoryName,
 }: {
   /** YYYY-MM-DD */
   date: string;
   address: string;
+  /** «lat,lon» of the visitor (components/visitorNear.ts), when known. */
+  near?: string | null;
   categoryName?: string;
 }) {
   const [result, setResult] = useState<Result | null>(null);
@@ -50,6 +53,7 @@ export function ConditionsPreview({
       return;
     }
     params.set('q', query);
+    if (near) params.set('near', near);
     const controller = new AbortController();
     const timer = window.setTimeout(async () => {
       setState('loading');
@@ -79,7 +83,7 @@ export function ConditionsPreview({
       controller.abort();
       window.clearTimeout(timer);
     };
-  }, [date, address, categoryName]);
+  }, [date, address, near, categoryName]);
 
   if (!date) return null;
   const dateLabel = new Date(`${date}T12:00:00`).toLocaleDateString('ru-RU', {

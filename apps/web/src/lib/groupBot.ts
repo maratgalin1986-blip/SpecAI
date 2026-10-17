@@ -272,6 +272,8 @@ export async function replyUnderOrder(
     threadId,
   });
   if (res.ok) return 'sent';
+  // No answer (a timeout): Telegram may have posted it, so it keeps counting.
+  if (res.error_code == null) return 'failed';
   await noteRefusal(chatId, res);
   await prisma.$transaction(async (tx) => {
     await tx.botReply.deleteMany({ where: { orderId } });
@@ -315,6 +317,8 @@ export async function followUpOnBid(
     threadId: row.threadId,
   });
   if (res.ok) return 'sent';
+  // No answer (a timeout): Telegram may have posted it, so no second try.
+  if (res.error_code == null) return 'failed';
   await noteRefusal(row.chatId, res);
   // Not sent: the next bid may try again, unless the order message is gone.
   const gone = orderMessageGone(res);

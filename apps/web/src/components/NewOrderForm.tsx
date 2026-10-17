@@ -6,6 +6,7 @@ import { ConditionsPreview } from '@/components/ConditionsPreview';
 import { DemandHint } from '@/components/DemandHint';
 import { GuestOrderForm } from '@/components/GuestOrderForm';
 import { PointPicker } from '@/components/PointPicker';
+import { visitorNear } from '@/components/visitorNear';
 import { noteInstallMoment } from '@/lib/installHint';
 import { pointAddress, type MapPoint } from '@/lib/mapPoint';
 import { useRouter } from 'next/navigation';
@@ -40,6 +41,18 @@ export function NewOrderForm({
   const [endDate, setEndDate] = useState(initial?.endDate ?? '');
   const [address, setAddress] = useState(initial?.address ?? '');
   const [point, setPoint] = useState<MapPoint | null>(null);
+  // The visitor's town, only if location is already allowed: «Мира 10» is
+  // then found there, not in a random city.
+  const [near, setNear] = useState<string | null>(null);
+  useEffect(() => {
+    let alive = true;
+    void visitorNear().then((value) => {
+      if (alive) setNear(value);
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -71,6 +84,7 @@ export function NewOrderForm({
           desiredEndDate: endDate,
           categoryId: categoryId || undefined,
           address: address.trim() || undefined,
+          near: near ?? undefined,
         }),
       });
     } catch {
@@ -190,6 +204,7 @@ export function NewOrderForm({
       <ConditionsPreview
         date={startDate}
         address={address}
+        near={near}
         categoryName={categories.find((category) => category.id === categoryId)?.name}
       />
 

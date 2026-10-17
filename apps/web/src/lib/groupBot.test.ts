@@ -164,6 +164,14 @@ describe('replyUnderOrder', () => {
     );
   });
 
+  it('keeps a reply that timed out on the books: Telegram may have posted it', async () => {
+    await chatInDb();
+    answer = () => ({ ok: false });
+    expect(await replyUnderOrder(message(1), 'o1', at('2026-10-17T09:00:00Z'))).toBe('failed');
+    expect(db.replies.has('o1')).toBe(true);
+    expect(db.chats.get(String(GROUP.id))).toMatchObject({ canWrite: true, repliesToday: 1 });
+  });
+
   it('does not go silent for good after a temporary «not enough rights»', async () => {
     await chatInDb();
     answer = () => ({ ok: false, error_code: 400, description: 'Bad Request: not enough rights' });

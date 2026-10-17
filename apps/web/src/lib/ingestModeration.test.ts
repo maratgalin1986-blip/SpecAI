@@ -59,7 +59,7 @@ describe('ingestMessage and the AI moderator', () => {
     vi.unstubAllEnvs();
   });
 
-  it('sends a doubtful import to the moderator, the result stays the same', async () => {
+  it('sends a doubtful import to the moderator and reports its publish', async () => {
     analyzeChatMessage.mockResolvedValue(analysis(0.5));
     autoModerateOrder.mockResolvedValue({ status: 'published', reason: 'нужен экскаватор' });
 
@@ -67,22 +67,27 @@ describe('ingestMessage and the AI moderator', () => {
 
     expect(order.create.mock.calls[0]?.[0].data.status).toBe('PENDING_REVIEW');
     expect(autoModerateOrder).toHaveBeenCalledWith('o1', { timeoutMs: 6000 });
-    expect(result).toEqual({ status: 'created', orderId: 'o1', published: false });
+    // Published by the AI: the group bot replies under it.
+    expect(result).toEqual({ status: 'created', orderId: 'o1', published: true });
+    // The moderator notifies providers itself.
     expect(notifyProvidersAboutOrder).not.toHaveBeenCalled();
-    // The owner does not moderate by hand: no «на модерации» ping.
+    expect(notifyTelegram.mock.calls[0]?.[0]).toContain('Новая заявка из чата');
+  });
+
+  it('does not ping the owner about an order the AI rejected or doubts', async () => {
+    analyzeChatMessage.mockResolvedValue(analysis(0.5));
+    for (const status of ['rejected', 'unsure'] as const) {
+      autoModerateOrder.mockResolvedValue({ status, reason: 'реклама' });
+      const result = await ingestMessage(MESSAGE);
+      expect(result).toMatchObject({ status: 'created', published: false });
+    }
     expect(notifyTelegram).not.toHaveBeenCalled();
   });
 
-  it('still pings the owner about a doubtful import when the AI is off', async () => {
-    vi.stubEnv('ANTHROPIC_API_KEY', '');
-    autoModerateOrder.mockResolvedValue({ status: 'skipped' });
-
-    const result = await ingestMessage({
-      ...MESSAGE,
-      text: 'Кто знает, экскаватор нужен или нет, подскажите',
-    });
-
-    expect(result).toMatchObject({ status: 'created', published: false });
+  it('pings the owner when the AI budget is spent', async () => {
+    analyzeChatMessage.mockResolvedValue(analysis(0.5));
+    autoModerateOrder.mockResolvedValue({ status: 'skipped', reason: 'budget' });
+    await ingestMessage(MESSAGE);
     expect(notifyTelegram.mock.calls[0]?.[0]).toContain('Заявка на модерации');
   });
 
@@ -107,6 +112,8 @@ describe('ingestMessage and the AI moderator', () => {
       orderId: 'o1',
       published: false,
     });
+    // No AI decided: the owner hears about it.
+    expect(notifyTelegram.mock.calls[0]?.[0]).toContain('Заявка на модерации');
   });
 
   it('does not reach the moderator for messages that are not orders', async () => {
