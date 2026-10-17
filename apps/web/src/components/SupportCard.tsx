@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { formatMoney } from '@/lib/money';
+import { SITE } from '@/lib/site';
 import {
   fetchPublicSupport,
   readDismissedIds,
@@ -13,7 +14,7 @@ import {
 type EnabledSupport = Extract<PublicSupportInfo, { enabled: true }>;
 
 export const SUPPORT_TEXT = {
-  title: 'Поддержать ИИСтройка24',
+  title: `Поддержать ${SITE.platform}`,
   body: 'Площадка бесплатная. Если она помогла — можно поддержать её развитие любой суммой. Это добровольно.',
   custom: 'Своя сумма',
   copy: 'Скопировать номер карты',

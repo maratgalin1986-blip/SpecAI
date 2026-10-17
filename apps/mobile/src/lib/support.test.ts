@@ -9,7 +9,10 @@ vi.mock('./storage', () => ({
   }),
 }));
 const apiFetch = vi.fn();
-vi.mock('./api', () => ({ apiFetch: (...args: unknown[]) => apiFetch(...args) }));
+vi.mock('./api', () => ({
+  API_URL: 'https://example.test',
+  apiFetch: (...args: unknown[]) => apiFetch(...args),
+}));
 
 const {
   SUPPORT_KEEP,
@@ -110,10 +113,10 @@ describe('fetchSupport', () => {
     expect(apiFetch).toHaveBeenCalledTimes(1);
   });
 
-  it('treats a failed request as «off» and retries next time', async () => {
+  it('marks a failed request (not «off») and retries next time', async () => {
     apiFetch.mockReset();
     apiFetch.mockRejectedValueOnce(new Error('offline'));
-    expect(await fetchSupport(10_000_000)).toEqual({ enabled: false });
+    expect(await fetchSupport(10_000_000)).toEqual({ enabled: false, failed: true });
     apiFetch.mockResolvedValueOnce({ enabled: false });
     await fetchSupport(10_000_001);
     expect(apiFetch).toHaveBeenCalledTimes(2);

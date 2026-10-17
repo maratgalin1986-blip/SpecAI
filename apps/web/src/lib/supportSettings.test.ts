@@ -99,8 +99,22 @@ describe('support settings', () => {
     expect(parseSupportUpdate({ card: '4111111111111112', enabled: false }).ok).toBe(false);
     expect(parseSupportUpdate({ card: '1234', enabled: false }).ok).toBe(false);
     expect(parseSupportUpdate({ card: '', enabled: true }).ok).toBe(false);
-    expect(parseSupportUpdate({ card: VISA_TEST }).ok).toBe(false);
+    expect(parseSupportUpdate({ card: VISA_TEST, enabled: 'yes' }).ok).toBe(false);
     expect(parseSupportUpdate({ card: VISA_TEST, recipient: 7, enabled: true }).ok).toBe(false);
     expect(parseSupportUpdate(null).ok).toBe(false);
+  });
+
+  it('keeps what is not sent: a partial save never wipes the card', () => {
+    const current = { card: VISA_TEST, recipient: 'Иван И.', enabled: true, updatedAt: null };
+    expect(parseSupportUpdate({ enabled: false }, current)).toEqual({
+      ok: true,
+      value: { card: VISA_TEST, recipient: 'Иван И.', enabled: false },
+    });
+    expect(parseSupportUpdate({ recipient: '' }, current)).toEqual({
+      ok: true,
+      value: { card: VISA_TEST, recipient: null, enabled: true },
+    });
+    // Clearing the card explicitly while it is on is refused.
+    expect(parseSupportUpdate({ card: '' }, current).ok).toBe(false);
   });
 });

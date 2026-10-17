@@ -17,7 +17,8 @@ export async function GET() {
     .catch(() => ({ enabled: false as const }));
   return NextResponse.json(body, {
     headers: {
-      'Cache-Control': 'public, max-age=0, s-maxage=60, stale-while-revalidate=300',
+      // A corrected or switched-off card must stop showing at once: no CDN copy.
+      'Cache-Control': 'no-store',
       'X-Robots-Tag': 'noindex',
     },
   });

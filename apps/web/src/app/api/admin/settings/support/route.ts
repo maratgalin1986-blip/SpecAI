@@ -32,7 +32,11 @@ export async function GET() {
 
 export async function PUT(request: NextRequest) {
   if (!isAdminRequest()) return NextResponse.json({ error: 'Нет доступа' }, { status: 401 });
-  const parsed = parseSupportUpdate(await request.json().catch(() => null));
+  // Fields not sent keep their stored values: a partial save never wipes the card.
+  const parsed = parseSupportUpdate(
+    await request.json().catch(() => null),
+    await loadSupportSettings(),
+  );
   if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: 400 });
   return NextResponse.json(view(await saveSupportSettings(parsed.value)), { headers: NO_STORE });
 }

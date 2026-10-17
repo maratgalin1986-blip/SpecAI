@@ -17,7 +17,7 @@ export const SUPPORT_KEYS = {
 
 const KEY_LIST = Object.values(SUPPORT_KEYS);
 
-/** How the recipient shows in the bank («Марат Г.»): short, one line. */
+/** How the recipient shows in the bank («Иван И.»): short, one line. */
 export const RECIPIENT_MAX = 60;
 
 /** «4111 1111-…» → digits only; anything other than digits, spaces and dashes → null. */
@@ -111,16 +111,20 @@ export function publicSupport(settings: SupportSettings): PublicSupport {
 
 export type SupportUpdate = { card: string; recipient: string | null; enabled: boolean };
 
+const NOTHING_SET: SupportSettings = { card: '', recipient: null, enabled: false, updatedAt: null };
+
 /**
- * The admin form → values to store, or the reason in plain Russian. An empty
- * card clears it (and the offer cannot be on without one).
+ * The admin form → values to store, or the reason in plain Russian. A field
+ * that is not sent keeps its stored value (`current`); an empty card or name
+ * clears it; the offer cannot be on without a card.
  */
 export function parseSupportUpdate(
   body: unknown,
+  current: SupportSettings = NOTHING_SET,
 ): { ok: true; value: SupportUpdate } | { ok: false; error: string } {
   if (!body || typeof body !== 'object') return { ok: false, error: 'Пустой запрос' };
   const input = body as Record<string, unknown>;
-  const card = normalizeCard(input.card ?? '');
+  const card = input.card === undefined ? current.card : normalizeCard(input.card);
   if (card === null || (card !== '' && !isValidCard(card))) {
     return {
       ok: false,
@@ -132,16 +136,16 @@ export function parseSupportUpdate(
       return { ok: false, error: 'Имя получателя — строкой' };
     }
   }
-  if (typeof input.enabled !== 'boolean') {
+  if (input.enabled !== undefined && typeof input.enabled !== 'boolean') {
     return { ok: false, error: 'Укажите, включена ли поддержка' };
   }
-  if (input.enabled && !card) {
+  const enabled = typeof input.enabled === 'boolean' ? input.enabled : current.enabled;
+  if (enabled && !card) {
     return { ok: false, error: 'Чтобы включить поддержку, укажите номер карты' };
   }
-  return {
-    ok: true,
-    value: { card, recipient: normalizeRecipient(input.recipient), enabled: input.enabled },
-  };
+  const recipient =
+    input.recipient === undefined ? current.recipient : normalizeRecipient(input.recipient);
+  return { ok: true, value: { card, recipient, enabled } };
 }
 
 export async function saveSupportSettings(update: SupportUpdate): Promise<SupportSettings> {

@@ -107,16 +107,26 @@ export function parsePublicSupport(body: unknown): PublicSupportInfo {
   };
 }
 
-let cached: Promise<PublicSupportInfo> | null = null;
+let cached: { at: number; value: Promise<PublicSupportInfo> } | null = null;
+/** Cards on one page share one answer; a new page a minute later asks again. */
+const CACHE_MS = 60_000;
 
-/** One request per page view; a failed one is retried next time. */
-export function fetchPublicSupport(): Promise<PublicSupportInfo> {
-  cached ??= fetch('/api/support')
-    .then((response) => (response.ok ? response.json() : null))
-    .then(parsePublicSupport)
-    .catch(() => {
-      cached = null;
-      return { enabled: false } as const;
-    });
-  return cached;
+/** One request per page view; a failed one (network, 5xx) is retried next time. */
+export function fetchPublicSupport(now: number = Date.now()): Promise<PublicSupportInfo> {
+  if (cached && now - cached.at < CACHE_MS) return cached.value;
+  const entry = {
+    at: now,
+    value: fetch('/api/support', { cache: 'no-store' })
+      .then((response) => {
+        if (!response.ok) throw new Error(`support ${response.status}`);
+        return response.json();
+      })
+      .then(parsePublicSupport)
+      .catch(() => {
+        if (cached === entry) cached = null;
+        return { enabled: false } as const;
+      }),
+  };
+  cached = entry;
+  return entry.value;
 }

@@ -21,6 +21,11 @@ export default function SupportScreen() {
             if (router.canGoBack()) router.back();
           }}
         />
+      ) : support.failed ? (
+        <EmptyState
+          title="Нет связи с сервером"
+          description="Проверьте интернет и откройте этот экран ещё раз."
+        />
       ) : (
         <EmptyState title="Сейчас поддержка не нужна" description="Спасибо, что заглянули!" />
       )}

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { apiFetch } from './api';
+import { SITE } from './site';
 import { STORAGE_KEYS, getItem, setItem } from './storage';
 
 /**
@@ -11,7 +12,7 @@ import { STORAGE_KEYS, getItem, setItem } from './storage';
  * или скопировали номер). Закрытые брони хранятся только на этом телефоне.
  */
 export const SUPPORT_TEXT = {
-  title: 'Поддержать ИИСтройка24',
+  title: `Поддержать ${SITE.name}`,
   body: 'Площадка бесплатная. Если она помогла — можно поддержать её развитие любой суммой. Это добровольно.',
   custom: 'Своя сумма',
   copy: 'Скопировать номер карты',
@@ -22,7 +23,8 @@ export const SUPPORT_TEXT = {
 } as const;
 
 export type PublicSupport =
-  { enabled: false } | { enabled: true; card: string; recipient: string | null; amounts: number[] };
+  | { enabled: false; /** Сервер не ответил (нет сети) — это не «выключено». */ failed?: true }
+  | { enabled: true; card: string; recipient: string | null; amounts: number[] };
 
 /** Сколько завершённых броней (первых в списке) учитываем. */
 export const SUPPORT_TRACKED = 30;
@@ -127,7 +129,7 @@ export function fetchSupport(now: number = Date.now()): Promise<PublicSupport> {
     .then(parseSupport)
     .catch(() => {
       cached = null;
-      return { enabled: false } as const;
+      return { enabled: false, failed: true } as const;
     });
   cached = { at: now, value };
   return value;

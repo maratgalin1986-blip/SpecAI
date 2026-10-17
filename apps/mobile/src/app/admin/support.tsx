@@ -31,7 +31,7 @@ export default function AdminSupportScreen() {
  * только на сервере (тот же, что в админке на сайте).
  */
 function AdminSupport() {
-  const { data, error, loading, refreshing, refresh } = useAdminData(fetchSupportSettings);
+  const { data, setData, error, loading, refreshing, refresh } = useAdminData(fetchSupportSettings);
   const [card, setCard] = useState('');
   const [recipient, setRecipient] = useState('');
   const [enabled, setEnabled] = useState(false);
@@ -57,10 +57,14 @@ function AdminSupport() {
 
   const save = async () => {
     Keyboard.dismiss();
+    // Настройки не загрузились: пустая форма стёрла бы сохранённую карту.
+    if (!data) return;
     setSaving(true);
     setMessage(null);
     try {
       const saved = await saveSupportSettings({ card, recipient, enabled });
+      // Сохранённое становится «серверным»: поля не откатываются к старому ответу.
+      setData(saved);
       setCard(saved.cardFormatted);
       setRecipient(saved.recipient);
       setEnabled(saved.enabled);
@@ -139,7 +143,19 @@ function AdminSupport() {
             {message.text}
           </Text>
         ) : null}
-        <Button title="Сохранить" size="large" loading={saving} onPress={() => void save()} />
+        {!data ? (
+          <Text style={[styles.message, styles.fail]} accessibilityRole="alert">
+            Настройки не загрузились — потяните экран вниз, чтобы обновить. До этого сохранить
+            нельзя, чтобы не стереть номер карты.
+          </Text>
+        ) : null}
+        <Button
+          title="Сохранить"
+          size="large"
+          loading={saving}
+          disabled={!data}
+          onPress={() => void save()}
+        />
       </ScrollView>
     </KeyboardAvoidingView>
   );
