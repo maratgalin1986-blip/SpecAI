@@ -38,6 +38,8 @@ import { bidLoginHref } from '@/lib/orderBoard';
 import { CloseOrderButton } from '@/components/AdminIntegrations';
 import { PhoneLink } from '@/components/admin/PhoneLink';
 import { isRealEmail } from '@/lib/notifications/routing';
+import { Hint } from '@/components/Hint';
+import { CUSTOMER_MODE_HREF } from '@/lib/cabinetMode';
 
 export const dynamic = 'force-dynamic';
 
@@ -177,6 +179,8 @@ export default async function OrderDetailPage({ params }: { params: { id: string
         </span>
       </div>
       {(isOwner || isAdmin) && <OrderTimeline timeline={timeline} />}
+      {isOwner && order.status === 'OPEN' && <Hint id="order-customer" />}
+      {viewerIsProvider && order.status === 'OPEN' && <Hint id="order-provider" />}
       {isAdmin && (
         <Card className="border-amber-200 bg-amber-50">
           <div className="flex flex-wrap items-start justify-between gap-2">
@@ -210,7 +214,13 @@ export default async function OrderDetailPage({ params }: { params: { id: string
       {isOwner && order.status === 'MATCHED' && (
         <p className="rounded-md border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
           Бронь создана — исполнитель подтвердит её, и вы увидите его телефон.{' '}
-          <a href="/dashboard#bookings" className="font-semibold underline">
+          <a
+            href={
+              // A provider's own order (customer mode): its bookings stay in that mode.
+              isProvider(session?.user) ? `${CUSTOMER_MODE_HREF}#bookings` : '/dashboard#bookings'
+            }
+            className="font-semibold underline"
+          >
             Мои брони
           </a>
         </p>
