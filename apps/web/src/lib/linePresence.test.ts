@@ -127,6 +127,11 @@ describe('liveMachines', () => {
     expect(liveMachines(rows, null, 60, now).map((m) => m.id)).toEqual(['p-ok']);
   });
 
+  it('hides a driver whose machine is gone', () => {
+    const rows = [row({ userId: 'ok' }), row({ userId: 'gone', equipment: null })];
+    expect(liveMachines(rows, null, 60, now).map((m) => m.id)).toEqual(['p-ok']);
+  });
+
   it('shows one machine once, at its freshest position', () => {
     const base = row({ userId: 'a' }).equipment!;
     const shared = { ...base, id: 'e-shared' };

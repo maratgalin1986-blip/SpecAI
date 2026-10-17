@@ -56,6 +56,11 @@ small so merges stay conflict-free.
    untick «Use existing Build Cache». Cloud sessions cannot read Vercel logs
    without `VERCEL_TOKEN` in the environment; ask for the log screenshot.
 
+10. **Review before every push.** `REVIEW.md` holds the project's review rules
+    (privacy, roles, prices, schema, texts, owner decisions). Run `/code-review`
+    on the diff before pushing and fix what it confirms; a reviewer's finding
+    that cites a REVIEW.md rule is blocking.
+
 ## Project facts
 
 - **Business model (owner's decision, 2026-10-06, replaces the 2026-10-02

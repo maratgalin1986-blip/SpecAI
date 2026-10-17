@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { ApiError, putLinePresence } from './api';
 import { REPORT_DISTANCE_M, REPORT_INTERVAL_MS } from './line';
 import { startBackgroundLine, stopBackgroundLine } from './lineTask';
-import { STORAGE_KEYS, removeItem, setItem } from './storage';
+import { STORAGE_KEYS, setItem } from './storage';
 
 export type PositionPermission = 'unknown' | 'granted' | 'denied';
 
@@ -34,15 +34,15 @@ export function useLineReporter(online: boolean, equipmentId: string | null) {
   const equipmentRef = useRef(equipmentId);
   equipmentRef.current = equipmentId;
   const lastCoords = useRef<Coords | null>(null);
+  /** Был ли переключатель включён в этом экране: снимаем с линии только после. */
+  const wasOnline = useRef(false);
 
-  // Та же машина — и в фоновой задаче.
+  // Та же машина — и в фоновой задаче. Пока парк не загрузился (машины ещё
+  // нет), сохранённую не трогаем: иначе фоновая задача отправит «без машины»,
+  // получит 400 и остановится.
   useEffect(() => {
-    if (!online) return;
-    void (
-      equipmentId
-        ? setItem(STORAGE_KEYS.lineEquipmentId, equipmentId)
-        : removeItem(STORAGE_KEYS.lineEquipmentId)
-    ).catch(() => undefined);
+    if (!online || !equipmentId) return;
+    void setItem(STORAGE_KEYS.lineEquipmentId, equipmentId).catch(() => undefined);
   }, [online, equipmentId]);
 
   useEffect(() => {
@@ -50,10 +50,15 @@ export function useLineReporter(online: boolean, equipmentId: string | null) {
       setLastSentAt(null);
       setError(null);
       setBackground(false);
+      // До загрузки настроек переключатель всегда «выключен»: это не выход с
+      // линии, иначе каждый запуск приложения снимал бы исполнителя с карты.
+      if (!wasOnline.current) return;
+      wasOnline.current = false;
       void stopBackgroundLine();
       putLinePresence({ online: false }).catch(() => undefined);
       return;
     }
+    wasOnline.current = true;
     let cancelled = false;
     let subscription: Location.LocationSubscription | null = null;
     let heartbeat: ReturnType<typeof setInterval> | null = null;

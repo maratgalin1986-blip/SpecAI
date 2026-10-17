@@ -61,6 +61,27 @@ describe('authenticateWithCredentials: the login limit counts failures only', ()
     }
   });
 
+  it('does not let a valid account clear the address counter', async () => {
+    const ip = `10.2.0.${counter}`;
+    for (let i = 0; i < LOGIN_LIMIT_PER_IP.limit - 1; i += 1) {
+      expect(
+        await authenticateWithCredentials({ email: freshEmail(), password: 'wrong' }, { ip }),
+      ).toBeNull();
+    }
+    // The attacker's own account logs in: the address keeps its failures.
+    const own = await authenticateWithCredentials(
+      { email: freshEmail(), password: 'correct-horse' },
+      { ip },
+    );
+    expect(own?.id).toBe('u1');
+    expect(
+      await authenticateWithCredentials({ email: freshEmail(), password: 'wrong' }, { ip }),
+    ).toBeNull();
+    await expect(
+      authenticateWithCredentials({ email: freshEmail(), password: 'wrong' }, { ip }),
+    ).rejects.toBeInstanceOf(LoginError);
+  });
+
   it('counts an unknown e-mail and bad input as failures of the address', async () => {
     findUserByEmail.mockResolvedValue(null);
     const ip = `10.1.0.${counter}`;

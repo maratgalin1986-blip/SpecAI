@@ -35,6 +35,10 @@ describe('placeInText', () => {
     expect(placeInText('сдаю экскаватор в Аренду, в Наличии два')).toBeNull();
     expect(placeInText('нужен кран в Понедельник, в Октябре')).toBeNull();
     expect(placeInText('нужен кран в казань')).toBeNull();
+    // Messengers and channels are not towns.
+    expect(placeInText('Нужен экскаватор на завтра, пишите в Телеграм')).toBeNull();
+    expect(placeInText('кран 25 т, в Ватсап или в Личку')).toBeNull();
+    expect(placeInText('погрузчик в Контакте, в Директ')).toBeNull();
     expect(placeInText('')).toBeNull();
     expect(placeInText(null)).toBeNull();
   });

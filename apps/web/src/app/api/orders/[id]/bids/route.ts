@@ -194,13 +194,20 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
           updated: true,
         });
       } else {
+        // As for a new bid: the owner reads Telegram, the relay covers the rest.
+        const fromChat = order.source !== 'SITE';
+        await notifyTelegram(
+          `💰 Предложение по заявке ${fromChat ? 'из чата' : 'гостя с сайта'} обновлено: ${equipment.name} — ${price}\n` +
+            (order.contactPhone ? `Позвоните заказчику: ${order.contactPhone}\n` : '') +
+            `${order.description.slice(0, 200)}\n${siteUrl()}/orders/${order.id}`,
+        );
         await notifyCompany(HOUSE_COMPANY_ID, {
           type: 'bid.relay',
           orderId: order.id,
           equipmentName: equipment.name,
           price,
           companyName: company?.name,
-          fromChat: order.source !== 'SITE',
+          fromChat,
         });
       }
     } catch (error) {

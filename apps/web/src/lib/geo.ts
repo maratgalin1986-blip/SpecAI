@@ -44,7 +44,14 @@ export async function geocodeAddress(query: string): Promise<GeoPoint | null> {
 export async function findAddress(query: string): Promise<GeocodeResult> {
   let elsewhere: GeoPoint | null = null;
   let unavailable = false;
+  // All the spellings together must answer within a Vercel function's time:
+  // a slow geocoder is reported as unavailable, not as a 504.
+  const deadline = Date.now() + GEOCODE_BUDGET_MS;
   for (const variant of addressVariants(query)) {
+    if (Date.now() + GEO_TIMEOUT_MS / 2 > deadline) {
+      unavailable = true;
+      break;
+    }
     const found = await lookupAddress(variant);
     if (found.status === 'unavailable') {
       unavailable = true;
@@ -72,6 +79,11 @@ export function parseCoordinates(query: string): { lat: number; lon: number } | 
   return Math.abs(lat) <= 90 && Math.abs(lon) <= 180 ? { lat, lon } : null;
 }
 
+/** One geocoder request; two of them (Nominatim, then Photon) per spelling. */
+export const GEO_TIMEOUT_MS = 4000;
+/** All spellings of one address together (Vercel kills the function at 10 s). */
+export const GEOCODE_BUDGET_MS = 8500;
+
 /** Like geocodeAddress, with the reason when there is no place. */
 export async function lookupAddress(query: string): Promise<GeocodeResult> {
   const q = query.trim().replace(/\s+/g, ' ').slice(0, 200);
@@ -93,7 +105,7 @@ export async function lookupAddress(query: string): Promise<GeocodeResult> {
     const response = await fetch(`https://nominatim.openstreetmap.org/search?${params}`, {
       headers: { 'User-Agent': GEO_USER_AGENT },
       next: { revalidate: 60 * 60 * 24 * 30 },
-      signal: AbortSignal.timeout(6000),
+      signal: AbortSignal.timeout(GEO_TIMEOUT_MS),
     });
     // Nominatim throttles a burst (429) or is down: Photon, the other free
     // OpenStreetMap geocoder, answers instead.
@@ -178,7 +190,7 @@ async function lookupPhoton(q: string): Promise<GeocodeResult> {
     const response = await fetch(`https://photon.komoot.io/api/?${params}`, {
       headers: { 'User-Agent': GEO_USER_AGENT },
       next: { revalidate: 60 * 60 * 24 * 30 },
-      signal: AbortSignal.timeout(6000),
+      signal: AbortSignal.timeout(GEO_TIMEOUT_MS),
     });
     if (!response.ok) return { status: 'unavailable' };
     const body = (await response.json()) as { features?: PhotonFeature[] };
