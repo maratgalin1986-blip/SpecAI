@@ -32,6 +32,8 @@ import { referralLink } from '@/lib/referral';
 import { siteUrl } from '@/lib/siteUrl';
 import { NotificationSettings } from '@/components/NotificationSettings';
 import { ShiftPanel } from '@/components/shifts/ShiftPanel';
+import { SupportPrompt } from '@/components/SupportCard';
+import { completedBookingIds } from '@/lib/supportPrompt';
 
 export const metadata: Metadata = { title: 'Личный кабинет', robots: { index: false } };
 
@@ -297,6 +299,9 @@ export default async function DashboardPage({
 
       <div id="bookings" className="scroll-mt-24">
         <h2 className="mb-3 text-lg font-semibold">Мои бронирования</h2>
+        <div className="mb-3 empty:hidden">
+          <SupportPrompt completedIds={completedBookingIds(myBookings)} />
+        </div>
         {!paymentsEnabled && myBookings.length > 0 && (
           <p className="mb-3 text-sm text-slate-600">
             Бронирование бесплатное: без предоплаты и комиссий. Работа техники — по цене

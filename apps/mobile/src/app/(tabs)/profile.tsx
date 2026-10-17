@@ -6,6 +6,7 @@ import { ContactActions } from '@/components/ContactActions';
 import { Hint } from '@/components/Hint';
 import { ModeSwitchCard, ProfileShortcuts } from '@/components/ProfileShortcuts';
 import { NotificationSettingsCard } from '@/components/NotificationSettingsCard';
+import { SupportProfileRow } from '@/components/SupportCard';
 import { Badge, Button, Card } from '@/components/ui';
 import { API_URL, ApiError, sendVerificationEmail, type UserRole } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
@@ -135,6 +136,7 @@ export default function ProfileScreen() {
         </Link>
       </Card>
 
+      <SupportProfileRow />
       <Button title="Выйти" variant="danger" onPress={handleLogout} loading={loggingOut} />
       <AdminLoginRow />
     </ScrollView>

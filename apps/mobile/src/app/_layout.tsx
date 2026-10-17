@@ -59,6 +59,7 @@ function RootNavigator() {
       <Stack.Screen name="map" options={{ title: 'Карта исполнителей' }} />
       <Stack.Screen name="providers" options={{ title: 'Исполнители' }} />
       <Stack.Screen name="guide" options={{ title: 'Как пользоваться' }} />
+      <Stack.Screen name="support" options={{ title: 'Поддержать приложение' }} />
       {/*
         Меню администратора: вход по паролю админки, а не по аккаунту, поэтому
         доступно и без входа (экраны сами просят пароль — AdminGate).
@@ -68,6 +69,7 @@ function RootNavigator() {
       <Stack.Screen name="admin/moderation" options={{ title: 'Модерация' }} />
       <Stack.Screen name="admin/orders" options={{ title: 'Заявки из чатов' }} />
       <Stack.Screen name="admin/providers" options={{ title: 'Исполнители' }} />
+      <Stack.Screen name="admin/support" options={{ title: 'Поддержка (донаты)' }} />
     </Stack>
   );
 }

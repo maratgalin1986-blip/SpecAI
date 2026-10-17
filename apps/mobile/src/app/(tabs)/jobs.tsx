@@ -23,6 +23,7 @@ import {
   type BadgeTone,
 } from '@/components/ui';
 import { OrderChatButton } from '@/components/OrderChatButton';
+import { SupportPrompt } from '@/components/SupportCard';
 import {
   ApiError,
   fetchMyBidOrders,
@@ -42,6 +43,7 @@ import {
   pluralizeRu,
 } from '@/lib/format';
 import { categoryIcon, relativeDay } from '@/lib/orderFlow';
+import { completedBookingIds } from '@/lib/support';
 import { colors, spacing } from '@/theme';
 
 type JobsView = 'bookings' | 'bids';
@@ -331,6 +333,7 @@ export default function JobsScreen() {
       <Segmented options={VIEWS} value={view} onChange={setView} />
       <Hint ids="jobs.list" />
       {error ? <ErrorBanner message={error} onRetry={() => void load()} /> : null}
+      {view === 'bookings' ? <SupportPrompt completedIds={completedBookingIds(bookings)} /> : null}
     </View>
   );
   const refreshControl = (

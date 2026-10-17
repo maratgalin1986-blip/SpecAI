@@ -832,3 +832,13 @@ model LinePresence {
   @@index([companyId])
   @@index([online, updatedAt])
 }
+
+// Small settings the owner changes from the admin menu (site and app), one row
+// per key. «Поддержать площадку» (owner, 2026-10-17): `support.card` (digits
+// only), `support.recipient` (how the bank shows the recipient) and
+// `support.enabled` ("1"/"0"). The requisites live only here, never in code.
+model AppSetting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+}

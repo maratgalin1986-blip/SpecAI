@@ -7,6 +7,7 @@ import { AdminLogin } from '@/components/AdminLogin';
 import { LeadOutcome } from '@/components/LeadOutcome';
 import { LeadStatusSelect } from '@/components/LeadStatusSelect';
 import { LinkOwnerForm } from '@/components/LinkOwnerForm';
+import { SupportSettingsForm } from '@/components/admin/SupportSettingsForm';
 import { CommentModerationButtons } from '@/components/Comments';
 import { EraseOrderButton } from '@/components/ChatOrderContact';
 import { ModerationButtons, CopyField, TelegramSetupButton } from '@/components/AdminIntegrations';
@@ -469,7 +470,7 @@ export default async function AdminPage({ searchParams = {} }: { searchParams?: 
       {/* Reference and one-time setup: collapsed, the daily work is above. */}
       <details className="rounded-xl border border-slate-200 bg-white p-4" id="settings">
         <summary className="cursor-pointer font-semibold">
-          Настройки и справочники: исполнители, мессенджеры, парк компании
+          Настройки и справочники: исполнители, мессенджеры, парк компании, донаты
         </summary>
         <div className="mt-4 flex flex-col gap-6">
           <Card className="flex flex-col gap-3" id="providers">
@@ -595,6 +596,18 @@ export default async function AdminPage({ searchParams = {} }: { searchParams?: 
                 {houseManagers.map((user) => `${user.name} (${user.email})`).join(', ')}
               </p>
             )}
+          </Card>
+
+          <Card className="flex flex-col gap-3" id="support">
+            <div>
+              <h2 className="font-semibold">Поддержка приложения (донаты)</h2>
+              <p className="text-sm text-slate-600">
+                После завершённого заказа заказчик и исполнитель видят ненавязчивое предложение
+                поддержать площадку любой суммой — переводом по номеру карты в своём банке. Номер
+                хранится только здесь и показывается, пока предложение включено.
+              </p>
+            </div>
+            <SupportSettingsForm />
           </Card>
         </div>
       </details>

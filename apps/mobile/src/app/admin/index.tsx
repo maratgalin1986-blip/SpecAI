@@ -75,6 +75,12 @@ function AdminMenu() {
       text: 'Компании и отметка «Проверен»',
       href: '/admin/providers',
     },
+    {
+      icon: 'heart-outline',
+      title: 'Поддержка (донаты)',
+      text: 'Номер карты для добровольной поддержки после заказа',
+      href: '/admin/support',
+    },
   ];
 
   return (
