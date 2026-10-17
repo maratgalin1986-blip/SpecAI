@@ -11,6 +11,7 @@ import {
   Segmented,
   type BadgeTone,
 } from '@/components/ui';
+import { Hint } from '@/components/Hint';
 import { ApiError, fetchMyOrders, type Order, type OrderStatus } from '@/lib/api';
 import { ORDER_STATUS_LABELS, formatDate, pluralizeRu } from '@/lib/format';
 import { appendOrders, categoryIcon } from '@/lib/orderFlow';
@@ -160,11 +161,10 @@ function OrdersScreen() {
           />
         }
         ListHeaderComponent={
-          error ? (
-            <View style={styles.header}>
-              <ErrorBanner message={error} onRetry={() => void load()} />
-            </View>
-          ) : null
+          <View style={styles.header}>
+            <Hint ids="orders.list" />
+            {error ? <ErrorBanner message={error} onRetry={() => void load()} /> : null}
+          </View>
         }
         onEndReached={nextOffset !== null ? () => void loadMore() : undefined}
         onEndReachedThreshold={0.5}
@@ -209,7 +209,7 @@ const styles = StyleSheet.create({
   switcher: { paddingHorizontal: spacing.lg, paddingTop: spacing.md },
   cardIcon: { fontSize: 22 },
   list: { padding: spacing.lg, paddingBottom: spacing.xl * 4, flexGrow: 1 },
-  header: { marginBottom: spacing.md },
+  header: { gap: spacing.md, marginBottom: spacing.md },
   card: {
     backgroundColor: colors.card,
     borderRadius: radius.lg,

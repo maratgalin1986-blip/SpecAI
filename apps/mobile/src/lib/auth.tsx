@@ -13,6 +13,8 @@ interface AuthContextValue {
   logout: () => Promise<void>;
   /** Перечитать пользователя с сервера (например, статус подтверждения e-mail). */
   refreshUser: () => Promise<void>;
+  /** Сразу применить то, что вернул сервер (например, новую роль после «Стать исполнителем»). */
+  mergeUser: (patch: Partial<ApiUser>) => void;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -93,6 +95,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [clear]);
 
+  const mergeUser = useCallback((patch: Partial<ApiUser>) => {
+    setUser((current) => {
+      if (!current) return current;
+      const next = { ...current, ...patch };
+      void setItem(STORAGE_KEYS.user, JSON.stringify(next)).catch(() => undefined);
+      return next;
+    });
+  }, []);
+
   const login = useCallback(
     async (email: string, password: string) => {
       const result = await apiLogin(email.trim(), password);
@@ -107,8 +118,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   );
 
   const value = useMemo<AuthContextValue>(
-    () => ({ token, user, isLoading, login, logout: clear, refreshUser }),
-    [token, user, isLoading, login, clear, refreshUser],
+    () => ({ token, user, isLoading, login, logout: clear, refreshUser, mergeUser }),
+    [token, user, isLoading, login, clear, refreshUser, mergeUser],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

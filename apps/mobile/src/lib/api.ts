@@ -433,6 +433,17 @@ export function register(input: RegisterInput) {
   });
 }
 
+/** «Стать исполнителем» под тем же логином: заказчик создаёт компанию. */
+export function becomeProvider(input: {
+  companyName: string;
+  baseAddress: string;
+  phone?: string;
+}) {
+  return apiFetch<{
+    user: { id: string; email: string; name: string; role: UserRole; companyId: string | null };
+  }>('/api/account/provider', { method: 'POST', body: input });
+}
+
 export function sendVerificationEmail() {
   return apiFetch<{ ok: boolean; alreadyVerified?: boolean }>('/api/auth/send-verification', {
     method: 'POST',

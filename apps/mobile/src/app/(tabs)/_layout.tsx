@@ -2,6 +2,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { Tabs } from 'expo-router';
 import React from 'react';
 import type { ColorValue } from 'react-native';
+import { HelpButton } from '@/components/ModeSwitch';
 import { useAuth } from '@/lib/auth';
 import { isProviderMode, usePrefs } from '@/lib/prefs';
 import { useUnreadMessages } from '@/lib/unread';
@@ -66,6 +67,7 @@ export default function TabsLayout() {
         options={{
           title: 'Лента',
           headerTitle: 'Заявки рядом',
+          headerRight: () => <HelpButton plain />,
           tabBarIcon: tabIcon('flash-outline'),
           href: forProvider,
         }}

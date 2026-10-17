@@ -11,6 +11,7 @@ import {
   View,
 } from 'react-native';
 import { CategoryPickerModal } from '@/components/CategoryPickerModal';
+import { Hint } from '@/components/Hint';
 import { Button, Card, ErrorBanner, Input } from '@/components/ui';
 import {
   ApiError,
@@ -285,6 +286,7 @@ export function EquipmentForm({
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
+          <Hint ids="equipment.form" />
           <Card style={styles.section}>
             <Input
               label="Название *"

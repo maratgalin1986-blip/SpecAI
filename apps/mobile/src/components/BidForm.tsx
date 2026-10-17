@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Alert, StyleSheet, Text, View } from 'react-native';
+import { Hint } from '@/components/Hint';
 import { Button, Chip, Input } from '@/components/ui';
 import { ApiError, createBid, type Equipment, type Order } from '@/lib/api';
 import { formatMoney } from '@/lib/format';
@@ -108,6 +109,7 @@ export function BidForm({
 
   return (
     <View style={styles.form}>
+      <Hint ids="bid.form" />
       {existing ? (
         <Text style={styles.notice}>
           Вы уже предложили {formatMoney(existing.price, existing.currency)} — можно изменить.
