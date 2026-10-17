@@ -7,6 +7,7 @@ import { ConsentText } from '@/components/ConsentText';
 import { DemandHint } from '@/components/DemandHint';
 import { noteInstallMoment } from '@/lib/installHint';
 import { SITE } from '@/lib/site';
+import { PromiseNote } from '@/components/PromiseNote';
 import type { OrderPrefill } from '@/lib/quickOrder';
 
 /** Today's date in Moscow as YYYY-MM-DD, the earliest allowed order date. */
@@ -253,6 +254,7 @@ export function GuestOrderForm({
       <Button type="submit" disabled={isSubmitting}>
         {isSubmitting ? 'Публикация…' : 'Опубликовать заявку'}
       </Button>
+      <PromiseNote />
       <p className="text-xs text-slate-500">
         Телефон видят только исполнители, которые нажмут «Показать телефон» — каждый показ
         записывается. Публично номер не показывается.

@@ -3,6 +3,7 @@
 // stores who invited the new user. Rewards are non-monetary: a «Рекомендует N»
 // note for providers and the count in the cabinet. Pure functions, safe for
 // client components; the database part is lib/referralStore.ts.
+import { SITE } from './site';
 
 /** Cookie that keeps the inviter's code until the visitor signs up. */
 export const REFERRAL_COOKIE = 'sp_ref';
@@ -47,11 +48,12 @@ export function referralLanding(code: string, provider = false): string {
   return `/register?${params.toString()}`;
 }
 
-/** The invitation text for messengers. */
+/** The invitation text for messengers; it leads with the platform's promise. */
 export function invitationText(role: 'CUSTOMER' | 'PROVIDER'): string {
+  const promise = SITE.promise.toLowerCase();
   return role === 'PROVIDER'
-    ? 'Подключайся к ИИСтройка24 от СпецПласт16 — бесплатный сервис заказов спецтехники по всей России: заявки заказчиков рядом с тобой приходят прямо в кабинет, без комиссии.'
-    : 'Заказываю спецтехнику через СпецПласт16: пишешь заявку, исполнители сами присылают цены. Бесплатно.';
+    ? `Подключайся к ${SITE.platform} от ${SITE.name} — заказы спецтехники по всей России, ${promise}: заявки заказчиков рядом с тобой приходят прямо в кабинет, цену называешь сам, расчёт — напрямую с заказчиком, площадка не берёт процент.`
+    : `Заказываю спецтехнику через ${SITE.platform} от ${SITE.name}: пишешь заявку, исполнители сами присылают цены. ${SITE.promise} — расчёт напрямую с владельцем техники.`;
 }
 
 /** «пригласил 1 коллегу / 2 коллег / 5 коллег» (accusative: one form besides 1, 21…). */

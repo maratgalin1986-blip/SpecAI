@@ -8,6 +8,7 @@ import {
   orderNeed,
   orderOgText,
   orderShareText,
+  orderShareTitle,
   orderShareUrl,
 } from './orderCard';
 
@@ -93,6 +94,19 @@ describe('orderShareText and orderShareUrl', () => {
   it('asks for help with the kind, city and date only', () => {
     expect(
       orderShareText({
+        categoryName: 'Автокраны',
+        location: { city: 'Елабуга' },
+        desiredStartDate: START,
+      }),
+    ).toBe(
+      'Помогите найти технику: нужен автокран · Елабуга · 20 октября. ' +
+        'Заявка на ИИСтройка24: бесплатно и без посредников',
+    );
+  });
+
+  it('keeps the share sheet title to the order itself', () => {
+    expect(
+      orderShareTitle({
         categoryName: 'Автокраны',
         location: { city: 'Елабуга' },
         desiredStartDate: START,

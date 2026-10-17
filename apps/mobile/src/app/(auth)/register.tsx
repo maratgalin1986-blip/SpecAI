@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { PromiseNote } from '@/components/Promise';
 import { Button, Input } from '@/components/ui';
 import { API_URL, ApiError, register } from '@/lib/api';
 import { phoneNear } from '@/lib/phoneNear';
@@ -122,7 +123,7 @@ export default function RegisterScreen() {
               <Text style={styles.title}>Регистрация в {SITE.name}</Text>
               <Text style={styles.subtitle}>
                 Заказчик размещает заявки и бронирует технику, исполнитель публикует свою технику и
-                отвечает на заявки. Бесплатно. Без аккаунта можно позвонить {SITE.phone}.
+                отвечает на заявки. Без аккаунта можно позвонить {SITE.phone}.
               </Text>
             </View>
 
@@ -233,6 +234,7 @@ export default function RegisterScreen() {
             </Pressable>
             {error ? <Text style={styles.error}>{error}</Text> : null}
             <Button title="Создать аккаунт" onPress={handleSubmit} loading={submitting} />
+            <PromiseNote />
 
             <Link href="/(auth)/login" style={styles.link}>
               Уже есть аккаунт? Войти

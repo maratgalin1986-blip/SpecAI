@@ -13,3 +13,4 @@ export * from './cities';
 export * from './schemas/shift';
 export * from './schemas/line';
 export * from './categories';
+export * from './promise';

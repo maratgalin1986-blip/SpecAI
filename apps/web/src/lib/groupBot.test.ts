@@ -291,6 +291,9 @@ describe('admin commands', () => {
     expect(result).toBe('done');
     expect(sent.some((c) => c.method === 'getChatMember')).toBe(false);
     expect(messages()[0]!.body.text).toContain('/bot');
+    // The platform's promise, a fixed text: no name or phone gets in through it.
+    expect(messages()[0]!.body.text).toContain('Бесплатно и без посредников: цену назначает');
+    expect(messages()[0]!.body.text).toContain('Не пишет в личку');
   });
 
   it('a failed admin check counts as «not an admin»', async () => {

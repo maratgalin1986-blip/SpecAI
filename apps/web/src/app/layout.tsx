@@ -58,6 +58,13 @@ export const metadata: Metadata = {
     title: `${SITE.platform} от ${SITE.name} — ${SITE.tagline}`,
     description: SITE.description,
   },
+  // The promise «Бесплатно и без посредников» is in SITE.description and on
+  // the default preview image (app/opengraph-image.png).
+  twitter: {
+    card: 'summary_large_image',
+    title: `${SITE.platform} от ${SITE.name} — ${SITE.tagline}`,
+    description: SITE.description,
+  },
   manifest: '/manifest.webmanifest',
   appleWebApp: {
     capable: true,

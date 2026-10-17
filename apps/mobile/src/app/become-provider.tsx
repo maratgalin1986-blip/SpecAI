@@ -12,6 +12,7 @@ import {
   View,
 } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
+import { PromiseNote } from '@/components/Promise';
 import { Button, Card, Input } from '@/components/ui';
 import { API_URL, ApiError, becomeProvider } from '@/lib/api';
 import { phoneNear } from '@/lib/phoneNear';
@@ -201,6 +202,7 @@ export default function BecomeProviderScreen() {
             loading={submitting}
             onPress={() => void submit()}
           />
+          <PromiseNote />
         </Card>
       </ScrollView>
     </KeyboardAvoidingView>

@@ -14,6 +14,7 @@ import { prisma } from '@specai/database';
 import { onceADay } from './cronOnce';
 import { categoryEmoji } from './orderBoard';
 import { orderCardText, orderShareUrl, type OrderCardInput } from './orderCard';
+import { SITE } from './site';
 import { siteUrl } from './siteUrl';
 import { telegramApi } from './telegramApi';
 
@@ -70,6 +71,7 @@ export function channelDigestText(
     ...items,
     ...(more > 0 ? [`И ещё ${more} — <a href="${escapeHtml(board)}">все заявки</a>`] : []),
     `Исполнители — выходите на линию в приложении: ${escapeHtml(channelProviderLink(base))}`,
+    escapeHtml(SITE.promiseLine),
   ].join('\n\n');
 }
 

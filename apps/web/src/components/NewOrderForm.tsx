@@ -12,6 +12,7 @@ import { pointAddress, type MapPoint } from '@/lib/mapPoint';
 import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { Button } from '@specai/ui';
+import { PromiseNote } from '@/components/PromiseNote';
 import type { OrderPrefill } from '@/lib/quickOrder';
 
 /** Today's date in Moscow as YYYY-MM-DD, the earliest allowed order date. */
@@ -216,6 +217,7 @@ export function NewOrderForm({
       <Button type="submit" disabled={isSubmitting}>
         {isSubmitting ? 'Публикация…' : 'Опубликовать заявку'}
       </Button>
+      <PromiseNote />
     </form>
   );
 }

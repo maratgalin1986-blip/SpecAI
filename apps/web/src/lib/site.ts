@@ -1,3 +1,13 @@
+// The file itself, not the package index: this module is in every page's
+// client bundle (the header) and in the middleware, which must not pull in
+// zod and the city list with it.
+import {
+  PLATFORM_PROMISE,
+  PLATFORM_PROMISE_DETAIL,
+  PLATFORM_PROMISE_LINE,
+  PLATFORM_PROMISE_SHORT,
+} from '@specai/shared/src/promise';
+
 // Company branding and contacts, in one place so they're easy to update.
 export const SITE = {
   name: 'СпецПласт16',
@@ -10,8 +20,21 @@ export const SITE = {
   // service to Tatarstan (site.test.ts checks it).
   tagline: 'Заказ спецтехники с машинистом по всей России',
   description:
-    'ИИСтройка24 от СпецПласт16 — заказ спецтехники с машинистом по всей России: одна заявка — ' +
-    'предложения исполнителей рядом с вами. Свой парк СпецПласт16 — в Набережных Челнах.',
+    'ИИСтройка24 от СпецПласт16 — заказ спецтехники с машинистом по всей России, бесплатно и без ' +
+    'посредников: одна заявка — цены исполнителей рядом с вами, расчёт напрямую с владельцем ' +
+    'техники. Свой парк СпецПласт16 — в Набережных Челнах.',
+  // The headline promise (owner, 2026-10-17), from packages/shared/src/promise.ts:
+  // the header pill, the hero, the forms, the footer, the shared texts. True
+  // only while there is no commission and no online payment
+  // (isOnlinePaymentEnabled() is false): introduce either and these texts must
+  // change in the same PR (REVIEW.md, «Тексты»).
+  promise: PLATFORM_PROMISE,
+  promiseShort: PLATFORM_PROMISE_SHORT,
+  promiseDetail: PLATFORM_PROMISE_DETAIL,
+  /** Both in one sentence: «Бесплатно и без посредников: цену назначает…». */
+  promiseLine: PLATFORM_PROMISE_LINE,
+  /** Where the header pill and the notes lead: the explanation on /kak-polzovatsya. */
+  promiseHref: '/kak-polzovatsya#besplatno',
   // The company's own contacts (the legal owner and the house provider), not
   // the service area: never show them as «где работаем».
   city: 'Набережные Челны',

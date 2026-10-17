@@ -132,21 +132,48 @@ export function SiteHeader() {
       data-dark={dark ? 'true' : undefined}
       className="site-header-vt sticky top-0 z-40 border-b border-slate-200/70 bg-white/75 backdrop-blur-md"
     >
-      <div className="mx-auto flex max-w-6xl items-center justify-between gap-2 px-4 py-3 sm:gap-4 sm:px-6 sm:py-4">
-        <a
-          href="/"
-          className="flex min-h-11 shrink-0 items-center gap-2 text-lg font-extrabold tracking-tight text-slate-900"
-        >
-          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-500 font-mono text-sm text-slate-950">
-            ИИ
-          </span>
-          <span className="flex flex-col leading-none">
-            {SITE.platform}
-            <span className="mt-0.5 text-[0.65rem] font-semibold tracking-normal text-amber-700">
-              от {SITE.name}
+      <div
+        className={`mx-auto flex max-w-6xl items-center justify-between gap-2 px-4 sm:gap-4 sm:px-6 ${
+          adminArea ? 'py-3 sm:py-4' : 'py-2 sm:py-3'
+        }`}
+      >
+        {/* The logo and, under it, the promise (owner, 2026-10-17: «бесплатно
+            и без посредников» always in view but quiet). The two lines take
+            the height the 44 px buttons already give the row, so the header
+            is as tall as before; the pill leads to the explanation. Both
+            links reach into the row's padding (::after), so each is a
+            comfortable tap target without growing the header. */}
+        <div className="flex shrink-0 flex-col items-start">
+          <a
+            href="/"
+            className={`relative flex shrink-0 items-center gap-2 text-lg font-extrabold tracking-tight text-slate-900 ${
+              adminArea
+                ? 'min-h-11'
+                : "min-h-8 after:absolute after:inset-x-0 after:-top-2 after:bottom-0 after:content-['']"
+            }`}
+          >
+            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-500 font-mono text-sm text-slate-950">
+              ИИ
             </span>
-          </span>
-        </a>
+            <span className="flex flex-col leading-none">
+              {SITE.platform}
+              <span className="mt-0.5 text-[0.65rem] font-semibold tracking-normal text-amber-700">
+                от {SITE.name}
+              </span>
+            </span>
+          </a>
+          {!adminArea && (
+            <a
+              href={SITE.promiseHref}
+              title={SITE.promiseDetail}
+              data-promise-pill
+              className="promise-pill relative mt-1 inline-flex items-center gap-1 whitespace-nowrap rounded-full px-1.5 py-0.5 text-[0.65rem] font-semibold leading-none after:absolute after:inset-x-0 after:-bottom-2 after:-top-1 after:content-['']"
+            >
+              <span aria-hidden>✓</span>
+              {SITE.promiseShort}
+            </a>
+          )}
+        </div>
 
         {adminArea && (
           <a

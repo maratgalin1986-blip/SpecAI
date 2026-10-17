@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { signIn } from 'next-auth/react';
 import { Button, Card } from '@specai/ui';
+import { PromiseNote } from '@/components/PromiseNote';
 import { CinemaBackdrop } from '@/components/CinemaHero';
 import { BasePicker, type BaseValue } from '@/components/BasePicker';
 import { ConsentText } from '@/components/ConsentText';
@@ -99,7 +100,7 @@ export default function RegisterPage() {
       <Card className="cine-sub shadow-2xl">
         <h1 className="cine-title mb-1 text-xl font-bold">Создать аккаунт</h1>
         <p className="mb-4 text-sm text-slate-600">
-          Что вам нужно? Всё бесплатно: регистрация, заявки и выход на линию.
+          Что вам нужно? Регистрация, заявки и выход на линию — бесплатно для обеих ролей.
         </p>
         {referralCode && (
           <p className="mb-4 rounded-md bg-signal-50 px-3 py-2 text-sm text-graphite-800">
@@ -265,6 +266,7 @@ export default function RegisterPage() {
           <Button type="submit" disabled={!hydrated || isSubmitting}>
             {isSubmitting ? 'Создание аккаунта…' : 'Создать аккаунт'}
           </Button>
+          <PromiseNote />
         </form>
         <p className="mt-4 text-sm text-slate-500">
           Уже есть аккаунт?{' '}

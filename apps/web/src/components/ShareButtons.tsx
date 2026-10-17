@@ -11,12 +11,15 @@ import { SHARE_NETWORKS, shareUrl, withShareUtm } from '@/lib/share';
 export function ShareButtons({
   url,
   text,
+  title = text,
   tag = true,
   label = 'Поделиться',
   className = '',
 }: {
   url: string;
   text: string;
+  /** The system share sheet's title, when it should be shorter than `text`. */
+  title?: string;
   tag?: boolean;
   label?: string;
   className?: string;
@@ -39,7 +42,7 @@ export function ShareButtons({
 
   async function systemShare() {
     try {
-      await navigator.share({ title: text, text, url: tag ? withShareUtm(url, 'native') : url });
+      await navigator.share({ title, text, url: tag ? withShareUtm(url, 'native') : url });
     } catch {
       // The user closed the sheet.
     }

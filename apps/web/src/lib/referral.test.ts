@@ -58,6 +58,8 @@ describe('referral codes', () => {
     for (const role of ['CUSTOMER', 'PROVIDER'] as const) {
       expect(invitationText(role)).toMatch(/СпецПласт16/);
       expect(invitationText(role)).not.toMatch(/₽|бонус|скидк/i);
+      expect(invitationText(role).toLowerCase()).toContain('бесплатно и без посредников');
+      expect(invitationText(role)).toContain('напрямую');
     }
   });
 });

@@ -14,7 +14,7 @@ const ICONS: Record<WelcomePath['role'], React.ComponentProps<typeof Ionicons>['
 
 /**
  * Приветствие перед входом (владелец, 2026-10-17): что здесь можно и что
- * всё бесплатно. Две большие карточки ведут в регистрацию с выбранной ролью,
+ * всё бесплатно и без посредников. Две большие карточки ведут в регистрацию с выбранной ролью,
  * ниже — «Уже есть аккаунт? Войти». Выбор запоминается: при следующем запуске
  * сразу вход, а сюда — со входа, «Как это работает».
  */
@@ -39,7 +39,10 @@ export default function WelcomeScreen() {
           <Text style={styles.brand}>{SITE.name}</Text>
           <Text style={styles.byline}>{SITE.byline}</Text>
           <Text style={styles.title}>Здравствуйте! Что вам нужно?</Text>
-          <Text style={styles.subtitle}>Всё бесплатно — и заказчикам, и исполнителям.</Text>
+          {/* Обещание площадки (владелец, 2026-10-17): заголовок — в карточках
+              ниже, здесь — что оно значит. */}
+          <Text style={styles.promise}>{SITE.promise} — и заказчикам, и исполнителям</Text>
+          <Text style={styles.subtitle}>{SITE.promiseDetail}</Text>
         </View>
 
         {WELCOME_PATHS.map((path) => (
@@ -107,6 +110,7 @@ const styles = StyleSheet.create({
   brand: { ...typography.title, color: colors.primaryDark },
   byline: { fontSize: 13, color: colors.textMuted },
   title: { ...typography.heading, color: colors.text, textAlign: 'center', marginTop: spacing.sm },
+  promise: { ...typography.caption, color: colors.success, textAlign: 'center' },
   subtitle: { ...typography.small, color: colors.textMuted, textAlign: 'center' },
   card: {
     flexDirection: 'row',

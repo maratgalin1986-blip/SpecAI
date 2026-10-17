@@ -92,7 +92,7 @@ export default async function Image({ params }: { params: { id: string } }) {
         }}
       >
         <div style={{ color: COLORS.paper }}>{text.brand}</div>
-        <div>Исполнители пришлют цены</div>
+        <div style={{ color: COLORS.signal }}>{text.promise}</div>
       </div>
     </div>,
     {
