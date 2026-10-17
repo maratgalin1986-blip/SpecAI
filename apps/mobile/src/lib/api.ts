@@ -67,6 +67,10 @@ interface RequestOptions {
   body?: unknown;
   /** Не подставлять Bearer (например, для входа). */
   anonymous?: boolean;
+  /** Дополнительные заголовки (сессия админки — x-admin-session). */
+  headers?: Record<string, string>;
+  /** 'omit' — не принимать и не отправлять cookie (вход в админку). */
+  credentials?: RequestCredentials;
 }
 
 const REQUEST_TIMEOUT_MS = 20_000;
@@ -76,6 +80,7 @@ export async function apiFetch<T>(path: string, options: RequestOptions = {}): P
   const headers: Record<string, string> = { Accept: 'application/json' };
   if (options.body !== undefined) headers['Content-Type'] = 'application/json';
   if (!options.anonymous) Object.assign(headers, await authHeaders());
+  if (options.headers) Object.assign(headers, options.headers);
 
   let response: Response;
   // Without a timeout a hung network leaves the screen loading forever.
@@ -87,6 +92,7 @@ export async function apiFetch<T>(path: string, options: RequestOptions = {}): P
       headers,
       body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
       signal: controller.signal,
+      ...(options.credentials ? { credentials: options.credentials } : {}),
     });
   } catch {
     throw new ApiError(

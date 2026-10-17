@@ -22,6 +22,8 @@ export interface AdminStats {
   machines: number;
   openOrders: number;
   activeBookings: number;
+  /** Orders imported from chats, waiting for the owner (PENDING_REVIEW). */
+  chatOrders: number;
   moderation: { reviews: number; comments: number };
   generatedAt: string;
 }
@@ -67,6 +69,7 @@ export async function loadAdminStats(now: Date = new Date()): Promise<AdminStats
     machines,
     openOrders,
     activeBookings,
+    chatOrders,
     reviews,
     comments,
   ] = await Promise.all([
@@ -77,6 +80,7 @@ export async function loadAdminStats(now: Date = new Date()): Promise<AdminStats
     prisma.equipment.count({ where: { status: { not: 'RETIRED' } } }),
     prisma.order.count({ where: { status: 'OPEN' } }),
     prisma.booking.count({ where: { status: { in: ['CONFIRMED', 'ACTIVE'] } } }),
+    prisma.order.count({ where: { status: 'PENDING_REVIEW' } }),
     prisma.review.count({ where: { textStatus: 'PENDING' } }),
     prisma.comment.count({ where: { status: 'PENDING' } }),
   ]);
@@ -88,6 +92,7 @@ export async function loadAdminStats(now: Date = new Date()): Promise<AdminStats
     machines,
     openOrders,
     activeBookings,
+    chatOrders,
     moderation: { reviews, comments },
     generatedAt: now.toISOString(),
   };

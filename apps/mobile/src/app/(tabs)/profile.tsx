@@ -1,6 +1,7 @@
 import { Link, useFocusEffect } from 'expo-router';
 import React, { useCallback, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { AdminLoginRow, AdminMenuCard } from '@/components/AdminEntry';
 import { ContactActions } from '@/components/ContactActions';
 import { Hint } from '@/components/Hint';
 import { ModeSwitchCard, ProfileShortcuts } from '@/components/ProfileShortcuts';
@@ -96,6 +97,7 @@ export default function ProfileScreen() {
         {__DEV__ ? <Row label="Сервер" value={API_URL} /> : null}
       </Card>
 
+      <AdminMenuCard />
       {hint ? <Hint ids={hint} /> : null}
       <ModeSwitchCard />
       <ProfileShortcuts />
@@ -134,6 +136,7 @@ export default function ProfileScreen() {
       </Card>
 
       <Button title="Выйти" variant="danger" onPress={handleLogout} loading={loggingOut} />
+      <AdminLoginRow />
     </ScrollView>
   );
 }
