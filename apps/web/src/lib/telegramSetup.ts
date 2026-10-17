@@ -28,7 +28,8 @@ const normal = (url: string | undefined) => {
   }
 };
 
-const UPDATES = ['message', 'channel_post', 'callback_query'];
+// my_chat_member: the bot added to or removed from a group (lib/groupBot.ts).
+const UPDATES = ['message', 'channel_post', 'callback_query', 'my_chat_member'];
 
 export async function connectBot(origin: string, force = false): Promise<ConnectResult> {
   const token = process.env.TELEGRAM_BOT_TOKEN;

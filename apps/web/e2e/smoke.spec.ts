@@ -16,6 +16,7 @@ const PAGES = [
   '/arenda/ekskavator-pogruzchik/kazan',
   '/kak-polzovatsya',
   '/predlozheniya',
+  '/bot',
 ];
 
 const ALLOWED_EXTERNAL = [
@@ -23,8 +24,8 @@ const ALLOWED_EXTERNAL = [
   /^mailto:/,
   /^https:\/\/wa\.me\//,
   /^https:\/\/api\.whatsapp\.com\//,
-  // Our own Telegram bot (the Telegram funnel), never another channel.
-  /^https:\/\/t\.me\/specplast16_zayavki_bot(\?start=[A-Za-z0-9_-]{1,64})?$/,
+  // Our own Telegram bot (the funnel, «Добавить бота в чат» on /bot), never another channel.
+  /^https:\/\/t\.me\/specplast16_zayavki_bot(\?start=[A-Za-z0-9_-]{1,64}|\?startgroup=1)?$/,
 ];
 
 async function guard(page: Page) {

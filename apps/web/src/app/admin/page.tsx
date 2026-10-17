@@ -23,6 +23,8 @@ import { PhoneLink } from '@/components/admin/PhoneLink';
 import { ProposalsCard } from '@/components/admin/ProposalsCard';
 import { AiDecisionsCard } from '@/components/admin/AiDecisionsCard';
 import { aiModerationEnabled, loadAiDecisions } from '@/lib/orderModeration';
+import { BotChatsCard } from '@/components/admin/BotChatsCard';
+import { loadBotChats } from '@/lib/groupBot';
 import { ADMIN_PROPOSAL_SELECT } from '@/lib/proposals';
 import {
   LEAD_FILTERS,
@@ -79,6 +81,9 @@ export default async function AdminPage({ searchParams = {} }: { searchParams?: 
     );
   }
 
+  // «Чаты с ботом», loaded alongside the rest; before the first deploy with
+  // the table, an empty list.
+  const botChatsLoad = loadBotChats().catch(() => ({ chats: [], active: 0 }));
   // Bot drafts without a phone are not leads yet (lib/botDrafts.ts).
   const leadsWhere = { NOT: { phone: '' } };
   const [stats, leads, leadsTotal] = await Promise.all([
@@ -136,6 +141,7 @@ export default async function AdminPage({ searchParams = {} }: { searchParams?: 
       })
       .catch(() => []);
   const proposals = [...(await loadProposals('NEW', 100)), ...(await loadProposals('READ', 30))];
+  const botChats = await botChatsLoad;
   // «Исполнители»: provider companies with the «Проверен» switch, unchecked first.
   const providers = await prisma.company.findMany({
     where: { isProvider: true },
@@ -229,6 +235,9 @@ export default async function AdminPage({ searchParams = {} }: { searchParams?: 
           >
             Предложения{proposalsCount > 0 ? ` · ${proposalsCount}` : ''}
           </a>
+          <a href="#bot-chats" className={chipClass(false)}>
+            Чаты с ботом · {botChats.active}
+          </a>
           <a href="/admin/providers" className={chipClass(false)}>
             Исполнители
           </a>
@@ -306,6 +315,7 @@ export default async function AdminPage({ searchParams = {} }: { searchParams?: 
       </Card>
 
       <AiDecisionsCard decisions={aiDecisions} enabled={aiModerationEnabled()} />
+      <BotChatsCard chats={botChats.chats} active={botChats.active} />
 
       <Card className="flex scroll-mt-24 flex-col gap-3" id="comments">
         <div>

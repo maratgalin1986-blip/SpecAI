@@ -62,6 +62,9 @@ export function SiteFooter() {
           <a href="/predlozheniya" className={LINK}>
             Предложения и партнёрство
           </a>
+          <a href="/bot" className={LINK}>
+            Бот для чатов
+          </a>
         </div>
         <div className="flex flex-col sm:gap-1">
           <div className="font-semibold text-white">Контакты</div>
