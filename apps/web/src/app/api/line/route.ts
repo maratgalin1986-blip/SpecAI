@@ -19,8 +19,11 @@ import {
   validTimeZone,
 } from '@/lib/lineDay';
 import { operatorOf } from '@/lib/shiftAccess';
+import { tickDeferredOrderNotices } from '@/lib/deferredOrderNotices';
 
 export const dynamic = 'force-dynamic';
+// Sends due «Пригласи друга» alerts: never from Next's Data Cache.
+export const fetchCache = 'force-no-store';
 
 /**
  * «На линии»: PUT {online, lat, lon, equipmentId?, note?} from the app of a
@@ -57,6 +60,9 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json({ error: zodErrorMessage(parsed.error) }, { status: 400 });
   }
   const input = parsed.data;
+  // Phones on the line report every minute: the most frequent tick for the
+  // «Пригласи друга» delayed alerts (lib/deferredOrderNotices.ts).
+  await tickDeferredOrderNotices('line');
   // A machinist switched off by the company admin is not on the line.
   if (isOperator(user)) {
     const operator = await operatorOf(user);

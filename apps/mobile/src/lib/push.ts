@@ -45,6 +45,8 @@ export function appRouteFor(path: string | undefined): string | null {
   if (order) return `/orders/${order[1]}`;
   // Вечерняя сводка заявок на завтра — лента исполнителя.
   if (clean === '/orders') return '/feed';
+  // «Пригласи друга»: ссылка и бонус — в профиле.
+  if (hash === 'invite') return '/profile';
   if (clean.startsWith('/provider')) {
     if (hash === 'documents') return '/provider/documents';
     if (hash === 'bookings') return '/jobs';

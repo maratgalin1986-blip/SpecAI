@@ -9,7 +9,8 @@ import { zodErrorMessage } from '@/lib/apiInput';
 import { resolveProviderBase, type ProviderBase } from '@/lib/providerBase';
 import { checkRateLimit } from '@/lib/rateLimit';
 import { REFERRAL_COOKIE } from '@/lib/referral';
-import { findReferrer, freeReferralCode } from '@/lib/referralStore';
+import { findReferrer, freeReferralCode, grantReferralPriority } from '@/lib/referralStore';
+import { notifyUser } from '@/lib/notifications/notifyUser';
 import { newsConsentFrom } from '@/lib/newsConsent';
 
 export async function POST(request: NextRequest) {
@@ -106,6 +107,23 @@ export async function POST(request: NextRequest) {
     await sendVerificationEmail(user);
   } catch (error) {
     console.error('[auth] failed to send verification email', error);
+  }
+
+  // Акция «Пригласи друга»: the inviter's new orders come 5 minutes earlier for
+  // a week. Best-effort, like the e-mail: a failure must not fail the sign-up.
+  if (referrer) {
+    try {
+      const bonus = await grantReferralPriority(referrer.id, user.id);
+      if (bonus) {
+        await notifyUser(referrer.id, {
+          type: 'referral.bonus',
+          until: bonus.until,
+          provider: bonus.role === 'PROVIDER_ADMIN',
+        });
+      }
+    } catch (error) {
+      console.error('[auth] referral bonus failed', error);
+    }
   }
 
   const response = NextResponse.json({ id: user.id, email: user.email }, { status: 201 });

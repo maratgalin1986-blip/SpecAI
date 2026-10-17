@@ -51,6 +51,8 @@ export default function RegisterScreen() {
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
+  // Код из приглашения друга («Пригласи друга»): необязательно.
+  const [inviteCode, setInviteCode] = useState('');
   const [consent, setConsent] = useState(false);
   // Еженедельное письмо (ФЗ «О рекламе» ст. 18): по умолчанию выключено.
   const [newsConsent, setNewsConsent] = useState(false);
@@ -90,6 +92,7 @@ export default function RegisterScreen() {
         phone: phone.trim() || undefined,
         consent: true as const,
         newsConsent,
+        ref: inviteCode.trim() || undefined,
       };
       await register(
         accountType === 'PROVIDER'
@@ -202,6 +205,16 @@ export default function RegisterScreen() {
               keyboardType="phone-pad"
               textContentType="telephoneNumber"
               placeholder="+7 900 000-00-00"
+              returnKeyType="next"
+            />
+            <Input
+              label="Код приглашения (если есть)"
+              value={inviteCode}
+              onChangeText={(value) => setInviteCode(value.toUpperCase())}
+              autoCapitalize="characters"
+              autoCorrect={false}
+              maxLength={7}
+              placeholder="Например, K7M2QXA"
               returnKeyType="next"
             />
             <Input

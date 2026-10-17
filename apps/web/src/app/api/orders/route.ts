@@ -11,6 +11,7 @@ import { addressCity, geocodeAddress, parseNear } from '@/lib/geo';
 import { notifyTelegram } from '@/lib/notify';
 import { notifyProvidersAboutOrder } from '@/lib/notifications/notifyUser';
 import { pingOrderBoard } from '@/lib/indexNow';
+import { tickDeferredOrderNotices } from '@/lib/deferredOrderNotices';
 import { SITE } from '@/lib/site';
 import { machineTypeOf } from '@/lib/equipmentCatalog';
 import { INVALID_JSON_MESSAGE, readJson, zodErrorMessage } from '@/lib/apiInput';
@@ -29,6 +30,10 @@ import {
 } from '@/lib/weather';
 
 export const dynamic = 'force-dynamic';
+// The feed sends due «Пригласи друга» alerts (lib/deferredOrderNotices.ts):
+// an e-mail sent from a GET handler must not land in Next's Data Cache. The
+// weather keeps its own explicit revalidate.
+export const fetchCache = 'default-no-store';
 
 /** One page of the open feed, and the most a client may ask for. */
 const FEED_PAGE = 50;
@@ -85,6 +90,8 @@ export async function GET(request: NextRequest) {
     if (!isProvider(currentUser)) {
       return NextResponse.json({ error: 'Доступно только исполнителям' }, { status: 403 });
     }
+    // A provider opening the feed: a tick for the delayed new-order alerts.
+    await tickDeferredOrderNotices('feed');
     // Work dates already over: nothing to offer, whoever bid on it.
     const notOver = { desiredEndDate: { gte: todayStartMsk() } };
     const ownBids = {

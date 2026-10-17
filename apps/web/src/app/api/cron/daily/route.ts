@@ -8,6 +8,7 @@ import { onceADay } from '@/lib/cronOnce';
 import { aiModerationSummary, sweepPendingOrders } from '@/lib/orderModeration';
 import { GET as evening } from '../evening/route';
 import { postChannelDigest } from '@/lib/channelDigest';
+import { FLUSH_BATCH, tickDeferredOrderNotices } from '@/lib/deferredOrderNotices';
 
 export const dynamic = 'force-dynamic';
 // A GET handler: without this Next keeps outgoing sends (Telegram, push,
@@ -27,6 +28,8 @@ export const maxDuration = 60;
  */
 export async function GET(request: NextRequest) {
   if (!cronAllowed(request)) return NextResponse.json({ error: 'forbidden' }, { status: 403 });
+  // Backstop for the delayed new-order alerts (lib/deferredOrderNotices.ts).
+  const notices = await tickDeferredOrderNotices('cron/daily', FLUSH_BATCH);
   const now = new Date();
   const horizon = new Date(now.getTime() + (DOCUMENT_REMINDER_DAYS + 1) * 86_400_000);
   const candidates = await prisma.providerDocument.findMany({
@@ -88,5 +91,6 @@ export async function GET(request: NextRequest) {
     moderationSummary,
     digest,
     channel,
+    notices,
   });
 }

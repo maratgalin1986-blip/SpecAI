@@ -139,6 +139,12 @@ export interface ApiUser {
   role: UserRole;
   /** Дата подтверждения e-mail; null — не подтверждён. Отдаёт GET /api/mobile/me. */
   emailVerified?: string | null;
+  /** «Пригласи друга»: до какого момента заявки приходят на 5 минут раньше (GET /api/mobile/me). */
+  priorityUntil?: string | null;
+  /** Своя ссылка-приглашение (заказчик и исполнитель); null — нет. */
+  referralLink?: string | null;
+  /** Сколько человек зарегистрировались по ссылке. */
+  invited?: number | null;
 }
 
 export type EquipmentStatus = 'AVAILABLE' | 'RENTED' | 'IN_MAINTENANCE' | 'RETIRED';
@@ -447,6 +453,8 @@ export type RegisterInput = {
   consent: true;
   /** Еженедельное письмо: true только если человек сам включил переключатель. */
   newsConsent?: boolean;
+  /** Код приглашения друга: другу — бонус «заявки на 5 минут раньше». */
+  ref?: string;
 } & (
   | { accountType: 'CUSTOMER' }
   | {

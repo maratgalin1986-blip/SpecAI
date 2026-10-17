@@ -4,6 +4,7 @@ import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { AdminLoginRow, AdminMenuCard } from '@/components/AdminEntry';
 import { ContactActions } from '@/components/ContactActions';
 import { Hint } from '@/components/Hint';
+import { InviteCard } from '@/components/InviteCard';
 import { ModeSwitchCard, ProfileShortcuts } from '@/components/ProfileShortcuts';
 import { ProposalsLink } from '@/components/ProposalsLink';
 import { NotificationSettingsCard } from '@/components/NotificationSettingsCard';
@@ -124,6 +125,7 @@ export default function ProfileScreen() {
         </Card>
       ) : null}
 
+      <InviteCard />
       <NotificationSettingsCard />
 
       <Card style={styles.card}>
