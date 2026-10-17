@@ -8,6 +8,7 @@ import { BasePicker, type BaseValue } from '@/components/BasePicker';
 import { ConsentText } from '@/components/ConsentText';
 import { Hint } from '@/components/Hint';
 import { noteInstallMoment } from '@/lib/installHint';
+import { NEWS_CONSENT_LABEL } from '@/lib/newsConsent';
 import { normalizeReferralCode } from '@/lib/referral';
 import { useHydrated } from '@/lib/useHydrated';
 import { accountTypeFromQuery, WELCOME_PATHS, type AccountType } from '@/lib/welcome';
@@ -34,6 +35,8 @@ export default function RegisterPage() {
   // 152-ФЗ ст. 10.1: a provider's card (name, base address and point, machines)
   // is public, which needs a consent to distribution separate from `consent`.
   const [publicConsent, setPublicConsent] = useState(false);
+  // The weekly newsletter (ФЗ «О рекламе» ст. 18): optional and unticked.
+  const [newsConsent, setNewsConsent] = useState(false);
   const [base, setBase] = useState<BaseValue>({ address: '', lat: null, lon: null });
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -72,6 +75,7 @@ export default function RegisterPage() {
         ...(phone ? { phone } : {}),
         ...(referralCode ? { ref: referralCode } : {}),
         consent,
+        newsConsent,
       }),
     });
 
@@ -241,6 +245,15 @@ export default function RegisterPage() {
               </span>
             </label>
           )}
+          <label className="flex items-start gap-2 text-xs text-slate-600">
+            <input
+              type="checkbox"
+              checked={newsConsent}
+              onChange={(e) => setNewsConsent(e.target.checked)}
+              className="mt-0.5"
+            />
+            <span>{NEWS_CONSENT_LABEL}</span>
+          </label>
           <p className="text-xs text-slate-500">
             Создавая аккаунт, вы принимаете{' '}
             <a href="/pravila" className="underline" target="_blank">

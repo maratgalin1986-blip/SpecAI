@@ -50,6 +50,14 @@ model User {
   referralCode String?
   referredById String?
 
+  // Рассылка «Заявки рядом за неделю» (ФЗ «О рекламе» ст. 18): только тем, кто
+  // сам отметил галочку (newsConsentAt). Отписка ставит newsUnsubscribedAt и
+  // снимает согласие; lastNewsAt — когда ушло последнее письмо (повторный
+  // запуск cron не шлёт второе). Существующие аккаунты не подписаны.
+  newsConsentAt      DateTime?
+  newsUnsubscribedAt DateTime?
+  lastNewsAt         DateTime?
+
   bookings           Booking[]           @relation("BookingCustomer")
   orders             Order[]             @relation("OrderCustomer")
   reviews            Review[]

@@ -1,6 +1,7 @@
 import { useFocusEffect } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
 import { AppState, Linking, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
+import { NewsletterSetting } from '@/components/NewsletterSetting';
 import { Badge, Button, Card } from '@/components/ui';
 import { ApiError } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
@@ -242,6 +243,7 @@ export function NotificationSettingsCard() {
         </View>
       ))}
       <LineReminderSetting />
+      <NewsletterSetting />
       {settings ? (
         <Button
           title="Проверить уведомления"

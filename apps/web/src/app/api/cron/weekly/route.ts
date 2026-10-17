@@ -5,12 +5,18 @@ import { notifyTelegram } from '@/lib/notify';
 import { SITE } from '@/lib/site';
 import { buildWeeklyReport } from '@/lib/weeklyReport';
 import { submitToIndexNow } from '@/lib/indexNow';
+import { sendWeeklyNewsletter } from '@/lib/newsletterData';
 import sitemap from '@/app/sitemap';
 
 export const dynamic = 'force-dynamic';
 // A GET handler: without this Next keeps outgoing sends (Telegram, push,
 // e-mail) in its Data Cache and never repeats an identical one.
 export const fetchCache = 'force-no-store';
+// The newsletter paces its letters (Resend: 2 a second) within NEWSLETTER_BUDGET_MS.
+export const maxDuration = 60;
+
+/** The newsletter starts no new letter after this much of the run. */
+const NEWSLETTER_BUDGET_MS = 45_000;
 
 // Called by Vercel Cron on Monday mornings (apps/web/vercel.json). With
 // CRON_SECRET set in Vercel, only requests carrying it are accepted.
@@ -21,10 +27,30 @@ export async function GET(request: NextRequest) {
   if (secret ? auth !== `Bearer ${secret}` : !fromCron) {
     return NextResponse.json({ error: 'forbidden' }, { status: 403 });
   }
+  const started = Date.now();
   // Once a day (lib/cronOnce.ts): a repeated call does not resend the report.
-  const result = await onceADay('weekly', sendWeeklyReport);
-  if (!result) return NextResponse.json({ ok: true, skipped: 'already sent today' });
-  return NextResponse.json({ ok: true, ...result });
+  let result: Awaited<ReturnType<typeof sendWeeklyReport>> | null = null;
+  let failed = false;
+  try {
+    result = await onceADay('weekly', sendWeeklyReport);
+  } catch (error) {
+    console.error('[cron/weekly] report failed', error);
+    failed = true;
+  }
+  // «Заявки рядом за неделю» to subscribers, after the report and on its own:
+  // an error here never costs the report. Each user is guarded by lastNewsAt,
+  // so a repeated call goes on with those not mailed yet.
+  const newsletter = await sendWeeklyNewsletter({
+    deadline: started + NEWSLETTER_BUDGET_MS,
+  }).catch((error: unknown) => {
+    console.error('[cron/weekly] newsletter failed', error);
+    return { error: String(error) };
+  });
+  if (failed) {
+    return NextResponse.json({ ok: false, error: 'report failed', newsletter }, { status: 500 });
+  }
+  if (!result) return NextResponse.json({ ok: true, skipped: 'already sent today', newsletter });
+  return NextResponse.json({ ok: true, ...result, newsletter });
 }
 
 async function sendWeeklyReport() {
