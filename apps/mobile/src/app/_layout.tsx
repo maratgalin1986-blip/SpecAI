@@ -75,6 +75,7 @@ function RootNavigator() {
       <Stack.Screen name="admin/providers" options={{ title: 'Исполнители' }} />
       <Stack.Screen name="admin/support" options={{ title: 'Поддержка (донаты)' }} />
       <Stack.Screen name="admin/proposals" options={{ title: 'Предложения' }} />
+      <Stack.Screen name="admin/ai-decisions" options={{ title: 'Решения ИИ' }} />
     </Stack>
   );
 }
