@@ -9,7 +9,10 @@
 //   UNSURE  → stays PENDING_REVIEW and is asked again; a day after the import
 //             it is rejected («не удалось понять заявку») — the owner does not
 //             moderate, so nothing waits for him.
-// Without ANTHROPIC_API_KEY nothing happens and orders wait in /admin as before.
+// Without ANTHROPIC_API_KEY the same verdicts come from rules (rulesVerdict:
+// the importer's parser — a request with a machinery type is published,
+// an advert or chatter rejected, anything else waits a day and is rejected),
+// so nothing waits for the owner either way (owner, 2026-10-17).
 // The admin can still override any decision from /admin («Решения ИИ»).
 import { prisma } from '@specai/database';
 import {
@@ -23,8 +26,11 @@ import { bidsUntilFor } from '@/lib/bidWindow';
 import { moscowDateKey } from '@/lib/bookingRules';
 import { notifyProvidersAboutOrder } from '@/lib/notifications/notifyUser';
 import { todayStartMsk } from '@/lib/providerFeed';
+import { parseEquipmentRequest } from '@specai/shared';
 
 export const AI_MODERATOR = 'ai';
+/** Decisions made by rules while no AI key is set (rulesVerdict). */
+export const RULES_MODERATOR = 'rules';
 export const ADMIN_MODERATOR = 'admin';
 
 /** An order the AI stays unsure about is rejected this long after the import. */
@@ -139,19 +145,48 @@ async function decide(
   reason: string,
   now: Date,
   extra: { status?: 'OPEN' | 'CANCELLED'; categoryId?: string; bidsUntil?: Date } = {},
+  moderator: string = AI_MODERATOR,
 ): Promise<boolean> {
   const { count } = await prisma.order.updateMany({
     // The admin may have decided in the meantime: his decision stays.
     where: { id: orderId, status: 'PENDING_REVIEW' },
     data: {
       ...extra,
-      moderatedBy: AI_MODERATOR,
+      moderatedBy: moderator,
       moderationDecision: decision,
       moderationReason: reason.slice(0, 160),
       moderatedAt: now,
     },
   });
   return count > 0;
+}
+
+/**
+ * The verdict without the AI: the importer's own parser. An order waits here
+ * because the parser saw a request but was not sure enough to publish it at
+ * once; with a machinery type it is published (providers are matched by it),
+ * an advert or chatter is rejected, and anything else stays unsure.
+ */
+export function rulesVerdict(
+  text: string,
+  now: Date = new Date(),
+  /** The machinery type the import already found, if any. */
+  knownCategory?: string | null,
+): ChatOrderModeration {
+  const parsed = parseEquipmentRequest(text, now);
+  // An advert («сдаю», «услуги», прайс) is never an order; without a known
+  // machinery type the parser must also see a request in the text.
+  const advert = parsed.signals.some((signal) => signal.startsWith('признаки рекламы'));
+  if (advert || (!parsed.isRequest && !knownCategory)) {
+    return { decision: 'REJECT', reason: 'похоже на объявление или разговор, а не на заявку' };
+  }
+  const category = knownCategory ?? parsed.categorySlug;
+  if (!category) return { decision: 'UNSURE', reason: NO_CATEGORY_REASON };
+  return {
+    decision: 'PUBLISH',
+    reason: 'заявка на технику (проверено правилами)',
+    categoryHint: category,
+  };
 }
 
 /**
@@ -162,14 +197,15 @@ export async function autoModerateOrder(
   orderId: string,
   options: { now?: Date; timeoutMs?: number } = {},
 ): Promise<ModerationOutcome> {
-  if (!aiModerationEnabled()) return { status: 'skipped', reason: 'no-ai' };
   const now = options.now ?? new Date();
+  const useAi = aiModerationEnabled();
+  const moderator = useAi ? AI_MODERATOR : RULES_MODERATOR;
   const order = await prisma.order.findUnique({ where: { id: orderId }, select: ORDER_SELECT });
   if (!order || order.status !== 'PENDING_REVIEW') {
     return { status: 'skipped', reason: 'not-pending' };
   }
   const reject = async (reason: string, decision: ModerationDecision = 'REJECT') =>
-    (await decide(order.id, decision, reason, now, { status: 'CANCELLED' }))
+    (await decide(order.id, decision, reason, now, { status: 'CANCELLED' }, moderator))
       ? ({ status: 'rejected', reason } as const)
       : ({ status: 'skipped', reason: 'not-pending' } as const);
 
@@ -183,25 +219,28 @@ export async function autoModerateOrder(
   const overdue = now.getTime() - order.createdAt.getTime() >= UNSURE_GIVE_UP_MS;
   if (overdue && order.moderationDecision === 'UNSURE') return reject(GIVE_UP_REASON);
 
-  if (!(await claimModerationCall(now))) return { status: 'skipped', reason: 'budget' };
-
   let verdict: ChatOrderModeration;
-  try {
-    verdict = await moderateChatOrder(
-      {
-        text,
-        chatTitle: order.sourceChat,
-        categorySlug: order.category?.slug,
-        city: order.location?.city,
-        today: moscowDateKey(now),
-      },
-      options.timeoutMs ? { timeoutMs: options.timeoutMs, maxRetries: 0 } : {},
-    );
-  } catch (error) {
-    // An answer that is not a verdict counts as a doubt; anything else
-    // (network, rate limit) is the caller's to log and retry.
-    if (!(error instanceof ModerationOutputError)) throw error;
-    verdict = { decision: 'UNSURE', reason: 'ИИ не дал понятного ответа' };
+  if (!useAi) {
+    verdict = rulesVerdict(text, now, order.category?.slug);
+  } else {
+    if (!(await claimModerationCall(now))) return { status: 'skipped', reason: 'budget' };
+    try {
+      verdict = await moderateChatOrder(
+        {
+          text,
+          chatTitle: order.sourceChat,
+          categorySlug: order.category?.slug,
+          city: order.location?.city,
+          today: moscowDateKey(now),
+        },
+        options.timeoutMs ? { timeoutMs: options.timeoutMs, maxRetries: 0 } : {},
+      );
+    } catch (error) {
+      // An answer that is not a verdict counts as a doubt; anything else
+      // (network, rate limit) is the caller's to log and retry.
+      if (!(error instanceof ModerationOutputError)) throw error;
+      verdict = { decision: 'UNSURE', reason: 'ИИ не дал понятного ответа' };
+    }
   }
 
   if (verdict.decision === 'PUBLISH') {
@@ -215,12 +254,19 @@ export async function autoModerateOrder(
         : null;
     const categoryId = order.categoryId ?? hinted?.id;
     if (!categoryId) return reject(NO_CATEGORY_REASON);
-    const published = await decide(order.id, 'PUBLISH', verdict.reason, now, {
-      status: 'OPEN',
-      ...(order.categoryId ? {} : { categoryId }),
-      // Providers get the usual time to bid from the moment it is published.
-      bidsUntil: bidsUntilFor(now, order.desiredStartDate),
-    });
+    const published = await decide(
+      order.id,
+      'PUBLISH',
+      verdict.reason,
+      now,
+      {
+        status: 'OPEN',
+        ...(order.categoryId ? {} : { categoryId }),
+        // Providers get the usual time to bid from the moment it is published.
+        bidsUntil: bidsUntilFor(now, order.desiredStartDate),
+      },
+      moderator,
+    );
     if (!published) return { status: 'skipped', reason: 'not-pending' };
     // The same side effect as a confident import (lib/ingest.ts).
     await notifyProvidersAboutOrder(order.id);
@@ -230,7 +276,7 @@ export async function autoModerateOrder(
   if (verdict.decision === 'REJECT') return reject(verdict.reason);
 
   if (overdue) return reject(GIVE_UP_REASON);
-  return (await decide(order.id, 'UNSURE', verdict.reason, now))
+  return (await decide(order.id, 'UNSURE', verdict.reason, now, {}, moderator))
     ? { status: 'unsure', reason: verdict.reason }
     : { status: 'skipped', reason: 'not-pending' };
 }
@@ -255,7 +301,8 @@ export async function sweepPendingOrders(
   options: { limit?: number; now?: Date } = {},
 ): Promise<SweepResult> {
   const result: SweepResult = {
-    enabled: aiModerationEnabled(),
+    // Always on: without the AI key the rules decide (rulesVerdict).
+    enabled: true,
     checked: 0,
     published: 0,
     rejected: 0,
@@ -263,7 +310,6 @@ export async function sweepPendingOrders(
     skipped: 0,
     errors: 0,
   };
-  if (!result.enabled) return result;
   const now = options.now ?? new Date();
   const limit = Math.max(0, Math.min(options.limit ?? SWEEP_LIMIT, SWEEP_LIMIT));
 
@@ -353,7 +399,7 @@ export async function aiModerationSummary(now: Date = new Date()): Promise<strin
   const since = new Date(now.getTime() - 24 * 3_600_000);
   const rows = await prisma.order.groupBy({
     by: ['moderationDecision'],
-    where: { moderatedBy: AI_MODERATOR, moderatedAt: { gte: since } },
+    where: { moderatedBy: { in: [AI_MODERATOR, RULES_MODERATOR] }, moderatedAt: { gte: since } },
     _count: true,
   });
   const count = (decision: ModerationDecision) =>
@@ -361,5 +407,6 @@ export async function aiModerationSummary(now: Date = new Date()): Promise<strin
   const published = count('PUBLISH');
   const rejected = count('REJECT');
   if (published + rejected === 0) return null;
-  return `🤖 ИИ за сутки: опубликовал заявок — ${published}, отклонил — ${rejected}.`;
+  const who = aiModerationEnabled() ? 'ИИ' : 'Автомодерация';
+  return `🤖 ${who} за сутки: опубликовано заявок — ${published}, отклонено — ${rejected}.`;
 }
