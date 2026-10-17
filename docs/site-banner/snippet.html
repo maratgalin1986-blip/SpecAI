@@ -1,0 +1,53 @@
+<!--
+  ИИСтройка24 — блок для сайта СпецПласт16 (тот, что рекламируется в Яндекс Директе).
+  Две части, можно вставить обе или одну:
+    1) яркий баннер в тексте страницы (лучше сразу под первым экраном);
+    2) кнопка, прилипшая к низу экрана: видна всё время, не закрывает содержимое.
+  Ссылки с метками utm: переходы видны в /admin → «Маркетинг».
+  Всё внутри: стили с префиксом ii24-, без внешних скриптов.
+-->
+
+<!-- 1. Баннер -->
+<style>
+  .ii24-banner{box-sizing:border-box;max-width:1100px;margin:24px auto;padding:28px 24px;border-radius:20px;
+    background:linear-gradient(135deg,#f47b10 0%,#ff9733 55%,#ffb25c 100%);color:#121519;
+    font-family:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;display:flex;gap:24px;align-items:center;flex-wrap:wrap;
+    box-shadow:0 10px 30px rgba(244,123,16,.35)}
+  .ii24-banner *{box-sizing:border-box}
+  .ii24-logo{width:72px;height:72px;border-radius:18px;flex:none;background:#fff;box-shadow:0 4px 12px rgba(0,0,0,.15)}
+  .ii24-body{flex:1 1 320px;min-width:0}
+  .ii24-badge{display:inline-block;margin:0 0 10px;padding:8px 14px;border-radius:999px;background:#121519;color:#fff;
+    font-weight:800;font-size:18px;letter-spacing:.2px}
+  .ii24-title{margin:0 0 6px;font-size:26px;line-height:1.2;font-weight:800;color:#121519}
+  .ii24-text{margin:0;font-size:16px;line-height:1.45;color:#2a2f36}
+  .ii24-btn{flex:none;display:inline-block;padding:16px 26px;border-radius:14px;background:#121519;color:#fff !important;
+    font-weight:800;font-size:18px;text-decoration:none !important;white-space:nowrap}
+  .ii24-btn:hover{background:#2a2f36}
+  @media (max-width:640px){.ii24-banner{padding:20px 16px;margin:16px 12px}.ii24-title{font-size:21px}
+    .ii24-badge{font-size:16px}.ii24-btn{width:100%;text-align:center}}
+</style>
+<section class="ii24-banner" aria-label="ИИСтройка24 — бесплатно и без посредников">
+  <img class="ii24-logo" src="https://spec-ai-web.vercel.app/icons/icon-192.png" alt="ИИСтройка24" width="72" height="72">
+  <div class="ii24-body">
+    <p class="ii24-badge">Бесплатно и без посредников</p>
+    <h2 class="ii24-title">Закажите спецтехнику в приложении ИИСтройка24</h2>
+    <p class="ii24-text">Одна заявка — цены от владельцев техники рядом с вами, по всей России. Цену назначает владелец, расчёт — напрямую с ним, площадка не берёт процент.</p>
+  </div>
+  <a class="ii24-btn" href="https://spec-ai-web.vercel.app/?utm_source=specplast16_site&amp;utm_medium=banner&amp;utm_campaign=app">Открыть приложение →</a>
+</section>
+
+<!-- 2. Кнопка внизу экрана -->
+<style>
+  .ii24-sticky{position:fixed;left:50%;bottom:16px;transform:translateX(-50%);z-index:9999;display:flex;align-items:center;gap:10px;
+    max-width:calc(100% - 24px);padding:12px 18px;border-radius:999px;background:#f47b10;color:#121519 !important;
+    font-family:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;font-weight:800;font-size:16px;line-height:1.2;
+    text-decoration:none !important;box-shadow:0 8px 24px rgba(0,0,0,.25);white-space:nowrap}
+  .ii24-sticky img{width:28px;height:28px;border-radius:8px;background:#fff;flex:none}
+  .ii24-sticky span{overflow:hidden;text-overflow:ellipsis}
+  .ii24-sticky small{font-weight:700;opacity:.85}
+  @media (max-width:420px){.ii24-sticky{font-size:14px;padding:10px 14px}.ii24-sticky small{display:none}}
+</style>
+<a class="ii24-sticky" href="https://spec-ai-web.vercel.app/?utm_source=specplast16_site&amp;utm_medium=sticky&amp;utm_campaign=app">
+  <img src="https://spec-ai-web.vercel.app/icons/icon-192.png" alt="" width="28" height="28">
+  <span>Бесплатно и без посредников <small>· заказать технику в приложении</small></span>
+</a>
