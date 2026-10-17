@@ -23,7 +23,7 @@
       "package": "com.specai.specai",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#D97706"
+        "backgroundColor": "#F59E0B"
       },
       "permissions": [
         "ACCESS_COARSE_LOCATION",
@@ -57,7 +57,7 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#D97706",
+          "backgroundColor": "#F59E0B",
           "image": "./assets/splash-icon.png",
           "imageWidth": 160
         }
