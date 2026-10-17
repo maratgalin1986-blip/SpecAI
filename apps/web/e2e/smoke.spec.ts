@@ -5,7 +5,15 @@ import { expect, test, type Page } from 'playwright/test';
 // brand is never shortened to «СП16». Nothing is ever sent: every non-GET
 // request (leads, photos, chat) is answered here.
 
-const PAGES = ['/?intro=0', '/pravila', '/contacts', '/soglasie', '/privacy', '/arenda/samosval'];
+const PAGES = [
+  '/?intro=0',
+  '/pravila',
+  '/contacts',
+  '/soglasie',
+  '/privacy',
+  '/arenda/samosval',
+  '/kak-polzovatsya',
+];
 
 const ALLOWED_EXTERNAL = [
   /^tel:/,

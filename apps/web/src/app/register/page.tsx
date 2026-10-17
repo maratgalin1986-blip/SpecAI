@@ -6,6 +6,7 @@ import { Button, Card } from '@specai/ui';
 import { CinemaBackdrop } from '@/components/CinemaHero';
 import { BasePicker, type BaseValue } from '@/components/BasePicker';
 import { ConsentText } from '@/components/ConsentText';
+import { Hint } from '@/components/Hint';
 import { normalizeReferralCode } from '@/lib/referral';
 import { useHydrated } from '@/lib/useHydrated';
 
@@ -100,6 +101,7 @@ export default function RegisterPage() {
           </p>
         )}
 
+        <Hint id="register" className="mb-3" />
         <div className="mb-4 flex flex-col gap-2 text-sm sm:flex-row">
           {(
             [

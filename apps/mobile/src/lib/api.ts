@@ -67,6 +67,10 @@ interface RequestOptions {
   body?: unknown;
   /** Не подставлять Bearer (например, для входа). */
   anonymous?: boolean;
+  /** Дополнительные заголовки (сессия админки — x-admin-session). */
+  headers?: Record<string, string>;
+  /** 'omit' — не принимать и не отправлять cookie (вход в админку). */
+  credentials?: RequestCredentials;
 }
 
 const REQUEST_TIMEOUT_MS = 20_000;
@@ -76,6 +80,7 @@ export async function apiFetch<T>(path: string, options: RequestOptions = {}): P
   const headers: Record<string, string> = { Accept: 'application/json' };
   if (options.body !== undefined) headers['Content-Type'] = 'application/json';
   if (!options.anonymous) Object.assign(headers, await authHeaders());
+  if (options.headers) Object.assign(headers, options.headers);
 
   let response: Response;
   // Without a timeout a hung network leaves the screen loading forever.
@@ -87,6 +92,7 @@ export async function apiFetch<T>(path: string, options: RequestOptions = {}): P
       headers,
       body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
       signal: controller.signal,
+      ...(options.credentials ? { credentials: options.credentials } : {}),
     });
   } catch {
     throw new ApiError(
@@ -433,6 +439,21 @@ export function register(input: RegisterInput) {
   });
 }
 
+/** «Стать исполнителем» под тем же логином: заказчик создаёт компанию. */
+export function becomeProvider(input: {
+  companyName: string;
+  baseAddress: string;
+  phone?: string;
+}) {
+  return apiFetch<{
+    user: { id: string; email: string; name: string; role: UserRole; companyId: string | null };
+  }>('/api/account/provider', {
+    method: 'POST',
+    // The screen does not send without the switch on (152-ФЗ ст. 10.1).
+    body: { ...input, publicConsent: true },
+  });
+}
+
 export function sendVerificationEmail() {
   return apiFetch<{ ok: boolean; alreadyVerified?: boolean }>('/api/auth/send-verification', {
     method: 'POST',
@@ -452,7 +473,10 @@ export function createCheckout(bookingId: string) {
 }
 
 export function createReview(input: { bookingId: string; rating: number; comment?: string }) {
-  return apiFetch<{ review: { id: string } }>('/api/reviews', { method: 'POST', body: input });
+  return apiFetch<{ review: { id: string }; message?: string }>('/api/reviews', {
+    method: 'POST',
+    body: input,
+  });
 }
 
 export function fetchCategories() {

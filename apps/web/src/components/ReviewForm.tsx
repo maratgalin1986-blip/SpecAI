@@ -37,9 +37,7 @@ export function ReviewForm({ bookingId }: { bookingId: string }) {
   }
 
   if (submitted) {
-    return (
-      <p className="text-xs text-green-700">Спасибо! Оценка видна сразу, текст — после проверки.</p>
-    );
+    return <p className="text-xs text-green-700">Спасибо! Отзыв появится после проверки.</p>;
   }
 
   return (

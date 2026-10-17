@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { BidCountdown } from '@/components/BidCountdown';
 import { BidForm } from '@/components/BidForm';
+import { Hint } from '@/components/Hint';
 import { OfferBreakdown } from '@/components/OfferBreakdown';
 import { OrderContact } from '@/components/OrderContact';
 import {
@@ -527,6 +528,7 @@ export default function OrderDetailScreen() {
 
         {order.status === 'OPEN' || !isOwner ? (
           <>
+            {canAccept && order.bids.length > 0 ? <Hint ids="order.bids" /> : null}
             <SectionTitle>
               {isOwner
                 ? `Предложения${bidCount > 0 ? ` · ${bidCount}` : ''}`

@@ -12,6 +12,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { AdminLoginRow, AdminMenuCard } from '@/components/AdminEntry';
 import { ContactActions } from '@/components/ContactActions';
 import { Button, Input } from '@/components/ui';
 import { ApiError, API_URL } from '@/lib/api';
@@ -118,6 +119,8 @@ export default function LoginScreen() {
             </Link>
           </View>
 
+          <AdminMenuCard />
+          <AdminLoginRow />
           {__DEV__ ? <Text style={styles.footer}>Сервер: {API_URL}</Text> : null}
         </ScrollView>
       </KeyboardAvoidingView>

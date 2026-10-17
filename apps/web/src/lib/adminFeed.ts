@@ -235,7 +235,9 @@ export function reviewEvents(reviews: FeedReviewRow[]): FeedEvent[] {
     kind: 'review',
     at: iso(review.createdAt),
     title: `Отзыв ${'★'.repeat(review.rating)} ждёт модерации`,
-    text: `${review.authorName} о «${review.companyName}»: ${clipText(review.text)}`,
+    text: review.text.trim()
+      ? `${review.authorName} о «${review.companyName}»: ${clipText(review.text)}`
+      : `${review.authorName} о «${review.companyName}»: только оценка, без текста`,
     href: '/admin#comments',
     tag: FEED_KIND_LABELS.review,
     tone: 'amber',

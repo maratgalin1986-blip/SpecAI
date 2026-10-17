@@ -10,6 +10,10 @@ export const STORAGE_KEYS = {
   providerOnline: 'specai.providerOnline',
   /** Машина, с которой исполнитель выходит на линию (id Equipment). */
   lineEquipmentId: 'specai.lineEquipmentId',
+  /** Закрытые подсказки (JSON-массив ключей) — только на этом телефоне. */
+  hints: 'specai.hints',
+  /** Сессия меню администратора (вход по паролю админки), не связана с аккаунтом. */
+  adminSession: 'specai.adminSession',
 } as const;
 
 export async function getItem(key: string): Promise<string | null> {

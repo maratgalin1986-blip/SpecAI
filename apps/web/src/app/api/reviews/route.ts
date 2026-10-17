@@ -48,7 +48,7 @@ export async function POST(request: NextRequest) {
   }
 
   // The text goes through the same rules as comments (contacts and links
-  // hidden) and waits for moderation; the stars count at once.
+  // hidden). The whole review (stars and text) waits for the owner's approval.
   let text: string | null = null;
   if (parsed.data.comment?.trim()) {
     const prepared = prepareCommentText(parsed.data.comment);
@@ -71,7 +71,8 @@ export async function POST(request: NextRequest) {
         equipmentId: booking.equipmentId,
         rating: parsed.data.rating,
         comment: text,
-        textStatus: text ? 'PENDING' : 'APPROVED',
+        // The owner approves every review (stars and text) before anyone sees it.
+        textStatus: 'PENDING',
       },
     });
   } catch (error) {
@@ -82,18 +83,16 @@ export async function POST(request: NextRequest) {
     throw error;
   }
 
-  if (text) {
-    await notifyTelegram(
-      `⭐ Новый отзыв (${review.rating}/5) ждёт проверки: ${booking.equipment.name}\n«${text.slice(0, 300)}»`,
-    ).catch(() => undefined);
-  }
+  // Every review waits for the owner, a rating-only one too: tell him.
+  await notifyTelegram(
+    `⭐ Новый отзыв (${review.rating}/5) ждёт проверки: ${booking.equipment.name}\n` +
+      (text ? `«${text.slice(0, 300)}»` : 'Только оценка, без текста'),
+  ).catch(() => undefined);
 
   return NextResponse.json(
     {
       review,
-      message: text
-        ? 'Спасибо! Оценка уже видна, текст отзыва появится после проверки'
-        : 'Спасибо за оценку!',
+      message: 'Спасибо! Отзыв появится после проверки',
     },
     { status: 201 },
   );

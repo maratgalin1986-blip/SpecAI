@@ -105,6 +105,8 @@ export default async function EquipmentDetailPage({ params }: { params: { id: st
       location: true,
       company: true,
       reviews: {
+        // Stars and text appear once the owner approves the review.
+        where: { textStatus: 'APPROVED' },
         include: { author: { select: { name: true } } },
         orderBy: { createdAt: 'desc' },
       },

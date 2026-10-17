@@ -45,6 +45,9 @@ export function SiteFooter() {
           <a href="/contacts" className={LINK}>
             Контакты
           </a>
+          <a href="/kak-polzovatsya" className={LINK}>
+            Как пользоваться
+          </a>
           <a href="/pravila" className={LINK}>
             Правила площадки
           </a>

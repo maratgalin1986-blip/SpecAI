@@ -14,6 +14,7 @@ import {
 import { CategoryPickerModal } from '@/components/CategoryPickerModal';
 import { DateField } from '@/components/DateField';
 import { DemandHint } from '@/components/DemandHint';
+import { Hint } from '@/components/Hint';
 import { Button, Segmented } from '@/components/ui';
 import { ApiError, createOrder, fetchCategories, type Category } from '@/lib/api';
 import { popularCategories } from '@/lib/categoryGroups';
@@ -128,6 +129,8 @@ export function QuickOrderSheet({
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
+          {/* Как заказать, затем — про адрес и дату; на экране не больше одной. */}
+          <Hint ids={['home.order', 'home.sheet']} />
           <Text style={styles.title} accessibilityRole="header">
             Какая техника нужна?
           </Text>

@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { asksWhatNext, guideReply, guideRole, nextSteps } from './guide';
+import {
+  GUIDE_HELP_LINK,
+  asksWhatNext,
+  guideReply,
+  guideRole,
+  inCustomerMode,
+  nextSteps,
+} from './guide';
+import { dashboardRedirect } from './cabinetMode';
 
 const customer = { role: 'CUSTOMER', companyId: null };
 const provider = { role: 'PROVIDER_ADMIN', companyId: 'c1' };
@@ -197,5 +205,44 @@ describe('asksWhatNext and guideReply', () => {
     expect(reply).toContain('[Оставить заявку](/orders)');
     expect(reply).toContain('✅ Регистрация');
     expect(guideReply(nextSteps(customer, {}), 'plain')).not.toContain('](');
+  });
+});
+
+describe('guide links', () => {
+  it('the help page is linked from the guide card', () => {
+    expect(GUIDE_HELP_LINK.href).toBe('/kak-polzovatsya');
+  });
+
+  it('in the customer mode the dashboard links keep the mode', () => {
+    const guide = inCustomerMode(nextSteps(customer, { orders: 1, openOrdersWithoutBids: 0 }));
+    const hrefs = [...guide.steps, guide.next]
+      .map((step) => step.action?.href)
+      .filter((href): href is string => Boolean(href));
+    expect(hrefs).toContain('/dashboard?mode=customer#orders');
+    expect(hrefs).toContain('/dashboard?mode=customer#bookings');
+    for (const href of hrefs.filter((h) => h.startsWith('/dashboard'))) {
+      const url = new URL(href, 'https://example.test');
+      // None of them bounces a provider back to /provider.
+      expect(dashboardRedirect(provider, url.searchParams.get('mode')), href).toBeNull();
+    }
+    // Links elsewhere and the app routes stay as they were.
+    expect(hrefs).toContain('/orders');
+    const order = guide.steps.find((step) => step.id === 'order');
+    expect(order?.action?.app).toBe('/orders/new');
+  });
+
+  it('does not touch links that only look like the dashboard', () => {
+    const base = nextSteps(customer);
+    const first = base.steps[0]!;
+    const odd = {
+      ...base,
+      steps: [
+        { ...first, action: { label: 'x', href: '/dashboards' } },
+        { ...first, id: 'q', action: { label: 'y', href: '/dashboard?verified=1' } },
+      ],
+    };
+    const result = inCustomerMode(odd);
+    expect(result.steps[0]?.action?.href).toBe('/dashboards');
+    expect(result.steps[1]?.action?.href).toBe('/dashboard?verified=1&mode=customer');
   });
 });

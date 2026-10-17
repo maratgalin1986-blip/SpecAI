@@ -40,3 +40,8 @@
     карте; приложение снимало с линии при каждом запуске).
     → `/code-review` по диффу перед каждым пушем, до слития, а не после. Найденное исправлять с
     тестом, который падал до правки.
+16. Обновления 16–17 октября ушли в Expo только для Android (`--platform android`), а Expo Go
+    просит runtime «exposdk:57.0.0», не «0.1.0» APK: на iPhone владельца — «AppLoaderTask …
+    could not launch an update».
+    → Публиковать `--platform all` и дважды: обычной командой (APK) и с `EXPO_GO_UPDATE=1`
+    (Expo Go); проверять ответ `u.expo.dev` для `expo-platform: ios` и обоих runtime.

@@ -12,12 +12,18 @@ import { isOnlinePaymentEnabled } from '@/lib/stripe';
 import { SITE } from '@/lib/site';
 import { VerifyEmailBanner } from '@/components/VerifyEmailBanner';
 import { isEmailConfigured } from '@/lib/email';
-import { HOUSE_COMPANY_ID, PUBLISHED_FLEET, isProvider } from '@/lib/fleet';
+import { HOUSE_COMPANY_ID, PUBLISHED_FLEET } from '@/lib/fleet';
 import { providerForCustomer } from '@/lib/customerPrivacy';
 import { redirect } from 'next/navigation';
+import { cookies } from 'next/headers';
 import { GuideCard } from '@/components/GuideCard';
 import { CommentForm } from '@/components/Comments';
 import { guideFor } from '@/lib/guideState';
+import { inCustomerMode } from '@/lib/guide';
+import { MODE_COOKIE, canSwitchModes, dashboardRedirect } from '@/lib/cabinetMode';
+import { BecomeProviderForm } from '@/components/BecomeProviderForm';
+import { ModeSwitch } from '@/components/ModeSwitch';
+import { Hint } from '@/components/Hint';
 import { CabinetQuickOrder } from '@/components/CabinetQuickOrder';
 import { ReferralCard } from '@/components/ReferralCard';
 import { orderTimeline } from '@/lib/orderTimeline';
@@ -57,11 +63,20 @@ function PaymentStatusLabel({ paid }: { paid: boolean }) {
 export default async function DashboardPage({
   searchParams,
 }: {
-  searchParams?: { payment?: string; verified?: string };
+  searchParams?: { payment?: string; verified?: string; mode?: string };
 }) {
   const session = await getServerSession(authOptions);
-  // The fleet manager's cabinet is /provider (the header's «Кабинет» leads here).
-  if (isProvider(session?.user)) redirect('/provider');
+  // One login, two modes: a provider works on /provider, and orders machinery
+  // here in the customer mode (?mode=customer or the remembered choice).
+  const goTo = dashboardRedirect(
+    session?.user,
+    searchParams?.mode,
+    cookies().get(MODE_COOKIE)?.value,
+  );
+  if (goTo) redirect(goTo);
+  // A provider here is in the customer mode: its own orders and bookings.
+  const customerMode = canSwitchModes(session?.user);
+  const canBecomeProvider = session?.user.role === 'CUSTOMER';
   const paymentNotice = searchParams?.payment ? PAYMENT_NOTICE[searchParams.payment] : undefined;
   const paymentsEnabled = isOnlinePaymentEnabled();
 
@@ -76,7 +91,11 @@ export default async function DashboardPage({
     referralCode,
     invited,
   ] = await Promise.all([
-    guideFor(session?.user),
+    // In the customer mode a provider gets the customer's guide, with links
+    // that keep the mode.
+    customerMode && session
+      ? guideFor({ ...session.user, role: 'CUSTOMER', companyId: null }).then(inCustomerMode)
+      : guideFor(session?.user),
     prisma.equipment.count({ where: PUBLISHED_FLEET }),
     session
       ? prisma.booking.count({
@@ -131,8 +150,11 @@ export default async function DashboardPage({
           )
           .map(({ id, name, slug }) => ({ id, name, slug })),
       ),
-    session ? ensureReferralCode(session.user.id).catch(() => null) : Promise.resolve(null),
-    session
+    // The provider's own page has the invitation and the notifications already.
+    session && !customerMode
+      ? ensureReferralCode(session.user.id).catch(() => null)
+      : Promise.resolve(null),
+    session && !customerMode
       ? invitedCounts(session.user.id).catch(() => ({ total: 0, providers: 0 }))
       : Promise.resolve({ total: 0, providers: 0 }),
   ]);
@@ -144,12 +166,43 @@ export default async function DashboardPage({
 
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
-      <div className="flex items-baseline justify-between gap-3">
-        <h1 className="text-2xl font-extrabold tracking-tight text-graphite-950">Личный кабинет</h1>
-        <a href="#invite" className="text-sm font-semibold text-signal-700 hover:underline">
-          Пригласить коллегу
-        </a>
-      </div>
+      {customerMode ? (
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
+            <p className="cab-eyebrow">Режим заказчика</p>
+            <h1 className="text-2xl font-extrabold tracking-tight text-graphite-950">
+              Мои заказы техники
+            </h1>
+            <a
+              href="/provider"
+              className="inline-flex min-h-11 items-center text-sm font-semibold text-signal-700 hover:underline"
+            >
+              ← Кабинет исполнителя
+            </a>
+          </div>
+          <ModeSwitch current="customer" />
+        </div>
+      ) : (
+        <div className="flex items-baseline justify-between gap-3">
+          <h1 className="text-2xl font-extrabold tracking-tight text-graphite-950">
+            Личный кабинет
+          </h1>
+          <div className="flex flex-col items-end gap-1 text-right sm:flex-row sm:gap-4">
+            {canBecomeProvider && (
+              <a
+                href="#become-provider"
+                className="text-sm font-semibold text-signal-700 hover:underline"
+              >
+                Есть своя техника?
+              </a>
+            )}
+            <a href="#invite" className="text-sm font-semibold text-signal-700 hover:underline">
+              Пригласить коллегу
+            </a>
+          </div>
+        </div>
+      )}
+      <Hint id={customerMode ? 'dashboard-customer-mode' : 'dashboard'} />
       <CabinetQuickOrder categories={categories} />
       <GuideCard guide={guide} />
       {searchParams?.verified === '1' && (
@@ -368,6 +421,7 @@ export default async function DashboardPage({
         )}
       </div>
 
+      {canBecomeProvider && <BecomeProviderForm />}
       {referralCode && (
         <ReferralCard
           link={referralLink(siteUrl(), referralCode)}
@@ -375,7 +429,7 @@ export default async function DashboardPage({
           invited={invited}
         />
       )}
-      {session && <NotificationSettings />}
+      {session && !customerMode && <NotificationSettings />}
     </div>
   );
 }

@@ -25,7 +25,8 @@ export async function loadCompanyStats(companyIds: string[]): Promise<Map<string
       take: 10_000,
     }),
     prisma.review.findMany({
-      where: { companyId: { in: ids } },
+      // Only reviews the owner approved count (stars too).
+      where: { companyId: { in: ids }, textStatus: 'APPROVED' },
       select: { companyId: true, rating: true, author: { select: { companyId: true } } },
       take: 20_000,
     }),

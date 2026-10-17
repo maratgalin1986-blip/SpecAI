@@ -90,7 +90,7 @@ export async function loadAdminFeed(now: Date = new Date()): Promise<AdminFeed> 
         take: PER_SOURCE,
       }),
       prisma.review.findMany({
-        where: { textStatus: 'PENDING', comment: { not: null } },
+        where: { textStatus: 'PENDING' },
         select: {
           id: true,
           createdAt: true,

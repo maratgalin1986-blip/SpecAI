@@ -1,12 +1,15 @@
 import { Link, useFocusEffect } from 'expo-router';
 import React, { useCallback, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { AdminLoginRow, AdminMenuCard } from '@/components/AdminEntry';
 import { ContactActions } from '@/components/ContactActions';
+import { Hint } from '@/components/Hint';
 import { ModeSwitchCard, ProfileShortcuts } from '@/components/ProfileShortcuts';
 import { NotificationSettingsCard } from '@/components/NotificationSettingsCard';
 import { Badge, Button, Card } from '@/components/ui';
 import { API_URL, ApiError, sendVerificationEmail, type UserRole } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
+import { profileHint } from '@/lib/modes';
 import { SITE } from '@/lib/site';
 import { colors, spacing } from '@/lib/theme';
 
@@ -22,6 +25,7 @@ export default function ProfileScreen() {
   const [loggingOut, setLoggingOut] = useState(false);
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
+  const hint = profileHint(user?.role);
 
   // При каждом открытии вкладки перечитываем пользователя: статус подтверждения
   // e-mail меняется после перехода по ссылке из письма.
@@ -93,6 +97,8 @@ export default function ProfileScreen() {
         {__DEV__ ? <Row label="Сервер" value={API_URL} /> : null}
       </Card>
 
+      <AdminMenuCard />
+      {hint ? <Hint ids={hint} /> : null}
       <ModeSwitchCard />
       <ProfileShortcuts />
 
@@ -130,6 +136,7 @@ export default function ProfileScreen() {
       </Card>
 
       <Button title="Выйти" variant="danger" onPress={handleLogout} loading={loggingOut} />
+      <AdminLoginRow />
     </ScrollView>
   );
 }

@@ -222,7 +222,12 @@ export async function POST(request: NextRequest) {
     async get_equipment_details(input) {
       const item = await prisma.equipment.findUnique({
         where: { id: requireString(input, 'equipmentId') },
-        include: { category: true, location: true, reviews: true, company: true },
+        include: {
+          category: true,
+          location: true,
+          reviews: { where: { textStatus: 'APPROVED' } },
+          company: true,
+        },
       });
       if (!item || !isPublicEquipment(item)) {
         throw new ToolError('Техника не найдена');

@@ -4,46 +4,61 @@ import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Card } from '@/components/ui';
 import { useAuth } from '@/lib/auth';
-import { isProviderMode, setAppMode, usePrefs } from '@/lib/prefs';
+import { useSwitchMode } from '@/components/ModeSwitch';
+import { modeSwitchKind } from '@/lib/modes';
+import { isProviderMode, usePrefs } from '@/lib/prefs';
 import { colors, radius, spacing, TAP } from '@/theme';
 
 /**
- * Переключатель «Режим заказчика / Кабинет исполнителя» — только у
- * исполнителей. Режим хранится на телефоне; роль на сервере не меняется.
+ * Один вход — два режима. Исполнитель переключается «Заказчик ⇄ Исполнитель»
+ * (режим хранится на телефоне, роль на сервере не меняется); заказчик видит
+ * «Стать исполнителем». Машинисту карточка не показывается (lib/modes.ts).
  */
 export function ModeSwitchCard() {
   const router = useRouter();
   const { user } = useAuth();
   const { mode } = usePrefs();
-  if (user?.role !== 'PROVIDER_ADMIN') return null;
-  const providerMode = isProviderMode(user.role, mode);
+  const switchMode = useSwitchMode();
+  const kind = modeSwitchKind(user?.role);
+  if (kind === 'none') return null;
 
-  const toggle = () => {
-    if (providerMode) {
-      setAppMode('customer');
-      router.replace('/(tabs)');
-    } else {
-      setAppMode('provider');
-      router.replace('/(tabs)/feed');
-    }
-  };
+  if (kind === 'become') {
+    return (
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Стать исполнителем"
+        onPress={() => router.push('/become-provider')}
+        style={({ pressed }) => [styles.mode, pressed && styles.pressed]}
+      >
+        <Ionicons name="construct-outline" size={24} color={colors.primary} />
+        <View style={styles.flex}>
+          <Text style={styles.modeTitle}>Стать исполнителем</Text>
+          <Text style={styles.modeText}>Добавьте свою технику и получайте заявки</Text>
+        </View>
+        <Ionicons name="chevron-forward" size={20} color={colors.onDarkMuted} />
+      </Pressable>
+    );
+  }
 
+  const providerMode = isProviderMode(user?.role, mode);
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={providerMode ? 'Перейти в режим заказчика' : 'Вернуться в кабинет'}
-      onPress={toggle}
+      accessibilityLabel={
+        providerMode ? 'Перейти в режим «Заказчик»' : 'Перейти в режим «Исполнитель»'
+      }
+      onPress={() => switchMode(providerMode ? 'customer' : 'provider')}
       style={({ pressed }) => [styles.mode, pressed && styles.pressed]}
     >
       <Ionicons name="swap-horizontal" size={24} color={colors.primary} />
       <View style={styles.flex}>
         <Text style={styles.modeTitle}>
-          {providerMode ? 'Режим заказчика' : 'Кабинет исполнителя'}
+          {providerMode ? 'Перейти в режим «Заказчик»' : 'Перейти в режим «Исполнитель»'}
         </Text>
         <Text style={styles.modeText}>
           {providerMode
-            ? 'Закажите технику у других исполнителей сервиса'
-            : 'Сейчас вы заказываете как заказчик. Вернуться к ленте заявок'}
+            ? 'Сейчас вы исполнитель. Закажите технику у других исполнителей сервиса'
+            : 'Сейчас вы заказчик. Вернуться к ленте заявок и своей технике'}
         </Text>
       </View>
       <Ionicons name="chevron-forward" size={20} color={colors.onDarkMuted} />
@@ -90,6 +105,7 @@ export function ProfileShortcuts() {
     <Card style={styles.links}>
       {[
         ...links,
+        { icon: 'help-circle-outline' as const, label: 'Как пользоваться', href: '/guide' as Href },
         { icon: 'heart-outline' as const, label: 'О сервисе и контакты', href: '/about' as Href },
       ].map((link, index) => (
         <Pressable

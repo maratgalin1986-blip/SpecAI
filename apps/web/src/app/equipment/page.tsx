@@ -20,6 +20,7 @@ import {
 import { pluralizeRu } from '@/lib/pluralize';
 import { SITE } from '@/lib/site';
 import { CinemaHero } from '@/components/CinemaHero';
+import { Hint } from '@/components/Hint';
 import { Reveal } from '@/components/Reveal';
 import { TelegramButton } from '@/components/TelegramButton';
 import { PUBLISHED_FLEET } from '@/lib/fleet';
@@ -248,6 +249,8 @@ export default async function EquipmentCatalogPage({
           </a>
         </div>
       </CinemaHero>
+
+      <Hint id="catalog" />
 
       <nav aria-label="Категории техники" className="flex flex-col gap-3">
         <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0">
