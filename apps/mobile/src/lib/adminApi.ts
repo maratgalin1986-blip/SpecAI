@@ -234,3 +234,22 @@ export function setProposalStatus(id: string, status: 'READ' | 'ARCHIVED') {
     body: { status },
   });
 }
+
+/** «Решения ИИ»: как ИИ-модератор решил по сомнительным заявкам из чатов. */
+export interface AiDecision {
+  id: string;
+  /** OPEN | MATCHED | CANCELLED | PENDING_REVIEW — где заявка сейчас. */
+  status: string;
+  excerpt: string;
+  decision: 'PUBLISH' | 'REJECT' | 'UNSURE' | string;
+  reason: string;
+  moderatedAt: string | null;
+  /** Администратор потом изменил решение на сайте. */
+  overridden: boolean;
+}
+
+export function fetchAiDecisions() {
+  return adminFetch<{ enabled: boolean; decisions: AiDecision[] }>(
+    '/api/admin/orders/ai-decisions',
+  );
+}

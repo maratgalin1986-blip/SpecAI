@@ -21,6 +21,8 @@ import { providerPath } from '@/lib/providerSeo';
 import { chipClass } from '@/components/admin/AdminUi';
 import { PhoneLink } from '@/components/admin/PhoneLink';
 import { ProposalsCard } from '@/components/admin/ProposalsCard';
+import { AiDecisionsCard } from '@/components/admin/AiDecisionsCard';
+import { aiModerationEnabled, loadAiDecisions } from '@/lib/orderModeration';
 import { ADMIN_PROPOSAL_SELECT } from '@/lib/proposals';
 import {
   LEAD_FILTERS,
@@ -88,7 +90,7 @@ export default async function AdminPage({ searchParams = {} }: { searchParams?: 
     }),
     prisma.lead.count({ where: leadsWhere }),
   ]);
-  const [pendingOrders, importedStats] = await Promise.all([
+  const [pendingOrders, importedStats, aiDecisions] = await Promise.all([
     prisma.order.findMany({
       where: { status: 'PENDING_REVIEW' },
       include: { category: true, location: true },
@@ -100,6 +102,7 @@ export default async function AdminPage({ searchParams = {} }: { searchParams?: 
       where: { source: { not: 'SITE' }, createdAt: { gte: new Date(Date.now() - 7 * 86_400_000) } },
       _count: true,
     }),
+    loadAiDecisions().catch(() => []),
   ]);
   const pendingComments = await prisma.comment.findMany({
     where: { status: 'PENDING' },
@@ -262,8 +265,8 @@ export default async function AdminPage({ searchParams = {} }: { searchParams?: 
             <span className="text-amber-700">({moderationCount})</span>
           </h2>
           <p className="text-sm text-slate-600">
-            Уверенные заявки из чатов публикуются на торгах сразу, сомнительные ждут здесь. За 7
-            дней импортировано:{' '}
+            Уверенные заявки из чатов публикуются на торгах сразу, сомнительные проверяет ИИ (см.
+            «Решения ИИ»); здесь остаются те, что он ещё не решил. За 7 дней импортировано:{' '}
             {importedStats.length === 0
               ? '0'
               : importedStats.map((s) => `${SOURCE_LABELS[s.source]} — ${s._count}`).join(', ')}
@@ -301,6 +304,8 @@ export default async function AdminPage({ searchParams = {} }: { searchParams?: 
           </div>
         ))}
       </Card>
+
+      <AiDecisionsCard decisions={aiDecisions} enabled={aiModerationEnabled()} />
 
       <Card className="flex scroll-mt-24 flex-col gap-3" id="comments">
         <div>

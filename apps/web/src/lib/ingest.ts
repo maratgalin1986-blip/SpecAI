@@ -5,6 +5,7 @@ import { notifyTelegram } from '@/lib/notify';
 import { bidsUntilFor } from '@/lib/bidWindow';
 import { chatOrderNote, placeInText } from '@/lib/chatOrders';
 import { notifyProvidersAboutOrder } from '@/lib/notifications/notifyUser';
+import { autoModerateOrder } from '@/lib/orderModeration';
 import { isSafeHttpUrl, maskContacts } from '@/lib/privacy';
 import { SITE } from '@/lib/site';
 import { siteUrl } from '@/lib/siteUrl';
@@ -173,6 +174,13 @@ export async function ingestMessage(message: IncomingMessage): Promise<IngestRes
 
   // Providers with this kind of machinery nearby hear about it at once.
   if (published) await notifyProvidersAboutOrder(order.id);
+  // A doubtful one goes to the AI moderator at once (lib/orderModeration.ts);
+  // if that fails, the daily sweep retries it. The result here stays the same.
+  if (!published) {
+    await autoModerateOrder(order.id, { timeoutMs: 6_000 }).catch((error: unknown) =>
+      console.error('[ingest] AI moderation failed, the sweep will retry', error),
+    );
+  }
 
   return { status: 'created', orderId: order.id, published };
 }

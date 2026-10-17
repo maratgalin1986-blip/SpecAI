@@ -70,6 +70,12 @@ function AdminMenu() {
       href: '/admin/orders',
     },
     {
+      icon: 'sparkles-outline',
+      title: 'Решения ИИ',
+      text: 'Что ИИ опубликовал и отклонил из заявок из чатов',
+      href: '/admin/ai-decisions',
+    },
+    {
       icon: 'bulb-outline',
       title: 'Предложения',
       text: 'Идеи по сервису и предложения о сотрудничестве',

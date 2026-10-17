@@ -379,11 +379,23 @@ model Order {
   // 24 h, capped at the start date (lib/bidWindow.ts). Later bids are late.
   bidsUntil    DateTime?
 
+  // Moderation of doubtful chat imports (owner, 2026-10-17: the AI decides,
+  // not the owner; apps/web/src/lib/orderModeration.ts). moderatedBy "ai" |
+  // "admin" (who decided last); moderationDecision is the AI's verdict
+  // "PUBLISH" | "REJECT" | "UNSURE", kept when the admin overrides it;
+  // moderatedAt is the last decision or AI attempt. Strings, not enums
+  // (CLAUDE.md, rule 2).
+  moderatedBy        String?
+  moderationDecision String?
+  moderationReason   String?
+  moderatedAt        DateTime?
+
   @@index([customerId])
   @@index([categoryId])
   @@index([status])
   @@index([fingerprint])
   @@index([externalId])
+  @@index([moderatedAt])
 }
 
 enum OrderSource {
