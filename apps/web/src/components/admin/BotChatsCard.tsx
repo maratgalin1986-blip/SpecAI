@@ -1,6 +1,7 @@
 import { Card } from '@specai/ui';
 import { AdminTag } from '@/components/admin/AdminUi';
 import { ChannelPickButton } from '@/components/admin/ChannelPickButton';
+import { ChatSilentButton } from '@/components/admin/ChatSilentButton';
 import { moscowDateKey } from '@/lib/bookingRules';
 import { REPLY_LIMITS } from '@/lib/groupBot';
 
@@ -9,6 +10,8 @@ export interface BotChatRow {
   title: string | null;
   username: string | null;
   quiet: boolean;
+  /** «Тихий режим»: collects orders, posts nothing (null on rows from before the column). */
+  silent?: boolean | null;
   canWrite: boolean;
   removedAt: Date | null;
   repliesToday: number;
@@ -45,9 +48,11 @@ export function BotChatsCard({
           Чаты с ботом <span className="text-amber-700">({active})</span>
         </h2>
         <p className="text-sm text-slate-600">
-          Бот отвечает под опубликованными заявками ссылкой на торги: не больше{' '}
-          {REPLY_LIMITS.perHour} ответов в час и {REPLY_LIMITS.perDay} в день на чат. Админ чата
-          выключает его командой /quiet — тогда бот не отвечает и не собирает заявки.
+          По умолчанию бот в «тихом режиме»: молча собирает заявки и ничего не пишет в группе — ни
+          приветствия, ни ответов, ни ответов на команды. «Включить ответы» (или /otvechat от админа
+          чата) — бот отвечает под опубликованными заявками ссылкой на торги, не больше{' '}
+          {REPLY_LIMITS.perHour} ответов в час и {REPLY_LIMITS.perDay} в день; /tiho — снова тихо.
+          Команда /quiet выключает бота совсем: не отвечает и не собирает заявки.
         </p>
         <p className="text-sm text-slate-600">
           «Сводка заявок сюда» — в этот чат (ваш канал или группу) каждый вечер в 19:00 по Москве
@@ -72,6 +77,8 @@ export function BotChatsCard({
             <AdminTag tone="quiet">удалён</AdminTag>
           ) : chat.quiet ? (
             <AdminTag tone="warn">выключен (/quiet)</AdminTag>
+          ) : chat.silent !== false ? (
+            <AdminTag tone="graphite">молча собирает заявки</AdminTag>
           ) : !chat.canWrite ? (
             <AdminTag tone="red">нет права писать</AdminTag>
           ) : (
@@ -81,6 +88,9 @@ export function BotChatsCard({
             добавлен {chat.addedAt.toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow' })} ·
             ответов сегодня: {repliesToday(chat)}
           </span>
+          {!chat.removedAt && !chat.quiet && (
+            <ChatSilentButton chatId={chat.chatId} silent={chat.silent !== false} />
+          )}
           {!digestFromEnv &&
             (chat.chatId === digestChatId || (!chat.removedAt && chat.canWrite && !chat.quiet)) && (
               <ChannelPickButton

@@ -3,6 +3,12 @@
 // follow-up when bids arrive, the admins' /quiet, /resume and /about, and
 // bookkeeping of the chats (BotChat) when the bot is added or removed.
 //
+// «Тихий режим» (owner, 2026-10-18; BotChat.silent, on by default): group
+// members must not see the bot. A silent chat gets NO message at all — no
+// hello, no replies, no follow-ups, no command answers; orders are still
+// collected (unless /quiet). A chat admin's /otvechat turns replies on, /tiho
+// back off, silently; the owner sees and switches the state in /admin.
+//
 // Hard limits (ФЗ «О рекламе» ст. 18, 152-ФЗ, Telegram ToS): the bot answers
 // only publicly, in the thread where the order was posted; it never writes to
 // the author or anyone else in private, and its messages carry no phone
@@ -90,14 +96,16 @@ export const RESUME_TEXT =
   'Бот снова включён: на заявки о технике отвечает ссылкой, где исполнители присылают цены. ' +
   'Выключить — /quiet.';
 
-export type GroupCommand = 'quiet' | 'resume' | 'about';
+export type GroupCommand = 'quiet' | 'resume' | 'about' | 'otvechat' | 'tiho';
 
 /** «/quiet», «/quiet@<this bot>»; a command addressed to another bot is not ours. */
 export function parseGroupCommand(
   text: string | undefined,
   botUsername: string,
 ): GroupCommand | null {
-  const match = /^\/(quiet|resume|about)(?:@(\w+))?(?:\s|$)/i.exec((text ?? '').trim());
+  const match = /^\/(quiet|resume|about|otvechat|tiho)(?:@(\w+))?(?:\s|$)/i.exec(
+    (text ?? '').trim(),
+  );
   if (!match) return null;
   if (match[2] && match[2].toLowerCase() !== botUsername.toLowerCase()) return null;
   return match[1]!.toLowerCase() as GroupCommand;
@@ -145,22 +153,31 @@ async function noteRefusal(chatId: string, res: TelegramResponse) {
  * message from a chat the bot sat in before this table existed; the title and
  * handle follow renames. Returns whether the chat is quiet.
  */
-export async function botChatState(chat: TgChat): Promise<{ quiet: boolean; canWrite: boolean }> {
+export async function botChatState(
+  chat: TgChat,
+): Promise<{ quiet: boolean; canWrite: boolean; silent: boolean }> {
   const chatId = String(chat.id);
   const title = chat.title?.slice(0, 200) ?? null;
   const username = chat.username?.slice(0, 64) ?? null;
   const row = await prisma.botChat.findUnique({
     where: { chatId },
-    select: { quiet: true, canWrite: true, title: true, username: true, removedAt: true },
+    select: {
+      quiet: true,
+      canWrite: true,
+      silent: true,
+      title: true,
+      username: true,
+      removedAt: true,
+    },
   });
   if (!row) {
     const created = await prisma.botChat.upsert({
       where: { chatId },
       create: { chatId, title, username },
       update: {},
-      select: { quiet: true, canWrite: true },
+      select: { quiet: true, canWrite: true, silent: true },
     });
-    return created;
+    return { ...created, silent: created.silent ?? true };
   }
   // A message from the chat means the bot is in it.
   if (row.title !== title || row.username !== username || row.removedAt) {
@@ -169,10 +186,11 @@ export async function botChatState(chat: TgChat): Promise<{ quiet: boolean; canW
       data: { title, username, removedAt: null },
     });
   }
-  return { quiet: row.quiet, canWrite: row.canWrite };
+  // A row from before the column existed reads as silent (the default).
+  return { quiet: row.quiet, canWrite: row.canWrite, silent: row.silent ?? true };
 }
 
-export type SlotResult = 'ok' | 'quiet' | 'cannot_write' | 'limited';
+export type SlotResult = 'ok' | 'quiet' | 'silent' | 'cannot_write' | 'limited';
 
 /** Thrown inside the slot transaction to roll it back with a reason. */
 class SlotRefused extends Error {
@@ -196,10 +214,12 @@ async function claimReplySlot(
 ): Promise<void> {
   const chat = await tx.botChat.findUnique({
     where: { chatId },
-    select: { quiet: true, canWrite: true, removedAt: true },
+    select: { quiet: true, canWrite: true, removedAt: true, silent: true },
   });
   // An unknown chat is treated as quiet: no reply without a row to respect.
   if (!chat || chat.quiet) throw new SlotRefused('quiet');
+  // «Тихий режим»: nothing is posted in the group.
+  if (chat.silent !== false) throw new SlotRefused('silent');
   if (!chat.canWrite || chat.removedAt) throw new SlotRefused('cannot_write');
   // The daily counter starts over each Moscow day. NULL needs its own branch:
   // `repliesDay <> day` is not true for NULL in SQL.
@@ -351,7 +371,18 @@ export async function isChatAdmin(message: TgGroupMessage): Promise<boolean> {
 
 export type CommandResult = 'done' | 'not_admin' | 'limited';
 
-/** /quiet, /resume and /about in a group: for the chat's admins only. */
+const COMMAND_STATE: Partial<Record<GroupCommand, { quiet?: boolean; silent?: boolean }>> = {
+  quiet: { quiet: true },
+  resume: { quiet: false },
+  otvechat: { silent: false },
+  tiho: { silent: true },
+};
+
+/**
+ * /quiet, /resume, /about, /otvechat and /tiho in a group: for the chat's
+ * admins only. In a silent chat (and after /tiho) nothing is posted back —
+ * the owner hears of a switch in his own Telegram and sees it in /admin.
+ */
 export async function handleGroupCommand(
   message: TgGroupMessage,
   command: GroupCommand,
@@ -363,16 +394,39 @@ export async function handleGroupCommand(
   }
   // Non-admins get no answer at all: nothing to argue with in the chat.
   if (!(await isChatAdmin(message))) return 'not_admin';
-  if (command !== 'about') {
-    const quiet = command === 'quiet';
-    const title = message.chat.title?.slice(0, 200) ?? null;
-    await prisma.botChat.upsert({
+  const change = COMMAND_STATE[command];
+  const title = message.chat.title?.slice(0, 200) ?? null;
+  let silent = true;
+  if (change) {
+    const row = await prisma.botChat.upsert({
       where: { chatId },
-      create: { chatId, title, username: message.chat.username ?? null, quiet },
-      // An admin's /resume also clears a refusal the bot remembered.
-      update: { quiet, removedAt: null, ...(quiet ? {} : { canWrite: true }) },
+      create: { chatId, title, username: message.chat.username ?? null, ...change },
+      // An admin's /resume or /otvechat also clears a refusal the bot remembered.
+      update: {
+        ...change,
+        removedAt: null,
+        ...(change.quiet === false || change.silent === false ? { canWrite: true } : {}),
+      },
+      select: { silent: true },
     });
+    silent = row.silent !== false;
+    if (change.silent !== undefined) {
+      try {
+        await notifyTelegram(
+          `Чат «${title ?? chatId}»: админ включил ${
+            change.silent ? 'тихий режим — бот молча собирает заявки' : 'ответы бота под заявками'
+          } (/admin → «Чаты с ботом»).`,
+        );
+      } catch (error) {
+        console.error('[telegram] could not tell the owner about the switch', error);
+      }
+    }
+  } else {
+    const row = await prisma.botChat.findUnique({ where: { chatId }, select: { silent: true } });
+    silent = row?.silent !== false;
   }
+  // «Тихий режим»: no answer post at all (and none for /otvechat and /tiho).
+  if (silent || command === 'otvechat' || command === 'tiho') return 'done';
   const text = command === 'quiet' ? QUIET_TEXT : command === 'resume' ? RESUME_TEXT : aboutText();
   // Channels get no answer post: only groups have a thread to reply in.
   if (isGroupChat(message.chat.type)) {
@@ -431,8 +485,12 @@ export async function onMyChatMember(
     // One short hello so members and admins know what the bot does and how
     // to switch it off; no reply-to, no notification.
     if (canWrite && isGroupChat(update.chat.type)) {
-      const state = await prisma.botChat.findUnique({ where: { chatId }, select: { quiet: true } });
-      if (!state?.quiet) {
+      const state = await prisma.botChat.findUnique({
+        where: { chatId },
+        select: { quiet: true, silent: true },
+      });
+      // «Тихий режим» (the default): not even a hello.
+      if (state && !state.quiet && state.silent === false) {
         const res = await send(chatId, aboutText());
         if (!res.ok) await noteRefusal(chatId, res);
       }
@@ -459,9 +517,10 @@ export async function onChatMigrated(oldChatId: number, newChatId: number): Prom
       title: old.title,
       username: old.username,
       quiet: old.quiet,
+      silent: old.silent,
       addedAt: old.addedAt,
     },
-    update: { quiet: old.quiet },
+    update: { quiet: old.quiet, silent: old.silent },
   });
   await prisma.botChat.update({
     where: { chatId: String(oldChatId) },
@@ -484,4 +543,14 @@ export async function loadBotChats(take = 50) {
     prisma.botChat.count({ where: { removedAt: null } }),
   ]);
   return { chats, active };
+}
+
+/** /admin «Чаты с ботом»: replies on (silent: false) or the quiet collection (true). */
+export async function setChatSilent(chatId: unknown, silent: unknown) {
+  if (typeof chatId !== 'string' || !/^-?\d{1,20}$/.test(chatId) || typeof silent !== 'boolean') {
+    return { ok: false as const, error: 'Неверный чат' };
+  }
+  const updated = await prisma.botChat.updateMany({ where: { chatId }, data: { silent } });
+  if (updated.count === 0) return { ok: false as const, error: 'Чат не найден' };
+  return { ok: true as const, chatId, silent };
 }

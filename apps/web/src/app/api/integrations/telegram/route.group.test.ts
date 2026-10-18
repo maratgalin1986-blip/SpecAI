@@ -70,7 +70,65 @@ beforeEach(() => {
   answer = async () => new Response('{"ok":true}');
 });
 
+/** The admin turned replies on (/otvechat): the chat is no longer silent. */
+async function answeringChat(id = chat.id) {
+  await db.prisma.botChat.upsert({
+    where: { chatId: String(id) },
+    create: { chatId: String(id), title: chat.title, silent: false },
+    update: { silent: false },
+  });
+}
+
+describe('тихий режим (the default)', () => {
+  it('collects the order but posts nothing in the group', async () => {
+    ingestMessage.mockResolvedValue({ status: 'created', orderId: 'ord-s', published: true });
+    const res = await post(orderMessage());
+    expect(res).toMatchObject({ status: 200, body: { result: 'created' } });
+    expect(res.body.reply).toBeUndefined();
+    expect(ingestMessage).toHaveBeenCalledTimes(1);
+    expect(replies()).toHaveLength(0);
+    expect(db.chats.get(String(chat.id))!.silent).toBe(true);
+  });
+
+  it('does not even answer /id in the group', async () => {
+    const res = await post({
+      message: { message_id: 30, text: '/id', chat, from: { id: 5 } },
+    });
+    expect(res.body.result).toBe('silent');
+    expect(replies()).toHaveLength(0);
+    await answeringChat();
+    await post({ message: { message_id: 31, text: '/id', chat, from: { id: 5 } } });
+    expect(replies()).toHaveLength(1);
+  });
+
+  it('says no hello when added', async () => {
+    const res = await post({
+      my_chat_member: {
+        chat: { ...chat, id: -100999 },
+        from: { id: 5 },
+        old_chat_member: { status: 'left' },
+        new_chat_member: { status: 'member' },
+      },
+    });
+    expect(res.body.result).toBe('added');
+    expect(replies()).toHaveLength(0);
+  });
+
+  it('a quiet chat is neither imported nor answered, silent or not', async () => {
+    await db.prisma.botChat.upsert({
+      where: { chatId: String(chat.id) },
+      create: { chatId: String(chat.id), quiet: true },
+      update: { quiet: true },
+    });
+    await post(orderMessage());
+    expect(ingestMessage).not.toHaveBeenCalled();
+    expect(replies()).toHaveLength(0);
+  });
+});
+
 describe('group order replies', () => {
+  beforeEach(() => answeringChat());
+
   it('replies once under a published order, without phone or names', async () => {
     ingestMessage.mockResolvedValue({ status: 'created', orderId: 'ord1', published: true });
     const res = await post(orderMessage());

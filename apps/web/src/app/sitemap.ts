@@ -38,6 +38,8 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     // noindex until then, see app/arenda/[slug]/[city]).
     ...(await servedCityPaths()),
     '/raboty',
+    '/ceny',
+    '/ceny/opros',
     ...JOBS.map((job) => `/raboty/${job.slug}`),
     '/equipment',
     '/map',

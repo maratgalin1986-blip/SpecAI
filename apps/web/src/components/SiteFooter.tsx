@@ -28,6 +28,9 @@ export function SiteFooter() {
           <a href="/raboty" className={LINK}>
             Работы и цены
           </a>
+          <a href="/ceny" className={LINK}>
+            Цены
+          </a>
           <a href="/providers" className="hover:text-white">
             Исполнители
           </a>

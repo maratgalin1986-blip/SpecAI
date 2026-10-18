@@ -5,6 +5,7 @@ import { CallbackForm } from '@/components/CallbackForm';
 import { CinemaBand } from '@/components/CinemaBand';
 import { CinemaLayer } from '@/components/CinemaHero';
 import { MachineAmbience } from '@/components/MachineAmbience';
+import { MarketPriceNote } from '@/components/MarketPriceNote';
 import { TelegramButton } from '@/components/TelegramButton';
 import { TrustBadges } from '@/components/TrustBadges';
 import {
@@ -278,6 +279,14 @@ export default async function CityLandingPage({ params }: { params: Params }) {
           </ul>
         </section>
       )}
+
+      {/* Awaited as a call, like ProviderOpsSection: the JSX types stay simple. */}
+      {await MarketPriceNote({
+        categorySlug: landing.categorySlug,
+        categoryLabel: landing.short,
+        city: city.name,
+        region: city.region,
+      })}
 
       <CinemaBand
         machine={machine}

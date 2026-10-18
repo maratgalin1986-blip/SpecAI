@@ -6,6 +6,8 @@ export interface TelegramResponse<T = unknown> {
   result?: T;
   description?: string;
   error_code?: number;
+  /** No answer within the timeout: Telegram may still have done it. */
+  timedOut?: boolean;
 }
 
 /** Calls the Bot API and gives Telegram's answer (the result or the error). */
@@ -28,7 +30,11 @@ export async function telegramRequest<T = unknown>(
     return data ?? { ok: res.ok, ...(res.ok ? {} : { error_code: res.status }) };
   } catch (error) {
     console.error(`[telegram] ${method} failed`, error);
-    return { ok: false };
+    const name = (error as { name?: string } | null)?.name;
+    return {
+      ok: false,
+      ...(name === 'TimeoutError' || name === 'AbortError' ? { timedOut: true } : {}),
+    };
   }
 }
 

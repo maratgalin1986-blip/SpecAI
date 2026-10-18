@@ -47,6 +47,8 @@ export function appRouteFor(path: string | undefined): string | null {
   if (clean === '/orders') return '/feed';
   // «Пригласи друга»: ссылка и бонус — в профиле.
   if (hash === 'invite') return '/profile';
+  // «Обновите цены и свободные дни» (еженедельно по понедельникам).
+  if (clean === '/provider/aktualno') return '/provider/aktualno';
   if (clean.startsWith('/provider')) {
     if (hash === 'documents') return '/provider/documents';
     if (hash === 'bookings') return '/jobs';

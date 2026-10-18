@@ -5,6 +5,7 @@
 // Privacy (CLAUDE.md): a provider never gets the customer's full name, phone
 // or e-mail in a notification — only «Анна П.» — and texts that come from
 // users or chats are passed through maskContacts.
+import { AKTUALNO_PATH, PRICE_ASK_BODY, PRICE_ASK_TITLE } from '../aktualno';
 import { stripChatOrderNote } from '../chatOrders';
 import { maskContacts } from '../privacy';
 import { EARLY_NOTICE_LINE, EARLY_NOTICE_MINUTES, priorityDate } from '../referralPriority';
@@ -188,6 +189,8 @@ export type NotificationEvent =
     }
   /** To providers at 19:00: tomorrow's open orders in their categories and radius. */
   | { type: 'digest.evening'; items: string[] }
+  /** Monday mornings, to provider managers: «обновите цены и свободные дни» (lib/aktualnoData.ts). */
+  | { type: 'price.ask' }
   /** At 19:00, a CONFIRMED booking starts tomorrow: to the customer, the provider and the operator. */
   | {
       type: 'booking.tomorrow';
@@ -377,6 +380,8 @@ export function renderNotification(event: NotificationEvent): RenderedNotificati
         path: '/orders',
       };
     }
+    case 'price.ask':
+      return { title: PRICE_ASK_TITLE, body: PRICE_ASK_BODY, path: AKTUALNO_PATH };
     case 'booking.tomorrow':
       if (event.audience === 'provider' || event.audience === 'operator') {
         return {

@@ -53,6 +53,24 @@ import { ShiftPanel } from '@/components/shifts/ShiftPanel';
 import { ModeSwitch } from '@/components/ModeSwitch';
 import { Hint } from '@/components/Hint';
 import { CUSTOMER_MODE_HREF } from '@/lib/cabinetMode';
+import { AKTUALNO_PATH, isAvailabilityFresh } from '@/lib/aktualno';
+
+/** «Цены и свободные дни»: the quick page of the weekly question, any time. */
+function AktualnoCard({ fresh, total }: { fresh: number; total: number }) {
+  return (
+    <section id="aktualno" className="cab-card flex scroll-mt-24 flex-col gap-2">
+      <h2 className="text-lg font-bold text-graphite-950">Цены и свободные дни</h2>
+      <p className="text-sm text-graphite-600">
+        {fresh === total
+          ? 'Всё актуально: заказчики видят «Свободна…» на ваших машинах.'
+          : `Обновлено ${fresh} из ${total}. Машины с актуальными ценами и свободными днями заказчики видят выше в каталоге.`}
+      </p>
+      <a href={AKTUALNO_PATH} className="cab-action w-full sm:w-fit">
+        Обновить за 30 секунд
+      </a>
+    </section>
+  );
+}
 
 export const dynamic = 'force-dynamic';
 export const metadata: Metadata = {
@@ -162,7 +180,14 @@ export default async function ProviderPage({
     }),
     prisma.equipment.findMany({
       where: { companyId, status: { not: 'RETIRED' } },
-      select: { id: true, name: true, status: true, imageUrls: true, hourlyRate: true },
+      select: {
+        id: true,
+        name: true,
+        status: true,
+        imageUrls: true,
+        hourlyRate: true,
+        availabilityUpdatedAt: true,
+      },
       orderBy: { createdAt: 'desc' },
       take: 200,
     }),
@@ -401,6 +426,13 @@ export default async function ProviderPage({
           machines={fleet.map((item) => ({ id: item.id, name: item.name, status: item.status }))}
         />
       </section>
+
+      {!isHouseManager(session.user) && fleet.length > 0 && (
+        <AktualnoCard
+          fresh={fleet.filter((item) => isAvailabilityFresh(item, new Date())).length}
+          total={fleet.length}
+        />
+      )}
 
       <NoOrdersChecklist items={checklist} />
 

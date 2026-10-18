@@ -9,6 +9,7 @@ import { aiModerationSummary, sweepPendingOrders } from '@/lib/orderModeration';
 import { GET as evening } from '../evening/route';
 import { postChannelDigest } from '@/lib/channelDigest';
 import { FLUSH_BATCH, tickDeferredOrderNotices } from '@/lib/deferredOrderNotices';
+import { runGroupPriceSurvey } from '@/lib/groupPriceSurvey';
 
 export const dynamic = 'force-dynamic';
 // A GET handler: without this Next keeps outgoing sends (Telegram, push,
@@ -73,6 +74,12 @@ export async function GET(request: NextRequest) {
   // «Заявки за сутки» in the platform's own Telegram channel (off without TELEGRAM_CHANNEL_ID);
   // before the AI sweep, which may use the rest of the function's time.
   const channel = await postChannelDigest().catch((error: unknown) => ({ error: String(error) }));
+  // «Опрос цен в группе»: posted once in the owner's group, closed after 7
+  // days with the results to the owner (lib/groupPriceSurvey.ts).
+  const priceSurvey = await runGroupPriceSurvey().catch((error: unknown) => {
+    console.error('[cron/daily] group price survey failed', error);
+    return 'error';
+  });
   const moderation = await sweepPendingOrders().catch((error: unknown) => {
     console.error('[cron/daily] AI moderation sweep failed', error);
     return { error: String(error) };
@@ -91,6 +98,7 @@ export async function GET(request: NextRequest) {
     moderationSummary,
     digest,
     channel,
+    priceSurvey,
     notices,
   });
 }
