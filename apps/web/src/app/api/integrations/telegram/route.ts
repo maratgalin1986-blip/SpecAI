@@ -35,6 +35,29 @@ import {
   whenText,
 } from '@/lib/botFunnel';
 import { attachPhone, findDraft, saveDraft, sendDueReminders, unsubscribe } from '@/lib/botDrafts';
+import {
+  askPricePhoneText,
+  categoryKeyboard,
+  CITY_TEXT,
+  cityKeyboard,
+  isPriceStart,
+  parsePriceCallback,
+  priceAnswerText,
+  priceIntroText,
+  priceKeyboard,
+  PRICE_LIMITED,
+  PRICE_PHONE_SAVED,
+  priceText,
+  WANT_ORDERS_BUTTON,
+  type PriceCallback,
+} from '@/lib/botPrices';
+import {
+  attachBotPhone,
+  findPendingBotReport,
+  markWantsOrders,
+  saveBotPriceReport,
+} from '@/lib/botPriceStore';
+import { collectSurveyReply } from '@/lib/groupPriceSurvey';
 import { tickDeferredOrderNotices } from '@/lib/deferredOrderNotices';
 import { checkRateLimit } from '@/lib/rateLimit';
 import { telegramApi } from '@/lib/telegramApi';
@@ -71,6 +94,8 @@ interface TelegramMessage {
   migrate_to_chat_id?: number;
   /** This supergroup was the group with this id. */
   migrate_from_chat_id?: number;
+  /** The message this one answers (the group price survey reads replies to its message). */
+  reply_to_message?: { message_id: number };
 }
 
 async function reply(chatId: number, text: string, markup?: unknown) {
@@ -89,6 +114,49 @@ interface CallbackQuery {
   message?: { chat: { id: number; type: string } };
 }
 
+/** «💰 Цены на технику»: machine → city → price → the colleagues' prices (lib/botPrices.ts). */
+async function onPriceStep(chatId: number, step: PriceCallback) {
+  if (step.step === 'start') {
+    await reply(chatId, priceIntroText(), categoryKeyboard());
+    return;
+  }
+  if (step.step === 'category' || step.step === 'cities') {
+    await reply(
+      chatId,
+      CITY_TEXT,
+      cityKeyboard(step.landing, step.step === 'cities' ? step.page : 0),
+    );
+    return;
+  }
+  if (step.step === 'city') {
+    await reply(chatId, priceText(step.landing, step.city), priceKeyboard(step.landing, step.city));
+    return;
+  }
+  if (step.step === 'price') {
+    const text = await saveBotPriceReport(chatId, step).catch((error: unknown) => {
+      console.error('[telegram] price survey answer not saved', error);
+      return undefined;
+    });
+    if (text === undefined) {
+      await reply(chatId, 'Не получилось сохранить ответ. Попробуйте позже — /ceny.');
+      return;
+    }
+    if (text === null) {
+      await reply(chatId, PRICE_LIMITED);
+      return;
+    }
+    await reply(chatId, priceAnswerText(text), { inline_keyboard: [[WANT_ORDERS_BUTTON]] });
+    return;
+  }
+  // «Хочу заявки рядом»: the phone only through «Поделиться номером», after the consent notice.
+  const marked = await markWantsOrders(chatId).catch(() => false);
+  if (!marked) {
+    await reply(chatId, 'Сначала ответьте на опрос — /ceny.');
+    return;
+  }
+  await reply(chatId, askPricePhoneText(), CONTACT_KEYBOARD);
+}
+
 /** The order funnel's buttons: machine → when → where → phone (lib/botFunnel.ts). */
 async function onCallback(query: CallbackQuery) {
   await telegramApi('answerCallbackQuery', { callback_query_id: query.id });
@@ -96,6 +164,11 @@ async function onCallback(query: CallbackQuery) {
   if (!chatId || query.message?.chat.type !== 'private') return;
   // A flood of button presses costs nothing: 20 a minute per chat.
   if (!checkRateLimit(`tg-cb:${chatId}`, { limit: 20, windowMs: 60_000 }).ok) return;
+  const priceStep = parsePriceCallback(query.data);
+  if (priceStep) {
+    await onPriceStep(chatId, priceStep);
+    return;
+  }
   const step = parseCallback(query.data);
   if (!step) return;
   if (step.step === 'unsubscribe') {
@@ -182,7 +255,25 @@ export async function POST(request: NextRequest) {
       ownContact ??
       (message.text && !message.text.startsWith('/') ? phoneFromText(message.text) : null);
     if (phone) {
-      const draft = await findDraft(message.chat.id).catch(() => null);
+      const [draft, priceReport] = await Promise.all([
+        findDraft(message.chat.id).catch(() => null),
+        // Only a shared contact (never a typed number) completes a price
+        // answer, and only after «Хочу заявки рядом» with the consent notice.
+        ownContact
+          ? findPendingBotReport(message.chat.id).catch(() => null)
+          : Promise.resolve(null),
+      ]);
+      if (
+        priceReport?.wantsOrders &&
+        (!draft || priceReport.createdAt.getTime() > draft.updatedAt.getTime())
+      ) {
+        const fullName = [message.from?.first_name, message.from?.last_name]
+          .filter(Boolean)
+          .join(' ');
+        await attachBotPhone(priceReport, phone, fullName || message.from?.username || '');
+        await reply(message.chat.id, PRICE_PHONE_SAVED, { remove_keyboard: true });
+        return NextResponse.json({ ok: true, result: 'price-phone' });
+      }
       if (draft) {
         const fullName = [message.from?.first_name, message.from?.last_name]
           .filter(Boolean)
@@ -212,6 +303,14 @@ export async function POST(request: NextRequest) {
   // Tells the owner which value to put into TELEGRAM_CHAT_ID (works in a
   // private chat or, as an explicit command, in a group).
   if (/^\/id(@\w+)?(\s|$)/.test(text)) {
+    if (!isPrivate) {
+      const state = await botChatState(message.chat).catch(() => null);
+      // «Тихий режим», /quiet or no right to write: not even this answer in
+      // the group (the chat id is in /admin).
+      if (!state || state.silent || state.quiet || !state.canWrite) {
+        return NextResponse.json({ ok: true, result: 'silent' });
+      }
+    }
     await reply(
       message.chat.id,
       `ID этого чата: ${message.chat.id}\nУкажите его в TELEGRAM_CHAT_ID.`,
@@ -241,6 +340,11 @@ export async function POST(request: NextRequest) {
         : 'Этот чат не подключён к уведомлениям.',
     );
     return NextResponse.json({ ok: true });
+  }
+  // «💰 Цены на технику»: /ceny or the deep link t.me/<bot>?start=ceny.
+  if (isPrivate && isPriceStart(text)) {
+    await reply(message.chat.id, priceIntroText(), categoryKeyboard());
+    return NextResponse.json({ ok: true, result: 'price-survey' });
   }
   if (isPrivate && text.startsWith('/start')) {
     // «/start <source>»: the page and campaign the visitor came from.
@@ -275,7 +379,7 @@ export async function POST(request: NextRequest) {
   // order gets one public reply in the thread; the bot's own failures are
   // logged and never turn into a retry.
   if (!isPrivate) {
-    let state: { quiet: boolean } | null = null;
+    let state: { quiet: boolean; silent: boolean } | null = null;
     try {
       state = await botChatState(message.chat);
     } catch (error) {
@@ -283,9 +387,17 @@ export async function POST(request: NextRequest) {
     }
     // The chat's admins said /quiet: neither import nor replies.
     if (state?.quiet) return NextResponse.json({ ok: true, result: 'quiet' });
+    // A reply to the price survey message: the author's answer, never an order;
+    // the bot says nothing (lib/groupPriceSurvey.ts).
+    const survey = await collectSurveyReply(message).catch((error: unknown) => {
+      console.error('[telegram] survey reply', error);
+      return 'not_survey' as const;
+    });
+    if (survey !== 'not_survey') return NextResponse.json({ ok: true, result: `survey-${survey}` });
     const result = await ingestMessage(incoming);
+    // «Тихий режим» (the default): the order is collected, nothing is posted.
     const reply =
-      state && result.status === 'created' && result.published
+      state && !state.silent && result.status === 'created' && result.published
         ? await replyUnderOrder(message, result.orderId).catch((error) => {
             console.error('[telegram] reply under the order', error);
             return 'error';

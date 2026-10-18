@@ -6,6 +6,7 @@ import { SITE } from '@/lib/site';
 import { buildWeeklyReport } from '@/lib/weeklyReport';
 import { submitToIndexNow } from '@/lib/indexNow';
 import { sendWeeklyNewsletter } from '@/lib/newsletterData';
+import { sendWeeklyPriceAsk } from '@/lib/aktualnoData';
 import sitemap from '@/app/sitemap';
 
 export const dynamic = 'force-dynamic';
@@ -16,7 +17,10 @@ export const fetchCache = 'force-no-store';
 export const maxDuration = 60;
 
 /** The newsletter starts no new letter after this much of the run. */
-const NEWSLETTER_BUDGET_MS = 45_000;
+const NEWSLETTER_BUDGET_MS = 35_000;
+/** «Обновите цены и свободные дни» to providers starts no new message after this. */
+// Its sends time out after 8 s (lib/aktualnoData.ts), so the run ends within maxDuration.
+const PRICE_ASK_BUDGET_MS = 48_000;
 
 // Called by Vercel Cron on Monday mornings (apps/web/vercel.json). With
 // CRON_SECRET set in Vercel, only requests carrying it are accepted.
@@ -46,11 +50,25 @@ export async function GET(request: NextRequest) {
     console.error('[cron/weekly] newsletter failed', error);
     return { error: String(error) };
   });
+  // «Актуализация»: the platform asks its own providers to confirm prices and
+  // free days (lib/aktualnoData.ts). Last, on its own budget; each user is
+  // guarded by NotificationSettings.priceAskSentAt (once a week).
+  const priceAsk = await sendWeeklyPriceAsk({
+    deadline: started + PRICE_ASK_BUDGET_MS,
+  }).catch((error: unknown) => {
+    console.error('[cron/weekly] price ask failed', error);
+    return { error: String(error) };
+  });
   if (failed) {
-    return NextResponse.json({ ok: false, error: 'report failed', newsletter }, { status: 500 });
+    return NextResponse.json(
+      { ok: false, error: 'report failed', newsletter, priceAsk },
+      { status: 500 },
+    );
   }
-  if (!result) return NextResponse.json({ ok: true, skipped: 'already sent today', newsletter });
-  return NextResponse.json({ ok: true, ...result, newsletter });
+  if (!result) {
+    return NextResponse.json({ ok: true, skipped: 'already sent today', newsletter, priceAsk });
+  }
+  return NextResponse.json({ ok: true, ...result, newsletter, priceAsk });
 }
 
 async function sendWeeklyReport() {

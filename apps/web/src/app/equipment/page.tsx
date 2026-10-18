@@ -2,6 +2,7 @@ import { prisma } from '@specai/database';
 import { EQUIPMENT_SORT_OPTIONS } from '@specai/shared';
 import { CallbackForm } from '@/components/CallbackForm';
 import { EquipmentCard } from '@/components/EquipmentCard';
+import { freshFirst } from '@/lib/aktualno';
 import { Icon } from '@/components/Icon';
 import { Pagination } from '@/components/Pagination';
 import {
@@ -189,7 +190,7 @@ export default async function EquipmentCatalogPage({
   const totalPages = totalPagesFor(total, PAGE_SIZE);
   const page = Math.min(requestedPage, totalPages);
 
-  const equipment = await orEmpty(
+  const loaded = await orEmpty(
     'equipment',
     prisma.equipment.findMany({
       where,
@@ -199,6 +200,9 @@ export default async function EquipmentCatalogPage({
       take: PAGE_SIZE,
     }),
   );
+  // «Актуализация»: in the default order, machines whose provider confirmed
+  // prices and free days this week come a bit higher (house fleet still first).
+  const equipment = sort === 'newest' ? freshFirst(loaded, new Date()) : loaded;
 
   const hasFilters = Boolean(
     searchParams.q ||

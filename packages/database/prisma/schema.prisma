@@ -208,6 +208,14 @@ model Equipment {
   createdAt   DateTime        @default(now())
   updatedAt   DateTime        @updatedAt
 
+  // «Актуализация» (2026-10-18): the provider's own answer to the platform's
+  // weekly question. availableFrom — the Moscow day the machine is free from
+  // (UTC midnight of that day, like booking days); availabilityUpdatedAt —
+  // when the provider last confirmed prices and free days (the catalogue shows
+  // «Свободна …» only for 7 days after it). The house fleet is never asked.
+  availableFrom         DateTime?
+  availabilityUpdatedAt DateTime?
+
   category   EquipmentCategory @relation(fields: [categoryId], references: [id])
   categoryId String
 
@@ -626,6 +634,11 @@ model NotificationSettings {
   email                 Boolean   @default(true)
   whatsapp              Boolean   @default(false)
   sms                   Boolean   @default(false)
+  // «Актуализация»: the weekly «обновите цены и свободные дни» to providers
+  // (on by default, switched off in «Уведомления»); priceAskSentAt keeps it
+  // to one a week (lib/aktualnoData.ts).
+  priceAsk              Boolean   @default(true)
+  priceAskSentAt        DateTime?
   // Private chat with the bot, set by "/start <token>" (lib/notifications/telegramLink.ts).
   telegramChatId        String?
   // sha256 of the one-time token from the deep link, never the token itself.
@@ -939,6 +952,12 @@ model BotChat {
   removedAt    DateTime?
   repliesToday Int       @default(0)
   repliesDay   String?
+  // «Тихий режим» (owner, 2026-10-18): the bot posts nothing in the group —
+  // no hello, no replies under orders, no follow-ups, no command answers —
+  // and only collects orders (unless quiet). On by default, existing chats
+  // too; a chat admin's /otvechat turns replies on, /tiho back off, and the
+  // owner switches it in /admin.
+  silent       Boolean   @default(true)
   addedAt      DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 }
@@ -955,4 +974,43 @@ model BotReply {
   followUpAt DateTime?
 
   @@index([chatId, createdAt])
+}
+
+// «Узнай цены в своём городе» (2026-10-18): answers to the platform's open
+// price survey — on the site (/ceny/opros), in a private chat with the bot
+// (the person writes to it first) and as replies to the one survey message
+// the bot posts in the owner's own group (lib/groupPriceSurvey.ts). Nobody is
+// asked as a fake customer. Name, company and phone are kept only with consent
+// (consentAt); a group reply keeps the author's public Telegram name
+// (authorName, admin only) and the text as written. reporterHash is a keyed
+// hash of the IP, the Telegram user or the account (lib/priceReportStore.ts):
+// one reporter counts once in the price index and in the limits. A group reply
+// may name no known machine type, city or hourly price (null then; a price per
+// shift goes to shiftRate and never into the hourly index). Strings, not enums
+// (CLAUDE.md, rule 2): source "web" | "telegram" | "group".
+model PriceReport {
+  id           String    @id @default(cuid())
+  categorySlug String?
+  city         String?
+  region       String?
+  hourlyRate   Int?
+  shiftRate    Int?
+  machineName  String?
+  rawText      String?
+  authorName   String?
+  surveyKey    String?
+  companyName  String?
+  contactName  String?
+  phone        String?
+  wantsOrders  Boolean   @default(false)
+  consentAt    DateTime?
+  source       String    @default("web")
+  reporterHash String?
+  // A guest's network (IPv4 /24, IPv6 /48) as a keyed hash: one participant in the index.
+  networkHash  String?
+  createdAt    DateTime  @default(now())
+
+  @@index([createdAt])
+  @@index([reporterHash, createdAt])
+  @@index([surveyKey])
 }

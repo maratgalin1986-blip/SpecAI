@@ -17,6 +17,7 @@ import {
   taskGroupOf,
 } from '@/lib/equipmentCatalog';
 import { modelPhotosOf } from '@/lib/modelPhotos';
+import { availabilityBadge } from '@/lib/aktualno';
 
 type Amount = number | string | { toString(): string } | null;
 
@@ -33,6 +34,9 @@ export interface EquipmentCardItem {
   /** Owner of the machine; the house fleet gets a «Парк СпецПласт16» badge. */
   companyId?: string;
   company?: { name: string } | null;
+  /** «Актуализация»: the provider's own answer (lib/aktualno.ts availabilityBadge). */
+  availableFrom?: Date | string | null;
+  availabilityUpdatedAt?: Date | string | null;
 }
 
 const GROUP_ICON: Record<ReturnType<typeof taskGroupOf>, IconName> = {
@@ -74,6 +78,7 @@ export function EquipmentCard({ item }: { item: EquipmentCardItem }) {
   const priceSummary = [hour !== null && `${rub(hour)}/ч`, shift !== null && `${rub(shift)}/смена`]
     .filter(Boolean)
     .join(', ');
+  const freeBadge = availabilityBadge(item, new Date());
 
   return (
     <TiltCard max={6} className="rounded-3xl border border-slate-200 bg-white">
@@ -126,6 +131,11 @@ export function EquipmentCard({ item }: { item: EquipmentCardItem }) {
             </div>
           )}
           <AvailabilityChip status={item.status} className="absolute left-3 top-3 shadow-sm" />
+          {freeBadge && (
+            <span className="absolute bottom-3 left-3 rounded-full bg-white/95 px-2.5 py-1 text-xs font-semibold text-emerald-800 shadow-sm ring-1 ring-emerald-600/20">
+              {freeBadge}
+            </span>
+          )}
         </a>
 
         <div className="flex flex-1 flex-col gap-4 p-5">

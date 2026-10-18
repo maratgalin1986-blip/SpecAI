@@ -104,7 +104,7 @@ export async function loadChannelOrders(
 }
 
 export type ChannelDigestResult =
-  { posted: number } | { skipped: 'off' | 'preview' | 'already posted today' };
+  { posted: number } | { skipped: 'off' | 'preview' | 'already posted today' | 'silent' };
 
 /**
  * Posts the day's orders to the channel, once per Moscow day (lib/cronOnce.ts).
@@ -117,6 +117,12 @@ export async function postChannelDigest(now: Date = new Date()): Promise<Channel
   if (process.env.VERCEL_ENV === 'preview') return { skipped: 'preview' };
   const chatId = await loadChannelChatId();
   if (!chatId) return { skipped: 'off' };
+  // A group in silent mode (the owner, 2026-10-18: members must not see the
+  // bot) gets no daily post either; the platform's own channel is no BotChat.
+  const chat = await prisma.botChat
+    .findUnique({ where: { chatId }, select: { silent: true } })
+    .catch(() => null);
+  if (chat?.silent) return { skipped: 'silent' };
   const result = await onceADay(
     CHANNEL_JOB,
     async () => {

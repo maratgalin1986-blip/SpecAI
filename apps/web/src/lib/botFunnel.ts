@@ -6,6 +6,7 @@
 // be attached to it and one reminder can be sent an hour later. Prices come
 // only from lib/prices.ts.
 
+import { PRICES_BUTTON } from '@/lib/botPrices';
 import { LANDINGS } from '@/lib/landings';
 import { MACHINE_LABELS } from '@/lib/machinePhotos';
 import { HAMMER_RATE, rateOf, rub, SHIFT_HOURS } from '@/lib/prices';
@@ -65,7 +66,8 @@ export function machineKeyboard(src: string): InlineKeyboard {
     text: landing.short,
     callback_data: `m|${i}|${src}`,
   }));
-  return { inline_keyboard: [...rows(buttons, 2), [UNSUBSCRIBE]] };
+  // «💰 Цены на технику»: the open price survey (lib/botPrices.ts).
+  return { inline_keyboard: [...rows(buttons, 2), [PRICES_BUTTON], [UNSUBSCRIBE]] };
 }
 
 export function whenKeyboard(machine: number, src: string): InlineKeyboard {

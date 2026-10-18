@@ -17,6 +17,7 @@ import { Hint, HintCard } from '@/components/Hint';
 import { EquipmentDocBadge } from '@/components/EquipmentDocBadge';
 import { MachineIncomeCard } from '@/components/MachineIncomeCard';
 import { MyMapPinCard } from '@/components/MyMapPinCard';
+import { AktualnoCard } from '@/components/PriceAskSetting';
 import { NextStepCard } from '@/components/NextStepCard';
 import { Button, EmptyState, ErrorBanner, Loader } from '@/components/ui';
 import {
@@ -210,6 +211,7 @@ export default function ProviderFleetScreen() {
       <Link href="/provider/equipment/new" asChild>
         <Button title="Добавить технику" size="large" />
       </Link>
+      <AktualnoCard />
       <DocumentsCard summary={docs.summary} />
       <Link href="/provider/operators" asChild>
         <Button title="Машинисты" variant="secondary" />

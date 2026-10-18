@@ -40,11 +40,13 @@ const messages = () => sent.filter((call) => call.method === 'sendMessage');
 const message = (id: number, chat = GROUP) => ({ message_id: id, chat, from: { id: 42 } });
 const at = (iso: string) => new Date(iso);
 
+/** A chat in the database; replies switched on (/otvechat) unless `silent` is given. */
 async function chatInDb(data: Record<string, unknown> = {}) {
+  const row = { silent: false, ...data };
   await db.prisma.botChat.upsert({
     where: { chatId: String(GROUP.id) },
-    create: { chatId: String(GROUP.id), title: GROUP.title, username: GROUP.username, ...data },
-    update: data,
+    create: { chatId: String(GROUP.id), title: GROUP.title, username: GROUP.username, ...row },
+    update: row,
   });
 }
 
@@ -200,6 +202,30 @@ describe('replyUnderOrder', () => {
   });
 });
 
+describe('тихий режим', () => {
+  it('no reply and no follow-up in a silent chat, nothing sent to Telegram', async () => {
+    await chatInDb({ silent: true });
+    expect(await replyUnderOrder(message(1), 'o-silent')).toBe('silent');
+    db.state.bids = 2;
+    expect(await followUpOnBid('o-silent')).toBe('none');
+    expect(sent).toHaveLength(0);
+    expect(db.replies.size).toBe(0);
+  });
+
+  it('the owner’s switch in /admin', async () => {
+    await chatInDb({ silent: true });
+    expect(await bot.setChatSilent(String(GROUP.id), false)).toEqual({
+      ok: true,
+      chatId: String(GROUP.id),
+      silent: false,
+    });
+    expect(await replyUnderOrder(message(2), 'o-loud')).toBe('sent');
+    expect((await bot.setChatSilent('-1', true)).ok).toBe(false);
+    expect((await bot.setChatSilent('drop table', true)).ok).toBe(false);
+    expect((await bot.setChatSilent(String(GROUP.id), 'yes')).ok).toBe(false);
+  });
+});
+
 describe('followUpOnBid', () => {
   it('posts once per order, with the count, under the order message', async () => {
     await chatInDb();
@@ -272,6 +298,7 @@ describe('admin commands', () => {
   });
 
   it('let an admin switch the bot off and on', async () => {
+    await chatInDb();
     answer = (call) =>
       call.method === 'getChatMember'
         ? { ok: true, result: { status: 'administrator' } }
@@ -288,6 +315,7 @@ describe('admin commands', () => {
   });
 
   it('trust an anonymous admin writing on behalf of the group', async () => {
+    await chatInDb();
     const result = await handleGroupCommand(
       command('/about', { from: { id: 1087968824, is_bot: true }, sender_chat: { id: GROUP.id } }),
       'about',
@@ -298,6 +326,39 @@ describe('admin commands', () => {
     // The platform's promise, a fixed text: no name or phone gets in through it.
     expect(messages()[0]!.body.text).toContain('Бесплатно и без посредников: цену назначает');
     expect(messages()[0]!.body.text).toContain('Не пишет в личку');
+  });
+
+  it('say nothing in a silent chat, switch replies on and off silently, and tell the owner', async () => {
+    answer = (call) =>
+      call.method === 'getChatMember'
+        ? { ok: true, result: { status: 'administrator' } }
+        : { ok: true };
+    // A new chat is silent: even /about and /quiet get no answer post.
+    expect(await handleGroupCommand(command('/about'), 'about')).toBe('done');
+    expect(await handleGroupCommand(command('/quiet'), 'quiet')).toBe('done');
+    expect(db.chats.get(String(GROUP.id))).toMatchObject({ quiet: true, silent: true });
+    expect(await handleGroupCommand(command('/resume'), 'resume')).toBe('done');
+    expect(messages()).toHaveLength(0);
+    // /otvechat: replies on, still no post about it; the owner hears in his Telegram.
+    expect(await handleGroupCommand(command('/otvechat'), 'otvechat')).toBe('done');
+    expect(db.chats.get(String(GROUP.id))!.silent).toBe(false);
+    expect(messages()).toHaveLength(0);
+    expect(notifyTelegram).toHaveBeenLastCalledWith(expect.stringContaining('ответы бота'));
+    // Now /about answers in the chat; /tiho goes back to silence without a word.
+    await handleGroupCommand(command('/about'), 'about');
+    expect(messages()).toHaveLength(1);
+    expect(await handleGroupCommand(command('/tiho'), 'tiho')).toBe('done');
+    expect(db.chats.get(String(GROUP.id))!.silent).toBe(true);
+    expect(messages()).toHaveLength(1);
+    expect(notifyTelegram).toHaveBeenLastCalledWith(expect.stringContaining('тихий режим'));
+  });
+
+  it('members cannot switch replies on', async () => {
+    answer = (call) =>
+      call.method === 'getChatMember' ? { ok: true, result: { status: 'member' } } : { ok: true };
+    const other = { chat: { ...GROUP, id: -8 } };
+    expect(await handleGroupCommand(command('/otvechat', other), 'otvechat')).toBe('not_admin');
+    expect(db.chats.size).toBe(0);
   });
 
   it('a failed admin check counts as «not an admin»', async () => {
@@ -315,10 +376,20 @@ describe('onMyChatMember', () => {
     new_chat_member: { status: to, ...extra },
   });
 
-  it('records the chat, tells the owner and says hello once', async () => {
+  it('records the chat, tells the owner and, silent by default, says nothing in it', async () => {
     expect(await onMyChatMember(update('left', 'member'))).toBe('added');
-    expect(db.chats.get(String(GROUP.id))).toMatchObject({ title: GROUP.title, canWrite: true });
+    expect(db.chats.get(String(GROUP.id))).toMatchObject({
+      title: GROUP.title,
+      canWrite: true,
+      silent: true,
+    });
     expect(notifyTelegram).toHaveBeenCalledWith('Бот добавлен в чат: Стройка Казань');
+    expect(messages()).toHaveLength(0);
+  });
+
+  it('says hello once when it comes back to a chat that switched replies on', async () => {
+    await chatInDb({ removedAt: new Date() });
+    expect(await onMyChatMember(update('left', 'member'))).toBe('added');
     expect(messages()).toHaveLength(1);
     expect(messages()[0]!.body.reply_parameters).toBeUndefined();
     // Promoted to admin: no second hello.

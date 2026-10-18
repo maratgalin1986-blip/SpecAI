@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const keys = new Map<string, Date>();
 const settings = new Map<string, string>();
+let silentChat = false;
 let orders: unknown[] = [];
 let orderTotal = 0;
 const findMany = vi.fn(async () => orders);
@@ -21,6 +22,7 @@ vi.mock('@specai/database', () => ({
         removedAt: null,
         canWrite: true,
         quiet: false,
+        silent: silentChat,
       })),
     },
     adminFeedRead: {
@@ -176,6 +178,16 @@ describe('postChannelDigest', () => {
     expect(await postChannelDigest(NOW)).toEqual({ skipped: 'preview' });
     expect(telegramApi).not.toHaveBeenCalled();
     expect(keys.size).toBe(0);
+  });
+
+  it('posts nothing in a group in silent mode', async () => {
+    vi.stubEnv('TELEGRAM_CHANNEL_ID', '');
+    settings.set('channel.chatId', '-1001234');
+    silentChat = true;
+    orders = [row('o1', 'Автокраны', 'Елабуга')];
+    expect(await postChannelDigest(NOW)).toEqual({ skipped: 'silent' });
+    expect(telegramApi).not.toHaveBeenCalled();
+    silentChat = false;
   });
 
   it('posts to the chat picked in /admin when the variable is not set', async () => {

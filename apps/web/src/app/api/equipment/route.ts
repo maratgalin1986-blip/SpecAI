@@ -3,6 +3,7 @@ import { Prisma, prisma } from '@specai/database';
 import { createEquipmentSchema, equipmentSearchQuerySchema } from '@specai/shared';
 import { getRequestUser } from '@/lib/requestUser';
 import { EQUIPMENT_ORDER_BY, totalPagesFor } from '@/lib/pagination';
+import { freshFirst } from '@/lib/aktualno';
 import { PUBLIC_FLEET, PUBLISHED_FLEET, isProvider } from '@/lib/fleet';
 import { INVALID_JSON_MESSAGE, readJson, zodErrorMessage } from '@/lib/apiInput';
 import { listingPhoto } from '@/lib/equipmentPhoto';
@@ -66,7 +67,7 @@ export async function GET(request: NextRequest) {
     name: query ? { contains: query, mode: 'insensitive' } : undefined,
   };
 
-  const [total, equipment] = await Promise.all([
+  const [total, loaded] = await Promise.all([
     prisma.equipment.count({ where }),
     prisma.equipment.findMany({
       where,
@@ -81,6 +82,9 @@ export async function GET(request: NextRequest) {
     }),
   ]);
 
+  // «Актуализация»: as in the site's catalogue, fresh answers a bit higher in
+  // the default order (house fleet still first); the provider's own list as stored.
+  const equipment = sort === 'newest' && !ownFleet ? freshFirst(loaded, new Date()) : loaded;
   // The app shows photoUrl: the machine's own photo or an example one.
   const origin = request.nextUrl.origin;
   return NextResponse.json({

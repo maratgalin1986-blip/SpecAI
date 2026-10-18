@@ -27,6 +27,10 @@ import { BotChatsCard } from '@/components/admin/BotChatsCard';
 import { loadBotChats } from '@/lib/groupBot';
 import { channelFromEnv, loadPickedChannelChatId } from '@/lib/channelTarget';
 import { ADMIN_PROPOSAL_SELECT } from '@/lib/proposals';
+import { PriceSurveyCard } from '@/components/admin/PriceSurveyCard';
+import { aktualnoAdminCount } from '@/lib/aktualnoData';
+import { loadAdminPriceReports } from '@/lib/priceReportStore';
+import { surveyAdminView } from '@/lib/groupPriceSurvey';
 import {
   LEAD_FILTERS,
   filterLeads,
@@ -143,6 +147,13 @@ export default async function AdminPage({ searchParams = {} }: { searchParams?: 
       })
       .catch(() => []);
   const proposals = [...(await loadProposals('NEW', 100)), ...(await loadProposals('READ', 30))];
+  // «Актуализация» and «Опрос цен»: before the first deploy with the new
+  // columns and table, zero and an empty list.
+  const [aktualnoCompanies, priceSurvey, groupSurvey] = await Promise.all([
+    aktualnoAdminCount().catch(() => 0),
+    loadAdminPriceReports().catch(() => ({ reports: [], week: 0, total: 0 })),
+    surveyAdminView().catch(() => null),
+  ]);
   const botChats = await botChatsLoad;
   const digestChatId = await digestChatLoad;
   // «Исполнители»: provider companies with the «Проверен» switch, unchecked first.
@@ -267,6 +278,16 @@ export default async function AdminPage({ searchParams = {} }: { searchParams?: 
       </form>
 
       <SignupCounters stats={stats} />
+      <p className="-mt-4 text-xs text-slate-600">
+        Обновили цены и свободные дни за 7 дней: исполнителей {aktualnoCompanies} ·{' '}
+        <a href="/ceny" className="font-semibold text-signal-700 underline">
+          Цены на рынке
+        </a>{' '}
+        ·{' '}
+        <a href="#price-survey" className="font-semibold text-signal-700 underline">
+          Опрос цен · {priceSurvey.week} за неделю
+        </a>
+      </p>
 
       {/* Daily actions right under the top: moderation of chat orders,
           comments and reviews. Empty ones take one line; the calls follow. */}
@@ -386,6 +407,8 @@ export default async function AdminPage({ searchParams = {} }: { searchParams?: 
       </Card>
 
       <ProposalsCard proposals={proposals} />
+
+      <PriceSurveyCard {...priceSurvey} survey={groupSurvey} />
 
       <section className="flex scroll-mt-24 flex-col gap-3" id="leads">
         <div className="flex flex-wrap items-center justify-between gap-2">

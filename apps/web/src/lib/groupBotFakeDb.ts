@@ -55,6 +55,8 @@ export function createBotDb() {
     title: null,
     username: null,
     quiet: false,
+    // «Тихий режим» is the column's default, as in Postgres.
+    silent: true,
     canWrite: true,
     removedAt: null,
     repliesToday: 0,
