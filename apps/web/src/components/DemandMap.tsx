@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import type { Map as LeafletMap } from 'leaflet';
-import { createBaseMap, escapeHtml, loadLeaflet } from '@/components/leaflet';
+import { createBaseMap, escapeHtml, loadLeaflet, showVisitor } from '@/components/leaflet';
 import { DEMAND_COLORS, DEMAND_LABELS, type CityDemand, type DemandLevel } from '@/lib/demand';
 
 interface DemandResponse {
@@ -41,6 +41,8 @@ export function DemandMap({ embed = false }: { embed?: boolean }) {
         if (cancelled || !element.current || mapRef.current) return;
         const map = createBaseMap(L, element.current);
         mapRef.current = map;
+        // «Вы здесь»: the map keeps its view of the cities with demand.
+        showVisitor(L, map);
         // The cities with demand, or the whole country when there are none.
         if (data.cities.length > 0) {
           map.fitBounds(

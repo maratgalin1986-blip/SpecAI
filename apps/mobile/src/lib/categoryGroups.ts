@@ -6,6 +6,7 @@
  * сервер) всё работает как плоский список. Покрыто тестами.
  */
 import type { Category } from '@/lib/api';
+import { matchesSearch, normalizeSearch } from './categoryText';
 
 export const OTHER_GROUP = 'Другая техника';
 
@@ -33,22 +34,18 @@ export function popularCategories(
   return base;
 }
 
-export function normalizeSearch(text: string): string {
-  return text.toLowerCase().replace(/ё/g, 'е').replace(/\s+/g, ' ').trim();
-}
+export { normalizeSearch };
 
 /**
  * Разделы для SectionList: по группе в порядке появления; категории без
- * группы — в «Другая техника». Поиск — по названию вида и группы.
+ * группы — в «Другая техника». Поиск — по названию вида, группе и словам.
  */
 export function categorySections(categories: Category[], query = ''): CategorySection[] {
   const needle = normalizeSearch(query);
   const sections: CategorySection[] = [];
   const byTitle = new Map<string, CategorySection>();
   for (const category of categories) {
-    if (needle && !normalizeSearch(`${category.name} ${category.group ?? ''}`).includes(needle)) {
-      continue;
-    }
+    if (!matchesSearch(category, needle)) continue;
     const title = category.group ?? OTHER_GROUP;
     let section = byTitle.get(title);
     if (!section) {

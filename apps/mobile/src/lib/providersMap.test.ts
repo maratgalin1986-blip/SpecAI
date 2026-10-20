@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
+  HOUSE_LABEL,
   TILES_URL,
   machinesLabel,
+  pinLabel,
   providersMapHtml,
   scriptJson,
   sortPins,
@@ -73,5 +75,41 @@ describe('providers map', () => {
     expect(html).toContain('"id":"house"');
     expect(html).toContain('Подача бесплатно');
     expect(html.indexOf('"id":"house"')).toBeLessThan(html.indexOf('"id":"x1"'));
+  });
+
+  it('labels every company above its pin, the house fleet as СпецПласт16', () => {
+    expect(pinLabel({ name: 'specplast', equipmentCount: 12, isHouse: true })).toEqual({
+      title: HOUSE_LABEL,
+      sub: 'свой парк · 12 машин',
+    });
+    expect(pinLabel({ name: 'Стройтех', equipmentCount: 3, isHouse: false })).toEqual({
+      title: 'Стройтех',
+      sub: '3 машины',
+    });
+    expect(
+      pinLabel({ name: 'Я'.repeat(50), equipmentCount: 1, isHouse: false }).title,
+    ).toHaveLength(28);
+    const html = providersMapHtml([pin({ isHouse: true, id: 'house' })], COLORS);
+    expect(html).toContain('"title":"СпецПласт16"');
+    expect(html).toContain("permanent: true, direction: 'top'");
+    expect(html).toContain('var LABELS_MIN_ZOOM = 8;');
+    // The label ranks are read with a real digit class in the page.
+    expect(html).toContain('/ r(\\d)/.exec');
+  });
+
+  it('draws the platform «приём заявок» points with the city only', () => {
+    const html = providersMapHtml([], COLORS, [
+      {
+        city: 'Казань',
+        lat: 55.79,
+        lon: 49.1,
+        title: 'ИИСтройка24 · приём заявок',
+        text: 'Казань: оставьте заявку — найдём технику',
+      },
+    ]);
+    expect(html).toContain('"city":"Казань"');
+    expect(html).toContain('ИИСтройка24 · приём заявок');
+    expect(html).toContain("type: 'intake', city: p.city");
+    expect(html).toContain('var INTAKE_CLEAR_KM = 30;');
   });
 });

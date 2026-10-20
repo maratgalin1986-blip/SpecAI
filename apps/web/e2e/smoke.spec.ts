@@ -304,3 +304,57 @@ test('install hint on the second visit, closed for good', async ({ page }, testI
   await expect(hint).toHaveCount(0);
   expect(errors, 'page errors').toEqual([]);
 });
+
+// The owner, 2026-10-18: «Манипулятор вездеход» typed into «Что нужно» picks
+// «Краны-манипуляторы (КМУ)» by itself, and the type is found by typing.
+test.describe('order form finds the machinery from the words', () => {
+  // The site's service worker would answer /api/* itself, past the mock.
+  test.use({ serviceWorkers: 'block' });
+
+  test('«Манипулятор вездеход» → КМУ; «вездеход» in the type field finds it', async ({ page }) => {
+    await guard(page);
+    await page.route('**/api/categories', (route) =>
+      route.fulfill({
+        contentType: 'application/json',
+        body: JSON.stringify({
+          categories: [
+            { id: 'c-cranes', name: 'Автокраны', slug: 'cranes', group: 'Подъёмная техника' },
+            {
+              id: 'c-kmu',
+              name: 'Краны-манипуляторы (КМУ)',
+              slug: 'crane-trucks',
+              group: 'Подъёмная техника',
+            },
+          ],
+        }),
+      }),
+    );
+    await page.goto('/orders#new', { waitUntil: 'networkidle' });
+    const form = page.locator('#new');
+    const description = form.locator('textarea').first();
+    const combo = form.getByRole('combobox', { name: 'Техника' });
+    await expect(combo).toBeVisible();
+    await description.click();
+    await description.pressSequentially('Манипулятор вездеход');
+    await expect(form.locator('[data-auto-category]')).toContainText(
+      'Техника: Краны-манипуляторы (КМУ) — определили по описанию',
+    );
+    await expect(combo).toHaveValue(/Краны-манипуляторы \(КМУ\)/);
+
+    // Picked by hand: the description no longer changes it.
+    await combo.click();
+    await combo.pressSequentially('автокран');
+    await form.getByRole('option', { name: /Автокраны/ }).click();
+    await expect(combo).toHaveValue(/Автокраны/);
+    await description.pressSequentially(' самогруз');
+    await expect(combo).toHaveValue(/Автокраны/);
+    await expect(form.locator('[data-auto-category]')).toHaveCount(0);
+
+    // Typing finds the type by a word that is not in its name.
+    await combo.click();
+    await combo.pressSequentially('вездеход');
+    await expect(form.getByRole('option', { name: /Краны-манипуляторы/ })).toBeVisible();
+    await combo.press('Enter');
+    await expect(combo).toHaveValue(/Краны-манипуляторы \(КМУ\)/);
+  });
+});

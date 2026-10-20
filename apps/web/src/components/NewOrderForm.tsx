@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
+import { AutoCategoryNote, useAutoCategory } from '@/components/AutoCategory';
 import { CategorySelect, type SelectableCategory } from '@/components/CategorySelect';
 import { ConditionsPreview } from '@/components/ConditionsPreview';
 import { DemandHint } from '@/components/DemandHint';
@@ -8,7 +9,8 @@ import { GuestOrderForm } from '@/components/GuestOrderForm';
 import { PointPicker } from '@/components/PointPicker';
 import { visitorNear } from '@/components/visitorNear';
 import { noteInstallMoment } from '@/lib/installHint';
-import { pointAddress, type MapPoint } from '@/lib/mapPoint';
+import { addressWithPoint, type MapPoint } from '@/lib/mapPoint';
+import { onOrderPrefill, withPrefillLine } from '@/lib/orderPrefillEvent';
 import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { Button } from '@specai/ui';
@@ -56,12 +58,34 @@ export function NewOrderForm({
   }, []);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const categoryInputId = useId();
+  const autoCategory = useAutoCategory({
+    description,
+    categories,
+    categoryId,
+    setCategoryId,
+    pickedByHand: Boolean(initial?.categoryId),
+  });
 
   useEffect(() => {
     fetch('/api/categories')
       .then((res) => res.json())
-      .then((data) => setCategories(data.categories ?? []));
+      .then((data) => setCategories(data.categories ?? []))
+      .catch(() => setCategories([]));
   }, []);
+
+  // «Заказать» on a machine above the form (OfferNow): its type and a line.
+  const { pick } = autoCategory;
+  useEffect(
+    () =>
+      onOrderPrefill(({ categorySlug, text }) => {
+        const row = categorySlug ? categories.find((c) => c.slug === categorySlug) : undefined;
+        if (row) pick(row.id);
+        setDescription((current) => withPrefillLine(current, text));
+      }),
+    // pick only sets state; the list is what changes the lookup.
+    [categories],
+  );
 
   // No registration on the site: a visitor orders with a name and a phone
   // (GuestOrderForm → /api/orders/guest), providers bid as on any order.
@@ -84,6 +108,9 @@ export function NewOrderForm({
           desiredStartDate: startDate,
           desiredEndDate: endDate,
           categoryId: categoryId || undefined,
+          // «Любая» chosen by hand: the server keeps the order open to every
+          // type instead of reading one from the description.
+          anyCategory: !categoryId && autoCategory.byHand ? true : undefined,
           address: address.trim() || undefined,
           near: near ?? undefined,
         }),
@@ -107,6 +134,7 @@ export function NewOrderForm({
     const created = (await response.json().catch(() => null)) as { order?: { id?: string } } | null;
     setDescription('');
     setCategoryId('');
+    autoCategory.reset();
     setStartDate('');
     setEndDate('');
     setAddress('');
@@ -133,17 +161,22 @@ export function NewOrderForm({
           className="rounded-md border border-slate-300 px-3 py-2"
         />
       </label>
-
-      <label className="flex flex-col gap-1 text-sm">
-        Техника (необязательно)
-        <CategorySelect
-          categories={categories}
-          value={categoryId}
-          onChange={setCategoryId}
-          emptyLabel="Любая"
-          className="rounded-md border border-slate-300 px-3 py-2"
+      {autoCategory.auto && (
+        <AutoCategoryNote
+          name={categories.find((category) => category.id === categoryId)?.name}
+          inputId={categoryInputId}
         />
-      </label>
+      )}
+
+      <CategorySelect
+        id={categoryInputId}
+        label="Техника (необязательно)"
+        categories={categories}
+        value={categoryId}
+        onChange={autoCategory.pick}
+        emptyLabel="Любая"
+        className="rounded-md border border-slate-300 px-3 py-2"
+      />
       <DemandHint
         categoryId={categoryId}
         categoryName={categories.find((category) => category.id === categoryId)?.name}
@@ -193,12 +226,7 @@ export function NewOrderForm({
         onPick={(next) => {
           setPoint(next);
           // The street part stays as a label; the point is what gets located.
-          const street = (address.split(' · Точка на карте:')[0] ?? '')
-            .replace(/^Точка на карте:.*$/, '')
-            .trim();
-          setAddress(
-            next ? (street ? `${street} · ${pointAddress(next)}` : pointAddress(next)) : street,
-          );
+          setAddress((current) => addressWithPoint(current, next));
         }}
       />
 

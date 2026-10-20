@@ -34,6 +34,11 @@ export async function GET() {
         groupSlug: group?.slug ?? null,
         emoji: def?.emoji ?? null,
         popular: isPopularCategory(row.slug),
+        // The app finds the type from what the customer types with these
+        // (apps/mobile/src/lib/categoryGroups.ts), as the site does.
+        keywords: def?.keywords ?? [],
+        searchWords: def?.searchWords ?? [],
+        priority: def?.priority ?? 0,
       };
     })
     .sort(

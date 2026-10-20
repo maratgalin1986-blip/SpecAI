@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Category } from './api';
 import { OTHER_GROUP, categorySections, popularCategories } from './categoryGroups';
+import { detectCategoryFromText } from './categoryText';
 
 const CATEGORIES: Category[] = [
   { id: 'exc', name: 'Экскаваторы гусеничные', group: 'Землеройная техника', popular: true },
@@ -45,5 +46,38 @@ describe('categorySections', () => {
       'Подъёмная техника',
     ]);
     expect(categorySections(CATEGORIES, 'вертолёт')).toEqual([]);
+  });
+
+  it('finds a type by the words the server sends («вездеход», «jcb»)', () => {
+    const rows: Category[] = [
+      ...CATEGORIES,
+      {
+        id: 'kmu',
+        name: 'Краны-манипуляторы (КМУ)',
+        group: 'Подъёмная техника',
+        keywords: ['манипулятор', 'кму', 'самогруз'],
+        searchWords: ['вездеход'],
+      },
+    ];
+    const ids = (query: string) =>
+      categorySections(rows, query).flatMap((section) => section.data.map((c) => c.id));
+    expect(ids('вездеход')).toEqual(['kmu']);
+    expect(ids('Самогруз')).toEqual(['kmu']);
+    expect(ids('манипулятора')).toEqual(['kmu']);
+  });
+});
+
+describe('detectCategoryFromText', () => {
+  const rows: Category[] = [
+    { id: 'cranes', name: 'Автокраны', keywords: ['автокран', 'кран'] },
+    { id: 'kmu', name: 'КМУ', keywords: ['манипулятор', 'кму', 'кран-манипулятор'], priority: 1 },
+    { id: 'old', name: 'Без слов' },
+  ];
+  it('picks the type the text names, the higher weight first', () => {
+    expect(detectCategoryFromText('Манипулятор вездеход', rows)?.id).toBe('kmu');
+    expect(detectCategoryFromText('нужен кран-манипулятор', rows)?.id).toBe('kmu');
+    expect(detectCategoryFromText('нужен автокран', rows)?.id).toBe('cranes');
+    expect(detectCategoryFromText('экран', rows)).toBeNull();
+    expect(detectCategoryFromText('', rows)).toBeNull();
   });
 });

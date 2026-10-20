@@ -14,6 +14,7 @@ import { formatRate } from '@/lib/money';
 import { customerRates } from '@/lib/equipmentCatalog';
 import { maskContactsAndLinks, maskMessagesForAi } from '@/lib/privacy';
 import { EXCERPT_MAX } from '@/lib/orderBoard';
+import { orderCategoryId } from '@/lib/orderCategoryData';
 import { LEAD_RATE_LIMIT, checkRateLimit } from '@/lib/rateLimit';
 import { HOUSE_FIRST_ORDER, PUBLIC_FLEET, isProvider, isPublicEquipment } from '@/lib/fleet';
 import { notifyTelegram } from '@/lib/notify';
@@ -295,8 +296,9 @@ export async function POST(request: NextRequest) {
       if (!order.success) {
         throw new ToolError(`Некорректные данные заявки: ${order.error.message}`);
       }
+      const categoryId = await orderCategoryId(order.data);
       const created = await prisma.order.create({
-        data: { ...order.data, customerId: currentUser.id },
+        data: { ...order.data, categoryId, customerId: currentUser.id },
       });
       return { id: created.id, status: created.status, link: `/orders/${created.id}` };
     },

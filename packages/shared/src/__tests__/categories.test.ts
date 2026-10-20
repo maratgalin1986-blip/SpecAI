@@ -91,6 +91,13 @@ describe('detectCategorySlug', () => {
     ['Нужен илосос откачать септик', 'vacuum-trucks'],
     ['Требуется генератор 100 кВт', 'generators'],
     ['Нужен каток 10 т на асфальт', 'rollers'],
+    // The owner's order form, 2026-10-18.
+    ['Манипулятор вездеход', 'crane-trucks'],
+    ['манипулятор-вездеход на объект', 'crane-trucks'],
+    ['Нужен самогруз привезти блоки', 'crane-trucks'],
+    ['Нужен кран-манипулятор', 'crane-trucks'],
+    // «Вездеход» alone is too vague to pick a category: only the search finds it.
+    ['Нужен вездеход', undefined],
     ['Нужна раскатка теста', undefined],
     ['Всем привет', undefined],
   ])('«%s» → %s', (text, slug) => {

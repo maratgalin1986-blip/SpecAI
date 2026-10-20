@@ -15,6 +15,7 @@ import { Button, Card, Chip, Input } from '@/components/ui';
 import { ApiError, createOrder, fetchCategories, type Category } from '@/lib/api';
 import { phoneNear } from '@/lib/phoneNear';
 import { popularCategories } from '@/lib/categoryGroups';
+import { detectCategoryFromText } from '@/lib/categoryText';
 import { addDays, bookingDays, pluralizeRu, startOfDay, toIsoDate } from '@/lib/format';
 import { categoryIcon } from '@/lib/orderFlow';
 import { colors, spacing } from '@/theme';
@@ -28,6 +29,16 @@ export default function NewOrderScreen() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [categoryId, setCategoryId] = useState<string | null>(params.categoryId ?? null);
   const [pickerOpen, setPickerOpen] = useState(false);
+  // Вид из текста «Что нужно», пока заказчик не выбрал его сам (владелец,
+  // 2026-10-18: «Манипулятор вездеход» → «Краны-манипуляторы (КМУ)»).
+  // Выбор рукой — и «Любая» тоже — больше не меняется.
+  const [pickedByHand, setPickedByHand] = useState(Boolean(params.categoryId));
+  const [autoPicked, setAutoPicked] = useState(false);
+  const pick = (id: string | null) => {
+    setPickedByHand(true);
+    setAutoPicked(false);
+    setCategoryId(id);
+  };
   const [address, setAddress] = useState(params.address ?? '');
   // По умолчанию — одна смена завтра.
   const [startDate, setStartDate] = useState(() => addDays(today, 1));
@@ -48,6 +59,16 @@ export default function NewOrderScreen() {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    if (pickedByHand || categories.length === 0) return;
+    const found = detectCategoryFromText(description, categories);
+    setAutoPicked(Boolean(found));
+    setCategoryId(found?.id ?? null);
+  }, [description, categories, pickedByHand]);
+  const autoName = autoPicked
+    ? categories.find((category) => category.id === categoryId)?.name
+    : undefined;
 
   const handleStartChange = (date: Date) => {
     const next = startOfDay(date);
@@ -76,6 +97,8 @@ export default function NewOrderScreen() {
         desiredStartDate: toIsoDate(startDate),
         desiredEndDate: toIsoDate(endDate),
         categoryId: categoryId ?? undefined,
+        // «Любая» выбрана рукой: сервер не подставляет вид из описания.
+        anyCategory: pickedByHand && categoryId === null ? true : undefined,
         address: address.trim() || undefined,
         // Улица без города ищется в городе телефона, а не где-то в России.
         near: address.trim() ? await phoneNear() : null,
@@ -107,6 +130,18 @@ export default function NewOrderScreen() {
             style={styles.textarea}
             textAlignVertical="top"
           />
+          {autoName ? (
+            <Text style={styles.hint} accessibilityLiveRegion="polite">
+              Техника: <Text style={styles.strong}>{autoName}</Text> — определили по описанию ·{' '}
+              <Text
+                style={styles.link}
+                accessibilityRole="button"
+                onPress={() => setPickerOpen(true)}
+              >
+                изменить
+              </Text>
+            </Text>
+          ) : null}
         </Card>
 
         <Card style={styles.section}>
@@ -122,18 +157,14 @@ export default function NewOrderScreen() {
         <Card style={styles.section}>
           <Text style={styles.sectionTitle}>Вид техники</Text>
           <View style={styles.chips}>
-            <Chip
-              label="Любая"
-              selected={categoryId === null}
-              onPress={() => setCategoryId(null)}
-            />
+            <Chip label="Любая" selected={categoryId === null} onPress={() => pick(null)} />
             {popularCategories(categories, 10, categoryId).map((category) => (
               <Chip
                 key={category.id}
                 label={`${categoryIcon(category.name, category.emoji)} ${category.name}`}
                 accessibilityLabel={category.name}
                 selected={categoryId === category.id}
-                onPress={() => setCategoryId(category.id)}
+                onPress={() => pick(category.id)}
               />
             ))}
             {categories.length > 0 ? (
@@ -144,7 +175,7 @@ export default function NewOrderScreen() {
             visible={pickerOpen}
             categories={categories}
             selectedId={categoryId}
-            onSelect={(picked) => setCategoryId(picked?.id ?? null)}
+            onSelect={(picked) => pick(picked?.id ?? null)}
             onClose={() => setPickerOpen(false)}
             allowNone
           />
@@ -202,6 +233,8 @@ const styles = StyleSheet.create({
   dateRow: { flexDirection: 'row', gap: spacing.md },
   dateField: { flex: 1 },
   hint: { fontSize: 14, color: colors.textMuted },
+  strong: { fontWeight: '600', color: colors.text },
+  link: { fontWeight: '600', color: colors.primary, textDecorationLine: 'underline' },
   error: { color: colors.danger, fontSize: 14 },
   footer: { fontSize: 13, color: colors.textMuted, textAlign: 'center', lineHeight: 18 },
 });

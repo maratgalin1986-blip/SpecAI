@@ -2,13 +2,19 @@
 
 import { useEffect, useRef, useState } from 'react';
 import type { Map as LeafletMap, Marker } from 'leaflet';
-import { centreOnVisitor, createBaseMap, loadLeaflet, pinIcon } from '@/components/leaflet';
+import { createBaseMap, loadLeaflet, pinIcon, showVisitor } from '@/components/leaflet';
+import { TAP_ERRORS, tapVisitorFix } from '@/components/visitorPosition';
 import { formatCoords, inServiceArea } from '@/lib/geo';
 import type { MapPoint } from '@/lib/mapPoint';
 
 // «Нет адреса на карте? Поставьте точку»: a small map for a work site with
 // no address yet. Tap the map or drag the pin, then «Готово». Leaflet loads
-// only when the visitor opens it.
+// only when the visitor opens it. «Я на объекте» puts the point where the
+// phone is (the browser asks on that tap if it has to); the position becomes
+// part of the order only when the person sends it.
+
+export const HERE_BUTTON = '📍 Я на объекте — поставить точку здесь';
+const OUTSIDE = 'Поставьте точку в России';
 
 export function PointPicker({
   value,
@@ -24,9 +30,11 @@ export function PointPicker({
   const [open, setOpen] = useState(false);
   const [point, setPoint] = useState<MapPoint | null>(value);
   const [status, setStatus] = useState<string | null>(null);
+  const [locating, setLocating] = useState(false);
   const element = useRef<HTMLDivElement>(null);
   const mapRef = useRef<LeafletMap | null>(null);
   const markerRef = useRef<Marker | null>(null);
+  const placeRef = useRef<((lat: number, lon: number, zoom?: number) => void) | null>(null);
 
   const muted = dark ? 'text-white/60' : 'text-slate-500';
 
@@ -41,10 +49,10 @@ export function PointPicker({
         point ? { center: [point.lat, point.lon], zoom: 16 } : {},
       );
       mapRef.current = map;
-      if (!point) centreOnVisitor(map, 12);
-      const place = (lat: number, lon: number) => {
+      showVisitor(L, map, point ? {} : { centreZoom: 12 });
+      const place = (lat: number, lon: number, zoom?: number) => {
         if (!inServiceArea(lat, lon)) {
-          setStatus('Поставьте точку в России');
+          setStatus(OUTSIDE);
           return;
         }
         setStatus(null);
@@ -62,7 +70,9 @@ export function PointPicker({
         } else {
           markerRef.current.setLatLng([lat, lon]);
         }
+        if (zoom) map.setView([lat, lon], zoom);
       };
+      placeRef.current = place;
       if (point) place(point.lat, point.lon);
       map.on('click', (event) => place(event.latlng.lat, event.latlng.lng));
     });
@@ -71,28 +81,76 @@ export function PointPicker({
       mapRef.current?.remove();
       mapRef.current = null;
       markerRef.current = null;
+      placeRef.current = null;
     };
     // The map is built once per opening; later moves go through `place`.
   }, [open]);
 
+  /** «Я на объекте»: the point where the phone is, on the open map or straight into the form. */
+  async function here() {
+    setLocating(true);
+    setStatus('Определяем местоположение…');
+    const outcome = await tapVisitorFix();
+    setLocating(false);
+    if ('error' in outcome) {
+      setStatus(TAP_ERRORS[outcome.error]);
+      return;
+    }
+    const { lat, lon } = outcome.fix;
+    if (!inServiceArea(lat, lon)) {
+      setStatus(OUTSIDE);
+      return;
+    }
+    setStatus(null);
+    if (placeRef.current) {
+      placeRef.current(lat, lon, 16);
+    } else {
+      setPoint({ lat, lon });
+      onPick({ lat, lon });
+    }
+  }
+
+  const hereButton = (
+    <button
+      type="button"
+      onClick={() => void here()}
+      disabled={locating}
+      className={`inline-flex min-h-11 items-center rounded-full px-4 text-left text-sm font-semibold ring-1 transition disabled:opacity-60 ${
+        dark
+          ? 'bg-white/10 text-white ring-white/30 hover:bg-white/20'
+          : 'bg-white text-slate-900 ring-slate-300 hover:ring-slate-900'
+      }`}
+    >
+      {locating ? 'Определяем…' : HERE_BUTTON}
+    </button>
+  );
+
   if (!open) {
     return (
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-        <button
-          type="button"
-          onClick={() => setOpen(true)}
-          className={`text-left text-sm underline decoration-dotted underline-offset-4 ${muted} hover:text-amber-500`}
-        >
-          {value ? `📍 Точка: ${formatCoords(value.lat, value.lon)} — изменить` : label}
-        </button>
-        {value && (
+      <div className="flex flex-col items-start gap-2">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
           <button
             type="button"
-            onClick={() => onPick(null)}
-            className={`text-xs ${muted} hover:text-red-500`}
+            onClick={() => setOpen(true)}
+            className={`text-left text-sm underline decoration-dotted underline-offset-4 ${muted} hover:text-amber-500`}
           >
-            убрать
+            {value ? `📍 Точка: ${formatCoords(value.lat, value.lon)} — изменить` : label}
           </button>
+          {value && (
+            <button
+              type="button"
+              onClick={() => onPick(null)}
+              className={`text-xs ${muted} hover:text-red-500`}
+            >
+              убрать
+            </button>
+          )}
+        </div>
+        {!value && hereButton}
+        {status && (
+          <p role="status" className="text-xs text-amber-600">
+            {status}
+          </p>
         )}
       </div>
     );
@@ -108,7 +166,12 @@ export function PointPicker({
         className="h-64 w-full overflow-hidden rounded-xl bg-slate-200 ring-1 ring-slate-200"
         aria-label="Карта: нажмите, чтобы отметить место работ"
       />
-      {status && <p className="text-xs text-amber-600">{status}</p>}
+      {hereButton}
+      {status && (
+        <p role="status" className="text-xs text-amber-600">
+          {status}
+        </p>
+      )}
       <div className="flex items-center gap-4">
         <button
           type="button"
