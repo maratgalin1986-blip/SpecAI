@@ -32,6 +32,13 @@ export interface CategoryDef {
    * («нужен трал перевезти экскаватор» is a transport request); default 0.
    */
   priority?: number;
+  /**
+   * Extra words that find this category in a picker's search box but are too
+   * vague to decide what a message is about («вездеход» is a manipulator truck
+   * as often as a cross-country lorry or a tracked carrier). Not used by
+   * detectCategory.
+   */
+  searchWords?: string[];
 }
 
 export const CATEGORY_GROUPS = [
@@ -155,8 +162,9 @@ export const CATEGORIES: readonly CategoryDef[] = [
     name: 'Краны-манипуляторы (КМУ)',
     group: 'lifting',
     emoji: '🏗️',
-    keywords: ['манипулятор', 'кму', 'воровайк', 'кран-манипулятор'],
+    keywords: ['манипулятор', 'кму', 'воровайк', 'кран-манипулятор', 'самогруз'],
     priority: 1,
+    searchWords: ['вездеход', 'бортовой с краном', 'грузовик с краном'],
   },
   {
     slug: 'aerial-platforms',

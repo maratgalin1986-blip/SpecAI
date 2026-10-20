@@ -20,9 +20,6 @@ export interface LivePin {
   house: boolean;
 }
 
-/** Пузырей с постоянной подписью на карте не больше этого; дальше — по нажатию. */
-export const LIVE_PERMANENT_MAX = 8;
-
 export function shortLabel(machine: Pick<LiveMachine, 'equipment' | 'company'>): string {
   const source = machine.equipment?.category ?? machine.equipment?.name ?? machine.company.name;
   const word = source.split(/[\s,(]/).find((part) => part.length > 0) ?? '•';

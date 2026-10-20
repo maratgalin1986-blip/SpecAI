@@ -2,13 +2,9 @@
 
 import { useEffect, useRef, useState } from 'react';
 import type { Map as LeafletMap, Marker } from 'leaflet';
-import {
-  centreOnVisitor,
-  createBaseMap,
-  loadLeaflet,
-  nearParam,
-  pinIcon,
-} from '@/components/leaflet';
+import { createBaseMap, loadLeaflet, nearParam, pinIcon, showVisitor } from '@/components/leaflet';
+import { drawProviderLayer } from '@/components/providerLayer';
+import { TAP_ERRORS, tapVisitorFix } from '@/components/visitorPosition';
 import { ConsentText } from '@/components/ConsentText';
 import { LeadSuccess } from '@/components/LeadSuccess';
 import { formatCoords, inServiceArea } from '@/lib/geo';
@@ -52,7 +48,10 @@ export function OrderMap({ embed = false }: { embed?: boolean }) {
         if (cancelled || !element.current || mapRef.current) return;
         const map = createBaseMap(L, element.current);
         mapRef.current = map;
-        centreOnVisitor(map);
+        showVisitor(L, map, { centreZoom: 11 });
+        // Every provider with a label over its pin, the machines on the line
+        // (signed in) and the «приём заявок» points where nobody is near.
+        void drawProviderLayer(L, map, () => !cancelled && mapRef.current === map);
         const place = (lat: number, lon: number, zoom?: number) => {
           if (!inServiceArea(lat, lon)) {
             setHint('Поставьте точку в России');
@@ -88,17 +87,11 @@ export function OrderMap({ embed = false }: { embed?: boolean }) {
     };
   }, []);
 
-  function locate() {
-    if (!navigator.geolocation) {
-      setHint('Телефон не даёт местоположение — нажмите на карту');
-      return;
-    }
+  async function locate() {
     setHint('Определяем местоположение…');
-    navigator.geolocation.getCurrentPosition(
-      (pos) => placeRef.current(pos.coords.latitude, pos.coords.longitude, 16),
-      () => setHint('Не удалось определить место — нажмите на карту или найдите адрес'),
-      { enableHighAccuracy: true, timeout: 10_000 },
-    );
+    const outcome = await tapVisitorFix();
+    if ('error' in outcome) setHint(TAP_ERRORS[outcome.error]);
+    else placeRef.current(outcome.fix.lat, outcome.fix.lon, 16);
   }
 
   async function search(event: React.FormEvent) {
@@ -172,7 +165,7 @@ export function OrderMap({ embed = false }: { embed?: boolean }) {
         </form>
         <button
           type="button"
-          onClick={locate}
+          onClick={() => void locate()}
           className="min-h-10 rounded-md bg-slate-900 px-4 text-sm font-semibold text-white hover:bg-slate-700"
         >
           📍 Я на объекте

@@ -2,13 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import type { Map as LeafletMap, Marker } from 'leaflet';
-import {
-  centreOnVisitor,
-  createBaseMap,
-  loadLeaflet,
-  nearParam,
-  pinIcon,
-} from '@/components/leaflet';
+import { showVisitor, createBaseMap, loadLeaflet, nearParam, pinIcon } from '@/components/leaflet';
 import { formatCoords, inServiceArea } from '@/lib/geo';
 import { baseAfterAddressEdit } from '@/lib/providerMap';
 
@@ -58,7 +52,7 @@ export function BasePicker({
         saved ? { center: [start.lat as number, start.lon as number], zoom: 14 } : {},
       );
       mapRef.current = map;
-      if (!saved) centreOnVisitor(map);
+      showVisitor(L, map, saved ? {} : { centreZoom: 11 });
       map.on('click', (event) => {
         const { lat, lng } = event.latlng;
         if (!inServiceArea(lat, lng)) {

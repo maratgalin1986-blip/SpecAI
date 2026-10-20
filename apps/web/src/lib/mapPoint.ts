@@ -15,6 +15,30 @@ export function pointAddress(point: MapPoint): string {
   return `Точка на карте: ${formatCoords(point.lat, point.lon)}`;
 }
 
+/** The order forms' address limit (createOrderSchema, createGuestOrderSchema). */
+export const ADDRESS_MAX = 200;
+
+/**
+ * The address field after a point is set or removed: a street typed before
+ * stays as a label («ул. Мира · Точка на карте: …»), the point replaces an
+ * earlier one, and removing it leaves the street alone.
+ */
+export function addressWithPoint(
+  address: string,
+  point: MapPoint | null,
+  max = ADDRESS_MAX,
+): string {
+  const street = (address.split(' · Точка на карте:')[0] ?? '')
+    .replace(/^Точка на карте:.*$/, '')
+    .trim();
+  if (!point) return street;
+  const tail = pointAddress(point);
+  // The order schemas take 200 characters: the street gives way, the point stays.
+  const room = max - tail.length - ' · '.length;
+  const label = street.slice(0, Math.max(0, room)).trimEnd();
+  return label ? `${label} · ${tail}` : tail;
+}
+
 export const POINT_LINE_PREFIX = 'Место работ (точка на карте):';
 
 /** Line for a request message: coordinates and a link to open them. */

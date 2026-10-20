@@ -15,12 +15,14 @@ import { Icon, type IconName } from '@/components/Icon';
 import { IntroSplash } from '@/components/IntroSplash';
 import { MachinePhoto } from '@/components/MachinePhoto';
 import { MarketplaceBlock } from '@/components/MarketplaceBlock';
+import { OfferNow } from '@/components/OfferNow';
 import { Reveal } from '@/components/Reveal';
 import { TiltCard } from '@/components/TiltCard';
 import type { Metadata } from 'next';
 import type { MachineType } from '@/lib/machinePhotos';
 import { pluralizeRu } from '@/lib/pluralize';
 import { loadActivity } from '@/lib/activityData';
+import { loadOfferNow } from '@/lib/offerNowData';
 import { SITE } from '@/lib/site';
 import { fromPerHour, HAMMER_RATE, MIN_RATE, priceFaqAnswer, SHIFT_HOURS } from '@/lib/prices';
 
@@ -164,7 +166,9 @@ export const metadata: Metadata = {
 
 // Service cards link to their catalog category (matched by slug) and show how
 // much equipment is listed there. Falls back to plain cards without a database.
-export const revalidate = 300;
+// A minute, not five: «Сейчас на линии» (OfferNow) must not offer a machine
+// whose driver left the line long ago.
+export const revalidate = 60;
 
 async function loadCategoryLinks() {
   try {
@@ -244,9 +248,10 @@ const HOME_FAQ = [
 ];
 
 export default async function HomePage() {
-  const [{ links: categoryLinks, available }, activity] = await Promise.all([
+  const [{ links: categoryLinks, available }, activity, offer] = await Promise.all([
     loadCategoryLinks(),
     loadActivity(),
+    loadOfferNow(),
   ]);
   const stats = [
     ...(available > 0
@@ -295,9 +300,9 @@ export default async function HomePage() {
               оставьте телефон — подберёт диспетчер. Парк {SITE.name} в Набережных Челнах —{' '}
               {fromPerHour(MIN_RATE)}, с НДС. {SITE.promiseLine}
             </p>
-            {/* Owner, 2026-10-03: order, estimate and design as real buttons,
-                «Заказать технику» the biggest and brightest; then the phone and
-                the film tour; the other ways in stay quiet links. */}
+            {/* Owner, 2026-10-03: «Заказать технику» the biggest and brightest;
+                2026-10-18: «Встать на линию» the second big button, then the
+                phone; the other ways in stay quiet links. */}
             <div
               className="float-in mt-5 flex max-w-xl flex-col gap-3 sm:mt-8"
               style={{ animationDelay: '360ms' }}
@@ -315,23 +320,27 @@ export default async function HomePage() {
                   <Icon name="arrow" className="h-5 w-5" />
                 </span>
               </a>
-              <div className="grid grid-cols-2 gap-3">
-                {[
-                  { href: '/orders#new', icon: '📝', label: 'Разместить заявку' },
-                  { href: '/register?type=provider', icon: '🚛', label: 'Встать на линию' },
-                ].map((item) => (
-                  <a
-                    key={item.href}
-                    href={item.href}
-                    className="inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-white/10 px-3 py-3 text-center text-sm font-bold text-white ring-1 ring-white/40 backdrop-blur-md transition hover:bg-white hover:text-slate-950 sm:text-base"
-                  >
-                    <span aria-hidden className="text-lg">
-                      {item.icon}
-                    </span>
-                    {item.label}
-                  </a>
-                ))}
-              </div>
+              {/* Owner, 2026-10-18: the second big button is for providers,
+                  same size and shape, graphite instead of amber. */}
+              <a
+                href="/register?type=provider"
+                className="group relative inline-flex w-full items-center justify-center gap-2 overflow-hidden rounded-2xl bg-slate-900 px-4 py-3 text-white shadow-2xl shadow-black/40 ring-2 ring-emerald-400/70 transition hover:bg-slate-800 sm:gap-3 sm:px-7 sm:py-4"
+              >
+                <span aria-hidden className="text-xl sm:text-3xl">
+                  🚛
+                </span>
+                <span className="flex flex-col items-start leading-tight">
+                  <span className="whitespace-nowrap text-lg font-extrabold sm:text-2xl">
+                    Встать на линию
+                  </span>
+                  <span className="text-xs font-semibold text-emerald-300 sm:text-sm">
+                    бесплатно, заявки рядом приходят сами
+                  </span>
+                </span>
+                <span className="nudge">
+                  <Icon name="arrow" className="h-5 w-5" />
+                </span>
+              </a>
               <div className="flex flex-wrap gap-3">
                 <a
                   href={SITE.phoneHref}
@@ -639,7 +648,10 @@ export default async function HomePage() {
       {/* The anchor sits on the form card itself (first on phones), so «Заказать
           технику» lands with the phone field mid-screen, not on the heading. No
           dolly tilt here: a tilted form is harder to tap and skews the jump. */}
-      <section data-no-dolly>
+      <section data-no-dolly className="flex flex-col gap-6">
+        {/* Owner, 2026-10-18: «мою технику первым делом предлагай, а потом
+            всех остальных, кто на линии» — right above the order form. */}
+        <OfferNow house={offer.house} line={offer.line} formAnchor="callback" />
         <CallbackIris backdrop="/images/trench.jpg">
           <div className="grid grid-cols-1 gap-8 p-6 sm:p-10 lg:grid-cols-2">
             <div className="flex min-w-0 flex-col justify-center">
@@ -673,6 +685,14 @@ export default async function HomePage() {
               id="callback"
               className="order-first min-w-0 scroll-mt-28 rounded-3xl bg-slate-950/50 p-4 ring-1 ring-white/10 backdrop-blur sm:p-6 lg:order-none"
             >
+              <a
+                href="#offer-now"
+                className="mb-3 inline-flex min-h-[44px] items-center text-sm font-semibold text-amber-400 underline-offset-4 hover:underline"
+              >
+                {offer.house.length > 0
+                  ? `↑ Свободная техника ${SITE.name} и кто сейчас на линии`
+                  : '↑ Кто сейчас на линии'}
+              </a>
               <CallbackForm source="home" dark />
             </div>
           </div>

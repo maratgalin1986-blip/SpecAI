@@ -16,6 +16,7 @@ import { SITE } from '@/lib/site';
 import { machineTypeOf } from '@/lib/equipmentCatalog';
 import { INVALID_JSON_MESSAGE, readJson, zodErrorMessage } from '@/lib/apiInput';
 import { checkBookingDates } from '@/lib/bookingRules';
+import { orderCategoryId } from '@/lib/orderCategoryData';
 import { customerShortName } from '@/lib/customerPrivacy';
 import { unreadMessagesByOrder } from '@/lib/orderChatAccess';
 import { bidForCustomer } from '@/lib/bidPrivacy';
@@ -274,13 +275,22 @@ export async function POST(request: NextRequest) {
       })
     : null;
 
+  // No type: the one the description names, so the right providers hear.
+  // A type the customer chose is never replaced, and «Любая» picked by hand
+  // (`anyCategory`, the web form and the app) keeps the order open to all.
+  const categoryId = await orderCategoryId({
+    categoryId: parsed.data.categoryId,
+    anyCategory: (body as { anyCategory?: unknown }).anyCategory === true,
+    description: parsed.data.description,
+  });
+
   const order = await prisma.order.create({
     data: {
       customerId: currentUser.id,
       description: parsed.data.description,
       desiredStartDate: parsed.data.desiredStartDate,
       desiredEndDate: parsed.data.desiredEndDate,
-      categoryId: parsed.data.categoryId,
+      categoryId,
       locationId: location?.id,
       bidsUntil: bidsUntilFor(new Date(), dates.startDate),
     },

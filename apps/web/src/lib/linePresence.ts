@@ -111,7 +111,7 @@ export function isOnLine(
 }
 
 /** «4 000 ₽/ч» with a no-break space; «договорная» when the machine has no price. */
-function rateText(rate: number): string {
+export function rateText(rate: number): string {
   return rate > 0 ? `от ${Math.round(rate).toLocaleString('ru-RU')}\u00a0₽/ч` : 'цена договорная';
 }
 

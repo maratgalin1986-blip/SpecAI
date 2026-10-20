@@ -14,6 +14,8 @@ import { isAdminRequest } from '@/lib/admin';
 import { isProvider } from '@/lib/fleet';
 import { SITE } from '@/lib/site';
 import { GuestOrderForm } from '@/components/GuestOrderForm';
+import { OfferNow } from '@/components/OfferNow';
+import { loadOfferNow } from '@/lib/offerNowData';
 import { orderPrefill } from '@/lib/quickOrder';
 import {
   BOARD_SORT,
@@ -143,10 +145,12 @@ export default async function OrdersPage({ searchParams }: { searchParams: Order
     customerId: viewerId ?? '-',
   };
 
-  const [board, forProvider, mine] = await Promise.all([
+  const [board, forProvider, mine, offer] = await Promise.all([
     loadOrderBoard(boardQuery),
     loadProvider(searchParams.provider),
     viewerIsCustomer ? loadMyOrders(myWhere, parsePage(searchParams.mp)) : null,
+    // Not for providers, nor on an order meant for one provider (no block there).
+    viewerIsProvider || searchParams.provider ? null : loadOfferNow(),
   ]);
 
   // A provider's own order (placed in the customer mode) is «Моя заявка»;
@@ -176,61 +180,67 @@ export default async function OrdersPage({ searchParams }: { searchParams: Order
   const hasFilters = Boolean(boardQuery.group || boardQuery.city || boardQuery.when !== 'all');
 
   const orderForm = !viewerIsProvider && (
-    <section id="new" data-order-form className="scroll-mt-24">
-      <h2 className="mb-3 text-lg font-semibold">
-        {forProvider ? `Заявка для «${forProvider.name}»` : 'Разместить заявку'}
-      </h2>
-      {viewerId ? (
-        <p className="mb-3 max-w-xl text-sm text-slate-600">
-          {forProvider
-            ? `Заявку увидит «${forProvider.name}» и другие исполнители — сравните предложения.`
-            : `Заявку увидят все исполнители со своей техникой, включая парк ${SITE.name}, и пришлют цены. Бесплатно.`}
-        </p>
-      ) : (
-        // A guest's order goes on the board (POST /api/orders/guest); the
-        // phone stays hidden and opens to providers only on request.
-        <p className="mb-3 max-w-xl text-sm text-slate-600">
-          Без регистрации: заявку увидят{' '}
-          {forProvider ? `«${forProvider.name}» и другие исполнители` : 'все исполнители'} и пришлют
-          цены, а телефон откроется только по запросу исполнителя. С аккаунтом удобнее сравнивать
-          предложения:{' '}
-          <a href="/register" className="underline">
-            зарегистрируйтесь
-          </a>{' '}
-          или{' '}
-          <a href="/login" className="underline">
-            войдите
-          </a>{' '}
-          — это бесплатно.
-        </p>
-      )}
-      {!viewerId && <Hint id="orders-guest" className="mb-3 max-w-xl" />}
-      {viewerId ? (
-        <Card className="max-w-xl">
-          <NewOrderForm provider={forProvider} initial={orderPrefill(searchParams)} />
-        </Card>
-      ) : (
-        <div className="grid gap-4 lg:grid-cols-2">
-          {/* No account: the guest form puts the order on the board
+    <>
+      {/* Owner, 2026-10-18: СпецПласт16's machines first, then who is on the
+          line; «Заказать» fills the form right below. Not for an order meant
+          for one provider. */}
+      {offer && !forProvider && <OfferNow house={offer.house} line={offer.line} formAnchor="new" />}
+      <section id="new" data-order-form className="scroll-mt-24">
+        <h2 className="mb-3 text-lg font-semibold">
+          {forProvider ? `Заявка для «${forProvider.name}»` : 'Разместить заявку'}
+        </h2>
+        {viewerId ? (
+          <p className="mb-3 max-w-xl text-sm text-slate-600">
+            {forProvider
+              ? `Заявку увидит «${forProvider.name}» и другие исполнители — сравните предложения.`
+              : `Заявку увидят все исполнители со своей техникой, включая парк ${SITE.name}, и пришлют цены. Бесплатно.`}
+          </p>
+        ) : (
+          // A guest's order goes on the board (POST /api/orders/guest); the
+          // phone stays hidden and opens to providers only on request.
+          <p className="mb-3 max-w-xl text-sm text-slate-600">
+            Без регистрации: заявку увидят{' '}
+            {forProvider ? `«${forProvider.name}» и другие исполнители` : 'все исполнители'} и
+            пришлют цены, а телефон откроется только по запросу исполнителя. С аккаунтом удобнее
+            сравнивать предложения:{' '}
+            <a href="/register" className="underline">
+              зарегистрируйтесь
+            </a>{' '}
+            или{' '}
+            <a href="/login" className="underline">
+              войдите
+            </a>{' '}
+            — это бесплатно.
+          </p>
+        )}
+        {!viewerId && <Hint id="orders-guest" className="mb-3 max-w-xl" />}
+        {viewerId ? (
+          <Card className="max-w-xl">
+            <NewOrderForm provider={forProvider} initial={orderPrefill(searchParams)} />
+          </Card>
+        ) : (
+          <div className="grid gap-4 lg:grid-cols-2">
+            {/* No account: the guest form puts the order on the board
               (POST /api/orders/guest); providers bid as on any order. */}
-          <Card>
-            <GuestOrderForm provider={forProvider} initial={orderPrefill(searchParams)} />
-          </Card>
-          <Card className="flex flex-col justify-center gap-3 self-start">
-            <p className="font-semibold">Не знаете, какая техника нужна?</p>
-            <p className="text-sm text-slate-600">
-              Ответьте на 3 вопроса — подберём машину, покажем цену и погоду на день работ.
-            </p>
-            <a
-              href="/#podbor"
-              className="w-fit rounded-full bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white hover:bg-slate-800"
-            >
-              Подобрать технику за 30 секунд
-            </a>
-          </Card>
-        </div>
-      )}
-    </section>
+            <Card>
+              <GuestOrderForm provider={forProvider} initial={orderPrefill(searchParams)} />
+            </Card>
+            <Card className="flex flex-col justify-center gap-3 self-start">
+              <p className="font-semibold">Не знаете, какая техника нужна?</p>
+              <p className="text-sm text-slate-600">
+                Ответьте на 3 вопроса — подберём машину, покажем цену и погоду на день работ.
+              </p>
+              <a
+                href="/#podbor"
+                className="w-fit rounded-full bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white hover:bg-slate-800"
+              >
+                Подобрать технику за 30 секунд
+              </a>
+            </Card>
+          </div>
+        )}
+      </section>
+    </>
   );
 
   return (

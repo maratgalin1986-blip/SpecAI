@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { LIVE_PERMANENT_MAX, positionStatus, shortLabel, splitBubble, toLivePins } from './line';
+import { positionStatus, shortLabel, splitBubble, toLivePins } from './line';
 import type { LiveMachine } from './api';
 
 const machine: LiveMachine = {
@@ -46,7 +46,6 @@ describe('live pins', () => {
       body: 'JCB · от 4 000 ₽/ч',
     });
     expect(splitBubble('Я на линии')).toEqual({ head: 'Я на линии', body: '' });
-    expect(LIVE_PERMANENT_MAX).toBe(8);
   });
 
   it('describes the reporter state', () => {

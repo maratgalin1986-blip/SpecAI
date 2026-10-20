@@ -1,5 +1,5 @@
 import type { NearPoint } from './near';
-import type { ProviderPin } from './providersMap';
+import type { IntakePin, ProviderPin } from './providersMap';
 import { STORAGE_KEYS, getItem } from './storage';
 
 /**
@@ -227,6 +227,14 @@ export interface Category {
   emoji?: string | null;
   /** Один из десяти самых частых видов — показывается первым в плитках. */
   popular?: boolean;
+  /**
+   * Слова, по которым вид узнаётся в тексте заявки («манипулятор», «кму»), и
+   * его вес, когда в тексте несколько видов (packages/shared/src/categories.ts).
+   */
+  keywords?: string[];
+  priority?: number;
+  /** Слова только для поиска в списке («вездеход»). */
+  searchWords?: string[];
 }
 
 export interface CategoryGroup {
@@ -546,6 +554,8 @@ export function createOrder(input: {
   desiredStartDate: string;
   desiredEndDate: string;
   categoryId?: string;
+  /** «Любая» выбрана рукой: сервер не берёт вид из описания. */
+  anyCategory?: boolean;
   /** Адрес объекта: сервер геокодирует его для погоды и карты. */
   address?: string;
   /** Положение телефона (lib/near.ts): адрес ищется сначала рядом. */
@@ -717,7 +727,7 @@ export function fetchOpenOrders(params: { scope?: 'near' | 'all'; offset?: numbe
 
 /** Исполнители на карте: точки баз компаний (публично, без контактов). */
 export function fetchProviderPins() {
-  return apiFetch<{ providers: ProviderPin[] }>('/api/providers/map');
+  return apiFetch<{ providers: ProviderPin[]; intake?: IntakePin[] }>('/api/providers/map');
 }
 
 /** Все открытые заявки с ожидающими предложениями своей компании («Мои предложения»). */

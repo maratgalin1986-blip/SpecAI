@@ -8,6 +8,7 @@ import { checkBookingDates } from '@/lib/bookingRules';
 import { addressCity, geocodeAddress, parseNear } from '@/lib/geo';
 import { GUEST_ORDER_SUCCESS } from '@/lib/guestOrder';
 import { technicalUserId } from '@/lib/ingest';
+import { orderCategoryId } from '@/lib/orderCategoryData';
 import { notifyTelegram } from '@/lib/notify';
 import { notifyProvidersAboutOrder } from '@/lib/notifications/notifyUser';
 import { pingOrderBoard } from '@/lib/indexNow';
@@ -75,8 +76,11 @@ export async function POST(request: NextRequest) {
       })
     : null;
 
-  const category = parsed.data.categoryId
-    ? await prisma.equipmentCategory.findUnique({ where: { id: parsed.data.categoryId } })
+  // «Подобрать по описанию»: the type the description names, so the right
+  // providers hear. A type the guest chose is never replaced.
+  const categoryId = await orderCategoryId(parsed.data);
+  const category = categoryId
+    ? await prisma.equipmentCategory.findUnique({ where: { id: categoryId } })
     : null;
   const now = new Date();
   const order = await prisma.order.create({

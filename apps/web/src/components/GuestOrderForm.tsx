@@ -1,11 +1,15 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { Button } from '@specai/ui';
+import { AutoCategoryNote, useAutoCategory } from '@/components/AutoCategory';
 import { CategorySelect, type SelectableCategory } from '@/components/CategorySelect';
 import { ConsentText } from '@/components/ConsentText';
 import { DemandHint } from '@/components/DemandHint';
+import { PointPicker } from '@/components/PointPicker';
 import { noteInstallMoment } from '@/lib/installHint';
+import { addressWithPoint, type MapPoint } from '@/lib/mapPoint';
+import { onOrderPrefill, withPrefillLine } from '@/lib/orderPrefillEvent';
 import { SITE } from '@/lib/site';
 import { PromiseNote } from '@/components/PromiseNote';
 import type { OrderPrefill } from '@/lib/quickOrder';
@@ -37,6 +41,7 @@ export function GuestOrderForm({
   const [startDate, setStartDate] = useState(initial?.startDate ?? '');
   const [endDate, setEndDate] = useState(initial?.endDate ?? '');
   const [address, setAddress] = useState(initial?.address ?? '');
+  const [point, setPoint] = useState<MapPoint | null>(null);
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [consent, setConsent] = useState(false);
@@ -45,6 +50,14 @@ export function GuestOrderForm({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [done, setDone] = useState<string | null>(null);
   const doneRef = useRef<HTMLDivElement>(null);
+  const categoryInputId = useId();
+  const autoCategory = useAutoCategory({
+    description,
+    categories,
+    categoryId,
+    setCategoryId,
+    pickedByHand: Boolean(initial?.categoryId),
+  });
 
   useEffect(() => {
     fetch('/api/categories')
@@ -52,6 +65,19 @@ export function GuestOrderForm({
       .then((data) => setCategories(data.categories ?? []))
       .catch(() => setCategories([]));
   }, []);
+
+  // «Заказать» on a machine above the form (OfferNow): its type and a line.
+  const { pick } = autoCategory;
+  useEffect(
+    () =>
+      onOrderPrefill(({ categorySlug, text }) => {
+        const row = categorySlug ? categories.find((c) => c.slug === categorySlug) : undefined;
+        if (row) pick(row.id);
+        setDescription((current) => withPrefillLine(current, text));
+      }),
+    // pick only sets state; the list is what changes the lookup.
+    [categories],
+  );
 
   // The form sits far down /orders on a phone: when it turns into the short
   // confirmation the page gets shorter and the browser is left on the footer.
@@ -144,17 +170,17 @@ export function GuestOrderForm({
           className="rounded-md border border-slate-300 px-3 py-2"
         />
       </label>
+      {autoCategory.auto && <AutoCategoryNote name={categoryName} inputId={categoryInputId} />}
 
-      <label className="flex flex-col gap-1 text-sm">
-        Техника
-        <CategorySelect
-          categories={categories}
-          value={categoryId}
-          onChange={setCategoryId}
-          emptyLabel="Подобрать по описанию"
-          className="rounded-md border border-slate-300 px-3 py-2"
-        />
-      </label>
+      <CategorySelect
+        id={categoryInputId}
+        label="Техника"
+        categories={categories}
+        value={categoryId}
+        onChange={autoCategory.pick}
+        emptyLabel="Подобрать по описанию"
+        className="rounded-md border border-slate-300 px-3 py-2"
+      />
       <DemandHint categoryId={categoryId} categoryName={categoryName} />
 
       <div className="grid grid-cols-2 gap-3">
@@ -195,6 +221,14 @@ export function GuestOrderForm({
           По адресу исполнители посчитают подачу и увидят погоду на день работ.
         </span>
       </label>
+      <PointPicker
+        value={point}
+        onPick={(next) => {
+          setPoint(next);
+          // The street part stays as a label; the point is what gets located.
+          setAddress((current) => addressWithPoint(current, next));
+        }}
+      />
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <label className="flex flex-col gap-1 text-sm">

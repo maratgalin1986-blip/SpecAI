@@ -73,18 +73,18 @@ export function CabinetQuickOrder({ categories }: { categories: QuickCategory[] 
       </div>
 
       {categories.length > tiles.length && (
-        <label className="flex flex-col gap-1 text-sm text-graphite-100">
-          Все виды техники
-          <CategorySelect
-            categories={categories}
-            value={categoryId}
-            onChange={setCategoryId}
-            emptyLabel={selectedElsewhere ? 'Выбрано выше' : 'Выбрать из полного списка…'}
-            className={`min-h-[44px] rounded-xl border bg-graphite-800 px-3 text-white [color-scheme:dark] ${
-              selectedElsewhere ? 'border-signal-500' : 'border-graphite-600'
-            }`}
-          />
-        </label>
+        <CategorySelect
+          label="Все виды техники"
+          labelClassName="flex flex-col gap-1 text-sm text-graphite-100"
+          categories={categories}
+          value={categoryId}
+          onChange={setCategoryId}
+          emptyLabel="Любая"
+          placeholder="Начните вводить: манипулятор, кран, самосвал…"
+          className={`min-h-[44px] rounded-xl border bg-graphite-800 px-3 text-white placeholder:text-graphite-400 ${
+            selectedElsewhere ? 'border-signal-500' : 'border-graphite-600'
+          }`}
+        />
       )}
 
       <div className="grid grid-cols-2 gap-1 rounded-full bg-graphite-800 p-1" role="radiogroup">

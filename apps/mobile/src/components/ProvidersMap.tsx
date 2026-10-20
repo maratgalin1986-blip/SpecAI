@@ -1,10 +1,11 @@
+import { useRouter } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import { WebView, type WebViewMessageEvent } from 'react-native-webview';
 import { fetchProviderPins, type BaseMachine, type LiveMachine } from '@/lib/api';
 import { toBasePins, toLivePins } from '@/lib/line';
-import { providersMapHtml, type ProviderPin } from '@/lib/providersMap';
+import { providersMapHtml, type IntakePin, type ProviderPin } from '@/lib/providersMap';
 import { SITE } from '@/lib/site';
 import { colors } from '@/theme';
 
@@ -34,7 +35,10 @@ export function ProvidersMap({
   /** Нажатие на машину на линии. */
   onMachine?: (equipmentId: string) => void;
 }) {
+  const router = useRouter();
   const [pins, setPins] = useState<ProviderPin[] | null>(null);
+  // «Приём заявок» площадки в крупных городах без исполнителей рядом.
+  const [intake, setIntake] = useState<IntakePin[]>([]);
   const webRef = useRef<WebView>(null);
   const [ready, setReady] = useState(false);
   const centred = useRef(false);
@@ -65,7 +69,11 @@ export function ProvidersMap({
   useEffect(() => {
     let cancelled = false;
     fetchProviderPins()
-      .then((data) => !cancelled && setPins(data.providers))
+      .then((data) => {
+        if (cancelled) return;
+        setIntake(data.intake ?? []);
+        setPins(data.providers);
+      })
       // Без точек карта всё равно показывается — заказ работает и так.
       .catch(() => !cancelled && setPins([]));
     return () => {
@@ -77,13 +85,17 @@ export function ProvidersMap({
     () =>
       pins === null
         ? null
-        : providersMapHtml(pins, {
-            primary: colors.primary,
-            dark: colors.dark,
-            onDark: colors.onDark,
-            text: colors.text,
-          }),
-    [pins],
+        : providersMapHtml(
+            pins,
+            {
+              primary: colors.primary,
+              dark: colors.dark,
+              onDark: colors.onDark,
+              text: colors.text,
+            },
+            intake,
+          ),
+    [pins, intake],
   );
 
   const onMessage = (event: WebViewMessageEvent) => {
@@ -92,9 +104,15 @@ export function ProvidersMap({
         type?: string;
         catalogUrl?: string;
         equipmentId?: string;
+        city?: string;
         lat?: number;
         lon?: number;
       };
+      // «Приём заявок»: новая заявка с этим городом в адресе, дальше как обычно.
+      if (message.type === 'intake' && typeof message.city === 'string') {
+        router.push({ pathname: '/orders/new', params: { address: message.city.slice(0, 100) } });
+        return;
+      }
       if (message.type === 'machine' && typeof message.equipmentId === 'string') {
         onMachine?.(message.equipmentId);
         return;
