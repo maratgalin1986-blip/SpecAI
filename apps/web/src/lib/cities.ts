@@ -411,6 +411,21 @@ export function joiningText(city: City): string {
   return `Исполнители ${city.inCity} подключаются — оставьте заявку, мы найдём технику.`;
 }
 
+/**
+ * The provider's half of an empty city page: whoever has a machine there can
+ * be the first on the line (free, no commission — packages/shared/src/promise.ts),
+ * and the page opens to search once a provider serves the city.
+ */
+export function firstOnLineInvite(city: City): { title: string; text: string; href: string } {
+  return {
+    title: `Своя техника ${city.inCity}?`,
+    text:
+      `Встаньте на линию первым — заявки ${city.inCity} и рядом будут приходить вам. ` +
+      `Регистрация бесплатная, цену назначаете вы, площадка не берёт процент.`,
+    href: '/register?role=provider',
+  };
+}
+
 const lower = (text: string) => `${text[0]!.toLowerCase()}${text.slice(1)}`;
 
 /** «Казань (Республика Татарстан)»; Москва and Санкт-Петербург alone. */
