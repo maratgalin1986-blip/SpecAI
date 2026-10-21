@@ -13,6 +13,7 @@ import {
   cityPageText,
   cityPath,
   DELIVERY_NOTE,
+  firstOnLineInvite,
   HOUSE_CITIES,
   joiningText,
   nearestCities,
@@ -73,6 +74,7 @@ export default async function CityLandingPage({ params }: { params: Params }) {
   const offer = await loadCityOffer(landing, city);
   const text = cityPageText(landing, city, offer);
   const path = cityPath(landing.slug, city.slug);
+  const invite = firstOnLineInvite(city);
   // «от …» and the example shift: the lowest rate of the machines that serve
   // this city (СпецПласт16's list price where its fleet goes), never invented.
   const rate = offer.kind === 'available' ? offer.fromRate : null;
@@ -254,6 +256,16 @@ export default async function CityLandingPage({ params }: { params: Params }) {
           >
             Разместить заявку для исполнителей
           </a>
+          <div className="mt-5 border-t border-amber-200 pt-4" data-testid="city-first-on-line">
+            <h3 className="font-bold">{invite.title}</h3>
+            <p className="mt-1 text-sm text-slate-700">{invite.text}</p>
+            <a
+              href={invite.href}
+              className="mt-3 inline-flex min-h-11 items-center justify-center rounded-md bg-slate-900 px-5 text-sm font-bold text-white ring-2 ring-emerald-400/70 transition-colors hover:bg-slate-800"
+            >
+              🚛 Встать на линию первым
+            </a>
+          </div>
         </section>
       ) : (
         <section className="rounded-2xl border border-amber-200 bg-amber-50 p-6">

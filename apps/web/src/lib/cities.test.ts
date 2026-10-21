@@ -10,6 +10,7 @@ import {
   cityPages,
   cityPageText,
   cityPath,
+  firstOnLineInvite,
   houseArea,
   HOUSE_CITIES,
   joiningText,
@@ -300,5 +301,24 @@ describe('city page texts', () => {
     const source = pageSource('arenda', '[slug]', '[city]', 'page.tsx');
     expect(source).toContain('alternates: { canonical: path }');
     expect(source).not.toContain('naberezhnye-chelny');
+  });
+});
+
+describe('the provider invite of an empty city page', () => {
+  it('names the city in its case and opens the provider sign-up', () => {
+    const invite = firstOnLineInvite(city('kazan'));
+    expect(invite.title).toBe('Своя техника в Казани?');
+    expect(invite.text).toContain('заявки в Казани и рядом');
+    expect(invite.href).toBe('/register?role=provider');
+    expect(firstOnLineInvite(city('vladivostok')).title).toBe('Своя техника во Владивостоке?');
+  });
+
+  it('promises only what the platform keeps: free, the owner sets the price, no percent', () => {
+    for (const slug of ['novosibirsk', 'moskva', 'kazan']) {
+      const { text } = firstOnLineInvite(city(slug));
+      expect(text).toContain('Регистрация бесплатная');
+      expect(text).toContain('площадка не берёт процент');
+      expect(text).not.toMatch(/₽|\d|гарант|скидк/);
+    }
   });
 });
