@@ -6,6 +6,25 @@ export type LeadStatus = z.infer<typeof leadStatusSchema>;
 export const leadOutcomeSchema = z.enum(['deal', 'no_deal', 'no_answer']);
 export type LeadOutcome = z.infer<typeof leadOutcomeSchema>;
 
+// What the owner edits in the CRM (/admin/leads): PATCH /api/admin/leads/[id].
+// Every field is optional; null clears it. callAt is an ISO date-time.
+export const leadCrmPatchSchema = z
+  .object({
+    status: leadStatusSchema,
+    outcome: leadOutcomeSchema.nullable(),
+    amount: z.number().int().min(0).max(1_000_000_000).nullable(),
+    note: z.string().trim().max(2000).nullable(),
+    city: z.string().trim().max(80).nullable(),
+    callAt: z
+      .string()
+      .datetime({ offset: true })
+      .nullable()
+      .transform((value) => (value === null ? null : new Date(value))),
+  })
+  .partial()
+  .refine((value) => Object.keys(value).length > 0, 'Нечего менять');
+export type LeadCrmPatch = z.infer<typeof leadCrmPatchSchema>;
+
 export const createLeadSchema = z.object({
   // Optional: only the phone and the consent are required. No name is kept
   // as «Имя не указано», the same placeholder the site's short forms send.

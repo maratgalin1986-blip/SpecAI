@@ -412,7 +412,12 @@ export default async function AdminPage({ searchParams = {} }: { searchParams?: 
 
       <section className="flex scroll-mt-24 flex-col gap-3" id="leads">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 className="font-semibold">Заявки на звонок</h2>
+          <h2 className="font-semibold">
+            Заявки на звонок{' '}
+            <a href="/admin/leads" className="ml-2 text-sm font-semibold text-signal-700 underline">
+              Открыть CRM
+            </a>
+          </h2>
           <nav aria-label="Фильтр звонков" className="flex flex-wrap gap-1.5">
             {LEAD_FILTERS.map((item) => (
               <a

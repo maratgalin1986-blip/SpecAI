@@ -10,6 +10,7 @@ import { GET as evening } from '../evening/route';
 import { postChannelDigest } from '@/lib/channelDigest';
 import { FLUSH_BATCH, tickDeferredOrderNotices } from '@/lib/deferredOrderNotices';
 import { runGroupPriceSurvey } from '@/lib/groupPriceSurvey';
+import { callbackReminderText } from '@/lib/adminCrm';
 
 export const dynamic = 'force-dynamic';
 // A GET handler: without this Next keeps outgoing sends (Telegram, push,
@@ -66,6 +67,12 @@ export async function GET(request: NextRequest) {
     });
     sent += 1;
   }
+  // CRM (/admin/leads): the owner's call-backs for tomorrow and the missed
+  // ones, to the owner's Telegram, once a day (lib/adminCrm.ts).
+  const callbacks = await remindCallbacks(now).catch((error: unknown) => {
+    console.error('[cron/daily] call-back reminder failed', error);
+    return { due: 0, sent: false };
+  });
   // The evening digest runs from the same cron: Vercel's Hobby plan allows two
   // cron jobs per project (weekly + this one), so both daily tasks share it.
   const digest = await evening(request)
@@ -100,5 +107,30 @@ export async function GET(request: NextRequest) {
     channel,
     priceSurvey,
     notices,
+    callbacks,
   });
+}
+
+/** Call-backs for tomorrow and the missed ones → the owner's Telegram, once a day. */
+async function remindCallbacks(now: Date): Promise<{ due: number; sent: boolean }> {
+  const horizon = new Date(now.getTime() + 2 * 86_400_000);
+  const leads = await prisma.lead.findMany({
+    where: { callAt: { not: null, lte: horizon }, status: { not: 'DONE' }, NOT: { phone: '' } },
+    select: {
+      id: true,
+      name: true,
+      phone: true,
+      city: true,
+      note: true,
+      status: true,
+      callAt: true,
+      createdAt: true,
+    },
+    orderBy: { callAt: 'asc' },
+    take: 500,
+  });
+  const text = callbackReminderText(leads, now);
+  if (!text) return { due: 0, sent: false };
+  const result = await onceADay('lead-callbacks', () => notifyTelegram(text));
+  return { due: leads.length, sent: result === true };
 }
