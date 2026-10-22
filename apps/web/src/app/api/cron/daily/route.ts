@@ -126,6 +126,7 @@ async function remindCallbacks(now: Date): Promise<{ due: number; sent: boolean 
       callAt: true,
       createdAt: true,
     },
+    orderBy: { callAt: 'asc' },
     take: 500,
   });
   const text = callbackReminderText(leads, now);
