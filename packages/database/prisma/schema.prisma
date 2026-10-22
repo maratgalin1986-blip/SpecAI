@@ -588,11 +588,16 @@ model Lead {
   amount     Int?
   // Yandex Metrika ClientID (_ym_uid).
   ymClientId String?
+  // CRM (/admin/leads): the owner's note, when to call back, the city.
+  note       String?
+  callAt     DateTime?
+  city       String?
   createdAt  DateTime   @default(now())
   updatedAt  DateTime   @updatedAt
 
   @@index([status])
   @@index([createdAt])
+  @@index([callAt])
 }
 
 // Comments about a provider (company) or a customer (user), published only
