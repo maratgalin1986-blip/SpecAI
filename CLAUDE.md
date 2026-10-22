@@ -83,6 +83,15 @@ small so merges stay conflict-free.
 - Work plan and lessons: `tasks/todo.md` (checkable plan) and `tasks/lessons.md`
   (read at session start; add a rule after every correction). How we work:
   `docs/ai-office.md` → «Как работаем».
+- **Big tasks go through `/autopilot`** (`.claude/skills/autopilot/SKILL.md`; owner,
+  2026-10-22: «делай всё сам, работай без меня»). The queue is `docs/roadmap.md`. The
+  morning session, once production and `main` are healthy, takes the first task marked
+  «ждёт» or «в работе» from the roadmap instead of inventing a small improvement: brief →
+  numbered requirements → spec → plan (≤ 8 tasks) → subagents → `/site-check` +
+  `/code-review` → acceptance by requirement → PR, merge after green CI. A run that does
+  not fit one session records progress in `tasks/autopilot/<date>-<slug>/plan.md` and marks
+  the roadmap row «в работе, ветка …»; the next morning continues that branch. Only when
+  the roadmap is empty does the morning session go back to one small daily improvement.
 - Shared memory lives in the repo: `docs/owner-requests.md` (the owner's
   requests and their status), `docs/ai-office.md` (how the sessions work
   together, lessons log), `docs/marketing.md`.
