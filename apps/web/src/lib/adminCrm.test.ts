@@ -96,15 +96,16 @@ describe('due and overdue', () => {
     ];
     const base = parseCrmQuery({});
     expect(filterCrm(list, { ...base, today: true }, NOW).map((l) => l.id)).toEqual(['a', 'b']);
-    expect(filterCrm(list, { ...base, status: 'new', city: 'каз' }, NOW).map((l) => l.id)).toEqual(
-      ['e', 'f'],
-    );
+    expect(filterCrm(list, { ...base, status: 'new', city: 'каз' }, NOW).map((l) => l.id)).toEqual([
+      'e',
+      'f',
+    ]);
     expect(
       filterCrm(list, parseCrmQuery({ city: 'Казань', from: '2026-10-22' }), NOW).map((l) => l.id),
     ).toEqual(['e']);
-    expect(
-      filterCrm(list, parseCrmQuery({ from: '2026-10-21', to: '2026-10-21' }), NOW),
-    ).toEqual([]);
+    expect(filterCrm(list, parseCrmQuery({ from: '2026-10-21', to: '2026-10-21' }), NOW)).toEqual(
+      [],
+    );
   });
 
   it('sorts overdue, new, today, in work, done', () => {
@@ -125,10 +126,7 @@ describe('callbackReminderText', () => {
   it('is silent when nothing is due', () => {
     expect(callbackReminderText([lead({ id: 'x' })], NOW)).toBeNull();
     expect(
-      callbackReminderText(
-        [lead({ id: 'y', callAt: new Date('2026-10-25T07:00:00Z') })],
-        NOW,
-      ),
+      callbackReminderText([lead({ id: 'y', callAt: new Date('2026-10-25T07:00:00Z') })], NOW),
     ).toBeNull();
   });
 
@@ -143,7 +141,12 @@ describe('callbackReminderText', () => {
           callAt: new Date('2026-10-23T06:00:00Z'),
         }),
         lead({ id: '2', name: 'Ольга', callAt: new Date('2026-10-21T06:00:00Z') }),
-        lead({ id: '3', name: 'Закрыта', status: 'DONE', callAt: new Date('2026-10-21T06:00:00Z') }),
+        lead({
+          id: '3',
+          name: 'Закрыта',
+          status: 'DONE',
+          callAt: new Date('2026-10-21T06:00:00Z'),
+        }),
         // Later tonight: not tomorrow, not missed yet.
         lead({ id: '4', name: 'Вечером', callAt: new Date('2026-10-22T18:00:00Z') }),
       ],
