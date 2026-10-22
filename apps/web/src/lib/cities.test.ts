@@ -168,7 +168,9 @@ describe('the honest city page model', () => {
       kind: 'available',
       fromRate: 3000,
       houseServes: false,
-      machines: [{ id: 'near', name: near.name, isHouse: false, hourlyRate: 3000 }],
+      machines: [
+        { id: 'near', name: near.name, isHouse: false, hourlyRate: 3000, shiftRate: 24000 },
+      ],
     });
     const text = cityPageText(backhoe, novosibirsk, offer);
     expect(text.title).toBe(
@@ -215,6 +217,25 @@ describe('the honest city page model', () => {
     expect(cityOffer(backhoe, city('elabuga'), [house], houseArea(), true)).toMatchObject({
       houseServes: true,
       fromRate: rateOf('backhoe'),
+    });
+  });
+
+  it('gives each card the shift price: the provider’s own, else 8 hours of the hourly one', () => {
+    const point = { lat: 55.1, lon: 83.1 };
+    const offer = cityOffer(backhoe, city('novosibirsk'), [
+      { ...machine('own-shift', point, 100, 3000), dailyRate: 20000 },
+      machine('hourly-only', point, 100, 2500),
+      { ...machine('shift-only', point, 100), hourlyRate: null, dailyRate: 28000 },
+      { ...machine('free', point), hourlyRate: null },
+    ]);
+    const shifts =
+      offer.kind === 'available' &&
+      Object.fromEntries(offer.machines.map((m) => [m.id, m.shiftRate]));
+    expect(shifts).toEqual({
+      'own-shift': 20000,
+      'hourly-only': 2500 * SHIFT_HOURS,
+      'shift-only': 28000,
+      free: 0,
     });
   });
 

@@ -24,7 +24,7 @@ import { landingClips } from '@/lib/landingClips';
 import { landingLoop } from '@/lib/loops';
 import { Reveal } from '@/components/Reveal';
 import { LANDINGS, landingBySlug } from '@/lib/landings';
-import { rub } from '@/lib/prices';
+import { rub, SHIFT_HOURS } from '@/lib/prices';
 import { SITE } from '@/lib/site';
 import { siteUrl } from '@/lib/siteUrl';
 
@@ -214,6 +214,11 @@ export default async function CityLandingPage({ params }: { params: Params }) {
                     <p className="mt-auto text-lg font-semibold" data-testid="fleet-card-price">
                       от {rub(item.hourlyRate)} ₽
                       <span className="text-sm font-normal text-slate-500">/ч с машинистом</span>
+                    </p>
+                  )}
+                  {item.shiftRate > 0 && (
+                    <p className="text-sm text-slate-600" data-testid="fleet-card-shift">
+                      смена {SHIFT_HOURS}&nbsp;ч — от {rub(item.shiftRate)}&nbsp;₽
                     </p>
                   )}
                 </Card>

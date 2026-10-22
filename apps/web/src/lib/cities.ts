@@ -346,6 +346,11 @@ export interface CityMachine {
   isHouse: boolean;
   /** What the customer pays per hour with the operator (customerRates). */
   hourlyRate: number;
+  /**
+   * What a shift costs (customerRates: the provider's own shift price, else
+   * SHIFT_HOURS of the hourly one); 0 when the machine has no price.
+   */
+  shiftRate: number;
 }
 
 export type CityOffer =
@@ -377,12 +382,16 @@ export function cityOffer(
 ): CityOffer {
   const machines = rows
     .filter((row) => rowServesCity(row, city, house))
-    .map((row) => ({
-      id: row.id,
-      name: row.name,
-      isHouse: isHouseEquipment(row),
-      hourlyRate: customerRates({ ...row, categoryName: landing.title }).hourlyRate,
-    }))
+    .map((row) => {
+      const rates = customerRates({ ...row, categoryName: landing.title });
+      return {
+        id: row.id,
+        name: row.name,
+        isHouse: isHouseEquipment(row),
+        hourlyRate: rates.hourlyRate,
+        shiftRate: rates.hourlyRate > 0 ? rates.dailyRate : 0,
+      };
+    })
     // СпецПласт16 first (the owner's rule), then the cheapest; unpriced last.
     .sort(
       (a, b) =>
