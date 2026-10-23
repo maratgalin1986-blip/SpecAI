@@ -7,6 +7,7 @@
 // users or chats are passed through maskContacts.
 import { AKTUALNO_PATH, PRICE_ASK_BODY, PRICE_ASK_TITLE } from '../aktualno';
 import { stripChatOrderNote } from '../chatOrders';
+import { DEMAND_NUDGE_PATH, demandNudgeText } from '../demandNudge';
 import { maskContacts } from '../privacy';
 import { EARLY_NOTICE_LINE, EARLY_NOTICE_MINUTES, priorityDate } from '../referralPriority';
 
@@ -191,6 +192,8 @@ export type NotificationEvent =
   | { type: 'digest.evening'; items: string[] }
   /** Monday mornings, to provider managers: «обновите цены и свободные дни» (lib/aktualnoData.ts). */
   | { type: 'price.ask' }
+  /** Once a day, to provider managers off the line: today's open orders nearby (lib/demandNudgeData.ts). */
+  | { type: 'demand.today'; count: number }
   /** At 19:00, a CONFIRMED booking starts tomorrow: to the customer, the provider and the operator. */
   | {
       type: 'booking.tomorrow';
@@ -382,6 +385,8 @@ export function renderNotification(event: NotificationEvent): RenderedNotificati
     }
     case 'price.ask':
       return { title: PRICE_ASK_TITLE, body: PRICE_ASK_BODY, path: AKTUALNO_PATH };
+    case 'demand.today':
+      return { ...demandNudgeText(event.count), path: DEMAND_NUDGE_PATH };
     case 'booking.tomorrow':
       if (event.audience === 'provider' || event.audience === 'operator') {
         return {
@@ -443,12 +448,27 @@ export function renderNotification(event: NotificationEvent): RenderedNotificati
   }
 }
 
-function pluralOrders(n: number): string {
+/** «заявка» / «заявки» / «заявок» for a count. */
+export function pluralOrders(n: number): string {
   const mod10 = n % 10;
   const mod100 = n % 100;
   if (mod10 === 1 && mod100 !== 11) return 'заявка';
   if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return 'заявки';
   return 'заявок';
+}
+
+/**
+ * Events that may use only some channels, whatever else the user chose: the
+ * daily «Спрос рядом» nudge is too frequent for e-mail and not worth a paid
+ * WhatsApp or SMS. Events not listed here use every chosen channel.
+ */
+export const EVENT_CHANNELS: Partial<Record<NotificationEvent['type'], readonly Channel[]>> = {
+  'demand.today': ['push', 'telegram'],
+};
+
+/** The channels this event may use at all; null when it is not restricted. */
+export function eventChannels(event: NotificationEvent): readonly Channel[] | null {
+  return EVENT_CHANNELS[event.type] ?? null;
 }
 
 /** Plain text for Telegram, WhatsApp and SMS. SMS is kept short (one or two segments). */

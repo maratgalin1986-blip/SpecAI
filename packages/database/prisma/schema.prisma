@@ -644,6 +644,11 @@ model NotificationSettings {
   // to one a week (lib/aktualnoData.ts).
   priceAsk              Boolean   @default(true)
   priceAskSentAt        DateTime?
+  // «Спрос рядом»: once a Moscow day, 09:00–20:00, «Сегодня N заявок рядом —
+  // выйдите на линию» to provider managers (push and Telegram only; on by
+  // default); demandNudgeSentAt keeps it to one a day (lib/demandNudgeData.ts).
+  demandNudge           Boolean   @default(true)
+  demandNudgeSentAt     DateTime?
   // Private chat with the bot, set by "/start <token>" (lib/notifications/telegramLink.ts).
   telegramChatId        String?
   // sha256 of the one-time token from the deep link, never the token itself.
