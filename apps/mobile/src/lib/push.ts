@@ -43,7 +43,7 @@ export function appRouteFor(path: string | undefined): string | null {
   const [clean = '', hash = ''] = path.split('#');
   const order = /^\/orders\/([\w-]{1,64})$/.exec(clean);
   if (order) return `/orders/${order[1]}`;
-  // Вечерняя сводка заявок на завтра — лента исполнителя.
+  // Вечерняя сводка заявок на завтра и дневное «Спрос рядом» — лента исполнителя.
   if (clean === '/orders') return '/feed';
   // «Пригласи друга»: ссылка и бонус — в профиле.
   if (hash === 'invite') return '/profile';

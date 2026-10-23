@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Card } from '@specai/ui';
 import { NewsletterSetting } from './NewsletterSetting';
+import { DemandNudgeSetting } from './DemandNudgeSetting';
 import { PriceAskSetting } from './PriceAskSetting';
 
 // «Уведомления» in the cabinet: checkboxes for Telegram, push, e-mail,
@@ -203,6 +204,7 @@ export function NotificationSettings() {
         )}
         <NewsletterSetting />
         <PriceAskSetting />
+        <DemandNudgeSetting />
         {view && (
           <div>
             <button

@@ -7,6 +7,12 @@ import { apiFetch } from './api';
 
 export const PRICE_ASK_LABEL = 'Раз в неделю напоминать обновить цены и свободные дни техники';
 
+// «Спрос рядом» (2026-10-23): раз в сутки, днём, «Сегодня N заявок рядом —
+// выйдите на линию» тем же людям (сервер — apps/web/src/lib/demandNudge.ts,
+// подпись — apps/web/src/lib/aktualno.ts).
+export const DEMAND_NUDGE_LABEL =
+  'Спрос рядом — раз в день, если сегодня рядом есть заявки на вашу технику';
+
 export type AvailabilityKind = 'today' | 'tomorrow' | 'busy';
 
 export const AVAILABILITY_LABELS: Record<AvailabilityKind, string> = {
@@ -97,6 +103,23 @@ export function fetchPriceAsk() {
 
 export function setPriceAsk(enabled: boolean) {
   return apiFetch<PriceAskSetting>('/api/account/price-ask', {
+    method: 'PATCH',
+    body: { enabled },
+  });
+}
+
+export interface DemandNudgeSetting {
+  /** false — не руководитель компании-исполнителя (или парк СпецПласт16): переключатель не показываем. */
+  available: boolean;
+  enabled: boolean;
+}
+
+export function fetchDemandNudge() {
+  return apiFetch<DemandNudgeSetting>('/api/account/demand-nudge');
+}
+
+export function setDemandNudge(enabled: boolean) {
+  return apiFetch<DemandNudgeSetting>('/api/account/demand-nudge', {
     method: 'PATCH',
     body: { enabled },
   });

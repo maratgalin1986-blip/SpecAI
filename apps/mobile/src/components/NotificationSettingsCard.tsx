@@ -1,6 +1,7 @@
 import { useFocusEffect } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
 import { AppState, Linking, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
+import { DemandNudgeSetting } from '@/components/DemandNudgeSetting';
 import { NewsletterSetting } from '@/components/NewsletterSetting';
 import { PriceAskSetting } from '@/components/PriceAskSetting';
 import { Badge, Button, Card } from '@/components/ui';
@@ -246,6 +247,7 @@ export function NotificationSettingsCard() {
       <LineReminderSetting />
       <NewsletterSetting />
       <PriceAskSetting />
+      <DemandNudgeSetting />
       {settings ? (
         <Button
           title="Проверить уведомления"
