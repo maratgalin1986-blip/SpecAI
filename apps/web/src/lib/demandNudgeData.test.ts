@@ -358,18 +358,18 @@ describe('«Спрос рядом»', () => {
     expect(claims.filter(Boolean)).toHaveLength(1);
   });
 
-  it('gives the day back when every channel failed, keeps it when nothing was reachable', async () => {
+  it('keeps the day when every channel failed: a broken channel is not retried every 5 minutes', async () => {
     const notify = vi.fn(async (userId: string, _count: number): Promise<object> =>
-      userId === 'u1' ? { telegram: { ok: false, error: 'down' } } : {},
+      userId === 'u1' ? { telegram: { ok: false, error: 'blocked' } } : {},
     );
     const result = await run(notify);
     expect(result).toMatchObject({ sent: 0, failed: 1, skipped: 2 });
-    expect(db.settings.find((row) => row.userId === 'u1')?.demandNudgeSentAt).toBeNull();
+    expect(db.settings.find((row) => row.userId === 'u1')?.demandNudgeSentAt).toEqual(now);
     expect(db.settings.find((row) => row.userId === 'u2')?.demandNudgeSentAt).toEqual(now);
-    // The failed one is tried again by the next run.
+    // The next run the same day sends nothing (the next day is covered above).
     notify.mockImplementation(async () => delivered);
     await run(notify, { now: later(5 * 60_000) });
-    expect(notify.mock.calls.slice(3).map(([id]) => id)).toEqual(['u1']);
+    expect(notify).toHaveBeenCalledTimes(3);
   });
 
   it('starts nothing after the deadline and stops at the cap; the rest are told next time', async () => {

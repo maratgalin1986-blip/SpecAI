@@ -81,16 +81,6 @@ export async function claimDemandNudge(userId: string, now: Date): Promise<boole
     .catch(() => false);
 }
 
-/** Gives the day back when nothing could be delivered because of errors. */
-async function releaseDemandNudge(userId: string, now: Date, previous: Date | null) {
-  await prisma.notificationSettings
-    .updateMany({
-      where: { userId, demandNudgeSentAt: now },
-      data: { demandNudgeSentAt: previous },
-    })
-    .catch((error: unknown) => console.error('[demand-nudge] could not release', error));
-}
-
 /**
  * The daily «Сегодня N заявок рядом» from api/cron/notices. N is the number
  * of today's OPEN orders (since 00:00 Moscow) that the company would be
@@ -240,10 +230,11 @@ export async function sendDemandNudges(
           if (report === 'timeout') return 'failed' as const;
           const results = Object.values(report);
           if (results.some((item) => item?.ok)) return 'sent' as const;
-          // Neither the app nor Telegram is set up: the day stays claimed,
-          // there is nothing to retry.
+          // Neither the app nor Telegram is set up: nothing to send.
           if (results.length === 0) return 'skipped' as const;
-          await releaseDemandNudge(userId, now, byUser.get(userId)?.demandNudgeSentAt ?? null);
+          // Every channel failed (a blocked bot, a stale push token): the day
+          // stays claimed, so a broken channel is not retried every 5 minutes;
+          // tomorrow's run tries again.
           return 'failed' as const;
         } catch (error) {
           console.error('[demand-nudge] failed for one provider', error);
