@@ -2,16 +2,19 @@
 // links in notifications.
 //
 // The site lives on https://spec-ai-web.vercel.app, and that is the default.
-// NEXT_PUBLIC_SITE_URL overrides it (e.g. a staging host). iistroyka24.ru and
-// iistroyka.ru are bought but not connected (a registrar parking page answers
-// there), so an override or a Vercel production domain on those hosts is
-// ignored until NEXT_PUBLIC_SITE_DOMAIN_CONNECTED=1 says the DNS points at
-// Vercel.
+// NEXT_PUBLIC_SITE_URL overrides it (e.g. a staging host). The main domain is
+// иистройка24.рф (owner, 2026-10-23: «сюда всё переносим»); it, iistroyka24.ru
+// and iistroyka.ru are bought but not connected yet, so an override or a
+// Vercel production domain on those hosts is ignored until
+// NEXT_PUBLIC_SITE_DOMAIN_CONNECTED=1 says the DNS points at Vercel.
 
 export const DEFAULT_SITE_URL = 'https://spec-ai-web.vercel.app';
 
+/** иистройка24.рф as browsers send it (punycode): the main domain to come. */
+export const MAIN_DOMAIN_HOST = 'xn--24-6kc5aagh4arjl.xn--p1ai';
+
 /** Bought domains that do not serve the site yet. */
-export const PENDING_DOMAINS = ['iistroyka24.ru', 'iistroyka.ru'];
+export const PENDING_DOMAINS = [MAIN_DOMAIN_HOST, 'iistroyka24.ru', 'iistroyka.ru'];
 
 type SiteEnv = Partial<
   Record<

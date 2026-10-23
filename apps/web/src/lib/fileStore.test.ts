@@ -69,6 +69,9 @@ describe('fileStore', () => {
       'equipment/c1/R-a.jpg',
     );
     expect(storedKeyFromUrl('https://www.iistroyka24.ru/api/files/x.jpg')).toBe('x.jpg');
+    // иистройка24.рф, the main domain to come (the URL parser gives punycode).
+    expect(storedKeyFromUrl('https://иистройка24.рф/api/files/x.jpg')).toBe('x.jpg');
+    expect(storedKeyFromUrl('https://www.иистройка24.рф/api/files/x.jpg')).toBe('x.jpg');
   });
 
   it('recognises only this site’s own file links', () => {

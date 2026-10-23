@@ -5,11 +5,17 @@ export const FILES_PATH = '/api/files/';
 
 /**
  * The site's own addresses, now and planned: a link saved under one of them
- * stays «ours» when the site moves to its domain (CLAUDE.md: iistroyka24.ru
+ * stays «ours» when the site moves to its domain (иистройка24.рф, iistroyka24.ru
  * and iistroyka.ru are bought, the site is still on spec-ai-web.vercel.app).
  */
 function ownHosts(): Set<string> {
-  const hosts = new Set(['spec-ai-web.vercel.app', 'iistroyka24.ru', 'iistroyka.ru']);
+  const hosts = new Set([
+    'spec-ai-web.vercel.app',
+    // иистройка24.рф as the URL parser gives it (siteUrl.ts: MAIN_DOMAIN_HOST).
+    'xn--24-6kc5aagh4arjl.xn--p1ai',
+    'iistroyka24.ru',
+    'iistroyka.ru',
+  ]);
   try {
     hosts.add(new URL(siteUrl()).host);
   } catch {
