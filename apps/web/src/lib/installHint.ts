@@ -1,6 +1,7 @@
 // «Установить на экран» (owner, 2026-10-17): a slim card that offers to put
 // the site on the home screen. Never on the first look at the site: from the
-// second visit on, or right after a lead or a sign-up. ✕ hides it for good.
+// second visit on, right after a lead or a sign-up, or at once for a visitor
+// who came by an «install the app» link (isAppInviteSearch). ✕ hides it for good.
 // Everything here is pure (a Storage-like object, a user-agent string), so the
 // rules are unit-tested and the reads never throw (private mode, blocked
 // storage). Only a visit counter and two flags are kept, no personal data.
@@ -115,6 +116,18 @@ export function hasInstallMoment(storage: StorageLike | null, now: number): bool
 /** After a lead or a sign-up; the hint shows on this page or the next one. */
 export function markInstallMoment(storage: StorageLike | null, now: number) {
   write(storage, INSTALL_MOMENT_KEY, String(now));
+}
+
+/**
+ * A visitor who followed an «install the app» link (the owner's ad on the
+ * СпецПласт16 site: `?utm_campaign=app`, or a short `?app=1`) came for the app: the
+ * hint shows on the first visit, as after a lead.
+ */
+export function isAppInviteSearch(search: string | null | undefined): boolean {
+  const params = new URLSearchParams(search ?? '');
+  return (
+    params.get('utm_campaign')?.trim().toLowerCase() === 'app' || params.get('app')?.trim() === '1'
+  );
 }
 
 /** Browser-side wrapper for forms: sets the flag and wakes the hint. */
