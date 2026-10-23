@@ -12,6 +12,7 @@ import {
   INSTALL_VISITS_KEY,
   installHintMode,
   isAndroidWebView,
+  isAppInviteSearch,
   isBot,
   isInstallDismissed,
   isInstallHintPage,
@@ -257,6 +258,19 @@ describe('dismissal and the moment', () => {
     // The flag of the first version ('1') counts as long gone.
     storage.setItem(INSTALL_MOMENT_KEY, '1');
     expect(hasInstallMoment(storage, t0)).toBe(false);
+  });
+
+  it('treats an «install the app» link as the moment, and nothing else', () => {
+    expect(isAppInviteSearch('?utm_source=specplast16&utm_medium=site&utm_campaign=app')).toBe(
+      true,
+    );
+    expect(isAppInviteSearch('?utm_campaign=APP')).toBe(true);
+    expect(isAppInviteSearch('?app=1')).toBe(true);
+    expect(isAppInviteSearch('')).toBe(false);
+    expect(isAppInviteSearch(null)).toBe(false);
+    expect(isAppInviteSearch('?utm_campaign=direct')).toBe(false);
+    expect(isAppInviteSearch('?utm_campaign=application')).toBe(false);
+    expect(isAppInviteSearch('?app=0')).toBe(false);
   });
 
   it('the inline script in the layout reads the same keys', () => {

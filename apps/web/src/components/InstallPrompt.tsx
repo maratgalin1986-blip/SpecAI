@@ -7,11 +7,13 @@ import {
   hasInstallMoment,
   INSTALL_MOMENT_EVENT,
   INSTALL_TEXTS,
+  isAppInviteSearch,
   installHintMode,
   installStorage,
   isInstallDismissed,
   isInstallHintPage,
   isMobileUa,
+  markInstallMoment,
   recordVisit,
   type InstallHintMode,
 } from '@/lib/installHint';
@@ -76,7 +78,11 @@ export function InstallPrompt() {
     const win = window as InstallWindow;
     const storage = installStorage();
     const visits = recordVisit(storage, Date.now());
-    let moment = hasInstallMoment(storage, Date.now());
+    // Came by an «install the app» link: the moment is now, and it lasts for
+    // the next pages too (the card may wait for a free slot).
+    const invited = isAppInviteSearch(window.location.search);
+    if (invited) markInstallMoment(storage, Date.now());
+    let moment = invited || hasInstallMoment(storage, Date.now());
     let ready = false;
     let shown = false;
     let timer = 0;
