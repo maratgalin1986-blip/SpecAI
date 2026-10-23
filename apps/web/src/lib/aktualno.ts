@@ -19,6 +19,14 @@ export const PRICE_ASK_BODY = 'Заказчики видят актуальну�
 /** The switch in «Уведомления» (site and app). */
 export const PRICE_ASK_LABEL = 'Раз в неделю напоминать обновить цены и свободные дни техники';
 
+/**
+ * The «Спрос рядом» switch next to it (lib/demandNudge.ts, same audience:
+ * canAnswerPriceAsk). Kept here so the client component and the app's test
+ * need no import of the notification routing.
+ */
+export const DEMAND_NUDGE_LABEL =
+  'Спрос рядом — раз в день, если сегодня рядом есть заявки на вашу технику';
+
 /** Not more often than this: a late Monday run still counts as the same week. */
 export const PRICE_ASK_INTERVAL_MS = 6 * 86_400_000;
 

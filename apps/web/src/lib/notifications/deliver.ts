@@ -5,6 +5,7 @@ import { escapeHtml, type EmailTemplate } from '../emailTemplates';
 import type { DeliveryResult } from './adapters';
 import {
   coveredByOwnerTelegram,
+  eventChannels,
   phoneDigits,
   pickChannels,
   plainText,
@@ -75,6 +76,8 @@ export async function deliver(
   const message = renderNotification(event);
   let channels = pickChannels(prefs, recipient, deps.server);
   if (options.only) channels = channels.filter((channel) => options.only!.includes(channel));
+  const allowed = eventChannels(event);
+  if (allowed) channels = channels.filter((channel) => allowed.includes(channel));
   if (coveredByOwnerTelegram(event, recipient, deps.ownerTelegramChatId)) {
     channels = channels.filter((channel) => channel !== 'telegram');
   }

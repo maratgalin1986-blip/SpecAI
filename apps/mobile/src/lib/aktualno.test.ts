@@ -1,9 +1,18 @@
 import { describe, expect, it, vi } from 'vitest';
 
-vi.mock('./api', () => ({ apiFetch: vi.fn() }));
+const apiFetch = vi.fn();
+vi.mock('./api', () => ({ apiFetch }));
 
-const { AVAILABILITY_LABELS, PRICE_ASK_LABEL, moscowDayKey, rowsFrom, saveBody } =
-  await import('./aktualno');
+const {
+  AVAILABILITY_LABELS,
+  DEMAND_NUDGE_LABEL,
+  PRICE_ASK_LABEL,
+  fetchDemandNudge,
+  moscowDayKey,
+  rowsFrom,
+  saveBody,
+  setDemandNudge,
+} = await import('./aktualno');
 const web = await import('../../../web/src/lib/aktualno');
 
 describe('«Цены и свободные дни» в приложении', () => {
@@ -57,5 +66,21 @@ describe('«Цены и свободные дни» в приложении', ()
 
   it('день — по Москве', () => {
     expect(moscowDayKey(new Date('2026-10-19T21:30:00Z'))).toBe('2026-10-20');
+  });
+});
+
+describe('«Спрос рядом» в приложении', () => {
+  it('подпись — слово в слово как на сайте', () => {
+    expect(DEMAND_NUDGE_LABEL).toBe(web.DEMAND_NUDGE_LABEL);
+  });
+
+  it('читает и меняет свой выключатель через /api/account/demand-nudge', () => {
+    apiFetch.mockReset();
+    void fetchDemandNudge();
+    void setDemandNudge(false);
+    expect(apiFetch.mock.calls).toEqual([
+      ['/api/account/demand-nudge'],
+      ['/api/account/demand-nudge', { method: 'PATCH', body: { enabled: false } }],
+    ]);
   });
 });

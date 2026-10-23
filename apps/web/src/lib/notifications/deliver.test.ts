@@ -121,6 +121,33 @@ describe('deliver', () => {
     expect(deps.send.whatsapp).toHaveBeenCalledWith('79171234567', expect.any(String));
     expect(deps.send.sms).toHaveBeenCalledWith('79171234567', expect.any(String));
   });
+
+  it('sends the daily «Спрос рядом» to push and Telegram only, whatever else is chosen', async () => {
+    const deps = fakeDeps();
+    deps.server = { ...deps.server, whatsapp: true, sms: true };
+    const all = { telegram: true, push: true, email: true, whatsapp: true, sms: true };
+    const report = await deliver(RECIPIENT, all, { type: 'demand.today', count: 3 }, deps);
+    expect(Object.keys(report).sort()).toEqual(['push', 'telegram']);
+    expect(deps.send.email).not.toHaveBeenCalled();
+    expect(deps.send.whatsapp).not.toHaveBeenCalled();
+    expect(deps.send.sms).not.toHaveBeenCalled();
+    expect(deps.send.push).toHaveBeenCalledWith(['ExponentPushToken[a]'], {
+      title: 'Сегодня 3 заявки рядом',
+      body: expect.stringContaining('Выйдите на линию'),
+      data: { path: '/orders' },
+    });
+    // The user's own choice still counts: no push chosen, Telegram only.
+    const telegramOnly = await deliver(
+      RECIPIENT,
+      { ...all, push: false },
+      { type: 'demand.today', count: 1 },
+      deps,
+    );
+    expect(Object.keys(telegramOnly)).toEqual(['telegram']);
+    // Other events keep every chosen channel.
+    const other = await deliver(RECIPIENT, all, EVENT, deps);
+    expect(Object.keys(other).sort()).toEqual(['email', 'push', 'sms', 'telegram', 'whatsapp']);
+  });
 });
 
 describe('genericEmail', () => {
