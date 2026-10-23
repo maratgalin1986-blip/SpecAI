@@ -1,5 +1,11 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { DEFAULT_SITE_URL, resolveSiteUrl, siteUrl, usableSiteUrl } from './siteUrl';
+import {
+  DEFAULT_SITE_URL,
+  MAIN_DOMAIN_HOST,
+  resolveSiteUrl,
+  siteUrl,
+  usableSiteUrl,
+} from './siteUrl';
 
 describe('resolveSiteUrl', () => {
   it('defaults to the working Vercel address', () => {
@@ -44,6 +50,22 @@ describe('resolveSiteUrl', () => {
         NEXT_PUBLIC_SITE_DOMAIN_CONNECTED: '1',
       }),
     ).toBe('https://iistroyka24.ru');
+  });
+
+  it('waits for иистройка24.рф, written in Cyrillic or in punycode', () => {
+    expect(new URL('https://иистройка24.рф').hostname).toBe(MAIN_DOMAIN_HOST);
+    expect(resolveSiteUrl({ NEXT_PUBLIC_SITE_URL: 'https://иистройка24.рф' })).toBe(
+      DEFAULT_SITE_URL,
+    );
+    expect(resolveSiteUrl({ VERCEL_PROJECT_PRODUCTION_URL: MAIN_DOMAIN_HOST })).toBe(
+      DEFAULT_SITE_URL,
+    );
+    expect(
+      resolveSiteUrl({
+        NEXT_PUBLIC_SITE_URL: 'https://иистройка24.рф/',
+        NEXT_PUBLIC_SITE_DOMAIN_CONNECTED: '1',
+      }),
+    ).toBe(`https://${MAIN_DOMAIN_HOST}`);
   });
 
   it('ignores blank and malformed values', () => {

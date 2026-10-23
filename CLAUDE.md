@@ -73,7 +73,7 @@ small so merges stay conflict-free.
   «Анна П.» (`lib/customerPrivacy.ts`); contacts only once the booking is
   CONFIRMED/ACTIVE/COMPLETED. Chat-imported contacts are shown masked and
   revealed only through «Показать телефон» (logged, rate-limited). Construction
-  materials are sold by СпецПласт16 itself (`lib/smetaPrices.ts`). The platform is called «ИИСтройка24 от СпецПласт16» (owner, 2026-10-03; domains iistroyka24.ru and iistroyka.ru bought but not connected yet — the site stays on spec-ai-web.vercel.app, see owner-requests)
+  materials are sold by СпецПласт16 itself (`lib/smetaPrices.ts`). The platform is called «ИИСтройка24 от СпецПласт16» (owner, 2026-10-03; main domain иистройка24.рф (owner, 2026-10-23: «сюда всё переносим»), also iistroyka24.ru and iistroyka.ru; none connected yet — the site stays on spec-ai-web.vercel.app until the DNS points at Vercel, see owner-requests)
   (`SITE.platform`); prices live in `lib/prices.ts`. Details:
   `docs/owner-requests.md`. Do not switch to a single executor without the owner.
 - **Geography (owner, 2026-10-17): all of Russia, not only Tatarstan.** No code may
