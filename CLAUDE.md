@@ -92,6 +92,8 @@ small so merges stay conflict-free.
   not fit one session records progress in `tasks/autopilot/<date>-<slug>/plan.md` and marks
   the roadmap row «в работе, ветка …»; the next morning continues that branch. Only when
   the roadmap is empty does the morning session go back to one small daily improvement.
+- **Sessions talk through `docs/sessions/handoff.md`** (owner, 2026-10-23): read it at the start
+  of work and before every publication, answer there with a date; never ask the owner to relay prompts.
 - Shared memory lives in the repo: `docs/owner-requests.md` (the owner's
   requests and their status), `docs/ai-office.md` (how the sessions work
   together, lessons log), `docs/marketing.md`.
