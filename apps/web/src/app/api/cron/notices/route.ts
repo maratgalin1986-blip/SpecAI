@@ -27,7 +27,7 @@ function demandCounts(result: DemandNudgeResult) {
 // 5 minutes by .github/workflows/order-notices.yml. Public and safe: it only
 // sends alerts already due, each once, so extra calls change nothing; the
 // answer is counts only. Then the daily «Спрос рядом» (lib/demandNudgeData.ts:
-// 09:00–20:00 Moscow, once a day per provider manager), with its own time
+// 09:00–12:00 Moscow, once a day per provider manager), with its own time
 // budget and its own error handling, so it never holds back the alerts.
 // Production only, so a preview deployment never sends anything;
 // rate-limited by IP.

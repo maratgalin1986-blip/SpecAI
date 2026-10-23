@@ -8,7 +8,7 @@
 ## Чистая логика `apps/web/src/lib/demandNudge.ts` (R2–R5, R7, R9, R12)
 
 - `mskDayStart(now): Date` — 00:00 по Москве (UTC+3, без переходов) текущих суток.
-- `inDemandWindow(now): boolean` — 09:00 ≤ время МСК < 20:00.
+- `inDemandWindow(now): boolean` — 09:00 ≤ время МСК < 12:00 (от МСК−1 до МСК+9 — везде день по местному времени: Калининград 08–11, Камчатка 18–21).
 - `demandNudgeDue(sentAt, now): boolean` — `sentAt` пуст или раньше `mskDayStart(now)`.
 - `countNearbyOrders(provider: ProviderForMatch, orders: OrderForMatch[]): number` — через `providerMatchesOrder`.
 - `demandNudgeText(n)` → `{ title: 'Сегодня N заявок рядом', body: 'Выйдите на линию — заказчики видят свободные машины на карте и пишут первым.' }` с правильным склонением (1 заявка, 2 заявки, 5 заявок, 21 заявка, 11 заявок).
@@ -27,8 +27,10 @@
 - `sendDemandNudges({ now, deadline, notify })`: вне окна — `{ skipped: 'window' }`. Заявки:
   OPEN, `createdAt ≥ mskDayStart`, до 500, с location и category → `OrderForMatch` (как в
   `matchOrderRecipients`: `orderPoint`, `acceptedCategoryIds`). Компании: `isProvider`, не
-  `HOUSE_COMPANY_ID`, с техникой не RETIRED, их PROVIDER_ADMIN. Пользователи со свежей
-  `LinePresence.online` (`PRESENCE_FRESH_MS`) пропускаются. N ≥ 1 → claim → notify; доставка
+  `HOUSE_COMPANY_ID`, с техникой не RETIRED, их PROVIDER_ADMIN. Заявки своих руководителей и
+  заявки, на которые компания уже сделала предложение, не считаются (как в `providerFeed.ts`).
+  Компания, у которой сейчас есть машина на линии (`LinePresence` по `companyId`, `isOnLine`,
+  `PRESENCE_FRESH_MS`; выводит и машинист), пропускается целиком. N ≥ 1 → claim → notify; доставка
   не удалась ни по одному каналу → вернуть отметку (как `releasePriceAsk`). Остановка по
   `deadline`. Ответ — только числа.
 - `demandNudgeEnabled(userId)`, `setDemandNudge(userId, enabled)` — для выключателя.

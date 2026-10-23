@@ -1,6 +1,6 @@
-// «Спрос рядом» (2026-10-23): once a Moscow day, between 09:00 and 20:00, a
-// provider manager who is not on the line hears «Сегодня N заявок рядом —
-// выйдите на линию». N counts real OPEN orders created today that fit the
+// «Спрос рядом» (2026-10-23): once a Moscow day, between 09:00 and 12:00
+// Moscow time, a provider manager whose company has no machine on the line
+// hears «Сегодня N заявок рядом — выйдите на линию». N counts real OPEN orders created today that fit the
 // company by the same rule as the new-order alert (providerMatchesOrder).
 // Push and Telegram only (routing.ts EVENT_CHANNELS). Pure helpers; the
 // database side is lib/demandNudgeData.ts.
@@ -19,9 +19,15 @@ import { todayStartMsk } from './providerFeed';
 /** Where the message leads: the open orders (the app opens its orders screen for it). */
 export const DEMAND_NUDGE_PATH = '/orders';
 
-/** The daytime window in Moscow: from 09:00 up to (not including) 20:00. */
+/**
+ * The window in Moscow time: from 09:00 up to (not including) 12:00. Providers
+ * are all over Russia (CLAUDE.md), from MSK−1 to MSK+9, and a narrow morning
+ * window in Moscow is daytime locally everywhere: 08–11 in Kaliningrad, 11–14
+ * in Yekaterinburg, 16–19 in Vladivostok, 18–21 in Kamchatka. A wider one
+ * (09–20 MSK) would wake Vladivostok at night.
+ */
 export const DEMAND_WINDOW_FROM_HOUR = 9;
-export const DEMAND_WINDOW_TO_HOUR = 20;
+export const DEMAND_WINDOW_TO_HOUR = 12;
 
 const HOUR_MS = 3_600_000;
 
@@ -30,7 +36,7 @@ export function mskDayStart(now: Date): Date {
   return todayStartMsk(now);
 }
 
-/** Whether `now` is within 09:00–20:00 Moscow time. */
+/** Whether `now` is within 09:00–12:00 Moscow time. */
 export function inDemandWindow(now: Date): boolean {
   const sinceMidnight = now.getTime() - mskDayStart(now).getTime();
   return (

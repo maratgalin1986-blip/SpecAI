@@ -55,8 +55,8 @@ export function DemandNudgeSetting() {
         />
       </View>
       <Text style={styles.hint}>
-        Днём, с 9 до 20 по Москве — в приложение и Telegram, если они включены выше. Если вы уже на
-        линии, сообщения не будет.
+        Раз в день, днём по вашему времени — в приложение и Telegram, если они включены выше. Если
+        вы уже на линии, сообщения не будет.
       </Text>
       {error ? <Text style={styles.error}>{error}</Text> : null}
     </View>

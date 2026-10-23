@@ -28,10 +28,13 @@ interface FakeOrder {
   createdAt: Date;
   categoryId: string | null;
   customerCompanyId: string | null;
+  /** Companies whose machines already bid on it. */
+  bidCompanyIds?: string[];
   location: { latitude: number | null; longitude: number | null; city: string } | null;
 }
 interface FakePresence {
   userId: string;
+  companyId: string;
   online: boolean;
   updatedAt: Date;
   onlineSince: Date | null;
@@ -92,6 +95,7 @@ const prisma = {
         .map((row) => ({
           categoryId: row.categoryId,
           customer: { companyId: row.customerCompanyId },
+          bids: (row.bidCompanyIds ?? []).map((companyId) => ({ equipment: { companyId } })),
           location: row.location && { ...row.location, addressLine: '' },
         })),
     ),
@@ -133,7 +137,7 @@ const prisma = {
     findMany: vi.fn(async ({ where }: { where: Where }) =>
       db.presence.filter(
         (row) =>
-          where.userId.in.includes(row.userId) &&
+          where.companyId.in.includes(row.companyId) &&
           row.online === where.online &&
           row.updatedAt.getTime() >= where.updatedAt.gte.getTime(),
       ),
@@ -186,8 +190,8 @@ vi.mock('./notifications/notifyUser', () => ({ notifyUser: vi.fn() }));
 const { claimDemandNudge, demandNudgeEnabled, sendDemandNudges, setDemandNudge } =
   await import('./demandNudgeData');
 
-// 12:00 in Moscow; the Moscow day began at 2026-10-22T21:00:00Z.
-const now = new Date('2026-10-23T09:00:00Z');
+// 10:00 in Moscow; the Moscow day began at 2026-10-22T21:00:00Z.
+const now = new Date('2026-10-23T07:00:00Z');
 const later = (ms: number) => new Date(now.getTime() + ms);
 const HOUR = 3_600_000;
 
@@ -290,9 +294,9 @@ describe('«Спрос рядом»', () => {
     expect(prisma.company.findMany.mock.calls[0]![0].where.id).toEqual({ not: HOUSE });
   });
 
-  it('sends nothing outside 09:00–20:00 Moscow time and reads nothing', async () => {
+  it('sends nothing outside 09:00–12:00 Moscow time and reads nothing', async () => {
     const notify = vi.fn(async (_userId: string, _count: number) => delivered);
-    for (const iso of ['2026-10-23T05:59:00Z', '2026-10-23T17:00:00Z']) {
+    for (const iso of ['2026-10-23T05:59:00Z', '2026-10-23T09:00:00Z']) {
       expect(await run(notify, { now: new Date(iso) })).toEqual({ skipped: 'window' });
     }
     expect(notify).not.toHaveBeenCalled();
@@ -310,35 +314,75 @@ describe('«Спрос рядом»', () => {
     expect(notify).not.toHaveBeenCalled();
   });
 
-  it('skips a manager who is on the line now, not one whose position went stale', async () => {
+  it('skips every manager of a company with a machine on the line now, not a stale one', async () => {
     db.presence = [
+      // c1's machinist went on the line: its manager u1 is not told.
       {
-        userId: 'u1',
+        userId: 'u-op',
+        companyId: 'c1',
         online: true,
         updatedAt: later(-60_000),
         onlineSince: later(-HOUR),
         timeZone: null,
       },
+      // c2's position is older than PRESENCE_FRESH_MS: it is not on the line.
       {
         userId: 'u2',
+        companyId: 'c2',
         online: true,
         updatedAt: later(-20 * 60_000),
         onlineSince: later(-HOUR),
         timeZone: null,
       },
-      { userId: 'u3', online: false, updatedAt: later(-60_000), onlineSince: null, timeZone: null },
+      // c3 went off the line.
+      {
+        userId: 'u3',
+        companyId: 'c3',
+        online: false,
+        updatedAt: later(-60_000),
+        onlineSince: null,
+        timeZone: null,
+      },
     ];
     const notify = vi.fn(async (_userId: string, _count: number) => delivered);
     const result = await run(notify);
     expect(notify.mock.calls.map(([id]) => id).sort()).toEqual(['u2', 'u3']);
     expect(result).toMatchObject({ sent: 2, skipped: 1 });
+    expect(prisma.linePresence.findMany.mock.calls[0]![0].where.companyId.in.sort()).toEqual([
+      'c1',
+      'c2',
+      'c3',
+    ]);
+  });
+
+  it('does not count the orders the company already bid on', async () => {
+    db.orders = db.orders.map((row) =>
+      row.id === 'o1'
+        ? { ...row, bidCompanyIds: ['c3'] }
+        : row.id === 'o2'
+          ? { ...row, bidCompanyIds: ['c1', 'c3'] }
+          : row,
+    );
+    const notify = vi.fn(async (_userId: string, _count: number) => delivered);
+    await run(notify);
+    expect(notify.mock.calls.sort()).toEqual([
+      ['u1', 1], // o1 (bid on o2)
+      ['u2', 1], // o-crane
+      ['u3', 1], // o-own (bid on o1 and o2)
+    ]);
+    // Bid on everything it could take: nothing to tell (the day's claims cleared).
+    db.settings = [];
+    db.orders = [order('o1', { bidCompanyIds: ['c1', 'c3'] })];
+    notify.mockClear();
+    expect(await run(notify)).toMatchObject({ orders: 1, sent: 0 });
+    expect(notify).not.toHaveBeenCalled();
   });
 
   it('is sent once a Moscow day: a later run the same day sends nothing, the next day does', async () => {
     const notify = vi.fn(async (_userId: string, _count: number) => delivered);
     await run(notify);
     expect(notify).toHaveBeenCalledTimes(3);
-    const again = await run(notify, { now: later(5 * HOUR) }); // 17:00 MSK
+    const again = await run(notify, { now: later(HOUR) }); // 11:00 MSK
     expect(again).toMatchObject({ sent: 0, skipped: 3 });
     expect(notify).toHaveBeenCalledTimes(3);
     // The next Moscow day, with orders of that day.

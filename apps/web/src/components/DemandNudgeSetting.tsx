@@ -66,8 +66,8 @@ export function DemandNudgeSetting() {
         <span className="text-sm">{DEMAND_NUDGE_LABEL}</span>
       </label>
       <p className="pl-8 text-xs text-slate-500">
-        Днём, с 9 до 20 по Москве — в приложение и Telegram, если они включены выше. Если вы уже на
-        линии, сообщения не будет.
+        Раз в день, днём по вашему времени — в приложение и Telegram, если они включены выше. Если
+        вы уже на линии, сообщения не будет.
       </p>
       {error && <p className="pl-8 text-sm text-red-700">{error}</p>}
     </div>

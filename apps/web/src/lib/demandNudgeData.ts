@@ -1,6 +1,6 @@
 // «Спрос рядом»: the database side of lib/demandNudge.ts — the daily
 // «Сегодня N заявок рядом — выйдите на линию» from api/cron/notices
-// (time-budgeted, once a Moscow day per user, 09:00–20:00) and the switch in
+// (time-budgeted, once a Moscow day per user, 09:00–12:00 MSK) and the switch in
 // «Уведомления». Only PROVIDER_ADMIN users of provider companies with
 // machinery, never СпецПласт16's own fleet (the owner sees every order).
 import { HOUSE_COMPANY_ID, prisma } from '@specai/database';
@@ -31,7 +31,7 @@ async function withTimeout<T>(work: Promise<T>, ms: number): Promise<T | 'timeou
 }
 
 export type DemandNudgeResult =
-  /** Outside 09:00–20:00 Moscow time: nothing is read or sent. */
+  /** Outside 09:00–12:00 Moscow time: nothing is read or sent. */
   | { skipped: 'window' }
   | {
       /** Today's open orders considered. */
@@ -85,10 +85,10 @@ export async function claimDemandNudge(userId: string, now: Date): Promise<boole
  * The daily «Сегодня N заявок рядом» from api/cron/notices. N is the number
  * of today's OPEN orders (since 00:00 Moscow) that the company would be
  * alerted about (providerMatchesOrder, as matchOrderRecipients does), minus
- * the ones its own managers placed. N = 0 sends nothing; a manager who is on
- * the line now is not told. Stops starting new messages at `deadline` and
- * after DEMAND_MAX_PER_RUN; the next call goes on with those not told yet
- * (the claimed ones drop out).
+ * the ones its own managers placed and the ones it already bid on. N = 0
+ * sends nothing; a company with a machine on the line now is not told. Stops
+ * starting new messages at `deadline` and after DEMAND_MAX_PER_RUN; the next
+ * call goes on with those not told yet (the claimed ones drop out).
  */
 export async function sendDemandNudges(
   options: DemandNudgeOptions = {},
@@ -106,6 +106,8 @@ export async function sendDemandNudges(
     select: {
       categoryId: true,
       customer: { select: { companyId: true } },
+      // Who already bid on it: not demand for that company any more.
+      bids: { select: { equipment: { select: { companyId: true } } } },
       location: { select: { latitude: true, longitude: true, city: true, addressLine: true } },
     },
     orderBy: { createdAt: 'desc' },
@@ -160,10 +162,15 @@ export async function sendDemandNudges(
       lon: point?.lon,
       city: order.location?.city || null,
     };
-    return { target, customerCompanyId: order.customer?.companyId ?? null };
+    return {
+      target,
+      customerCompanyId: order.customer?.companyId ?? null,
+      bidCompanyIds: new Set(order.bids.map((bid) => bid.equipment.companyId)),
+    };
   });
 
   const counts = new Map<string, number>();
+  const companyOf = new Map<string, string>();
   for (const company of companies) {
     if (company.users.length === 0) continue;
     const count = countNearbyOrders(
@@ -174,25 +181,37 @@ export async function sendDemandNudges(
         radiusKm: company.deliveryRadiusKm,
         baseAddress: company.baseAddress,
       },
-      // Its own managers' orders are not demand for it.
-      orders.filter((order) => order.customerCompanyId !== company.id).map((o) => o.target),
+      // Its own managers' orders and the ones it already bid on are not
+      // demand for it (as in the provider feed, lib/providerFeed.ts).
+      orders
+        .filter(
+          (order) => order.customerCompanyId !== company.id && !order.bidCompanyIds.has(company.id),
+        )
+        .map((order) => order.target),
     );
     if (count === 0) continue;
-    for (const user of company.users) if (!counts.has(user.id)) counts.set(user.id, count);
+    for (const user of company.users) {
+      if (counts.has(user.id)) continue;
+      counts.set(user.id, count);
+      companyOf.set(user.id, company.id);
+    }
   }
   const userIds = [...counts.keys()];
   if (userIds.length === 0) return result;
 
+  // «Already on the line» is the company's: its machinists put its machines
+  // on the line too, and then none of its managers is told.
+  const companyIds = [...new Set(companyOf.values())];
   const [presence, settings] = await Promise.all([
     prisma.linePresence.findMany({
       where: {
-        userId: { in: userIds },
+        companyId: { in: companyIds },
         online: true,
         updatedAt: { gte: new Date(now.getTime() - PRESENCE_FRESH_MS) },
       },
-      select: { userId: true, online: true, updatedAt: true, onlineSince: true, timeZone: true },
-      orderBy: { userId: 'asc' },
-      take: userIds.length,
+      select: { companyId: true, online: true, updatedAt: true, onlineSince: true, timeZone: true },
+      orderBy: { updatedAt: 'desc' },
+      take: 5000,
     }),
     prisma.notificationSettings.findMany({
       where: { userId: { in: userIds } },
@@ -201,12 +220,12 @@ export async function sendDemandNudges(
       take: userIds.length,
     }),
   ]);
-  const onLine = new Set(presence.filter((row) => isOnLine(row, now)).map((row) => row.userId));
+  const onLine = new Set(presence.filter((row) => isOnLine(row, now)).map((row) => row.companyId));
   const byUser = new Map(settings.map((row) => [row.userId, row]));
   const due = userIds.filter((userId) => {
     const row = byUser.get(userId);
     return (
-      !onLine.has(userId) &&
+      !onLine.has(companyOf.get(userId)!) &&
       row?.demandNudge !== false &&
       demandNudgeDue(row?.demandNudgeSentAt, now)
     );
