@@ -92,7 +92,7 @@ export async function deliver(
       case 'push': {
         const result = await deps.send.push(recipient.pushTokens ?? [], {
           title: message.title,
-          body: message.body,
+          body: message.pushBody ?? message.body,
           data: { path: message.path },
         });
         if (!result.ok && result.invalidTokens?.length) {

@@ -82,6 +82,14 @@ ${button}
 </html>`;
 }
 
+/** Escaped text with its https links made clickable (for lines that carry links). */
+export function linkifyEscaped(value: string): string {
+  return escapeHtml(value).replace(
+    /https:\/\/[^\s,<]+/g,
+    (href) => `<a href="${href}">${href}</a>`,
+  );
+}
+
 function plain(title: string, lines: string[], link?: string): string {
   return [title, '', ...lines, ...(link ? ['', `Ссылка: ${link}`] : []), '', `— ${PLATFORM}`].join(
     '\n',
@@ -158,6 +166,8 @@ export type BookingStatusChangedParams = {
   status: BookingStatusValue;
   startDate: Date | string;
   endDate: Date | string;
+  /** Only for COMPLETED: rate, review, invite (lib/reviewLinks.ts completionFollowUp). */
+  followUp?: string[];
 };
 
 /** Клиенту: статус бронирования изменён. */
@@ -173,11 +183,15 @@ export function bookingStatusChanged(params: BookingStatusChangedParams): EmailT
     `Период: ${formatDate(params.startDate)} — ${formatDate(params.endDate)}`,
     'Подробности — в личном кабинете.',
   ];
+  const followUp = params.status === 'COMPLETED' ? (params.followUp ?? []) : [];
 
   return {
     subject,
-    html: layout(title, lines.map(escapeHtml), { href: url, label: 'Открыть кабинет' }),
-    text: plain(title, lines, url),
+    html: layout(title, [...lines.map(escapeHtml), ...followUp.map(linkifyEscaped)], {
+      href: url,
+      label: 'Открыть кабинет',
+    }),
+    text: plain(title, [...lines, ...followUp], url),
   };
 }
 

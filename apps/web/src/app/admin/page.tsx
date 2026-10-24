@@ -8,6 +8,7 @@ import { LeadOutcome } from '@/components/LeadOutcome';
 import { LeadStatusSelect } from '@/components/LeadStatusSelect';
 import { LinkOwnerForm } from '@/components/LinkOwnerForm';
 import { SupportSettingsForm } from '@/components/admin/SupportSettingsForm';
+import { ReviewLinksForm } from '@/components/admin/ReviewLinksForm';
 import { CommentModerationButtons } from '@/components/Comments';
 import { EraseOrderButton } from '@/components/ChatOrderContact';
 import { ModerationButtons, CopyField, TelegramSetupButton } from '@/components/AdminIntegrations';
@@ -682,6 +683,19 @@ export default async function AdminPage({ searchParams = {} }: { searchParams?: 
               </p>
             </div>
             <SupportSettingsForm />
+          </Card>
+
+          <Card className="flex flex-col gap-3" id="reviews">
+            <div>
+              <h2 className="font-semibold">Отзывы о площадке</h2>
+              <p className="text-sm text-slate-600">
+                Когда исполнитель отмечает бронь выполненной, заказчик получает одно сообщение:
+                «Оцените исполнителя», ссылки на карточки площадки в 2ГИС и Яндекс Картах и личную
+                ссылку «Пригласите коллегу». Пустое поле — этой карточки в сообщении нет. Награды за
+                отзыв не предлагаем: правила карт это запрещают.
+              </p>
+            </div>
+            <ReviewLinksForm />
           </Card>
         </div>
       </details>
