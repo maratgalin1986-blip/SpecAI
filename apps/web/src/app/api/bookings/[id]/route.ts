@@ -17,6 +17,10 @@ import { findOverlappingBooking, lockEquipment } from '@/lib/bookingConflicts';
 import { isProvider } from '@/lib/fleet';
 import { BOOKING_STATUS_LABELS } from '@/lib/emailTemplates';
 import { CANCELLED_BY } from '@specai/shared';
+import { completionFollowUp, loadReviewLinks } from '@/lib/reviewLinks';
+import { ensureReferralCode } from '@/lib/referralStore';
+import { referralLink } from '@/lib/referral';
+import { siteUrl } from '@/lib/siteUrl';
 
 const updateSchema = z.object({
   status: z.enum(['CONFIRMED', 'ACTIVE', 'COMPLETED', 'CANCELLED']),
@@ -58,6 +62,28 @@ async function closePendingCheckout(
   } catch (error) {
     console.error(`[stripe] failed to mark payment ${payment.id} FAILED on cancel`, error);
   }
+}
+
+/**
+ * «Бронь завершена» to the customer carries, once, the lines «оцените
+ * исполнителя», the platform's 2ГИС / Яндекс Карты cards and «Пригласите
+ * коллегу» (roadmap № 3). Once per booking: only the guarded ACTIVE →
+ * COMPLETED move gets here, and COMPLETED has no way out. A failure to read
+ * the links or the code drops those lines, never the status change.
+ */
+async function completedFollowUp(customerId: string): Promise<string[]> {
+  const base = siteUrl().replace(/\/$/, '');
+  const [links, code] = await Promise.all([
+    loadReviewLinks().catch((error) => {
+      console.error('[notify] review links could not be read', error);
+      return { twoGis: '', yandex: '' };
+    }),
+    ensureReferralCode(customerId).catch((error) => {
+      console.error('[notify] referral code could not be made', error);
+      return null;
+    }),
+  ]);
+  return completionFollowUp({ links, inviteUrl: code ? referralLink(base, code) : null });
 }
 
 /**
@@ -231,16 +257,21 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
       } as const;
       if (isOwningProvider) {
         // The provider moved it: the customer hears over their channels.
+        const followUp =
+          updated.status === 'COMPLETED' && booking.status === 'ACTIVE'
+            ? await completedFollowUp(booking.customerId)
+            : undefined;
         const template = bookingStatusChanged({
           bookingId: updated.id,
           equipmentName: booking.equipment.name,
           status: updated.status,
           startDate: updated.startDate,
           endDate: updated.endDate,
+          followUp,
         });
         await notifyUser(
           booking.customerId,
-          { ...event, audience: 'customer' },
+          { ...event, audience: 'customer', followUp },
           { email: template },
         );
       } else {

@@ -50,6 +50,28 @@ describe('deliver', () => {
     expect(deps.send.whatsapp).not.toHaveBeenCalled();
   });
 
+  it('a completed booking: the push keeps one line, Telegram gets the follow-up', async () => {
+    const deps = fakeDeps();
+    await deliver(
+      RECIPIENT,
+      DEFAULT_PREFS,
+      {
+        type: 'booking.status',
+        bookingId: 'b1',
+        equipmentName: 'JCB 4CX',
+        status: 'COMPLETED',
+        startDate: new Date('2026-11-01T06:00:00Z'),
+        audience: 'customer',
+        followUp: ['Пригласите коллегу — нужна техника? https://site.ru/r/ABCDEFG'],
+      },
+      deps,
+    );
+    const push = vi.mocked(deps.send.push).mock.calls[0]?.[1];
+    expect(push?.body).not.toContain('Пригласите');
+    expect(push?.body).toContain('бронь завершена');
+    expect(deps.send.telegram).toHaveBeenCalledWith('42', expect.stringContaining('/r/ABCDEFG'));
+  });
+
   it('uses a ready-made letter when given', async () => {
     const deps = fakeDeps();
     const letter = { subject: 'Своё письмо', html: '<p>x</p>', text: 'x' };
