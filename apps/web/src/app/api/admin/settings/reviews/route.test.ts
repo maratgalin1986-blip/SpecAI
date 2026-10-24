@@ -69,11 +69,14 @@ describe('/api/admin/settings/reviews', () => {
     expect(transaction).not.toHaveBeenCalled();
   });
 
-  it('an empty field clears the link', async () => {
+  it('an empty field stores an empty link, so the default does not come back', async () => {
     findMany.mockResolvedValue([
       { key: 'reviews.2gis', value: 'https://2gis.ru/kazan/firm/1', updatedAt: null },
     ]);
-    expect((await put({ twoGis: '' })).status).toBe(200);
-    expect(deleteMany).toHaveBeenCalledWith({ where: { key: 'reviews.2gis' } });
+    expect((await put({ yandex: '' })).status).toBe(200);
+    expect(upsert).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { key: 'reviews.yandex' }, update: { value: '' } }),
+    );
+    expect(deleteMany).not.toHaveBeenCalled();
   });
 });
