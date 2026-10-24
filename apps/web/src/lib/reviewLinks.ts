@@ -6,9 +6,9 @@ import { SITE } from '@/lib/site';
  * customer whose booking was completed hears once — in the same status
  * message — «оцените исполнителя», «отзыв о площадке в 2ГИС и Яндекс Картах»
  * and «Пригласите коллегу». The two map cards are the platform's own; the
- * owner enters their links in the admin menu (AppSetting). Until he does,
- * those lines are simply left out. No rewards for reviews: the maps' rules
- * and ФЗ «О рекламе» forbid buying them.
+ * owner changes their links in the admin menu (AppSetting). With nothing
+ * stored, DEFAULT_REVIEW_LINKS apply; a card without a link is left out. No
+ * rewards for reviews: the maps' rules and ФЗ «О рекламе» forbid buying them.
  */
 export const REVIEW_KEYS = {
   twoGis: 'reviews.2gis',
@@ -16,6 +16,17 @@ export const REVIEW_KEYS = {
 } as const;
 
 export type ReviewLinkKind = keyof typeof REVIEW_KEYS;
+
+/**
+ * Public cards found 2026-10-24: Яндекс Карты «Спецпласт 16» — аренда
+ * спецтехники, the platform's phone. The 2ГИС card of the same company is
+ * listed under «Пластиковая тара» with another phone, so it is not used until
+ * the owner fixes it and enters the link in /admin.
+ */
+export const DEFAULT_REVIEW_LINKS: Record<ReviewLinkKind, string> = {
+  twoGis: '',
+  yandex: 'https://yandex.ru/maps/org/spetsplast_16/22387401129/',
+};
 
 const KEY_LIST = Object.values(REVIEW_KEYS);
 
@@ -63,13 +74,18 @@ export interface ReviewLinks {
   updatedAt: string | null;
 }
 
-/** Stored rows → links; a stored value that is no longer valid is ignored. */
+/**
+ * Stored rows → links. No row → the default card; a stored '' → switched off
+ * in /admin; a stored value that is no longer valid is ignored.
+ */
 export function linksFromRows(
   rows: readonly { key: string; value: string; updatedAt?: Date | string | null }[],
 ): ReviewLinks {
   const byKey = new Map(rows.map((row) => [row.key, row]));
-  const read = (kind: ReviewLinkKind) =>
-    normalizeReviewUrl(kind, byKey.get(REVIEW_KEYS[kind])?.value ?? '') ?? '';
+  const read = (kind: ReviewLinkKind) => {
+    const row = byKey.get(REVIEW_KEYS[kind]);
+    return normalizeReviewUrl(kind, row ? row.value : DEFAULT_REVIEW_LINKS[kind]) ?? '';
+  };
   const updated = rows
     .map((row) => (row.updatedAt ? new Date(row.updatedAt).getTime() : NaN))
     .filter((time) => Number.isFinite(time));
@@ -118,10 +134,14 @@ export async function saveReviewLinks(update: ReviewLinksUpdate): Promise<Review
   await prisma.$transaction(
     (['twoGis', 'yandex'] as const).map((kind) => {
       const key = REVIEW_KEYS[kind];
+      // '' is stored too: an emptied field switches the card off instead of
+      // bringing the default back.
       const value = update[kind];
-      return value
-        ? prisma.appSetting.upsert({ where: { key }, create: { key, value }, update: { value } })
-        : prisma.appSetting.deleteMany({ where: { key } });
+      return prisma.appSetting.upsert({
+        where: { key },
+        create: { key, value },
+        update: { value },
+      });
     }),
   );
   return loadReviewLinks();

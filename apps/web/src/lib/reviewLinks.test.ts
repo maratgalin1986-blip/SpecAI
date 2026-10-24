@@ -37,6 +37,18 @@ describe('normalizeReviewUrl', () => {
 });
 
 describe('linksFromRows', () => {
+  it('uses the default Яндекс card when nothing is stored, and no 2ГИС card', () => {
+    expect(linksFromRows([])).toEqual({
+      twoGis: '',
+      yandex: 'https://yandex.ru/maps/org/spetsplast_16/22387401129/',
+      updatedAt: null,
+    });
+  });
+
+  it('a link emptied in /admin stays off instead of bringing the default back', () => {
+    expect(linksFromRows([{ key: 'reviews.yandex', value: '' }]).yandex).toBe('');
+  });
+
   it('ignores a stored value that is no longer a valid link', () => {
     expect(
       linksFromRows([
