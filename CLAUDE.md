@@ -41,7 +41,8 @@ small so merges stay conflict-free.
    locate the Query Engine for runtime rhel-openssl-3.0.x" while the build
    passed; Prisma's monorepo plugin in `apps/web/next.config.mjs` fixes it
    (#17), keep it. After a production deploy open
-   `https://spec-ai-web.vercel.app/api/categories` (must be 200); if it fails,
+   `https://иистройка24.рф/api/categories` and `https://spec-ai-web.vercel.app/api/categories`
+   (both must be 200); if it fails,
    read Vercel → Logs first.
 8. **Secrets for cloud sessions are plain environment variables** of the cloud
    environment (that is how `EXPO_TOKEN` works); the "API credentials" form did
@@ -73,7 +74,7 @@ small so merges stay conflict-free.
   «Анна П.» (`lib/customerPrivacy.ts`); contacts only once the booking is
   CONFIRMED/ACTIVE/COMPLETED. Chat-imported contacts are shown masked and
   revealed only through «Показать телефон» (logged, rate-limited). Construction
-  materials are sold by СпецПласт16 itself (`lib/smetaPrices.ts`). The platform is called «ИИСтройка24 от СпецПласт16» (owner, 2026-10-03; main domain иистройка24.рф (owner, 2026-10-23: «сюда всё переносим»), also iistroyka24.ru and iistroyka.ru; none connected yet — the site stays on spec-ai-web.vercel.app until the DNS points at Vercel, see owner-requests)
+  materials are sold by СпецПласт16 itself (`lib/smetaPrices.ts`). The platform is called «ИИСтройка24 от СпецПласт16» (owner, 2026-10-03; main domain иистройка24.рф (owner, 2026-10-23: «сюда всё переносим»), connected 2026-10-24 — pages of spec-ai-web.vercel.app redirect there, the app's API stays on the old address; iistroyka24.ru and iistroyka.ru are not connected yet, see owner-requests)
   (`SITE.platform`); prices live in `lib/prices.ts`. Details:
   `docs/owner-requests.md`. Do not switch to a single executor without the owner.
 - **Geography (owner, 2026-10-17): all of Russia, not only Tatarstan.** No code may

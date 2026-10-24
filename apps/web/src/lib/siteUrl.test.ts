@@ -4,12 +4,38 @@ import {
   MAIN_DOMAIN_HOST,
   resolveSiteUrl,
   siteUrl,
+  legacyRedirectTarget,
   usableSiteUrl,
 } from './siteUrl';
 
+describe('legacyRedirectTarget', () => {
+  it('sends pages of the old address to the domain, path and query kept', () => {
+    expect(
+      legacyRedirectTarget('spec-ai-web.vercel.app', '/orders?utm_source=vk', 'production'),
+    ).toBe('https://xn--24-6kc5aagh4arjl.xn--p1ai/orders?utm_source=vk');
+    expect(legacyRedirectTarget('spec-ai-web.vercel.app.:443', '/', 'production')).toBe(
+      'https://xn--24-6kc5aagh4arjl.xn--p1ai/',
+    );
+    expect(legacyRedirectTarget('SPEC-AI-WEB.vercel.app', '/', 'production')).toBe(
+      'https://xn--24-6kc5aagh4arjl.xn--p1ai/',
+    );
+  });
+
+  it('leaves the domain itself, previews and local runs alone', () => {
+    expect(legacyRedirectTarget(MAIN_DOMAIN_HOST, '/', 'production')).toBeNull();
+    expect(legacyRedirectTarget('spec-ai-web.vercel.app', '/', 'preview')).toBeNull();
+    expect(
+      legacyRedirectTarget('spec-ai-web-git-x-marat10.vercel.app', '/', 'production'),
+    ).toBeNull();
+    expect(legacyRedirectTarget('localhost:3000', '/', undefined)).toBeNull();
+    expect(legacyRedirectTarget(null, '/', 'production')).toBeNull();
+  });
+});
+
 describe('resolveSiteUrl', () => {
-  it('defaults to the working Vercel address', () => {
-    expect(DEFAULT_SITE_URL).toBe('https://spec-ai-web.vercel.app');
+  it('defaults to иистройка24.рф, the main domain since 2026-10-24', () => {
+    expect(DEFAULT_SITE_URL).toBe('https://xn--24-6kc5aagh4arjl.xn--p1ai');
+    expect(new URL(DEFAULT_SITE_URL).hostname).toBe(new URL('https://иистройка24.рф').hostname);
     expect(resolveSiteUrl({})).toBe(DEFAULT_SITE_URL);
   });
 
@@ -52,20 +78,14 @@ describe('resolveSiteUrl', () => {
     ).toBe('https://iistroyka24.ru');
   });
 
-  it('waits for иистройка24.рф, written in Cyrillic or in punycode', () => {
+  it('uses иистройка24.рф from the environment, in Cyrillic or in punycode', () => {
     expect(new URL('https://иистройка24.рф').hostname).toBe(MAIN_DOMAIN_HOST);
-    expect(resolveSiteUrl({ NEXT_PUBLIC_SITE_URL: 'https://иистройка24.рф' })).toBe(
-      DEFAULT_SITE_URL,
+    expect(resolveSiteUrl({ NEXT_PUBLIC_SITE_URL: 'https://иистройка24.рф/' })).toBe(
+      `https://${MAIN_DOMAIN_HOST}`,
     );
     expect(resolveSiteUrl({ VERCEL_PROJECT_PRODUCTION_URL: MAIN_DOMAIN_HOST })).toBe(
-      DEFAULT_SITE_URL,
+      `https://${MAIN_DOMAIN_HOST}`,
     );
-    expect(
-      resolveSiteUrl({
-        NEXT_PUBLIC_SITE_URL: 'https://иистройка24.рф/',
-        NEXT_PUBLIC_SITE_DOMAIN_CONNECTED: '1',
-      }),
-    ).toBe(`https://${MAIN_DOMAIN_HOST}`);
   });
 
   it('ignores blank and malformed values', () => {

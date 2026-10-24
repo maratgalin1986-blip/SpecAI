@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   bidAccepted,
   bookingStatusChanged,
+  getEmailBaseUrl,
   emailVerify,
   newBidReceived,
   passwordReset,
@@ -78,7 +79,16 @@ describe('links and sender', () => {
       startDate: new Date('2026-10-01T00:00:00Z'),
       endDate: new Date('2026-10-02T00:00:00Z'),
     });
-    expect(bid.html).toContain('https://spec-ai-web.vercel.app/dashboard');
+    expect(bid.html).toContain('https://xn--24-6kc5aagh4arjl.xn--p1ai/dashboard');
+  });
+
+  it('skips a NEXTAUTH_URL still set to the old address and links to the domain', () => {
+    delete process.env.NEXT_PUBLIC_APP_URL;
+    process.env.NEXTAUTH_URL = 'https://spec-ai-web.vercel.app';
+    delete process.env.NEXT_PUBLIC_SITE_URL;
+    delete process.env.VERCEL_PROJECT_PRODUCTION_URL;
+    expect(getEmailBaseUrl()).toBe('https://xn--24-6kc5aagh4arjl.xn--p1ai');
+    delete process.env.NEXTAUTH_URL;
   });
 
   it('is signed by the platform', () => {
