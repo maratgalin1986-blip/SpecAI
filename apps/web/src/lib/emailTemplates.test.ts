@@ -101,6 +101,31 @@ describe('bookingStatusChanged', () => {
     expect(tpl.html).toContain('отменено');
     expect(tpl.text).toContain('bk_2');
   });
+
+  it('a completed booking carries the follow-up lines with clickable links', () => {
+    const followUp = ['Спасибо!', 'Пригласите коллегу: https://site.ru/r/ABCDEFG'];
+    const done = bookingStatusChanged({
+      bookingId: 'bk_4',
+      equipmentName: 'Самосвал',
+      status: 'COMPLETED',
+      startDate: '2026-11-01T00:00:00Z',
+      endDate: '2026-11-03T00:00:00Z',
+      followUp,
+    });
+    expect(done.text).toContain('Пригласите коллегу: https://site.ru/r/ABCDEFG');
+    expect(done.html).toContain(
+      '<a href="https://site.ru/r/ABCDEFG">https://site.ru/r/ABCDEFG</a>',
+    );
+    const cancelled = bookingStatusChanged({
+      bookingId: 'bk_4',
+      equipmentName: 'Самосвал',
+      status: 'CANCELLED',
+      startDate: '2026-11-01T00:00:00Z',
+      endDate: '2026-11-03T00:00:00Z',
+      followUp,
+    });
+    expect(cancelled.text).not.toContain('Пригласите');
+  });
 });
 
 describe('paymentReceived', () => {

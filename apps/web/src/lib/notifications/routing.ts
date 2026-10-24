@@ -170,6 +170,8 @@ export type NotificationEvent =
       startDate: Date;
       /** 'customer' — the provider changed it; 'provider' — the customer cancelled. */
       audience: 'customer' | 'provider';
+      /** «Бронь завершена» to the customer: rate, review, invite (lib/reviewLinks.ts completionFollowUp). */
+      followUp?: string[];
     }
   /** To admins: a comment waits for moderation. */
   | { type: 'comment.pending'; authorShortName: string; about: string; text: string }
@@ -239,6 +241,8 @@ export interface RenderedNotification {
   body: string;
   /** Path on the site, e.g. /orders/abc. */
   path: string;
+  /** A shorter body for the push, when `body` carries extra lines (lock screens show one or two). */
+  pushBody?: string;
 }
 
 const STATUS_TEXT: Record<string, string> = {
@@ -328,13 +332,20 @@ export function renderNotification(event: NotificationEvent): RenderedNotificati
       };
     case 'booking.status': {
       const status = STATUS_TEXT[event.status] ?? event.status;
+      if (event.audience === 'provider') {
+        return {
+          title: `Бронь ${status}`,
+          body: `Заказчик отменил бронь: ${event.equipmentName}, ${day(event.startDate)}`,
+          path: '/provider#bookings',
+        };
+      }
+      const line = `${event.equipmentName}, ${day(event.startDate)}: бронь ${status}`;
+      const followUp = event.status === 'COMPLETED' ? (event.followUp ?? []) : [];
       return {
         title: `Бронь ${status}`,
-        body:
-          event.audience === 'provider'
-            ? `Заказчик отменил бронь: ${event.equipmentName}, ${day(event.startDate)}`
-            : `${event.equipmentName}, ${day(event.startDate)}: бронь ${status}`,
-        path: event.audience === 'provider' ? '/provider#bookings' : '/dashboard#bookings',
+        body: [line, ...followUp].join('\n'),
+        ...(followUp.length ? { pushBody: line } : {}),
+        path: '/dashboard#bookings',
       };
     }
     case 'comment.pending':

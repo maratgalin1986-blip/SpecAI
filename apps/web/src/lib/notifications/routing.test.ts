@@ -159,6 +159,32 @@ describe('renderNotification', () => {
     expect(toCustomer.path).toBe('/dashboard#bookings');
   });
 
+  it('adds the follow-up lines only to «завершена» for the customer', () => {
+    const base = {
+      type: 'booking.status' as const,
+      bookingId: 'b1',
+      equipmentName: 'JCB 4CX',
+      startDate: start,
+      followUp: ['Спасибо!', 'Пригласите коллегу — нужна техника?'],
+    };
+    const done = renderNotification({ ...base, status: 'COMPLETED', audience: 'customer' });
+    expect(done.body.split('\n')).toEqual([
+      expect.stringContaining('бронь завершена'),
+      'Спасибо!',
+      'Пригласите коллегу — нужна техника?',
+    ]);
+    expect(done.path).toBe('/dashboard#bookings');
+    // The push keeps its one short line; the follow-up goes to the text channels.
+    expect(done.pushBody).toBe(done.body.split('\n')[0]);
+    expect(plainText(done, 'https://x.ru', 'telegram')).toContain('Пригласите коллегу');
+    expect(plainText(done, 'https://x.ru', 'sms')).not.toContain('Пригласите');
+    const active = renderNotification({ ...base, status: 'ACTIVE', audience: 'customer' });
+    expect(active.body).not.toContain('Пригласите');
+    expect(active.pushBody).toBeUndefined();
+    const provider = renderNotification({ ...base, status: 'COMPLETED', audience: 'provider' });
+    expect(provider.body).not.toContain('Пригласите');
+  });
+
   it('points admins to moderation', () => {
     const message = renderNotification({
       type: 'comment.pending',
