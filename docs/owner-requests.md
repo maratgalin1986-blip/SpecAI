@@ -695,6 +695,13 @@ GREEN-API, кто подписывает договор за машины Спе
 NXDOMAIN — свежая регистрация).
 24.10: домен уже разрешается (A → 95.163.244.138), но открывает страницу-заглушку reg.ru — записи
 Vercel ещё не внесены, сайт под ним не открывается.
+24.10, 08:30 МСК: владелец с сессией внёс всё. Vercel → Domains: `xn--24-6kc5aagh4arjl.xn--p1ai`
+(Production, Valid Configuration) и `www.…` (308 → основной). reg.ru → зона: A `@` → `216.198.79.1`
+(новая запись Vercel), CNAME `www` → `cname.vercel-dns.com.`, записи заглушки удалены. Через Vercel
+сайт и `/api/health` уже отвечают; старый адрес заглушки держится в кэшах до 6 ч (TTL 21600).
+**Следующий шаг сессии:** когда домен стабильно открывает сайт — провести владельца по переменным
+Vercel (`NEXT_PUBLIC_SITE_URL`, `NEXT_PUBLIC_SITE_DOMAIN_CONNECTED=1`, `NEXTAUTH_URL`), затем
+редирект spec-ai-web.vercel.app → домен, `EXPO_PUBLIC_API_URL`, ссылки в рекламе и в handoff «Ютубу».
 
 - Код готов: `MAIN_DOMAIN_HOST` (`xn--24-6kc5aagh4arjl.xn--p1ai`) в `lib/siteUrl.ts` среди
   ожидающих доменов, ссылки на файлы под ним считаются своими (`lib/fileUrls.ts`).
