@@ -6,7 +6,7 @@ export const FILES_PATH = '/api/files/';
 /**
  * The site's own addresses, now and planned: a link saved under one of them
  * stays «ours» when the site moves to its domain (иистройка24.рф, iistroyka24.ru
- * and iistroyka.ru are bought, the site is still on spec-ai-web.vercel.app).
+ * and iistroyka.ru are bought; иистройка24.рф serves the site since 2026-10-24).
  */
 function ownHosts(): Set<string> {
   const hosts = new Set([

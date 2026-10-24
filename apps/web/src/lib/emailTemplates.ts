@@ -1,5 +1,5 @@
 import { SITE } from './site';
-import { siteUrl, usableSiteUrl } from './siteUrl';
+import { siteUrl, LEGACY_SITE_HOST, usableSiteUrl } from './siteUrl';
 
 /**
  * Шаблоны email-уведомлений (простой HTML на русском).
@@ -21,14 +21,18 @@ export const BOOKING_STATUS_LABELS: Record<BookingStatusValue, string> = {
   CANCELLED: 'отменено',
 };
 
-/** Links in letters: the app URL, else NEXTAUTH_URL, else the site; never a parked domain. */
+/**
+ * Links in letters: the app URL, else NEXTAUTH_URL, else the site; never a
+ * parked domain, and never the old address whose pages now redirect (a
+ * NEXTAUTH_URL still set to it would cost every link a hop and the session).
+ */
 export function getEmailBaseUrl(): string {
   const connected = process.env.NEXT_PUBLIC_SITE_DOMAIN_CONNECTED?.trim() === '1';
-  return (
-    usableSiteUrl(process.env.NEXT_PUBLIC_APP_URL, connected) ??
-    usableSiteUrl(process.env.NEXTAUTH_URL, connected) ??
-    siteUrl()
-  );
+  const current = (raw: string | undefined) => {
+    const url = usableSiteUrl(raw, connected);
+    return url && new URL(url).hostname !== LEGACY_SITE_HOST ? url : null;
+  };
+  return current(process.env.NEXT_PUBLIC_APP_URL) ?? current(process.env.NEXTAUTH_URL) ?? siteUrl();
 }
 
 export function escapeHtml(value: string): string {
