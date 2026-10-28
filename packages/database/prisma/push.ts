@@ -5,7 +5,14 @@
 // fails before it even reaches the database. Deployments that only set
 // DATABASE_URL (a plain, unpooled Postgres) can safely use it for DDL too.
 import { spawnSync } from 'node:child_process';
-import { isYandexDatabaseUrl, resolveDatabaseUrl } from '../src/connection';
+import {
+  applyDatabaseEnvOverrides,
+  isYandexDatabaseUrl,
+  resolveDatabaseUrl,
+} from '../src/connection';
+
+// The NEON_ pair from Vercel Storage replaces DATABASE_URL / DIRECT_URL when set.
+applyDatabaseEnvOverrides();
 
 if (!process.env.DIRECT_URL && process.env.DATABASE_URL) {
   process.env.DIRECT_URL = process.env.DATABASE_URL;

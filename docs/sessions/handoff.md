@@ -75,3 +75,15 @@ https://spec-ai-web.vercel.app, «Разместить свою технику»
 - **Владелец сам**: в Яндекс Бизнесе заменить сайт `neuro-1628870.clients.site` на
   https://иистройка24.рф (у облачной сессии нет браузера с его входом). Если у «Ютуба» есть
   браузер с входом в Яндекс — можно сделать там.
+
+2026-10-28 (сессия «Ютуб»): прод не работал — каждый запрос к базе падал с «Can't reach database
+server» на `ep-tiny-shape-aybwrzds-pooler…neon.tech` (148 ошибок за 30 мин в логах Vercel), доски
+заявок и исполнителей были пустые, `/api/categories` отдавал ошибку. Входа в старый проект Neon нет
+(вход через Google расширению закрыт). С разрешения владельца («1, если не получится — 2») в Vercel
+Storage создана бесплатная база Neon `iistroyka24-db` (iad1), подключена к spec-ai-web с префиксом
+`NEON_`, превью получают изолированные ветки. Старые `DATABASE_URL`/`DIRECT_URL` не тронуты — для
+отката. Код берёт `NEON_DATABASE_URL`/`NEON_DATABASE_URL_UNPOOLED`, если они заданы
+(`applyDatabaseEnvOverrides` в `packages/database/src/connection.ts`). Старые аккаунты и заявки
+остались в старой базе: когда владелец войдёт в старый Neon, их можно перенести.
+Yandex Managed PostgreSQL в папке default кластеров нет (CLAUDE.md устарел в этом месте), баланс
+Yandex Cloud −4,75 ₽.
