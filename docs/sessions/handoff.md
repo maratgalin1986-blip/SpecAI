@@ -130,3 +130,9 @@ FAQ (5 вопросов, `cityFaq` в `lib/cities.ts`) + FAQPage и BreadcrumbLi
 проверки), новая модель `LegalEntity` — с хунками `LinePresence` не пересекается. Приложению: тот же
 маршрут отдаёт `token` (мобильный JWT); экран лёгкой формы и «Завершите регистрацию» в приложении —
 за сессией «Приложение» (API: `GET/PUT /api/account/verification`, `POST /api/account/verification/file`).
+2026-10-28 (задача «3D-город на главной», ветка `claude/world3d-2026-10-28`): владелец вернул 3D
+(«Верни на иистройка24 3D-мир…»). Новые файлы только в `apps/web/src/components/world3d/` и
+`public/images/world3d-poster.jpg`; в `app/page.tsx` — один блок после `MarketplaceBlock` и два
+импорта; зависимости `three`/`@types/three` 0.170 вернулись в `apps/web/package.json`. `globals.css`,
+тему и анимации не трогал (сессия редизайна), SEO-страницы не трогал. Подробности —
+`docs/owner-requests.md`, «3D-город возвращён».

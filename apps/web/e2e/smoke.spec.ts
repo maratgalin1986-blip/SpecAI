@@ -358,3 +358,20 @@ test.describe('order form finds the machinery from the words', () => {
     await expect(combo).toHaveValue(/Краны-манипуляторы \(КМУ\)/);
   });
 });
+
+test('3D city: poster first, machine chips open the order card', async ({ page }) => {
+  const errors = await guard(page);
+  await page.goto('/?intro=0', { waitUntil: 'load' });
+  const block = page.locator('section[aria-labelledby="world3d-title"]');
+  await block.scrollIntoViewIfNeeded();
+  await expect(block.getByRole('img')).toHaveAttribute('src', '/images/world3d-poster.jpg');
+  await block.getByRole('button', { name: 'Автовышка' }).click();
+  const card = block.getByRole('dialog', { name: 'Автовышка' });
+  await expect(card).toBeVisible();
+  await expect(card.getByRole('link', { name: 'Заказать' })).toHaveAttribute('href', /^\/orders/);
+  await expect(card.getByRole('link', { name: 'Встать на линию' })).toHaveAttribute(
+    'href',
+    '/register?role=provider',
+  );
+  expect(errors).toEqual([]);
+});
