@@ -24,6 +24,15 @@ import { toPublicComment } from '@/lib/comments';
 import { MyMapPin } from '@/components/MyMapPin';
 import { isDisplayableImage, pinPhotoChoices } from '@/lib/providerMap';
 import { OnlineToggle } from '@/components/OnlineToggle';
+import { LineStandingCard } from '@/components/LineStandingCard';
+import { isLive } from '@/lib/linePresence';
+import {
+  addDays,
+  localDayKey,
+  STANDING_MAX_DAYS,
+  standingActive,
+  untilLong,
+} from '@/lib/lineStanding';
 import { MachineStatusChips } from '@/components/MachineStatusChips';
 import { NoOrdersChecklist } from '@/components/NoOrdersChecklist';
 import { ReliabilityBadges } from '@/components/ReliabilityBadges';
@@ -213,6 +222,31 @@ export default async function ProviderPage({
       .catch(() => null),
   ]);
   const priorityBadge = priorityBadgeText(bonus?.priorityUntil, new Date());
+  // «На линии на 5 рабочих дней» (lib/lineStanding.ts): this user's own line.
+  const [linePresence, lineMachines] = await Promise.all([
+    prisma.linePresence.findUnique({ where: { userId: session.user.id } }).catch(() => null),
+    prisma.equipment.findMany({
+      where: { companyId, status: { not: 'RETIRED' } },
+      select: { id: true, name: true, status: true },
+      orderBy: { name: 'asc' },
+      take: 200,
+    }),
+  ]);
+  const lineNow = new Date();
+  const lineOn = linePresence
+    ? standingActive(linePresence, lineNow) || isLive(linePresence, lineNow)
+    : false;
+  const lineState = {
+    on: lineOn,
+    equipmentId: linePresence?.equipmentId ?? null,
+    forever: Boolean(lineOn && linePresence?.standingForever),
+    untilText:
+      lineOn && linePresence?.standingUntil
+        ? untilLong(linePresence.standingUntil, linePresence.timeZone)
+        : null,
+    live: linePresence ? isLive(linePresence, lineNow) : false,
+  };
+  const lineToday = localDayKey(lineNow, linePresence?.timeZone);
   const { items: feed, total: feedTotal } = incoming;
   const income = monthIncome(monthBookings);
   // Documents (СТС, ПСМ, страховка…): expired ones mark the machine and the checklist.
@@ -414,6 +448,18 @@ export default async function ProviderPage({
           </ul>
         )}
       </section>
+
+      <LineStandingCard
+        machines={lineMachines.map((item) => ({
+          id: item.id,
+          name: item.name,
+          available: item.status === 'AVAILABLE',
+        }))}
+        initial={lineState}
+        hasBase={pinCompany?.baseLat != null && pinCompany?.baseLon != null}
+        minDate={lineToday}
+        maxDate={addDays(lineToday, STANDING_MAX_DAYS)}
+      />
 
       <section id="fleet-status" className="cab-card flex scroll-mt-24 flex-col gap-2">
         <div>

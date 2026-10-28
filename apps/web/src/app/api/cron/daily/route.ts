@@ -11,6 +11,7 @@ import { postChannelDigest } from '@/lib/channelDigest';
 import { FLUSH_BATCH, tickDeferredOrderNotices } from '@/lib/deferredOrderNotices';
 import { runGroupPriceSurvey } from '@/lib/groupPriceSurvey';
 import { callbackReminderText } from '@/lib/adminCrm';
+import { sendLineRenewOffers } from '@/lib/lineRenewData';
 
 export const dynamic = 'force-dynamic';
 // A GET handler: without this Next keeps outgoing sends (Telegram, push,
@@ -73,6 +74,11 @@ export async function GET(request: NextRequest) {
     console.error('[cron/daily] call-back reminder failed', error);
     return { due: 0, sent: false };
   });
+  // «Продлить на 5 рабочих дней?» a day before a standing line runs out (lib/lineRenewData.ts).
+  const lineRenew = await sendLineRenewOffers(now).catch((error: unknown) => {
+    console.error('[cron/daily] line renewal offers failed', error);
+    return { error: String(error) };
+  });
   // The evening digest runs from the same cron: Vercel's Hobby plan allows two
   // cron jobs per project (weekly + this one), so both daily tasks share it.
   const digest = await evening(request)
@@ -108,6 +114,7 @@ export async function GET(request: NextRequest) {
     priceSurvey,
     notices,
     callbacks,
+    lineRenew,
   });
 }
 

@@ -25,10 +25,31 @@ export const linePresenceSchema = z
     // Who sends: the open app («foreground», the provider is looking) or the
     // background location task. After the evening cutoff only the provider
     // may put the machine back on the line, never a phone left on.
-    source: z.enum(['foreground', 'background']).optional().catch(undefined),
+    source: z.enum(['foreground', 'background', 'web']).optional().catch(undefined),
+    // «На линии на 5 рабочих дней» (owner, 2026-10-28): the standing
+    // availability. 'days5' — 5 working days (the default when going online),
+    // 'until' with `until` (YYYY-MM-DD) — to the end of that day, 'forever' —
+    // until switched off, 'off' — off the line altogether. Without it an
+    // older app keeps working (lib/lineStanding.ts, api/line).
+    standing: z.enum(['days5', 'until', 'forever', 'off']).optional(),
+    until: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/, 'Укажите дату')
+      .optional(),
   })
-  .refine((data) => !data.online || (data.lat !== undefined && data.lon !== undefined), {
-    message: 'Чтобы выйти на линию, разрешите приложению геопозицию',
-    path: ['lat'],
-  });
+  .refine((data) => data.standing !== 'until' || data.until !== undefined, {
+    message: 'Укажите дату, до которой вы на линии',
+    path: ['until'],
+  })
+  .refine(
+    (data) =>
+      !data.online ||
+      // From the cabinet: the machine stands at its base, no phone position needed.
+      (data.standing !== undefined && data.standing !== 'off') ||
+      (data.lat !== undefined && data.lon !== undefined),
+    {
+      message: 'Чтобы выйти на линию, разрешите приложению геопозицию',
+      path: ['lat'],
+    },
+  );
 export type LinePresenceInput = z.infer<typeof linePresenceSchema>;

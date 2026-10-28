@@ -9,6 +9,8 @@ import { AKTUALNO_PATH, PRICE_ASK_BODY, PRICE_ASK_TITLE } from '../aktualno';
 import { stripChatOrderNote } from '../chatOrders';
 import { DEMAND_NUDGE_PATH, demandNudgeText } from '../demandNudge';
 import { maskContacts } from '../privacy';
+import { lineRenewPath } from '../lineRenew';
+import { untilLong } from '../lineStanding';
 import { EARLY_NOTICE_LINE, EARLY_NOTICE_MINUTES, priorityDate } from '../referralPriority';
 
 export const CHANNELS = ['telegram', 'push', 'email', 'whatsapp', 'sms'] as const;
@@ -194,6 +196,15 @@ export type NotificationEvent =
   | { type: 'digest.evening'; items: string[] }
   /** Monday mornings, to provider managers: «обновите цены и свободные дни» (lib/aktualnoData.ts). */
   | { type: 'price.ask' }
+  /** A day before a standing line runs out: «Продлить на 5 рабочих дней?» with a one-tap link (lib/lineRenewData.ts). */
+  | {
+      type: 'line.renew';
+      until: Date;
+      timeZone?: string | null;
+      equipmentName: string;
+      /** Signed for this row and period (lib/lineRenew.ts). */
+      token: string;
+    }
   /** Once a day, to provider managers off the line: today's open orders nearby (lib/demandNudgeData.ts). */
   | { type: 'demand.today'; count: number }
   /** At 19:00, a CONFIRMED booking starts tomorrow: to the customer, the provider and the operator. */
@@ -398,6 +409,14 @@ export function renderNotification(event: NotificationEvent): RenderedNotificati
       return { title: PRICE_ASK_TITLE, body: PRICE_ASK_BODY, path: AKTUALNO_PATH };
     case 'demand.today':
       return { ...demandNudgeText(event.count), path: DEMAND_NUDGE_PATH };
+    case 'line.renew':
+      return {
+        title: 'Продлить на 5 рабочих дней?',
+        body:
+          `${clip(event.equipmentName, 60)} на линии до ${untilLong(event.until, event.timeZone)} включительно. ` +
+          'Одно нажатие — и заказчики видят машину ещё 5 рабочих дней.',
+        path: lineRenewPath(event.token),
+      };
     case 'booking.tomorrow':
       if (event.audience === 'provider' || event.audience === 'operator') {
         return {
@@ -475,6 +494,8 @@ export function pluralOrders(n: number): string {
  */
 export const EVENT_CHANNELS: Partial<Record<NotificationEvent['type'], readonly Channel[]>> = {
   'demand.today': ['push', 'telegram'],
+  // No paid channels for a reminder.
+  'line.renew': ['push', 'telegram', 'email'],
 };
 
 /** The channels this event may use at all; null when it is not restricted. */
@@ -642,4 +663,52 @@ export function providerMatchesOrder(provider: ProviderForMatch, order: OrderFor
   const radius =
     provider.radiusKm != null && provider.radiusKm > 0 ? provider.radiusKm : ORDER_RADIUS_KM;
   return km <= radius;
+}
+
+/**
+ * A machine «на линии» (owner, 2026-10-28: «заказчикам не нужно ждать, пока
+ * кто-то нажмёт кнопку»): its standing period or live GPS session places it
+ * at `lat/lon` (the phone's position, else its base). An order reaches the
+ * company when such a machine can take it (category), stands within
+ * ORDER_RADIUS_KM of the work site and is still on the line on the order's
+ * start date — even when the company's own base is farther away.
+ */
+export interface LineForMatch {
+  categoryId: string | null;
+  lat: number;
+  lon: number;
+  /** Live GPS now: on the line today only. */
+  live: boolean;
+  standingForever: boolean;
+  standingUntil: Date | null;
+}
+
+export function lineMatchesOrder(
+  line: LineForMatch,
+  order: OrderForMatch & { startDate?: Date | null },
+  now: Date = new Date(),
+): boolean {
+  if (order.lat == null || order.lon == null || !line.categoryId) return false;
+  const accepted = order.categoryIds ?? (order.categoryId ? [order.categoryId] : null);
+  if (accepted && !accepted.includes(line.categoryId)) return false;
+  const start = order.startDate ?? now;
+  const onLineThen =
+    line.standingForever ||
+    Boolean(
+      line.standingUntil &&
+      line.standingUntil.getTime() >= Math.max(now.getTime(), startOfDayMsk(start)),
+    ) ||
+    (line.live && startOfDayMsk(start) <= now.getTime());
+  if (!onLineThen) return false;
+  return (
+    distanceKm({ lat: order.lat, lon: order.lon }, { lat: line.lat, lon: line.lon }) <=
+    ORDER_RADIUS_KM
+  );
+}
+
+/** The first moment of the Moscow day of `date` (orders are dated by Moscow). */
+function startOfDayMsk(date: Date): number {
+  const MSK = 3 * 60 * 60_000;
+  const local = date.getTime() + MSK;
+  return local - (((local % 86_400_000) + 86_400_000) % 86_400_000) - MSK;
 }

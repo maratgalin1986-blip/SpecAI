@@ -57,7 +57,8 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
       if (active === false && operator.userId) {
         await tx.linePresence.updateMany({
           where: { userId: operator.userId },
-          data: { online: false, equipmentId: null },
+          // …and leaves the standing line too (lib/lineStanding.ts).
+          data: { online: false, equipmentId: null, standingUntil: null, standingForever: false },
         });
       }
       if (operator.userId && (name !== undefined || phone !== undefined)) {

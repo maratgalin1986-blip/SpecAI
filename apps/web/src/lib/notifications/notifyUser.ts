@@ -14,10 +14,12 @@ import {
 } from './adapters';
 import { deliver, type DeliverDeps, type DeliverOptions, type DeliveryReport } from './deliver';
 import { orderPoint } from '../geo';
+import { basePoint, isLive, PRESENCE_FRESH_MS } from '../linePresence';
 import {
   acceptedCategoryIds,
   prefsFrom,
   providerMatchesOrder,
+  lineMatchesOrder,
   type NotificationEvent,
   type Recipient,
 } from './routing';
@@ -181,6 +183,44 @@ export async function matchOrderRecipients(orderId: string, now: Date = new Date
     }),
     prisma.equipmentCategory.findMany({ select: { id: true, slug: true, parentId: true } }),
   ]);
+  // Machines «на линии» (lib/lineStanding.ts): the order reaches their
+  // company even when its base is far, as long as the machine is near.
+  const lines = await Promise.resolve()
+    .then(() =>
+      prisma.linePresence.findMany({
+        where: {
+          equipmentId: { not: null },
+          OR: [
+            { online: true, updatedAt: { gte: new Date(now.getTime() - PRESENCE_FRESH_MS) } },
+            { standingForever: true },
+            { standingUntil: { gt: now } },
+          ],
+        },
+        select: {
+          companyId: true,
+          lat: true,
+          lon: true,
+          online: true,
+          updatedAt: true,
+          onlineSince: true,
+          timeZone: true,
+          gpsAt: true,
+          standingUntil: true,
+          standingForever: true,
+          equipment: {
+            select: {
+              categoryId: true,
+              status: true,
+              location: { select: { latitude: true, longitude: true } },
+              company: { select: { baseLat: true, baseLon: true } },
+            },
+          },
+        },
+        orderBy: { updatedAt: 'desc' },
+        take: 2000,
+      }),
+    )
+    .catch(() => []);
   const point = orderPoint(order.location);
   const target = {
     categoryId: order.categoryId,
@@ -192,20 +232,41 @@ export async function matchOrderRecipients(orderId: string, now: Date = new Date
     // no city either — only the house fleet (no default town).
     city: order.location?.city || null,
   };
+  const lineCompanies = new Set<string>();
+  for (const line of lines) {
+    if (!line.equipment || line.equipment.status !== 'AVAILABLE') continue;
+    const live = isLive(line, now);
+    const at = live ? { lat: line.lat, lon: line.lon } : (basePoint(line.equipment) ?? line);
+    const matched = lineMatchesOrder(
+      {
+        categoryId: line.equipment.categoryId,
+        lat: at.lat,
+        lon: at.lon,
+        live,
+        standingForever: line.standingForever,
+        standingUntil: line.standingUntil,
+      },
+      { ...target, startDate: order.desiredStartDate },
+      now,
+    );
+    if (matched) lineCompanies.add(line.companyId);
+  }
   const seen = new Set<string>([order.customerId]);
   const recipients: OrderRecipient[] = [];
   for (const company of companies) {
-    const matches = providerMatchesOrder(
-      {
-        categoryIds: company.equipment.map((item) => item.categoryId),
-        baseLat: company.baseLat,
-        baseLon: company.baseLon,
-        radiusKm: company.deliveryRadiusKm,
-        baseAddress: company.baseAddress,
-        isHouse: company.id === HOUSE_COMPANY_ID,
-      },
-      target,
-    );
+    const matches =
+      lineCompanies.has(company.id) ||
+      providerMatchesOrder(
+        {
+          categoryIds: company.equipment.map((item) => item.categoryId),
+          baseLat: company.baseLat,
+          baseLon: company.baseLon,
+          radiusKm: company.deliveryRadiusKm,
+          baseAddress: company.baseAddress,
+          isHouse: company.id === HOUSE_COMPANY_ID,
+        },
+        target,
+      );
     if (!matches) continue;
     const priority = companyHasPriority(company.users, now);
     const house = company.id === HOUSE_COMPANY_ID;
