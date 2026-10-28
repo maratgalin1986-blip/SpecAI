@@ -7,6 +7,53 @@ import { PROVIDER_FILTERS, type ProviderFilter, type ProviderRow } from '@/lib/a
 import { loadCompanyStats } from '@/lib/companyStats';
 import { documentsSummary } from '@/lib/documents';
 import { reliability } from '@/lib/reliability';
+import {
+  AdminVerificationQueue,
+  type VerificationRow,
+} from '@/components/admin/AdminVerificationQueue';
+import { legalFormLabel, taxRegimeLabel } from '@/lib/providerVerification';
+
+/** Исполнители, отправившие полную регистрацию и ждущие решения. */
+async function loadVerificationQueue(): Promise<VerificationRow[]> {
+  const companies = await prisma.company.findMany({
+    where: { isProvider: true, verified: false, verificationRequestedAt: { not: null } },
+    select: {
+      id: true,
+      name: true,
+      legalForm: true,
+      legalName: true,
+      taxId: true,
+      taxRegime: true,
+      phone: true,
+      verificationRequestedAt: true,
+    },
+    orderBy: { verificationRequestedAt: 'asc' },
+    take: 50,
+  });
+  const ids = companies.map((company) => company.id);
+  const sts = ids.length
+    ? await prisma.providerDocument.findMany({
+        where: { companyId: { in: ids }, kind: 'STS' },
+        select: { companyId: true, number: true, fileUrl: true },
+        orderBy: { createdAt: 'desc' },
+        take: 200,
+      })
+    : [];
+  return companies.map((company) => {
+    const doc = sts.find((row) => row.companyId === company.id);
+    return {
+      id: company.id,
+      name: company.name,
+      legalForm: legalFormLabel(company.legalForm),
+      legalName: company.legalName,
+      inn: company.taxId,
+      taxRegime: taxRegimeLabel(company.taxRegime),
+      phone: company.phone,
+      requestedAt: (company.verificationRequestedAt ?? new Date()).toISOString(),
+      sts: doc ? { number: doc.number, fileUrl: doc.fileUrl } : null,
+    };
+  });
+}
 
 export const dynamic = 'force-dynamic';
 export const metadata: Metadata = { title: 'Исполнители · CRM', robots: { index: false } };
@@ -116,7 +163,7 @@ export default async function AdminProvidersPage({ searchParams }: { searchParam
   if (gate) return gate;
 
   const now = new Date();
-  const rows = await loadRows(now);
+  const [rows, queue] = await Promise.all([loadRows(now), loadVerificationQueue()]);
   const verified = rows.filter((row) => row.verified).length;
   const withoutMachines = rows.filter((row) => row.machines === 0).length;
   const expiredDocs = rows.filter((row) => row.docsExpired > 0).length;
@@ -140,6 +187,7 @@ export default async function AdminProvidersPage({ searchParams }: { searchParam
           hint={expiredDocs > 0 ? 'напомнить компании' : 'всё в порядке'}
         />
       </div>
+      <AdminVerificationQueue rows={queue} />
       <AdminProvidersTable
         rows={rows}
         initialFilter={parseFilter(searchParams.filter)}

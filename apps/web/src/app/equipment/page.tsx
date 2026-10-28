@@ -198,7 +198,7 @@ export default async function EquipmentCatalogPage({
       include: {
         category: true,
         location: true,
-        company: { select: { name: true, createdAt: true, verified: true } },
+        company: { select: { name: true, createdAt: true, verified: true, provisional: true } },
       },
       orderBy: EQUIPMENT_ORDER_BY[sort],
       skip: (page - 1) * PAGE_SIZE,

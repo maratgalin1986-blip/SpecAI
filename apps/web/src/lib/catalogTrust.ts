@@ -12,6 +12,8 @@ export interface CardTrust {
   reviews: number;
   since: string;
   verified: boolean;
+  /** Лёгкий вход, данные не проверены — честная пометка вместо «Проверен». */
+  provisional: boolean;
 }
 
 export interface ReviewGroup {
@@ -21,7 +23,7 @@ export interface ReviewGroup {
 }
 
 export function cardTrust(
-  company: { createdAt: Date; verified: boolean },
+  company: { createdAt: Date; verified: boolean; provisional?: boolean | null },
   group: ReviewGroup | undefined,
 ): CardTrust {
   const reviews = group?._count._all ?? 0;
@@ -31,6 +33,7 @@ export function cardTrust(
     reviews,
     since: sinceLabel(company.createdAt),
     verified: company.verified,
+    provisional: !company.verified && Boolean(company.provisional),
   };
 }
 

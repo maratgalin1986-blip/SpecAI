@@ -13,7 +13,10 @@ export async function loadCompanyStats(companyIds: string[]): Promise<Map<string
   if (ids.length === 0) return result;
 
   const [companies, bookings, ratings, invited] = await Promise.all([
-    prisma.company.findMany({ where: { id: { in: ids } }, select: { id: true, verified: true } }),
+    prisma.company.findMany({
+      where: { id: { in: ids } },
+      select: { id: true, verified: true, provisional: true },
+    }),
     prisma.booking.findMany({
       where: { equipment: { companyId: { in: ids } } },
       select: {
@@ -47,6 +50,7 @@ export async function loadCompanyStats(companyIds: string[]): Promise<Map<string
   for (const id of ids) result.set(id, { ...EMPTY_STATS, bookings: {}, cancelledBy: {} });
   for (const company of companies) {
     result.get(company.id)!.verified = company.verified;
+    result.get(company.id)!.provisional = company.provisional;
   }
   for (const [id, tally] of byCompany) {
     const stats = result.get(id);

@@ -119,3 +119,14 @@ FAQ (5 вопросов, `cityFaq` в `lib/cities.ts`) + FAQPage и BreadcrumbLi
 городе. Цена в FAQ — только из `cityOffer` (ставки исполнителей / прайс СпецПласт16 в его зоне).
 Пустые города по-прежнему noindex и не в sitemap — открываются сами, когда появится исполнитель.
 Трогал только `lib/cities.ts`, его тест и `app/arenda/[slug]/[city]/page.tsx`.
+
+2026-10-28 (задача «Лёгкий вход исполнителя и кабинеты», ветка `claude/quick-provider-cabinets-2026-10-28`,
+для сессии «на линии на 5 рабочих дней» и сессии «Приложение»): лёгкая форма «Встать на линию —
+попробовать бесплатно» (`POST /api/auth/quick-provider`: имя, телефон, вид техники, точка или город)
+создаёт компанию `provisional`, машину и `LinePresence` с `standingData('days5', …)` из
+`lib/lineStanding.ts` — **файлы линии (`api/line/**`, `lineNearbyData`, `linePresence`, `lineStanding`,
+`OnlineToggle`) эта ветка не трогает**, ждёт слияния ветки `claude/line-5-workdays-2026-10-28` и берёт
+её поверх. Схема: колонки в `User` (`phoneVerifiedAt`, `quickSignup`) и `Company` (реквизиты, статус
+проверки), новая модель `LegalEntity` — с хунками `LinePresence` не пересекается. Приложению: тот же
+маршрут отдаёт `token` (мобильный JWT); экран лёгкой формы и «Завершите регистрацию» в приложении —
+за сессией «Приложение» (API: `GET/PUT /api/account/verification`, `POST /api/account/verification/file`).

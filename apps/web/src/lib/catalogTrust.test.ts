@@ -10,7 +10,13 @@ describe('cardTrust', () => {
       _avg: { rating: 4.8333 },
       _count: { _all: 12 },
     });
-    expect(trust).toEqual({ rating: 4.8, reviews: 12, since: 'с октября 2026', verified: true });
+    expect(trust).toEqual({
+      rating: 4.8,
+      reviews: 12,
+      since: 'с октября 2026',
+      verified: true,
+      provisional: false,
+    });
     expect(trustLine(trust)).toBe('★ 4,8 · 12 отзывов · на площадке с октября 2026');
   });
   it('shows only the date without reviews', () => {
