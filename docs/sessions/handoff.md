@@ -103,3 +103,9 @@ Yandex Cloud −4,75 ₽.
 iPhone — «откройте в Safari», остальные — через меню браузера. `manifest.ts`/`sw.ts` не трогал.
 Ссылок на магазины для Expo-приложения нет (RuStore ещё не опубликован) — когда появится ссылка,
 добавить её в подсказку кнопки.
+2026-10-28 (сессия «Тема и анимации», ветка `claude/theme-motion-2026-10-28`): по ролику «сайт за ночь»
+добавлены светлая/тёмная тема (`lib/theme.ts`, `components/ThemeToggle.tsx`, `app/theme.css`; в
+`app/layout.tsx` один `<script>` до первой отрисовки и импорт `theme.css`, в `SiteHeader` — кнопка) и
+карточки «Сводка за 7/30 дней» в /admin (`lib/adminSummary.ts`). Тёмная тема — переназначение светлых
+утилит в `theme.css`: новые светлые классы (bg-white, text-slate-*) темнеют сами; белая «таблетка» с
+text-slate-950 остаётся белой. Идеи ролика — `docs/roadmap-ideas-video-v-5EHG3IeeE.md`, строка 6 в roadmap.

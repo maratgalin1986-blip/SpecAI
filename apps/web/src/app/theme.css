@@ -1,0 +1,168 @@
+/* ---- Dark theme ------------------------------------------------------------
+   html[data-theme='dark'] is set before the first paint (lib/theme.ts): the
+   visitor's pick, else the system setting. The site is written with light
+   Tailwind utilities, so the dark theme remaps the light surfaces, borders and
+   body text to the cabinet graphite palette. Sections that are already dark
+   (the hero, bg-slate-900/950) and amber actions keep their own colours:
+   text-slate-950 / text-graphite-950 on amber stays dark on purpose. */
+
+html[data-theme='dark'] {
+  color-scheme: dark;
+  --theme-bg: #121519;
+  --theme-surface: #1d2126;
+  --theme-surface-2: #252a31;
+  --theme-line: #343a42;
+  --theme-text: #e8eaed;
+  --theme-text-2: #c3c8cf;
+  --theme-muted: #9aa2ad;
+  --theme-warm: #2a2013;
+  --theme-warm-line: #5c4318;
+}
+
+html[data-theme='dark'] body,
+html[data-theme='dark'] .bg-\[\#f7f7f5\] {
+  background-color: var(--theme-bg);
+  color: var(--theme-text);
+}
+
+/* Surfaces */
+/* A white pill with near-black text (the hero phone button) stays white. */
+html[data-theme='dark'] :is(.bg-white, .cab-card, .cab-chip, .cab-ghost):not(.rounded-full),
+html[data-theme='dark']
+  :is(.bg-white, .cab-chip, .cab-ghost).rounded-full:not([class*='text-slate-950']):not(
+    [class*='text-graphite-950']
+  ) {
+  background-color: var(--theme-surface);
+}
+html[data-theme='dark']
+  :is(.bg-slate-50, .bg-slate-100, .bg-graphite-50, .bg-graphite-100, .bg-gray-50, .bg-gray-100) {
+  background-color: var(--theme-surface-2);
+}
+html[data-theme='dark'] :is(.bg-white\/75, .bg-white\/80, .bg-white\/90, .bg-white\/95) {
+  background-color: rgb(18 21 25 / 0.85);
+}
+html[data-theme='dark']
+  :is(
+    .hover\:bg-slate-50,
+    .hover\:bg-slate-100,
+    .hover\:bg-graphite-50,
+    .hover\:bg-graphite-100
+  ):hover {
+  background-color: var(--theme-line);
+}
+html[data-theme='dark']
+  :is(.bg-amber-50, .bg-amber-100, .bg-orange-50, .bg-yellow-50, .bg-signal-50) {
+  background-color: var(--theme-warm);
+}
+html[data-theme='dark'] :is(.bg-emerald-50, .bg-green-50) {
+  background-color: #10261c;
+}
+html[data-theme='dark'] :is(.bg-red-50, .bg-rose-50) {
+  background-color: #2c1517;
+}
+html[data-theme='dark'] :is(.bg-sky-50, .bg-blue-50) {
+  background-color: #12212e;
+}
+html[data-theme='dark'] .from-amber-50 {
+  --tw-gradient-from: var(--theme-warm) var(--tw-gradient-from-position);
+}
+html[data-theme='dark'] .to-orange-100 {
+  --tw-gradient-to: #33210f var(--tw-gradient-to-position);
+}
+
+html[data-theme='dark'] .bg-white:not(.rounded-full):is(.text-slate-950, .text-graphite-950) {
+  color: var(--theme-text);
+}
+
+/* Lines */
+html[data-theme='dark']
+  :is(
+    .border-slate-100,
+    .border-slate-200,
+    .border-slate-300,
+    .border-graphite-100,
+    .border-graphite-200,
+    .border-gray-200,
+    .cab-card,
+    .cab-chip,
+    .cab-ghost
+  ) {
+  border-color: var(--theme-line);
+}
+html[data-theme='dark'] :is(.border-slate-200\/70) {
+  border-color: rgb(52 58 66 / 0.7);
+}
+html[data-theme='dark'] :is(.border-amber-100, .border-amber-200) {
+  border-color: var(--theme-warm-line);
+}
+html[data-theme='dark'] :is(.divide-slate-100, .divide-slate-200, .divide-graphite-100) > * + * {
+  border-color: var(--theme-line);
+}
+html[data-theme='dark'] :is(.ring-slate-200, .ring-slate-300) {
+  --tw-ring-color: var(--theme-line);
+}
+
+/* Text on the remapped surfaces. Only on elements that do not paint their own
+   dark or coloured background (hero, buttons). */
+html[data-theme='dark']
+  :is(.text-slate-900, .text-slate-800, .text-graphite-900, .text-graphite-800, .text-gray-900):not(
+    [class*='bg-amber']
+  ):not([class*='bg-signal']):not([class*='bg-white\/']) {
+  color: var(--theme-text);
+}
+html[data-theme='dark']
+  :is(.text-slate-700, .text-graphite-700, .text-gray-700, .cab-chip, .cab-ghost) {
+  color: var(--theme-text-2);
+}
+html[data-theme='dark']
+  :is(
+    .text-slate-600,
+    .text-slate-500,
+    .text-graphite-600,
+    .text-graphite-500,
+    .text-gray-600,
+    .text-gray-500
+  ) {
+  color: var(--theme-muted);
+}
+html[data-theme='dark'] .hover\:text-slate-900:hover {
+  color: #fff;
+}
+html[data-theme='dark']
+  :is(.text-amber-700, .text-amber-800, .text-amber-900, .text-signal-700, .text-signal-800) {
+  color: #fbbf24;
+}
+html[data-theme='dark'] :is(.text-emerald-700, .text-emerald-800) {
+  color: #34d399;
+}
+html[data-theme='dark'] :is(.text-red-600, .text-red-700, .text-red-800) {
+  color: #f87171;
+}
+
+/* Text that sits on an amber action keeps its dark colour. */
+html[data-theme='dark']
+  :is([class*='bg-amber-'], [class*='bg-signal-'], [class*='from-amber-4'])
+  :is(.text-slate-900, .text-slate-800, .text-slate-700) {
+  color: #0f172a;
+}
+
+/* Form fields */
+html[data-theme='dark'] :is(input, textarea, select):not([type='checkbox']):not([type='radio']) {
+  color: var(--theme-text);
+}
+html[data-theme='dark'] ::placeholder {
+  color: #7d8590;
+}
+
+/* The switch itself: a short turn on change, at rest with reduced motion. */
+.theme-toggle svg {
+  transition: transform var(--motion-base, 320ms) var(--motion-ease-out, ease-out);
+}
+.theme-toggle[aria-pressed='true'] svg {
+  transform: rotate(90deg);
+}
+@media (prefers-reduced-motion: reduce) {
+  .theme-toggle svg {
+    transition: none;
+  }
+}

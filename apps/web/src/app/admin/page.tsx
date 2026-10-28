@@ -29,6 +29,8 @@ import { loadBotChats } from '@/lib/groupBot';
 import { channelFromEnv, loadPickedChannelChatId } from '@/lib/channelTarget';
 import { ADMIN_PROPOSAL_SELECT } from '@/lib/proposals';
 import { PriceSurveyCard } from '@/components/admin/PriceSurveyCard';
+import { BusinessSummary } from '@/components/admin/BusinessSummary';
+import { loadAdminSummary } from '@/lib/adminSummary';
 import { aktualnoAdminCount } from '@/lib/aktualnoData';
 import { loadAdminPriceReports } from '@/lib/priceReportStore';
 import { surveyAdminView } from '@/lib/groupPriceSurvey';
@@ -93,7 +95,7 @@ export default async function AdminPage({ searchParams = {} }: { searchParams?: 
   const digestChatLoad = loadPickedChannelChatId().catch(() => null);
   // Bot drafts without a phone are not leads yet (lib/botDrafts.ts).
   const leadsWhere = { NOT: { phone: '' } };
-  const [stats, leads, leadsTotal] = await Promise.all([
+  const [stats, leads, leadsTotal, summary] = await Promise.all([
     loadAdminStats(),
     prisma.lead.findMany({
       where: leadsWhere,
@@ -101,6 +103,8 @@ export default async function AdminPage({ searchParams = {} }: { searchParams?: 
       take: LEADS_LOADED,
     }),
     prisma.lead.count({ where: leadsWhere }),
+    // The summary must not take the page down: without it, the cards are hidden.
+    loadAdminSummary().catch(() => null),
   ]);
   const [pendingOrders, importedStats, aiDecisions] = await Promise.all([
     prisma.order.findMany({
@@ -278,6 +282,7 @@ export default async function AdminPage({ searchParams = {} }: { searchParams?: 
         </button>
       </form>
 
+      {summary && <BusinessSummary summary={summary} />}
       <SignupCounters stats={stats} />
       <p className="-mt-4 text-xs text-slate-600">
         Обновили цены и свободные дни за 7 дней: исполнителей {aktualnoCompanies} ·{' '}
