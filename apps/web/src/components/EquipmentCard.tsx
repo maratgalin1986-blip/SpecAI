@@ -176,6 +176,14 @@ export function EquipmentCard({ item }: { item: EquipmentCardItem }) {
                     Проверен
                   </span>
                 )}
+                {item.trust.provisional && (
+                  <span
+                    className="rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 font-semibold text-amber-800"
+                    title="Исполнитель начал без полной регистрации: реквизиты и документы ещё не проверены"
+                  >
+                    Новый исполнитель, данные не проверены
+                  </span>
+                )}
                 <span>{trustLine(item.trust)}</span>
               </p>
             )}

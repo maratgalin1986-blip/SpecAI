@@ -8,6 +8,7 @@ import { CinemaBackdrop } from '@/components/CinemaHero';
 import { BasePicker, type BaseValue } from '@/components/BasePicker';
 import { ConsentText } from '@/components/ConsentText';
 import { Hint } from '@/components/Hint';
+import { QuickProviderForm } from '@/components/QuickProviderForm';
 import { noteInstallMoment } from '@/lib/installHint';
 import { NEWS_CONSENT_LABEL } from '@/lib/newsConsent';
 import { normalizeReferralCode } from '@/lib/referral';
@@ -27,6 +28,8 @@ export default function RegisterPage() {
     if (preset) setAccountType(preset);
     setReferralCode(normalizeReferralCode(params.get('ref')));
   }, []);
+  // «Встать на линию — попробовать бесплатно» first; the full form on request.
+  const [fullProvider, setFullProvider] = useState(false);
   const [companyName, setCompanyName] = useState('');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -151,136 +154,144 @@ export default function RegisterPage() {
           </p>
         )}
 
-        <form method="post" onSubmit={handleSubmit} className="ym-hide-content flex flex-col gap-3">
-          {accountType === 'PROVIDER' && (
+        {accountType === 'PROVIDER' && !fullProvider ? (
+          <QuickProviderForm onFullForm={() => setFullProvider(true)} />
+        ) : (
+          <form
+            method="post"
+            onSubmit={handleSubmit}
+            className="ym-hide-content flex flex-col gap-3"
+          >
+            {accountType === 'PROVIDER' && (
+              <label className="flex flex-col gap-1 text-sm">
+                Название компании или ИП
+                <input
+                  required
+                  value={companyName}
+                  onChange={(e) => setCompanyName(e.target.value)}
+                  className="rounded-md border border-slate-300 px-3 py-2"
+                />
+              </label>
+            )}
+            {accountType === 'PROVIDER' && (
+              <div className="flex flex-col gap-1 text-sm">
+                <span>
+                  Где стоит техника <span className="text-red-600">*</span>
+                </span>
+                <span className="text-xs text-slate-500">
+                  Адрес базы или стоянки — по нему заказчики увидят вас на карте и выберут
+                  ближайшего. Телефон и e-mail на карте не показываются.
+                </span>
+                <BasePicker value={base} onChange={setBase} />
+              </div>
+            )}
             <label className="flex flex-col gap-1 text-sm">
-              Название компании или ИП
+              Имя
               <input
                 required
-                value={companyName}
-                onChange={(e) => setCompanyName(e.target.value)}
+                value={name}
+                onChange={(e) => setName(e.target.value)}
                 className="rounded-md border border-slate-300 px-3 py-2"
               />
             </label>
-          )}
-          {accountType === 'PROVIDER' && (
-            <div className="flex flex-col gap-1 text-sm">
-              <span>
-                Где стоит техника <span className="text-red-600">*</span>
-              </span>
-              <span className="text-xs text-slate-500">
-                Адрес базы или стоянки — по нему заказчики увидят вас на карте и выберут ближайшего.
-                Телефон и e-mail на карте не показываются.
-              </span>
-              <BasePicker value={base} onChange={setBase} />
-            </div>
-          )}
-          <label className="flex flex-col gap-1 text-sm">
-            Имя
-            <input
-              required
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              className="rounded-md border border-slate-300 px-3 py-2"
-            />
-          </label>
-          <label className="flex flex-col gap-1 text-sm">
-            E-mail
-            <input
-              type="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="rounded-md border border-slate-300 px-3 py-2"
-            />
-          </label>
-          <label className="flex flex-col gap-1 text-sm">
-            Телефон <span className="text-slate-400">(необязательно)</span>
-            <input
-              type="tel"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              maxLength={30}
-              autoComplete="tel"
-              placeholder="+7 (___) ___-__-__"
-              className="rounded-md border border-slate-300 px-3 py-2"
-            />
-          </label>
-          <label className="flex flex-col gap-1 text-sm">
-            Пароль <span className="text-slate-400">(минимум 8 символов)</span>
-            <input
-              type="password"
-              required
-              minLength={8}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="rounded-md border border-slate-300 px-3 py-2"
-            />
-          </label>
-          <label className="flex items-start gap-2 text-xs text-slate-600">
-            <input
-              type="checkbox"
-              required
-              checked={consent}
-              onChange={(e) => setConsent(e.target.checked)}
-              className="mt-0.5"
-            />
-            <ConsentText />
-          </label>
-          {accountType === 'PROVIDER' && (
+            <label className="flex flex-col gap-1 text-sm">
+              E-mail
+              <input
+                type="email"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="rounded-md border border-slate-300 px-3 py-2"
+              />
+            </label>
+            <label className="flex flex-col gap-1 text-sm">
+              Телефон <span className="text-slate-400">(необязательно)</span>
+              <input
+                type="tel"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                maxLength={30}
+                autoComplete="tel"
+                placeholder="+7 (___) ___-__-__"
+                className="rounded-md border border-slate-300 px-3 py-2"
+              />
+            </label>
+            <label className="flex flex-col gap-1 text-sm">
+              Пароль <span className="text-slate-400">(минимум 8 символов)</span>
+              <input
+                type="password"
+                required
+                minLength={8}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="rounded-md border border-slate-300 px-3 py-2"
+              />
+            </label>
             <label className="flex items-start gap-2 text-xs text-slate-600">
               <input
                 type="checkbox"
                 required
-                checked={publicConsent}
-                onChange={(e) => setPublicConsent(e.target.checked)}
+                checked={consent}
+                onChange={(e) => setConsent(e.target.checked)}
                 className="mt-0.5"
               />
-              <span>
-                Согласен(на), что название компании, город, адрес базы и её точка на карте, техника,
-                цены и фото будут видны всем посетителям (
-                <a href="/soglasie-rasprostranenie" className="underline" target="_blank">
-                  согласие на распространение
-                </a>
-                )
-              </span>
+              <ConsentText />
             </label>
-          )}
-          <label className="flex items-start gap-2 text-xs text-slate-600">
-            <input
-              type="checkbox"
-              checked={newsConsent}
-              onChange={(e) => setNewsConsent(e.target.checked)}
-              className="mt-0.5"
-            />
-            <span>{NEWS_CONSENT_LABEL}</span>
-          </label>
-          <p className="text-xs text-slate-500">
-            Создавая аккаунт, вы принимаете{' '}
-            <a href="/pravila" className="underline" target="_blank">
-              Правила площадки
-            </a>
-            {accountType === 'CUSTOMER' ? (
-              <>
-                . Отзывы и комментарии публикуются с именем в виде «Анна П.» (
-                <a href="/soglasie-rasprostranenie" className="underline" target="_blank">
-                  согласие на распространение
-                </a>
-                )
-              </>
-            ) : null}
-            .
-          </p>
-          {error && (
-            <p role="alert" className="text-sm text-red-700">
-              {error}
+            {accountType === 'PROVIDER' && (
+              <label className="flex items-start gap-2 text-xs text-slate-600">
+                <input
+                  type="checkbox"
+                  required
+                  checked={publicConsent}
+                  onChange={(e) => setPublicConsent(e.target.checked)}
+                  className="mt-0.5"
+                />
+                <span>
+                  Согласен(на), что название компании, город, адрес базы и её точка на карте,
+                  техника, цены и фото будут видны всем посетителям (
+                  <a href="/soglasie-rasprostranenie" className="underline" target="_blank">
+                    согласие на распространение
+                  </a>
+                  )
+                </span>
+              </label>
+            )}
+            <label className="flex items-start gap-2 text-xs text-slate-600">
+              <input
+                type="checkbox"
+                checked={newsConsent}
+                onChange={(e) => setNewsConsent(e.target.checked)}
+                className="mt-0.5"
+              />
+              <span>{NEWS_CONSENT_LABEL}</span>
+            </label>
+            <p className="text-xs text-slate-500">
+              Создавая аккаунт, вы принимаете{' '}
+              <a href="/pravila" className="underline" target="_blank">
+                Правила площадки
+              </a>
+              {accountType === 'CUSTOMER' ? (
+                <>
+                  . Отзывы и комментарии публикуются с именем в виде «Анна П.» (
+                  <a href="/soglasie-rasprostranenie" className="underline" target="_blank">
+                    согласие на распространение
+                  </a>
+                  )
+                </>
+              ) : null}
+              .
             </p>
-          )}
-          <Button type="submit" disabled={!hydrated || isSubmitting}>
-            {isSubmitting ? 'Создание аккаунта…' : 'Создать аккаунт'}
-          </Button>
-          <PromiseNote />
-        </form>
+            {error && (
+              <p role="alert" className="text-sm text-red-700">
+                {error}
+              </p>
+            )}
+            <Button type="submit" disabled={!hydrated || isSubmitting}>
+              {isSubmitting ? 'Создание аккаунта…' : 'Создать аккаунт'}
+            </Button>
+            <PromiseNote />
+          </form>
+        )}
         <p className="mt-4 text-sm text-slate-500">
           Уже есть аккаунт?{' '}
           <a href="/login" className="font-medium text-amber-700">

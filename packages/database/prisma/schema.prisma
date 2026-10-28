@@ -63,6 +63,13 @@ model User {
   newsUnsubscribedAt DateTime?
   lastNewsAt         DateTime?
 
+  // Лёгкий вход исполнителя (owner, 2026-10-28): имя, телефон и вид техники,
+  // без e-mail и пароля. Телефон не подтверждён, пока нет проверки (SMS не
+  // покупаем) — phoneVerifiedAt остаётся пустым. quickSignup отличает такой
+  // аккаунт: e-mail у него служебный (*.invalid), вход — по сессии с устройства.
+  phoneVerifiedAt DateTime?
+  quickSignup     Boolean   @default(false)
+
   bookings           Booking[]           @relation("BookingCustomer")
   orders             Order[]             @relation("OrderCustomer")
   reviews            Review[]
@@ -130,6 +137,25 @@ model Company {
   // the trip to the site costs (prefills «подача» in a bid).
   deliveryRadiusKm   Int      @default(100)
   deliveryPricePerKm Decimal? @db.Decimal(10, 2)
+
+  // Полная регистрация исполнителя (owner, 2026-10-28, lib/providerVerification.ts).
+  // provisional — вошёл по лёгкой форме, данные не проверены (заказчики видят
+  // «Новый исполнитель, данные не проверены»). Реквизиты заполняет сам
+  // исполнитель после первого заказа; verificationRequestedAt — когда отправил
+  // на проверку, verificationRejectedReason — почему админ вернул. «Проверен» —
+  // по-прежнему `verified`. Банковские реквизиты видят только сама компания и админ.
+  provisional                Boolean   @default(false)
+  legalForm                  String?
+  legalName                  String?
+  kpp                        String?
+  ogrn                       String?
+  taxRegime                  String?
+  bankName                   String?
+  bankBik                    String?
+  bankAccount                String?
+  verificationRequestedAt    DateTime?
+  verificationRejectedReason String?
+  verifiedAt                 DateTime?
 
   users         User[]
   equipment     Equipment[]
@@ -1035,4 +1061,21 @@ model PriceReport {
   @@index([createdAt])
   @@index([reporterHash, createdAt])
   @@index([surveyKey])
+}
+
+/// Реквизиты заказчика (owner, 2026-10-28): несколько юрлиц/ИП на один аккаунт,
+/// одно из них выбрано «от кого заказываю» (isDefault). Видит только владелец.
+model LegalEntity {
+  id        String   @id @default(cuid())
+  userId    String
+  legalForm String
+  name      String
+  inn       String
+  kpp       String?
+  address   String?
+  isDefault Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
 }

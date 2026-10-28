@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@specai/database';
 import { isAllowedUploadType } from '@/lib/blob';
+import { isPrivateKey } from '@/lib/privateFiles';
 
 export const dynamic = 'force-dynamic';
 
@@ -19,6 +20,8 @@ export async function GET(_request: Request, { params }: { params: { key: string
   } catch {
     return NextResponse.json({ error: 'Файл не найден' }, { status: 404 });
   }
+  // Документы для проверки (СТС) — только через /api/private-files с правами.
+  if (isPrivateKey(key)) return NextResponse.json({ error: 'Файл не найден' }, { status: 404 });
   const file = await prisma.storedFile.findUnique({ where: { key } }).catch(() => null);
   if (!file || !isAllowedUploadType(file.contentType)) {
     return NextResponse.json({ error: 'Файл не найден' }, { status: 404 });

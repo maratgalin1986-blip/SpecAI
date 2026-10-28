@@ -4,6 +4,7 @@ import { prisma } from '@specai/database';
 import { authenticateWithCredentials } from '@/lib/credentials';
 import { isTokenIssuedBeforePasswordChange } from '@/lib/passwordChanged';
 import { clientIpFrom } from '@/lib/loginErrors';
+import { verifyQuickLoginToken } from '@/lib/quickProvider';
 
 export const authOptions: AuthOptions = {
   session: { strategy: 'jwt' },
@@ -23,6 +24,36 @@ export const authOptions: AuthOptions = {
         return authenticateWithCredentials(credentials, {
           ip: clientIpFrom((name) => headers[name]),
         });
+      },
+    }),
+    // «Встать на линию — попробовать бесплатно»: вход сразу после лёгкой формы
+    // по короткому подписанному токену (lib/quickProvider.ts), без пароля.
+    CredentialsProvider({
+      id: 'quick',
+      name: 'Quick',
+      credentials: { token: { label: 'Token', type: 'text' } },
+      async authorize(credentials) {
+        const userId = await verifyQuickLoginToken(credentials?.token);
+        if (!userId) return null;
+        const user = await prisma.user.findUnique({
+          where: { id: userId },
+          select: {
+            id: true,
+            email: true,
+            name: true,
+            role: true,
+            companyId: true,
+            quickSignup: true,
+          },
+        });
+        if (!user?.quickSignup) return null;
+        return {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          role: user.role,
+          companyId: user.companyId,
+        };
       },
     }),
   ],

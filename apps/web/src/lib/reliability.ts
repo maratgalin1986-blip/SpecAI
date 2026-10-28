@@ -9,6 +9,8 @@ import { recommendsNote } from './referral';
 
 export interface CompanyStats {
   verified: boolean;
+  /** Лёгкий вход без проверки данных (lib/providerVerification.ts). */
+  provisional?: boolean;
   /** Bookings by status for the company's machinery. */
   bookings: Partial<Record<string, number>>;
   /**
@@ -37,6 +39,9 @@ export interface Reliability {
   badges: string[];
   recommends: string | null;
 }
+
+/** Chip of a provider signed up by the light form (owner, 2026-10-28). */
+export const PROVISIONAL_BADGE = 'Новый исполнитель, данные не проверены';
 
 /** Below this many decided bookings the cancellation share says nothing. */
 export const MIN_SAMPLE = 3;
@@ -88,7 +93,10 @@ export function reliability(stats: CompanyStats): Reliability {
   if (rating !== null) badges.push(`★ ${rating.toFixed(1)} (${stats.ratingCount})`);
   if (completed > 0) badges.push(`${completed} ${completedWord(completed)}`);
   if (cancelShare !== null) badges.push(cancelLabel(cancelShare));
-  if (badges.length === 0 || (!stats.verified && completed === 0 && rating === null)) {
+  if (stats.provisional && !stats.verified) {
+    // Честно: исполнитель вошёл по лёгкой форме, реквизиты не проверены.
+    badges.push(PROVISIONAL_BADGE);
+  } else if (badges.length === 0 || (!stats.verified && completed === 0 && rating === null)) {
     badges.push('Новый на сервисе');
   }
 
