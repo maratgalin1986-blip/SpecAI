@@ -18,6 +18,8 @@ import { MarketplaceBlock } from '@/components/MarketplaceBlock';
 import { OfferNow } from '@/components/OfferNow';
 import { Reveal } from '@/components/Reveal';
 import { TiltCard } from '@/components/TiltCard';
+import { World3D } from '@/components/world3d/World3D';
+import { WORLD_KINDS } from '@/components/world3d/kinds';
 import type { Metadata } from 'next';
 import type { MachineType } from '@/lib/machinePhotos';
 import { pluralizeRu } from '@/lib/pluralize';
@@ -406,6 +408,18 @@ export default async function HomePage() {
       {/* Owner, 2026-10-11: the marketplace itself — two doors and the live board. */}
       <div className="depth">
         <MarketplaceBlock />
+      </div>
+
+      {/* Owner, 2026-10-28: the 3D city is back — machines «на линии», tap one to order. */}
+      <div className="depth">
+        <World3D
+          categoryIds={Object.fromEntries(
+            WORLD_KINDS.flatMap((k) => {
+              const id = categoryLinks.get(k.slug)?.id;
+              return id ? [[k.kind, id]] : [];
+            }),
+          )}
+        />
       </div>
 
       <div

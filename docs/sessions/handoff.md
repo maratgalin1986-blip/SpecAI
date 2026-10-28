@@ -120,6 +120,12 @@ FAQ (5 вопросов, `cityFaq` в `lib/cities.ts`) + FAQPage и BreadcrumbLi
 Пустые города по-прежнему noindex и не в sitemap — открываются сами, когда появится исполнитель.
 Трогал только `lib/cities.ts`, его тест и `app/arenda/[slug]/[city]/page.tsx`.
 
+2026-10-28 (задача «3D-город на главной», ветка `claude/world3d-2026-10-28`): владелец вернул 3D
+(«Верни на иистройка24 3D-мир…»). Новые файлы только в `apps/web/src/components/world3d/` и
+`public/images/world3d-poster.jpg`; в `app/page.tsx` — один блок после `MarketplaceBlock` и два
+импорта; зависимости `three`/`@types/three` 0.170 вернулись в `apps/web/package.json`. `globals.css`,
+тему и анимации не трогал (сессия редизайна), SEO-страницы не трогал. Подробности —
+`docs/owner-requests.md`, «3D-город возвращён».
 2026-10-28 (задача «На линии на 5 рабочих дней», ветка `claude/line-5-workdays-2026-10-28`, для сессии
 «Приложение»): владелец: «если встал на линию — то на 5 рабочих дней». Сервер и кабинет сделаны
 (`lib/lineStanding.ts`, `PUT /api/line`, `GET /api/line/nearby`, `docs/owner-requests.md`). Что нужно в
