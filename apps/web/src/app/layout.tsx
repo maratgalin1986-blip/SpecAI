@@ -5,6 +5,7 @@ import { InstallPrompt } from '@/components/InstallPrompt';
 import { TelegramMiniApp } from '@/components/TelegramMiniApp';
 import { Providers } from '@/components/Providers';
 import { SiteHeader } from '@/components/SiteHeader';
+import { THEME_INIT_SCRIPT } from '@/lib/theme';
 import { SiteFooter } from '@/components/SiteFooter';
 import { PublicOnly } from '@/components/PublicOnly';
 import { AgentChatWidget } from '@/components/AgentChatWidget';
@@ -20,6 +21,7 @@ import { SITE } from '@/lib/site';
 import { siteUrl } from '@/lib/siteUrl';
 import './globals.css';
 import './motion.css';
+import './theme.css';
 import { fromPrice, MIN_RATE } from '@/lib/prices';
 
 // Cyrillic-capable fonts: Manrope for text and headings, a mono for labels and figures.
@@ -129,6 +131,8 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         >
           К содержимому
         </a>
+        {/* Light or dark before the first paint (lib/theme.ts, app/theme.css). */}
+        <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
         {/* Black bars open on every page load, like the start of a scene. */}
         <div className="cine-curtain" aria-hidden />
         <script

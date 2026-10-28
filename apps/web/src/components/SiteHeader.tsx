@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { JOURNEY_SELECTOR } from '@/components/useJourneyInView';
 import { SoundToggle } from '@/components/SoundToggle';
+import { ThemeToggle } from '@/components/ThemeToggle';
 import { isAdminArea } from '@/components/PublicOnly';
 import { SITE } from '@/lib/site';
 
@@ -208,6 +209,7 @@ export function SiteHeader() {
               <span className="transition group-hover:translate-x-0.5">→</span>
             </a>
             <SoundToggle iconOnly large />
+            <ThemeToggle />
           </nav>
         )}
 
@@ -278,6 +280,7 @@ export function SiteHeader() {
               {link.label}
             </a>
           ))}
+          <ThemeToggle withLabel />
           <div className="px-2 py-2">
             <AuthStatus />
           </div>
