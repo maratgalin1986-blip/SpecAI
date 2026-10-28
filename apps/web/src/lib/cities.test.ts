@@ -5,6 +5,8 @@ import {
   addressNamesCity,
   BASE_CITY_SLUG,
   CITIES,
+  cityFaq,
+  otherLandingsInCity,
   cityBySlug,
   cityOffer,
   cityPages,
@@ -341,5 +343,44 @@ describe('the provider invite of an empty city page', () => {
       expect(text).toContain('площадка не берёт процент');
       expect(text).not.toMatch(/₽|\d|гарант|скидк/);
     }
+  });
+});
+
+describe('cityFaq and links (SEO)', () => {
+  const landing = LANDINGS[0]!;
+  const city = CITIES.find((c) => c.slug === 'moskva')!;
+
+  it('covers at least the 100 largest cities', () => {
+    expect(CITIES.length).toBeGreaterThanOrEqual(100);
+  });
+
+  it('names no price on an empty city page', () => {
+    const faq = cityFaq(landing, city, { kind: 'empty' });
+    expect(faq.length).toBeGreaterThanOrEqual(4);
+    expect(faq.map((f) => f.a).join(' ')).not.toMatch(/₽/);
+    expect(faq.every((f) => f.q.length > 5 && f.a.length > 20)).toBe(true);
+  });
+
+  it('takes the price only from the offer and the VAT note only where the house serves', () => {
+    const faq = cityFaq(landing, city, {
+      kind: 'available',
+      fromRate: 3000,
+      houseServes: false,
+      machines: [],
+    });
+    const text = faq.map((f) => f.a).join(' ');
+    expect(text).toContain('3 000');
+    expect(text).not.toContain('НДС и закрывающие');
+  });
+
+  it('gives unique questions per city', () => {
+    const qs = CITIES.map((c) => cityFaq(landing, c, { kind: 'empty' })[0]!.q);
+    expect(new Set(qs).size).toBe(CITIES.length);
+  });
+
+  it('links the other machinery of the same city', () => {
+    const links = otherLandingsInCity(landing, city);
+    expect(links).toHaveLength(LANDINGS.length - 1);
+    expect(links.every((l) => l.href.endsWith('/moskva'))).toBe(true);
   });
 });
