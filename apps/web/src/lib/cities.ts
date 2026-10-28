@@ -158,6 +158,12 @@ const RUSSIA: Row[] = [
   ['lyubercy', 'Люберцы', 'в Люберцах', 'по Люберцам', MOSCOW_REGION, 55.6783, 37.8932],
   ['pskov', 'Псков', 'в Пскове', 'по Пскову', 'Псковская область', 57.8136, 28.3496],
   ['almetevsk', 'Альметьевск', 'в Альметьевске', 'по Альметьевску', TATARSTAN, 54.9014, 52.2971],
+  ['yuzhno-sahalinsk', 'Южно-Сахалинск', 'в Южно-Сахалинске', 'по Южно-Сахалинску', 'Сахалинская область', 46.9591, 142.738],
+  ['abakan', 'Абакан', 'в Абакане', 'по Абакану', 'Республика Хакасия', 53.7215, 91.4425],
+  ['petropavlovsk-kamchatskij', 'Петропавловск-Камчатский', 'в Петропавловске-Камчатском', 'по Петропавловску-Камчатскому', 'Камчатский край', 53.0452, 158.6483],
+  ['pyatigorsk', 'Пятигорск', 'в Пятигорске', 'по Пятигорску', 'Ставропольский край', 44.0486, 43.0594],
+  ['majkop', 'Майкоп', 'в Майкопе', 'по Майкопу', 'Республика Адыгея', 44.6098, 40.1006],
+  ['norilsk', 'Норильск', 'в Норильске', 'по Норильску', 'Красноярский край', 69.3558, 88.1893],
 ];
 
 const toCity = ([slug, name, inCity, around, region, lat, lon]: Row, houseKm?: number): City => ({
@@ -500,4 +506,71 @@ export function cityPageText(landing: Landing, city: City, offer: CityOffer): Ci
       DELIVERY_NOTE,
     intro: `${where} Например: ${tasks}. ${DELIVERY_NOTE}`,
   };
+}
+
+// ---------------------------------------------------------------------------
+// FAQ and links of a city page (SEO, 2026-10-28)
+// ---------------------------------------------------------------------------
+
+/**
+ * Questions and answers of /arenda/<slug>/<city>, also sent as schema.org
+ * FAQPage. Only what is true for this city: a price only from the offer (the
+ * providers' rates or СпецПласт16's list where its fleet goes), documents with
+ * VAT only where СпецПласт16 serves, no invented numbers.
+ */
+export function cityFaq(
+  landing: Landing,
+  city: City,
+  offer: CityOffer,
+): { q: string; a: string }[] {
+  const what = `аренда ${landing.title}`;
+  const price =
+    offer.kind === 'available' && offer.fromRate !== null
+      ? `Сейчас на площадке ${city.inCity} — ${fromPerHour(offer.fromRate)}, ` +
+        `смена ${SHIFT_HOURS} ч — от ${rub(offer.fromRate * SHIFT_HOURS)} ₽. ` +
+        `Цену назначает исполнитель, оплата — по отработанным часам. ${DELIVERY_NOTE}`
+      : `Цену назначает исполнитель: оставьте заявку, и исполнители, которые выезжают ` +
+        `${city.inCity}, пришлют свои предложения. Сравните и выберите — для заказчика это бесплатно.`;
+  const who =
+    offer.kind === 'available'
+      ? offer.houseServes
+        ? `Исполнители площадки, в том числе парк СпецПласт16 из Набережных Челнов. ` +
+          `У СпецПласт16 — договор, счёт с НДС и закрывающие документы; условия других ` +
+          `исполнителей уточняйте при заказе.`
+        : `Исполнители площадки, которые работают ${city.inCity} и рядом (${city.region === city.name ? city.name : city.region}). ` +
+          `Условия по договору и НДС уточняйте у выбранного исполнителя.`
+      : joiningText(city) +
+        ` Заявку увидят исполнители из соседних городов, которые готовы выехать.`;
+  return [
+    {
+      q: `Как заказать ${what.replace('аренда', 'аренду')} ${city.inCity}?`,
+      a:
+        `Оставьте заявку на этой странице или в разделе «Заявки»: задача, адрес объекта ` +
+        `${city.around} и сроки. Её увидят диспетчер ${SITE.platform} и исполнители со своей ` +
+        `техникой — они пришлют цены, машину и предложение выбираете вы.`,
+    },
+    { q: `Сколько стоит ${what} ${city.inCity}?`, a: price },
+    { q: `Кто выполняет работы ${city.inCity}?`, a: who },
+    {
+      q: 'Это платно для заказчика?',
+      a: 'Нет. Заявка и подбор техники для заказчика бесплатны, онлайн-оплаты на площадке нет — вы рассчитываетесь с исполнителем напрямую.',
+    },
+    {
+      q: `У меня своя техника ${city.inCity} — как получать заказы?`,
+      a:
+        `Зарегистрируйтесь как исполнитель и встаньте на линию: заявки ${city.inCity} и рядом ` +
+        `будут приходить вам. Регистрация бесплатная, цену назначаете вы.`,
+    },
+  ];
+}
+
+/** The other kinds of machinery in the same city, for «Ещё ${city.inCity}: …» links. */
+export function otherLandingsInCity(
+  landing: Landing,
+  city: City,
+): { href: string; label: string }[] {
+  return LANDINGS.filter((other) => other.slug !== landing.slug).map((other) => ({
+    href: cityPath(other.slug, city.slug),
+    label: other.short,
+  }));
 }

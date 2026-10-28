@@ -10,6 +10,7 @@ import { TelegramButton } from '@/components/TelegramButton';
 import { TrustBadges } from '@/components/TrustBadges';
 import {
   cityBySlug,
+  cityFaq,
   cityPageText,
   cityPath,
   DELIVERY_NOTE,
@@ -17,6 +18,7 @@ import {
   HOUSE_CITIES,
   joiningText,
   nearestCities,
+  otherLandingsInCity,
   shiftExample,
 } from '@/lib/cities';
 import { loadCityOffer } from '@/lib/cityFleetData';
@@ -79,6 +81,31 @@ export default async function CityLandingPage({ params }: { params: Params }) {
   // this city (СпецПласт16's list price where its fleet goes), never invented.
   const rate = offer.kind === 'available' ? offer.fromRate : null;
   const machines = offer.kind === 'available' ? offer.machines : [];
+  const faq = cityFaq(landing, city, offer);
+  const base = siteUrl();
+  const faqLd = {
+    '@context': 'https://schema.org',
+    '@type': 'FAQPage',
+    mainEntity: faq.map((item) => ({
+      '@type': 'Question',
+      name: item.q,
+      acceptedAnswer: { '@type': 'Answer', text: item.a },
+    })),
+  };
+  const breadcrumbLd = {
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: [
+      { '@type': 'ListItem', position: 1, name: 'Главная', item: `${base}/` },
+      {
+        '@type': 'ListItem',
+        position: 2,
+        name: landing.short,
+        item: `${base}/arenda/${landing.slug}`,
+      },
+      { '@type': 'ListItem', position: 3, name: city.name, item: `${base}${path}` },
+    ],
+  };
 
   const jsonLd = {
     '@context': 'https://schema.org',
@@ -104,7 +131,7 @@ export default async function CityLandingPage({ params }: { params: Params }) {
         addressCountry: 'RU',
       },
     },
-    url: `${siteUrl()}${path}`,
+    url: `${base}${path}`,
     ...(rate !== null
       ? {
           offers: {
@@ -163,6 +190,20 @@ export default async function CityLandingPage({ params }: { params: Params }) {
             )}
             <div className="mt-6 flex flex-wrap gap-3">
               <a
+                href="#zayavka"
+                className="rounded-md bg-amber-500 px-5 py-3 font-bold text-slate-950 hover:bg-amber-400"
+                data-testid="city-cta-order"
+              >
+                Оставить заявку бесплатно
+              </a>
+              <a
+                href={invite.href}
+                className="rounded-md bg-white/10 px-5 py-3 font-semibold text-white ring-1 ring-white/30 hover:bg-white/20"
+                data-testid="city-cta-provider"
+              >
+                Встать на линию
+              </a>
+              <a
                 href={SITE.phoneHref}
                 className="sweep rounded-md bg-amber-500 px-5 py-3 font-semibold text-slate-950 hover:bg-amber-400"
               >
@@ -178,7 +219,10 @@ export default async function CityLandingPage({ params }: { params: Params }) {
               .
             </p>
           </div>
-          <div className="rounded-2xl bg-white/5 p-5 ring-1 ring-white/10 backdrop-blur">
+          <div
+            id="zayavka"
+            className="scroll-mt-24 rounded-2xl bg-white/5 p-5 ring-1 ring-white/10 backdrop-blur"
+          >
             <CallbackForm
               source={`landing:${landing.slug}:${city.slug}`}
               defaultMessage={`Нужна аренда ${landing.title} ${city.inCity}`}
@@ -316,7 +360,52 @@ export default async function CityLandingPage({ params }: { params: Params }) {
         }
       />
 
+      <section data-testid="city-faq">
+        <h2 className="text-2xl font-bold">
+          Вопросы об аренде {landing.title} {city.inCity}
+        </h2>
+        <div className="mt-4 flex flex-col gap-3">
+          {faq.map((item) => (
+            <details key={item.q} className="rounded-xl border border-slate-200 bg-white p-4">
+              <summary className="cursor-pointer font-semibold">{item.q}</summary>
+              <p className="mt-2 text-sm text-slate-700">{item.a}</p>
+            </details>
+          ))}
+        </div>
+      </section>
+
+      {offer.kind === 'available' && (
+        <section
+          className="rounded-2xl bg-slate-900 p-6 text-white"
+          data-testid="city-provider-invite"
+        >
+          <h2 className="text-xl font-bold">{invite.title}</h2>
+          <p className="mt-1 text-sm text-slate-300">
+            Встаньте на линию — заявки {city.inCity} и рядом будут приходить вам. Регистрация
+            бесплатная, цену назначаете вы.
+          </p>
+          <a
+            href={invite.href}
+            className="mt-3 inline-flex min-h-11 items-center justify-center rounded-md bg-amber-500 px-5 text-sm font-bold text-slate-950 hover:bg-amber-400"
+          >
+            Встать на линию
+          </a>
+        </section>
+      )}
+
       <section className="flex flex-col gap-3 text-sm">
+        <div className="flex flex-wrap gap-x-3 gap-y-2" data-testid="city-other-landings">
+          <span className="text-slate-500">Ещё {city.inCity}:</span>
+          {otherLandingsInCity(landing, city).map((link) => (
+            <a
+              key={link.href}
+              href={link.href}
+              className="inline-flex min-h-[44px] items-center text-amber-700 hover:underline"
+            >
+              {link.label}
+            </a>
+          ))}
+        </div>
         <div className="flex flex-wrap gap-x-3 gap-y-2">
           <span className="text-slate-500">{landing.short} рядом:</span>
           {nearestCities(city).map((c) => (
@@ -346,6 +435,14 @@ export default async function CityLandingPage({ params }: { params: Params }) {
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(faqLd) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbLd) }}
       />
     </div>
   );
