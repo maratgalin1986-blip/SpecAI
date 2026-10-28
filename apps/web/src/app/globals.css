@@ -1477,6 +1477,28 @@ html[data-cookie-strip] .chat-fab,
 html[data-tg-chip] .chat-fab {
   bottom: calc(7.25rem + env(safe-area-inset-bottom));
 }
+/* «На рабочий стол» (InstallButton): bottom left, level with the chat button,
+   above the contact bar and the chips; away while the «Установить» card shows. */
+.install-fab {
+  bottom: calc(4.75rem + env(safe-area-inset-bottom));
+}
+html[data-cookie-strip] .install-fab,
+html[data-tg-chip] .install-fab {
+  bottom: calc(7.25rem + env(safe-area-inset-bottom));
+}
+html[data-install-hint] .install-fab {
+  display: none;
+}
+html[data-no-contact-bar] .install-fab {
+  bottom: calc(1rem + env(safe-area-inset-bottom));
+}
+@media (min-width: 640px) {
+  .install-fab,
+  html[data-tg-chip] .install-fab,
+  html[data-no-contact-bar] .install-fab {
+    bottom: 1rem;
+  }
+}
 /* The «Установить» card (InstallPrompt) is taller than the chip: up over it. */
 html[data-install-hint] .chat-fab {
   bottom: calc(10.5rem + env(safe-area-inset-bottom));
