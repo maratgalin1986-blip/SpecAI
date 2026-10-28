@@ -1,3 +1,4 @@
+import { cardTrust } from '@/lib/catalogTrust';
 import { prisma } from '@specai/database';
 import { EQUIPMENT_SORT_OPTIONS } from '@specai/shared';
 import { CallbackForm } from '@/components/CallbackForm';
@@ -194,7 +195,11 @@ export default async function EquipmentCatalogPage({
     'equipment',
     prisma.equipment.findMany({
       where,
-      include: { category: true, location: true, company: { select: { name: true } } },
+      include: {
+        category: true,
+        location: true,
+        company: { select: { name: true, createdAt: true, verified: true } },
+      },
       orderBy: EQUIPMENT_ORDER_BY[sort],
       skip: (page - 1) * PAGE_SIZE,
       take: PAGE_SIZE,
@@ -202,7 +207,30 @@ export default async function EquipmentCatalogPage({
   );
   // «Актуализация»: in the default order, machines whose provider confirmed
   // prices and free days this week come a bit higher (house fleet still first).
-  const equipment = sort === 'newest' ? freshFirst(loaded, new Date()) : loaded;
+  const ordered = sort === 'newest' ? freshFirst(loaded, new Date()) : loaded;
+  // «Как на Авито»: stars, «на площадке с …» and «Проверен» on every card —
+  // one grouped query over the companies of this page (at most PAGE_SIZE).
+  const companyIds = [...new Set(ordered.map((item) => item.companyId))];
+  const reviewGroups = companyIds.length
+    ? await prisma.review
+        .groupBy({
+          by: ['companyId'],
+          where: { companyId: { in: companyIds } },
+          _avg: { rating: true },
+          _count: { _all: true },
+          orderBy: { companyId: 'asc' },
+          take: PAGE_SIZE,
+        })
+        .catch((error: unknown) => {
+          console.error('[equipment] failed to load ratings', error);
+          return [];
+        })
+    : [];
+  const reviewsOf = new Map(reviewGroups.map((group) => [group.companyId, group]));
+  const equipment = ordered.map((item) => ({
+    ...item,
+    trust: item.company ? cardTrust(item.company, reviewsOf.get(item.companyId)) : undefined,
+  }));
 
   const hasFilters = Boolean(
     searchParams.q ||
