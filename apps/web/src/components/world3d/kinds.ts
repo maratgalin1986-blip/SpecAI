@@ -1,6 +1,7 @@
 // The machine types of the home-page 3D city (owner, 2026-10-28: «Верни 3D-мир»)
 // and the rules that decide whether a device gets the live scene or the poster.
-// No three.js here: the home page imports this file in its first chunk.
+// No three.js here: the home page imports this file in its first chunk;
+// scene.ts (three.js) is imported only when the block nears the screen.
 
 export type WorldKind = 'excavator' | 'crane' | 'agp' | 'dump';
 
