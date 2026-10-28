@@ -208,3 +208,42 @@ export function installHintMode(input: InstallHintInput): InstallHintMode | null
   if (isIosSafari(input.ua, input.maxTouchPoints)) return 'ios';
   return null;
 }
+
+// «Кнопка установить приложение — всегда» (owner, 2026-10-28): besides the
+// card above, a small button stays on every page until the app is installed.
+// It is not hidden by ✕ on the card and does not wait for a second visit.
+
+export const INSTALL_BUTTON_TEXTS = {
+  button: 'На рабочий стол',
+  label: 'Установить приложение на рабочий стол',
+  title: `Установить ${SITE.platform}`,
+  ios: 'Нажмите «Поделиться» ⬆︎ внизу экрана → «На экран „Домой“» → «Добавить».',
+  iosOther: 'Откройте эту страницу в Safari, затем «Поделиться» ⬆︎ → «На экран „Домой“».',
+  manual:
+    'Откройте меню браузера (⋮ или ≡) → «Установить приложение» или «Добавить на главный экран».',
+  close: 'Понятно',
+} as const;
+
+/** native: the browser's own dialog; the others open a short instruction. */
+export type InstallButtonMode = 'native' | 'ios' | 'ios-other' | 'manual';
+
+export interface InstallButtonInput {
+  pathname: string | null | undefined;
+  standalone: boolean;
+  ua: string;
+  maxTouchPoints?: number;
+  promptAvailable: boolean;
+}
+
+/** What the persistent button does, or null where it is not shown at all. */
+export function installButtonMode(input: InstallButtonInput): InstallButtonMode | null {
+  if (input.standalone) return null;
+  // The Telegram mini-app and the Android app's WebViews cannot be installed.
+  if (/^\/tg(\/|$)/.test(input.pathname ?? '')) return null;
+  if (isAndroidWebView(input.ua)) return null;
+  if (input.promptAvailable) return 'native';
+  if (isIos(input.ua, input.maxTouchPoints)) {
+    return isIosSafari(input.ua, input.maxTouchPoints) ? 'ios' : 'ios-other';
+  }
+  return 'manual';
+}

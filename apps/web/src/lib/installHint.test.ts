@@ -10,6 +10,7 @@ import {
   MOMENT_TTL_MS,
   INSTALL_TEXTS,
   INSTALL_VISITS_KEY,
+  installButtonMode,
   installHintMode,
   isAndroidWebView,
   isAppInviteSearch,
@@ -303,5 +304,32 @@ describe('texts and the web manifest', () => {
     const any = icons.filter((i) => (i.purpose ?? 'any') === 'any').map((i) => i.sizes);
     expect(any).toEqual(expect.arrayContaining(['192x192', '512x512']));
     expect(icons.some((i) => i.purpose === 'maskable' && i.sizes === '512x512')).toBe(true);
+  });
+});
+
+describe('installButtonMode (always-on button)', () => {
+  const base = { pathname: '/', standalone: false, ua: UA.androidChrome, promptAvailable: false };
+
+  it('is hidden only inside the installed app, the mini-app and WebViews', () => {
+    expect(installButtonMode({ ...base, standalone: true, promptAvailable: true })).toBeNull();
+    expect(installButtonMode({ ...base, pathname: '/tg' })).toBeNull();
+    expect(installButtonMode({ ...base, pathname: '/tg/orders' })).toBeNull();
+    expect(installButtonMode({ ...base, ua: UA.androidWebView })).toBeNull();
+  });
+
+  it('shows on every other page, also on the first visit and in the CRM', () => {
+    expect(installButtonMode({ ...base, pathname: '/admin' })).toBe('manual');
+    expect(installButtonMode({ ...base, pathname: '/orders' })).toBe('manual');
+  });
+
+  it('uses the browser dialog when there is one', () => {
+    expect(installButtonMode({ ...base, promptAvailable: true })).toBe('native');
+  });
+
+  it('gives iPhone the Safari steps, and other iPhone browsers «open in Safari»', () => {
+    expect(installButtonMode({ ...base, ua: UA.iphoneSafari })).toBe('ios');
+    expect(installButtonMode({ ...base, ua: UA.ipadOs, maxTouchPoints: 5 })).toBe('ios');
+    expect(installButtonMode({ ...base, ua: UA.iphoneChrome })).toBe('ios-other');
+    expect(installButtonMode({ ...base, ua: UA.iphoneTelegram })).toBe('ios-other');
   });
 });
