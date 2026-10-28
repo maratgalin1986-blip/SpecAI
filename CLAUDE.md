@@ -112,7 +112,10 @@ small so merges stay conflict-free.
 - «На линии» (owner, 2026-10-15): providers go online from the app with a
   machine; the phone reports its position to `PUT /api/line` (`LinePresence`),
   customers see fresh online machines on the app's home map with the bubble
-  «Я на линии · машина · цена · имя» (`GET /api/line/nearby`). The site's
+  «Я на линии · машина · цена · имя» (`GET /api/line/nearby`). Since
+  2026-10-28 going online is a standing availability for 5 working days (or
+  «до …» / «пока не отключу», `lib/lineStanding.ts`): without fresh GPS the
+  machine shows at its base «на линии до пт»; also from `/provider#line`. The site's
   /stroyka, /smeta, /kalkulyator and /dizain are removed from navigation and
   redirect to the home page (owner, 2026-10-15); the page code stays until the
   site session deletes it.

@@ -235,3 +235,110 @@ describe('baseMachines (СпецПласт16 at the base)', () => {
     expect(pins[0]?.id).toBe('near');
   });
 });
+
+describe('liveMachines — «на линии на 5 рабочих дней» without GPS', () => {
+  const until = new Date('2026-10-16T20:59:59.999Z'); // Friday 23:59 Moscow
+  const stale = new Date(now.getTime() - 3 * 60 * 60_000);
+  const standing = (over: Partial<PresenceRow> & { userId: string }) =>
+    row({ online: false, updatedAt: stale, gpsAt: stale, standingUntil: until, ...over });
+
+  it('shows a standing machine at its base, «Я на линии до пт», while the period runs', () => {
+    const [machine] = liveMachines(
+      [standing({ userId: 'u', basePoint: { lat: 55.7, lon: 52.3 } })],
+      { lat: 55.74, lon: 52.4 },
+      60,
+      now,
+    );
+    expect(machine).toMatchObject({
+      lat: 55.7,
+      lon: 52.3,
+      live: false,
+      until: 'до пт',
+      busyToday: false,
+    });
+    expect(machine!.bubble).toBe(`Я на линии до пт · Экскаватор JCB 3CX · ${RATE} · Марат Г.`);
+  });
+
+  it('hides it once the period ran out, and with «пока не отключу» never', () => {
+    const later = new Date('2026-10-17T09:00:00Z');
+    expect(liveMachines([standing({ userId: 'u' })], null, 60, later)).toHaveLength(0);
+    const forever = liveMachines(
+      [standing({ userId: 'u', standingUntil: null, standingForever: true })],
+      null,
+      60,
+      later,
+    );
+    expect(forever[0]?.until).toBe('до отключения');
+  });
+
+  it('a fresh GPS report puts the pin where the phone is: «рядом сейчас»', () => {
+    const [machine] = liveMachines(
+      [
+        standing({
+          userId: 'u',
+          online: true,
+          gpsAt: now,
+          updatedAt: now,
+          lat: 55.75,
+          lon: 52.41,
+          basePoint: { lat: 55.7, lon: 52.3 },
+        }),
+      ],
+      null,
+      60,
+      now,
+    );
+    expect(machine).toMatchObject({ lat: 55.75, lon: 52.41, live: true });
+    expect(machine!.bubble.startsWith('Я на линии, рядом сейчас · ')).toBe(true);
+  });
+
+  it('applies the radius to the base point, not to the stale position', () => {
+    const far = standing({
+      userId: 'u',
+      lat: 55.74,
+      lon: 52.4,
+      basePoint: { lat: 59.9, lon: 30.3 },
+    });
+    expect(liveMachines([far], { lat: 55.74, lon: 52.4 }, 60, now)).toHaveLength(0);
+  });
+
+  it('marks a machine booked today as busy and puts the free ones first', () => {
+    const rows = [
+      standing({ userId: 'busy', lat: 55.74, lon: 52.4 }),
+      standing({ userId: 'free', lat: 55.9, lon: 52.6 }),
+    ];
+    const bookings = [
+      {
+        equipmentId: 'e-busy',
+        startDate: new Date('2026-10-15T05:00:00Z'),
+        endDate: new Date('2026-10-16T15:00:00Z'),
+        status: 'CONFIRMED',
+      },
+      {
+        equipmentId: 'e-free',
+        startDate: new Date('2026-10-20T05:00:00Z'),
+        endDate: new Date('2026-10-20T15:00:00Z'),
+        status: 'PENDING',
+      },
+    ];
+    const machines = liveMachines(rows, { lat: 55.74, lon: 52.4 }, 60, now, bookings);
+    expect(machines.map((item) => item.equipment?.id)).toEqual(['e-free', 'e-busy']);
+    expect(machines[1]).toMatchObject({ busyToday: true, busyDays: ['2026-10-15', '2026-10-16'] });
+    expect(machines[1]!.bubble.startsWith('Занята сегодня · ')).toBe(true);
+    expect(machines[0]!.busyDays).toEqual([]);
+  });
+
+  it('still leaves out a machine that is not «Свободна»', () => {
+    const rented = standing({ userId: 'u' });
+    rented.equipment = { ...rented.equipment!, status: 'RENTED' };
+    expect(liveMachines([rented], null, 60, now)).toHaveLength(0);
+  });
+
+  it('never puts the driver’s account id into the answer', () => {
+    const json = JSON.stringify(
+      liveMachines([standing({ userId: 'secret-user-id', id: 'p1' })], null, 60, now),
+    );
+    expect(json).not.toContain('"secret-user-id"');
+    expect(json).not.toContain('userId');
+  });
+});

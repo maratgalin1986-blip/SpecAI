@@ -202,3 +202,148 @@ describe('PUT /api/line — the evening cutoff', () => {
     expect(await put({ ...online, timeZone: 42, source: 'nonsense' })).toBe(200);
   });
 });
+
+describe('PUT /api/line — «на линии на 5 рабочих дней»', () => {
+  // Wednesday 2026-10-28, 14:00 Moscow.
+  const day = new Date('2026-10-28T11:00:00Z');
+  const fridayNext = new Date('2026-11-03T20:59:59.999Z'); // Tuesday 23:59 Moscow: 5 working days
+  const written = () => upsert.mock.calls[0]?.[0].update as Record<string, unknown>;
+
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(day);
+    presenceFindUnique.mockReset();
+    upsert.mockReset();
+    upsert.mockImplementation(async ({ update: data }) => ({ ...row(), ...data }));
+    update.mockReset();
+    equipmentFindUnique.mockReset();
+    equipmentFindUnique.mockResolvedValue({
+      companyId: 'c1',
+      status: 'AVAILABLE',
+      location: null,
+      company: { baseLat: 55.7, baseLon: 52.3 },
+    });
+    getRequestUser.mockReset();
+    getRequestUser.mockResolvedValue({
+      id: `u${++userSeq}`,
+      role: 'PROVIDER_ADMIN',
+      companyId: 'c1',
+    });
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('going online from the app starts 5 working days (Wednesday → Tuesday)', async () => {
+    presenceFindUnique.mockResolvedValue(row({ online: false }));
+    const { status, body } = await putFull({ ...online, source: 'foreground' });
+    expect(status).toBe(200);
+    expect((written().standingUntil as Date).toISOString()).toBe(fridayNext.toISOString());
+    expect(written().gpsAt).toBeInstanceOf(Date);
+    expect(body.standing).toBe(true);
+  });
+
+  it('a heartbeat keeps the running period as it is', async () => {
+    presenceFindUnique.mockResolvedValue(
+      row({ standingUntil: new Date('2026-10-30T20:59:59.999Z'), note: null }),
+    );
+    await put({ ...online, lat: 55.75, source: 'foreground' });
+    expect(written().standingUntil).toBeUndefined();
+    expect(written().standingSince).toBeUndefined();
+  });
+
+  it('the app’s own switch-off at 21:00 ends GPS only: the machine stays on the line', async () => {
+    vi.setSystemTime(new Date('2026-10-28T18:05:00Z')); // 21:05 Moscow
+    presenceFindUnique.mockResolvedValue(
+      row({ standingUntil: fridayNext, note: 'Могу сразу', timeZone: 'Europe/Moscow' }),
+    );
+    await put({ online: false, timeZone: 'Europe/Moscow' });
+    expect(written()).toMatchObject({ online: false, equipmentId: 'e1', note: 'Могу сразу' });
+    expect(written().standingUntil).toBeUndefined();
+  });
+
+  it('«Уйти с линии» during the day ends the period too', async () => {
+    presenceFindUnique.mockResolvedValue(row({ standingUntil: fridayNext }));
+    await put({ online: false });
+    expect(written()).toMatchObject({
+      online: false,
+      equipmentId: null,
+      standingUntil: null,
+      standingForever: false,
+    });
+  });
+
+  it('`standing: off` ends it at any hour', async () => {
+    vi.setSystemTime(new Date('2026-10-28T19:00:00Z'));
+    presenceFindUnique.mockResolvedValue(row({ standingUntil: fridayNext }));
+    await put({ online: false, standing: 'off' });
+    expect(written()).toMatchObject({ standingUntil: null, equipmentId: null });
+  });
+
+  it('from the cabinet: no position needed, the machine stands at the base; the phone’s session is untouched', async () => {
+    presenceFindUnique.mockResolvedValue(row({ online: false, lat: 1, lon: 1 }));
+    const { status } = await putFull({
+      online: true,
+      equipmentId: 'e1',
+      standing: 'forever',
+      source: 'web',
+    });
+    expect(status).toBe(200);
+    expect(written()).toMatchObject({ online: false, standingForever: true, lat: 55.7, lon: 52.3 });
+    expect(written().gpsAt).toBeUndefined();
+    expect(written().onlineSince).toBeUndefined();
+  });
+
+  it('from the cabinet «до …» writes the end of that day', async () => {
+    presenceFindUnique.mockResolvedValue(null);
+    await put({
+      online: true,
+      equipmentId: 'e1',
+      standing: 'until',
+      until: '2026-11-06',
+      source: 'web',
+    });
+    const created = upsert.mock.calls[0]?.[0].create;
+    expect((created.standingUntil as Date).toISOString()).toBe('2026-11-06T20:59:59.999Z');
+  });
+
+  it('refuses a past date and a machine with no place to stand', async () => {
+    presenceFindUnique.mockResolvedValue(null);
+    expect(
+      await put({
+        online: true,
+        equipmentId: 'e1',
+        standing: 'until',
+        until: '2026-10-01',
+        source: 'web',
+      }),
+    ).toBe(400);
+    equipmentFindUnique.mockResolvedValue({
+      companyId: 'c1',
+      status: 'AVAILABLE',
+      location: null,
+      company: { baseLat: null, baseLon: null },
+    });
+    const { status, body } = await putFull({
+      online: true,
+      equipmentId: 'e1',
+      standing: 'days5',
+      source: 'web',
+    });
+    expect(status).toBe(400);
+    expect(body.error).toContain('адрес базы');
+  });
+
+  it('still refuses a machine of another company', async () => {
+    presenceFindUnique.mockResolvedValue(null);
+    equipmentFindUnique.mockResolvedValue({
+      companyId: 'other',
+      status: 'AVAILABLE',
+      location: null,
+      company: null,
+    });
+    expect(await put({ online: true, equipmentId: 'e9', standing: 'days5', source: 'web' })).toBe(
+      403,
+    );
+  });
+});

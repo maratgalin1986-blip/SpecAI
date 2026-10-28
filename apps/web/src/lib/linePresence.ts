@@ -6,6 +6,7 @@ import { HOUSE_COMPANY_ID } from './fleet';
 import { distanceKm } from './geo';
 import { shortAuthorName } from './comments';
 import { presenceAutoOff } from './lineDay';
+import { busyDays, standingActive, untilText, type BusyBooking } from './lineStanding';
 import { HIDDEN_CONTACT, HIDDEN_LINK, maskContactsAndLinks } from './privacy';
 import { SITE } from './site';
 
@@ -60,6 +61,13 @@ export interface PresenceRow {
   onlineSince?: Date | null;
   /** The phone's IANA time zone; Moscow when unknown. */
   timeZone?: string | null;
+  /** «На линии на 5 рабочих дней» (lib/lineStanding.ts): seen until then without GPS. */
+  standingUntil?: Date | null;
+  standingForever?: boolean | null;
+  /** The last real GPS report; updatedAt on older rows. */
+  gpsAt?: Date | null;
+  /** Where a machine without fresh GPS stands: its own point, else the company's base. */
+  basePoint?: { lat: number; lon: number } | null;
   user: { name: string | null };
   company: { id: string; name: string; verified: boolean };
   equipment: {
@@ -89,25 +97,44 @@ export interface LiveMachine {
   } | null;
   note: string | null;
   distanceKm: number | null;
-  /** The bubble on the map: «Я на линии · Экскаватор JCB · от 4 000 ₽/ч · Марат Г.». */
+  /**
+   * The bubble on the map: «Я на линии, рядом сейчас · Экскаватор JCB · от 4 000 ₽/ч · Марат Г.»
+   * with fresh GPS, «Я на линии до пт · …» at the base, «Занята сегодня · …» when booked today.
+   */
   bubble: string;
   updatedAt: string;
+  /** The phone reports a fresh position: the pin is where the machine is now. */
+  live: boolean;
+  /** «до пт», «до 06.11», «до отключения»; null for a live session without a standing line. */
+  until: string | null;
+  /** A CONFIRMED/ACTIVE booking covers today (Moscow): shown, but as busy. */
+  busyToday: boolean;
+  /** The Moscow days of the next two weeks the machine is booked on («2026-10-29»). */
+  busyDays: string[];
 }
 
 export function isFresh(updatedAt: Date, now: Date = new Date()): boolean {
   return now.getTime() - updatedAt.getTime() <= PRESENCE_FRESH_MS;
 }
 
+type LineFields = Pick<PresenceRow, 'online' | 'updatedAt' | 'onlineSince' | 'timeZone'> &
+  Partial<Pick<PresenceRow, 'standingUntil' | 'standingForever' | 'gpsAt'>>;
+
 /**
- * Really on the line now: online, fresh, and the session not ended by the
- * evening cutoff in the provider's own time zone (a phone left on after
- * 21:00 keeps sending, but customers no longer see it).
+ * The phone reports a live position now: online, fresh, and the session not
+ * ended by the evening cutoff in the provider's own time zone (a phone left
+ * on after 21:00 keeps sending, but that is not «рядом сейчас» any more).
  */
-export function isOnLine(
-  row: Pick<PresenceRow, 'online' | 'updatedAt' | 'onlineSince' | 'timeZone'>,
-  now: Date = new Date(),
-): boolean {
-  return row.online && isFresh(row.updatedAt, now) && !presenceAutoOff(row, now);
+export function isLive(row: LineFields, now: Date = new Date()): boolean {
+  return row.online && isFresh(row.gpsAt ?? row.updatedAt, now) && !presenceAutoOff(row, now);
+}
+
+/**
+ * On the line now: a live GPS session, or the standing availability
+ * («на 5 рабочих дней», «до …», «пока не отключу») has not run out.
+ */
+export function isOnLine(row: LineFields, now: Date = new Date()): boolean {
+  return isLive(row, now) || standingActive(row, now);
 }
 
 /** «4 000 ₽/ч» with a no-break space; «договорная» when the machine has no price. */
@@ -143,52 +170,71 @@ export function publicNote(note: string | null | undefined): string | null {
 }
 
 /** Short on purpose: the map reads it at 360 px. The note travels separately. */
-export function presenceBubble(row: {
-  user: { name: string | null };
-  equipment: { name: string; hourlyRate: number } | null;
-}): string {
-  const parts = ['Я на линии'];
+export function presenceBubble(
+  row: {
+    user: { name: string | null };
+    equipment: { name: string; hourlyRate: number } | null;
+  },
+  head: string = 'Я на линии',
+): string {
+  const parts = [head];
   if (row.equipment) parts.push(shortName(row.equipment.name), rateText(row.equipment.hourlyRate));
   const driver = shortAuthorName(row.user.name);
   if (driver !== 'Пользователь') parts.push(driver);
   return parts.join(' · ');
 }
 
+/** The small first line of the bubble. */
+export function bubbleHead(live: boolean, until: string | null, busyToday: boolean): string {
+  if (busyToday) return 'Занята сегодня';
+  if (live) return 'Я на линии, рядом сейчас';
+  return until ? `Я на линии ${until}` : 'Я на линии';
+}
+
 /**
- * The online machines around a point, nearest first and СпецПласт16's ahead
- * at equal distance; stale rows, sessions past the evening cutoff
- * (isOnLine), machines that are not AVAILABLE (taken off
- * publication, rented, under repair) are left out, and one machine is shown
- * once — at its freshest position. Without a point every fresh row is
- * returned (the map centred on the city).
+ * The machines on the line around a point, nearest first, free ones ahead
+ * of the ones booked today, and СпецПласт16's ahead at equal distance.
+ * A row counts when it is live (fresh GPS, not past the evening cutoff) or
+ * its standing availability runs (lib/lineStanding.ts); a machine that is
+ * not AVAILABLE (taken off publication, rented, under repair) is left out,
+ * and one machine is shown once — a live row first, else the freshest. A
+ * machine without fresh GPS stands at its base (`basePoint`), else at its
+ * last known position. `bookings` (CONFIRMED/ACTIVE) mark the busy days.
+ * Without a point every row is returned (the map centred on the city).
  */
 export function liveMachines(
   rows: PresenceRow[],
   around: { lat: number; lon: number } | null,
   radiusKm: number,
   now: Date = new Date(),
+  bookings: readonly BusyBooking[] = [],
 ): LiveMachine[] {
   const result: LiveMachine[] = [];
-  const freshest = new Map<string, Date>();
+  const best = new Map<string, PresenceRow>();
+  const score = (row: PresenceRow) =>
+    (isLive(row, now) ? 1e15 : 0) + (row.gpsAt ?? row.updatedAt).getTime();
   for (const row of rows) {
-    if (row.equipment && isOnLine(row, now)) {
-      const seen = freshest.get(row.equipment.id);
-      if (!seen || seen < row.updatedAt) freshest.set(row.equipment.id, row.updatedAt);
-    }
+    if (!row.equipment || !isOnLine(row, now)) continue;
+    const seen = best.get(row.equipment.id);
+    if (!seen || score(seen) < score(row)) best.set(row.equipment.id, row);
   }
-  const shown = new Set<string>();
-  for (const row of rows) {
-    if (!isOnLine(row, now)) continue;
+  const today = localDayMsk(now);
+  for (const row of best.values()) {
     // No machine (deleted after going online) or not «Свободна»: nothing to book.
     if (!row.equipment || row.equipment.status !== 'AVAILABLE') continue;
-    if (freshest.get(row.equipment.id) !== row.updatedAt || shown.has(row.equipment.id)) continue;
-    shown.add(row.equipment.id);
-    const km = around ? distanceKm(around, { lat: row.lat, lon: row.lon }) : null;
+    const live = isLive(row, now);
+    const point = live
+      ? { lat: row.lat, lon: row.lon }
+      : (row.basePoint ?? { lat: row.lat, lon: row.lon });
+    const km = around ? distanceKm(around, point) : null;
     if (km !== null && km > radiusKm) continue;
+    const until = untilText(row, now, row.timeZone);
+    const days = busyDays(bookings, row.equipment.id, today);
+    const busyToday = days[0] === today;
     result.push({
       id: row.id,
-      lat: row.lat,
-      lon: row.lon,
+      lat: point.lat,
+      lon: point.lon,
       driver: shortAuthorName(row.user.name),
       company: {
         id: row.company.id,
@@ -196,28 +242,42 @@ export function liveMachines(
         verified: row.company.verified,
         isHouse: row.company.id === HOUSE_COMPANY_ID,
       },
-      equipment: row.equipment
-        ? {
-            id: row.equipment.id,
-            name: row.equipment.name,
-            category: row.equipment.category?.name ?? null,
-            categorySlug: row.equipment.category?.slug ?? null,
-            hourlyRate: row.equipment.hourlyRate,
-            dailyRate: row.equipment.dailyRate,
-          }
-        : null,
+      equipment: {
+        id: row.equipment.id,
+        name: row.equipment.name,
+        category: row.equipment.category?.name ?? null,
+        categorySlug: row.equipment.category?.slug ?? null,
+        hourlyRate: row.equipment.hourlyRate,
+        dailyRate: row.equipment.dailyRate,
+      },
       note: publicNote(row.note),
       distanceKm: km === null ? null : Math.round(km * 10) / 10,
-      bubble: presenceBubble(row),
-      updatedAt: row.updatedAt.toISOString(),
+      bubble: presenceBubble(row, bubbleHead(live, until, busyToday)),
+      updatedAt: (row.gpsAt ?? row.updatedAt).toISOString(),
+      live,
+      until,
+      busyToday,
+      busyDays: days,
     });
   }
   return result.sort(
     (a, b) =>
+      Number(a.busyToday) - Number(b.busyToday) ||
       (a.distanceKm ?? 0) - (b.distanceKm ?? 0) ||
       Number(b.company.isHouse) - Number(a.company.isHouse) ||
+      Number(b.live) - Number(a.live) ||
       b.updatedAt.localeCompare(a.updatedAt),
   );
+}
+
+/** Today's Moscow day key: bookings are dated by Moscow (REVIEW.md §5). */
+function localDayMsk(now: Date): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Europe/Moscow',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(now);
 }
 
 // ---------------------------------------------------------------------------
@@ -277,12 +337,15 @@ export function baseBubble(machine: { name: string; hourlyRate: number }): strin
 }
 
 /** Where a house machine stands: its own point, else the company's base; null when neither is known. */
-export function basePoint(row: BaseMachineRow): { lat: number; lon: number } | null {
+export function basePoint(
+  row: Pick<BaseMachineRow, 'location' | 'company'>,
+): { lat: number; lon: number } | null {
   const own = row.location;
   if (typeof own?.latitude === 'number' && typeof own.longitude === 'number') {
     return { lat: own.latitude, lon: own.longitude };
   }
-  const { baseLat, baseLon } = row.company;
+  const baseLat = row.company?.baseLat;
+  const baseLon = row.company?.baseLon;
   return typeof baseLat === 'number' && typeof baseLon === 'number'
     ? { lat: baseLat, lon: baseLon }
     : null;

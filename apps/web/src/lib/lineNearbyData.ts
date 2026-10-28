@@ -1,7 +1,9 @@
 import { prisma } from '@specai/database';
 import { customerRates } from './equipmentCatalog';
 import { OWN_FLEET } from './fleet';
+import { BUSY_STATUSES } from './lineStanding';
 import {
+  basePoint,
   baseMachines,
   liveMachines,
   NEARBY_BASE_SCAN,
@@ -30,12 +32,16 @@ export async function loadLineNearby(
   const latSpan = km / 111;
   const lonSpan = km / Math.max(0.1, 111 * Math.cos((around?.lat ?? 0) * (Math.PI / 180)));
   const freshSince = new Date(now.getTime() - PRESENCE_FRESH_MS);
+  // «На линии на 5 рабочих дней» (lib/lineStanding.ts): seen without GPS too.
+  const standing = [{ standingForever: true }, { standingUntil: { gt: now } }];
   const housePromise = prisma.equipment.findMany({
     where: {
       ...OWN_FLEET,
       status: 'AVAILABLE',
       // A machine whose driver is online is a live pin, not a base one.
-      linePresences: { none: { online: true, updatedAt: { gte: freshSince } } },
+      linePresences: {
+        none: { OR: [{ online: true, updatedAt: { gte: freshSince } }, ...standing] },
+      },
     },
     select: {
       id: true,
@@ -54,18 +60,25 @@ export async function loadLineNearby(
   });
   const presencePromise = prisma.linePresence.findMany({
     where: {
-      online: true,
-      updatedAt: { gte: freshSince },
-      // A session begun over a day ago is past its evening cutoff in any
-      // zone: such phones left on do not use up the row cap. The exact
-      // cutoff (the phone's own zone) is applied in liveMachines.
-      OR: [{ onlineSince: null }, { onlineSince: { gte: new Date(now.getTime() - DAY_MS) } }],
-      ...(around
-        ? {
-            lat: { gte: around.lat - latSpan, lte: around.lat + latSpan },
-            lon: { gte: around.lon - lonSpan, lte: around.lon + lonSpan },
-          }
-        : {}),
+      OR: [
+        {
+          online: true,
+          updatedAt: { gte: freshSince },
+          // A session begun over a day ago is past its evening cutoff in any
+          // zone: such phones left on do not use up the row cap. The exact
+          // cutoff (the phone's own zone) is applied in liveMachines.
+          OR: [{ onlineSince: null }, { onlineSince: { gte: new Date(now.getTime() - DAY_MS) } }],
+          ...(around
+            ? {
+                lat: { gte: around.lat - latSpan, lte: around.lat + latSpan },
+                lon: { gte: around.lon - lonSpan, lte: around.lon + lonSpan },
+              }
+            : {}),
+        },
+        // A standing line is placed at its base, which the box above cannot
+        // see: the radius is applied in liveMachines.
+        ...standing,
+      ],
     },
     include: {
       user: { select: { name: true } },
@@ -79,6 +92,8 @@ export async function loadLineNearby(
           hourlyRate: true,
           dailyRate: true,
           category: { select: { name: true, slug: true } },
+          location: { select: { latitude: true, longitude: true } },
+          company: { select: { baseLat: true, baseLon: true } },
         },
       },
     },
@@ -86,9 +101,27 @@ export async function loadLineNearby(
     take: NEARBY_MAX_ROWS,
   });
   const [rows, houseRows] = await Promise.all([presencePromise, housePromise]);
+  const equipmentIds = [...new Set(rows.flatMap((row) => row.equipmentId ?? []))];
+  // Busy days (lib/lineStanding.ts busyDays): the next two weeks' CONFIRMED/ACTIVE bookings.
+  const bookings = equipmentIds.length
+    ? await prisma.booking.findMany({
+        where: {
+          equipmentId: { in: equipmentIds },
+          status: { in: [...BUSY_STATUSES] },
+          endDate: { gte: new Date(now.getTime() - DAY_MS) },
+          startDate: { lte: new Date(now.getTime() + 15 * DAY_MS) },
+        },
+        select: { equipmentId: true, startDate: true, endDate: true, status: true },
+        orderBy: { startDate: 'asc' },
+        take: 2000,
+      })
+    : [];
   const machines = liveMachines(
     rows.map((row) => ({
       ...row,
+      basePoint: row.equipment
+        ? basePoint({ location: row.equipment.location, company: row.equipment.company })
+        : null,
       equipment: row.equipment
         ? {
             id: row.equipment.id,
@@ -106,6 +139,7 @@ export async function loadLineNearby(
     around,
     km,
     now,
+    bookings,
   );
   const liveIds = new Set(machines.flatMap((machine) => machine.equipment?.id ?? []));
   const base = baseMachines(

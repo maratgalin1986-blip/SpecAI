@@ -206,10 +206,23 @@ export async function sendDemandNudges(
     prisma.linePresence.findMany({
       where: {
         companyId: { in: companyIds },
-        online: true,
-        updatedAt: { gte: new Date(now.getTime() - PRESENCE_FRESH_MS) },
+        // Live GPS, or the standing «на 5 рабочих дней» (lib/lineStanding.ts).
+        OR: [
+          { online: true, updatedAt: { gte: new Date(now.getTime() - PRESENCE_FRESH_MS) } },
+          { standingForever: true },
+          { standingUntil: { gt: now } },
+        ],
       },
-      select: { companyId: true, online: true, updatedAt: true, onlineSince: true, timeZone: true },
+      select: {
+        companyId: true,
+        online: true,
+        updatedAt: true,
+        onlineSince: true,
+        timeZone: true,
+        gpsAt: true,
+        standingUntil: true,
+        standingForever: true,
+      },
       orderBy: { updatedAt: 'desc' },
       take: 5000,
     }),

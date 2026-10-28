@@ -138,8 +138,8 @@ const prisma = {
       db.presence.filter(
         (row) =>
           where.companyId.in.includes(row.companyId) &&
-          row.online === where.online &&
-          row.updatedAt.getTime() >= where.updatedAt.gte.getTime(),
+          row.online === where.OR[0].online &&
+          row.updatedAt.getTime() >= where.OR[0].updatedAt.gte.getTime(),
       ),
     ),
   },
