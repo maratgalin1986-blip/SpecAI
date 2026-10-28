@@ -20,6 +20,10 @@ const live = (over: Partial<LiveMachine> & { house?: boolean; eq?: string }): Li
   distanceKm: null,
   bubble: 'Я на линии · Экскаватор JCB 3CX · от 3 000 ₽/ч · Марат Г.',
   updatedAt: '2026-10-18T08:00:00.000Z',
+  live: true,
+  until: null,
+  busyToday: false,
+  busyDays: [],
   ...over,
 });
 

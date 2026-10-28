@@ -5,7 +5,11 @@ const findMany = vi.fn();
 const equipmentFindMany = vi.fn();
 const getRequestUser = vi.fn();
 vi.mock('@specai/database', () => ({
-  prisma: { linePresence: { findMany }, equipment: { findMany: equipmentFindMany } },
+  prisma: {
+    linePresence: { findMany },
+    equipment: { findMany: equipmentFindMany },
+    booking: { findMany: async () => [] },
+  },
   Prisma: {},
 }));
 vi.mock('@/lib/requestUser', () => ({ getRequestUser }));
@@ -73,12 +77,16 @@ describe('GET /api/line/nearby', () => {
     expect(body.machines[0].id).toBe('p1');
     expect(JSON.stringify(body)).not.toContain('driver-user-id');
     const args = findMany.mock.calls[0]?.[0];
-    expect(args.where.lat).toBeUndefined();
+    const liveWhere = args.where.OR[0];
+    expect(liveWhere.lat).toBeUndefined();
     expect(args.orderBy).toEqual({ updatedAt: 'desc' });
     expect(args.take).toBe(200);
     // Sessions begun over a day ago (phones left on) do not use up the cap.
-    expect(args.where.OR[0]).toEqual({ onlineSince: null });
-    expect(Date.now() - args.where.OR[1].onlineSince.gte.getTime()).toBeGreaterThanOrEqual(
+    expect(liveWhere.OR[0]).toEqual({ onlineSince: null });
+    // «На линии на 5 рабочих дней»: standing rows are read without GPS.
+    expect(args.where.OR[1]).toEqual({ standingForever: true });
+    expect(args.where.OR[2].standingUntil.gt).toBeInstanceOf(Date);
+    expect(Date.now() - liveWhere.OR[1].onlineSince.gte.getTime()).toBeGreaterThanOrEqual(
       24 * 60 * 60_000 - 1000,
     );
   });
@@ -94,7 +102,7 @@ describe('GET /api/line/nearby', () => {
     expect(body.around).toEqual({ lat: 55.74312, lon: 52.39811 });
     expect(body.km).toBe(60);
     expect(body.machines[0].distanceKm).toBeCloseTo(0.2, 0);
-    const where = findMany.mock.calls[0]?.[0].where;
+    const where = findMany.mock.calls[0]?.[0].where.OR[0];
     expect(where.lat.gte).toBeLessThan(55.74312);
     expect(where.lat.lte).toBeGreaterThan(55.74312);
     expect(where.lon.gte).toBeLessThan(52.39811);
@@ -128,7 +136,7 @@ describe('GET /api/line/nearby', () => {
     const where = equipmentFindMany.mock.calls[0]?.[0].where;
     expect(where.companyId).toBe(HOUSE_COMPANY_ID);
     expect(where.status).toBe('AVAILABLE');
-    expect(where.linePresences.none.online).toBe(true);
+    expect(where.linePresences.none.OR[0].online).toBe(true);
     expect(equipmentFindMany.mock.calls[0]?.[0].take).toBe(500);
   });
 

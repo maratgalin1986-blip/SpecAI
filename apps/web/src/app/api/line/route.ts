@@ -19,6 +19,8 @@ import {
   validTimeZone,
 } from '@/lib/lineDay';
 import { operatorOf } from '@/lib/shiftAccess';
+import { standingActive, standingData } from '@/lib/lineStanding';
+import { basePoint } from '@/lib/linePresence';
 import { tickDeferredOrderNotices } from '@/lib/deferredOrderNotices';
 
 export const dynamic = 'force-dynamic';
@@ -38,6 +40,18 @@ export const fetchCache = 'force-no-store';
  * report is refused with `{ online: false, autoOff: true }` and the row goes
  * offline. The provider switching on again from the open app
  * (`source: 'foreground'`) starts a new session, visible until midnight.
+ *
+ * «На линии на 5 рабочих дней» (owner, 2026-10-28, lib/lineStanding.ts):
+ * going online also starts a standing availability — 5 working days unless
+ * `standing` says otherwise ('until' + `until`, 'forever'); heartbeats keep
+ * the running one. Customers see the machine for the whole period, with or
+ * without fresh GPS (`online` is now only the live GPS session). The
+ * evening cutoff ends the GPS session, not the period. Going offline with
+ * `standing: 'off'` ends both; an older app's plain `online: false` during
+ * the working day is the provider's own «Уйти с линии» and ends both too,
+ * while the one it sends by itself at 21:00 (outside the working day) ends
+ * only GPS. From the cabinet (`source: 'web'`, no position) the machine
+ * stands at its own point or the company's base.
  */
 export async function GET(request: NextRequest) {
   const user = await getRequestUser(request);
@@ -85,17 +99,23 @@ export async function PUT(request: NextRequest) {
     // after the cutoff, nor keeps one the cutoff has ended.
     const continues = Boolean(existing?.online && existing.onlineSince);
     if (continues ? sessionOver : afterEveningCutoff(now, timeZone)) {
+      // Only the GPS session ends: a standing line keeps the machine on the map.
       const presence = existing?.online
         ? await prisma.linePresence.update({
             where: { userId: user.id },
             data: {
               online: false,
-              note: null,
+              ...(existing && standingActive(existing, now) ? {} : { note: null }),
               ...(reportedZone ? { timeZone: reportedZone } : {}),
             },
           })
         : existing;
-      return NextResponse.json({ presence, online: false, autoOff: true });
+      return NextResponse.json({
+        presence,
+        online: false,
+        autoOff: true,
+        standing: presence ? standingActive(presence, now) : false,
+      });
     }
   }
   if (input.online && !input.equipmentId) {
@@ -109,10 +129,16 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json({ error: 'В заметке нельзя указывать контакты' }, { status: 400 });
   }
   let equipmentId: string | null = null;
+  let machinePoint: { lat: number; lon: number } | null = null;
   if (input.online && input.equipmentId) {
     const machine = await prisma.equipment.findUnique({
       where: { id: input.equipmentId },
-      select: { companyId: true, status: true },
+      select: {
+        companyId: true,
+        status: true,
+        location: { select: { latitude: true, longitude: true } },
+        company: { select: { baseLat: true, baseLon: true } },
+      },
     });
     if (!machine || machine.companyId !== user.companyId) {
       return NextResponse.json(
@@ -123,6 +149,41 @@ export async function PUT(request: NextRequest) {
     const reason = machineUnavailableReason(machine.status);
     if (reason) return NextResponse.json({ error: reason }, { status: 409 });
     equipmentId = input.equipmentId;
+    machinePoint = basePoint(machine);
+  }
+
+  // The phone's position, or none (the cabinet): the GPS session is the phone's only.
+  const gps = input.online && input.lat !== undefined && input.lon !== undefined;
+  const fromPhone = gps && input.source !== 'web';
+  const standingRunning = Boolean(existing && standingActive(existing, now));
+  // Which standing period to write (null: leave the columns as they are).
+  let standingMode = input.standing ?? null;
+  if (!standingMode && input.online && !standingRunning) standingMode = 'days5';
+  // An older app's «Уйти с линии» (no `standing`) in the working day ends
+  // the period; the one it sends itself at the evening cutoff does not.
+  if (!standingMode && !input.online && standingRunning && withinLineDay(now, timeZone)) {
+    standingMode = 'off';
+  }
+  const standing = standingMode ? standingData(standingMode, now, timeZone, input.until) : null;
+  if (standingMode && !standing) {
+    return NextResponse.json(
+      { error: 'Выберите дату не раньше сегодняшней и не дальше чем через 60 дней' },
+      { status: 400 },
+    );
+  }
+  const point = gps
+    ? { lat: input.lat as number, lon: input.lon as number }
+    : input.online
+      ? (machinePoint ?? (existing ? { lat: existing.lat, lon: existing.lon } : null))
+      : null;
+  if (input.online && !point) {
+    return NextResponse.json(
+      {
+        error:
+          'Укажите адрес базы компании или место машины — по нему заказчики увидят её на карте',
+      },
+      { status: 400 },
+    );
   }
 
   const note = input.online ? (input.note ?? null) : null;
@@ -139,6 +200,8 @@ export async function PUT(request: NextRequest) {
   // note is always applied (so offline → online within 15 s works).
   const pureMove =
     !renewed &&
+    !standingMode &&
+    fromPhone &&
     existing !== null &&
     existing.online &&
     input.online &&
@@ -155,25 +218,45 @@ export async function PUT(request: NextRequest) {
   // kept while the same machine stays online; a phone back after its row went
   // stale (customers stopped seeing it) is a new start.
   const wentOnline =
-    input.online &&
+    fromPhone &&
     (!existing ||
       !existing.online ||
       renewed ||
       existing.equipmentId !== equipmentId ||
       !isFresh(existing.updatedAt, now));
+  // The cabinet changes the period only: a running GPS session of the phone
+  // stays as it is, and the note the phone set is kept.
+  const fromCabinet = input.online && !fromPhone;
+  // After this write the standing period still runs: the machine and the
+  // note stay even when the phone's GPS session ends.
+  const keepsStanding = standing
+    ? Boolean(standing.standingForever || standing.standingUntil)
+    : standingRunning;
   const data = {
     companyId: user.companyId,
-    online: input.online,
-    equipmentId,
-    note,
+    online: fromCabinet ? (existing?.online ?? false) : input.online,
+    equipmentId: input.online
+      ? equipmentId
+      : keepsStanding
+        ? (existing?.equipmentId ?? null)
+        : null,
+    note: input.online
+      ? fromCabinet
+        ? (input.note ?? existing?.note ?? null)
+        : note
+      : keepsStanding
+        ? (existing?.note ?? null)
+        : null,
     ...(reportedZone ? { timeZone: reportedZone } : {}),
     ...(wentOnline ? { onlineSince: now } : {}),
-    ...(input.online ? { lat: input.lat as number, lon: input.lon as number } : {}),
+    ...(fromPhone ? { gpsAt: now } : {}),
+    ...(point && (fromPhone || !existing?.online) ? { lat: point.lat, lon: point.lon } : {}),
+    ...(standing ?? {}),
   };
   const presence = await prisma.linePresence.upsert({
     where: { userId: user.id },
     update: data,
-    create: { userId: user.id, lat: input.lat ?? 0, lon: input.lon ?? 0, ...data },
+    create: { userId: user.id, lat: point?.lat ?? 0, lon: point?.lon ?? 0, ...data },
   });
-  return NextResponse.json({ presence });
+  return NextResponse.json({ presence, standing: standingActive(presence, now) });
 }
