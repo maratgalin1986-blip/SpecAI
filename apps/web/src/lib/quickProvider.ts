@@ -17,7 +17,7 @@ export const QUICK_EMAIL_DOMAIN = 'quick.iistroyka24.invalid';
 export const QUICK_LIMIT_PER_IP = { limit: 5, windowMs: 60 * 60_000 };
 export const QUICK_LIMIT_PER_PHONE = { limit: 3, windowMs: 24 * 60 * 60_000 };
 
-/** «8 (927) 242-80-88», «+7 927…», «927…» → «79272428088»; иначе null. */
+/** «8 (917) 000-00-00», «+7 917…», «917…» → «79170000000»; иначе null. */
 export function normalizeRuPhone(raw: unknown): string | null {
   if (typeof raw !== 'string') return null;
   let digits = raw.replace(/\D/g, '');
@@ -26,7 +26,7 @@ export function normalizeRuPhone(raw: unknown): string | null {
   return /^79\d{9}$/.test(digits) ? digits : null;
 }
 
-/** «79272428088» → «+7 927 242-80-88». */
+/** «79170000000» → «+7 917 000-00-00». */
 export function formatRuPhone(digits: string): string {
   return `+7 ${digits.slice(1, 4)} ${digits.slice(4, 7)}-${digits.slice(7, 9)}-${digits.slice(9, 11)}`;
 }
