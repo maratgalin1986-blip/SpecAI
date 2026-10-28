@@ -1,8 +1,9 @@
 import { PrismaClient } from '../generated/client';
-import { locateQueryEngine, resolveDatabaseUrl } from './connection';
+import { applyDatabaseEnvOverrides, locateQueryEngine, resolveDatabaseUrl } from './connection';
 
 /** A Prisma client that also handles Yandex Cloud TLS (see connection.ts). */
 export function createPrismaClient() {
+  applyDatabaseEnvOverrides();
   locateQueryEngine();
   const url = resolveDatabaseUrl(process.env.DATABASE_URL);
   return new PrismaClient(url ? { datasources: { db: { url } } } : undefined);
@@ -27,6 +28,7 @@ export * from '../generated/client';
 export const HOUSE_COMPANY_ID = 'specplast16-house';
 
 export {
+  applyDatabaseEnvOverrides,
   isYandexDatabaseUrl,
   locateQueryEngine,
   resolveDatabaseUrl,
