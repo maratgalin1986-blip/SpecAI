@@ -130,7 +130,7 @@ export function QuickProviderForm({ onFullForm }: { onFullForm: () => void }) {
           className="rounded-md border border-slate-300 px-3 py-2"
         />
         <span className="text-xs text-slate-500">
-          Телефон не показывается на карте. Пока он не подтверждён — так и написано в карточке.
+          Телефон не показывается на карте — заказчик увидит его только после подтверждения брони.
         </span>
       </label>
       <CategorySelect
