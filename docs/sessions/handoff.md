@@ -103,3 +103,11 @@ Yandex Cloud −4,75 ₽.
 iPhone — «откройте в Safari», остальные — через меню браузера. `manifest.ts`/`sw.ts` не трогал.
 Ссылок на магазины для Expo-приложения нет (RuStore ещё не опубликован) — когда появится ссылка,
 добавить её в подсказку кнопки.
+
+2026-10-28 (задача «Яндекс Go и Авито», ветка `claude/yandexgo-avito-ideas-2026-10-28`): разбор приёмов
+— `docs/ideas-yandexgo-avito.md` (только механика, без чужого бренда и текстов). Сделано: цена до
+заказа на формах заявки (`components/OrderEstimate.tsx`, `lib/orderEstimate.ts`, одна строка в
+`GuestOrderForm`/`NewOrderForm`) и «Проверен · ★ рейтинг · на площадке с …» на карточках `/equipment`
+(`lib/catalogTrust.ts`, `EquipmentCard`). Тему и анимации (`claude/theme-motion-2026-10-28`) не трогал;
+классы блока цены (amber-50/200, slate-500/800) есть в её `theme.css`. Остальные идеи — в конце
+`docs/roadmap.md`, раздел «Предложено: Яндекс Go и Авито».

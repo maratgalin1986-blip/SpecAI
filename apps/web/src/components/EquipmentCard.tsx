@@ -18,6 +18,7 @@ import {
 } from '@/lib/equipmentCatalog';
 import { modelPhotosOf } from '@/lib/modelPhotos';
 import { availabilityBadge } from '@/lib/aktualno';
+import { trustLine, type CardTrust } from '@/lib/catalogTrust';
 
 type Amount = number | string | { toString(): string } | null;
 
@@ -37,6 +38,8 @@ export interface EquipmentCardItem {
   /** «Актуализация»: the provider's own answer (lib/aktualno.ts availabilityBadge). */
   availableFrom?: Date | string | null;
   availabilityUpdatedAt?: Date | string | null;
+  /** Rating, «на площадке с …», «Проверен» (lib/catalogTrust.ts); the catalogue passes it. */
+  trust?: CardTrust;
 }
 
 const GROUP_ICON: Record<ReturnType<typeof taskGroupOf>, IconName> = {
@@ -161,6 +164,19 @@ export function EquipmentCard({ item }: { item: EquipmentCardItem }) {
                 ) : (
                   item.company?.name
                 )}
+              </p>
+            )}
+            {item.trust && (
+              <p className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-slate-600">
+                {item.trust.verified && (
+                  <span
+                    className="rounded-full bg-graphite-900 px-2 py-0.5 font-bold text-signal-300"
+                    title="Администратор проверил компанию и документы"
+                  >
+                    Проверен
+                  </span>
+                )}
+                <span>{trustLine(item.trust)}</span>
               </p>
             )}
           </div>

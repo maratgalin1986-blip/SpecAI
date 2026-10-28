@@ -6,6 +6,7 @@ import { AutoCategoryNote, useAutoCategory } from '@/components/AutoCategory';
 import { CategorySelect, type SelectableCategory } from '@/components/CategorySelect';
 import { ConsentText } from '@/components/ConsentText';
 import { DemandHint } from '@/components/DemandHint';
+import { OrderEstimate } from '@/components/OrderEstimate';
 import { PointPicker } from '@/components/PointPicker';
 import { noteInstallMoment } from '@/lib/installHint';
 import { addressWithPoint, type MapPoint } from '@/lib/mapPoint';
@@ -206,6 +207,7 @@ export function GuestOrderForm({
           />
         </label>
       </div>
+      <OrderEstimate categoryName={categoryName} startDate={startDate} endDate={endDate} />
 
       <label className="flex flex-col gap-1 text-sm">
         Адрес работ

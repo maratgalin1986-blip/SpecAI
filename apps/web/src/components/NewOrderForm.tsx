@@ -5,6 +5,7 @@ import { AutoCategoryNote, useAutoCategory } from '@/components/AutoCategory';
 import { CategorySelect, type SelectableCategory } from '@/components/CategorySelect';
 import { ConditionsPreview } from '@/components/ConditionsPreview';
 import { DemandHint } from '@/components/DemandHint';
+import { OrderEstimate } from '@/components/OrderEstimate';
 import { GuestOrderForm } from '@/components/GuestOrderForm';
 import { PointPicker } from '@/components/PointPicker';
 import { visitorNear } from '@/components/visitorNear';
@@ -206,6 +207,11 @@ export function NewOrderForm({
           />
         </label>
       </div>
+      <OrderEstimate
+        categoryName={categories.find((category) => category.id === categoryId)?.name}
+        startDate={startDate}
+        endDate={endDate}
+      />
 
       <label className="flex flex-col gap-1 text-sm">
         Адрес работ
