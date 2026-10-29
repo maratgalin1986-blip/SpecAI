@@ -21,6 +21,7 @@ import { customerShortName } from '@/lib/customerPrivacy';
 import { unreadMessagesByOrder } from '@/lib/orderChatAccess';
 import { bidForCustomer } from '@/lib/bidPrivacy';
 import { maskContactsAndLinks } from '@/lib/privacy';
+import { buyerJson, resolveBuyer } from '@/lib/buyerRequisites';
 import {
   assessWork,
   fetchForecast,
@@ -185,8 +186,9 @@ export async function GET(request: NextRequest) {
           bidCount: order.bids.length,
         };
       }
-      const { customerId, customer, ...rest } = withoutBooking;
-      void customerId;
+      // The buyer's requisites belong to the booked provider only (GET /api/bookings).
+      const { customerId, customer, buyer, ...rest } = withoutBooking;
+      void [customerId, buyer];
       // A chat or guest order: the phone masked, «Показать телефон» opens it.
       // The house manager too: it works these leads first, and the feed is
       // its only place to call them from the app (every reveal is logged).
@@ -255,6 +257,16 @@ export async function POST(request: NextRequest) {
     }
   }
 
+  // «Заказываю от …»: снимок реквизитов на момент заявки.
+  const buyer = await resolveBuyer(
+    prisma,
+    currentUser.id,
+    (body as { legalEntityId?: unknown }).legalEntityId,
+  );
+  if ('error' in buyer) {
+    return NextResponse.json({ error: buyer.error }, { status: 400 });
+  }
+
   // The work site: geocoded once here, used for the weather and the map.
   const address = parsed.data.address;
   // The phone's position (the app sends it when allowed): a bare street is
@@ -293,6 +305,7 @@ export async function POST(request: NextRequest) {
       categoryId,
       locationId: location?.id,
       bidsUntil: bidsUntilFor(new Date(), dates.startDate),
+      buyer: buyerJson(buyer.buyer),
     },
     include: { category: true },
   });

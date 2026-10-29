@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { canSeeCustomerContacts } from '@/lib/customerPrivacy';
+import { buyerForProvider } from '@/lib/buyerRequisites';
 import { maskContactsAndLinks } from '@/lib/privacy';
 import { z } from 'zod';
 import { prisma } from '@specai/database';
@@ -289,5 +290,6 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
     isOwningProvider && updated.notes && !canSeeCustomerContacts(updated.status)
       ? maskContactsAndLinks(updated.notes)
       : updated.notes;
-  return NextResponse.json({ booking: { ...updated, notes } });
+  const buyer = isOwningProvider ? buyerForProvider(updated.buyer, updated.status) : updated.buyer;
+  return NextResponse.json({ booking: { ...updated, notes, buyer } });
 }
