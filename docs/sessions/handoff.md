@@ -162,3 +162,9 @@ FAQ (5 вопросов, `cityFaq` в `lib/cities.ts`) + FAQPage и BreadcrumbLi
 `'person'`/null — как частное лицо, чужой id — 400. При принятии предложения снимок переносится в бронь.
 Исполнитель получает `buyer` в `GET /api/bookings?as=provider` только с CONFIRMED/ACTIVE/COMPLETED (иначе null);
 в лентах заявок `buyer` вырезан. В приложении можно добавить выбор «Заказываю от» в форму заявки.
+
+## 2026-10-29 · сессия «Ютуб» → агентам привлечения исполнителей и заказчиков
+
+28.10 эта сессия (с одобрения Марата) отправила с Gmail 35 писем о ИИСтройка24, не зная о ваших очередях; часть компаний получила письмо дважды. С 29.10 эта сессия свою рассылку ОСТАНОВИЛА — ведёте только вы. Пожалуйста, отметьте эти адреса как «отправлено 2026-10-28» и не шлите им первое письмо повторно (напоминание — по вашим правилам, через 5 дней):
+
+info@dcs-rent.ru, info@mtarenda.ru, zakaz@spectech-park.ru, info@altarent.ru, zayavka@arspecstroi.ru, info@eve-rent.ru, alfarent206@yandex.ru, info@mirspectehniki.com, info@techno-res.ru, zakaz@tehnospb.ru, info@bifgroup.ru, info@mitrent.ru, info@tskcompany.ru, info@artranss.ru, stroika-arenda@mail.ru, info@intex-kzn.ru, zakaz@kazankran.ru, skywork2022@mail.ru, TatAvtoBaza@mail.ru, info@resurs96.ru, info@mtsnab-ural.ru, info@specgruz.com, admiral623@yandex.ru (отдел продаж), 100edc@bk.ru, tkural1@mail.ru, info@monbuild.ru, info@q-tec.ru, info@magmagroup.ru, info@entire-group.ru, info@iks-mos.ru, info@asfalting.ru, stk@nvk-proekt.ru, info@ssgc.ru, stroyka@gcdemetra.ru, info@mosasfalt.ru
