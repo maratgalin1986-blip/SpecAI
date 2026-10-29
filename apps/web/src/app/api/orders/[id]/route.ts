@@ -71,6 +71,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     externalId,
     fingerprint,
     customerId,
+    buyer,
     ...rest
   } = order;
   const contact = isHouseManager(currentUser)
@@ -130,7 +131,9 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       ...(isOwner || bookedProviderSees(rest.booking, currentUser.companyId)
         ? {}
         : { description: maskContactsAndLinks(rest.description) }),
-      ...(isOwner ? { customerId } : {}),
+      // Requisites «Заказываю от …»: the customer's own; the provider reads them
+      // on the confirmed booking (GET /api/bookings?as=provider).
+      ...(isOwner ? { customerId, buyer } : {}),
       ...contact,
       ...(chatContact ? { chatContact } : {}),
       customer: isOwner ? rest.customer : { name: customerShortName(rest.customer.name) },

@@ -23,6 +23,7 @@ import { HOUSE_COMPANY_ID } from '@/lib/fleet';
 import { SITE } from '@/lib/site';
 import { customerRates } from '@/lib/equipmentCatalog';
 import { unreadMessagesByOrder } from '@/lib/orderChatAccess';
+import { buyerForProvider, buyerJson, resolveBuyer } from '@/lib/buyerRequisites';
 
 export const dynamic = 'force-dynamic';
 
@@ -75,6 +76,8 @@ export async function GET(request: NextRequest) {
       bookings: bookings.map((booking) => ({
         ...booking,
         customer: customerForProvider(booking.customer, booking.status),
+        // «Заказываю от …»: requisites for the provider's invoice and act, once confirmed.
+        buyer: buyerForProvider(booking.buyer, booking.status),
         // The customer's note may carry a phone: hidden until the booking is confirmed.
         notes:
           booking.notes && !canSeeCustomerContacts(booking.status)
@@ -142,6 +145,15 @@ export async function POST(request: NextRequest) {
   }
   const { startDate, endDate, days } = dates;
 
+  const buyer = await resolveBuyer(
+    prisma,
+    currentUser.id,
+    (body as { legalEntityId?: unknown }).legalEntityId,
+  );
+  if ('error' in buyer) {
+    return NextResponse.json({ error: buyer.error }, { status: 400 });
+  }
+
   if (deliveryLocationId) {
     const location = await prisma.location.findUnique({
       where: { id: deliveryLocationId },
@@ -204,6 +216,7 @@ export async function POST(request: NextRequest) {
           currency: equipment.currency,
           deliveryLocationId,
           notes,
+          buyer: buyerJson(buyer.buyer),
         },
       });
       return { status: 201, booking, equipment } as const;
