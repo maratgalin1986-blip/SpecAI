@@ -1,5 +1,6 @@
 'use client';
 
+import { BuyerSelect } from './BuyerSelect';
 import { useEffect, useId, useState } from 'react';
 import { AutoCategoryNote, useAutoCategory } from '@/components/AutoCategory';
 import { CategorySelect, type SelectableCategory } from '@/components/CategorySelect';
@@ -57,6 +58,8 @@ export function NewOrderForm({
       alive = false;
     };
   }, []);
+  // «Заказываю от …» (BuyerSelect): undefined — поле не отправляется.
+  const [legalEntityId, setLegalEntityId] = useState<string | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const categoryInputId = useId();
@@ -114,6 +117,7 @@ export function NewOrderForm({
           anyCategory: !categoryId && autoCategory.byHand ? true : undefined,
           address: address.trim() || undefined,
           near: near ?? undefined,
+          legalEntityId,
         }),
       });
     } catch {
@@ -242,6 +246,8 @@ export function NewOrderForm({
         near={near}
         categoryName={categories.find((category) => category.id === categoryId)?.name}
       />
+
+      <BuyerSelect onChange={setLegalEntityId} />
 
       {error && (
         <p role="alert" className="text-sm text-red-700">

@@ -311,6 +311,11 @@ model Booking {
   // on bookings confirmed before 2026-10-17: the public activity strip
   // (lib/activity.ts) simply leaves them out.
   confirmedAt DateTime?
+  // Реквизиты заказчика на момент заказа («Заказываю от …», owner 2026-10-28):
+  // снимок { legalForm, name, inn, kpp, address } из LegalEntity, чтобы правки
+  // реквизитов не меняли прошлые документы. Null — «как частное лицо».
+  // Исполнитель видит его только с CONFIRMED (lib/buyerRequisites.ts).
+  buyer Json?
 
   equipment   Equipment @relation(fields: [equipmentId], references: [id])
   equipmentId String
@@ -407,6 +412,12 @@ model Order {
 
   bids    Bid[]
   booking Booking?
+
+  // Реквизиты заказчика на момент заказа («Заказываю от …», owner 2026-10-28):
+  // снимок { legalForm, name, inn, kpp, address } из LegalEntity, чтобы правки
+  // реквизитов не меняли прошлые документы. Null — «как частное лицо».
+  // Исполнитель видит его только с CONFIRMED (lib/buyerRequisites.ts).
+  buyer Json?
 
   // Orders collected automatically from Telegram/WhatsApp chats and groups.
   // For those, `customer` is a technical importer user and the real contact

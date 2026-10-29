@@ -11,6 +11,7 @@ import { completedBookingIds } from '@/lib/supportPrompt';
 import { formatMoney } from '@/lib/money';
 import { ProviderEquipmentCard } from '@/components/ProviderEquipmentCard';
 import { CONTACTS_AFTER_CONFIRM, customerForProvider } from '@/lib/customerPrivacy';
+import { buyerForProvider, buyerLine } from '@/lib/buyerRequisites';
 import { Pagination } from '@/components/Pagination';
 import { parsePage, totalPagesFor } from '@/lib/pagination';
 import { isHouseManager, isProvider } from '@/lib/fleet';
@@ -751,6 +752,7 @@ export default async function ProviderPage({
             <div className="flex flex-col gap-3">
               {bookings.map((booking) => {
                 const customer = customerForProvider(booking.customer, booking.status);
+                const buyer = buyerForProvider(booking.buyer, booking.status);
                 return (
                   <Card
                     key={booking.id}
@@ -763,6 +765,11 @@ export default async function ProviderPage({
                         – {booking.endDate.toLocaleDateString('ru-RU')} ·{' '}
                         {formatMoney(booking.totalPrice, booking.currency)}
                       </p>
+                      {buyer && (
+                        <p className="mt-1 break-words text-sm text-slate-700">
+                          Покупатель для счёта и акта: {buyerLine(buyer)}
+                        </p>
+                      )}
                       {customer.contactsVisible ? (
                         <p className="mt-1 flex flex-wrap gap-x-3 text-sm">
                           {customer.phone && (

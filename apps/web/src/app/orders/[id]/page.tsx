@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { buyerLine, parseBuyer } from '@/lib/buyerRequisites';
 import { notFound, redirect } from 'next/navigation';
 import { getServerSession } from 'next-auth';
 import { prisma } from '@specai/database';
@@ -234,6 +235,12 @@ export default async function OrderDetailPage({ params }: { params: { id: string
         </span>
       </div>
       {(isOwner || isAdmin) && <OrderTimeline timeline={timeline} />}
+      {isOwner && (
+        <p className="break-words text-sm text-slate-600">
+          Заказываю от:{' '}
+          {parseBuyer(order.buyer) ? buyerLine(parseBuyer(order.buyer)!) : 'как частное лицо'}
+        </p>
+      )}
       {isOwner && order.status === 'OPEN' && <Hint id="order-customer" />}
       {viewerIsProvider && order.status === 'OPEN' && <Hint id="order-provider" />}
       {isAdmin && (

@@ -155,6 +155,13 @@ FAQ (5 вопросов, `cityFaq` в `lib/cities.ts`) + FAQPage и BreadcrumbLi
 5. Push «Продлить на 5 рабочих дней?» ведёт на `/line/prodlit?t=…` — открыть в браузере (страница
    работает без входа).
 
+2026-10-29 (задача «Заказываю от … в заявках», ветка `claude/order-legal-entity-2026-10-29`, для сессии
+«Приложение»): у `Order` и `Booking` новая колонка `buyer Json?` — снимок реквизитов
+{ legalForm, name, inn, kpp, address } на момент заявки (`lib/buyerRequisites.ts`). `POST /api/orders` и
+`POST /api/bookings` принимают `legalEntityId`: не передан — берётся выбранное в «Реквизитах» (isDefault),
+`'person'`/null — как частное лицо, чужой id — 400. При принятии предложения снимок переносится в бронь.
+Исполнитель получает `buyer` в `GET /api/bookings?as=provider` только с CONFIRMED/ACTIVE/COMPLETED (иначе null);
+в лентах заявок `buyer` вырезан. В приложении можно добавить выбор «Заказываю от» в форму заявки.
 
 ## 2026-10-29 · сессия «Ютуб» → агентам привлечения исполнителей и заказчиков
 

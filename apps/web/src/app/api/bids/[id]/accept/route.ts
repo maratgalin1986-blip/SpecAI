@@ -3,6 +3,7 @@ import { prisma } from '@specai/database';
 import { getRequestUser } from '@/lib/requestUser';
 import { bidAccepted } from '@/lib/emailTemplates';
 import { prismaErrorCode } from '@/lib/apiInput';
+import { buyerJson, parseBuyer } from '@/lib/buyerRequisites';
 import {
   BLOCKING_BOOKING_STATUSES,
   toBookingDay,
@@ -117,6 +118,8 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
           totalPrice: bid.price,
           currency: bid.currency,
           orderId: bid.orderId,
+          // The order's «Заказываю от …» snapshot moves to the booking as is.
+          buyer: buyerJson(parseBuyer(bid.order.buyer)),
         },
       });
       return { booking: created } as const;
