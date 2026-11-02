@@ -214,7 +214,7 @@ export function GuestOrderForm({
         <input
           value={address}
           onChange={(e) => setAddress(e.target.value)}
-          placeholder="Набережные Челны, проспект Мира, 49"
+          placeholder="Город, улица, дом"
           autoComplete="street-address"
           maxLength={200}
           className="rounded-md border border-slate-300 px-3 py-2"

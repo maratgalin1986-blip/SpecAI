@@ -25,7 +25,7 @@ import type { MachineType } from '@/lib/machinePhotos';
 import { pluralizeRu } from '@/lib/pluralize';
 import { loadActivity } from '@/lib/activityData';
 import { loadOfferNow } from '@/lib/offerNowData';
-import { SITE } from '@/lib/site';
+import { SHIFT, SITE } from '@/lib/site';
 import { fromPerHour, HAMMER_RATE, MIN_RATE, priceFaqAnswer, SHIFT_HOURS } from '@/lib/prices';
 
 // Big interactive blocks below the fold: separate chunks, so the browser
@@ -159,6 +159,11 @@ const STEPS = [
   { title: 'Работайте', text: 'Диспетчер на связи, оплата по факту.' },
 ];
 
+// Owner, 2026-11-02: the house fleet reaches a site in Набережные Челны within
+// two hours of the order; other providers name their own delivery time.
+const HOUSE_CITY = 'Челнам';
+const HOUSE_DELIVERY = '2 часа';
+
 // Title and description come from the root layout; the home page adds the
 // canonical (UTM and ?agent= variants of «/» otherwise count as duplicates).
 export const metadata: Metadata = {
@@ -290,8 +295,8 @@ export default async function HomePage() {
               className="float-in mt-3 max-w-xl text-base leading-snug text-slate-300 sm:hidden"
               style={{ animationDelay: '240ms' }}
             >
-              Одна заявка — цены исполнителей, включая парк {SITE.name} ({fromPerHour(MIN_RATE)}).{' '}
-              {SITE.promise}.
+              Одна заявка — цены исполнителей. Парк {SITE.name}: {fromPerHour(MIN_RATE)}, подача по{' '}
+              {HOUSE_CITY} за {HOUSE_DELIVERY}. {SITE.promise}.
             </p>
             <p
               className="float-in mt-6 hidden max-w-xl text-lg leading-relaxed text-slate-300 sm:block"
@@ -300,7 +305,8 @@ export default async function HomePage() {
               Экскаваторы-погрузчики, автокраны и погрузчики с машинистами по всей России.
               Разместите заявку — исполнители рядом с вами пришлют цены, вы выберете подходящее; или
               оставьте телефон — подберёт диспетчер. Парк {SITE.name} в Набережных Челнах —{' '}
-              {fromPerHour(MIN_RATE)}, с НДС. {SITE.promiseLine}
+              {fromPerHour(MIN_RATE)}, с НДС, подача по городу за {HOUSE_DELIVERY}.{' '}
+              {SITE.promiseLine}
             </p>
             {/* Owner, 2026-10-03: «Заказать технику» the biggest and brightest;
                 2026-10-18: «Встать на линию» the second big button, then the
@@ -708,6 +714,22 @@ export default async function HomePage() {
                   : '↑ Кто сейчас на линии'}
               </a>
               <CallbackForm source="home" dark />
+              {/* Owner, 2026-11-02: the person who answers is «Иван, начальник
+                  отдела логистики»; nothing about the owner himself. A machine
+                  photo, not a person's. */}
+              <div className="mt-4 flex items-center gap-3 rounded-2xl bg-white/5 p-3 ring-1 ring-white/10">
+                <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-xl">
+                  <MachinePhoto type="excavator" slot="dispatcher" sizes="56px" />
+                </div>
+                <p className="text-sm leading-snug text-slate-200">
+                  Вам ответит <span className="font-bold text-white">Иван</span>, начальник отдела
+                  логистики {SITE.name}. Подберёт технику и назовёт цену за 15 минут, Пн–Сб{' '}
+                  {SHIFT.from}:00–{SHIFT.to}:00.
+                </p>
+              </div>
+              <p className="mt-3 text-xs text-slate-400">
+                {SITE.legalName} · ИНН {SITE.inn} · Набережные Челны · работаем с НДС
+              </p>
             </div>
           </div>
         </CallbackIris>

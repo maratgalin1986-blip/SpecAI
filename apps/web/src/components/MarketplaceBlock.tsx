@@ -98,37 +98,32 @@ export async function MarketplaceBlock() {
         ))}
       </div>
 
-      <div className="flex flex-col gap-3">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <h3 className="text-xl font-bold tracking-tight">
-            {board.total > 0
-              ? `Свежие заявки · ${pluralizeRu(board.total, ['открытая', 'открытые', 'открытых'])}`
-              : 'Свежие заявки'}
-          </h3>
-          <a
-            href="/orders#board"
-            className="group inline-flex min-h-[44px] items-center gap-2 rounded-full border border-graphite-200 px-5 py-2.5 text-sm font-semibold transition hover:border-graphite-900"
-          >
-            Все заявки
-            <span className="transition group-hover:translate-x-0.5">→</span>
-          </a>
-        </div>
-        {board.items.length === 0 ? (
-          <p className="rounded-cab border border-dashed border-graphite-200 bg-white p-6 text-sm text-graphite-600">
-            Открытых заявок сейчас нет —{' '}
-            <a href="/orders#new" className="font-semibold text-signal-700 hover:underline">
-              разместите первую
+      {/* Owner, 2026-11-02 (site audit): an empty board («Открытых заявок
+          сейчас нет») read as an empty platform; the two doors above already
+          lead to «Разместить заявку». The board shows once there are orders. */}
+      {board.items.length > 0 && (
+        <div className="flex flex-col gap-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h3 className="text-xl font-bold tracking-tight">
+              {board.total > 0
+                ? `Свежие заявки · ${pluralizeRu(board.total, ['открытая', 'открытые', 'открытых'])}`
+                : 'Свежие заявки'}
+            </h3>
+            <a
+              href="/orders#board"
+              className="group inline-flex min-h-[44px] items-center gap-2 rounded-full border border-graphite-200 px-5 py-2.5 text-sm font-semibold transition hover:border-graphite-900"
+            >
+              Все заявки
+              <span className="transition group-hover:translate-x-0.5">→</span>
             </a>
-            , исполнители ответят ценами.
-          </p>
-        ) : (
+          </div>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {board.items.map((item) => (
               <OrderBoardCard key={item.card.id} card={item.card} viewer="public" compact />
             ))}
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </section>
   );
 }

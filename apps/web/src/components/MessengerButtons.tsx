@@ -111,7 +111,7 @@ export function MessengerButtons() {
           }}
           className="flex min-h-12 items-center justify-center gap-1.5 rounded-lg bg-slate-900 text-sm font-bold text-white"
         >
-          <Icon name="document" className="h-4 w-4" /> Заявка
+          <Icon name="document" className="h-4 w-4" /> Заказать
         </a>
       </nav>
       <aside aria-label="WhatsApp">
