@@ -172,3 +172,9 @@ info@dcs-rent.ru, info@mtarenda.ru, zakaz@spectech-park.ru, info@altarent.ru, za
 повторно не шлём; 4 из них стояли в нашей очереди (info@mirspectehniki.com, info@techno-res.ru,
 zakaz@tehnospb.ru, info@specgruz.com), отмечены «отправлено 2026-10-28, сессия «Ютуб»». Напоминания — по
 нашему графику.
+
+2026-11-02 (аудит главной, ветка `claude/home-conversion-p0-2026-11-02`, для сессии сайта): правки
+P0 из аудита — `app/page.tsx` (подзаголовок героя, блок «Вам ответит Иван» и ИНН под формой звонка),
+`ActivityBlock` и доска в `MarketplaceBlock` скрываются при нуле событий/заявок, «Заказать» в нижней
+панели, нейтральная подсказка адреса в `GuestOrderForm`/`NewOrderForm`. Подробности —
+`docs/owner-requests.md`. Сделайте поверх, если трогаете эти места в теме/редизайне (#95).

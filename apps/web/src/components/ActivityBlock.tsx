@@ -30,7 +30,10 @@ export function ActivityBlock({ initial }: { initial: Activity | null }) {
     };
   }, []);
 
-  if (!activity) return null;
+  // Owner, 2026-11-02 (site audit): a quiet day is not news — «новых заявок
+  // пока нет» told visitors the platform is empty, so the block shows only
+  // when there is something to show.
+  if (!activity || activity.events.length === 0) return null;
 
   return (
     <section
@@ -48,26 +51,20 @@ export function ActivityBlock({ initial }: { initial: Activity | null }) {
         </p>
       </div>
       <p className="mt-3 text-lg font-extrabold tracking-tight sm:text-2xl">{activity.summary}</p>
-      {activity.events.length > 0 ? (
-        <ul className="mt-4 flex flex-col gap-2">
-          {activity.events.map((event) => (
-            <li
-              key={`${event.kind}-${event.at}-${event.text}`}
-              className="flex items-start gap-2 text-sm text-graphite-700"
-            >
-              <span aria-hidden>{KIND_ICON[event.kind]}</span>
-              <span className="min-w-0 flex-1">
-                {event.text}
-                <span className="whitespace-nowrap text-graphite-600"> · {event.ago}</span>
-              </span>
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <p className="mt-2 text-sm text-graphite-600">
-          За последние дни событий нет — новые заявки и брони появятся здесь.
-        </p>
-      )}
+      <ul className="mt-4 flex flex-col gap-2">
+        {activity.events.map((event) => (
+          <li
+            key={`${event.kind}-${event.at}-${event.text}`}
+            className="flex items-start gap-2 text-sm text-graphite-700"
+          >
+            <span aria-hidden>{KIND_ICON[event.kind]}</span>
+            <span className="min-w-0 flex-1">
+              {event.text}
+              <span className="whitespace-nowrap text-graphite-600"> · {event.ago}</span>
+            </span>
+          </li>
+        ))}
+      </ul>
     </section>
   );
 }
