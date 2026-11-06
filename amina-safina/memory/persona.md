@@ -11,7 +11,7 @@ photorealistic, luxury glamour, high-end editorial photography, realistic skin t
 natural lighting, 85mm, shallow depth of field, consistent facial identity.
 Лицо: fictional 26-year-old Tatar woman, long dark brown hair, expressive warm brown eyes,
 natural attractive features, subtle makeup, confident gentle smile.
-Эталон v1: Canva `MAHaJmnyMTM`, превью `assets/reference/amina-ref-v1-preview.png` — ЖДЁТ УТВЕРЖДЕНИЯ.
+Эталон v1: Canva `MAHaJmnyMTM`, превью `assets/reference/amina-ref-v1-preview.png` — утверждён 2026-11-06.
 
 ## Границы
 Купальники — пляж/бассейн/яхта, позы как в каталоге одежды. Без прозрачных тканей, без «implied nude»,
