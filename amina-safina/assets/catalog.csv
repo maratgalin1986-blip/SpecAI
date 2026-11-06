@@ -4,3 +4,24 @@ test-01,fullbody,assets/images/fullbody/test-01-kazan-emerald-preview.png,MAHaJq
 test-02,swimwear,assets/images/swimwear/test-02-yacht-navy-preview.png,MAHaJi6W0I4,яхта/слитный+рубашка,тест консистентности,похоже,ok,пост 4:5,2026-11-06
 p-02,portrait,assets/images/portrait/p-02-black-velvet-candlelight-preview.png,MAHaJu02U3E,черный бархат/жемчуг/свечи,готов,похоже (превью мелкое — сверить в Canva),ok,пост 4:5,2026-11-06
 p-03,portrait,assets/images/portrait/p-03-white-silk-moscow-dusk-preview.png,MAHaJtPbM40,белая шелковая блуза/Москва закат,готов,похоже (превью мелкое — сверить в Canva),ok,пост 4:5,2026-11-06
+p-07,portrait,assets/images/portrait/p-07.jpg,,"morning coffee by a window, oversized cream knit sweater off",готов (AI Horde),ok (стабильное лицо),ok,пост 4:5,2026-11-06
+p-09,portrait,assets/images/portrait/p-09.jpg,,"black leather jacket, night street with neon reflections, co",готов (AI Horde),ok (стабильное лицо),ok,пост 4:5,2026-11-06
+f-03,fashion,assets/images/fashion/f-03.jpg,,"full-body, red bodycon dress, Moscow Red Square at dusk, wal",готов (AI Horde),ok (стабильное лицо),ok,пост 4:5,2026-11-06
+p-06,portrait,assets/images/portrait/p-06.jpg,,"champagne sequin dress with deep neckline, bokeh city lights",готов (AI Horde),ok (стабильное лицо),ok,пост 4:5,2026-11-06
+p-08,portrait,assets/images/portrait/p-08.jpg,,"red satin dress, red lipstick, dramatic low-key studio light",готов (AI Horde),ok (стабильное лицо),ok,пост 4:5,2026-11-06
+p-10,portrait,assets/images/portrait/p-10.jpg,,"beige trench coat, autumn golden leaves, hair moving in wind",готов (AI Horde),ok (стабильное лицо),ok,пост 4:5,2026-11-06
+f-02,fashion,assets/images/fashion/f-02.jpg,,"full-body, white satin evening gown with high slit, grand ma",готов (AI Horde),ok (стабильное лицо),ok,пост 4:5,2026-11-06
+p-02h,portrait,assets/images/portrait/p-02h.jpg,,"black velvet off-shoulder evening dress, pearl earrings, can",готов (AI Horde),ok (стабильное лицо),ok,пост 4:5,2026-11-06
+p-04,portrait,assets/images/portrait/p-04.jpg,,"golden hour on a city rooftop, wind in hair, bare shoulders,",готов (AI Horde),ok (стабильное лицо),ok,пост 4:5,2026-11-06
+f-01,fashion,assets/images/fashion/f-01.jpg,,"full-body, fitted black corset midi dress cinched waist, hee",готов (AI Horde),ok (стабильное лицо),ok,пост 4:5,2026-11-06
+g-01,lifestyle,assets/images/lifestyle/g-01.jpg,,holding a large bouquet of red roses and a gift box with a b,готов (AI Horde),ok (стабильное лицо),ok,пост 4:5,2026-11-06
+s-01,swimwear,assets/images/swimwear/s-01.jpg,,"yacht deck, classic black one-piece swimsuit with deep neckl",готов (AI Horde),ok (стабильное лицо),ok,пост 4:5,2026-11-06
+p-05,portrait,assets/images/portrait/p-05.jpg,,"Tatar-inspired gold embroidered headpiece, modern burgundy g",готов (AI Horde),ok (стабильное лицо),ok,пост 4:5,2026-11-06
+g-03,lifestyle,assets/images/lifestyle/g-03.jpg,,"holding luxury shopping bags from a boutique, laughing, blow",готов (AI Horde),ok (стабильное лицо),ok,пост 4:5,2026-11-06
+s-02,swimwear,assets/images/swimwear/s-02.jpg,,"infinity pool edge at a luxury resort, elegant red one-piece",готов (AI Horde),ok (стабильное лицо),ok,пост 4:5,2026-11-06
+g-02,lifestyle,assets/images/lifestyle/g-02.jpg,,"opening a small velvet jewelry box with a necklace, surprise",готов (AI Horde),ok (стабильное лицо),ok,пост 4:5,2026-11-06
+r1-znakomstvo,video,assets/video/r1-znakomstvo.mp4,,content/video-scripts.md,готов,ok,ok,Клипы/Reels 9:16,2026-11-06
+r2-vechernie-obrazy,video,assets/video/r2-vechernie-obrazy.mp4,,content/video-scripts.md,готов,ok,ok,Клипы/Reels 9:16,2026-11-06
+r3-kurort,video,assets/video/r3-kurort.mp4,,content/video-scripts.md,готов,ok,ok,Клипы/Reels 9:16,2026-11-06
+r4-podarki,video,assets/video/r4-podarki.mp4,,content/video-scripts.md,готов,ok,ok,Клипы/Reels 9:16,2026-11-06
+r5-5-obrazov,video,assets/video/r5-5-obrazov.mp4,,content/video-scripts.md,готов,ok,ok,Клипы/Reels 9:16,2026-11-06
