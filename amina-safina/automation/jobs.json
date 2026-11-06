@@ -1,0 +1,18 @@
+[
+ {"id":"p-02h","cat":"portrait","prompt":"black velvet off-shoulder evening dress, pearl earrings, candlelight, 85mm"},
+ {"id":"p-04","cat":"portrait","prompt":"golden hour on a city rooftop, wind in hair, bare shoulders, silk camisole dress, seductive gaze, 85mm"},
+ {"id":"p-05","cat":"portrait","prompt":"Tatar-inspired gold embroidered headpiece, modern burgundy gown, regal confident look, studio light"},
+ {"id":"p-06","cat":"portrait","prompt":"champagne sequin dress with deep neckline, bokeh city lights at night, playful smile"},
+ {"id":"p-07","cat":"portrait","prompt":"morning coffee by a window, oversized cream knit sweater off one shoulder, soft smile"},
+ {"id":"p-08","cat":"portrait","prompt":"red satin dress, red lipstick, dramatic low-key studio light, sultry look"},
+ {"id":"p-09","cat":"portrait","prompt":"black leather jacket, night street with neon reflections, confident smirk"},
+ {"id":"p-10","cat":"portrait","prompt":"beige trench coat, autumn golden leaves, hair moving in wind"},
+ {"id":"f-01","cat":"fashion","src":"t01","den":0.65,"prompt":"full-body, fitted black corset midi dress cinched waist, heels, night city embankment lights"},
+ {"id":"f-02","cat":"fashion","src":"t01","den":0.65,"prompt":"full-body, white satin evening gown with high slit, grand marble staircase of a palace"},
+ {"id":"f-03","cat":"fashion","src":"t01","den":0.65,"prompt":"full-body, red bodycon dress, Moscow Red Square at dusk, walking towards camera"},
+ {"id":"g-01","cat":"lifestyle","den":0.7,"prompt":"holding a large bouquet of red roses and a gift box with a bow, delighted smile, hotel lobby at night, fitted black dress"},
+ {"id":"g-02","cat":"lifestyle","den":0.7,"prompt":"opening a small velvet jewelry box with a necklace, surprised happy face, cozy apartment, gift boxes and ribbons around"},
+ {"id":"g-03","cat":"lifestyle","den":0.7,"prompt":"holding luxury shopping bags from a boutique, laughing, blowing an air kiss, evening street"},
+ {"id":"s-01","cat":"swimwear","src":"t02","den":0.6,"prompt":"yacht deck, classic black one-piece swimsuit with deep neckline, open white shirt, straw hat, sunlight"},
+ {"id":"s-02","cat":"swimwear","src":"t02","den":0.65,"prompt":"infinity pool edge at a luxury resort, elegant red one-piece swimsuit, sunglasses, golden hour"}
+]
