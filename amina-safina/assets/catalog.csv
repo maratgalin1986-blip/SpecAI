@@ -1,0 +1,3 @@
+id,category,file,canva_media_id,prompt_ref,status,qc_face,qc_anatomy,platform_fit,created
+ref-v1,reference,assets/reference/amina-ref-v1-preview.png,MAHaJmnyMTM,persona.md#лицо,ждёт утверждения,—,ok,аватар,2026-11-06
+test-01,fullbody,assets/images/fullbody/test-01-kazan-emerald-preview.png,MAHaJq4yYwo,persona.md + Казань/изумрудное платье,тест консистентности,похоже (превью мелкое — сверить в Canva),ok,пост 4:5,2026-11-06
