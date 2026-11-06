@@ -2,3 +2,5 @@ id,category,file,canva_media_id,prompt_ref,status,qc_face,qc_anatomy,platform_fi
 ref-v1,reference,assets/reference/amina-ref-v1-preview.png,MAHaJmnyMTM,persona.md#лицо,утверждён 2026-11-06,—,ok,аватар,2026-11-06
 test-01,fullbody,assets/images/fullbody/test-01-kazan-emerald-preview.png,MAHaJq4yYwo,persona.md + Казань/изумрудное платье,тест консистентности,похоже (превью мелкое — сверить в Canva),ok,пост 4:5,2026-11-06
 test-02,swimwear,assets/images/swimwear/test-02-yacht-navy-preview.png,MAHaJi6W0I4,яхта/слитный+рубашка,тест консистентности,похоже,ok,пост 4:5,2026-11-06
+p-02,portrait,assets/images/portrait/p-02-black-velvet-candlelight-preview.png,MAHaJu02U3E,черный бархат/жемчуг/свечи,готов,похоже (превью мелкое — сверить в Canva),ok,пост 4:5,2026-11-06
+p-03,portrait,assets/images/portrait/p-03-white-silk-moscow-dusk-preview.png,MAHaJtPbM40,белая шелковая блуза/Москва закат,готов,похоже (превью мелкое — сверить в Canva),ok,пост 4:5,2026-11-06
