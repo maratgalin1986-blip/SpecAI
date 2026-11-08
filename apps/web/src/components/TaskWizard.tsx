@@ -150,37 +150,13 @@ export function TaskWizard() {
   const workDate =
     when === 'Сегодня' ? mskToday() : when === 'Завтра' ? mskToday(Date.now() + 86_400_000) : null;
 
+  // The wizard does not ask where the work is, and the platform serves all of
+  // Russia (owner, 2026-10-17): there is no town to forecast for, so no
+  // forecast is fetched (/api/weather needs a place). The site session may
+  // add a place step and bring the forecast back.
   useEffect(() => {
-    if (step !== 3 || !task || !workDate) {
-      setForecast(null);
-      setForecastDone(true);
-      return;
-    }
-    const controller = new AbortController();
-    setForecastDone(false);
-    const params = new URLSearchParams({ date: workDate });
-    if (task.photo) params.set('kind', task.photo);
-    fetch(`/api/weather?${params}`, { signal: controller.signal })
-      .then((response) => (response.ok ? response.json() : null))
-      .then((data) => {
-        setForecast(
-          data?.weather ? { date: workDate, weather: data.weather, notes: data.notes } : null,
-        );
-        setForecastDone(true);
-      })
-      .catch((error: Error) => {
-        if (error.name !== 'AbortError') setForecastDone(true);
-      });
-    // Never keep the form waiting for long. A forecast that comes later is
-    // dropped: it would change the form's key and wipe what the visitor typed.
-    const timer = window.setTimeout(() => {
-      controller.abort();
-      setForecastDone(true);
-    }, 2500);
-    return () => {
-      controller.abort();
-      window.clearTimeout(timer);
-    };
+    setForecast(null);
+    setForecastDone(true);
   }, [step, task, workDate]);
 
   // Sound (when on): the «Готов» stamp lands on the finished work order.

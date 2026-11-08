@@ -1,7 +1,11 @@
 import { prisma, type OrderSource } from '@specai/database';
 import { analyzeChatMessage } from '@specai/ai-service';
-import { parseEquipmentRequest, requestFingerprint } from '@specai/shared';
+import { cityByName, parseEquipmentRequest, requestFingerprint } from '@specai/shared';
 import { notifyTelegram } from '@/lib/notify';
+import { bidsUntilFor } from '@/lib/bidWindow';
+import { chatOrderNote, placeInText } from '@/lib/chatOrders';
+import { notifyProvidersAboutOrder } from '@/lib/notifications/notifyUser';
+import { autoModerateOrder } from '@/lib/orderModeration';
 import { isSafeHttpUrl, maskContacts } from '@/lib/privacy';
 import { SITE } from '@/lib/site';
 import { siteUrl } from '@/lib/siteUrl';
@@ -20,23 +24,38 @@ export interface IncomingMessage {
   authorName?: string;
   authorPhone?: string;
   url?: string;
+  /** A group or channel (the bot was added by its admins), not a private message. */
+  openChat?: boolean;
 }
 
 export type IngestResult =
   | { status: 'created'; orderId: string; published: boolean }
   | { status: 'duplicate' | 'ignored' | 'too_short'; reason?: string };
 
-const IMPORTER_EMAIL = 'imported-orders@specplast16.invalid';
 const PUBLISH_CONFIDENCE = 0.7;
 const REPOST_WINDOW_DAYS = 7;
 
-async function importerUserId() {
+// Technical customer accounts (reserved .invalid addresses, no notifications):
+// orders whose author has no account are filed under them, with the real
+// contact in contactName/contactPhone (masked for providers, see lib/chatOrders.ts).
+export const TECHNICAL_CUSTOMERS = {
+  importer: { email: 'imported-orders@specplast16.invalid', name: 'Заявка из мессенджера' },
+  guest: { email: 'site-guest-orders@specplast16.invalid', name: 'Заявка с сайта' },
+} as const;
+
+/** Id of a technical customer account, created on first use. */
+export async function technicalUserId(kind: keyof typeof TECHNICAL_CUSTOMERS) {
+  const account = TECHNICAL_CUSTOMERS[kind];
   const user = await prisma.user.upsert({
-    where: { email: IMPORTER_EMAIL },
+    where: { email: account.email },
     update: {},
-    create: { email: IMPORTER_EMAIL, name: 'Заявка из мессенджера', role: 'CUSTOMER' },
+    create: { email: account.email, name: account.name, role: 'CUSTOMER' },
   });
   return user.id;
+}
+
+export function importerUserId() {
+  return technicalUserId('importer');
 }
 
 function parseDate(value: string | null | undefined) {
@@ -50,7 +69,9 @@ async function locationFor(city: string | undefined) {
   const existing = await prisma.location.findFirst({ where: { city, addressLine: city } });
   if (existing) return existing.id;
   const created = await prisma.location.create({
-    data: { addressLine: city, city, region: 'Республика Татарстан', country: 'Россия' },
+    // The region of a known city («Самара» → Самарская область); none for a
+    // town the list does not have — never a default region.
+    data: { addressLine: city, city, region: cityByName(city)?.region ?? null, country: 'Россия' },
   });
   return created.id;
 }
@@ -100,6 +121,12 @@ export async function ingestMessage(message: IncomingMessage): Promise<IngestRes
 
   if (!isRequest) return { status: 'ignored', reason: heuristic.signals.join('; ') };
 
+  // A town the parsers do not know («в Бавлы») still gets a Location with its
+  // name: only the house fleet and providers whose base names that town hear
+  // of it (lib/geo.ts orderPoint has no point for it). An order with no place
+  // at all reaches only the house fleet.
+  city = city ?? placeInText(text) ?? undefined;
+
   const category = categorySlug
     ? await prisma.equipmentCategory.findUnique({ where: { slug: categorySlug } })
     : null;
@@ -110,7 +137,10 @@ export async function ingestMessage(message: IncomingMessage): Promise<IngestRes
       customerId: await importerUserId(),
       // The public description never carries phones, e-mails or @usernames
       // (152-ФЗ); the full text stays in rawText for admins and providers.
-      description: maskContacts(summary ?? text).slice(0, 2000),
+      // Orders from open chats say so, and that the author may ask to remove them.
+      description: message.openChat
+        ? `${maskContacts(summary ?? text).slice(0, 1850)}\n\n${chatOrderNote(message.chatTitle)}`
+        : maskContacts(summary ?? text).slice(0, 2000),
       desiredStartDate: start,
       desiredEndDate: end,
       status: published ? 'OPEN' : 'PENDING_REVIEW',
@@ -124,24 +154,46 @@ export async function ingestMessage(message: IncomingMessage): Promise<IngestRes
       contactName: message.authorName?.slice(0, 200),
       contactPhone: phone,
       rawText: text.slice(0, 4000),
+      bidsUntil: bidsUntilFor(new Date(), start),
     },
   });
 
-  const sourceLabel = message.source === 'WHATSAPP' ? 'WhatsApp' : 'Telegram';
-  await notifyTelegram(
-    [
-      `${published ? '🆕 Новая заявка из чата' : '🕵️ Заявка на модерации'} — ${SITE.name}`,
-      `Источник: ${sourceLabel}${message.chatTitle ? ` · ${message.chatTitle}` : ''}`,
-      category ? `Техника: ${category.name}` : null,
-      city ? `Где: ${city}` : null,
-      `Текст: ${text.slice(0, 300)}`,
-      message.authorName ? `Автор: ${message.authorName}` : null,
-      phone ? `Телефон: ${phone}` : null,
-      `${siteUrl()}${published ? `/orders/${order.id}` : '/admin'}`,
-    ]
-      .filter(Boolean)
-      .join('\n'),
-  );
+  // Providers with this kind of machinery nearby hear about it at once.
+  if (published) await notifyProvidersAboutOrder(order.id);
+  // A doubtful one goes to the AI moderator at once (lib/orderModeration.ts),
+  // which notifies providers itself when it publishes; if the AI cannot be
+  // asked, the daily sweep retries it.
+  const moderation = published
+    ? null
+    : await autoModerateOrder(order.id, { timeoutMs: 6_000 }).catch((error: unknown) => {
+        console.error('[ingest] AI moderation failed, the sweep will retry', error);
+        return { status: 'skipped', reason: 'error' } as const;
+      });
+  const live = published || moderation?.status === 'published';
+  // The owner does not moderate orders himself (2026-10-17): he hears about
+  // published orders, and about a doubtful one only when no AI decided on it
+  // (the AI is off, its daily budget is spent or it could not be reached).
+  const waitsForOwner =
+    !live && moderation?.status === 'skipped' && moderation.reason !== 'not-pending';
 
-  return { status: 'created', orderId: order.id, published };
+  const sourceLabel = message.source === 'WHATSAPP' ? 'WhatsApp' : 'Telegram';
+  if (live || waitsForOwner)
+    await notifyTelegram(
+      [
+        `${live ? '🆕 Новая заявка из чата' : '🕵️ Заявка на модерации'} — ${SITE.name}`,
+        `Источник: ${sourceLabel}${message.chatTitle ? ` · ${message.chatTitle}` : ''}`,
+        category ? `Техника: ${category.name}` : null,
+        city ? `Где: ${city}` : null,
+        `Текст: ${text.slice(0, 300)}`,
+        message.authorName ? `Автор: ${message.authorName}` : null,
+        phone ? `Телефон: ${phone}` : null,
+        `${siteUrl()}${live ? `/orders/${order.id}` : '/admin'}`,
+      ]
+        .filter(Boolean)
+        .join('\n'),
+    );
+
+  // `published`: on the board now, by the import or by the AI (the group bot
+  // replies under such an order).
+  return { status: 'created', orderId: order.id, published: live };
 }

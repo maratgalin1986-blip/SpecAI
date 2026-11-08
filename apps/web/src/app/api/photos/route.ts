@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { clientIp } from '@/lib/loginErrors';
 import { put } from '@vercel/blob';
 import { checkRateLimit } from '@/lib/rateLimit';
 import { getBlobToken } from '@/lib/blob';
@@ -19,7 +20,7 @@ import {
 const RATE_LIMIT = { limit: 5, windowMs: 10 * 60_000 };
 
 export async function POST(request: NextRequest) {
-  const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown';
+  const ip = clientIp(request);
   const rate = checkRateLimit(`photos:${ip}`, RATE_LIMIT);
   if (!rate.ok) {
     return NextResponse.json(

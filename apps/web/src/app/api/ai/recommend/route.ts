@@ -5,7 +5,7 @@ import { recommendEquipment } from '@specai/ai-service';
 import { getRequestUser } from '@/lib/requestUser';
 import { checkRateLimit } from '@/lib/rateLimit';
 import { clientIpFrom } from '@/lib/loginErrors';
-import { PUBLIC_FLEET } from '@/lib/fleet';
+import { HOUSE_FIRST_ORDER, PUBLIC_FLEET } from '@/lib/fleet';
 import { matchTask } from '@/lib/dispatcher';
 import { customerRates } from '@/lib/equipmentCatalog';
 
@@ -46,6 +46,7 @@ export async function POST(request: NextRequest) {
   const available = await prisma.equipment.findMany({
     where: { ...PUBLIC_FLEET, status: 'AVAILABLE' },
     include: { category: true },
+    orderBy: HOUSE_FIRST_ORDER,
     take: 50,
   });
 
@@ -71,9 +72,11 @@ export async function POST(request: NextRequest) {
         .sort((x, y) => x.dailyRate - y.dailyRate)
         .slice(0, 3)
         .map((c) => ({ equipmentId: c.id, reason: `Подходит: ${task?.why}.` })),
-      followUpQuestion: task
-        ? undefined
-        : 'Опишите задачу подробнее: что нужно сделать (копать, поднять, вывезти, уплотнить…), объём и адрес.',
+      followUpQuestion: !task
+        ? 'Опишите задачу подробнее: что нужно сделать (копать, поднять, вывезти, уплотнить…), объём и адрес.'
+        : picked.length === 0
+          ? `Свободной техники «${task.category}» в каталоге сейчас нет. Разместите заявку — исполнители предложат цену.`
+          : undefined,
     };
   };
   let result;

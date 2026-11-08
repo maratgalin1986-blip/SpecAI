@@ -3,7 +3,11 @@ import { PUBLIC_AGENT_PROFILES, agentIdSchema } from '@specai/shared';
 import { AgentChat } from '@/components/AgentChat';
 import { CinemaHero } from '@/components/CinemaHero';
 
-export const metadata: Metadata = { title: 'ИИ-агенты' };
+export const metadata: Metadata = {
+  title: 'ИИ-агенты',
+  // ?agent=<id> preselects an agent: one canonical for every variant.
+  alternates: { canonical: '/agents' },
+};
 
 export default function AgentsPage({ searchParams }: { searchParams: { agent?: string } }) {
   const parsed = agentIdSchema.safeParse(searchParams.agent);

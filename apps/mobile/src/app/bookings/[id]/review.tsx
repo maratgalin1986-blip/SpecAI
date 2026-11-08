@@ -2,6 +2,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
+  Alert,
   Keyboard,
   KeyboardAvoidingView,
   Platform,
@@ -39,8 +40,16 @@ export default function ReviewScreen() {
     if (!id) return;
     setSubmitting(true);
     try {
-      await createReview({ bookingId: id, rating, comment: comment.trim() || undefined });
-      router.back();
+      const result = await createReview({
+        bookingId: id,
+        rating,
+        comment: comment.trim() || undefined,
+      });
+      // Отзыв появится после проверки владельцем — говорим об этом, иначе кажется,
+      // что он пропал.
+      Alert.alert('Отзыв отправлен', result.message ?? 'Спасибо! Отзыв появится после проверки', [
+        { text: 'Хорошо', onPress: () => router.back() },
+      ]);
     } catch (caught) {
       setError(caught instanceof ApiError ? caught.message : 'Не удалось отправить отзыв');
     } finally {

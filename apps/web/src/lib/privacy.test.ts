@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   HIDDEN_CONTACT,
+  containsContact,
   canSeeChatContacts,
   canSeeCustomerName,
   isHttpsUrl,
@@ -12,6 +13,55 @@ import {
 } from './privacy';
 
 describe('maskContacts', () => {
+  it('masks phones written with dots, underscores, slashes and long dashes', () => {
+    for (const phone of [
+      '8.917.444.55.66',
+      '+7 917 444.55.66',
+      '8\u2014917\u2014444\u201455\u201466',
+      '8_917_444_55_66',
+      '8/917/444/55/66',
+      '+7\u00b7917\u00b7444\u00b755\u00b766',
+    ]) {
+      expect(maskContacts(`звоните ${phone}, жду`)).toBe(`звоните ${HIDDEN_CONTACT}, жду`);
+    }
+  });
+
+  it('masks a phone written next to a date and keeps the date', () => {
+    expect(maskContacts('Тел 89174445566 12.10.2026')).toBe(`Тел ${HIDDEN_CONTACT} 12.10.2026`);
+    expect(maskContacts('12.10.2026 89174445566')).toBe(`12.10.2026 ${HIDDEN_CONTACT}`);
+    expect(maskContacts('+7 (917) 444-55-66 12.10.2026')).toContain('12.10.2026');
+    expect(maskContacts('+7 (917) 444-55-66 12.10.2026')).not.toContain('444');
+  });
+
+  it('masks commas, pipes and asterisks, and a phone right after a word', () => {
+    for (const phone of ['8,917,444,55,66', '8|917|444|55|66', '8*917*444*55*66']) {
+      expect(maskContacts(`звоните ${phone}`)).toBe(`звоните ${HIDDEN_CONTACT}`);
+    }
+    expect(maskContacts('AUDIT3 8.917.444.55.66')).toBe(`AUDIT3 ${HIDDEN_CONTACT}`);
+  });
+
+  it('leaves coordinates, sums and date ranges alone', () => {
+    for (const text of [
+      'Координаты 55.7436 52.3959',
+      'Бюджет 1.200.000.000 руб',
+      'Смены 12.10-15.10 и 20.10-25.10 2026',
+      'смены 1, 2, 3, 4, 5, 6, 7, 8, 9, 10',
+    ]) {
+      expect(maskContacts(text)).toBe(text);
+    }
+  });
+
+  it('leaves dates and date ranges readable', () => {
+    for (const text of [
+      'с 12.10.2026 - 15.10',
+      'на 01.06.2028',
+      '12.10.2026 08:00',
+      'смены 12.10-15.10',
+    ]) {
+      expect(maskContacts(text)).toBe(text);
+    }
+  });
+
   it('hides phone numbers in any common format', () => {
     for (const phone of [
       '89170001122',
@@ -136,5 +186,15 @@ describe('who sees personal data', () => {
     expect(orderDescriptionFor(imported, { isAdmin: true })).toBe(imported.description);
     const site = { description: 'мой тел 89170001122', source: 'SITE' };
     expect(orderDescriptionFor(site, {})).toBe(site.description);
+  });
+});
+
+describe('containsContact', () => {
+  it('finds phones, e-mails and handles in a machine name, not model codes', () => {
+    expect(containsContact('Самосвал тел 89173334455')).toBe(true);
+    expect(containsContact('Кран 8.917.333.44.55')).toBe(true);
+    expect(containsContact('Кран, пишите ivan@mail.ru')).toBe(true);
+    expect(containsContact('КамАЗ 65115-6058-48')).toBe(false);
+    expect(containsContact('Hitachi ZX200-5G 2019')).toBe(false);
   });
 });

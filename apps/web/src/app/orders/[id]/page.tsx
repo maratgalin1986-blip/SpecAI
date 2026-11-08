@@ -1,4 +1,6 @@
-import { notFound } from 'next/navigation';
+import type { Metadata } from 'next';
+import { buyerLine, parseBuyer } from '@/lib/buyerRequisites';
+import { notFound, redirect } from 'next/navigation';
 import { getServerSession } from 'next-auth';
 import { prisma } from '@specai/database';
 import { Card } from '@specai/ui';
@@ -10,14 +12,80 @@ import { AcceptBidButton } from '@/components/AcceptBidButton';
 import { formatMoney } from '@/lib/money';
 import { isAdminRequest } from '@/lib/admin';
 import { SiteConditions } from '@/components/SiteConditions';
-import { houseFirst, isProvider, isHouseManager } from '@/lib/fleet';
-import { isSafeHttpUrl } from '@/lib/privacy';
+import { houseFirstBids, isHouseManager, isProvider } from '@/lib/fleet';
+import { isSafeHttpUrl, maskContactsAndLinks } from '@/lib/privacy';
+import { bookedProviderSees, contactsOpenFor } from '@/lib/bidPrivacy';
+import { BookingActionButtons } from '@/components/BookingActionButtons';
+import { CONTACTS_AFTER_CONFIRM } from '@/lib/customerPrivacy';
 import { approvedComments } from '@/lib/commentAccess';
 import { CommentForm, CommentList } from '@/components/Comments';
 import { customerShortName } from '@/lib/customerPrivacy';
+import { OrderTimeline } from '@/components/OrderTimeline';
+import { ReliabilityBadges } from '@/components/ReliabilityBadges';
+import { orderTimeline } from '@/lib/orderTimeline';
+import { offerBreakdown } from '@/lib/offerBreakdown';
+import { loadCompanyStats } from '@/lib/companyStats';
+import { EMPTY_STATS, reliability } from '@/lib/reliability';
+import { providerPath } from '@/lib/providerSeo';
+import { pluralizeRu } from '@/lib/pluralize';
+import { EraseOrderButton, RevealPhoneButton } from '@/components/ChatOrderContact';
+import { CHAT_ORDER_REMOVAL, CHAT_ORDER_REMOVAL_HREF, maskPhone } from '@/lib/chatOrders';
 import { SITE } from '@/lib/site';
+import { OrderChat } from '@/components/OrderChat';
+import { bidsLeftText, isLateBid } from '@/lib/bidWindow';
+import { orderDays } from '@/lib/offerBreakdown';
+import { distanceKm } from '@/lib/geo';
+import { CloseOrderButton } from '@/components/AdminIntegrations';
+import { PhoneLink } from '@/components/admin/PhoneLink';
+import { isRealEmail } from '@/lib/notifications/routing';
+import { Hint } from '@/components/Hint';
+import { CUSTOMER_MODE_HREF } from '@/lib/cabinetMode';
+import { OrderPublicView } from '@/components/OrderPublicView';
+import { ShareButtons } from '@/components/ShareButtons';
+import { orderCardText, orderShareText, orderShareTitle } from '@/lib/orderCard';
+import { siteUrl } from '@/lib/siteUrl';
 
 export const dynamic = 'force-dynamic';
+
+const msk = (date: Date) => date.toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow' });
+
+/**
+ * Its own tab title («Заявка · Автокран · 20.10.2026»); never indexed. A shared
+ * link gets a preview: «Нужен автокран · Елабуга · 20 октября» and the card
+ * from opengraph-image.tsx — the kind of machine, the city and the day only.
+ */
+export async function generateMetadata({ params }: { params: { id: string } }): Promise<Metadata> {
+  const order = await prisma.order
+    .findUnique({
+      where: { id: params.id },
+      select: {
+        status: true,
+        desiredStartDate: true,
+        category: { select: { name: true } },
+        location: { select: { city: true, latitude: true, longitude: true } },
+      },
+    })
+    .catch(() => null);
+  const robots = { index: false, follow: false };
+  if (!order || order.status === 'PENDING_REVIEW') return { title: 'Заявка', robots };
+  const preview = orderCardText({
+    categoryName: order.category?.name,
+    location: order.location,
+    desiredStartDate: order.desiredStartDate,
+  });
+  const description = `Исполнители со своей техникой присылают цены, заказчик выбирает. ${SITE.promise}.`;
+  return {
+    title: `Заявка · ${order.category?.name ?? 'любая техника'} · ${msk(order.desiredStartDate)}`,
+    description,
+    robots,
+    openGraph: {
+      title: preview.line,
+      description,
+      url: `/orders/${encodeURIComponent(params.id)}`,
+      type: 'website',
+    },
+  };
+}
 
 export default async function OrderDetailPage({ params }: { params: { id: string } }) {
   const session = await getServerSession(authOptions);
@@ -28,8 +96,11 @@ export default async function OrderDetailPage({ params }: { params: { id: string
       category: true,
       customer: true,
       location: true,
+      booking: { select: { id: true, status: true, equipment: { select: { companyId: true } } } },
       bids: {
-        include: { equipment: { include: { company: true } } },
+        include: {
+          equipment: { include: { company: true, category: { select: { name: true } } } },
+        },
         orderBy: { price: 'asc' },
       },
     },
@@ -48,10 +119,35 @@ export default async function OrderDetailPage({ params }: { params: { id: string
   const isAdmin = isAdminRequest();
   const canSeeContact = isHouseManager(session?.user) || isAdmin;
   const seesAllBids = isOwner || isAdmin;
+  // A visitor without an account (a shared link, the channel) sees the public
+  // card with a sign-in button; another customer is shown the board instead
+  // of a 404.
   if (!isOwner && !isAdmin && !isProvider(session?.user)) {
-    notFound();
+    if (!session?.user) {
+      // Only what the public card reads, not the loaded rows (customer, bids).
+      return (
+        <OrderPublicView
+          order={{
+            id: order.id,
+            status: order.status,
+            description: order.description,
+            desiredStartDate: order.desiredStartDate,
+            desiredEndDate: order.desiredEndDate,
+            createdAt: order.createdAt,
+            bidsUntil: order.bidsUntil,
+            source: order.source,
+            category: order.category,
+            customer: { name: order.customer.name },
+            contactName: order.contactName,
+            location: order.location,
+            bidCount: order.bids.length,
+          }}
+        />
+      );
+    }
+    redirect('/orders#board');
   }
-  const visibleBids = houseFirst(
+  const visibleBids = houseFirstBids(
     seesAllBids
       ? order.bids
       : order.bids.filter((bid) => bid.equipment.companyId === session?.user.companyId),
@@ -64,10 +160,61 @@ export default async function OrderDetailPage({ params }: { params: { id: string
     ? await approvedComments({ targetUserId: order.customerId }, 10)
     : [];
   const providerHasBid = viewerIsProvider && visibleBids.length > 0;
+  // The customer compares offers by trust signals as well as price.
+  const trust = seesAllBids
+    ? await loadCompanyStats(order.bids.map((bid) => bid.equipment.companyId))
+    : new Map();
+  const timeline = orderTimeline(
+    {
+      orderStatus: order.status,
+      bidCount: order.bids.length,
+      bookingStatus: order.booking?.status ?? null,
+    },
+    order.id,
+  );
+  // «Поделиться заявкой»: the kind, the city and the day only (lib/orderCard.ts).
+  const shareCard = {
+    categoryName: order.category?.name,
+    location: order.location,
+    desiredStartDate: order.desiredStartDate,
+  };
+  // The house bid leads the list (houseFirst), so the cheapest is not always first.
+  const cheapest =
+    visibleBids.length > 1 ? Math.min(...visibleBids.map((bid) => Number(bid.price))) : null;
   // One bid per company: a repeat updates the pending one.
   const ownPendingBid = viewerIsProvider
     ? visibleBids.find((bid) => bid.status === 'PENDING')
     : undefined;
+  // «Подача» prefilled from the distance base → site × the company's price per km.
+  const viewerCompany =
+    viewerIsProvider && session?.user.companyId
+      ? await prisma.company.findUnique({
+          where: { id: session.user.companyId },
+          select: { baseLat: true, baseLon: true, deliveryPricePerKm: true },
+        })
+      : null;
+  const suggestedDelivery =
+    viewerCompany?.baseLat != null &&
+    viewerCompany.baseLon != null &&
+    viewerCompany.deliveryPricePerKm != null &&
+    order.location?.latitude != null &&
+    order.location.longitude != null
+      ? distanceKm(
+          { lat: viewerCompany.baseLat, lon: viewerCompany.baseLon },
+          { lat: order.location.latitude, lon: order.location.longitude },
+        ) * Number(viewerCompany.deliveryPricePerKm)
+      : null;
+  const bidsLeft = order.status === 'OPEN' ? bidsLeftText(order.bidsUntil) : null;
+  // The provider the customer chose: confirms the booking right here, and
+  // reads the customer's contacts once it is confirmed (CLAUDE.md: contacts
+  // only on CONFIRMED/ACTIVE/COMPLETED).
+  const viewerBooking =
+    viewerIsProvider &&
+    order.booking &&
+    session?.user.companyId &&
+    order.booking.equipment.companyId === session.user.companyId
+      ? order.booking
+      : null;
 
   return (
     <div className="flex flex-col gap-6">
@@ -87,19 +234,122 @@ export default async function OrderDetailPage({ params }: { params: { id: string
           {ORDER_STATUS_LABELS[order.status]}
         </span>
       </div>
+      {(isOwner || isAdmin) && <OrderTimeline timeline={timeline} />}
+      {isOwner && (
+        <p className="break-words text-sm text-slate-600">
+          Заказываю от:{' '}
+          {parseBuyer(order.buyer) ? buyerLine(parseBuyer(order.buyer)!) : 'как частное лицо'}
+        </p>
+      )}
+      {isOwner && order.status === 'OPEN' && <Hint id="order-customer" />}
+      {viewerIsProvider && order.status === 'OPEN' && <Hint id="order-provider" />}
+      {isAdmin && (
+        <Card className="border-amber-200 bg-amber-50">
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <h2 className="font-semibold">Контакты (видит только администратор)</h2>
+            {order.status === 'OPEN' && <CloseOrderButton orderId={order.id} />}
+          </div>
+          <ul className="mt-2 flex flex-col gap-1 text-sm">
+            <li>
+              Заказчик: {order.contactName ?? order.customer.name} ·{' '}
+              <PhoneLink phone={order.contactPhone ?? order.customer.phone} />
+              {!isImported && isRealEmail(order.customer.email) && (
+                <>
+                  {' '}
+                  ·{' '}
+                  <a href={`mailto:${order.customer.email}`} className="underline">
+                    {order.customer.email}
+                  </a>
+                </>
+              )}
+            </li>
+            {houseFirstBids(order.bids, (bid) => bid.equipment.companyId).map((bid) => (
+              <li key={bid.id}>
+                {bid.status === 'ACCEPTED' ? 'Выбран исполнитель' : 'Предложение'}: «
+                {bid.equipment.company.name}» · <PhoneLink phone={bid.equipment.company.phone} />
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
+      {isOwner && order.status === 'OPEN' && (
+        // The customer may share the order by choice: a friend with machinery,
+        // a work chat. The link previews as the card (opengraph-image.tsx).
+        <ShareButtons
+          url={`${siteUrl()}/orders/${encodeURIComponent(order.id)}`}
+          text={orderShareText(shareCard)}
+          title={orderShareTitle(shareCard)}
+          label="Поделиться заявкой"
+        />
+      )}
       {isOwner && order.status === 'OPEN' && <CancelOrderButton orderId={order.id} />}
       {isOwner && order.status === 'MATCHED' && (
         <p className="rounded-md border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
-          Бронь создана — диспетчер {SITE.name} подтвердит её и свяжется с вами.{' '}
-          <a href="/dashboard#bookings" className="font-semibold underline">
+          Бронь создана — исполнитель подтвердит её, и вы увидите его телефон.{' '}
+          <a
+            href={
+              // A provider's own order (customer mode): its bookings stay in that mode.
+              isProvider(session?.user) ? `${CUSTOMER_MODE_HREF}#bookings` : '/dashboard#bookings'
+            }
+            className="font-semibold underline"
+          >
             Мои брони
           </a>
         </p>
       )}
+      {viewerBooking?.status === 'PENDING' && (
+        <Card className="border-amber-300 bg-amber-50" id="confirm">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
+            <div className="min-w-0">
+              <h2 className="font-semibold">Заказчик выбрал вас — подтвердите бронь</h2>
+              <p className="mt-1 text-sm text-slate-700">
+                {CONTACTS_AFTER_CONFIRM}. Бронь есть и в кабинете:{' '}
+                <a href="/provider#bookings" className="font-semibold underline">
+                  Бронирования
+                </a>
+                .
+              </p>
+            </div>
+            <BookingActionButtons
+              bookingId={viewerBooking.id}
+              availableTransitions={['CONFIRMED', 'CANCELLED']}
+            />
+          </div>
+        </Card>
+      )}
+      {viewerBooking && contactsOpenFor(viewerBooking.status) && (
+        <Card className="border-green-200 bg-green-50" id="contacts">
+          <h2 className="font-semibold">Контакты заказчика</h2>
+          <p className="mt-2 text-sm">
+            {order.contactName ?? order.customer.name} ·{' '}
+            <PhoneLink phone={order.contactPhone ?? order.customer.phone} />
+            {!isImported && isRealEmail(order.customer.email) && (
+              <>
+                {' '}
+                ·{' '}
+                <a href={`mailto:${order.customer.email}`} className="underline">
+                  {order.customer.email}
+                </a>
+              </>
+            )}
+          </p>
+          <p className="mt-1 text-xs text-slate-600">
+            Бронь подтверждена — договоритесь о времени подачи. Статус брони:{' '}
+            <a href="/provider#bookings" className="underline">
+              в кабинете
+            </a>
+            .
+          </p>
+        </Card>
+      )}
 
       <Card>
         <h2 className="font-semibold">Описание</h2>
-        <p className="mt-2 whitespace-pre-line text-sm text-slate-600">{order.description}</p>
+        <p className="mt-2 whitespace-pre-line text-sm text-slate-600">
+          {isOwner || isAdmin || bookedProviderSees(order.booking, session?.user.companyId)
+            ? order.description
+            : maskContactsAndLinks(order.description)}
+        </p>
       </Card>
 
       {/* An async server component, awaited directly so the JSX types do not
@@ -138,16 +388,63 @@ export default async function OrderDetailPage({ params }: { params: { id: string
                 <p className="mt-1 whitespace-pre-line text-slate-600">«{order.rawText}»</p>
               )}
             </div>
+          ) : viewerIsProvider && order.contactPhone ? (
+            <div className="mt-2">
+              <RevealPhoneButton orderId={order.id} maskedPhone={maskPhone(order.contactPhone)} />
+            </div>
           ) : null}
+          <p className="mt-2 text-xs text-slate-500">
+            {order.sourceChat?.startsWith('Личное сообщение')
+              ? 'Отправлена личным сообщением боту площадки.'
+              : 'Найдена в открытой группе мессенджера, к которой подключена площадка.'}{' '}
+            {CHAT_ORDER_REMOVAL} (
+            <a href={CHAT_ORDER_REMOVAL_HREF} className="underline">
+              подробнее
+            </a>
+            ).
+          </p>
+          {isAdmin && (
+            <div className="mt-2">
+              <EraseOrderButton orderId={order.id} />
+            </div>
+          )}
+        </Card>
+      )}
+
+      {!isImported && order.contactPhone && (viewerIsProvider || canSeeContact) && (
+        <Card className="border-sky-200 bg-sky-50">
+          <h2 className="font-semibold">Заявка с сайта без регистрации</h2>
+          {canSeeContact ? (
+            <p className="mt-2 text-sm">
+              {order.contactName && <>Автор: {order.contactName} · </>}
+              Телефон:{' '}
+              <a href={`tel:${order.contactPhone}`} className="font-semibold text-amber-700">
+                {order.contactPhone}
+              </a>
+            </p>
+          ) : (
+            <div className="mt-2">
+              <RevealPhoneButton orderId={order.id} maskedPhone={maskPhone(order.contactPhone)} />
+            </div>
+          )}
         </Card>
       )}
 
       {order.status === 'OPEN' && !isOwner && (
-        <section>
+        <section id="bid" className="scroll-mt-24">
           <h2 className="mb-3 text-lg font-semibold">Ваше предложение</h2>
+          <p className="mb-3 text-sm text-slate-600">
+            {bidsLeft
+              ? `Предложить цену: ${bidsLeft}`
+              : order.bidsUntil
+                ? 'Срок приёма предложений истёк — предложение примут, но пометят как позднее'
+                : null}
+          </p>
           <Card className="max-w-xl">
             <BidForm
               orderId={order.id}
+              suggestedDelivery={suggestedDelivery}
+              days={orderDays(order.desiredStartDate, order.desiredEndDate)}
               existing={
                 ownPendingBid
                   ? {
@@ -155,11 +452,26 @@ export default async function OrderDetailPage({ params }: { params: { id: string
                       currency: ownPendingBid.currency,
                       message: ownPendingBid.message,
                       equipmentId: ownPendingBid.equipmentId,
+                      deliveryPrice:
+                        ownPendingBid.deliveryPrice === null
+                          ? null
+                          : Number(ownPendingBid.deliveryPrice),
+                      shiftPrice:
+                        ownPendingBid.shiftPrice === null ? null : Number(ownPendingBid.shiftPrice),
+                      shifts: ownPendingBid.shifts,
+                      optionsNote: ownPendingBid.optionsNote,
                     }
                   : undefined
               }
             />
           </Card>
+        </section>
+      )}
+
+      {viewerIsProvider && providerHasBid && (
+        <section id="chat" className="flex scroll-mt-24 flex-col gap-3">
+          <h2 className="text-lg font-semibold">Чат с заказчиком</h2>
+          <OrderChat orderId={order.id} defaultOpen />
         </section>
       )}
 
@@ -177,36 +489,49 @@ export default async function OrderDetailPage({ params }: { params: { id: string
         </section>
       )}
 
-      <section>
+      <section id="offers" className="scroll-mt-24">
         <h2 className="mb-3 text-lg font-semibold">
-          {isOwner
-            ? `Цена от ${SITE.name}`
-            : seesAllBids
-              ? `Предложения исполнителей · ${order.bids.length}`
-              : `Ваши предложения (всего по заявке: ${order.bids.length})`}
+          {seesAllBids
+            ? `Предложения исполнителей · ${order.bids.length}`
+            : `Ваши предложения (всего по заявке: ${order.bids.length})`}
         </h2>
         {visibleBids.length === 0 ? (
           <p className="text-sm text-slate-600">
             {isOwner
-              ? `Диспетчер ${SITE.name} ещё не назвал цену — обычно в течение рабочего дня. Срочно: ${SITE.phone}.`
+              ? `Пока нет предложений. Исполнители видят заявку и пришлют цены сюда; срочно — ${SITE.phone}.`
               : 'Пока никто не предложил технику.'}
           </p>
         ) : (
-          <div className="flex flex-col gap-3">
+          <div id={isOwner ? 'chat' : undefined} className="flex scroll-mt-24 flex-col gap-3">
             {visibleBids.map((bid) => (
               <Card
                 key={bid.id}
-                className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4"
+                className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:gap-4"
               >
-                <div className="min-w-0">
-                  <p className="break-words font-medium">
-                    {bid.equipment.name} · {bid.equipment.company.name}
-                  </p>
-                  <p className="text-sm text-slate-500">
-                    {formatMoney(bid.price, bid.currency)}
-                    {bid.message && <> · {bid.message}</>}
-                  </p>
-                </div>
+                <OfferBody
+                  bid={{
+                    ...bid,
+                    message:
+                      bid.message &&
+                      !isAdmin &&
+                      !(
+                        ['CONFIRMED', 'ACTIVE', 'COMPLETED'].includes(
+                          order.booking?.status ?? '',
+                        ) && bid.status === 'ACCEPTED'
+                      )
+                        ? maskContactsAndLinks(bid.message)
+                        : bid.message,
+                  }}
+                  start={order.desiredStartDate}
+                  end={order.desiredEndDate}
+                  trust={
+                    seesAllBids
+                      ? reliability(trust.get(bid.equipment.companyId) ?? EMPTY_STATS)
+                      : null
+                  }
+                  cheapest={cheapest !== null && Number(bid.price) === cheapest}
+                  late={isLateBid(order.bidsUntil, bid.createdAt)}
+                />
                 {isOwner && order.status === 'OPEN' && bid.status === 'PENDING' && (
                   <AcceptBidButton bidId={bid.id} />
                 )}
@@ -227,11 +552,156 @@ export default async function OrderDetailPage({ params }: { params: { id: string
                     Отклонено
                   </span>
                 )}
+                {/* The customer talks to each bidder separately; the admin reads along. */}
+                {(isOwner || isAdmin) && (
+                  <div className="basis-full">
+                    <OrderChat
+                      orderId={order.id}
+                      companyId={bid.equipment.companyId}
+                      label={`Открыть чат с ${bid.equipment.company.name}`}
+                      readOnly={!isOwner}
+                    />
+                  </div>
+                )}
               </Card>
             ))}
           </div>
         )}
       </section>
+    </div>
+  );
+}
+
+/** One offer: company and trust signals, machine, total and the price breakdown. */
+function OfferBody({
+  bid,
+  start,
+  end,
+  trust,
+  cheapest,
+  late = false,
+}: {
+  bid: {
+    price: unknown;
+    currency: string;
+    message: string | null;
+    deliveryPrice?: unknown;
+    shiftPrice?: unknown;
+    shifts?: number | null;
+    optionsNote?: string | null;
+    equipment: {
+      id: string;
+      name: string;
+      hourlyRate: unknown;
+      dailyRate: unknown;
+      companyId: string;
+      company: { name: string };
+      category: { name: string };
+    };
+  };
+  start: Date;
+  end: Date;
+  trust: ReturnType<typeof reliability> | null;
+  cheapest: boolean;
+  /** Sent after the order's bid deadline (Order.bidsUntil). */
+  late?: boolean;
+}) {
+  // The card rates are the machine page's numbers (customerRates): a house
+  // machine never shows a lower price here than in the catalogue.
+  const parts = offerBreakdown(
+    bid.price,
+    start,
+    end,
+    { ...bid.equipment, categoryName: bid.equipment.category.name },
+    bid,
+  );
+  return (
+    <div className="flex min-w-0 flex-col gap-2">
+      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+        <a
+          href={providerPath(bid.equipment.companyId)}
+          className="break-words text-base font-bold text-graphite-950 hover:text-signal-700 hover:underline"
+        >
+          {bid.equipment.company.name}
+        </a>
+        {cheapest && (
+          <span className="rounded-full bg-signal-500 px-2 py-0.5 text-xs font-bold text-graphite-950">
+            Лучшая цена
+          </span>
+        )}
+        {late && (
+          <span className="rounded-full bg-graphite-100 px-2 py-0.5 text-xs font-semibold text-graphite-600">
+            Позднее предложение
+          </span>
+        )}
+      </div>
+      {trust && <ReliabilityBadges value={trust} />}
+      <a
+        href={`/equipment/${bid.equipment.id}`}
+        className="break-words text-sm text-graphite-700 hover:underline"
+      >
+        {bid.equipment.name}
+      </a>
+      <p className="font-mono text-2xl font-bold text-graphite-950">
+        {formatMoney(parts.total, bid.currency)}
+        <span className="ml-2 font-sans text-xs font-medium text-graphite-500">
+          за {pluralizeRu(parts.days, ['день', 'дня', 'дней'])}
+        </span>
+      </p>
+      {parts.shiftPrice !== null && parts.shifts !== null && (
+        <dl className="grid grid-cols-3 gap-x-3 rounded-xl bg-graphite-50 px-3 py-2 text-xs text-graphite-700">
+          <div>
+            <dt>Подача</dt>
+            <dd className="font-semibold text-graphite-900">
+              {parts.delivery ? formatMoney(parts.delivery, bid.currency) : 'бесплатно'}
+            </dd>
+          </div>
+          <div>
+            <dt>Смены</dt>
+            <dd className="font-semibold text-graphite-900">
+              {parts.shifts} × {formatMoney(parts.shiftPrice, bid.currency)}
+            </dd>
+          </div>
+          <div>
+            <dt>Итого</dt>
+            <dd className="font-semibold text-graphite-900">
+              {formatMoney(parts.total, bid.currency)}
+            </dd>
+          </div>
+        </dl>
+      )}
+      {parts.optionsNote && <p className="text-xs text-graphite-600">Опции: {parts.optionsNote}</p>}
+      <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-graphite-600 sm:grid-cols-3">
+        {parts.days > 1 && (
+          <div>
+            <dt className="inline">В день: </dt>
+            <dd className="inline font-semibold text-graphite-800">
+              {formatMoney(parts.perDay, bid.currency)}
+            </dd>
+          </div>
+        )}
+        {parts.cardHour !== null && (
+          <div>
+            <dt className="inline">По карточке: </dt>
+            <dd className="inline font-semibold text-graphite-800">
+              {formatMoney(parts.cardHour, bid.currency)}/ч
+            </dd>
+          </div>
+        )}
+        {parts.cardShift !== null && (
+          <div>
+            <dt className="inline">Смена: </dt>
+            <dd className="inline font-semibold text-graphite-800">
+              {formatMoney(parts.cardShift, bid.currency)}
+            </dd>
+          </div>
+        )}
+      </dl>
+      {bid.message && (
+        <p className="whitespace-pre-line rounded-xl bg-graphite-50 px-3 py-2 text-sm text-graphite-700">
+          {bid.message}
+        </p>
+      )}
     </div>
   );
 }

@@ -5,8 +5,8 @@ import { isAdminRequest } from '@/lib/admin';
 
 const schema = z.object({ status: z.enum(['APPROVED', 'REJECTED']) });
 
-// Moderation of a review's text: publish (APPROVED) or hide it (REJECTED).
-// The stars are public either way.
+// Moderation of a review: publish it (APPROVED: stars and text count and are
+// shown) or hide it (REJECTED). Nothing is public before the owner decides.
 export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
   if (!isAdminRequest()) return NextResponse.json({ error: 'Нет доступа' }, { status: 401 });
   const parsed = schema.safeParse(await request.json().catch(() => null));

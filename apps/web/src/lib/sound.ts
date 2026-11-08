@@ -19,7 +19,7 @@ export type SoundCue =
 export type MachineSource = 'hero' | 'journey' | 'page' | 'wizard' | 'scene';
 
 // v2 (2026-10-03): the old switch took two presses, so many «off» choices
-// saved under the old key were accidents; sound is on again for everyone.
+// saved under the old key were accidents. Only an explicit «on» counts now.
 export const SOUND_STORAGE_KEY = 'specplast16_sound_v2';
 export const SOUND_HINT_KEY = 'specplast16_sound_hint';
 /** The chat microphone opened (detail true) or closed: the site's sound steps aside. */
@@ -84,10 +84,32 @@ export function prefersReducedMotion(): boolean {
 }
 
 /**
- * Pages for reading (consent, policy, credits): no cinema layer and no sound
- * director, so no sound switch either (CinemaLayer, SoundToggle).
+ * Pages for reading (consents, policy, rules, credits): no cinema layer and
+ * no sound director, so no sound switch either (CinemaLayer, SoundToggle).
+ * Covers /soglasie and /soglasie-rasprostranenie alike.
  */
-export const DOCUMENT_PAGES = /^\/(soglasie|privacy|credits)(\/|$)/;
+export const DOCUMENT_PAGES = /^\/(soglasie(-[a-z-]+)?|privacy|pravila|credits)(\/|$)/;
+
+// The touch that started the sound (SoundDirector notes it). A sound button
+// pressed while the sound waits for its first touch is that touch: its click,
+// which comes after the sound already runs, must not switch it straight off.
+let wakeTarget: EventTarget | null = null;
+let wakeAt = 0;
+
+export function noteWakeGesture(target: EventTarget | null): void {
+  wakeTarget = target;
+  wakeAt = Date.now();
+}
+
+/** This press of `button` is the one that just started the sound (used once). */
+export function startedByPress(button: Element): boolean {
+  const target = wakeTarget;
+  const fresh = Date.now() - wakeAt < 3000;
+  const playing = document.documentElement.hasAttribute('data-sound-live');
+  if (!(target instanceof Node) || !fresh || !playing || !button.contains(target)) return false;
+  wakeTarget = null;
+  return true;
+}
 
 export function soundEnabled(): boolean {
   return enabled;
@@ -113,9 +135,9 @@ export function setSoundEnabled(value: boolean, persist = true): void {
 }
 
 /**
- * The saved choice; sound is on unless the visitor turned it off (owner's
- * request, 2026-10-03). Browsers still start audio only at the first tap,
- * key or click of the page.
+ * The saved choice. On the public pages the sound is on by default (owner,
+ * 2026-10-03) and wakes at the first real gesture; «Выключить звук» turns it
+ * off for good. The cabinets and the admin never play it (CinemaLayer).
  */
 export function storedSoundChoice(): boolean {
   try {

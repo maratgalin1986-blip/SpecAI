@@ -80,7 +80,11 @@ export default function EquipmentDetailScreen() {
         endDate: toIsoDate(endDate),
       });
       Alert.alert('Заявка отправлена', 'Бронирование создано и ожидает подтверждения.', [
-        { text: 'К бронированиям', onPress: () => router.replace('/(tabs)/bookings') },
+        {
+          text: 'К бронированиям',
+          onPress: () =>
+            router.replace({ pathname: '/(tabs)/orders', params: { view: 'bookings' } }),
+        },
         { text: 'Ок' },
       ]);
     } catch (caught) {
@@ -220,7 +224,7 @@ export default function EquipmentDetailScreen() {
               </View>
               <Text style={styles.estimateHint}>
                 {hasHourly
-                  ? 'Предварительно: дни × стоимость смены 8 ч. Точную сумму по машино-часам уточнит менеджер. Бронирование бесплатное, без предоплаты.'
+                  ? 'Предварительно: дни × стоимость смены 8 ч. Точную сумму по машино-часам назовёт исполнитель. Бронирование бесплатное, без предоплаты.'
                   : 'Итоговая стоимость рассчитывается по суточной ставке. Бронирование бесплатное, без предоплаты.'}
               </Text>
             </View>

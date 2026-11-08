@@ -191,10 +191,10 @@ export function HeroPhotos() {
         ))}
       </div>
       <a
-        href={current === -1 ? '/stroyka' : slide.href}
+        href={current === -1 ? '/orders#new' : slide.href}
         className="absolute bottom-3 left-6 z-10 inline-flex min-h-11 items-center font-mono text-[0.65rem] uppercase tracking-[0.2em] text-slate-400 hover:text-amber-400 sm:left-10 lg:hidden"
       >
-        {current === -1 ? 'Стройка онлайн' : MACHINE_LABELS[slide.type]} →
+        {current === -1 ? 'Разместить заявку' : MACHINE_LABELS[slide.type]} →
       </a>
       <span className="absolute right-5 top-4 z-10 text-[0.6rem] text-white/50">
         {current === -1 ? `${object.name} · видео для примера` : 'Фото для примера'}

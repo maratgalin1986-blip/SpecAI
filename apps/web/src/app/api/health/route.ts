@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@specai/database';
+import { integrationFlags } from '@/lib/integrationFlags';
 
 export const dynamic = 'force-dynamic';
 
@@ -8,7 +9,7 @@ export const dynamic = 'force-dynamic';
 export async function GET() {
   try {
     await prisma.$queryRaw`SELECT 1`;
-    return NextResponse.json({ ok: true, database: 'ok' });
+    return NextResponse.json({ ok: true, database: 'ok', integrations: integrationFlags() });
   } catch (error) {
     const e = error as { name?: string; errorCode?: string; code?: string };
     return NextResponse.json(

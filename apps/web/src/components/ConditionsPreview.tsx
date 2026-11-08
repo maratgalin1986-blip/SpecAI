@@ -11,7 +11,9 @@ import type { ShiftWeather, WorkNote } from '@/lib/weather';
 // Live preview under an order form: the weather for the chosen day at the
 // typed address, and the top-down map once the address is found. The address
 // is looked up only after a 1.5 s pause and once it has a house number, not on
-// every keystroke; the server caches forecasts and geocoding.
+// every keystroke; the server caches forecasts and geocoding. Without a found
+// address there is no forecast: the platform serves all of Russia, so there is
+// no default town to show the weather for.
 
 type Result = {
   place: { lat: number; lon: number; label: string };
@@ -22,15 +24,18 @@ type Result = {
 export function ConditionsPreview({
   date,
   address,
+  near,
   categoryName,
 }: {
   /** YYYY-MM-DD */
   date: string;
   address: string;
+  /** «lat,lon» of the visitor (components/visitorNear.ts), when known. */
+  near?: string | null;
   categoryName?: string;
 }) {
   const [result, setResult] = useState<Result | null>(null);
-  const [state, setState] = useState<'idle' | 'loading' | 'far' | 'error'>('idle');
+  const [state, setState] = useState<'idle' | 'loading' | 'far' | 'error' | 'not_found'>('idle');
 
   useEffect(() => {
     if (!date) {
@@ -42,37 +47,43 @@ export function ConditionsPreview({
     const kind = machineTypeOf(categoryName ?? '');
     if (kind) params.set('kind', kind);
     const query = address.trim();
-    const withAddress = query.length >= 5 && /\d/.test(query);
-    if (withAddress) params.set('q', query);
+    if (!(query.length >= 5 && /\d/.test(query))) {
+      setResult(null);
+      setState('idle');
+      return;
+    }
+    params.set('q', query);
+    if (near) params.set('near', near);
     const controller = new AbortController();
-    const timer = window.setTimeout(
-      async () => {
-        setState('loading');
-        try {
-          const response = await fetch(`/api/weather?${params}`, { signal: controller.signal });
-          if (response.status === 400) {
-            setResult(null);
-            setState('far');
-            return;
-          }
-          if (!response.ok) throw new Error('weather');
-          const data = (await response.json()) as Result;
-          setResult(data);
-          setState('idle');
-          if (withAddress) {
-            reachGoal(data.place.label !== 'Набережные Челны' ? 'geo_found' : 'geo_fail');
-          }
-        } catch (error) {
-          if ((error as Error).name !== 'AbortError') setState('error');
+    const timer = window.setTimeout(async () => {
+      setState('loading');
+      try {
+        const response = await fetch(`/api/weather?${params}`, { signal: controller.signal });
+        if (response.status === 400) {
+          setResult(null);
+          setState('far');
+          return;
         }
-      },
-      withAddress ? 1500 : 300,
-    );
+        if (response.status === 404) {
+          setResult(null);
+          setState('not_found');
+          reachGoal('geo_fail');
+          return;
+        }
+        if (!response.ok) throw new Error('weather');
+        const data = (await response.json()) as Result;
+        setResult(data);
+        setState('idle');
+        reachGoal('geo_found');
+      } catch (error) {
+        if ((error as Error).name !== 'AbortError') setState('error');
+      }
+    }, 1500);
     return () => {
       controller.abort();
       window.clearTimeout(timer);
     };
-  }, [date, address, categoryName]);
+  }, [date, address, near, categoryName]);
 
   if (!date) return null;
   const dateLabel = new Date(`${date}T12:00:00`).toLocaleDateString('ru-RU', {
@@ -80,11 +91,6 @@ export function ConditionsPreview({
     month: 'long',
   });
   const kind = machineTypeOf(categoryName ?? '');
-  const hasAddress =
-    address.trim().length >= 5 &&
-    /\d/.test(address) &&
-    result?.place &&
-    result.place.label !== 'Набережные Челны';
 
   return (
     <div className="flex flex-col gap-3" aria-live="polite">
@@ -109,30 +115,24 @@ export function ConditionsPreview({
           <WeatherHud
             weather={result.weather}
             notes={result.notes}
-            place={
-              hasAddress
-                ? result.place.label.split(',').slice(-2).join(',').trim()
-                : 'Набережные Челны'
-            }
+            place={result.place.label.split(',').slice(-2).join(',').trim()}
             dateLabel={dateLabel}
             machineLabel={kind ? `для выбранной техники` : undefined}
             group={machineGroup(kind)}
           />
-          {!hasAddress && /\d/.test(address) && address.trim().length >= 5 && (
-            <p className="text-sm text-slate-500">
-              Адрес на карте не нашёлся — не страшно: точку уточним по телефону, заявку можно
-              отправлять.
-            </p>
-          )}
-          {hasAddress && (
-            <SiteMap
-              lat={result.place.lat}
-              lon={result.place.lon}
-              label={result.place.label}
-              caption="Так мы видим место работ"
-            />
-          )}
+          <SiteMap
+            lat={result.place.lat}
+            lon={result.place.lon}
+            label={result.place.label}
+            caption="Так мы видим место работ"
+          />
         </>
+      )}
+      {state === 'not_found' && (
+        <p className="text-sm text-slate-500">
+          Адрес на карте не нашёлся — не страшно: точку уточним по телефону, заявку можно
+          отправлять.
+        </p>
       )}
     </div>
   );

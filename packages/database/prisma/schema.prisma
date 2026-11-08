@@ -44,6 +44,32 @@ model User {
   company   Company? @relation(fields: [companyId], references: [id])
   companyId String?
 
+  // «Пригласи коллегу»: the user's own code (/r/<code>) and who invited them.
+  // No @unique: adding a unique constraint makes the build-time `db push`
+  // stop for confirmation; codes are random and checked in lib/referralStore.ts.
+  referralCode String?
+  referredById String?
+  // Акция «Пригласи друга» (owner, 2026-10-17): until this moment the user's
+  // company hears of new orders 5 minutes before the other providers
+  // (lib/referralPriority.ts). Each friend signed up with the user's code adds
+  // 7 days, never more than 30 days ahead.
+  priorityUntil DateTime?
+
+  // Рассылка «Заявки рядом за неделю» (ФЗ «О рекламе» ст. 18): только тем, кто
+  // сам отметил галочку (newsConsentAt). Отписка ставит newsUnsubscribedAt и
+  // снимает согласие; lastNewsAt — когда ушло последнее письмо (повторный
+  // запуск cron не шлёт второе). Существующие аккаунты не подписаны.
+  newsConsentAt      DateTime?
+  newsUnsubscribedAt DateTime?
+  lastNewsAt         DateTime?
+
+  // Лёгкий вход исполнителя (owner, 2026-10-28): имя, телефон и вид техники,
+  // без e-mail и пароля. Телефон не подтверждён, пока нет проверки (SMS не
+  // покупаем) — phoneVerifiedAt остаётся пустым. quickSignup отличает такой
+  // аккаунт: e-mail у него служебный (*.invalid), вход — по сессии с устройства.
+  phoneVerifiedAt DateTime?
+  quickSignup     Boolean   @default(false)
+
   bookings           Booking[]           @relation("BookingCustomer")
   orders             Order[]             @relation("OrderCustomer")
   reviews            Review[]
@@ -51,8 +77,13 @@ model User {
   verificationTokens VerificationToken[]
   commentsWritten    Comment[]           @relation("CommentAuthor")
   commentsReceived   Comment[]           @relation("CommentTarget")
+  operator           Operator?
+  linePresence       LinePresence?
+  proposals          Proposal[]
 
   @@index([companyId])
+  @@index([referralCode])
+  @@index([referredById])
 }
 
 enum VerificationTokenType {
@@ -95,16 +126,43 @@ model Company {
   // Aggregator map: where the provider's fleet is based, the marker picture
   // (a photo of its machinery; empty = the default icon) and a short note
   // customers see on the map ("от 2 500 ₽/ч, скидка 10% на неделю").
-  baseLat     Float?
-  baseLon     Float?
-  baseAddress String?
-  pinImageUrl String?
-  pinNote     String?
+  baseLat            Float?
+  baseLon            Float?
+  baseAddress        String?
+  pinImageUrl        String?
+  pinNote            String?
+  // «Проверен»: the admin checked the company (ИНН, documents, a call).
+  verified           Boolean  @default(false)
+  // Delivery: how far from the base the company goes and what a kilometre of
+  // the trip to the site costs (prefills «подача» in a bid).
+  deliveryRadiusKm   Int      @default(100)
+  deliveryPricePerKm Decimal? @db.Decimal(10, 2)
 
-  users     User[]
-  equipment Equipment[]
-  reviews   Review[]
-  comments  Comment[]
+  // Полная регистрация исполнителя (owner, 2026-10-28, lib/providerVerification.ts).
+  // provisional — вошёл по лёгкой форме, данные не проверены (заказчики видят
+  // «Новый исполнитель, данные не проверены»). Реквизиты заполняет сам
+  // исполнитель после первого заказа; verificationRequestedAt — когда отправил
+  // на проверку, verificationRejectedReason — почему админ вернул. «Проверен» —
+  // по-прежнему `verified`. Банковские реквизиты видят только сама компания и админ.
+  provisional                Boolean   @default(false)
+  legalForm                  String?
+  legalName                  String?
+  kpp                        String?
+  ogrn                       String?
+  taxRegime                  String?
+  bankName                   String?
+  bankBik                    String?
+  bankAccount                String?
+  verificationRequestedAt    DateTime?
+  verificationRejectedReason String?
+  verifiedAt                 DateTime?
+
+  users         User[]
+  equipment     Equipment[]
+  reviews       Review[]
+  comments      Comment[]
+  operators     Operator[]
+  linePresences LinePresence[]
 
   @@index([locationId])
 }
@@ -176,6 +234,14 @@ model Equipment {
   createdAt   DateTime        @default(now())
   updatedAt   DateTime        @updatedAt
 
+  // «Актуализация» (2026-10-18): the provider's own answer to the platform's
+  // weekly question. availableFrom — the Moscow day the machine is free from
+  // (UTC midnight of that day, like booking days); availabilityUpdatedAt —
+  // when the provider last confirmed prices and free days (the catalogue shows
+  // «Свободна …» only for 7 days after it). The house fleet is never asked.
+  availableFrom         DateTime?
+  availabilityUpdatedAt DateTime?
+
   category   EquipmentCategory @relation(fields: [categoryId], references: [id])
   categoryId String
 
@@ -190,6 +256,8 @@ model Equipment {
   maintenanceRecords MaintenanceRecord[]
   reviews            Review[]
   documents          Document[]
+  blocks             EquipmentBlock[]
+  linePresences      LinePresence[]
 
   @@index([categoryId])
   @@index([companyId])
@@ -233,6 +301,21 @@ model Booking {
   notes       String?
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
+  // Who cancelled a CANCELLED booking (CANCELLED_BY in @specai/shared:
+  // CUSTOMER | PROVIDER | ADMIN — a plain column, not an enum, see CLAUDE.md)
+  // and when. Null on bookings cancelled before 2026-10-12: unknown, and the
+  // provider's cancellation share leaves them out (lib/reliability.ts).
+  cancelledBy String?
+  cancelledAt DateTime?
+  // When the booking became CONFIRMED (the provider or a paid deposit). Null
+  // on bookings confirmed before 2026-10-17: the public activity strip
+  // (lib/activity.ts) simply leaves them out.
+  confirmedAt DateTime?
+  // Реквизиты заказчика на момент заказа («Заказываю от …», owner 2026-10-28):
+  // снимок { legalForm, name, inn, kpp, address } из LegalEntity, чтобы правки
+  // реквизитов не меняли прошлые документы. Null — «как частное лицо».
+  // Исполнитель видит его только с CONFIRMED (lib/buyerRequisites.ts).
+  buyer Json?
 
   equipment   Equipment @relation(fields: [equipmentId], references: [id])
   equipmentId String
@@ -248,9 +331,12 @@ model Booking {
   order   Order?  @relation(fields: [orderId], references: [id])
   orderId String? @unique
 
-  documents Document[]
-  review    Review?
-  payment   Payment?
+  documents  Document[]
+  review     Review?
+  payment    Payment?
+  operatorId String?
+  operator   Operator?  @relation(fields: [operatorId], references: [id])
+  shifts     Shift[]
 
   @@index([equipmentId])
   @@index([customerId])
@@ -327,6 +413,12 @@ model Order {
   bids    Bid[]
   booking Booking?
 
+  // Реквизиты заказчика на момент заказа («Заказываю от …», owner 2026-10-28):
+  // снимок { legalForm, name, inn, kpp, address } из LegalEntity, чтобы правки
+  // реквизитов не меняли прошлые документы. Null — «как частное лицо».
+  // Исполнитель видит его только с CONFIRMED (lib/buyerRequisites.ts).
+  buyer Json?
+
   // Orders collected automatically from Telegram/WhatsApp chats and groups.
   // For those, `customer` is a technical importer user and the real contact
   // is kept in contactName/contactPhone (shown only to providers and admins).
@@ -341,12 +433,36 @@ model Order {
   contactName  String?
   contactPhone String?
   rawText      String?
+  // Until when providers are asked to bid: «Нужна сейчас» — 2 h, otherwise
+  // 24 h, capped at the start date (lib/bidWindow.ts). Later bids are late.
+  bidsUntil    DateTime?
+
+  // Moderation of doubtful chat imports (owner, 2026-10-17: the AI decides,
+  // not the owner; apps/web/src/lib/orderModeration.ts). moderatedBy "ai" |
+  // "admin" (who decided last); moderationDecision is the AI's verdict
+  // "PUBLISH" | "REJECT" | "UNSURE", kept when the admin overrides it;
+  // moderatedAt is the last decision or AI attempt. Strings, not enums
+  // (CLAUDE.md, rule 2).
+  moderatedBy        String?
+  moderationDecision String?
+  moderationReason   String?
+  moderatedAt        DateTime?
+
+  // «Пригласи друга»: providers with the bonus heard of the order first
+  // (earlyNotifiedUserIds); the others are due at othersNotifyAt and were
+  // notified at othersNotifiedAt (lib/deferredOrderNotices.ts). Both null:
+  // everyone was notified at once.
+  earlyNotifiedUserIds String[]  @default([])
+  othersNotifyAt       DateTime?
+  othersNotifiedAt     DateTime?
 
   @@index([customerId])
   @@index([categoryId])
   @@index([status])
   @@index([fingerprint])
   @@index([externalId])
+  @@index([moderatedAt])
+  @@index([othersNotifiedAt, othersNotifyAt])
 }
 
 enum OrderSource {
@@ -377,6 +493,12 @@ model Bid {
 
   equipment   Equipment @relation(fields: [equipmentId], references: [id])
   equipmentId String
+
+  // Price breakdown (lib/offerBreakdown.ts): price = deliveryPrice + shiftPrice × shifts.
+  deliveryPrice Decimal? @db.Decimal(10, 2)
+  shiftPrice    Decimal? @db.Decimal(10, 2)
+  shifts        Int?
+  optionsNote   String?
 
   @@index([orderId])
   @@index([equipmentId])
@@ -503,11 +625,16 @@ model Lead {
   amount     Int?
   // Yandex Metrika ClientID (_ym_uid).
   ymClientId String?
+  // CRM (/admin/leads): the owner's note, when to call back, the city.
+  note       String?
+  callAt     DateTime?
+  city       String?
   createdAt  DateTime   @default(now())
   updatedAt  DateTime   @updatedAt
 
   @@index([status])
   @@index([createdAt])
+  @@index([callAt])
 }
 
 // Comments about a provider (company) or a customer (user), published only
@@ -533,4 +660,433 @@ model Comment {
   @@index([status])
   @@index([targetCompanyId])
   @@index([targetUserId])
+}
+
+// ---------------------------------------------------------------------------
+// Notifications: channels each user picked, Telegram linking, app push tokens
+// ---------------------------------------------------------------------------
+
+// One row per user, created on the first change (no row = the defaults).
+// userId is a plain column, not a relation, so the User model stays untouched.
+model NotificationSettings {
+  id                    String    @id @default(cuid())
+  userId                String    @unique
+  telegram              Boolean   @default(true)
+  push                  Boolean   @default(true)
+  email                 Boolean   @default(true)
+  whatsapp              Boolean   @default(false)
+  sms                   Boolean   @default(false)
+  // «Актуализация»: the weekly «обновите цены и свободные дни» to providers
+  // (on by default, switched off in «Уведомления»); priceAskSentAt keeps it
+  // to one a week (lib/aktualnoData.ts).
+  priceAsk              Boolean   @default(true)
+  priceAskSentAt        DateTime?
+  // «Спрос рядом»: once a Moscow day, 09:00–20:00, «Сегодня N заявок рядом —
+  // выйдите на линию» to provider managers (push and Telegram only; on by
+  // default); demandNudgeSentAt keeps it to one a day (lib/demandNudgeData.ts).
+  demandNudge           Boolean   @default(true)
+  demandNudgeSentAt     DateTime?
+  // Private chat with the bot, set by "/start <token>" (lib/notifications/telegramLink.ts).
+  telegramChatId        String?
+  // sha256 of the one-time token from the deep link, never the token itself.
+  telegramLinkHash      String?
+  telegramLinkExpiresAt DateTime?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@index([telegramLinkHash])
+  @@index([telegramChatId])
+}
+
+// Expo push token of a signed-in device (several per user).
+model PushToken {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String
+  platform  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+}
+
+// Log of «Показать телефон» on orders found in open chats: who saw the phone
+// and when. Also the per-provider daily limit (lib/chatOrders.ts).
+model ContactReveal {
+  id        String   @id @default(cuid())
+  orderId   String
+  userId    String
+  companyId String?
+  createdAt DateTime @default(now())
+
+  @@index([companyId, createdAt])
+  @@index([orderId])
+}
+
+// ---- Order chat ----
+// Chat between the customer of an order and one provider company: one
+// thread per (order, company), so bidders never see each other. No relations
+// to Order/User/Company on purpose (the shared models stay untouched);
+// access is checked in apps/web/src/lib/orderChatAccess.ts.
+model OrderThread {
+  id            String   @id @default(cuid())
+  orderId       String
+  companyId     String
+  createdAt     DateTime @default(now())
+  lastMessageAt DateTime @default(now())
+
+  messages OrderMessage[]
+
+  @@unique([orderId, companyId])
+  @@index([companyId, lastMessageAt])
+}
+
+// A message in a thread. `body` is stored already masked while the booking
+// is not confirmed (lib/orderChat.ts); `readAt` is set when the other side
+// opens the thread.
+model OrderMessage {
+  id            String    @id @default(cuid())
+  threadId      String
+  senderUserId  String
+  body          String
+  attachmentUrl String?
+  createdAt     DateTime  @default(now())
+  readAt        DateTime?
+
+  thread OrderThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+
+  @@index([threadId, createdAt])
+  @@index([threadId, readAt])
+  @@index([senderUserId])
+}
+
+// ---- Documents, demand, delivery, bids ----
+
+// A provider's document: for the company (ИНН, insurance), a machine (СТС,
+// ПСМ, техосмотр) or an operator (удостоверение машиниста). Plain ids, no
+// relations, so Company and Equipment stay untouched. The daily cron
+// (api/cron/daily) reminds the company's managers 30 days before expiresAt
+// and again on the day; remindedAt30/remindedAt0 make each reminder one-off.
+model ProviderDocument {
+  id           String    @id @default(cuid())
+  companyId    String
+  equipmentId  String?
+  operatorName String?
+  // One of PROVIDER_DOCUMENT_KINDS in @specai/shared (STS, PSM, OPERATOR_LICENSE, OSAGO, INSPECTION, OTHER).
+  kind         String
+  number       String?
+  fileUrl      String?
+  issuedAt     DateTime?
+  expiresAt    DateTime?
+  remindedAt30 DateTime?
+  remindedAt0  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@index([companyId])
+  @@index([equipmentId])
+  @@index([expiresAt])
+}
+
+// ---- Shifts, timesheets, operators, calendar ----
+
+// A machine operator («машинист») of a provider company. Managed by the
+// company's PROVIDER_ADMIN; `userId` links the operator's own app sign-in
+// (role PROVIDER_OPERATOR), which the admin creates with a temporary password.
+model Operator {
+  id            String   @id @default(cuid())
+  name          String
+  phone         String?
+  licenseNumber String?
+  active        Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  company   Company @relation(fields: [companyId], references: [id])
+  companyId String
+
+  user   User?   @relation(fields: [userId], references: [id])
+  userId String? @unique
+
+  bookings Booking[]
+  shifts   Shift[]
+
+  @@index([companyId])
+}
+
+// One working day of a booking, driven by the operator from the app:
+// Выехал → На объекте → Работа → Простой → Смена завершена. `status` is a
+// string (see packages/shared/src/schemas/shift.ts), never an enum, so the
+// list can grow without ALTER TYPE (CLAUDE.md, rule 2). One shift per booking
+// per calendar day (`date` is UTC midnight of the Moscow day).
+model Shift {
+  id            String    @id @default(cuid())
+  date          DateTime
+  status        String    @default("PLANNED")
+  startedAt     DateTime?
+  arrivedAt     DateTime?
+  workStartedAt DateTime?
+  finishedAt    DateTime?
+  startPhotoUrl String?
+  endPhotoUrl   String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  booking   Booking @relation(fields: [bookingId], references: [id])
+  bookingId String
+
+  operator   Operator? @relation(fields: [operatorId], references: [id])
+  operatorId String?
+
+  events    ShiftEvent[]
+  timesheet Timesheet?
+
+  @@unique([bookingId, date])
+  @@index([operatorId])
+}
+
+// Every status change of a shift with its moment, an optional note (the
+// reason of an idle period) and the photo taken at the start or the end.
+model ShiftEvent {
+  id       String   @id @default(cuid())
+  kind     String
+  at       DateTime @default(now())
+  note     String?
+  photoUrl String?
+
+  shift   Shift  @relation(fields: [shiftId], references: [id])
+  shiftId String
+
+  @@index([shiftId, at])
+}
+
+// The shift's timesheet («табель»): hours worked and idle, filled by the
+// operator or the provider after the shift and final only when BOTH the
+// customer and the provider's admin have confirmed it.
+model Timesheet {
+  id                  String    @id @default(cuid())
+  hoursWorked         Decimal   @db.Decimal(5, 2)
+  idleHours           Decimal   @default(0) @db.Decimal(5, 2)
+  note                String?
+  customerConfirmedAt DateTime?
+  providerConfirmedAt DateTime?
+  disputedAt          DateTime?
+  disputeNote         String?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  shift   Shift  @relation(fields: [shiftId], references: [id])
+  shiftId String @unique
+}
+
+// Days the provider took a machine off the calendar by hand («Не сдаётся»):
+// bookings may not overlap them. Both ends inclusive, calendar days.
+model EquipmentBlock {
+  id        String   @id @default(cuid())
+  from      DateTime
+  to        DateTime
+  reason    String?
+  createdAt DateTime @default(now())
+
+  equipment   Equipment @relation(fields: [equipmentId], references: [id])
+  equipmentId String
+
+  @@index([equipmentId, from])
+}
+
+// ---- Admin feed ----
+
+// «Прочитано» in the admin's notification feed (/admin/feed): one row per
+// event the admin has seen. `key` is "<event kind>:<entity id>[:<state>]",
+// built in apps/web/src/lib/adminFeed.ts. A model only, no enum (CLAUDE.md,
+// rule 2). The crons also keep their once-a-day markers here,
+// "cron:<job>:<Moscow day>" (apps/web/src/lib/cronOnce.ts).
+model AdminFeedRead {
+  id     String   @id @default(cuid())
+  key    String   @unique
+  readAt DateTime @default(now())
+}
+
+// «На линии» (owner, 2026-10-15, the Yandex Go picture): a provider's manager
+// or machinist who went online from the app, with the machine and its last
+// position. One row per user; off-line rows stay (online = false) so the
+// toggle is remembered. Customers see the fresh online rows on the home map
+// with a bubble «Я на линии · машина · цена · имя» (api/line/nearby).
+model LinePresence {
+  id          String     @id @default(cuid())
+  user        User       @relation(fields: [userId], references: [id])
+  userId      String     @unique
+  company     Company    @relation(fields: [companyId], references: [id])
+  companyId   String
+  equipment   Equipment? @relation(fields: [equipmentId], references: [id])
+  equipmentId String?
+  online      Boolean    @default(true)
+  lat         Float
+  lon         Float
+  // A short line the machinist writes for customers («Могу выехать сразу»).
+  note        String?
+  // When this machine last went online (offline → online or another machine),
+  // for «Машина вышла на линию» in the activity strip. Null on older rows.
+  onlineSince DateTime?
+  // The phone's IANA time zone («Asia/Novosibirsk»), sent with every report:
+  // the line switches itself off at 21:00 in the provider's own time
+  // (lib/lineDay.ts). Null on older rows — Moscow then.
+  timeZone    String?
+  // «На линии на 5 рабочих дней» (owner, 2026-10-28): a standing availability,
+  // not a ping. Customers see the machine until `standingUntil` (or always with
+  // `standingForever`) even without fresh GPS — at its base then
+  // (lib/lineStanding.ts). `online` stays the live GPS session of the app.
+  standingUntil   DateTime?
+  standingForever Boolean   @default(false)
+  standingSince   DateTime?
+  // When «Продлить на 5 рабочих дней?» went out for the current period.
+  renewOfferAt    DateTime?
+  // The last real GPS report from the phone; null on older rows (updatedAt then).
+  gpsAt           DateTime?
+  updatedAt   DateTime   @updatedAt
+  createdAt   DateTime   @default(now())
+
+  @@index([companyId])
+  @@index([online, updatedAt])
+  @@index([standingUntil])
+}
+
+
+// Uploaded files kept in the database when Vercel Blob is not connected
+// (BLOB_READ_WRITE_TOKEN unset): machine photos, shift photos, documents.
+// Served by GET /api/files/<key>; `key` mirrors the Blob path
+// (`equipment/<companyId>/<random>-<name>`). With Blob connected new files go
+// there and this table only keeps the older ones.
+model StoredFile {
+  key         String   @id
+  data        Bytes
+  contentType String
+  size        Int
+  createdAt   DateTime @default(now())
+}
+
+// Small settings the owner changes from the admin menu (site and app), one row
+// per key. «Поддержать площадку» (owner, 2026-10-17): `support.card` (digits
+// only), `support.recipient` (how the bank shows the recipient) and
+// `support.enabled` ("1"/"0"). The requisites live only here, never in code.
+model AppSetting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+}
+
+// «Предложения и партнёрство» (owner, 2026-10-17): ideas about the service and
+// partnership offers from anyone, guests included (POST /api/proposals). The
+// owner reads them in the admin area. Strings, not enums (CLAUDE.md, rule 2):
+// kind "IDEA" | "PARTNERSHIP", status "NEW" | "READ" | "ARCHIVED".
+model Proposal {
+  id        String   @id @default(cuid())
+  kind      String
+  name      String
+  contact   String
+  message   String
+  company   String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  userId    String?
+  status    String   @default("NEW")
+  createdAt DateTime @default(now())
+
+  @@index([status, createdAt])
+  @@index([userId])
+}
+
+// Telegram groups the bot was added to by their admins (my_chat_member, or
+// the first message from a chat it already sat in). `quiet` is the chat's
+// opt-out (/quiet by a chat admin): no replies and no import. The daily reply
+// counter is per Moscow day (`repliesDay` = "YYYY-MM-DD"); the hourly limit
+// counts BotReply rows (apps/web/src/lib/groupBot.ts).
+model BotChat {
+  chatId       String    @id
+  title        String?
+  // The public @handle of the group, if it has one (utm_campaign of the links).
+  username     String?
+  quiet        Boolean   @default(false)
+  // False once Telegram refuses the bot's messages (restricted or removed).
+  canWrite     Boolean   @default(true)
+  removedAt    DateTime?
+  repliesToday Int       @default(0)
+  repliesDay   String?
+  // «Тихий режим» (owner, 2026-10-18): the bot posts nothing in the group —
+  // no hello, no replies under orders, no follow-ups, no command answers —
+  // and only collects orders (unless quiet). On by default, existing chats
+  // too; a chat admin's /otvechat turns replies on, /tiho back off, and the
+  // owner switches it in /admin.
+  silent       Boolean   @default(true)
+  addedAt      DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+}
+
+// The bot's public reply under an order message in its chat: one per order.
+// `followUpAt` keeps the «уже N предложений» follow-up to one per order.
+model BotReply {
+  orderId    String    @id
+  chatId     String
+  // The order message in the chat (the bot replies to it) and its forum topic.
+  messageId  Int
+  threadId   Int?
+  createdAt  DateTime  @default(now())
+  followUpAt DateTime?
+
+  @@index([chatId, createdAt])
+}
+
+// «Узнай цены в своём городе» (2026-10-18): answers to the platform's open
+// price survey — on the site (/ceny/opros), in a private chat with the bot
+// (the person writes to it first) and as replies to the one survey message
+// the bot posts in the owner's own group (lib/groupPriceSurvey.ts). Nobody is
+// asked as a fake customer. Name, company and phone are kept only with consent
+// (consentAt); a group reply keeps the author's public Telegram name
+// (authorName, admin only) and the text as written. reporterHash is a keyed
+// hash of the IP, the Telegram user or the account (lib/priceReportStore.ts):
+// one reporter counts once in the price index and in the limits. A group reply
+// may name no known machine type, city or hourly price (null then; a price per
+// shift goes to shiftRate and never into the hourly index). Strings, not enums
+// (CLAUDE.md, rule 2): source "web" | "telegram" | "group".
+model PriceReport {
+  id           String    @id @default(cuid())
+  categorySlug String?
+  city         String?
+  region       String?
+  hourlyRate   Int?
+  shiftRate    Int?
+  machineName  String?
+  rawText      String?
+  authorName   String?
+  surveyKey    String?
+  companyName  String?
+  contactName  String?
+  phone        String?
+  wantsOrders  Boolean   @default(false)
+  consentAt    DateTime?
+  source       String    @default("web")
+  reporterHash String?
+  // A guest's network (IPv4 /24, IPv6 /48) as a keyed hash: one participant in the index.
+  networkHash  String?
+  createdAt    DateTime  @default(now())
+
+  @@index([createdAt])
+  @@index([reporterHash, createdAt])
+  @@index([surveyKey])
+}
+
+/// Реквизиты заказчика (owner, 2026-10-28): несколько юрлиц/ИП на один аккаунт,
+/// одно из них выбрано «от кого заказываю» (isDefault). Видит только владелец.
+model LegalEntity {
+  id        String   @id @default(cuid())
+  userId    String
+  legalForm String
+  name      String
+  inn       String
+  kpp       String?
+  address   String?
+  isDefault Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
 }

@@ -1,5 +1,5 @@
-import { Link } from 'expo-router';
-import React, { useState } from 'react';
+import { Link, useLocalSearchParams } from 'expo-router';
+import React, { useEffect, useState } from 'react';
 import {
   Keyboard,
   KeyboardAvoidingView,
@@ -13,34 +13,49 @@ import {
 } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { PromiseNote } from '@/components/Promise';
 import { Button, Input } from '@/components/ui';
 import { API_URL, ApiError, register } from '@/lib/api';
+import { NEWS_CONSENT_LABEL } from '@/lib/news';
+import { phoneNear } from '@/lib/phoneNear';
 import { useAuth } from '@/lib/auth';
 import { SITE } from '@/lib/site';
 import { colors, spacing } from '@/lib/theme';
-
-type AccountType = 'CUSTOMER' | 'PROVIDER';
+import { accountTypeFromRole, type AccountType } from '@/lib/welcome';
 
 const ACCOUNT_TYPES: { value: AccountType; label: string; hint: string }[] = [
-  { value: 'CUSTOMER', label: 'Арендую технику', hint: 'Заявки, брони, отзывы' },
-  { value: 'PROVIDER', label: 'Сдаю технику', hint: 'Своя техника и заявки заказчиков' },
+  { value: 'CUSTOMER', label: 'Заказать технику', hint: 'Заявка, предложения исполнителей, брони' },
+  { value: 'PROVIDER', label: 'Встать на линию', hint: 'Своя техника, заявки заказчиков, доход' },
 ];
 
 /**
  * Регистрация (поля как у веб-формы) с автологином: заказчик или исполнитель.
  * Исполнитель указывает компанию и адрес базы — сервер найдёт его на карте и
- * проверит регион (как на сайте).
+ * проверит регион (как на сайте). Роль приходит из приветствия
+ * (`?role=customer|provider`) и остаётся переключаемой.
  */
 export default function RegisterScreen() {
   const { login } = useAuth();
-  const [accountType, setAccountType] = useState<AccountType>('CUSTOMER');
+  const { role } = useLocalSearchParams<{ role?: string }>();
+  const [accountType, setAccountType] = useState<AccountType>(
+    () => accountTypeFromRole(role) ?? 'CUSTOMER',
+  );
+  // Снова пришли из приветствия с другой карточкой — экран уже открыт.
+  useEffect(() => {
+    const preset = accountTypeFromRole(role);
+    if (preset) setAccountType(preset);
+  }, [role]);
   const [companyName, setCompanyName] = useState('');
   const [baseAddress, setBaseAddress] = useState('');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
+  // Код из приглашения друга («Пригласи друга»): необязательно.
+  const [inviteCode, setInviteCode] = useState('');
   const [consent, setConsent] = useState(false);
+  // Еженедельное письмо (ФЗ «О рекламе» ст. 18): по умолчанию выключено.
+  const [newsConsent, setNewsConsent] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -76,6 +91,8 @@ export default function RegisterScreen() {
         password,
         phone: phone.trim() || undefined,
         consent: true as const,
+        newsConsent,
+        ref: inviteCode.trim() || undefined,
       };
       await register(
         accountType === 'PROVIDER'
@@ -84,6 +101,7 @@ export default function RegisterScreen() {
               accountType,
               companyName: companyName.trim(),
               baseAddress: baseAddress.trim(),
+              near: await phoneNear(),
             }
           : { ...payload, accountType },
       );
@@ -112,7 +130,7 @@ export default function RegisterScreen() {
               <Text style={styles.title}>Регистрация в {SITE.name}</Text>
               <Text style={styles.subtitle}>
                 Заказчик размещает заявки и бронирует технику, исполнитель публикует свою технику и
-                отвечает на заявки. Бесплатно. Без аккаунта можно позвонить {SITE.phone}.
+                отвечает на заявки. Без аккаунта можно позвонить {SITE.phone}.
               </Text>
             </View>
 
@@ -190,6 +208,16 @@ export default function RegisterScreen() {
               returnKeyType="next"
             />
             <Input
+              label="Код приглашения (если есть)"
+              value={inviteCode}
+              onChangeText={(value) => setInviteCode(value.toUpperCase())}
+              autoCapitalize="characters"
+              autoCorrect={false}
+              maxLength={7}
+              placeholder="Например, K7M2QXA"
+              returnKeyType="next"
+            />
+            <Input
               label="Пароль"
               value={password}
               onChangeText={setPassword}
@@ -215,14 +243,28 @@ export default function RegisterScreen() {
                 Согласен(на) на обработку персональных данных в соответствии с{' '}
                 <Text
                   style={styles.consentLink}
-                  onPress={() => void WebBrowser.openBrowserAsync(`${API_URL}/privacy`)}
+                  onPress={() => void WebBrowser.openBrowserAsync(`${API_URL}/soglasie`)}
                 >
-                  политикой конфиденциальности
+                  условиями согласия
                 </Text>
               </Text>
             </Pressable>
+            <Pressable
+              style={styles.consentRow}
+              onPress={() => setNewsConsent((value) => !value)}
+              accessibilityRole="checkbox"
+              accessibilityState={{ checked: newsConsent }}
+            >
+              <Switch
+                value={newsConsent}
+                onValueChange={setNewsConsent}
+                trackColor={{ true: colors.primary }}
+              />
+              <Text style={styles.consentText}>{NEWS_CONSENT_LABEL}</Text>
+            </Pressable>
             {error ? <Text style={styles.error}>{error}</Text> : null}
             <Button title="Создать аккаунт" onPress={handleSubmit} loading={submitting} />
+            <PromiseNote />
 
             <Link href="/(auth)/login" style={styles.link}>
               Уже есть аккаунт? Войти

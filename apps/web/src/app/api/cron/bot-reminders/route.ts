@@ -3,6 +3,9 @@ import { sendDueReminders } from '@/lib/botDrafts';
 import { checkRateLimit } from '@/lib/rateLimit';
 
 export const dynamic = 'force-dynamic';
+// A GET handler: without this Next keeps outgoing sends (Telegram, push,
+// e-mail) in its Data Cache and never repeats an identical one.
+export const fetchCache = 'force-no-store';
 
 // The bot funnel's single reminder (lib/botDrafts.ts). Called hourly by
 // .github/workflows/bot-reminders.yml and on every bot update. Safe to call

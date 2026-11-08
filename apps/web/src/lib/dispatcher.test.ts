@@ -34,13 +34,29 @@ describe('matchTask', () => {
   it('maps jobs to machines', () => {
     expect(matchTask('Нужно вырыть траншею 30 метров')?.category).toBe('Экскаваторы-погрузчики');
     expect(matchTask('вывезти строительный мусор')?.category).toBe('Самосвалы');
-    expect(matchTask('поднять плиты на 3 этаж, нужен кран')?.category).toBe('Краны');
-    expect(matchTask('покраска фасада на высоте 15 м')?.category).toBe('Автовышки');
-    expect(matchTask('разбить старый бетон')?.category).toBe('Экскаваторы');
+    expect(matchTask('поднять плиты на 3 этаж, нужен кран')?.category).toBe('Автокраны');
+    expect(matchTask('покраска фасада на высоте 15 м')?.category).toBe('Автовышки (АГП)');
+    expect(matchTask('разбить старый бетон')?.category).toBe('Экскаваторы колёсные');
+    expect(matchTask('нужен бетононасос')?.categorySlug).toBe('concrete-pumps');
+    expect(matchTask('залить бетон фундамент')?.categorySlug).toBe('concrete-pumps');
+    expect(matchTask('привезти бетон 5 кубов')?.categorySlug).toBe('mixer-trucks');
     expect(matchTask('уплотнить щебень под площадку')?.category).toBe('Катки');
     expect(matchTask('спланировать участок')?.category).toBe('Бульдозеры');
-    expect(matchTask('почистить снег во дворе')?.category).toBe('Погрузчики');
-    expect(matchTask('привезти и выгрузить блоки, манипулятор')?.category).toBe('Манипуляторы');
+    expect(matchTask('почистить снег во дворе')?.category).toBe('Фронтальные погрузчики');
+    expect(matchTask('привезти и выгрузить блоки, манипулятор')?.category).toBe(
+      'Краны-манипуляторы (КМУ)',
+    );
+    expect(matchTask('привезти и выгрузить блоки, манипулятор')?.categorySlug).toBe('crane-trucks');
+  });
+  it('tells the three excavator types apart', () => {
+    expect(matchTask('нужен колёсный экскаватор с гидромолотом')?.categorySlug).toBe(
+      'wheeled-excavators',
+    );
+    expect(matchTask('экскаватор колесный в город')?.categorySlug).toBe('wheeled-excavators');
+    expect(matchTask('нужен мини-экскаватор на дачу')?.categorySlug).toBe('mini-excavators');
+    expect(matchTask('миниэкскаватор во двор')?.categorySlug).toBe('mini-excavators');
+    expect(matchTask('гусеничный экскаватор с гидромолотом')?.categorySlug).toBe('excavators');
+    expect(matchTask('нужен экскаватор на котлован')?.categorySlug).toBe('excavators');
   });
   it('returns null for small talk', () => {
     expect(matchTask('здравствуйте')).toBeNull();
@@ -53,6 +69,46 @@ describe('faqAnswers and wantsPrice', () => {
     expect(faqAnswers('сколько часов смена').join(' ')).toContain('8 часов');
     expect(faqAnswers('привет')).toEqual([]);
   });
+  it('says the platform works all over Russia, the house fleet in Tatarstan', () => {
+    for (const question of ['Где вы работаете?', 'В каком регионе?', 'Работаете по России?']) {
+      const answer = faqAnswers(question).join(' ');
+      expect(answer).toContain('по всей России');
+      expect(answer).toContain('Набережных Челнах и Татарстане');
+    }
+  });
+  it('explains the aggregator: providers bid, the house fleet among them', () => {
+    const answer = faqAnswers('Вы посредник или своя техника?').join(' ');
+    expect(answer).toContain('исполнители');
+    expect(answer).toContain('СпецПласт16');
+    expect(answer).not.toContain('единственный');
+    expect(answer).toContain('Бесплатно и без посредников');
+  });
+  it('answers «commission?» and «is it free?» with the promise: direct payment, no percentage', () => {
+    for (const question of [
+      'Какая у вас комиссия?',
+      'Это бесплатно?',
+      'Сколько процентов берёт площадка?',
+      'Площадка бесплатная?',
+      'А бесплатно ли это?',
+    ]) {
+      const answer = faqAnswers(question).join(' ');
+      expect(answer).toContain('Бесплатно и без посредников');
+      expect(answer).toContain('напрямую');
+      expect(answer).toContain('не берёт процент');
+    }
+  });
+  it('does not answer about the platform when the question is about something else', () => {
+    for (const question of [
+      'Доставка материалов бесплатная?',
+      'Какой процент уплотнения грунта нужен?',
+      'Сколько берёт самосвал кубов?',
+      'Можно ли бесплатно вывезти мусор?',
+      'Привезли бесплатно песок',
+      'Площадка стоит ровная, кран встанет?',
+    ]) {
+      expect(faqAnswers(question).join(' ')).not.toContain('Бесплатно и без посредников');
+    }
+  });
   it('detects price questions', () => {
     expect(wantsPrice('Сколько стоит самосвал?')).toBe(true);
     expect(wantsPrice('нужен кран')).toBe(false);
@@ -61,8 +117,8 @@ describe('faqAnswers and wantsPrice', () => {
 
 describe('matchTask for lifting and removal jobs', () => {
   it('sends lifting slabs to a crane and rubbish removal to a dump truck', () => {
-    expect(matchTask('Поднять плиты по 3 т на высоту 10 м')?.category).toBe('Краны');
+    expect(matchTask('Поднять плиты по 3 т на высоту 10 м')?.category).toBe('Автокраны');
     expect(matchTask('Вывезти мусор после демонтажа, 20 кубов')?.category).toBe('Самосвалы');
-    expect(matchTask('Разбить бетон')?.category).toBe('Экскаваторы');
+    expect(matchTask('Разбить бетон')?.category).toBe('Экскаваторы колёсные');
   });
 });

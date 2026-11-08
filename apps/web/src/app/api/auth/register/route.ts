@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { clientIp } from '@/lib/loginErrors';
 import bcrypt from 'bcryptjs';
 import { prisma } from '@specai/database';
 import { findUserByEmail } from '@/lib/findUserByEmail';
@@ -7,15 +8,18 @@ import { sendVerificationEmail } from '@/lib/verificationEmail';
 import { zodErrorMessage } from '@/lib/apiInput';
 import { resolveProviderBase, type ProviderBase } from '@/lib/providerBase';
 import { checkRateLimit } from '@/lib/rateLimit';
+import { REFERRAL_COOKIE } from '@/lib/referral';
+import { findReferrer, freeReferralCode, grantReferralPriority } from '@/lib/referralStore';
+import { notifyUser } from '@/lib/notifications/notifyUser';
+import { newsConsentFrom } from '@/lib/newsConsent';
 
-/** Outside providers may sign up again if the owner reopens the aggregator. */
-const PROVIDER_SIGNUP_OPEN = false as boolean;
 export async function POST(request: NextRequest) {
   const body = (await request.json().catch(() => null)) as {
     consent?: unknown;
     baseAddress?: unknown;
     baseLat?: unknown;
     baseLon?: unknown;
+    ref?: unknown;
   } | null;
   // 152-ФЗ: без явного согласия на обработку персональных данных аккаунт не создаётся.
   if (body?.consent !== true) {
@@ -37,17 +41,9 @@ export async function POST(request: NextRequest) {
 
   // A provider is shown on the customers' map (/map): without the place where
   // its machinery stands it cannot sign up.
-  // Owner's decision (2026-10-02): only СпецПласт16's own fleet is offered,
-  // so outside providers cannot sign up.
-  if (!PROVIDER_SIGNUP_OPEN && parsed.data.accountType === 'PROVIDER') {
-    return NextResponse.json(
-      { error: 'Регистрация исполнителей закрыта: всю технику предоставляет СпецПласт16.' },
-      { status: 403 },
-    );
-  }
   let base: ProviderBase | null = null;
   if (parsed.data.accountType === 'PROVIDER') {
-    const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown';
+    const ip = clientIp(request);
     if (!checkRateLimit(`register-base:${ip}`, { limit: 10, windowMs: 60_000 }).ok) {
       return NextResponse.json(
         { error: 'Слишком часто, попробуйте через минуту' },
@@ -62,6 +58,15 @@ export async function POST(request: NextRequest) {
   }
 
   const passwordHash = await bcrypt.hash(parsed.data.password, 10);
+
+  // «Пригласи коллегу»: the code from the form (?ref=) or the cookie set by /r/<code>.
+  const referrer = await findReferrer(body?.ref ?? request.cookies.get(REFERRAL_COOKIE)?.value);
+  const referral = {
+    referralCode: await freeReferralCode(),
+    ...(referrer ? { referredById: referrer.id } : {}),
+  };
+  // The weekly newsletter: only a ticked box (`newsConsent: true`) subscribes.
+  const newsConsentAt = newsConsentFrom(body);
 
   // Aggregator: a provider signs up together with its company, which then
   // publishes its fleet and answers customers' orders.
@@ -79,6 +84,8 @@ export async function POST(request: NextRequest) {
           passwordHash,
           role: 'PROVIDER_ADMIN',
           companyId: company.id,
+          ...referral,
+          newsConsentAt,
         },
       });
     }
@@ -89,6 +96,8 @@ export async function POST(request: NextRequest) {
         phone: data.phone,
         passwordHash,
         role: 'CUSTOMER',
+        ...referral,
+        newsConsentAt,
       },
     });
   });
@@ -100,5 +109,24 @@ export async function POST(request: NextRequest) {
     console.error('[auth] failed to send verification email', error);
   }
 
-  return NextResponse.json({ id: user.id, email: user.email }, { status: 201 });
+  // Акция «Пригласи друга»: the inviter's new orders come 5 minutes earlier for
+  // a week. Best-effort, like the e-mail: a failure must not fail the sign-up.
+  if (referrer) {
+    try {
+      const bonus = await grantReferralPriority(referrer.id, user.id);
+      if (bonus) {
+        await notifyUser(referrer.id, {
+          type: 'referral.bonus',
+          until: bonus.until,
+          provider: bonus.role === 'PROVIDER_ADMIN',
+        });
+      }
+    } catch (error) {
+      console.error('[auth] referral bonus failed', error);
+    }
+  }
+
+  const response = NextResponse.json({ id: user.id, email: user.email }, { status: 201 });
+  if (referrer) response.cookies.delete(REFERRAL_COOKIE);
+  return response;
 }

@@ -1,29 +1,48 @@
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   Keyboard,
   KeyboardAvoidingView,
   Platform,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
+import { CategoryPickerModal } from '@/components/CategoryPickerModal';
 import { DateField } from '@/components/DateField';
-import { Button, Card, Input } from '@/components/ui';
+import { Button, Card, Chip, Input } from '@/components/ui';
 import { ApiError, createOrder, fetchCategories, type Category } from '@/lib/api';
+import { phoneNear } from '@/lib/phoneNear';
+import { popularCategories } from '@/lib/categoryGroups';
+import { detectCategoryFromText } from '@/lib/categoryText';
 import { addDays, bookingDays, pluralizeRu, startOfDay, toIsoDate } from '@/lib/format';
-import { colors, spacing } from '@/lib/theme';
+import { categoryIcon } from '@/lib/orderFlow';
+import { colors, spacing } from '@/theme';
 
 export default function NewOrderScreen() {
   const router = useRouter();
+  // Поля, заполненные на главном экране (шторка быстрого заказа).
+  const params = useLocalSearchParams<{ categoryId?: string; address?: string }>();
   const today = useMemo(() => startOfDay(new Date()), []);
   const [description, setDescription] = useState('');
   const [categories, setCategories] = useState<Category[]>([]);
-  const [categoryId, setCategoryId] = useState<string | null>(null);
+  const [categoryId, setCategoryId] = useState<string | null>(params.categoryId ?? null);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  // Вид из текста «Что нужно», пока заказчик не выбрал его сам (владелец,
+  // 2026-10-18: «Манипулятор вездеход» → «Краны-манипуляторы (КМУ)»).
+  // Выбор рукой — и «Любая» тоже — больше не меняется.
+  const [pickedByHand, setPickedByHand] = useState(Boolean(params.categoryId));
+  const [autoPicked, setAutoPicked] = useState(false);
+  const pick = (id: string | null) => {
+    setPickedByHand(true);
+    setAutoPicked(false);
+    setCategoryId(id);
+  };
+  const [address, setAddress] = useState(params.address ?? '');
+  // По умолчанию — одна смена завтра.
   const [startDate, setStartDate] = useState(() => addDays(today, 1));
-  const [endDate, setEndDate] = useState(() => addDays(today, 4));
+  const [endDate, setEndDate] = useState(() => addDays(today, 1));
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -40,6 +59,16 @@ export default function NewOrderScreen() {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    if (pickedByHand || categories.length === 0) return;
+    const found = detectCategoryFromText(description, categories);
+    setAutoPicked(Boolean(found));
+    setCategoryId(found?.id ?? null);
+  }, [description, categories, pickedByHand]);
+  const autoName = autoPicked
+    ? categories.find((category) => category.id === categoryId)?.name
+    : undefined;
 
   const handleStartChange = (date: Date) => {
     const next = startOfDay(date);
@@ -68,6 +97,11 @@ export default function NewOrderScreen() {
         desiredStartDate: toIsoDate(startDate),
         desiredEndDate: toIsoDate(endDate),
         categoryId: categoryId ?? undefined,
+        // «Любая» выбрана рукой: сервер не подставляет вид из описания.
+        anyCategory: pickedByHand && categoryId === null ? true : undefined,
+        address: address.trim() || undefined,
+        // Улица без города ищется в городе телефона, а не где-то в России.
+        near: address.trim() ? await phoneNear() : null,
       });
       router.replace({ pathname: '/orders/[id]', params: { id: order.id } });
     } catch (caught) {
@@ -96,25 +130,55 @@ export default function NewOrderScreen() {
             style={styles.textarea}
             textAlignVertical="top"
           />
+          {autoName ? (
+            <Text style={styles.hint} accessibilityLiveRegion="polite">
+              Техника: <Text style={styles.strong}>{autoName}</Text> — определили по описанию ·{' '}
+              <Text
+                style={styles.link}
+                accessibilityRole="button"
+                onPress={() => setPickerOpen(true)}
+              >
+                изменить
+              </Text>
+            </Text>
+          ) : null}
         </Card>
 
         <Card style={styles.section}>
-          <Text style={styles.sectionTitle}>Категория</Text>
+          <Input
+            label="Адрес объекта"
+            value={address}
+            onChangeText={setAddress}
+            placeholder="Город, улица, дом или ориентир"
+            maxLength={200}
+          />
+        </Card>
+
+        <Card style={styles.section}>
+          <Text style={styles.sectionTitle}>Вид техники</Text>
           <View style={styles.chips}>
-            <Chip
-              label="Любая"
-              selected={categoryId === null}
-              onPress={() => setCategoryId(null)}
-            />
-            {categories.map((category) => (
+            <Chip label="Любая" selected={categoryId === null} onPress={() => pick(null)} />
+            {popularCategories(categories, 10, categoryId).map((category) => (
               <Chip
                 key={category.id}
-                label={category.name}
+                label={`${categoryIcon(category.name, category.emoji)} ${category.name}`}
+                accessibilityLabel={category.name}
                 selected={categoryId === category.id}
-                onPress={() => setCategoryId(category.id)}
+                onPress={() => pick(category.id)}
               />
             ))}
+            {categories.length > 0 ? (
+              <Chip label="Все виды техники…" onPress={() => setPickerOpen(true)} />
+            ) : null}
           </View>
+          <CategoryPickerModal
+            visible={pickerOpen}
+            categories={categories}
+            selectedId={categoryId}
+            onSelect={(picked) => pick(picked?.id ?? null)}
+            onClose={() => setPickerOpen(false)}
+            allowNone
+          />
         </Card>
 
         <Card style={styles.section}>
@@ -145,33 +209,17 @@ export default function NewOrderScreen() {
         </Card>
 
         {error ? <Text style={styles.error}>{error}</Text> : null}
-        <Button title="Разместить заявку" onPress={handleSubmit} loading={submitting} />
+        <Button
+          title="Разместить заявку"
+          size="large"
+          onPress={handleSubmit}
+          loading={submitting}
+        />
         <Text style={styles.footer}>
-          Поставщики увидят заявку и предложат технику с ценой. Вы выбираете лучшее предложение.
+          Исполнители увидят заявку и предложат технику с ценой. Вы выбираете лучшее предложение.
         </Text>
       </ScrollView>
     </KeyboardAvoidingView>
-  );
-}
-
-function Chip({
-  label,
-  selected,
-  onPress,
-}: {
-  label: string;
-  selected: boolean;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityState={{ selected }}
-      onPress={onPress}
-      style={[styles.chip, selected && styles.chipSelected]}
-    >
-      <Text style={[styles.chipText, selected && styles.chipTextSelected]}>{label}</Text>
-    </Pressable>
   );
 }
 
@@ -182,20 +230,11 @@ const styles = StyleSheet.create({
   sectionTitle: { fontSize: 16, fontWeight: '600', color: colors.text },
   textarea: { minHeight: 110, paddingTop: spacing.md },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
-  chip: {
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.card,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-  },
-  chipSelected: { backgroundColor: colors.primary, borderColor: colors.primary },
-  chipText: { fontSize: 14, color: colors.text },
-  chipTextSelected: { color: '#fff', fontWeight: '600' },
   dateRow: { flexDirection: 'row', gap: spacing.md },
   dateField: { flex: 1 },
   hint: { fontSize: 14, color: colors.textMuted },
+  strong: { fontWeight: '600', color: colors.text },
+  link: { fontWeight: '600', color: colors.primary, textDecorationLine: 'underline' },
   error: { color: colors.danger, fontSize: 14 },
   footer: { fontSize: 13, color: colors.textMuted, textAlign: 'center', lineHeight: 18 },
 });

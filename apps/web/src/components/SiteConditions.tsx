@@ -6,7 +6,6 @@ import { geocodeAddress } from '@/lib/geo';
 import { MACHINE_LABELS } from '@/lib/machinePhotos';
 import {
   assessWork,
-  CHELNY,
   fetchForecast,
   machineGroup,
   mskParts,
@@ -35,8 +34,8 @@ async function placeOf(location: OrderLocation | null) {
     return { lat: location.latitude, lon: location.longitude, label: location.addressLine };
   }
   const query =
-    location.addressLine === location.city
-      ? location.city
+    !location.city || location.addressLine === location.city
+      ? location.addressLine
       : `${location.city}, ${location.addressLine}`;
   const found = await geocodeAddress(query);
   if (!found) return null;
@@ -61,23 +60,24 @@ export async function SiteConditions({
   const place = await placeOf(location);
   // A city-only place (orders imported from chats) gets the weather, not the map.
   const exact = Boolean(place && location && location.addressLine !== location.city);
-  const target = place ?? { lat: CHELNY.lat, lon: CHELNY.lon, label: 'Набережные Челны' };
 
   const day = mskParts(date.toISOString()).date;
   const ahead = (Date.parse(day) - Date.parse(mskToday())) / DAY_MS;
   const dateLabel = date.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' });
   const type = machineTypeOf(categoryName ?? '');
 
+  // The forecast only for a known place: an order whose place is unknown gets
+  // none rather than the weather of a town we would have to guess.
   let weatherBlock = null;
-  if (ahead >= 0) {
-    const points = ahead <= 9 ? await fetchForecast(target.lat, target.lon) : null;
+  if (ahead >= 0 && place) {
+    const points = ahead <= 9 ? await fetchForecast(place.lat, place.lon) : null;
     const weather = points ? shiftWeather(points, day) : null;
     weatherBlock = (
       <WeatherHud
         weather={weather}
         notes={weather ? assessWork(weather, machineGroup(type)) : []}
         group={machineGroup(type)}
-        place={location?.city ?? 'Набережные Челны'}
+        place={location?.city || place.label}
         dateLabel={dateLabel}
         machineLabel={type ? `для: ${MACHINE_LABELS[type].toLowerCase()}` : undefined}
         emptyReason={ahead <= 9 ? 'unavailable' : 'far'}

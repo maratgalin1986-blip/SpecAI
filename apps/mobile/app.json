@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "СпецПласт16",
+    "name": "ИИСтройка24",
     "slug": "specai",
     "owner": "maratgalin1986s-team",
     "version": "0.1.0",
@@ -14,32 +14,62 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.specai.app"
+      "bundleIdentifier": "com.specai.app",
+      "infoPlist": {
+        "UIBackgroundModes": ["location"]
+      }
     },
     "android": {
-      "package": "com.specai.app",
+      "package": "com.specai.specai",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#D97706"
-      }
+        "backgroundColor": "#F59E0B"
+      },
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_BACKGROUND_LOCATION",
+        "FOREGROUND_SERVICE",
+        "FOREGROUND_SERVICE_LOCATION",
+        "POST_NOTIFICATIONS"
+      ],
+      "googleServicesFile": "./google-services.json"
     },
     "plugins": [
       "expo-router",
       "expo-secure-store",
       [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Геопозиция нужна, чтобы заказчики видели вашу машину на линии, а вы — технику рядом.",
+          "locationAlwaysAndWhenInUsePermission": "Фоновая геопозиция нужна, чтобы ваша машина оставалась на карте у заказчиков, пока вы на линии, даже с выключенным экраном.",
+          "isAndroidBackgroundLocationEnabled": true,
+          "isAndroidForegroundServiceEnabled": true
+        }
+      ],
+      [
         "expo-image-picker",
         {
-          "photosPermission": "Приложению нужен доступ к фото, чтобы добавлять снимки техники."
+          "photosPermission": "Приложению нужен доступ к фото, чтобы добавлять снимки техники.",
+          "cameraPermission": "Камера нужна, чтобы снять технику в начале и в конце смены."
         }
       ],
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#D97706",
+          "backgroundColor": "#F59E0B",
           "image": "./assets/splash-icon.png",
           "imageWidth": 160
         }
-      ]
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#D97706"
+        }
+      ],
+      "expo-task-manager"
     ],
     "extra": {
       "router": {},

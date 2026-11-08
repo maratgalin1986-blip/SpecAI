@@ -1,3 +1,4 @@
+import { categoryName } from '@specai/shared';
 import { SHIFT, SITE } from '@/lib/site';
 
 // The site's dispatcher without a paid AI: it reads the visitor's message
@@ -55,81 +56,110 @@ export function findPhone(text: string): string | null {
 export interface TaskMatch {
   /** Category name as stored in the catalogue. */
   category: string;
+  /** Category slug (packages/shared/src/categories.ts). */
+  categorySlug: string;
   /** Why this machine fits, one short sentence. */
   why: string;
 }
 
 // Order matters: the first rule that matches wins, so the specific ones
-// (a machine named outright) come before the job descriptions.
-const RULES: { test: RegExp; category: string; why: string }[] = [
+// (a machine named outright) come before the job descriptions. Categories are
+// the slugs of packages/shared/src/categories.ts; the display name follows.
+const RULES: { test: RegExp; slug: string; why: string }[] = [
   {
     test: /экскаватор-погруз|погрузчик-экскав|jcb|4cx|3cx/,
-    category: 'Экскаваторы-погрузчики',
+    slug: 'backhoe-loaders',
     why: 'копает и грузит одной машиной',
   },
   {
     test: /(подн|подъ[её]м).*(плит|блок|балк|ферм|груз|\d+\s*т\b)|монтаж.*(плит|конструкц)/,
-    category: 'Краны',
+    slug: 'cranes',
     why: 'поднимет и установит тяжёлые грузы',
   },
   {
     test: /вывез|вывоз|мусор/,
-    category: 'Самосвалы',
+    slug: 'dump-trucks',
     why: 'вывезет грунт и мусор',
   },
   {
-    test: /гидромолот|молот|демонтаж|разбить|бетон/,
-    category: 'Экскаваторы',
+    test: /мини-?\s?экскав|миниэкскав/,
+    slug: 'mini-excavators',
+    why: 'компактный экскаватор пройдёт во двор и на участок, копает у домов и заборов',
+  },
+  {
+    test: /кол[её]сн\S*\s+экскав|экскав\S*\s+кол[её]сн|кол[её]сник|пневмокол[её]с/,
+    slug: 'wheeled-excavators',
+    why: 'колёсный экскаватор сам переезжает между объектами и работает в городе',
+  },
+  {
+    test: /гусенич\S*\s+экскав|экскав\S*\s+гусенич/,
+    slug: 'excavators',
+    why: 'гусеничный экскаватор — для котлованов и больших объёмов земляных работ',
+  },
+  {
+    test: /бетононас|подать бетон|подач\S* бетон|залить|заливк/,
+    slug: 'concrete-pumps',
+    why: 'бетононасос подаст бетон на высоту и в труднодоступное место',
+  },
+  {
+    test: /миксер|бетоносмес|бетоновоз|привез\S* бетон|доставк\S* бетон/,
+    slug: 'mixer-trucks',
+    why: 'автобетоносмеситель привезёт бетон на объект',
+  },
+  {
+    // «Бетон» alone is not a hammer job: only breaking it is.
+    test: /гидромолот|молот|демонтаж|разбить|разбор|долбить|сломать/,
+    slug: 'wheeled-excavators',
     why: 'колёсный экскаватор с гидромолотом разбивает бетон, асфальт и мёрзлый грунт',
   },
   {
     test: /экскав/,
-    category: 'Экскаваторы',
+    slug: 'excavators',
     why: 'для котлованов и больших объёмов земляных работ',
   },
   {
     test: /автокран|кран(?!.*манипул)/,
-    category: 'Краны',
+    slug: 'cranes',
     why: 'поднимет и установит тяжёлые грузы',
   },
   {
     test: /манипул|кму|перевез.*(груз|блок|плит)|привез.*и.*выгруз/,
-    category: 'Манипуляторы',
+    slug: 'crane-trucks',
     why: 'привезёт груз и сам выгрузит краном',
   },
   {
     test: /вышк|агп|высот|фасад|кровл|спил|дерев|освещ|фонар/,
-    category: 'Автовышки',
+    slug: 'aerial-platforms',
     why: 'для работ на высоте',
   },
   {
     test: /каток|катк|уплотн|утрамб|асфальт/,
-    category: 'Катки',
+    slug: 'rollers',
     why: 'уплотнит грунт, щебень или асфальт',
   },
   {
     test: /самосв|вывез|вывоз|мусор|привез.*(песок|щеб|грунт|пгс)|песок|щебень|пгс/,
-    category: 'Самосвалы',
+    slug: 'dump-trucks',
     why: 'вывезет грунт и мусор или привезёт сыпучие материалы',
   },
   {
     test: /бульд|планиров|разровн|выровн|засып/,
-    category: 'Бульдозеры',
+    slug: 'bulldozers',
     why: 'спланирует участок и переместит грунт',
   },
   {
     test: /трактор|мтз|беларус|покос|косить/,
-    category: 'Тракторы',
+    slug: 'tractors',
     why: 'для вспомогательных и коммунальных работ',
   },
   {
     test: /снег|погрузчик|погруз(ить|ка)|фронтал/,
-    category: 'Погрузчики',
+    slug: 'loaders',
     why: 'погрузит сыпучие материалы и уберёт снег',
   },
   {
     test: /транше|траншея|траншею|канав|котлован|яму|ямы|копать|выкопать|рыть|вырыть|фундамент|септик|водопровод|канализ|кабел/,
-    category: 'Экскаваторы-погрузчики',
+    slug: 'backhoe-loaders',
     why: 'траншеи, ямы и котлованы, а потом засыпка и погрузка',
   },
 ];
@@ -137,7 +167,9 @@ const RULES: { test: RegExp; category: string; why: string }[] = [
 export function matchTask(text: string): TaskMatch | null {
   const lower = text.toLowerCase();
   const rule = RULES.find(({ test }) => test.test(lower));
-  return rule ? { category: rule.category, why: rule.why } : null;
+  return rule
+    ? { category: categoryName(rule.slug), categorySlug: rule.slug, why: rule.why }
+    : null;
 }
 
 /** Answers to common questions, from facts the site already states. */
@@ -156,17 +188,28 @@ export function faqAnswers(text: string): string[] {
   if (/режим|часы работы|выходн|воскрес|до скольки|во сколько/.test(lower)) {
     answers.push(`Режим работы: ${SITE.workingHours}.`);
   }
-  if (/где|город|район|елабуг|нижнекам|менделеев|татарстан|выезд/.test(lower)) {
+  if (/где|город|район|регион|елабуг|нижнекам|менделеев|татарстан|росси|выезд/.test(lower)) {
     answers.push(
-      `Работаем в ${SITE.city === 'Набережные Челны' ? 'Набережных Челнах' : SITE.city} и по Татарстану.`,
+      `Работаем по всей России: заявку видят исполнители рядом с вашим объектом. Парк ${SITE.name} — в Набережных Челнах и Татарстане.`,
     );
   }
   if (/смет|рассчит|посчита|калькул/.test(lower)) {
     answers.push('Примерную смету можно посчитать за минуту: [калькулятор сметы](/smeta).');
   }
-  if (/посредник|поставщик|своя техника|чья техника/.test(lower)) {
+  // The platform's promise (owner, 2026-10-17): asked about middlemen, a
+  // commission or whether it is free, the dispatcher says it plainly.
+  // Only questions about the platform itself: «бесплатная доставка?» or «процент
+  // уплотнения» are not about it.
+  if (
+    /посредник|поставщик|своя техника|чья техника|комисси|наценк/.test(lower) ||
+    // Whole words only: «можно ли бесплатно вывезти», «площадка стоит ровная»
+    // (the building site) are not about the platform.
+    /(?<!\p{L})процент\S* (?:бер[её]т|площадк|сервис)|(?<!\p{L})(?:площадк\S*|сервис\S*|это) бесплатн\S*\s*(?:[?.!]|$)|бесплатн\S* ли (?:это|площадк|сервис|у вас|пользоваться)|(?<!\p{L})(?:площадк|сервис)\S* бер[её]т|сколько стоит (?:пользоваться|площадк|сервис|регистрац|разместить заявку)/u.test(
+      lower,
+    )
+  ) {
     answers.push(
-      `${SITE.name} — единственный исполнитель: своя техника и свои машинисты, без посредников.`,
+      `${SITE.promiseLine} Заявку видят исполнители со своей техникой и машинистами, включая парк ${SITE.name}: каждый называет свою цену, вы выбираете.`,
     );
   }
   return answers;

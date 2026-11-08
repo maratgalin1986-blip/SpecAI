@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { pointAddress, pointMessageLine, withPointLine, yandexMapsLink } from './mapPoint';
+import {
+  addressWithPoint,
+  pointAddress,
+  pointMessageLine,
+  withPointLine,
+  yandexMapsLink,
+} from './mapPoint';
 
 const point = { lat: 55.743123, lon: 52.398111 };
 
@@ -36,5 +42,25 @@ describe('parseCoordinates', () => {
     const text = withPointLine('а'.repeat(1200), point);
     expect(text.length).toBeLessThanOrEqual(1000);
     expect(text.endsWith(pointMessageLine(point))).toBe(true);
+  });
+});
+
+describe('addressWithPoint', () => {
+  const point = { lat: 55.7431, lon: 52.3981 };
+  it('keeps the street as a label and replaces an earlier point', () => {
+    expect(addressWithPoint('', point)).toBe(pointAddress(point));
+    expect(addressWithPoint('ул. Мира', point)).toBe(`ул. Мира · ${pointAddress(point)}`);
+    const twice = addressWithPoint(addressWithPoint('ул. Мира', point), { lat: 55.8, lon: 52.4 });
+    expect(twice.match(/Точка на карте/g)).toHaveLength(1);
+  });
+  it('fits the 200 characters of the order schemas, cutting the street', () => {
+    const long = 'у'.repeat(190);
+    const value = addressWithPoint(long, point);
+    expect(value.length).toBeLessThanOrEqual(200);
+    expect(value.endsWith(pointAddress(point))).toBe(true);
+  });
+  it('leaves only the street when the point is removed', () => {
+    expect(addressWithPoint(`ул. Мира · ${pointAddress(point)}`, null)).toBe('ул. Мира');
+    expect(addressWithPoint(pointAddress(point), null)).toBe('');
   });
 });

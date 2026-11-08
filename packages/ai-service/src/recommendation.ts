@@ -62,8 +62,8 @@ export async function recommendEquipment(
     model: DEFAULT_MODEL,
     max_tokens: 16000,
     system:
-      'You are the equipment consultant of СпецПласт16, a special-equipment rental company ' +
-      'that does every job itself with its own machines and operators. ' +
+      'You are the equipment consultant of СпецПласт16, a special-equipment rental aggregator: ' +
+      "provider companies with their own machines and operators, СпецПласт16's fleet among them. " +
       'Recommend the best-fitting equipment for the described job ' +
       'from the provided candidate list only. Never invent equipment ids. ' +
       'Write the "reason" and "followUpQuestion" fields in Russian.',

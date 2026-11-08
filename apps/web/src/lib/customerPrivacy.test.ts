@@ -19,6 +19,8 @@ describe('customer privacy for providers', () => {
     expect(customerShortName('анна')).toBe('Анна');
     expect(customerShortName('anna@example.ru')).toBe('Заказчик');
     expect(customerShortName('')).toBe('Заказчик');
+    expect(customerShortName('Заявка из мессенджера')).toBe('Заявка из чата');
+    expect(customerShortName('Заявка с сайта')).toBe('Заявка с сайта');
   });
 
   it('shows contacts only once the booking is confirmed', () => {

@@ -1,53 +1,101 @@
 import { describe, expect, it } from 'vitest';
+import { CATEGORIES } from '@specai/shared';
 import {
+  TASK_GROUPS,
+  bidShiftFloor,
+  customerRateFields,
+  customerRates,
   headlinePrices,
   keySpecs,
   machinePhotoOf,
   machineTypeOf,
+  normalizeTaskGroupId,
   numericSpec,
   specChip,
   specEntries,
   taskGroupOf,
 } from './equipmentCatalog';
+import { HOUSE_COMPANY_ID } from './fleet';
+import { cardRates, houseFloorError } from './offerBreakdown';
+import { RATES, SHIFT_HOURS } from './prices';
 
 describe('taskGroupOf', () => {
-  it('groups catalog categories by task', () => {
-    expect(taskGroupOf('Экскаваторы-погрузчики')).toBe('earth');
-    expect(taskGroupOf('Бульдозеры')).toBe('earth');
+  it('groups catalog categories by task, by slug or exact name', () => {
+    expect(taskGroupOf('Экскаваторы-погрузчики')).toBe('earthmoving');
+    expect(taskGroupOf('Бульдозеры')).toBe('earthmoving');
+    expect(taskGroupOf('Автокраны')).toBe('lifting');
+    expect(taskGroupOf('Автовышки (АГП)')).toBe('lifting');
+    expect(taskGroupOf('Фронтальные погрузчики')).toBe('loading');
+    expect(taskGroupOf('Самосвалы')).toBe('hauling');
+    expect(taskGroupOf('Катки')).toBe('road');
+    expect(taskGroupOf('Что угодно', 'mixer-trucks')).toBe('concrete');
+    expect(taskGroupOf('Дизельные генераторы')).toBe('equipment');
+  });
+
+  it('guesses the group of a hand-made category and knows every shared group', () => {
     expect(taskGroupOf('Краны')).toBe('lifting');
-    expect(taskGroupOf('Автовышки')).toBe('lifting');
     expect(taskGroupOf('Погрузчики')).toBe('loading');
-    expect(taskGroupOf('Самосвалы')).toBe('transport');
-    expect(taskGroupOf('Катки')).toBe('other');
+    expect(taskGroupOf('Пилорамы')).toBe('other');
+    const ids = new Set<string>(TASK_GROUPS.map((group) => group.id));
+    for (const category of CATEGORIES) expect(ids.has(category.group)).toBe(true);
+  });
+
+  it('understands the group ids of older catalog links', () => {
+    expect(normalizeTaskGroupId('earth')).toBe('earthmoving');
+    expect(normalizeTaskGroupId('transport')).toBe('hauling');
+    expect(normalizeTaskGroupId('road')).toBe('road');
+    expect(normalizeTaskGroupId('nope')).toBeUndefined();
   });
 });
 
 describe('machineTypeOf', () => {
   it('maps categories and names to a machine photo type', () => {
     expect(machineTypeOf('Экскаваторы-погрузчики')).toBe('backhoe');
-    expect(machineTypeOf('Экскаваторы', 'JCB 4CX экскаватор-погрузчик')).toBe('backhoe');
-    expect(machineTypeOf('Экскаваторы')).toBe('excavator');
-    expect(machineTypeOf('Экскаваторы', 'Гусеничный экскаватор Hitachi')).toBe('excavator');
-    expect(machineTypeOf('Экскаваторы', 'Колёсный экскаватор с гидромолотом')).toBe(
+    expect(machineTypeOf('Экскаваторы гусеничные', 'JCB 4CX экскаватор-погрузчик')).toBe('backhoe');
+    expect(machineTypeOf('Экскаваторы гусеничные')).toBe('excavator');
+    expect(machineTypeOf('Экскаваторы гусеничные', 'Гусеничный экскаватор Hitachi')).toBe(
+      'excavator',
+    );
+    expect(machineTypeOf('Экскаваторы гусеничные', 'Колёсный экскаватор с гидромолотом')).toBe(
       'wheeled-excavator',
     );
-    expect(machineTypeOf('Манипуляторы')).toBe('kmu');
-    expect(machineTypeOf('Краны', 'Кран-манипулятор КМУ 7 т')).toBe('kmu');
-    expect(machineTypeOf('Автовышки')).toBe('agp');
+    expect(machineTypeOf('Экскаваторы колёсные')).toBe('wheeled-excavator');
+    expect(machineTypeOf('Мини-экскаваторы')).toBe('excavator');
+    expect(machineTypeOf('Краны-манипуляторы (КМУ)')).toBe('kmu');
+    expect(machineTypeOf('Автокраны', 'Кран-манипулятор КМУ 7 т')).toBe('kmu');
+    expect(machineTypeOf('Автовышки (АГП)')).toBe('agp');
     expect(machineTypeOf('Спецтехника', 'АГП-22')).toBe('agp');
     expect(machineTypeOf('Катки')).toBe('roller');
-    expect(machineTypeOf('Краны')).toBe('crane');
-    expect(machineTypeOf('Погрузчики', 'Фронтальный погрузчик')).toBe('loader');
-    expect(machineTypeOf('Погрузчики', 'Вилочный погрузчик')).toBeNull();
+    expect(machineTypeOf('Автокраны')).toBe('crane');
+    expect(machineTypeOf('Фронтальные погрузчики', 'Фронтальный погрузчик')).toBe('loader');
+    expect(machineTypeOf('Вилочные погрузчики')).toBeNull();
+    expect(machineTypeOf('Телескопические погрузчики')).toBeNull();
+    expect(machineTypeOf('Мини-погрузчики (бобкэт)')).toBeNull();
+    expect(machineTypeOf('Ножничные и коленчатые подъёмники')).toBeNull();
     expect(machineTypeOf('Самосвалы')).toBe('truck');
+    expect(machineTypeOf('Тралы и низкорамники')).toBe('truck');
     expect(machineTypeOf('Бульдозеры')).toBe('dozer');
     expect(machineTypeOf('Тракторы')).toBe('tractor');
+    expect(machineTypeOf('Дизельные генераторы')).toBeNull();
+  });
+
+  it('still reads the older category names', () => {
+    expect(machineTypeOf('Экскаваторы')).toBe('excavator');
+    expect(machineTypeOf('Краны')).toBe('crane');
+    expect(machineTypeOf('Манипуляторы')).toBe('kmu');
+    expect(machineTypeOf('Погрузчики', 'Вилочный погрузчик')).toBeNull();
     expect(machineTypeOf('Генераторы')).toBeNull();
   });
 
+  it('never throws for any category of the shared list', () => {
+    for (const category of CATEGORIES) {
+      expect(() => machineTypeOf(category.name)).not.toThrow();
+    }
+  });
+
   it('gives the server-rendered photo of the type', () => {
-    expect(machinePhotoOf('Краны')).toMatch(/^\/images\/.+\.jpg$/);
-    expect(machinePhotoOf('Генераторы')).toBeNull();
+    expect(machinePhotoOf('Автокраны')).toMatch(/^\/images\/.+\.jpg$/);
+    expect(machinePhotoOf('Дизельные генераторы')).toBeNull();
   });
 });
 
@@ -97,5 +145,47 @@ describe('headlinePrices', () => {
       hour: null,
       shift: 22000,
     });
+  });
+});
+
+describe('one price per machine in the catalogue and in offers', () => {
+  const house = {
+    name: 'Экскаватор-погрузчик JCB 3CX',
+    categoryName: 'Экскаваторы-погрузчики',
+    companyId: HOUSE_COMPANY_ID,
+    hourlyRate: 1000,
+    dailyRate: 8000,
+  };
+  const listShift = RATES.backhoe * SHIFT_HOURS;
+
+  it('gives the API the rates the customer sees', () => {
+    expect(customerRateFields(house)).toEqual({
+      customerHourlyRate: RATES.backhoe,
+      customerDailyRate: listShift,
+    });
+    expect(customerRates(house).dailyRate).toBe(listShift);
+  });
+
+  it('floors bids only on the house fleet', () => {
+    expect(bidShiftFloor(house)).toBe(listShift);
+    expect(bidShiftFloor({ ...house, companyId: 'other-company' })).toBeNull();
+  });
+
+  it('shows the offer card rates as the machine page does', () => {
+    expect(cardRates(house)).toEqual({ hour: RATES.backhoe, shift: listShift });
+    // Older callers without the name and category keep the stored numbers.
+    expect(cardRates({ hourlyRate: 1000, dailyRate: 8000 })).toEqual({ hour: 1000, shift: 8000 });
+  });
+
+  it('refuses a house bid below the list, by the shift or by the total', () => {
+    expect(
+      houseFloorError({ price: 0, shiftPrice: listShift - 100, shifts: 2 }, listShift, 2),
+    ).toMatch(/минимум/);
+    expect(
+      houseFloorError({ price: 0, shiftPrice: listShift, shifts: 2 }, listShift, 2),
+    ).toBeNull();
+    expect(houseFloorError({ price: listShift * 3 - 500 }, listShift, 3)).toMatch(/за 3 смены/);
+    expect(houseFloorError({ price: listShift * 3 }, listShift, 3)).toBeNull();
+    expect(houseFloorError({ price: 1 }, null, 3)).toBeNull();
   });
 });

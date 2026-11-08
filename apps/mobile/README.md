@@ -1,21 +1,24 @@
 # @specai/mobile — мобильное приложение «СпецПласт16»
 
-Приложение компании **СпецПласт16** (аренда спецтехники с оператором, Набережные Челны и
-Татарстан) на [Expo](https://expo.dev) (React Native, SDK 57, expo-router). Работает поверх
+Приложение площадки ИИСтройка24 от **СпецПласт16** (заказ спецтехники с машинистом по всей
+России; компания — из Набережных Челнов) на [Expo](https://expo.dev) (React Native, SDK 57, expo-router). Работает поверх
 API сайта из `apps/web`: вход и регистрация, каталог техники с поиском и пагинацией, карточка
 техники с бронированием, мои бронирования и оплата через Stripe Checkout, заявки и
-предложения поставщиков, отзывы, чат с ИИ-ассистентом, профиль, заявка на обратный звонок и
+предложения исполнителей, отзывы, чат с ИИ-ассистентом, профиль, заявка на обратный звонок и
 экран «О компании». Пакет по-прежнему называется `@specai/mobile`, slug/scheme — `specai`,
-идентификаторы `com.specai.app` (см. `app.json`); в магазинах приложение называется
-«СпецПласт16».
+идентификаторы `com.specai.app` (iOS) и `com.specai.specai` (Android, см. `app.json`); в
+магазинах приложение называется «ИИСтройка24 от СпецПласт16» (`docs/rustore.md`).
 
 ## Бренд и контакты
 
 - Название, телефон, e-mail, город, режим работы и услуги — в `src/lib/site.ts` (копия
   `apps/web/src/lib/site.ts` на сайте; при изменении обновите оба файла). Ссылки на сайт
   строятся от `EXPO_PUBLIC_API_URL` — сайт и API на одном хосте.
-- Цвета (`src/lib/theme.ts`) — как на сайте: tailwind `amber-600` (`#d97706`) для акцентов и
-  `slate` для текста/фона.
+- Дизайн-система — `src/theme.ts`: своя палитра «графит + сигнальный оранжевый» (`#E0560B`),
+  отступы, радиусы, шрифты, тени; `TAP = 48` — минимальная область нажатия. `src/lib/theme.ts`
+  только реэкспортирует её для старых импортов. Общие компоненты (`Button` с вариантами
+  `primary/secondary/dark/ghost/danger` и размером `large`, `Chip`, `Segmented`, `Card`, `Badge`)
+  — в `src/components/ui.tsx`.
 - Цены (`src/lib/format.ts`): `formatMoney` — RUB по умолчанию, формат «12 500 ₽» (ru-RU);
   `formatRate` — главная цена как на сайте: «от 2 500 ₽/час», смена 8 ч — `dailyRate`; если
   `hourlyRate` не задан — `dailyRate` за сутки. Стоимость бронирования считается, как в
@@ -49,8 +52,18 @@ API сайта из `apps/web`: вход и регистрация, катало
   открывается через `expo-web-browser` (`openBrowserAsync`); после закрытия браузера список
   перечитывается. Статус оплаты приходит из `depositPaid` и `payment.status` в `GET /api/bookings`
   (его выставляет webhook Stripe, поэтому обновление может быть с задержкой).
-- **Заявки.** `GET /api/orders` — мои заявки (все статусы; `?open=1` — лента открытых заявок для поставщиков), `GET /api/orders/[id]` — заявка
-  с предложениями (`bids` с техникой и компанией) и флагом `isOwner`, `POST /api/bids/[id]/accept`.
+- **Заявки.** `GET /api/orders` — мои заявки (все статусы) постранично: `offset`/`limit`, в
+  ответе `nextOffset` (вкладка «Заявки» дозагружает по кнопке «Показать ещё» и при прокрутке;
+  без `nextOffset` показывает первую страницу); `?open=1` — лента открытых заявок для
+  исполнителей. `GET /api/orders/[id]` — заявка с предложениями (`bids` с техникой и компанией)
+  и флагом `isOwner`, `POST /api/bids/[id]/accept`. Исполнитель на чужой открытой заявке видит
+  «Предложить цену» (`BidForm`, `POST /api/orders/[id]/bids`, только свободная техника) и после
+  предложения — чат с заказчиком; уведомление о новой заявке открывает именно этот экран.
+- **Карта.** Тайлы OSM во WebView идут через кэширующий прокси сайта
+  `${API_URL}/api/tiles/{z}/{x}/{y}` (`src/lib/providersMap.ts`, zoom 6–18), как на сайте.
+- **Вход.** Точка входа `src/app/index.tsx` объявлена первым экраном корневого Stack: после
+  входа исполнитель попадает в «Ленту», машинист — в «Смены», заказчик — на главную; главная с
+  картой у исполнителя не монтируется.
 - **Восстановление пароля** — на сайте: ссылка «Забыли пароль?» открывает
   `${API_URL}/forgot-password` во встроенном браузере.
 - **Монорепо.** `metro.config.js` следит за корнем репозитория и ищет модули в
@@ -98,8 +111,16 @@ cd apps/mobile
 npx eas whoami                                   # должен показать аккаунт
 EXPO_PUBLIC_API_URL=https://spec-ai-web.vercel.app npx eas update --branch preview \
   --environment preview --message "описание изменений" --platform all
+# та же версия для Expo Go: он просит runtime «exposdk:57.0.0», а не «0.1.0» APK
+EXPO_GO_UPDATE=1 EXPO_PUBLIC_API_URL=https://spec-ai-web.vercel.app npx eas update \
+  --branch preview --environment preview --message "описание изменений" --platform all
 npx eas update:list --branch preview             # id и ссылки на обновления
 ```
+
+Публиковать **обе** команды и **всегда `--platform all`**: 2026‑10‑16/17 обновления ушли
+только для Android, и iPhone в Expo Go показал «AppLoaderTask encountered an unexpected
+error». Ссылка для Expo Go на iPhone:
+`exp://u.expo.dev/e14d6fd4-d51a-4611-b084-e1da96f98879?channel-name=preview`.
 
 Флаг `--environment` обязателен в `--non-interactive` режиме (CI); `expo-updates` уже в
 зависимостях — его добавил `eas update:configure`, для Expo Go он не нужен, но нужен сборкам
@@ -134,7 +155,8 @@ cd apps/mobile                 # eas-cli установлен как devDependen
 npx eas login                  # или EXPO_TOKEN в окружении
 npx eas build --platform android --profile preview   # APK для тестов (канал preview)
 npx eas build --platform ios --profile preview       # сборка для TestFlight / устройств
-npx eas build --platform all --profile production    # магазинные сборки (канал production)
+npx eas build --platform all --profile production    # магазинные сборки (канал production; Android — APK для RuStore)
+npx eas build --platform android --profile production-aab   # AAB для Google Play (канал production)
 ```
 
 Переменную `EXPO_PUBLIC_API_URL` для сборок задайте в профиле `eas.json`
@@ -147,25 +169,98 @@ npx eas build --platform all --profile production    # магазинные сб
   с доступом к команде.
 - **Google Play Console** (разовый взнос 25 $) — для публикации Android; для тестовых APK
   аккаунт не нужен. Keystore EAS генерирует и хранит сам.
-- Идентификаторы уже заданы в `app.json`: `com.specai.app` (iOS bundle id и Android package),
+- Идентификаторы уже заданы в `app.json`: `com.specai.app` (iOS bundle id) и `com.specai.specai` (Android package, как в проекте Firebase `specai-dev`),
   scheme `specai`.
+
+Первая APK-сборка сделана 2026-10-15 (профиль `preview`, канал `preview`, versionCode 1,
+keystore создан и хранится на EAS): `cd apps/mobile && npx eas build --platform android
+--profile preview --non-interactive --no-wait`, затем `npx eas build:view <id> --json` до
+статуса FINISHED и ссылка `artifacts.buildUrl` на APK. Команду запускать только из
+`apps/mobile`: из корня репозитория eas-cli создаёт лишние `app.json`/`eas.json`.
+
+В APK работают фоновая геопозиция «на линии» (`src/lib/lineTask.ts`, уведомление
+«Вы на линии» пока исполнитель на линии) и push-уведомления. Для push на Android
+используется проект Firebase `specai-dev` (создан в июле 2026 с аккаунта владельца):
+`google-services.json` для пакета `com.specai.specai` лежит рядом с `app.json`. Чтобы Expo
+мог отправлять push, на expo.dev → проект specai → Credentials → Android →
+Push Notifications (FCM V1) нужно один раз загрузить ключ сервисного аккаунта из консоли
+Firebase (Project settings → Service accounts → Generate new private key). Без ключа APK
+ставится и работает, но push не приходят.
 
 Публикация: `npx eas submit --platform ios|android` после успешной production-сборки.
 Профили `preview` и `production` в `eas.json` привязаны к одноимённым каналам EAS Update,
 так что `eas update --channel production` доставит JS-обновление в магазинную сборку без
 пересборки.
 
+## Публикация в RuStore
+
+Пошагово — в [`docs/rustore.md`](../../docs/rustore.md): аккаунт разработчика (создаёт владелец
+через VK ID и Госуслуги), сборка `cd apps/mobile && npx eas-cli build --platform android
+--profile production` (подписанный release-APK, `versionCode` растёт сам — `autoIncrement` и
+`appVersionSource: remote`), готовые тексты карточки, список скриншотов, анкета рейтинга.
+Каждое JS-обновление публикуется и в `preview`, и в `production` (`--channel production`, обе
+команды — обычная и `EXPO_GO_UPDATE=1`, `--platform all`), иначе пользователи из RuStore
+останутся на старой версии.
+
 ## Ограничения
 
-- Регистрация в приложении — только для клиентов; аккаунт поставщика создаётся на сайте.
+- Фоновая геопозиция «на линии» работает только в APK/магазинной сборке; в Expo Go положение
+  уходит, пока приложение открыто.
 - Восстановление пароля и сама страница Stripe Checkout открываются во встроенном браузере,
   не нативно.
 - После оплаты приложение не получает push/deep link — статус «Оплачено» появляется после
   обновления списка, когда webhook Stripe обработает платёж.
 
-## Кабинет поставщика (роль PROVIDER_ADMIN)
+## Две роли в одном приложении
 
-Вкладка «Кабинет» показывается только поставщикам: «Моя техника» (`GET /api/equipment?mine=1`)
+Сервис — агрегатор («такси для спецтехники»), поэтому вкладки зависят от роли:
+
+- **Заказчик:** «Главная» — карта исполнителей на весь экран (`/map?embed=1` в WebView,
+  `src/components/MapWebView.tsx`) и нижняя шторка быстрого заказа
+  (`src/components/QuickOrderSheet.tsx`): адрес, плитки видов техники (`GET /api/categories`),
+  «Нужна сейчас / На дату», кнопка «Заказать» → `POST /api/orders` (одна смена по умолчанию; адрес
+  уходит в поле `address` и строкой «Адрес: …» в описании, чтобы исполнитель видел его в ленте).
+  Над шторкой — текущий заказ. «Заказы» — заявки и брони (`?view=bookings`), «Помощник» — чат,
+  «Профиль». Экран заказа `orders/[id]` устроен как поездка: этапы Создан → Предложения →
+  Исполнитель выбран → В пути/на объекте → Завершён (по статусу заявки и брони с тем же `orderId`),
+  карточки предложений с кнопкой «Выбрать», контакты исполнителя после подтверждения, отмена;
+  пока идёт поиск, экран обновляется раз в 30 с. Каталог переехал в `catalog` (кнопка на главной).
+- **Исполнитель (PROVIDER_ADMIN):** «Лента» (`(tabs)/feed`) — переключатель «На линии / Не на
+  линии», статусы машин (`PATCH /api/equipment/[id]`), сводка (активные брони, доход за месяц по
+  броням), «Почему нет заказов?» и заявки с «Беру по прайсу» (смена × дни) и «Предложить цену»
+  (`src/components/BidForm.tsx`); «Мои заказы» (`(tabs)/jobs`) — брони со сменой статуса и
+  отправленные предложения; «Техника» (`(tabs)/provider`) — машины, база на карте, добавление;
+  «Профиль» с переключателем «Режим заказчика». `provider/orders` перенаправляет в «Ленту».
+- **Только на телефоне** (`src/lib/prefs.ts`, SecureStore): режим исполнителя/заказчика и «На
+  линии». Сервер их не знает: заказчики статус не видят, лента просто обновляется раз в минуту.
+- Чистая логика (этапы заказа, описание быстрого заказа, доход, расстояние) — `src/lib/orderFlow.ts`,
+  тесты — `pnpm --filter @specai/mobile test`.
+
+## Роли в приложении
+
+- **Заказчик** (`CUSTOMER`) — карта исполнителей, быстрый заказ, свои заявки и брони, чат с
+  помощником. Регистрируется в приложении сам.
+- **Исполнитель** (`PROVIDER_ADMIN`) — компания со своей техникой: лента заявок и «На линии»,
+  предложения, брони, календарь занятости, доход по машинам, документы техники, радиус подачи,
+  машинисты. Аккаунт создаётся на сайте (`/register?type=provider`).
+- **Машинист** (`PROVIDER_OPERATOR`) — создаёт исполнитель в разделе «Машинисты» (имя,
+  телефон, временный пароль). Видит только свои смены: статусы Выехал → На объекте → Работа →
+  Простой → Смена завершена с фото начала и конца, табель смены. Техники, ленты и цен не видит.
+- **Администратор** (`PLATFORM_ADMIN`) — в приложении отдельного вида нет, работает в `/admin`
+  на сайте.
+
+Тестовая ссылка для проверки PR: обновление публикуется в ветку EAS с номером PR, например
+`pr-30` — `EXPO_PUBLIC_API_URL=<превью Vercel> npx eas update --branch pr-30 --environment preview`
+(превью ветки `claude/expo-eas-publish`:
+`https://spec-ai-web-git-claude-expo-eas-publish-marat10.vercel.app`; хост
+`…-maratgalin1986s-projects.vercel.app` не открывается — 2026-10-14 три обновления ушли с ним
+и не работали). Команда:
+--message "PR #30"`; затем `npx eas update:list --branch pr-30`даёт ссылку`https://expo.dev/accounts/maratgalin1986s-team/projects/specai/updates/<group-id>`, которую
+открывают в Expo Go. Ветка `preview`остаётся для состояния`main`.
+
+## Кабинет исполнителя (роль PROVIDER_ADMIN)
+
+Вкладка «Кабинет» показывается только исполнителям: «Моя техника» (`GET /api/equipment?mine=1`)
 и «Бронирования» техники компании (`GET /api/bookings?as=provider`) с кнопками смены статуса
 (`PATCH /api/bookings/[id]`, те же переходы, что на сайте). Экран `provider/equipment/new` —
 добавление техники: фото через `expo-image-picker` → `POST /api/uploads` (multipart, Bearer),

@@ -2,6 +2,7 @@ import { useFocusEffect, useRouter, type Href } from 'expo-router';
 import React, { useCallback, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { fetchGuide, type Guide } from '@/lib/api';
+import { guideAppRoute } from '@/lib/guideRoute';
 import { colors, radius, spacing } from '@/lib/theme';
 
 /**
@@ -27,7 +28,7 @@ export function NextStepCard() {
 
   if (!guide) return null;
   const { next, progress } = guide;
-  const target = next.action?.app;
+  const target = guideAppRoute(next.action);
 
   return (
     <View style={styles.card} accessibilityLabel="Помощник: следующий шаг">
@@ -74,8 +75,8 @@ export function NextStepCard() {
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: colors.primaryLight,
-    borderColor: '#fcd34d',
+    backgroundColor: colors.primarySoft,
+    borderColor: colors.primaryLight,
     borderWidth: 1,
     borderRadius: radius.lg,
     padding: spacing.md,
@@ -84,7 +85,7 @@ const styles = StyleSheet.create({
   headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   eyebrow: { fontSize: 12, fontWeight: '700', color: colors.primaryDark, letterSpacing: 0.5 },
   progress: { fontSize: 12, color: colors.primaryDark },
-  bar: { height: 5, borderRadius: 3, backgroundColor: '#fde68a', overflow: 'hidden' },
+  bar: { height: 5, borderRadius: 3, backgroundColor: colors.primaryLight, overflow: 'hidden' },
   barFill: { height: 5, borderRadius: 3, backgroundColor: colors.primary },
   title: { fontSize: 17, fontWeight: '700', color: colors.text, marginTop: spacing.xs },
   hint: { fontSize: 14, color: colors.dark, lineHeight: 19 },

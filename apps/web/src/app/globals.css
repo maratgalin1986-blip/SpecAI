@@ -1477,8 +1477,35 @@ html[data-cookie-strip] .chat-fab,
 html[data-tg-chip] .chat-fab {
   bottom: calc(7.25rem + env(safe-area-inset-bottom));
 }
+/* «На рабочий стол» (InstallButton): bottom left, level with the chat button,
+   above the contact bar and the chips; away while the «Установить» card shows. */
+.install-fab {
+  bottom: calc(4.75rem + env(safe-area-inset-bottom));
+}
+html[data-cookie-strip] .install-fab,
+html[data-tg-chip] .install-fab {
+  bottom: calc(7.25rem + env(safe-area-inset-bottom));
+}
+html[data-install-hint] .install-fab {
+  display: none;
+}
+html[data-no-contact-bar] .install-fab {
+  bottom: calc(1rem + env(safe-area-inset-bottom));
+}
 @media (min-width: 640px) {
-  html[data-tg-chip] .chat-fab {
+  .install-fab,
+  html[data-tg-chip] .install-fab,
+  html[data-no-contact-bar] .install-fab {
+    bottom: 1rem;
+  }
+}
+/* The «Установить» card (InstallPrompt) is taller than the chip: up over it. */
+html[data-install-hint] .chat-fab {
+  bottom: calc(10.5rem + env(safe-area-inset-bottom));
+}
+@media (min-width: 640px) {
+  html[data-tg-chip] .chat-fab,
+  html[data-install-hint] .chat-fab {
     bottom: 1rem;
   }
   .chat-fab {
@@ -1508,6 +1535,23 @@ html[data-tg-chip] .chat-fab {
 }
 .site-header-vt[data-dark='true'] .vt-phone {
   background-color: rgb(255 255 255 / 0.18);
+}
+
+/* «Бесплатно · без посредников» under the logo: quiet, low contrast. */
+.promise-pill {
+  color: rgb(6 95 70); /* emerald-800 */
+  background-color: rgb(236 253 245 / 0.9); /* emerald-50 */
+  box-shadow: inset 0 0 0 1px rgb(167 243 208); /* emerald-200 */
+  transition:
+    background-color 0.2s,
+    color 0.2s;
+}
+.promise-pill:hover {
+  background-color: rgb(209 250 229); /* emerald-100 */
+}
+.site-header-vt[data-dark='true'] .promise-pill {
+  background-color: rgb(255 255 255 / 0.1);
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.2);
 }
 
 /* cinema content */
@@ -1636,6 +1680,36 @@ html[data-vt-kind='fade']::view-transition-group(root) {
 }
 .tilt-card[data-touch] .tilt-glare {
   opacity: 0.9;
+}
+
+/* ---- Cabinets (customer /dashboard, provider /provider) -------------------
+   Own identity: graphite surfaces + one signal-orange action per screen
+   (colors in tailwind.config.ts: graphite-*, signal-*). Mobile-first. */
+
+:root {
+  --sp-graphite: #1d2126;
+  --sp-signal: #f47b10;
+}
+
+@layer components {
+  .cab-card {
+    @apply rounded-cab border border-graphite-100 bg-white p-4 shadow-sm sm:p-5;
+  }
+  .cab-dark {
+    @apply rounded-cab bg-graphite-900 p-4 text-white shadow-lg sm:p-5;
+  }
+  .cab-chip {
+    @apply inline-flex items-center gap-1 rounded-full border border-graphite-200 bg-white px-2.5 py-0.5 text-xs font-semibold text-graphite-700;
+  }
+  .cab-action {
+    @apply inline-flex min-h-[44px] items-center justify-center gap-2 rounded-full bg-signal-500 px-5 py-2.5 text-sm font-bold text-graphite-950 transition hover:bg-signal-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-signal-600 disabled:cursor-not-allowed disabled:opacity-50;
+  }
+  .cab-ghost {
+    @apply inline-flex min-h-[40px] items-center justify-center gap-2 rounded-full border border-graphite-200 bg-white px-4 py-2 text-sm font-semibold text-graphite-800 transition hover:border-graphite-800;
+  }
+  .cab-eyebrow {
+    @apply text-[0.7rem] font-bold uppercase tracking-[0.14em] text-signal-700;
+  }
 }
 
 /* ---- Cinema effects v3 (CinemaDolly / CinemaParticles / CinemaFx) ---------
@@ -1942,6 +2016,43 @@ html[data-vt-kind='fade']::view-transition-group(root) {
   }
   html[data-typing] [data-bottom-bar] {
     transform: translateY(120%);
+    opacity: 0;
+    pointer-events: none;
+  }
+  /* Cabinets and sign-in forms have no contact bar (lib/workPages.ts), and
+     nothing else floats over their forms either: the cookie strip stands at
+     the end of the page instead of over the «Создать аккаунт» button, and
+     the chat button is not shown on a phone there. /stroyka keeps its own
+     strip (no data-bottom-bar on it). */
+  html[data-no-contact-bar] [data-testid='cookie-strip'][data-bottom-bar] {
+    position: relative;
+    inset: auto;
+    margin: 0.75rem 0.5rem calc(0.75rem + env(safe-area-inset-bottom));
+  }
+  html[data-no-contact-bar][data-cookie-strip] body {
+    padding-bottom: 0;
+  }
+  /* The «Установить» card over the contact bar: the end of the page and a
+     focused field stay clear of it. Without the bar (cabinets, forms) it
+     stands at the end of the page, like the cookie strip. */
+  html[data-install-hint] {
+    scroll-padding-bottom: 13rem;
+  }
+  html[data-install-hint] body {
+    padding-bottom: 4.5rem;
+  }
+  html[data-no-contact-bar] .install-hint {
+    position: relative;
+    inset: auto;
+    margin: 0.75rem 0.5rem calc(0.75rem + env(safe-area-inset-bottom));
+  }
+  html[data-no-contact-bar][data-install-hint] body {
+    padding-bottom: 0;
+  }
+  html[data-no-contact-bar] .chat-fab {
+    display: none;
+  }
+  html[data-typing] .chat-fab {
     opacity: 0;
     pointer-events: none;
   }

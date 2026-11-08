@@ -16,7 +16,11 @@ export function normalizeEmail(value: string): string {
 }
 
 const baseRegistration = {
-  name: z.string().trim().min(1, 'Укажите имя').max(200, 'Слишком длинное имя'),
+  name: z
+    .string({ required_error: 'Укажите имя', invalid_type_error: 'Укажите имя' })
+    .trim()
+    .min(1, 'Укажите имя')
+    .max(200, 'Слишком длинное имя'),
   email: emailSchema,
   password: z
     .string()
@@ -36,13 +40,33 @@ export type RegisterCustomerInput = z.infer<typeof registerCustomerSchema>;
 export const registerProviderSchema = z.object({
   accountType: z.literal('PROVIDER'),
   ...baseRegistration,
+  // Without `required_error` a missing field reports zod's English «Required»,
+  // which the API replaces with a generic message.
   companyName: z
-    .string()
+    .string({
+      required_error: 'Укажите название компании',
+      invalid_type_error: 'Укажите название компании',
+    })
     .trim()
     .min(1, 'Укажите название компании')
     .max(200, 'Слишком длинное название компании'),
 });
 export type RegisterProviderInput = z.infer<typeof registerProviderSchema>;
+
+/**
+ * «Стать исполнителем» under the same login: a customer adds a company (and
+ * the place its machinery stands, checked by the API like at sign-up) and
+ * then switches between ordering and working in one account.
+ */
+export const becomeProviderSchema = z.object({
+  companyName: registerProviderSchema.shape.companyName,
+  phone: z.string().trim().max(30, 'Слишком длинный телефон').optional(),
+  /** 152-ФЗ ст. 10.1: the provider's card (name, base, phone) is public. */
+  publicConsent: z.literal(true, {
+    errorMap: () => ({ message: 'Нужно согласие на публикацию карточки исполнителя' }),
+  }),
+});
+export type BecomeProviderInput = z.infer<typeof becomeProviderSchema>;
 
 export const registerSchema = z.discriminatedUnion('accountType', [
   registerCustomerSchema,

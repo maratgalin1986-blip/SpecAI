@@ -61,21 +61,101 @@ export function TelegramSetupButton({ configured }: { configured: boolean }) {
   );
 }
 
+/** PATCH /api/admin/orders/[id]; the server's refusal (409: already handled) as text. */
+async function setOrderStatus(orderId: string, status: 'OPEN' | 'CANCELLED') {
+  const response = await fetch(`/api/admin/orders/${encodeURIComponent(orderId)}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ status }),
+  }).catch(() => null);
+  if (response?.ok) return null;
+  const body = await response?.json().catch(() => null);
+  return typeof body?.error === 'string' ? body.error : 'Не удалось сохранить';
+}
+
+/** «Закрыть»: takes an open order off the board (a stale one, its dates passed). */
+export function CloseOrderButton({ orderId }: { orderId: string }) {
+  const router = useRouter();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  return (
+    <span className="flex flex-col items-end gap-1">
+      <button
+        type="button"
+        disabled={busy}
+        onClick={async () => {
+          if (
+            !window.confirm('Закрыть заявку? Она уйдёт с доски, исполнители её больше не увидят.')
+          )
+            return;
+          setBusy(true);
+          setError(await setOrderStatus(orderId, 'CANCELLED'));
+          setBusy(false);
+          router.refresh();
+        }}
+        className="rounded-md border border-slate-300 px-2.5 py-1 text-xs font-medium hover:bg-slate-50 disabled:opacity-50"
+      >
+        {busy ? 'Закрываем…' : 'Закрыть'}
+      </button>
+      {error && <span className="text-xs text-red-600">{error}</span>}
+    </span>
+  );
+}
+
+/** «Закрыть все»: every open order whose dates have passed leaves the board. */
+export function CloseStaleOrdersButton({ count }: { count: number }) {
+  const router = useRouter();
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+  return (
+    <span className="flex flex-col items-start gap-1">
+      <button
+        type="button"
+        disabled={busy}
+        onClick={async () => {
+          if (
+            !window.confirm(
+              `Закрыть все заявки с прошедшими датами (${count})? Они уйдут с доски, ожидающие предложения будут отклонены.`,
+            )
+          )
+            return;
+          setBusy(true);
+          const response = await fetch('/api/admin/orders/close-stale', { method: 'POST' }).catch(
+            () => null,
+          );
+          const body = await response?.json().catch(() => null);
+          setBusy(false);
+          setMessage(
+            response?.ok
+              ? `Закрыто: ${typeof body?.closed === 'number' ? body.closed : 0}`
+              : typeof body?.error === 'string'
+                ? body.error
+                : 'Не удалось закрыть',
+          );
+          router.refresh();
+        }}
+        className="rounded-md bg-graphite-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-graphite-800 disabled:opacity-50"
+      >
+        {busy ? 'Закрываем…' : `Закрыть все (${count})`}
+      </button>
+      {message && <span className="text-xs text-graphite-600">{message}</span>}
+    </span>
+  );
+}
+
 export function ModerationButtons({ orderId }: { orderId: string }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const act = async (status: 'OPEN' | 'CANCELLED') => {
     setBusy(true);
-    await fetch(`/api/admin/orders/${orderId}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status }),
-    });
+    setError(await setOrderStatus(orderId, status));
     setBusy(false);
     router.refresh();
   };
   return (
-    <div className="flex shrink-0 gap-2">
+    <div className="flex shrink-0 flex-wrap gap-2">
+      {error && <p className="basis-full text-xs text-red-600">{error}</p>}
       <button
         type="button"
         disabled={busy}

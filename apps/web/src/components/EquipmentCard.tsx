@@ -17,6 +17,8 @@ import {
   taskGroupOf,
 } from '@/lib/equipmentCatalog';
 import { modelPhotosOf } from '@/lib/modelPhotos';
+import { availabilityBadge } from '@/lib/aktualno';
+import { trustLine, type CardTrust } from '@/lib/catalogTrust';
 
 type Amount = number | string | { toString(): string } | null;
 
@@ -33,19 +35,33 @@ export interface EquipmentCardItem {
   /** Owner of the machine; the house fleet gets a «Парк СпецПласт16» badge. */
   companyId?: string;
   company?: { name: string } | null;
+  /** «Актуализация»: the provider's own answer (lib/aktualno.ts availabilityBadge). */
+  availableFrom?: Date | string | null;
+  availabilityUpdatedAt?: Date | string | null;
+  /** Rating, «на площадке с …», «Проверен» (lib/catalogTrust.ts); the catalogue passes it. */
+  trust?: CardTrust;
 }
 
 const GROUP_ICON: Record<ReturnType<typeof taskGroupOf>, IconName> = {
-  earth: 'excavator',
+  earthmoving: 'excavator',
   lifting: 'crane',
   loading: 'loader',
-  transport: 'tractor',
+  hauling: 'tractor',
+  road: 'roller',
+  concrete: 'helmet',
+  drilling: 'hammer',
+  municipal: 'helmet',
+  equipment: 'spark',
+  'agri-forestry': 'tractor',
   other: 'helmet',
 };
 
-export function categoryIcon(categoryName: string): IconName {
+/** The line icon of a category (the site's SVG set), by its group. */
+export function categoryIcon(categoryName: string, slug?: string | null): IconName {
   if (/бульдоз|трактор/i.test(categoryName)) return 'tractor';
-  return GROUP_ICON[taskGroupOf(categoryName)];
+  if (/вышк|подъ[её]мник/i.test(categoryName)) return 'lift';
+  if (/гидромолот/i.test(categoryName)) return 'hammer';
+  return GROUP_ICON[taskGroupOf(categoryName, slug)];
 }
 
 // Catalog card: photo (or a drawn placeholder), availability, key specs,
@@ -65,6 +81,7 @@ export function EquipmentCard({ item }: { item: EquipmentCardItem }) {
   const priceSummary = [hour !== null && `${rub(hour)}/ч`, shift !== null && `${rub(shift)}/смена`]
     .filter(Boolean)
     .join(', ');
+  const freeBadge = availabilityBadge(item, new Date());
 
   return (
     <TiltCard max={6} className="rounded-3xl border border-slate-200 bg-white">
@@ -117,6 +134,11 @@ export function EquipmentCard({ item }: { item: EquipmentCardItem }) {
             </div>
           )}
           <AvailabilityChip status={item.status} className="absolute left-3 top-3 shadow-sm" />
+          {freeBadge && (
+            <span className="absolute bottom-3 left-3 rounded-full bg-white/95 px-2.5 py-1 text-xs font-semibold text-emerald-800 shadow-sm ring-1 ring-emerald-600/20">
+              {freeBadge}
+            </span>
+          )}
         </a>
 
         <div className="flex flex-1 flex-col gap-4 p-5">
@@ -142,6 +164,27 @@ export function EquipmentCard({ item }: { item: EquipmentCardItem }) {
                 ) : (
                   item.company?.name
                 )}
+              </p>
+            )}
+            {item.trust && (
+              <p className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-slate-600">
+                {item.trust.verified && (
+                  <span
+                    className="rounded-full bg-graphite-900 px-2 py-0.5 font-bold text-signal-300"
+                    title="Администратор проверил компанию и документы"
+                  >
+                    Проверен
+                  </span>
+                )}
+                {item.trust.provisional && (
+                  <span
+                    className="rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 font-semibold text-amber-800"
+                    title="Исполнитель начал без полной регистрации: реквизиты и документы ещё не проверены"
+                  >
+                    Новый исполнитель, данные не проверены
+                  </span>
+                )}
+                <span>{trustLine(item.trust)}</span>
               </p>
             )}
           </div>

@@ -19,7 +19,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     env:
-      SITE: https://spec-ai-web.vercel.app
+      # иистройка24.рф (punycode) since 2026-10-24; the old address sends pages here.
+      SITE: https://xn--24-6kc5aagh4arjl.xn--p1ai
     steps:
       - name: Pages and API answer 200
         run: |
@@ -32,4 +33,12 @@ jobs:
               failed=1
             fi
           done
+          # The old address: the app's API lives there, its pages send visitors to the domain.
+          old=https://spec-ai-web.vercel.app
+          code=$(curl -s -o /dev/null -w '%{http_code}' --retry 2 --retry-delay 5 --max-time 30 "$old/api/categories")
+          echo "$code $old/api/categories"
+          if [ "$code" != "200" ]; then echo "::error::$old/api/categories answered $code"; failed=1; fi
+          code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 "$old/orders")
+          echo "$code $old/orders"
+          if [ "$code" != "308" ]; then echo "::error::$old/orders answered $code, expected 308 to the domain"; failed=1; fi
           exit $failed

@@ -1,5 +1,7 @@
 import { LANDINGS } from '@/lib/landings';
 import { SITE } from '@/lib/site';
+import { PromiseNote } from '@/components/PromiseNote';
+import { SupportFooterLink } from '@/components/SupportCard';
 
 // At least 44 px tap height on phones; compact rows from sm up.
 const LINK = 'flex min-h-11 items-center hover:text-white sm:min-h-0';
@@ -13,8 +15,9 @@ export function SiteFooter() {
             {SITE.platform} <span className="text-amber-400">от {SITE.name}</span>
           </div>
           <p className="mt-2">{SITE.tagline}.</p>
+          <PromiseNote dark large className="mt-3" />
           <p className="mt-3 text-xs italic text-slate-400">
-            Копаем, поднимаем, вывозим — техника {SITE.name} с машинистом.
+            Копаем, поднимаем, вывозим — техника {SITE.name} и других исполнителей с машинистом.
           </p>
         </div>
         <div className="flex flex-col sm:gap-1">
@@ -24,6 +27,15 @@ export function SiteFooter() {
           </a>
           <a href="/raboty" className={LINK}>
             Работы и цены
+          </a>
+          <a href="/ceny" className={LINK}>
+            Цены
+          </a>
+          <a href="/providers" className="hover:text-white">
+            Исполнители
+          </a>
+          <a href="/map" className={LINK}>
+            Заказ на карте
           </a>
           {LANDINGS.map((landing) => (
             <a key={landing.slug} href={`/arenda/${landing.slug}`} className={LINK}>
@@ -39,11 +51,24 @@ export function SiteFooter() {
           <a href="/contacts" className={LINK}>
             Контакты
           </a>
+          <a href="/kak-polzovatsya" className={LINK}>
+            Как пользоваться
+          </a>
+          <a href="/pravila" className={LINK}>
+            Правила площадки
+          </a>
           <a href="/privacy" className={LINK}>
             Политика конфиденциальности
           </a>
           <a href="/credits" className={LINK}>
             Авторы фото и видео
+          </a>
+          <SupportFooterLink className={`${LINK} text-left`} />
+          <a href="/predlozheniya" className={LINK}>
+            Предложения и партнёрство
+          </a>
+          <a href="/bot" className={LINK}>
+            Бот для чатов
           </a>
         </div>
         <div className="flex flex-col sm:gap-1">

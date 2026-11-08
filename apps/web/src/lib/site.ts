@@ -1,13 +1,42 @@
+// The file itself, not the package index: this module is in every page's
+// client bundle (the header) and in the middleware, which must not pull in
+// zod and the city list with it.
+import {
+  PLATFORM_PROMISE,
+  PLATFORM_PROMISE_DETAIL,
+  PLATFORM_PROMISE_LINE,
+  PLATFORM_PROMISE_SHORT,
+} from '@specai/shared/src/promise';
+
 // Company branding and contacts, in one place so they're easy to update.
 export const SITE = {
   name: 'СпецПласт16',
-  // The platform's own name (estimates, design, site tour); the company that
-  // does the work is always `name`.
+  // The platform (the aggregator) is `platform`, shown as «ИИСтройка24 от
+  // СпецПласт16»; `name` is the house provider, the materials seller and the
+  // legal operator of the site.
   platform: 'ИИСтройка24',
-  tagline: 'Аренда спецтехники и строительные услуги в Татарстане',
+  // The platform serves all of Russia (owner, 2026-10-17); СпецПласт16 is one
+  // provider, based in Набережные Челны. Customer-facing texts never limit the
+  // service to Tatarstan (site.test.ts checks it).
+  tagline: 'Заказ спецтехники с машинистом по всей России',
   description:
-    'СпецПласт16 — аренда спецтехники с оператором в Набережных Челнах и по Татарстану: ' +
-    'экскаваторы-погрузчики, автокраны, погрузчики. ИИ-агенты подберут технику и оформят заявку.',
+    'ИИСтройка24 от СпецПласт16 — заказ спецтехники с машинистом по всей России, бесплатно и без ' +
+    'посредников: одна заявка — цены исполнителей рядом с вами, расчёт напрямую с владельцем ' +
+    'техники. Свой парк СпецПласт16 — в Набережных Челнах.',
+  // The headline promise (owner, 2026-10-17), from packages/shared/src/promise.ts:
+  // the header pill, the hero, the forms, the footer, the shared texts. True
+  // only while there is no commission and no online payment
+  // (isOnlinePaymentEnabled() is false): introduce either and these texts must
+  // change in the same PR (REVIEW.md, «Тексты»).
+  promise: PLATFORM_PROMISE,
+  promiseShort: PLATFORM_PROMISE_SHORT,
+  promiseDetail: PLATFORM_PROMISE_DETAIL,
+  /** Both in one sentence: «Бесплатно и без посредников: цену назначает…». */
+  promiseLine: PLATFORM_PROMISE_LINE,
+  /** Where the header pill and the notes lead: the explanation on /kak-polzovatsya. */
+  promiseHref: '/kak-polzovatsya#besplatno',
+  // The company's own contacts (the legal owner and the house provider), not
+  // the service area: never show them as «где работаем».
   city: 'Набережные Челны',
   region: 'Республика Татарстан',
   phone: '+7 (927) 242-80-88',

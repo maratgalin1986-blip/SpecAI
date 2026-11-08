@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import type { MachineType } from '@/lib/machinePhotos';
 import { notFound } from 'next/navigation';
 import { prisma } from '@specai/database';
 import { Card, StatusBadge } from '@specai/ui';
@@ -11,10 +12,11 @@ import { siteUrl } from '@/lib/siteUrl';
 import { CinemaBand } from '@/components/CinemaBand';
 import { CinemaLayer } from '@/components/CinemaHero';
 import { fromPerHour, houseRate, rateOf, rub, SHIFT_HOURS } from '@/lib/prices';
-import { PUBLIC_FLEET } from '@/lib/fleet';
+import { HOUSE_FIRST_ORDER, PUBLIC_FLEET, isHouseEquipment } from '@/lib/fleet';
+import { customerRates } from '@/lib/equipmentCatalog';
 import { MachineAmbience } from '@/components/MachineAmbience';
 import { TelegramButton } from '@/components/TelegramButton';
-import { cityPath, NEARBY_CITIES } from '@/lib/cities';
+import { CITIES, cityPath, HOUSE_CITIES } from '@/lib/cities';
 import { landingClips } from '@/lib/landingClips';
 import { landingLoop } from '@/lib/loops';
 import { CountUp } from '@/components/CountUp';
@@ -31,12 +33,35 @@ async function loadEquipment(categorySlug: string) {
     return await prisma.equipment.findMany({
       where: { ...PUBLIC_FLEET, category: { slug: categorySlug }, status: { not: 'RETIRED' } },
       include: { location: true },
-      orderBy: { hourlyRate: 'asc' },
+      // СпецПласт16's machines first, then other providers'.
+      orderBy: [HOUSE_FIRST_ORDER, { hourlyRate: 'asc' }],
     });
   } catch (error) {
     console.error('Failed to load equipment for landing', error);
     return [];
   }
+}
+
+/**
+ * «от … ₽/ч» of a landing: the house list price (lib/prices.ts), or less
+ * when another provider lists a cheaper machine of this type (the aggregator:
+ * the floor applies to СпецПласт16's fleet only).
+ */
+function landingFromRate(
+  machine: MachineType,
+  categoryName: string,
+  items: {
+    companyId: string | null;
+    name: string;
+    hourlyRate: number | string | { toString(): string } | null;
+    dailyRate: number | string | { toString(): string } | null;
+  }[],
+): number {
+  const others = items
+    .filter((item) => !isHouseEquipment(item))
+    .map((item) => customerRates({ ...item, categoryName }).hourlyRate)
+    .filter((rate) => rate > 0);
+  return Math.min(rateOf(machine), ...others);
 }
 
 export async function generateMetadata({
@@ -46,11 +71,13 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const landing = landingBySlug(params.slug);
   if (!landing) return { title: 'Страница не найдена' };
-  // The price comes from lib/prices.ts, never from the database.
-  const title = `Аренда ${landing.title} в Набережных Челнах — ${fromPerHour(landing.machine)}`;
+  const items = await loadEquipment(landing.categorySlug);
+  const from = landingFromRate(landing.machine, landing.title, items);
+  // The whole country (owner, 2026-10-17); each city has its own page.
+  const title = `Аренда ${landing.title} по всей России — ${fromPerHour(from)}`;
   return {
     title,
-    description: `${landing.intro} ${SITE.city} и ${SITE.region}. ${SITE.phone}`,
+    description: `${landing.intro} Исполнители по всей России и парк ${SITE.name} в Набережных Челнах. ${SITE.phone}`,
     alternates: { canonical: `/arenda/${landing.slug}` },
     openGraph: { title, description: landing.intro },
   };
@@ -61,14 +88,15 @@ export default async function LandingPage({ params }: { params: { slug: string }
   if (!landing) notFound();
   const items = await loadEquipment(landing.categorySlug);
   const machine = landing.machine;
-  // «от …» in the title, header and structured data: lib/prices.ts only.
-  const from = rateOf(machine);
+  // «от …» in the title, header and structured data: the house list price or
+  // a cheaper third-party machine on this page.
+  const from = landingFromRate(machine, landing.title, items);
 
   const jsonLd = {
     '@context': 'https://schema.org',
     '@type': 'Service',
     name: `Аренда ${landing.title}`,
-    areaServed: [SITE.city, SITE.region],
+    areaServed: { '@type': 'Country', name: 'Россия' },
     provider: { '@type': 'Organization', name: SITE.legalName || SITE.name, telephone: SITE.phone },
     url: `${siteUrl()}/arenda/${landing.slug}`,
     offers: {
@@ -97,12 +125,20 @@ export default async function LandingPage({ params }: { params: { slug: string }
               / <span>{landing.short}</span>
             </nav>
             <h1 className="cine-title mt-3 text-3xl font-extrabold leading-tight sm:text-5xl">
-              Аренда {landing.title} в Набережных Челнах
+              Аренда {landing.title} по всей России
             </h1>
             <p className="mt-4 text-slate-300">{landing.intro}</p>
             <p className="mt-5 text-3xl font-bold text-amber-400" data-testid="landing-price">
               от {rub(from)} ₽
               <span className="text-base font-normal text-slate-300">/ч с машинистом</span>
+            </p>
+            {/* The lowest price on the platform, not a promise for every city. */}
+            <p className="mt-2 text-sm text-slate-300">
+              Самая низкая цена на площадке. Цены в вашем городе —{' '}
+              <a href="#cities" className="underline hover:text-white">
+                на странице города
+              </a>
+              .
             </p>
             <div className="mt-6 flex flex-wrap gap-3">
               <a
@@ -122,8 +158,8 @@ export default async function LandingPage({ params }: { params: { slug: string }
               <TelegramButton page={`/arenda/${landing.slug}`} dark />
             </div>
             <p className="mt-3 flex flex-wrap gap-x-2 text-sm text-slate-300">
-              <span>Работаем также:</span>
-              {NEARBY_CITIES.map((city, i) => (
+              <span>Парк {SITE.name}:</span>
+              {HOUSE_CITIES.map((city, i) => (
                 <span key={city.slug}>
                   {i > 0 && <span className="mr-2 text-slate-500">·</span>}
                   <a
@@ -166,10 +202,16 @@ export default async function LandingPage({ params }: { params: { slug: string }
                     <StatusBadge status={item.status} />
                   </div>
                   {item.location && <p className="text-sm text-slate-500">{item.location.city}</p>}
-                  {/* Never below the site price list (lib/prices.ts). */}
+                  {/* The house fleet never below the site price list (lib/prices.ts);
+                      other providers show their own rate. */}
                   <p className="mt-auto text-lg font-semibold" data-testid="fleet-card-price">
-                    от {rub(houseRate(item.hourlyRate, machine))} ₽
-                    <span className="text-sm font-normal text-slate-500">/ч с машинистом</span>
+                    от{' '}
+                    {rub(
+                      isHouseEquipment(item)
+                        ? houseRate(item.hourlyRate, machine)
+                        : customerRates({ ...item, categoryName: landing.title }).hourlyRate,
+                    )}{' '}
+                    ₽<span className="text-sm font-normal text-slate-500">/ч с машинистом</span>
                   </p>
                   <span className="text-sm font-medium text-amber-700">Рассчитать стоимость →</span>
                 </Card>
@@ -178,6 +220,25 @@ export default async function LandingPage({ params }: { params: { slug: string }
           </div>
         </section>
       )}
+
+      <section id="cities" className="scroll-mt-28">
+        <h2 className="text-2xl font-bold">Аренда {landing.title} по городам</h2>
+        <p className="mt-2 text-sm text-slate-600">
+          Выберите город: покажем технику исполнителей, которые туда выезжают. Где исполнители ещё
+          подключаются — оставьте заявку, мы найдём технику.
+        </p>
+        <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-sm" data-testid="city-links">
+          {CITIES.map((city) => (
+            <a
+              key={city.slug}
+              href={cityPath(landing.slug, city.slug)}
+              className="inline-flex min-h-[44px] items-center text-amber-700 hover:underline"
+            >
+              {city.name}
+            </a>
+          ))}
+        </div>
+      </section>
 
       <CinemaBand
         machine={machine}

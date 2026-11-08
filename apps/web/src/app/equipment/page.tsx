@@ -1,10 +1,17 @@
+import { cardTrust } from '@/lib/catalogTrust';
 import { prisma } from '@specai/database';
 import { EQUIPMENT_SORT_OPTIONS } from '@specai/shared';
 import { CallbackForm } from '@/components/CallbackForm';
 import { EquipmentCard } from '@/components/EquipmentCard';
+import { freshFirst } from '@/lib/aktualno';
 import { Icon } from '@/components/Icon';
 import { Pagination } from '@/components/Pagination';
-import { TASK_GROUPS, isTaskGroupId, taskGroupOf, type TaskGroupId } from '@/lib/equipmentCatalog';
+import {
+  TASK_GROUPS,
+  normalizeTaskGroupId,
+  taskGroupOf,
+  type TaskGroupId,
+} from '@/lib/equipmentCatalog';
 import {
   EQUIPMENT_ORDER_BY,
   EQUIPMENT_SORT_LABELS,
@@ -15,6 +22,7 @@ import {
 import { pluralizeRu } from '@/lib/pluralize';
 import { SITE } from '@/lib/site';
 import { CinemaHero } from '@/components/CinemaHero';
+import { Hint } from '@/components/Hint';
 import { Reveal } from '@/components/Reveal';
 import { TelegramButton } from '@/components/TelegramButton';
 import { PUBLISHED_FLEET } from '@/lib/fleet';
@@ -28,7 +36,9 @@ import {
 export const metadata = {
   title: 'Каталог спецтехники',
   description:
-    'Аренда экскаваторов-погрузчиков, автокранов, погрузчиков и другой спецтехники с оператором в Набережных Челнах и по Татарстану.',
+    'Аренда экскаваторов-погрузчиков, автокранов, погрузчиков и другой спецтехники с машинистом по всей России: техника исполнителей площадки и парк СпецПласт16.',
+  // Filters live in the query: one canonical for the whole catalogue.
+  alternates: { canonical: '/equipment' },
 };
 
 export const dynamic = 'force-dynamic';
@@ -113,7 +123,7 @@ export default async function EquipmentCatalogPage({
   const requestedPage = parsePage(searchParams.page);
 
   // Filters other than the category: the tab counts are computed against these.
-  // Only the house fleet; PUBLISHED_FLEET goes last so no filter can override it.
+  // Every provider's published machinery; PUBLISHED_FLEET goes last so no filter can override it.
   const baseWhere = {
     location: searchParams.city
       ? { city: { equals: searchParams.city, mode: 'insensitive' as const } }
@@ -126,8 +136,15 @@ export default async function EquipmentCatalogPage({
     ...PUBLISHED_FLEET,
   };
 
+  // Only the leaves of the category tree hold machines; the groups are the chips.
   const [categories, countsByCategory] = await Promise.all([
-    orEmpty('categories', prisma.equipmentCategory.findMany({ orderBy: { name: 'asc' } })),
+    orEmpty(
+      'categories',
+      prisma.equipmentCategory.findMany({
+        where: { children: { none: {} } },
+        orderBy: { name: 'asc' },
+      }),
+    ),
     orEmpty(
       'category counts',
       prisma.equipment.groupBy({ by: ['categoryId'], where: baseWhere, _count: { _all: true } }),
@@ -137,13 +154,13 @@ export default async function EquipmentCatalogPage({
   const countOf = new Map(countsByCategory.map((row) => [row.categoryId, row._count._all]));
   const categoryRows = categories.map((category) => ({
     ...category,
-    group: taskGroupOf(category.name),
+    group: taskGroupOf(category.name, category.slug),
     count: countOf.get(category.id) ?? 0,
   }));
 
   const selectedCategory = categoryRows.find((category) => category.id === searchParams.category);
   const activeGroup: TaskGroupId | undefined =
-    selectedCategory?.group ?? (isTaskGroupId(searchParams.group) ? searchParams.group : undefined);
+    selectedCategory?.group ?? normalizeTaskGroupId(searchParams.group);
 
   const groupTabs = TASK_GROUPS.map((group) => {
     const members = categoryRows.filter((category) => category.group === group.id);
@@ -174,16 +191,46 @@ export default async function EquipmentCatalogPage({
   const totalPages = totalPagesFor(total, PAGE_SIZE);
   const page = Math.min(requestedPage, totalPages);
 
-  const equipment = await orEmpty(
+  const loaded = await orEmpty(
     'equipment',
     prisma.equipment.findMany({
       where,
-      include: { category: true, location: true, company: { select: { name: true } } },
+      include: {
+        category: true,
+        location: true,
+        company: { select: { name: true, createdAt: true, verified: true, provisional: true } },
+      },
       orderBy: EQUIPMENT_ORDER_BY[sort],
       skip: (page - 1) * PAGE_SIZE,
       take: PAGE_SIZE,
     }),
   );
+  // «Актуализация»: in the default order, machines whose provider confirmed
+  // prices and free days this week come a bit higher (house fleet still first).
+  const ordered = sort === 'newest' ? freshFirst(loaded, new Date()) : loaded;
+  // «Как на Авито»: stars, «на площадке с …» and «Проверен» on every card —
+  // one grouped query over the companies of this page (at most PAGE_SIZE).
+  const companyIds = [...new Set(ordered.map((item) => item.companyId))];
+  const reviewGroups = companyIds.length
+    ? await prisma.review
+        .groupBy({
+          by: ['companyId'],
+          where: { companyId: { in: companyIds } },
+          _avg: { rating: true },
+          _count: { _all: true },
+          orderBy: { companyId: 'asc' },
+          take: PAGE_SIZE,
+        })
+        .catch((error: unknown) => {
+          console.error('[equipment] failed to load ratings', error);
+          return [];
+        })
+    : [];
+  const reviewsOf = new Map(reviewGroups.map((group) => [group.companyId, group]));
+  const equipment = ordered.map((item) => ({
+    ...item,
+    trust: item.company ? cardTrust(item.company, reviewsOf.get(item.companyId)) : undefined,
+  }));
 
   const hasFilters = Boolean(
     searchParams.q ||
@@ -204,13 +251,14 @@ export default async function EquipmentCatalogPage({
   return (
     <div className="flex flex-col gap-8">
       <CinemaHero
-        eyebrow={`Каталог · ${SITE.city} и Татарстан`}
+        eyebrow="Каталог · вся Россия"
         title="Спецтехника в аренду"
         clips={['site-aerial', 'excavator-truck', 'city-cranes']}
         camera={2}
       >
         <p>
-          Цена за час и за смену 8 часов — на каждой карточке. Оставьте телефон прямо в карточке:{' '}
+          Техника {SITE.name} и других исполнителей со своими машинистами. Цена за час и за смену 8
+          часов — на каждой карточке. Оставьте телефон прямо в карточке:{' '}
           {SITE.callbackPromise.toLowerCase()}.
         </p>
         <a
@@ -233,6 +281,8 @@ export default async function EquipmentCatalogPage({
           </a>
         </div>
       </CinemaHero>
+
+      <Hint id="catalog" />
 
       <nav aria-label="Категории техники" className="flex flex-col gap-3">
         <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0">
@@ -395,7 +445,7 @@ export default async function EquipmentCatalogPage({
               <a href="/orders" className="text-amber-700 underline">
                 заявку
               </a>
-              , подскажем, чем {SITE.name} закроет вашу задачу.
+              : её увидят исполнители, включая {SITE.name}, и ответят своими ценами.
             </p>
           </div>
           <div className="rounded-3xl border border-slate-200 bg-white p-6">

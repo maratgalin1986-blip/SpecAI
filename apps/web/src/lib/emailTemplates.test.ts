@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   bidAccepted,
   bookingStatusChanged,
+  getEmailBaseUrl,
   emailVerify,
   newBidReceived,
   passwordReset,
@@ -29,7 +30,7 @@ describe('newBidReceived', () => {
       currency: 'RUB',
       message: 'Готовы <сразу>',
     });
-    expect(tpl.subject).toContain('цена по заявке');
+    expect(tpl.subject).toContain('новое предложение');
     expect(tpl.subject).toContain('JCB 3CX');
     expect(tpl.html).toContain('https://specai.example.com/orders/ord_1');
     expect(tpl.text).toContain('https://specai.example.com/orders/ord_1');
@@ -62,6 +63,41 @@ describe('bidAccepted', () => {
   });
 });
 
+describe('links and sender', () => {
+  it('never links to a bought but unconnected domain', () => {
+    process.env.NEXT_PUBLIC_APP_URL = 'https://iistroyka.ru';
+    delete process.env.NEXTAUTH_URL;
+    delete process.env.NEXT_PUBLIC_SITE_URL;
+    delete process.env.VERCEL_PROJECT_PRODUCTION_URL;
+    const tpl = passwordReset({ resetUrl: 'https://spec-ai-web.vercel.app/reset?t=1' });
+    expect(tpl.html).not.toContain('iistroyka.ru');
+    const bid = bidAccepted({
+      bookingId: 'bk_9',
+      equipmentName: 'Кран',
+      price: 1,
+      currency: 'RUB',
+      startDate: new Date('2026-10-01T00:00:00Z'),
+      endDate: new Date('2026-10-02T00:00:00Z'),
+    });
+    expect(bid.html).toContain('https://xn--24-6kc5aagh4arjl.xn--p1ai/dashboard');
+  });
+
+  it('skips a NEXTAUTH_URL still set to the old address and links to the domain', () => {
+    delete process.env.NEXT_PUBLIC_APP_URL;
+    process.env.NEXTAUTH_URL = 'https://spec-ai-web.vercel.app';
+    delete process.env.NEXT_PUBLIC_SITE_URL;
+    delete process.env.VERCEL_PROJECT_PRODUCTION_URL;
+    expect(getEmailBaseUrl()).toBe('https://xn--24-6kc5aagh4arjl.xn--p1ai');
+    delete process.env.NEXTAUTH_URL;
+  });
+
+  it('is signed by the platform', () => {
+    const tpl = emailVerify({ verifyUrl: 'https://spec-ai-web.vercel.app/verify?t=1' });
+    expect(tpl.subject.startsWith('ИИСтройка24:')).toBe(true);
+    expect(tpl.text).toContain('ИИСтройка24 от СпецПласт16');
+  });
+});
+
 describe('bookingStatusChanged', () => {
   it('translates the status into Russian', () => {
     const tpl = bookingStatusChanged({
@@ -74,6 +110,31 @@ describe('bookingStatusChanged', () => {
     expect(tpl.subject).toContain('отменено');
     expect(tpl.html).toContain('отменено');
     expect(tpl.text).toContain('bk_2');
+  });
+
+  it('a completed booking carries the follow-up lines with clickable links', () => {
+    const followUp = ['Спасибо!', 'Пригласите коллегу: https://site.ru/r/ABCDEFG'];
+    const done = bookingStatusChanged({
+      bookingId: 'bk_4',
+      equipmentName: 'Самосвал',
+      status: 'COMPLETED',
+      startDate: '2026-11-01T00:00:00Z',
+      endDate: '2026-11-03T00:00:00Z',
+      followUp,
+    });
+    expect(done.text).toContain('Пригласите коллегу: https://site.ru/r/ABCDEFG');
+    expect(done.html).toContain(
+      '<a href="https://site.ru/r/ABCDEFG">https://site.ru/r/ABCDEFG</a>',
+    );
+    const cancelled = bookingStatusChanged({
+      bookingId: 'bk_4',
+      equipmentName: 'Самосвал',
+      status: 'CANCELLED',
+      startDate: '2026-11-01T00:00:00Z',
+      endDate: '2026-11-03T00:00:00Z',
+      followUp,
+    });
+    expect(cancelled.text).not.toContain('Пригласите');
   });
 });
 

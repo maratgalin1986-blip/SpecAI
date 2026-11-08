@@ -12,6 +12,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { AdminLoginRow, AdminMenuCard } from '@/components/AdminEntry';
 import { ContactActions } from '@/components/ContactActions';
 import { Button, Input } from '@/components/ui';
 import { ApiError, API_URL } from '@/lib/api';
@@ -58,10 +59,11 @@ export default function LoginScreen() {
           <View style={styles.header}>
             <View style={styles.logo}>
               <Text style={styles.logoText} numberOfLines={1} adjustsFontSizeToFit>
-                СпецПласт16
+                ИИСтройка24
               </Text>
             </View>
             <Text style={styles.title}>{SITE.name}</Text>
+            <Text style={styles.subtitle}>{SITE.byline}</Text>
             <Text style={styles.subtitle}>{SITE.tagline}</Text>
           </View>
 
@@ -99,6 +101,9 @@ export default function LoginScreen() {
             <Link href="/(auth)/register" style={styles.link}>
               Нет аккаунта? Зарегистрироваться
             </Link>
+            <Link href="/(auth)/welcome" style={styles.link}>
+              Как это работает
+            </Link>
           </View>
 
           <View style={styles.guestLinks}>
@@ -113,10 +118,12 @@ export default function LoginScreen() {
           <View style={styles.contacts}>
             <ContactActions source="mobile:login" compact />
             <Link href="/about" style={styles.link}>
-              О компании {SITE.name}
+              О сервисе {SITE.name}
             </Link>
           </View>
 
+          <AdminMenuCard />
+          <AdminLoginRow />
           {__DEV__ ? <Text style={styles.footer}>Сервер: {API_URL}</Text> : null}
         </ScrollView>
       </KeyboardAvoidingView>

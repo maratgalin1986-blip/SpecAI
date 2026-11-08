@@ -1,11 +1,13 @@
 import type { Metadata, Viewport } from 'next';
 import type { ReactNode } from 'react';
 import { JetBrains_Mono, Manrope } from 'next/font/google';
+import { InstallButton } from '@/components/InstallButton';
 import { InstallPrompt } from '@/components/InstallPrompt';
 import { TelegramMiniApp } from '@/components/TelegramMiniApp';
 import { Providers } from '@/components/Providers';
 import { SiteHeader } from '@/components/SiteHeader';
 import { SiteFooter } from '@/components/SiteFooter';
+import { PublicOnly } from '@/components/PublicOnly';
 import { AgentChatWidget } from '@/components/AgentChatWidget';
 import { YandexMetrika } from '@/components/YandexMetrika';
 import { MarketingTracker } from '@/components/MarketingTracker';
@@ -35,17 +37,18 @@ export const metadata: Metadata = {
   metadataBase: new URL(siteUrl()),
   title: {
     default: `${SITE.platform} от ${SITE.name} — ${SITE.tagline}`,
-    template: `%s · ${SITE.platform} · ${SITE.name}`,
+    template: `%s · ${SITE.platform} от ${SITE.name}`,
   },
   description: SITE.description,
-  applicationName: SITE.name,
+  applicationName: SITE.platform,
   keywords: [
-    'аренда спецтехники Набережные Челны',
+    'заказ спецтехники с машинистом',
+    'аренда спецтехники по России',
     'аренда экскаватора-погрузчика',
     'аренда экскаватора',
     'аренда автокрана',
     'аренда самосвала',
-    'спецтехника Татарстан',
+    'аренда спецтехники Набережные Челны',
     SITE.name,
     SITE.platform,
   ],
@@ -56,10 +59,17 @@ export const metadata: Metadata = {
     title: `${SITE.platform} от ${SITE.name} — ${SITE.tagline}`,
     description: SITE.description,
   },
+  // The promise «Бесплатно и без посредников» is in SITE.description and on
+  // the default preview image (app/opengraph-image.png).
+  twitter: {
+    card: 'summary_large_image',
+    title: `${SITE.platform} от ${SITE.name} — ${SITE.tagline}`,
+    description: SITE.description,
+  },
   manifest: '/manifest.webmanifest',
   appleWebApp: {
     capable: true,
-    title: SITE.name,
+    title: SITE.platform,
     statusBarStyle: 'black-translucent',
   },
   icons: {
@@ -89,7 +99,9 @@ const ORGANIZATION_JSON_LD = {
     addressRegion: SITE.region,
     addressCountry: 'RU',
   },
-  areaServed: SITE.region,
+  // The company sits in Набережные Челны; the platform it runs serves all of
+  // Russia (owner, 2026-10-17).
+  areaServed: { '@type': 'Country', name: 'Россия' },
   // Shown by Yandex and Google in the business card of the search results.
   image: `${siteUrl()}/opengraph-image.png`,
   priceRange: fromPrice(MIN_RATE),
@@ -126,6 +138,16 @@ export default function RootLayout({ children }: { children: ReactNode }) {
               "try{var k='cine-curtain-at',t=+sessionStorage.getItem(k)||0,n=Date.now();if(n-t<30000)document.documentElement.setAttribute('data-curtain','fast');sessionStorage.setItem(k,String(n))}catch(e){}",
           }}
         />
+        {/* Chrome may offer installation before React is up: keep the event for
+            the «Установить» card (components/InstallPrompt.tsx, keys in
+            lib/installHint.ts) instead of the browser's own mini-infobar; once
+            the card is closed for good, the browser's offer is left alone. */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html:
+              "addEventListener('beforeinstallprompt',function(e){window.__installPrompt=e;try{if(localStorage.getItem('specai:install-hint-dismissed')||localStorage.getItem('specai:install-prompt-dismissed-at'))return}catch(x){}e.preventDefault()})",
+          }}
+        />
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(ORGANIZATION_JSON_LD) }}
@@ -139,13 +161,17 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           >
             {children}
           </main>
-          <SiteFooter />
+          {/* The CRM (/admin) keeps the page to its own bar: no public footer. */}
+          <PublicOnly>
+            <SiteFooter />
+          </PublicOnly>
           {/* Multi-agent assistant (works for guests too). The streaming single
               assistant (/api/ai/chat) stays available to API/mobile clients. */}
           <AgentChatWidget />
           <MessengerButtons />
           <TelegramChip />
           <InstallPrompt />
+          <InstallButton />
           <TelegramMiniApp />
           <CookieNotice />
           <YandexMetrika />

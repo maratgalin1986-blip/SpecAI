@@ -25,7 +25,10 @@ export function TelegramChip() {
       return;
     }
     const check = () => {
-      const strip = document.documentElement.hasAttribute('data-cookie-strip');
+      const root = document.documentElement;
+      // Not together with the consent strip or the «Установить» card.
+      const strip =
+        root.hasAttribute('data-cookie-strip') || root.hasAttribute('data-install-hint');
       const intro = document.getElementById('intro');
       if (window.scrollY > 600 && !strip && (!intro || intro.hidden)) {
         setShown(true);

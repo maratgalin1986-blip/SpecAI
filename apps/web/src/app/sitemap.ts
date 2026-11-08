@@ -1,38 +1,73 @@
 import type { MetadataRoute } from 'next';
 import { prisma } from '@specai/database';
 import { LANDINGS } from '@/lib/landings';
-import { cityPages, cityPath } from '@/lib/cities';
+import { cityBySlug, cityPages, cityPath } from '@/lib/cities';
+import { loadCityOffers } from '@/lib/cityFleetData';
 import { JOBS } from '@/lib/jobs';
 import { siteUrl } from '@/lib/siteUrl';
 import { PUBLIC_FLEET } from '@/lib/fleet';
+import { providerPath } from '@/lib/providerSeo';
 
 export const revalidate = 3600;
+
+async function servedCityPaths(): Promise<string[]> {
+  const paths: string[] = [];
+  for (const landing of LANDINGS) {
+    const cities = cityPages()
+      .filter((page) => page.slug === landing.slug)
+      .map((page) => cityBySlug(page.city))
+      .filter((city): city is NonNullable<typeof city> => Boolean(city));
+    // One read per kind of machinery; without a database no city page is
+    // listed this hour rather than a guess.
+    const offers = await loadCityOffers(landing, cities).catch(() => null);
+    if (!offers) return [];
+    for (const city of cities) {
+      if (offers.get(city.slug)?.kind === 'available')
+        paths.push(cityPath(landing.slug, city.slug));
+    }
+  }
+  return paths;
+}
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const base = siteUrl();
   const staticPages = [
     '',
     ...LANDINGS.map((landing) => `/arenda/${landing.slug}`),
-    // Chelny pages point their canonical at /arenda/<slug>, so they stay out.
-    ...cityPages()
-      .filter((page) => page.city !== 'naberezhnye-chelny')
-      .map((page) => cityPath(page.slug, page.city)),
+    // City pages only where a provider really serves the city (the others are
+    // noindex until then, see app/arenda/[slug]/[city]).
+    ...(await servedCityPaths()),
     '/raboty',
+    '/ceny',
+    '/ceny/opros',
     ...JOBS.map((job) => `/raboty/${job.slug}`),
     '/equipment',
-    '/smeta',
-    '/kalkulyator',
-    '/dizain',
     '/map',
-    '/stroyka',
+    '/orders',
+    '/providers',
     '/agents',
     '/contacts',
     '/privacy',
+    '/pravila',
+    '/kak-polzovatsya',
+    '/predlozheniya',
+    '/bot',
   ];
   const equipment = await prisma.equipment
     .findMany({
       where: { ...PUBLIC_FLEET, status: { not: 'RETIRED' } },
       select: { id: true, updatedAt: true },
+    })
+    .catch(() => []);
+  // Public pages of provider companies (/providers/[id]) with a fleet or a base.
+  const providers = await prisma.company
+    .findMany({
+      where: {
+        isProvider: true,
+        OR: [{ equipment: { some: { status: { not: 'RETIRED' } } } }, { baseLat: { not: null } }],
+      },
+      select: { id: true, updatedAt: true },
+      take: 5000,
     })
     .catch(() => []);
   return [
@@ -44,6 +79,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     ...equipment.map((item) => ({
       url: `${base}/equipment/${item.id}`,
       lastModified: item.updatedAt,
+      changeFrequency: 'weekly' as const,
+      priority: 0.6,
+    })),
+    ...providers.map((company) => ({
+      url: `${base}${providerPath(company.id)}`,
+      lastModified: company.updatedAt,
       changeFrequency: 'weekly' as const,
       priority: 0.6,
     })),

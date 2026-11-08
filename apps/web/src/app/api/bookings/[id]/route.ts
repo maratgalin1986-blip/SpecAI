@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { canSeeCustomerContacts } from '@/lib/customerPrivacy';
+import { buyerForProvider } from '@/lib/buyerRequisites';
+import { maskContactsAndLinks } from '@/lib/privacy';
 import { z } from 'zod';
 import { prisma } from '@specai/database';
 import { getRequestUser } from '@/lib/requestUser';
-import { sendEmail } from '@/lib/email';
+import { notifyCompany, notifyUser } from '@/lib/notifications/notifyUser';
 import { bookingStatusChanged } from '@/lib/emailTemplates';
 import { getStripe } from '@/lib/stripe';
 import { INVALID_JSON_MESSAGE, readJson } from '@/lib/apiInput';
@@ -14,6 +17,11 @@ import {
 import { findOverlappingBooking, lockEquipment } from '@/lib/bookingConflicts';
 import { isProvider } from '@/lib/fleet';
 import { BOOKING_STATUS_LABELS } from '@/lib/emailTemplates';
+import { CANCELLED_BY } from '@specai/shared';
+import { completionFollowUp, loadReviewLinks } from '@/lib/reviewLinks';
+import { ensureReferralCode } from '@/lib/referralStore';
+import { referralLink } from '@/lib/referral';
+import { siteUrl } from '@/lib/siteUrl';
 
 const updateSchema = z.object({
   status: z.enum(['CONFIRMED', 'ACTIVE', 'COMPLETED', 'CANCELLED']),
@@ -55,6 +63,28 @@ async function closePendingCheckout(
   } catch (error) {
     console.error(`[stripe] failed to mark payment ${payment.id} FAILED on cancel`, error);
   }
+}
+
+/**
+ * «Бронь завершена» to the customer carries, once, the lines «оцените
+ * исполнителя», the platform's 2ГИС / Яндекс Карты cards and «Пригласите
+ * коллегу» (roadmap № 3). Once per booking: only the guarded ACTIVE →
+ * COMPLETED move gets here, and COMPLETED has no way out. A failure to read
+ * the links or the code drops those lines, never the status change.
+ */
+async function completedFollowUp(customerId: string): Promise<string[]> {
+  const base = siteUrl().replace(/\/$/, '');
+  const [links, code] = await Promise.all([
+    loadReviewLinks().catch((error) => {
+      console.error('[notify] review links could not be read', error);
+      return { twoGis: '', yandex: '' };
+    }),
+    ensureReferralCode(customerId).catch((error) => {
+      console.error('[notify] referral code could not be made', error);
+      return null;
+    }),
+  ]);
+  return completionFollowUp({ links, inviteUrl: code ? referralLink(base, code) : null });
 }
 
 /**
@@ -164,10 +194,22 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
       }
     }
     // Only move from the status we checked above: a double click or a second
-    // device must not overwrite a status that changed in between.
+    // device must not overwrite a status that changed in between. A
+    // cancellation records who did it: only the provider's own cancellations
+    // count against its reliability (lib/reliability.ts).
     const { count } = await tx.booking.updateMany({
       where: { id: booking.id, status: booking.status },
-      data: { status: nextStatus },
+      data: {
+        status: nextStatus,
+        // For «Бронь подтверждена» in the public activity strip (lib/activity.ts).
+        ...(nextStatus === 'CONFIRMED' ? { confirmedAt: new Date() } : {}),
+        ...(nextStatus === 'CANCELLED'
+          ? {
+              cancelledBy: isOwningProvider ? CANCELLED_BY.PROVIDER : CANCELLED_BY.CUSTOMER,
+              cancelledAt: new Date(),
+            }
+          : {}),
+      },
     });
     if (count === 0) {
       return { error: 'Статус бронирования уже изменён — обновите страницу' } as const;
@@ -207,18 +249,47 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
 
   if (updated.status !== booking.status) {
     try {
-      const template = bookingStatusChanged({
+      const event = {
+        type: 'booking.status',
         bookingId: updated.id,
         equipmentName: booking.equipment.name,
         status: updated.status,
         startDate: updated.startDate,
-        endDate: updated.endDate,
-      });
-      await sendEmail({ to: booking.customer.email, ...template });
+      } as const;
+      if (isOwningProvider) {
+        // The provider moved it: the customer hears over their channels.
+        const followUp =
+          updated.status === 'COMPLETED' && booking.status === 'ACTIVE'
+            ? await completedFollowUp(booking.customerId)
+            : undefined;
+        const template = bookingStatusChanged({
+          bookingId: updated.id,
+          equipmentName: booking.equipment.name,
+          status: updated.status,
+          startDate: updated.startDate,
+          endDate: updated.endDate,
+          followUp,
+        });
+        await notifyUser(
+          booking.customerId,
+          { ...event, audience: 'customer', followUp },
+          { email: template },
+        );
+      } else {
+        // The customer cancelled: the provider's managers hear of it.
+        await notifyCompany(booking.equipment.companyId, { ...event, audience: 'provider' });
+      }
     } catch (error) {
-      console.error('[email] bookingStatusChanged failed', error);
+      console.error('[notify] booking status notification failed', error);
     }
   }
 
-  return NextResponse.json({ booking: updated });
+  // The customer's note may carry a phone: the provider reads it masked
+  // until the booking is confirmed, as in GET /api/bookings?as=provider.
+  const notes =
+    isOwningProvider && updated.notes && !canSeeCustomerContacts(updated.status)
+      ? maskContactsAndLinks(updated.notes)
+      : updated.notes;
+  const buyer = isOwningProvider ? buyerForProvider(updated.buyer, updated.status) : updated.buyer;
+  return NextResponse.json({ booking: { ...updated, notes, buyer } });
 }

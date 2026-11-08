@@ -4,7 +4,7 @@
 import { SITE } from '@/lib/site';
 
 /** The site's own address, written in the source line of long copied text. */
-export const SITE_HOST = 'spec-ai-web.vercel.app';
+export const SITE_HOST = 'иистройка24.рф';
 
 /** Copied text of this length or shorter is left exactly as it was. */
 export const COPY_MIN_CHARS = 200;

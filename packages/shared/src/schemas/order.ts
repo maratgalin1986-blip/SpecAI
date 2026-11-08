@@ -37,3 +37,27 @@ export const createOrderSchema = z
     path: ['desiredEndDate'],
   });
 export type CreateOrderInput = z.infer<typeof createOrderSchema>;
+
+/**
+ * A guest's order from the site (POST /api/orders/guest): the order fields
+ * plus a name, a phone and the consent (152-ФЗ), like a callback lead.
+ */
+export const createGuestOrderSchema = createOrderSchema.and(
+  z.object({
+    name: z.string().trim().min(1, 'Укажите имя').max(100, 'Слишком длинное имя'),
+    phone: z
+      .string()
+      .trim()
+      .max(30)
+      .refine((value) => {
+        const digits = value.replace(/\D/g, '').length;
+        return digits >= 10 && digits <= 15;
+      }, 'Укажите телефон полностью'),
+    consent: z.literal(true, {
+      errorMap: () => ({ message: 'Нужно согласие на обработку персональных данных' }),
+    }),
+    // Honeypot: real visitors never fill this hidden field.
+    website: z.string().max(0).optional(),
+  }),
+);
+export type CreateGuestOrderInput = z.infer<typeof createGuestOrderSchema>;

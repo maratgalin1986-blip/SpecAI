@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { clientIp } from '@/lib/loginErrors';
 import { z } from 'zod';
 import { prisma } from '@specai/database';
 import { findUserByEmail } from '@/lib/findUserByEmail';
@@ -13,11 +14,6 @@ const IP_RATE_LIMIT = { limit: 20, windowMs: 60 * 60_000 };
 const TOKEN_TTL_MINUTES = 60;
 
 const schema = z.object({ email: emailSchema });
-
-function clientIp(request: NextRequest): string {
-  const forwarded = request.headers.get('x-forwarded-for');
-  return forwarded?.split(',')[0]?.trim() || request.headers.get('x-real-ip') || 'unknown';
-}
 
 function tooManyRequests(retryAfterSec: number) {
   return NextResponse.json(

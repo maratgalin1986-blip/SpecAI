@@ -8,6 +8,8 @@ import { inServiceArea } from './geo';
 import { maskContacts } from './privacy';
 import { pluralizeRu } from './pluralize';
 import { MACHINE_TYPES, photosOf } from './machinePhotos';
+import { providerPath } from './providerSeo';
+import { storedKeyFromUrl } from './fileUrls';
 
 export const PIN_NOTE_MAX = 120;
 
@@ -15,7 +17,7 @@ export const PIN_NOTE_MAX = 120;
 export const PIN_NOTE_EXAMPLES = [
   'от 2 500 ₽/ч, скидка 10% от недели',
   'Работаем без выходных, подача за 2 часа',
-  'Подача по Челнам бесплатно',
+  'Подача по городу бесплатно',
   'Опытные машинисты, документы для юрлиц',
 ] as const;
 
@@ -24,7 +26,7 @@ export type Checked<T> = { ok: true; value: T } | { ok: false; error: string };
 export const BASE_REQUIRED_MESSAGE =
   'Укажите, где стоит техника: адрес базы или точку на карте — по ней вас найдут заказчики';
 export const BASE_OUTSIDE_MESSAGE =
-  'Точка базы должна быть в Татарстане или соседних регионах — проверьте адрес или точку на карте';
+  'Точка базы должна быть в России — проверьте адрес или точку на карте';
 export const PIN_NOTE_CONTACTS_MESSAGE =
   'В подписи не указывайте телефон, e-mail и ссылки: заказчики связываются через заявку на сайте';
 
@@ -44,7 +46,7 @@ export function hasCoords(lat: unknown, lon: unknown): boolean {
 
 /**
  * A provider's base: both coordinates as numbers (or numeric strings), inside
- * Tatarstan and the neighbouring regions, rounded to six decimals (~10 cm).
+ * Russia (a rough box), rounded to six decimals (~10 cm).
  */
 export function parseBaseCoords(lat: unknown, lon: unknown): Checked<{ lat: number; lon: number }> {
   const la = toNumber(lat);
@@ -90,8 +92,10 @@ export function sanitizePinNote(input: unknown): Checked<string | null> {
   return { ok: true, value: text };
 }
 
-/** Where /api/uploads puts a provider's files on Vercel Blob. */
+/** Where /api/uploads puts a provider's files: Vercel Blob or the site's own store. */
 function isOwnUpload(url: URL, companyId: string) {
+  const stored = storedKeyFromUrl(url.href);
+  if (stored) return stored.startsWith(`equipment/${companyId}/`);
   return (
     url.protocol === 'https:' &&
     url.hostname.endsWith('.public.blob.vercel-storage.com') &&
@@ -193,8 +197,8 @@ export function toMapPins(rows: readonly ProviderMapRow[]): ProviderMapPin[] {
       imageUrl: isDisplayableImage(row.pinImageUrl) ? row.pinImageUrl : null,
       equipmentCount: Math.max(0, Math.floor(row.equipmentCount)),
       isHouse: row.id === HOUSE_COMPANY_ID,
-      // The catalogue shows only the house fleet.
-      catalogUrl: '/equipment',
+      // The provider's public page lists its machinery.
+      catalogUrl: providerPath(row.id),
     });
   }
   // The own fleet first, then the providers with the most machinery.

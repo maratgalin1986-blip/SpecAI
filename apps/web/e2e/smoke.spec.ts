@@ -5,15 +5,27 @@ import { expect, test, type Page } from 'playwright/test';
 // brand is never shortened to «СП16». Nothing is ever sent: every non-GET
 // request (leads, photos, chat) is answered here.
 
-const PAGES = ['/?intro=0', '/smeta', '/dizain', '/soglasie', '/privacy', '/arenda/samosval'];
+const PAGES = [
+  '/?intro=0',
+  '/pravila',
+  '/contacts',
+  '/soglasie',
+  '/privacy',
+  '/arenda/samosval',
+  // A city of the all-Russia list (lib/cities.ts); without a database nobody serves it yet.
+  '/arenda/ekskavator-pogruzchik/kazan',
+  '/kak-polzovatsya',
+  '/predlozheniya',
+  '/bot',
+];
 
 const ALLOWED_EXTERNAL = [
   /^tel:/,
   /^mailto:/,
   /^https:\/\/wa\.me\//,
   /^https:\/\/api\.whatsapp\.com\//,
-  // Our own Telegram bot (the Telegram funnel), never another channel.
-  /^https:\/\/t\.me\/specplast16_zayavki_bot(\?start=[A-Za-z0-9_-]{1,64})?$/,
+  // Our own Telegram bot (the funnel, «Добавить бота в чат» on /bot), never another channel.
+  /^https:\/\/t\.me\/specplast16_zayavki_bot(\?start=[A-Za-z0-9_-]{1,64}|\?startgroup=1)?$/,
 ];
 
 async function guard(page: Page) {
@@ -71,6 +83,16 @@ for (const path of PAGES) {
       expect(spaced(await page.getByTestId('landing-price').innerText())).toContain('от 3 300 ₽');
     }
 
+    // An honest city page: no providers there yet → no invented machines or prices.
+    if (path.endsWith('/kazan')) {
+      await expect(page.getByRole('heading', { level: 1 })).toContainText('в Казани');
+      await expect(page.getByTestId('city-joining')).toContainText(
+        'Исполнители в Казани подключаются — оставьте заявку, мы найдём технику.',
+      );
+      await expect(page.getByTestId('landing-price')).toHaveCount(0);
+      await expect(page.getByTestId('fleet-card-price')).toHaveCount(0);
+    }
+
     expect(errors, 'page errors').toEqual([]);
   });
 }
@@ -104,6 +126,35 @@ test('callback form sends a lead without a name', async ({ page }) => {
   expect(errors, 'page errors').toEqual([]);
 });
 
+// «Предложения и партнёрство»: errors under the fields, then the thank-you.
+test('proposal form: inline errors, then sent', async ({ page }) => {
+  const errors = await guard(page);
+  const sent: { body?: Record<string, unknown> } = {};
+  await page.route('**/api/proposals', (route) => {
+    sent.body = route.request().postDataJSON();
+    return route.fulfill({ status: 201, contentType: 'application/json', body: '{"ok":true}' });
+  });
+  await page.goto('/predlozheniya', { waitUntil: 'load' });
+  await page.getByRole('button', { name: 'Отправить' }).click();
+  await expect(page.getByText('Как к вам обращаться?')).toBeVisible();
+  await expect(page.getByText('Нужно согласие на обработку персональных данных')).toBeVisible();
+  expect(sent.body).toBeUndefined();
+
+  await page.getByText('Сотрудничество и партнёрство').click();
+  await page.getByLabel('Имя').fill('Тест');
+  await page.getByLabel('Телефон или e-mail для ответа').fill('test@example.com');
+  await page.getByLabel('Расскажите подробнее').fill('Предлагаем совместную рекламу техники.');
+  await page.locator('input[name="consent"]').check();
+  await page.getByRole('button', { name: 'Отправить' }).click();
+  await expect(page.getByText('Спасибо! Мы прочитаем и ответим.')).toBeVisible();
+  expect(sent.body).toMatchObject({
+    kind: 'PARTNERSHIP',
+    contact: 'test@example.com',
+    consent: true,
+  });
+  expect(errors, 'page errors').toEqual([]);
+});
+
 // The hero CTA lands on a usable form: within a second the phone field is on
 // screen, not under the header, the cookie strip or the chat button, and takes focus.
 test('hero CTA: phone field ready within 1 s', async ({ page }, testInfo) => {
@@ -130,11 +181,11 @@ test('hero CTA: phone field ready within 1 s', async ({ page }, testInfo) => {
   expect(errors, 'page errors').toEqual([]);
 });
 
-// /stroyka is a full-screen layer: the consent strip must still be seen and
-// tapped there (Metrika waits for it).
-test('cookie strip visible and clickable on /stroyka', async ({ page }) => {
+// The consent strip must be seen and tapped on the home page over the hero
+// (Metrika waits for it).
+test('cookie strip visible and clickable on the home page', async ({ page }) => {
   const errors = await guard(page);
-  await page.goto('/stroyka?nointro=1', { waitUntil: 'load' });
+  await page.goto('/?intro=0', { waitUntil: 'load' });
   const strip = page.getByTestId('cookie-strip');
   await expect(strip).toBeVisible({ timeout: 10_000 });
   await expect(strip).toBeInViewport();
@@ -170,63 +221,157 @@ test('hero order button above the fold on a phone', async ({ page }, testInfo) =
   }
 });
 
-// The default tour plays real footage per zone; the strip switches zones and
-// the one order button («К заказу» in the top bar) stays on top of the film.
-test('stroyka film tour', async ({ page }) => {
+// «Вход на стройку», «Смета» and «Дизайн» are gone from the site (owner,
+// 2026-10-15): their old addresses land on the home page, nothing else.
+test('removed pages redirect to the home page', async ({ page }) => {
   const errors = await guard(page);
-  await page.route('**/film/zones/*.mp4', (route) => route.abort());
-  await page.goto('/stroyka?nointro=1', { waitUntil: 'load' });
-  await expect(page.getByTestId('zone-film')).toBeVisible({ timeout: 15_000 });
-  const strip = page.getByTestId('zone-strip');
-  await expect(strip).toBeVisible();
-  await strip.locator('button').nth(1).click();
-  await page.waitForTimeout(800);
-  await expect(page.getByTestId('skip-to-order')).toBeVisible();
-  await page.getByTestId('skip-to-order').click();
-  await expect(page.getByTestId('order-panel')).toBeVisible();
+  for (const path of ['/stroyka', '/stroyka/kotlovan', '/smeta', '/kalkulyator', '/dizain']) {
+    await page.goto(path, { waitUntil: 'load' });
+    expect(new URL(page.url()).pathname, path).toBe('/');
+  }
   expect(errors, 'page errors').toEqual([]);
 });
 
-// The personal film: a chapter card that never takes a click, and the offer to
-// remember the visitor that stores nothing personal until «Да».
-test('stroyka chapter card and memory offer', async ({ page }) => {
+// «Установить на экран»: not on the first visit, from the second one on; it
+// never covers the call bar, has 44 px buttons, and ✕ closes it for good.
+test('install hint on the second visit, closed for good', async ({ page }, testInfo) => {
+  const phone = testInfo.project.name === 'iphone-13';
   const errors = await guard(page);
-  await page.route('**/film/zones/*.mp4', (route) => route.abort());
-  await page.goto('/stroyka?nointro=1', { waitUntil: 'load' });
-  await expect(page.getByTestId('zone-film')).toBeVisible({ timeout: 15_000 });
-  await page.getByTestId('zone-strip').locator('button').nth(1).click();
-  const card = page.getByTestId('chapter-card');
-  await expect(card).toContainText('Котлован');
-  expect(await card.evaluate((el) => getComputedStyle(el).pointerEvents)).toBe('none');
-  await expect(page.getByTestId('memory-consent')).toBeVisible({ timeout: 8_000 });
-  await expect(card).toHaveCount(0);
-  const stored = () => page.evaluate(() => localStorage.getItem('stroyka.memory.v1') ?? '');
-  expect(await stored()).not.toContain('consent');
-  await page.getByTestId('memory-no').click();
-  await expect(page.getByTestId('memory-consent')).toHaveCount(0);
-  expect(await stored()).toContain('declinedAt');
+  await page.addInitScript((native) => {
+    // Automated browsers never get the hint; this test plays a person.
+    Object.defineProperty(Navigator.prototype, 'webdriver', { get: () => false });
+    try {
+      localStorage.setItem('cookie-consent', 'yes');
+      if (!localStorage.getItem('specai:visits')) {
+        localStorage.setItem(
+          'specai:visits',
+          JSON.stringify({ count: 1, last: Date.now() - 2 * 3_600_000 }),
+        );
+      }
+    } catch {
+      /* storage blocked */
+    }
+    if (native) {
+      // Chrome on a computer (headless Chromium says «HeadlessChrome», a bot):
+      // the browser offers installation.
+      const ua = navigator.userAgent.replace('HeadlessChrome', 'Chrome');
+      Object.defineProperty(Navigator.prototype, 'userAgent', { get: () => ua });
+      addEventListener('DOMContentLoaded', () => {
+        const event = new Event('beforeinstallprompt', { cancelable: true });
+        Object.assign(event, {
+          prompt: () => Promise.resolve(),
+          userChoice: Promise.resolve({ outcome: 'dismissed', platform: 'web' }),
+        });
+        dispatchEvent(event);
+      });
+    }
+  }, !phone);
+  await page.goto('/?intro=0', { waitUntil: 'load' });
+  const hint = page.getByTestId('install-hint');
+  await expect(hint).toBeVisible({ timeout: 15_000 });
+  await expect(hint).toBeInViewport();
+  if (phone) {
+    // Chromium with the iPhone's user agent: Safari's two taps.
+    await expect(hint).toContainText('Установить ИИСтройка24 на телефон');
+    await expect(hint).toContainText('«На экран „Домой“»');
+    const bar = page.getByRole('navigation', { name: 'Быстрая связь' });
+    const barBox = (await bar.boundingBox())!;
+    const hintBox = (await hint.boundingBox())!;
+    expect(hintBox.y + hintBox.height, 'the hint sits above the call bar').toBeLessThanOrEqual(
+      barBox.y,
+    );
+    const callFree = await bar.locator('a[href^="tel:"]').evaluate((el) => {
+      const r = el.getBoundingClientRect();
+      const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+      return !!hit && el.contains(hit);
+    });
+    expect(callFree, 'nothing covers «Позвонить»').toBe(true);
+  } else {
+    const install = hint.getByRole('button', { name: 'Установить' });
+    await expect(install).toBeVisible();
+    expect((await install.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+  }
+  const close = hint.getByRole('button', { name: 'Закрыть подсказку об установке' });
+  expect((await close.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+  await close.click();
+  await expect(hint).toHaveCount(0);
+  const dismissed = await page.evaluate(() =>
+    localStorage.getItem('specai:install-hint-dismissed'),
+  );
+  expect(dismissed).toBe('1');
+  await page.reload({ waitUntil: 'load' });
+  await page.waitForTimeout(8_000);
+  await expect(hint).toHaveCount(0);
   expect(errors, 'page errors').toEqual([]);
 });
 
-// The story goes on after the visitor engaged, and the amber order button
-// opens Света's form right in the film (no other page).
-test('stroyka order stays in the film', async ({ page }) => {
+// The owner, 2026-10-18: «Манипулятор вездеход» typed into «Что нужно» picks
+// «Краны-манипуляторы (КМУ)» by itself, and the type is found by typing.
+test.describe('order form finds the machinery from the words', () => {
+  // The site's service worker would answer /api/* itself, past the mock.
+  test.use({ serviceWorkers: 'block' });
+
+  test('«Манипулятор вездеход» → КМУ; «вездеход» in the type field finds it', async ({ page }) => {
+    await guard(page);
+    await page.route('**/api/categories', (route) =>
+      route.fulfill({
+        contentType: 'application/json',
+        body: JSON.stringify({
+          categories: [
+            { id: 'c-cranes', name: 'Автокраны', slug: 'cranes', group: 'Подъёмная техника' },
+            {
+              id: 'c-kmu',
+              name: 'Краны-манипуляторы (КМУ)',
+              slug: 'crane-trucks',
+              group: 'Подъёмная техника',
+            },
+          ],
+        }),
+      }),
+    );
+    await page.goto('/orders#new', { waitUntil: 'networkidle' });
+    const form = page.locator('#new');
+    const description = form.locator('textarea').first();
+    const combo = form.getByRole('combobox', { name: 'Техника' });
+    await expect(combo).toBeVisible();
+    await description.click();
+    await description.pressSequentially('Манипулятор вездеход');
+    await expect(form.locator('[data-auto-category]')).toContainText(
+      'Техника: Краны-манипуляторы (КМУ) — определили по описанию',
+    );
+    await expect(combo).toHaveValue(/Краны-манипуляторы \(КМУ\)/);
+
+    // Picked by hand: the description no longer changes it.
+    await combo.click();
+    await combo.pressSequentially('автокран');
+    await form.getByRole('option', { name: /Автокраны/ }).click();
+    await expect(combo).toHaveValue(/Автокраны/);
+    await description.pressSequentially(' самогруз');
+    await expect(combo).toHaveValue(/Автокраны/);
+    await expect(form.locator('[data-auto-category]')).toHaveCount(0);
+
+    // Typing finds the type by a word that is not in its name.
+    await combo.click();
+    await combo.pressSequentially('вездеход');
+    await expect(form.getByRole('option', { name: /Краны-манипуляторы/ })).toBeVisible();
+    await combo.press('Enter');
+    await expect(combo).toHaveValue(/Краны-манипуляторы \(КМУ\)/);
+  });
+});
+
+test('3D city: poster first, machine chips open the order card', async ({ page }) => {
   const errors = await guard(page);
-  await page.route('**/film/zones/*.mp4', (route) => route.abort());
-  await page.goto('/stroyka?nointro=1', { waitUntil: 'load' });
-  await expect(page.getByTestId('dialogue')).toBeVisible({ timeout: 15_000 });
-  // Phones show a subtitle bar: the replies are behind «Ответить».
-  const expand = async () => {
-    const button = page.getByTestId('dialogue-expand');
-    if (await button.isVisible()) await button.click();
-  };
-  await expand();
-  await page.getByRole('button', { name: 'Копать котлован или траншею' }).click();
-  await page.getByTestId('zone-strip').getByRole('tab', { name: 'Котлован', exact: true }).click();
-  await expect(page.getByTestId('dialogue')).toContainText('Ринат');
-  await expand();
-  await page.getByTestId('replies').getByRole('button', { name: 'Оформить у Светы' }).click();
-  await expect(page.getByTestId('dialogue').locator('input[name="phone"]')).toBeVisible();
-  expect(new URL(page.url()).pathname).toBe('/stroyka');
-  expect(errors, 'page errors').toEqual([]);
+  await page.goto('/?intro=0', { waitUntil: 'load' });
+  const block = page.locator('section[aria-labelledby="world3d-title"]');
+  await block.scrollIntoViewIfNeeded();
+  await expect(block.getByRole('img')).toHaveAttribute('src', '/images/world3d-poster.jpg');
+  await block.getByRole('button', { name: 'Автовышка' }).click();
+  const card = block.getByRole('dialog', { name: 'Автовышка' });
+  await expect(card).toBeVisible();
+  await expect(card.getByRole('link', { name: 'Заказать' })).toHaveAttribute('href', /^\/orders/);
+  await expect(card.getByRole('link', { name: 'Встать на линию' })).toHaveAttribute(
+    'href',
+    '/register?role=provider',
+  );
+  expect(errors).toEqual([]);
 });

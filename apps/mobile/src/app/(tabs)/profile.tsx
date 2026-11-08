@@ -1,17 +1,26 @@
 import { Link, useFocusEffect } from 'expo-router';
 import React, { useCallback, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { AdminLoginRow, AdminMenuCard } from '@/components/AdminEntry';
 import { ContactActions } from '@/components/ContactActions';
+import { Hint } from '@/components/Hint';
+import { InviteCard } from '@/components/InviteCard';
+import { ModeSwitchCard, ProfileShortcuts } from '@/components/ProfileShortcuts';
+import { ProposalsLink } from '@/components/ProposalsLink';
+import { NotificationSettingsCard } from '@/components/NotificationSettingsCard';
+import { SupportProfileRow } from '@/components/SupportCard';
 import { Badge, Button, Card } from '@/components/ui';
 import { API_URL, ApiError, sendVerificationEmail, type UserRole } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
+import { profileHint } from '@/lib/modes';
 import { SITE } from '@/lib/site';
 import { colors, spacing } from '@/lib/theme';
 
 const ROLE_LABELS: Record<UserRole, string> = {
-  CUSTOMER: 'Клиент',
-  PROVIDER_ADMIN: 'Поставщик',
-  ADMIN: 'Администратор',
+  CUSTOMER: 'Заказчик',
+  PROVIDER_ADMIN: 'Исполнитель',
+  PROVIDER_OPERATOR: 'Машинист',
+  PLATFORM_ADMIN: 'Администратор платформы',
 };
 
 export default function ProfileScreen() {
@@ -19,6 +28,7 @@ export default function ProfileScreen() {
   const [loggingOut, setLoggingOut] = useState(false);
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
+  const hint = profileHint(user?.role);
 
   // При каждом открытии вкладки перечитываем пользователя: статус подтверждения
   // e-mail меняется после перехода по ссылке из письма.
@@ -90,6 +100,11 @@ export default function ProfileScreen() {
         {__DEV__ ? <Row label="Сервер" value={API_URL} /> : null}
       </Card>
 
+      <AdminMenuCard />
+      {hint ? <Hint ids={hint} /> : null}
+      <ModeSwitchCard />
+      <ProfileShortcuts />
+
       {user && user.emailVerified === null ? (
         <Card style={styles.card}>
           <Text style={styles.verifyTitle}>Подтвердите e-mail</Text>
@@ -110,10 +125,13 @@ export default function ProfileScreen() {
         </Card>
       ) : null}
 
+      <InviteCard />
+      <NotificationSettingsCard />
+
       <Card style={styles.card}>
         <Text style={styles.companyTitle}>{SITE.name}</Text>
         <Text style={styles.companyText}>
-          {SITE.tagline}. {SITE.city}, {SITE.region}. {SITE.workingHours}.
+          {SITE.tagline}. Офис СпецПласт16 — {SITE.city}, {SITE.region}. {SITE.workingHours}.
         </Text>
         <ContactActions source="mobile:profile" />
         <Link href="/about" style={styles.aboutLink}>
@@ -121,7 +139,10 @@ export default function ProfileScreen() {
         </Link>
       </Card>
 
+      <SupportProfileRow />
+      <ProposalsLink />
       <Button title="Выйти" variant="danger" onPress={handleLogout} loading={loggingOut} />
+      <AdminLoginRow />
     </ScrollView>
   );
 }
@@ -138,17 +159,22 @@ function Row({ label, value }: { label: string; value: string }) {
 }
 
 const styles = StyleSheet.create({
-  container: { padding: spacing.xl, alignItems: 'stretch', gap: spacing.md },
+  container: {
+    padding: spacing.lg,
+    paddingBottom: spacing.xl,
+    alignItems: 'stretch',
+    gap: spacing.md,
+  },
   avatar: {
     alignSelf: 'center',
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: colors.primaryLight,
+    backgroundColor: colors.dark,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  avatarText: { fontSize: 28, fontWeight: '700', color: colors.primaryDark },
+  avatarText: { fontSize: 28, fontWeight: '800', color: colors.primary },
   name: { fontSize: 22, fontWeight: '700', color: colors.text, textAlign: 'center' },
   email: { fontSize: 15, color: colors.textMuted, textAlign: 'center', marginBottom: spacing.md },
   card: { gap: spacing.md },

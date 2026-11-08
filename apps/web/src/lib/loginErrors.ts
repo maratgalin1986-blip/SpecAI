@@ -47,10 +47,25 @@ export function loginErrorMessage(error: string): string {
   return UNAVAILABLE_MESSAGE;
 }
 
-/** First address of X-Forwarded-For, then X-Real-IP. */
+/**
+ * The client's address for rate limits. Vercel's own X-Vercel-Forwarded-For
+ * comes first: a client cannot set it, while a hand-written X-Forwarded-For
+ * would give every request a fresh limit. Then X-Real-IP and the first
+ * address of X-Forwarded-For (other hosts, the local stand).
+ */
 export function clientIpFrom(get: (name: string) => string | null | undefined): string {
-  const forwarded = get('x-forwarded-for');
-  return forwarded?.split(',')[0]?.trim() || get('x-real-ip') || 'unknown';
+  const first = (value: string | null | undefined) => value?.split(',')[0]?.trim() || null;
+  return (
+    first(get('x-vercel-forwarded-for')) ||
+    first(get('x-real-ip')) ||
+    first(get('x-forwarded-for')) ||
+    'unknown'
+  );
+}
+
+/** clientIpFrom() for a request. */
+export function clientIp(request: { headers: { get(name: string): string | null } }): string {
+  return clientIpFrom((name) => request.headers.get(name));
 }
 
 /** Where a user lands after signing in without a specific target page. */

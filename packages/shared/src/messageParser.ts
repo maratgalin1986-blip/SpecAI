@@ -2,6 +2,11 @@
 // a message is someone *looking for* special equipment (a job request), as
 // opposed to a provider advertising theirs, and pulls out what it can.
 // Works offline; the AI extractor (ai-service) is used on top when available.
+// The machine types and their keywords come from ./categories (one list for
+// the seed, the pickers and this parser).
+
+import { detectCategory } from './categories';
+import { findCityInText } from './cities';
 
 export interface ParsedEquipmentRequest {
   isRequest: boolean;
@@ -24,34 +29,6 @@ function re(pattern: RegExp): RegExp {
   return new RegExp(pattern.source.replace(/\\b/g, BOUNDARY), pattern.flags);
 }
 
-const EQUIPMENT: { slug: string; label: string; pattern: RegExp }[] = [
-  {
-    slug: 'backhoe-loaders',
-    label: 'экскаватор-погрузчик',
-    pattern: re(
-      /экскаватор[\s-]*погрузчик|погрузчик[\s-]*экскаватор|\bjcb\b|джисиби|\b[34]cx\b|case\s?570|\bкейс\b|hidromek|гидромек|terex|терекс|гидромолот/,
-    ),
-  },
-  { slug: 'crane-trucks', label: 'манипулятор', pattern: re(/манипулятор|кму\b|воровайк/) },
-  { slug: 'cranes', label: 'автокран', pattern: re(/автокран|\bкран(а|ом|у|ы)?\b|кс-?\d{4,5}/) },
-  { slug: 'excavators', label: 'экскаватор', pattern: re(/экскаватор|гусеничн|полноповоротн/) },
-  {
-    slug: 'loaders',
-    label: 'погрузчик',
-    pattern: re(
-      /фронтальн|фронтальник|погрузчик|амкодор|lonking|sdlg|bobcat|бобкэт|мини[\s-]?погрузчик/,
-    ),
-  },
-  {
-    slug: 'dump-trucks',
-    label: 'самосвал',
-    pattern: re(/самосвал|камаз|шаланд|тонар|howo|хово|shacman|шакман/),
-  },
-  { slug: 'bulldozers', label: 'бульдозер', pattern: re(/бульдозер|\bдоз[еє]р|шантуй/) },
-  { slug: 'tractors', label: 'трактор', pattern: re(/трактор|\bмтз\b|беларус|\bюмз\b/) },
-  { slug: 'aerial-platforms', label: 'автовышка', pattern: re(/автовышк|\bвышк[аиу]\b/) },
-];
-
 // "I need …" signals.
 const REQUEST_PATTERNS: RegExp[] = [
   re(/\bнуж(ен|на|но|ны)\b/),
@@ -65,6 +42,8 @@ const REQUEST_PATTERNS: RegExp[] = [
   re(/подскажите/),
   re(/\bсрочно\b/),
   re(/\bвозьм(у|ем)\b/),
+  re(/\bаренд(овать|ую|уем)\b/),
+  re(/\b(в|на) аренду (на|с|до|завтра|сегодня)\b/),
 ];
 
 // "I offer …" signals — providers advertising their machines.
@@ -83,21 +62,10 @@ const OFFER_PATTERNS: RegExp[] = [
   re(/\bрассмотр(ю|им)\b.*предложени/),
 ];
 
-const CITIES: { name: string; pattern: RegExp }[] = [
-  { name: 'Набережные Челны', pattern: re(/набережн\w* челн|\bчелн(ы|ах|ов)\b|\bнч\b/) },
-  { name: 'Нижнекамск', pattern: re(/нижнекамск/) },
-  { name: 'Елабуга', pattern: re(/елабуг/) },
-  { name: 'Казань', pattern: re(/казан/) },
-  { name: 'Альметьевск', pattern: re(/альметьевск/) },
-  { name: 'Менделеевск', pattern: re(/менделеевск/) },
-  { name: 'Заинск', pattern: re(/заинск/) },
-  { name: 'Мензелинск', pattern: re(/мензелинск/) },
+// Cities come from ./cities (every Russian city of ~100 000 people and more,
+// with case forms); a district the list has no row for is matched here.
+const DISTRICTS: { name: string; pattern: RegExp }[] = [
   { name: 'Тукаевский район', pattern: re(/тукаев/) },
-  { name: 'Бугульма', pattern: re(/бугульм/) },
-  { name: 'Чистополь', pattern: re(/чистопол/) },
-  { name: 'Лениногорск', pattern: re(/лениногорск/) },
-  { name: 'Азнакаево', pattern: re(/азнака/) },
-  { name: 'Агрыз', pattern: re(/агрыз/) },
 ];
 
 const MONTHS: Record<string, number> = {
@@ -189,15 +157,17 @@ export function parseEquipmentRequest(raw: string, now: Date = new Date()): Pars
   const text = normalize(raw);
   const signals: string[] = [];
 
-  const equipment = EQUIPMENT.find((item) => item.pattern.test(text));
-  if (equipment) signals.push(`техника: ${equipment.label}`);
+  const equipment = detectCategory(text);
+  if (equipment) signals.push(`техника: ${equipment.name.toLowerCase()}`);
 
   const requestHits = REQUEST_PATTERNS.filter((p) => p.test(text)).length;
   const offerHits = OFFER_PATTERNS.filter((p) => p.test(text)).length;
   if (requestHits) signals.push(`признаки запроса: ${requestHits}`);
   if (offerHits) signals.push(`признаки рекламы: ${offerHits}`);
 
-  const city = CITIES.find((c) => c.pattern.test(text))?.name;
+  // The original text: names that are also ordinary words («Киров», «Шахты»)
+  // count only capitalised.
+  const city = findCityInText(raw)?.city.name ?? DISTRICTS.find((d) => d.pattern.test(text))?.name;
   if (city) signals.push(`город: ${city}`);
   const phone = extractPhone(raw);
   const dates = extractDates(text, now);

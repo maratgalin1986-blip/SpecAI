@@ -40,6 +40,7 @@ export async function POST(request: NextRequest) {
       parsed.data.externalId ?? `inbound:${Date.now()}:${Math.random().toString(36).slice(2)}`,
     text,
     chatTitle: chat,
+    openChat: Boolean(chat),
     authorName: author,
     authorPhone: phone,
     url,

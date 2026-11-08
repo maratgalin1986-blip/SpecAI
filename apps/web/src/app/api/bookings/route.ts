@@ -10,11 +10,20 @@ import {
 import { findOverlappingBooking, lockEquipment } from '@/lib/bookingConflicts';
 import { INVALID_JSON_MESSAGE, prismaErrorCode, readJson, zodErrorMessage } from '@/lib/apiInput';
 import { isOnlinePaymentEnabled } from '@/lib/stripe';
-import { isHouseEquipment, isProvider } from '@/lib/fleet';
-import { customerForProvider, providerForCustomer } from '@/lib/customerPrivacy';
+import { isOperator, isProvider, isPublicEquipment } from '@/lib/fleet';
+import {
+  canSeeCustomerContacts,
+  customerForProvider,
+  customerShortName,
+  providerForCustomer,
+} from '@/lib/customerPrivacy';
+import { notifyCompany } from '@/lib/notifications/notifyUser';
+import { maskContactsAndLinks } from '@/lib/privacy';
 import { HOUSE_COMPANY_ID } from '@/lib/fleet';
 import { SITE } from '@/lib/site';
 import { customerRates } from '@/lib/equipmentCatalog';
+import { unreadMessagesByOrder } from '@/lib/orderChatAccess';
+import { buyerForProvider, buyerJson, resolveBuyer } from '@/lib/buyerRequisites';
 
 export const dynamic = 'force-dynamic';
 
@@ -45,7 +54,7 @@ export async function GET(request: NextRequest) {
 
   if (request.nextUrl.searchParams.get('as') === 'provider') {
     if (!isProvider(currentUser)) {
-      return NextResponse.json({ error: 'Требуется аккаунт поставщика' }, { status: 403 });
+      return NextResponse.json({ error: 'Требуется аккаунт исполнителя' }, { status: 403 });
     }
 
     const bookings = await prisma.booking.findMany({
@@ -58,10 +67,23 @@ export async function GET(request: NextRequest) {
       take: 100,
     });
 
+    // Unread chat messages of the booked orders, for «Открыть чат» in the app.
+    const unread = await unreadMessagesByOrder(
+      bookings.flatMap((booking) => (booking.orderId ? [booking.orderId] : [])),
+      currentUser,
+    ).catch(() => new Map<string, number>());
     return NextResponse.json({
       bookings: bookings.map((booking) => ({
         ...booking,
         customer: customerForProvider(booking.customer, booking.status),
+        // «Заказываю от …»: requisites for the provider's invoice and act, once confirmed.
+        buyer: buyerForProvider(booking.buyer, booking.status),
+        // The customer's note may carry a phone: hidden until the booking is confirmed.
+        notes:
+          booking.notes && !canSeeCustomerContacts(booking.status)
+            ? maskContactsAndLinks(booking.notes)
+            : booking.notes,
+        unreadMessages: booking.orderId ? (unread.get(booking.orderId) ?? 0) : 0,
       })),
       paymentsEnabled,
     });
@@ -102,6 +124,10 @@ export async function POST(request: NextRequest) {
   if (!currentUser) {
     return NextResponse.json({ error: 'Необходимо войти в аккаунт' }, { status: 401 });
   }
+  // A machine operator drives shifts; it does not book in the company's name.
+  if (isOperator(currentUser)) {
+    return NextResponse.json({ error: 'Машинист не может бронировать технику' }, { status: 403 });
+  }
 
   const body = await readJson(request);
   if (body === null) {
@@ -118,6 +144,15 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: dates.error }, { status: 400 });
   }
   const { startDate, endDate, days } = dates;
+
+  const buyer = await resolveBuyer(
+    prisma,
+    currentUser.id,
+    (body as { legalEntityId?: unknown }).legalEntityId,
+  );
+  if ('error' in buyer) {
+    return NextResponse.json({ error: buyer.error }, { status: 400 });
+  }
 
   if (deliveryLocationId) {
     const location = await prisma.location.findUnique({
@@ -138,11 +173,19 @@ export async function POST(request: NextRequest) {
 
       const equipment = await tx.equipment.findUnique({
         where: { id: equipmentId },
-        include: { category: { select: { name: true } } },
+        include: {
+          category: { select: { name: true } },
+          company: { select: { isProvider: true } },
+        },
       });
-      // Only СпецПласт16's own machines can be booked.
-      if (!equipment || !isHouseEquipment(equipment)) {
+      // Any provider company's machine can be booked (the aggregator).
+      if (!equipment || !isPublicEquipment(equipment)) {
         return { status: 404, error: 'Техника не найдена' } as const;
+      }
+      // A company cannot book its own machine: a fake booking would count as
+      // a completed order and let it rate itself.
+      if (currentUser.companyId && equipment.companyId === currentUser.companyId) {
+        return { status: 403, error: 'Нельзя заказывать собственную технику' } as const;
       }
       const unavailable = unavailableEquipmentMessage(equipment.status);
       if (unavailable) {
@@ -173,9 +216,10 @@ export async function POST(request: NextRequest) {
           currency: equipment.currency,
           deliveryLocationId,
           notes,
+          buyer: buyerJson(buyer.buyer),
         },
       });
-      return { status: 201, booking } as const;
+      return { status: 201, booking, equipment } as const;
     });
   } catch (error) {
     if (prismaErrorCode(error) === 'P2003') {
@@ -187,5 +231,15 @@ export async function POST(request: NextRequest) {
   if (result.status !== 201) {
     return NextResponse.json({ error: result.error }, { status: result.status });
   }
+  // The provider's managers hear of the new PENDING booking at once — the
+  // customer waits for their confirmation. Only the short name (privacy rules).
+  void notifyCompany(result.equipment.companyId, {
+    type: 'booking.new',
+    bookingId: result.booking.id,
+    equipmentName: result.equipment.name,
+    startDate: result.booking.startDate,
+    endDate: result.booking.endDate,
+    customerShortName: customerShortName(currentUser.name),
+  }).catch((error) => console.error('[notify] booking.new failed', error));
   return NextResponse.json({ booking: result.booking }, { status: 201 });
 }

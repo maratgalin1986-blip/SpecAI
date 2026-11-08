@@ -79,3 +79,25 @@ describe('locateQueryEngine', () => {
     expect(locateQueryEngine(cwd, env)).toBe('/opt/engine.so.node');
   });
 });
+
+describe('applyDatabaseEnvOverrides', () => {
+  it('prefers the NEON_ pair from Vercel Storage', async () => {
+    const { applyDatabaseEnvOverrides } = await import('../connection');
+    const env: NodeJS.ProcessEnv = {
+      DATABASE_URL: 'postgresql://old-pooled',
+      DIRECT_URL: 'postgresql://old-direct',
+      NEON_DATABASE_URL: 'postgresql://new-pooled',
+      NEON_DATABASE_URL_UNPOOLED: 'postgresql://new-direct',
+    };
+    applyDatabaseEnvOverrides(env);
+    expect(env.DATABASE_URL).toBe('postgresql://new-pooled');
+    expect(env.DIRECT_URL).toBe('postgresql://new-direct');
+  });
+
+  it('leaves DATABASE_URL and DIRECT_URL alone without the NEON_ pair', async () => {
+    const { applyDatabaseEnvOverrides } = await import('../connection');
+    const env: NodeJS.ProcessEnv = { DATABASE_URL: 'postgresql://a', DIRECT_URL: 'postgresql://b' };
+    applyDatabaseEnvOverrides(env);
+    expect(env).toEqual({ DATABASE_URL: 'postgresql://a', DIRECT_URL: 'postgresql://b' });
+  });
+});

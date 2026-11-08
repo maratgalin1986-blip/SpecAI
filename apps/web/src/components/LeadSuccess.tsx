@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Icon } from '@/components/Icon';
 import { WhatsAppIcon } from '@/components/MessengerButtons';
 import { PhotoShare } from '@/components/PhotoShare';
+import { noteInstallMoment } from '@/lib/installHint';
 import { isOnShift, nextShiftText, SITE } from '@/lib/site';
 import { TelegramButton } from '@/components/TelegramButton';
 
@@ -16,6 +17,8 @@ export function LeadSuccess({ dark = false, summary }: { dark?: boolean; summary
   useEffect(() => {
     setOnShift(isOnShift());
     setNextShift(nextShiftText());
+    // A good moment to offer «Установить на экран» (InstallPrompt).
+    noteInstallMoment();
     // Focus without the browser's jump, then centre it: «Принято» never
     // ends up under the sticky header.
     const node = ref.current;

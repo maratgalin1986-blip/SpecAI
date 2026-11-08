@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { clientIp } from '@/lib/loginErrors';
 import { GEO_USER_AGENT, tileAllowed } from '@/lib/geo';
 import { checkRateLimit } from '@/lib/rateLimit';
 
@@ -28,7 +29,7 @@ export async function GET(
     return new NextResponse('Bad tile', { status: 400 });
   }
   if (!tileAllowed(z, x, y)) return new NextResponse('Outside the service area', { status: 404 });
-  const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown';
+  const ip = clientIp(request);
   if (!checkRateLimit(`tiles:${ip}`, { limit: 480, windowMs: 60_000 }).ok) {
     return new NextResponse('Too many requests', { status: 429 });
   }

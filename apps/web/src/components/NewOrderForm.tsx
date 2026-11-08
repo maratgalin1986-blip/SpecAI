@@ -1,54 +1,100 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { BuyerSelect } from './BuyerSelect';
+import { useEffect, useId, useState } from 'react';
+import { AutoCategoryNote, useAutoCategory } from '@/components/AutoCategory';
+import { CategorySelect, type SelectableCategory } from '@/components/CategorySelect';
 import { ConditionsPreview } from '@/components/ConditionsPreview';
+import { DemandHint } from '@/components/DemandHint';
+import { OrderEstimate } from '@/components/OrderEstimate';
+import { GuestOrderForm } from '@/components/GuestOrderForm';
 import { PointPicker } from '@/components/PointPicker';
-import { pointAddress, type MapPoint } from '@/lib/mapPoint';
+import { visitorNear } from '@/components/visitorNear';
+import { noteInstallMoment } from '@/lib/installHint';
+import { addressWithPoint, type MapPoint } from '@/lib/mapPoint';
+import { onOrderPrefill, withPrefillLine } from '@/lib/orderPrefillEvent';
 import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { Button } from '@specai/ui';
+import { PromiseNote } from '@/components/PromiseNote';
+import type { OrderPrefill } from '@/lib/quickOrder';
 
 /** Today's date in Moscow as YYYY-MM-DD, the earliest allowed order date. */
 function todayInMoscow() {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Moscow' }).format(new Date());
 }
 
-interface Category {
-  id: string;
-  name: string;
-}
+type Category = SelectableCategory;
 
-export function NewOrderForm({ provider }: { provider?: { name: string } | null } = {}) {
+export function NewOrderForm({
+  provider,
+  initial,
+}: {
+  provider?: { name: string } | null;
+  /** From the cabinet's quick-order panel (lib/quickOrder.ts). */
+  initial?: OrderPrefill;
+} = {}) {
   const router = useRouter();
   const { status } = useSession();
   const [categories, setCategories] = useState<Category[]>([]);
-  const [categoryId, setCategoryId] = useState('');
+  const [categoryId, setCategoryId] = useState(initial?.categoryId ?? '');
   // From the map's «Оставить заявку»: the order names the chosen provider.
   const [description, setDescription] = useState(
-    provider ? `Техника базы «${provider.name}». ` : '',
+    (provider ? `Для исполнителя «${provider.name}». ` : '') + (initial?.description ?? ''),
   );
-  const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate] = useState('');
-  const [address, setAddress] = useState('');
+  const [startDate, setStartDate] = useState(initial?.startDate ?? '');
+  const [endDate, setEndDate] = useState(initial?.endDate ?? '');
+  const [address, setAddress] = useState(initial?.address ?? '');
   const [point, setPoint] = useState<MapPoint | null>(null);
+  // The visitor's town, only if location is already allowed: «Мира 10» is
+  // then found there, not in a random city.
+  const [near, setNear] = useState<string | null>(null);
+  useEffect(() => {
+    let alive = true;
+    void visitorNear().then((value) => {
+      if (alive) setNear(value);
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
+  // «Заказываю от …» (BuyerSelect): undefined — поле не отправляется.
+  const [legalEntityId, setLegalEntityId] = useState<string | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const categoryInputId = useId();
+  const autoCategory = useAutoCategory({
+    description,
+    categories,
+    categoryId,
+    setCategoryId,
+    pickedByHand: Boolean(initial?.categoryId),
+  });
 
   useEffect(() => {
     fetch('/api/categories')
       .then((res) => res.json())
-      .then((data) => setCategories(data.categories ?? []));
+      .then((data) => setCategories(data.categories ?? []))
+      .catch(() => setCategories([]));
   }, []);
 
+  // «Заказать» on a machine above the form (OfferNow): its type and a line.
+  const { pick } = autoCategory;
+  useEffect(
+    () =>
+      onOrderPrefill(({ categorySlug, text }) => {
+        const row = categorySlug ? categories.find((c) => c.slug === categorySlug) : undefined;
+        if (row) pick(row.id);
+        setDescription((current) => withPrefillLine(current, text));
+      }),
+    // pick only sets state; the list is what changes the lookup.
+    [categories],
+  );
+
+  // No registration on the site: a visitor orders with a name and a phone
+  // (GuestOrderForm → /api/orders/guest), providers bid as on any order.
   if (status === 'unauthenticated') {
-    return (
-      <p className="text-sm text-slate-600">
-        <a href="/login" className="font-medium text-amber-700">
-          Войдите
-        </a>{' '}
-        , чтобы разместить заявку.
-      </p>
-    );
+    return <GuestOrderForm provider={provider} initial={initial} />;
   }
 
   async function handleSubmit(event: React.FormEvent) {
@@ -66,7 +112,12 @@ export function NewOrderForm({ provider }: { provider?: { name: string } | null 
           desiredStartDate: startDate,
           desiredEndDate: endDate,
           categoryId: categoryId || undefined,
+          // «Любая» chosen by hand: the server keeps the order open to every
+          // type instead of reading one from the description.
+          anyCategory: !categoryId && autoCategory.byHand ? true : undefined,
           address: address.trim() || undefined,
+          near: near ?? undefined,
+          legalEntityId,
         }),
       });
     } catch {
@@ -83,12 +134,22 @@ export function NewOrderForm({ provider }: { provider?: { name: string } | null 
       return;
     }
 
+    // The order page shows what happens next (offers, chat); the list under
+    // the form only refreshes if the id is missing for some reason.
+    const created = (await response.json().catch(() => null)) as { order?: { id?: string } } | null;
     setDescription('');
     setCategoryId('');
+    autoCategory.reset();
     setStartDate('');
     setEndDate('');
     setAddress('');
     setPoint(null);
+    // A good moment to offer «Установить на экран» (InstallPrompt).
+    noteInstallMoment();
+    if (created?.order?.id) {
+      router.push(`/orders/${encodeURIComponent(created.order.id)}`);
+      return;
+    }
     router.refresh();
   }
 
@@ -105,22 +166,26 @@ export function NewOrderForm({ provider }: { provider?: { name: string } | null 
           className="rounded-md border border-slate-300 px-3 py-2"
         />
       </label>
+      {autoCategory.auto && (
+        <AutoCategoryNote
+          name={categories.find((category) => category.id === categoryId)?.name}
+          inputId={categoryInputId}
+        />
+      )}
 
-      <label className="flex flex-col gap-1 text-sm">
-        Категория (необязательно)
-        <select
-          value={categoryId}
-          onChange={(e) => setCategoryId(e.target.value)}
-          className="rounded-md border border-slate-300 px-3 py-2"
-        >
-          <option value="">Любая</option>
-          {categories.map((category) => (
-            <option key={category.id} value={category.id}>
-              {category.name}
-            </option>
-          ))}
-        </select>
-      </label>
+      <CategorySelect
+        id={categoryInputId}
+        label="Техника (необязательно)"
+        categories={categories}
+        value={categoryId}
+        onChange={autoCategory.pick}
+        emptyLabel="Любая"
+        className="rounded-md border border-slate-300 px-3 py-2"
+      />
+      <DemandHint
+        categoryId={categoryId}
+        categoryName={categories.find((category) => category.id === categoryId)?.name}
+      />
 
       <div className="grid grid-cols-2 gap-3">
         <label className="flex flex-col gap-1 text-sm">
@@ -146,13 +211,18 @@ export function NewOrderForm({ provider }: { provider?: { name: string } | null 
           />
         </label>
       </div>
+      <OrderEstimate
+        categoryName={categories.find((category) => category.id === categoryId)?.name}
+        startDate={startDate}
+        endDate={endDate}
+      />
 
       <label className="flex flex-col gap-1 text-sm">
         Адрес работ
         <input
           value={address}
           onChange={(e) => setAddress(e.target.value)}
-          placeholder="Набережные Челны, проспект Мира, 49"
+          placeholder="Город, улица, дом"
           autoComplete="street-address"
           maxLength={200}
           className="rounded-md border border-slate-300 px-3 py-2"
@@ -166,20 +236,18 @@ export function NewOrderForm({ provider }: { provider?: { name: string } | null 
         onPick={(next) => {
           setPoint(next);
           // The street part stays as a label; the point is what gets located.
-          const street = (address.split(' · Точка на карте:')[0] ?? '')
-            .replace(/^Точка на карте:.*$/, '')
-            .trim();
-          setAddress(
-            next ? (street ? `${street} · ${pointAddress(next)}` : pointAddress(next)) : street,
-          );
+          setAddress((current) => addressWithPoint(current, next));
         }}
       />
 
       <ConditionsPreview
         date={startDate}
         address={address}
+        near={near}
         categoryName={categories.find((category) => category.id === categoryId)?.name}
       />
+
+      <BuyerSelect onChange={setLegalEntityId} />
 
       {error && (
         <p role="alert" className="text-sm text-red-700">
@@ -189,6 +257,7 @@ export function NewOrderForm({ provider }: { provider?: { name: string } | null 
       <Button type="submit" disabled={isSubmitting}>
         {isSubmitting ? 'Публикация…' : 'Опубликовать заявку'}
       </Button>
+      <PromiseNote />
     </form>
   );
 }

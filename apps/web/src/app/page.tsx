@@ -1,7 +1,7 @@
 import dynamic from 'next/dynamic';
-import Link from 'next/link';
 import { prisma } from '@specai/database';
 import { PUBLIC_AGENT_PROFILES } from '@specai/shared';
+import { ActivityBlock } from '@/components/ActivityBlock';
 import { CallbackForm } from '@/components/CallbackForm';
 import { CallbackIris } from '@/components/CallbackIris';
 import { TelegramButton } from '@/components/TelegramButton';
@@ -14,14 +14,19 @@ import { HowItWorks } from '@/components/HowItWorks';
 import { Icon, type IconName } from '@/components/Icon';
 import { IntroSplash } from '@/components/IntroSplash';
 import { MachinePhoto } from '@/components/MachinePhoto';
+import { MarketplaceBlock } from '@/components/MarketplaceBlock';
+import { OfferNow } from '@/components/OfferNow';
 import { Reveal } from '@/components/Reveal';
 import { TiltCard } from '@/components/TiltCard';
+import { World3D } from '@/components/world3d/World3D';
+import { WORLD_KINDS } from '@/components/world3d/kinds';
+import type { Metadata } from 'next';
 import type { MachineType } from '@/lib/machinePhotos';
 import { pluralizeRu } from '@/lib/pluralize';
-import { SITE } from '@/lib/site';
+import { loadActivity } from '@/lib/activityData';
+import { loadOfferNow } from '@/lib/offerNowData';
+import { SHIFT, SITE } from '@/lib/site';
 import { fromPerHour, HAMMER_RATE, MIN_RATE, priceFaqAnswer, SHIFT_HOURS } from '@/lib/prices';
-
-const cap = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
 
 // Big interactive blocks below the fold: separate chunks, so the browser
 // hydrates them in their own short tasks instead of one long one.
@@ -108,7 +113,7 @@ const SERVICES: {
   },
   {
     icon: 'helmet',
-    title: 'Техника с оператором',
+    title: 'Техника с машинистом',
     photo: 'dozer',
     text: 'Опытные машинисты, работа по договору, документы и ЭДО для юрлиц.',
   },
@@ -128,15 +133,15 @@ const MARQUEE = [
 const ADVANTAGES = [
   {
     title: 'С машинистом',
-    text: 'Опытный оператор на каждой машине — вам не нужно искать своего.',
+    text: 'Опытный машинист на каждой машине — вам не нужно искать своего.',
   },
   {
     title: 'Цена видна сразу',
-    text: `Почасовая ставка на сайте, смена — ${SHIFT_HOURS} часов. Подачу техники диспетчер назовёт заранее.`,
+    text: `Почасовая ставка на каждой карточке, смена — ${SHIFT_HOURS} часов. Подачу техники назовут заранее.`,
   },
   {
-    title: 'Одна цена от диспетчера',
-    text: `Наш парк и наши машинисты: диспетчер ${SITE.name} называет одну цену с подачей — без посредников и торгов.`,
+    title: 'Несколько предложений',
+    text: `Заявку видят исполнители со своей техникой, включая парк ${SITE.name}: каждый называет цену, вы выбираете. Сервис бесплатный.`,
   },
   { title: 'Круглосуточно', text: 'ИИ-агенты подберут технику и примут заявку даже ночью.' },
 ];
@@ -145,18 +150,32 @@ const STEPS = [
   { title: 'Опишите задачу', text: 'Своими словами — в чате ИИ-агенту или в форме заявки.' },
   {
     title: 'Получите варианты',
-    text: 'Диспетчер СпецПласт16 перезвонит, подберёт машину из нашего парка и назовёт цену.',
+    text: 'Исполнители, включая парк СпецПласт16, пришлют цены, агент подберёт технику из каталога.',
   },
   {
-    title: 'Оставьте заявку',
-    text: 'Подтвердите по телефону — мы закрепим за вами машину и машиниста из штата СпецПласт16.',
+    title: 'Забронируйте',
+    text: 'Примите предложение — исполнитель подтвердит бронь и закрепит машину и машиниста.',
   },
   { title: 'Работайте', text: 'Диспетчер на связи, оплата по факту.' },
 ];
 
-// Service cards link to their catalog category (matched by name) and show how
+// Owner, 2026-11-02: the house fleet reaches a site in Набережные Челны within
+// two hours of the order; other providers name their own delivery time.
+const HOUSE_CITY = 'Челнам';
+const HOUSE_DELIVERY = '2 часа';
+
+// Title and description come from the root layout; the home page adds the
+// canonical (UTM and ?agent= variants of «/» otherwise count as duplicates).
+export const metadata: Metadata = {
+  alternates: { canonical: '/' },
+  openGraph: { url: '/' },
+};
+
+// Service cards link to their catalog category (matched by slug) and show how
 // much equipment is listed there. Falls back to plain cards without a database.
-export const revalidate = 300;
+// A minute, not five: «Сейчас на линии» (OfferNow) must not offer a machine
+// whose driver left the line long ago.
+export const revalidate = 60;
 
 async function loadCategoryLinks() {
   try {
@@ -165,7 +184,7 @@ async function loadCategoryLinks() {
     });
     const links = new Map(
       categories.map((category) => [
-        category.name,
+        category.slug,
         { id: category.id, available: category._count.equipment },
       ]),
     );
@@ -177,16 +196,18 @@ async function loadCategoryLinks() {
   }
 }
 
+/** Catalog category (slug, packages/shared/src/categories.ts) of each service card. */
 const SERVICE_CATEGORY: Record<string, string> = {
-  'Экскаваторы-погрузчики': 'Экскаваторы-погрузчики',
-  Гидромолот: 'Экскаваторы-погрузчики',
-  'Гусеничные экскаваторы': 'Экскаваторы',
-  'Колёсный экскаватор с гидромолотом': 'Экскаваторы',
-  Автокраны: 'Краны',
-  'Манипулятор КМУ 7 т': 'Манипуляторы',
-  'Автовышка АГП': 'Автовышки',
-  'Фронтальные погрузчики': 'Погрузчики',
-  Тракторы: 'Тракторы',
+  'Экскаваторы-погрузчики': 'backhoe-loaders',
+  Гидромолот: 'backhoe-loaders',
+  'Гусеничные экскаваторы': 'excavators',
+  'Колёсный экскаватор с гидромолотом': 'excavators',
+  Автокраны: 'cranes',
+  'Манипулятор КМУ 7 т': 'crane-trucks',
+  'Автовышка АГП': 'aerial-platforms',
+  'Фронтальные погрузчики': 'loaders',
+  Виброкаток: 'rollers',
+  Тракторы: 'tractors',
 };
 
 const SERVICE_LANDING: Record<string, string> = {
@@ -205,19 +226,27 @@ const SERVICE_LANDING: Record<string, string> = {
 const HOME_FAQ = [
   {
     q: 'Сколько стоит аренда спецтехники?',
-    a: priceFaqAnswer(),
+    a: `Парк ${SITE.name}: ${priceFaqAnswer()} У других исполнителей — свои цены на карточках.`,
   },
   {
     q: 'Как быстро приедет техника?',
-    a: 'Зависит от загрузки парка и адреса. Оставьте заявку или позвоните — менеджер назовёт время подачи.',
+    a: 'Зависит от загрузки техники и адреса. Оставьте заявку или позвоните — время подачи назовут заранее.',
+  },
+  {
+    q: 'Кто выполняет работы?',
+    a: `Исполнители со своей техникой и машинистами, включая парк ${SITE.name} — он первый в списке. Заявку видят все, каждый называет свою цену, вы выбираете. Для заказчика сервис бесплатный.`,
+  },
+  {
+    q: 'Сколько берёт площадка?',
+    a: `Ничего: ${SITE.promise.toLowerCase()}. ${SITE.promiseDetail} ${SITE.name} зарабатывает как любой исполнитель — работой своей техники, а ещё продаёт строительные материалы.`,
   },
   {
     q: 'Работаете с юридическими лицами?',
-    a: 'Да: договор, оплата по безналу с НДС, закрывающие документы, в том числе через ЭДО.',
+    a: `${SITE.name} — да: договор, оплата по безналу с НДС, закрывающие документы, в том числе через ЭДО. Условия других исполнителей — в их предложениях.`,
   },
   {
     q: 'Где вы работаете?',
-    a: 'В Набережных Челнах и по Татарстану. Стоимость подачи зависит от расстояния до объекта.',
+    a: `По всей России: заявку видят исполнители рядом с вашим объектом. Парк ${SITE.name} — в Набережных Челнах и окрестностях. Там, где исполнители ещё подключаются, оставьте заявку — мы найдём технику. Стоимость подачи зависит от расстояния до объекта.`,
   },
   {
     q: 'Можно заказать технику через ИИ-агента?',
@@ -226,7 +255,11 @@ const HOME_FAQ = [
 ];
 
 export default async function HomePage() {
-  const { links: categoryLinks, available } = await loadCategoryLinks();
+  const [{ links: categoryLinks, available }, activity, offer] = await Promise.all([
+    loadCategoryLinks(),
+    loadActivity(),
+    loadOfferNow(),
+  ]);
   const stats = [
     ...(available > 0
       ? [{ prefix: '', value: available, suffix: '', label: 'единиц техники свободно' }]
@@ -248,9 +281,7 @@ export default async function HomePage() {
                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75 motion-reduce:animate-none" />
                 <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-400" />
               </span>
-              <span className="eyebrow text-slate-200">
-                {SITE.city} · свой парк, подача сегодня
-              </span>
+              <span className="eyebrow text-slate-200">Вся Россия · исполнители рядом</span>
             </div>
             <h1
               className="float-in mt-4 text-[2.25rem] font-extrabold leading-[1.02] tracking-[-0.04em] sm:mt-6 sm:text-6xl"
@@ -264,19 +295,22 @@ export default async function HomePage() {
               className="float-in mt-3 max-w-xl text-base leading-snug text-slate-300 sm:hidden"
               style={{ animationDelay: '240ms' }}
             >
-              {cap(fromPerHour(MIN_RATE))}. Свой парк {SITE.name}, подача в день заявки.
+              Одна заявка — цены исполнителей. Парк {SITE.name}: {fromPerHour(MIN_RATE)}, подача по{' '}
+              {HOUSE_CITY} за {HOUSE_DELIVERY}. {SITE.promise}.
             </p>
             <p
               className="float-in mt-6 hidden max-w-xl text-lg leading-relaxed text-slate-300 sm:block"
               style={{ animationDelay: '240ms' }}
             >
-              Экскаваторы-погрузчики, автокраны и погрузчики в Набережных Челнах и по Татарстану —{' '}
-              {fromPerHour(MIN_RATE)}. Свой парк и свои машинисты {SITE.name}, без посредников:
-              подача в день заявки, работаем с НДС.
+              Экскаваторы-погрузчики, автокраны и погрузчики с машинистами по всей России.
+              Разместите заявку — исполнители рядом с вами пришлют цены, вы выберете подходящее; или
+              оставьте телефон — подберёт диспетчер. Парк {SITE.name} в Набережных Челнах —{' '}
+              {fromPerHour(MIN_RATE)}, с НДС, подача по городу за {HOUSE_DELIVERY}.{' '}
+              {SITE.promiseLine}
             </p>
-            {/* Owner, 2026-10-03: order, estimate and design as real buttons,
-                «Заказать технику» the biggest and brightest; then the phone and
-                the film tour; the other ways in stay quiet links. */}
+            {/* Owner, 2026-10-03: «Заказать технику» the biggest and brightest;
+                2026-10-18: «Встать на линию» the second big button, then the
+                phone; the other ways in stay quiet links. */}
             <div
               className="float-in mt-5 flex max-w-xl flex-col gap-3 sm:mt-8"
               style={{ animationDelay: '360ms' }}
@@ -294,23 +328,27 @@ export default async function HomePage() {
                   <Icon name="arrow" className="h-5 w-5" />
                 </span>
               </a>
-              <div className="grid grid-cols-2 gap-3">
-                {[
-                  { href: '/smeta', icon: '🧮', label: 'Рассчитать смету' },
-                  { href: '/dizain', icon: '🏠', label: 'Создать дизайн' },
-                ].map((item) => (
-                  <a
-                    key={item.href}
-                    href={item.href}
-                    className="inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-white/10 px-3 py-3 text-center text-sm font-bold text-white ring-1 ring-white/40 backdrop-blur-md transition hover:bg-white hover:text-slate-950 sm:text-base"
-                  >
-                    <span aria-hidden className="text-lg">
-                      {item.icon}
-                    </span>
-                    {item.label}
-                  </a>
-                ))}
-              </div>
+              {/* Owner, 2026-10-18: the second big button is for providers,
+                  same size and shape, graphite instead of amber. */}
+              <a
+                href="/register?type=provider"
+                className="group relative inline-flex w-full items-center justify-center gap-2 overflow-hidden rounded-2xl bg-slate-900 px-4 py-3 text-white shadow-2xl shadow-black/40 ring-2 ring-emerald-400/70 transition hover:bg-slate-800 sm:gap-3 sm:px-7 sm:py-4"
+              >
+                <span aria-hidden className="text-xl sm:text-3xl">
+                  🚛
+                </span>
+                <span className="flex flex-col items-start leading-tight">
+                  <span className="whitespace-nowrap text-lg font-extrabold sm:text-2xl">
+                    Встать на линию
+                  </span>
+                  <span className="text-xs font-semibold text-emerald-300 sm:text-sm">
+                    бесплатно, заявки рядом приходят сами
+                  </span>
+                </span>
+                <span className="nudge">
+                  <Icon name="arrow" className="h-5 w-5" />
+                </span>
+              </a>
               <div className="flex flex-wrap gap-3">
                 <a
                   href={SITE.phoneHref}
@@ -319,20 +357,6 @@ export default async function HomePage() {
                   <Icon name="phone" className="h-5 w-5" />
                   {SITE.phone}
                 </a>
-                {/* The film tour: a glass pill with a softly pulsing play button. A
-                    client-side link, so the tap that started the sound here keeps
-                    it playing on the site (a full page load would need a new tap). */}
-                <Link
-                  href="/stroyka"
-                  className="group inline-flex flex-1 items-center justify-center gap-3 rounded-full bg-white/10 py-2 pl-2 pr-5 text-base font-semibold text-white ring-1 ring-white/30 backdrop-blur-sm transition hover:bg-white/20 hover:ring-white/60 sm:flex-none"
-                >
-                  <span className="stroyka-ping relative grid h-9 w-9 place-items-center rounded-full bg-amber-400 text-slate-950 transition group-hover:scale-110">
-                    <svg viewBox="0 0 16 16" aria-hidden className="ml-0.5 h-4 w-4 fill-current">
-                      <path d="M4 2.5v11l9-5.5z" />
-                    </svg>
-                  </span>
-                  Войти на стройку
-                </Link>
               </div>
             </div>
             <nav
@@ -347,14 +371,20 @@ export default async function HomePage() {
                 Подобрать технику&nbsp;<span className="nudge">→</span>
               </a>
               <a
-                href="/kalkulyator"
+                href="/providers"
                 className="link-draw group inline-flex min-h-[44px] items-center hover:text-white"
               >
-                Калькулятор работ&nbsp;<span className="nudge">→</span>
+                Исполнители рядом&nbsp;<span className="nudge">→</span>
               </a>
             </nav>
             <p className="float-in mt-5 text-sm text-slate-400" style={{ animationDelay: '480ms' }}>
-              Свой парк · Свои машинисты · Без посредников · Работаем с НДС и ЭДО
+              Цены исполнителей · Машинист на каждой машине ·{' '}
+              <a
+                href={SITE.promiseHref}
+                className="underline-offset-2 hover:text-white hover:underline"
+              >
+                Расчёт напрямую с исполнителем
+              </a>
             </p>
           </div>
         </div>
@@ -377,6 +407,26 @@ export default async function HomePage() {
           </div>
         ))}
       </section>
+
+      {/* «Сейчас на площадке»: today's real counts and anonymous events (lib/activity.ts). */}
+      <ActivityBlock initial={activity} />
+
+      {/* Owner, 2026-10-11: the marketplace itself — two doors and the live board. */}
+      <div className="depth">
+        <MarketplaceBlock />
+      </div>
+
+      {/* Owner, 2026-10-28: the 3D city is back — machines «на линии», tap one to order. */}
+      <div className="depth">
+        <World3D
+          categoryIds={Object.fromEntries(
+            WORLD_KINDS.flatMap((k) => {
+              const id = categoryLinks.get(k.slug)?.id;
+              return id ? [[k.kind, id]] : [];
+            }),
+          )}
+        />
+      </div>
 
       <div
         className="marquee-mask depth -my-10 overflow-hidden border-y border-slate-200 py-4"
@@ -403,7 +453,7 @@ export default async function HomePage() {
           <div className="eyebrow text-amber-700">Техника и цены</div>
           <div className="mt-3 flex flex-wrap items-end justify-between gap-4">
             <h2 className="max-w-2xl text-4xl font-extrabold tracking-[-0.03em] sm:text-5xl">
-              Цена видна сразу. Подачу техники диспетчер назовёт заранее
+              Цена видна сразу. Подачу техники назовут заранее
             </h2>
             <a
               href="/equipment"
@@ -425,8 +475,8 @@ export default async function HomePage() {
             </a>
           </div>
           <p className="mt-3 text-slate-600">
-            Все цены — с машинистом, смена {SHIFT_HOURS} часов. Подача зависит от расстояния до
-            объекта.
+            Цены парка {SITE.name} — с машинистом, смена {SHIFT_HOURS} часов; у других исполнителей
+            — свои ставки на карточках. Подача зависит от расстояния до объекта.
           </p>
         </Reveal>
         <div className="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
@@ -508,8 +558,8 @@ export default async function HomePage() {
       <CinemaBand
         machine="excavator"
         clip="excavator-gold"
-        eyebrow="Свой парк"
-        phrase="Котлован к утру — не обещание, а принятая заявка"
+        eyebrow="Как такси для спецтехники"
+        phrase="Котлован к утру начинается с принятой заявки"
       />
 
       <ShiftStory />
@@ -519,12 +569,12 @@ export default async function HomePage() {
           <Reveal>
             <div className="eyebrow text-amber-700">Почему мы</div>
             <h2 className="mt-3 text-4xl font-extrabold tracking-[-0.03em] sm:text-5xl">
-              Наш парк, наши машинисты
+              Исполнители с техникой и машинистами
             </h2>
             <p className="mt-4 text-slate-600">
-              {SITE.name} — аренда спецтехники в{' '}
-              {SITE.city === 'Набережные Челны' ? 'Набережных Челнах' : SITE.city}: собственный парк
-              и машинисты в штате. Одна цена от диспетчера {SITE.name} — с подачей, без посредников.
+              {SITE.platform} — сервис заказа спецтехники по всей России: исполнители со своей
+              техникой рядом с вашим объектом и парк {SITE.name} в Набережных Челнах. Заявку видят
+              все, вы выбираете цену и машину. {SITE.promise}.
             </p>
           </Reveal>
         </div>
@@ -618,7 +668,10 @@ export default async function HomePage() {
       {/* The anchor sits on the form card itself (first on phones), so «Заказать
           технику» lands with the phone field mid-screen, not on the heading. No
           dolly tilt here: a tilted form is harder to tap and skews the jump. */}
-      <section data-no-dolly>
+      <section data-no-dolly className="flex flex-col gap-6">
+        {/* Owner, 2026-10-18: «мою технику первым делом предлагай, а потом
+            всех остальных, кто на линии» — right above the order form. */}
+        <OfferNow house={offer.house} line={offer.line} formAnchor="callback" />
         <CallbackIris backdrop="/images/trench.jpg">
           <div className="grid grid-cols-1 gap-8 p-6 sm:p-10 lg:grid-cols-2">
             <div className="flex min-w-0 flex-col justify-center">
@@ -629,7 +682,7 @@ export default async function HomePage() {
               <ul className="mt-6 space-y-2 text-slate-200">
                 <li>✔ Подберём технику под задачу и бюджет</li>
                 <li>✔ Назовём точную цену с доставкой</li>
-                <li>✔ Работаем в Набережных Челнах и по всему Татарстану</li>
+                <li>✔ Работаем по всей России — исполнители рядом с вами</li>
               </ul>
               <a
                 href={SITE.phoneHref}
@@ -652,7 +705,31 @@ export default async function HomePage() {
               id="callback"
               className="order-first min-w-0 scroll-mt-28 rounded-3xl bg-slate-950/50 p-4 ring-1 ring-white/10 backdrop-blur sm:p-6 lg:order-none"
             >
+              <a
+                href="#offer-now"
+                className="mb-3 inline-flex min-h-[44px] items-center text-sm font-semibold text-amber-400 underline-offset-4 hover:underline"
+              >
+                {offer.house.length > 0
+                  ? `↑ Свободная техника ${SITE.name} и кто сейчас на линии`
+                  : '↑ Кто сейчас на линии'}
+              </a>
               <CallbackForm source="home" dark />
+              {/* Owner, 2026-11-02: the person who answers is «Иван, начальник
+                  отдела логистики»; nothing about the owner himself. A machine
+                  photo, not a person's. */}
+              <div className="mt-4 flex items-center gap-3 rounded-2xl bg-white/5 p-3 ring-1 ring-white/10">
+                <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-xl">
+                  <MachinePhoto type="excavator" slot="dispatcher" sizes="56px" />
+                </div>
+                <p className="text-sm leading-snug text-slate-200">
+                  Вам ответит <span className="font-bold text-white">Иван</span>, начальник отдела
+                  логистики {SITE.name}. Подберёт технику и назовёт цену за 15 минут, Пн–Сб{' '}
+                  {SHIFT.from}:00–{SHIFT.to}:00.
+                </p>
+              </div>
+              <p className="mt-3 text-xs text-slate-400">
+                {SITE.legalName} · ИНН {SITE.inn} · Набережные Челны · работаем с НДС
+              </p>
             </div>
           </div>
         </CallbackIris>
@@ -661,13 +738,15 @@ export default async function HomePage() {
       <Reveal>
         <section className="grid gap-6 rounded-[2rem] border border-amber-200 bg-gradient-to-br from-amber-50 to-orange-100 p-6 sm:grid-cols-2 sm:p-10">
           <div>
-            <div className="eyebrow text-amber-700">Наш парк — наши машинисты</div>
+            <div className="eyebrow text-amber-700">Как «такси» для спецтехники</div>
             <h2 className="mt-3 text-3xl font-extrabold tracking-tight">
-              Одна заявка — и техника едет
+              Одна заявка — несколько предложений
             </h2>
             <p className="mt-3 text-slate-700">
-              Опишите задачу — диспетчер {SITE.name} подберёт машину из нашего парка, назовёт цену и
-              поставит её в график. Машинисты в штате, без посредников и перекупщиков.
+              Войдите или зарегистрируйтесь и опишите задачу — её увидят исполнители со своей
+              техникой и машинистами, включая парк {SITE.name}. Сравните цены и выберите
+              предложение: телефон исполнителя откроется, когда он подтвердит бронь. Без регистрации
+              — оставьте телефон, перезвонит диспетчер. Сервис бесплатный, без комиссий.
             </p>
             <a
               href="/orders"
@@ -683,7 +762,7 @@ export default async function HomePage() {
             </a>
             <a href={`mailto:${SITE.email}`}>{SITE.email}</a>
             <span>
-              {SITE.city}, {SITE.region}
+              {SITE.name}: {SITE.city}, {SITE.region}
             </span>
             <span className="text-sm">{SITE.workingHours}</span>
           </div>

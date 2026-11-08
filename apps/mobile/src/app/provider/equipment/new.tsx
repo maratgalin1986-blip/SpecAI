@@ -10,9 +10,11 @@ export default function NewEquipmentScreen() {
       <Stack.Screen options={{ title: 'Новая техника' }} />
       <EquipmentForm
         onSaved={(equipment) =>
-          Alert.alert('Техника добавлена', `«${equipment.name}» появилась в вашем кабинете.`, [
-            { text: 'Ок', onPress: () => router.back() },
-          ])
+          Alert.alert(
+            'Техника добавлена',
+            `«${equipment.name}» появилась в списке вашей техники.`,
+            [{ text: 'Ок', onPress: () => router.back() }],
+          )
         }
       />
     </>

@@ -1,3 +1,5 @@
+import type { NearPoint } from './near';
+import type { IntakePin, ProviderPin } from './providersMap';
 import { STORAGE_KEYS, getItem } from './storage';
 
 /**
@@ -62,10 +64,14 @@ export async function authHeaders(): Promise<Record<string, string>> {
 }
 
 interface RequestOptions {
-  method?: 'GET' | 'POST' | 'PATCH' | 'DELETE';
+  method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
   body?: unknown;
   /** Не подставлять Bearer (например, для входа). */
   anonymous?: boolean;
+  /** Дополнительные заголовки (сессия админки — x-admin-session). */
+  headers?: Record<string, string>;
+  /** 'omit' — не принимать и не отправлять cookie (вход в админку). */
+  credentials?: RequestCredentials;
 }
 
 const REQUEST_TIMEOUT_MS = 20_000;
@@ -75,6 +81,7 @@ export async function apiFetch<T>(path: string, options: RequestOptions = {}): P
   const headers: Record<string, string> = { Accept: 'application/json' };
   if (options.body !== undefined) headers['Content-Type'] = 'application/json';
   if (!options.anonymous) Object.assign(headers, await authHeaders());
+  if (options.headers) Object.assign(headers, options.headers);
 
   let response: Response;
   // Without a timeout a hung network leaves the screen loading forever.
@@ -86,6 +93,7 @@ export async function apiFetch<T>(path: string, options: RequestOptions = {}): P
       headers,
       body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
       signal: controller.signal,
+      ...(options.credentials ? { credentials: options.credentials } : {}),
     });
   } catch {
     throw new ApiError(
@@ -121,7 +129,8 @@ export async function apiFetch<T>(path: string, options: RequestOptions = {}): P
 
 // ---- Типы ответов API (подмножество полей, которые использует приложение) ----
 
-export type UserRole = 'CUSTOMER' | 'PROVIDER_ADMIN' | 'ADMIN';
+/** Роли как в enum UserRole на сервере (packages/database/prisma/schema.prisma). */
+export type UserRole = 'CUSTOMER' | 'PROVIDER_ADMIN' | 'PROVIDER_OPERATOR' | 'PLATFORM_ADMIN';
 
 export interface ApiUser {
   id: string;
@@ -130,6 +139,12 @@ export interface ApiUser {
   role: UserRole;
   /** Дата подтверждения e-mail; null — не подтверждён. Отдаёт GET /api/mobile/me. */
   emailVerified?: string | null;
+  /** «Пригласи друга»: до какого момента заявки приходят на 5 минут раньше (GET /api/mobile/me). */
+  priorityUntil?: string | null;
+  /** Своя ссылка-приглашение (заказчик и исполнитель); null — нет. */
+  referralLink?: string | null;
+  /** Сколько человек зарегистрировались по ссылке. */
+  invited?: number | null;
 }
 
 export type EquipmentStatus = 'AVAILABLE' | 'RENTED' | 'IN_MAINTENANCE' | 'RETIRED';
@@ -145,6 +160,13 @@ export interface Equipment {
   dailyRate: string | number;
   /** Цена за машино-час — главная цена на сайте; null, если не задана. */
   hourlyRate?: string | number | null;
+  /**
+   * Цены, которые видит заказчик на карточке: для парка СпецПласт16 — не ниже
+   * прайса сайта, у остальных — свои. Из них подставляется цена смены в
+   * предложение; сервер не примет цену ниже (bidShiftRate в providerFeed.ts).
+   */
+  customerHourlyRate?: number;
+  customerDailyRate?: number;
   weeklyRate: string | number | null;
   monthlyRate: string | number | null;
   currency: string;
@@ -174,6 +196,8 @@ export type PaymentStatus = 'PENDING' | 'PAID' | 'FAILED' | 'REFUNDED' | string;
 
 export interface Booking {
   id: string;
+  /** Заявка, по которой создана бронь (если бронь из предложения). */
+  orderId?: string | null;
   status: BookingStatus;
   startDate: string;
   endDate: string;
@@ -195,6 +219,28 @@ export type BidStatus = 'PENDING' | 'ACCEPTED' | 'REJECTED';
 export interface Category {
   id: string;
   name: string;
+  /** Поля ниже отдаёт GET /api/categories (дерево видов техники); у старых ответов их нет. */
+  slug?: string | null;
+  /** Группа («Землеройная техника», «Подъёмная техника», …). */
+  group?: string | null;
+  groupSlug?: string | null;
+  emoji?: string | null;
+  /** Один из десяти самых частых видов — показывается первым в плитках. */
+  popular?: boolean;
+  /**
+   * Слова, по которым вид узнаётся в тексте заявки («манипулятор», «кму»), и
+   * его вес, когда в тексте несколько видов (packages/shared/src/categories.ts).
+   */
+  keywords?: string[];
+  priority?: number;
+  /** Слова только для поиска в списке («вездеход»). */
+  searchWords?: string[];
+}
+
+export interface CategoryGroup {
+  slug: string;
+  name: string;
+  emoji: string;
 }
 
 export interface Bid {
@@ -206,11 +252,30 @@ export interface Bid {
   status: BidStatus;
   createdAt: string;
   equipmentId: string;
+  /** Разбивка цены: подача + смена × смен (может отсутствовать). */
+  deliveryPrice?: string | number | null;
+  shiftPrice?: string | number | null;
+  shifts?: number | null;
+  optionsNote?: string | null;
   equipment?: {
     id: string;
     name: string;
     imageUrls?: string[];
-    company: { id: string; name: string };
+    /**
+     * Надёжность — только заказчику на его заявке (GET /api/orders/[id], как
+     * на сайте): «Проверен», рейтинг, выполненные заказы, доля отмен.
+     */
+    company: {
+      id: string;
+      name: string;
+      rating?: number | null;
+      ratingCount?: number;
+      verified?: boolean;
+      completed?: number;
+      cancelShare?: number | null;
+      /** Готовые подписи: «Проверен», «★ 4.5 (2)», «3 заказа выполнено», «Отмены 17%». */
+      badges?: string[];
+    };
   };
 }
 
@@ -227,13 +292,33 @@ export interface Order {
   /** Исполнитель видит заказчика как «Анна П.». */
   customer?: { id?: string; name: string } | null;
   bids: Bid[];
+  /** Сколько всего предложений (исполнитель видит в bids только свои). */
+  bidCount?: number;
+  /** Место работ; у старых заявок адрес может быть строкой «Адрес:» в описании. */
+  location?: {
+    addressLine?: string | null;
+    city?: string | null;
+    latitude?: number | null;
+    longitude?: number | null;
+  } | null;
+  /** Непрочитанные сообщения в чатах по заявке (для бейджей). */
+  unreadMessages?: number;
+  /** До какого момента заказчик ждёт предложений (lib/bidWindow.ts на сервере). */
+  bidsUntil?: string | null;
+  /** Заявка из чата или с сайта без входа: телефон автора скрыт, «Показать телефон» открывает его. */
+  chatContact?: { maskedPhone: string | null; canReveal: boolean } | null;
+  /** Контакт автора заявки из чата или с сайта — только СпецПласт16 на странице заявки. */
+  contactName?: string | null;
+  contactPhone?: string | null;
 }
 
 /**
- * Бронирование техники поставщика (GET /api/bookings?as=provider): заказчик как
+ * Бронирование техники исполнителя (GET /api/bookings?as=provider): заказчик как
  * «Анна П.»; телефон и e-mail — только после подтверждения брони.
  */
 export interface ProviderBooking extends Booking {
+  /** Назначенный машинист (см. /api/operators/assign). */
+  operatorId?: string | null;
   customer: {
     id: string;
     name: string;
@@ -241,6 +326,8 @@ export interface ProviderBooking extends Booking {
     phone?: string | null;
     contactsVisible?: boolean;
   };
+  /** Непрочитанные сообщения заказчика в чате по заявке брони. */
+  unreadMessages?: number;
 }
 
 export interface UploadedFile {
@@ -333,6 +420,24 @@ export function fetchEquipmentById(id: string) {
   });
 }
 
+/**
+ * «Предложения и партнёрство» — доступно без входа; вошедший отправляет свой
+ * токен, и сервер сам привязывает сообщение к аккаунту.
+ */
+export function sendProposal(body: {
+  kind: 'IDEA' | 'PARTNERSHIP';
+  name: string;
+  contact: string;
+  message: string;
+  company?: string;
+  consent: true;
+}) {
+  return apiFetch<{ ok: boolean; message?: string }>('/api/proposals', {
+    method: 'POST',
+    body,
+  });
+}
+
 /** Заказ обратного звонка — доступен без входа. `consent` обязателен (152-ФЗ). */
 export function createLead(input: CreateLeadInput) {
   return apiFetch<{ ok: boolean }>('/api/leads', {
@@ -354,9 +459,19 @@ export type RegisterInput = {
   password: string;
   phone?: string;
   consent: true;
+  /** Еженедельное письмо: true только если человек сам включил переключатель. */
+  newsConsent?: boolean;
+  /** Код приглашения друга: другу — бонус «заявки на 5 минут раньше». */
+  ref?: string;
 } & (
   | { accountType: 'CUSTOMER' }
-  | { accountType: 'PROVIDER'; companyName: string; baseAddress: string }
+  | {
+      accountType: 'PROVIDER';
+      companyName: string;
+      baseAddress: string;
+      /** Положение телефона (lib/near.ts): город для адреса базы без города. */
+      near?: NearPoint | null;
+    }
 );
 
 /** Регистрация заказчика или исполнителя (с компанией и адресом базы). */
@@ -365,6 +480,22 @@ export function register(input: RegisterInput) {
     method: 'POST',
     body: input,
     anonymous: true,
+  });
+}
+
+/** «Стать исполнителем» под тем же логином: заказчик создаёт компанию. */
+export function becomeProvider(input: {
+  companyName: string;
+  baseAddress: string;
+  phone?: string;
+  near?: NearPoint | null;
+}) {
+  return apiFetch<{
+    user: { id: string; email: string; name: string; role: UserRole; companyId: string | null };
+  }>('/api/account/provider', {
+    method: 'POST',
+    // The screen does not send without the switch on (152-ФЗ ст. 10.1).
+    body: { ...input, publicConsent: true },
   });
 }
 
@@ -387,16 +518,31 @@ export function createCheckout(bookingId: string) {
 }
 
 export function createReview(input: { bookingId: string; rating: number; comment?: string }) {
-  return apiFetch<{ review: { id: string } }>('/api/reviews', { method: 'POST', body: input });
+  return apiFetch<{ review: { id: string }; message?: string }>('/api/reviews', {
+    method: 'POST',
+    body: input,
+  });
 }
 
 export function fetchCategories() {
-  return apiFetch<{ categories: Category[] }>('/api/categories', { anonymous: true });
+  return apiFetch<{ categories: Category[]; groups?: CategoryGroup[] }>('/api/categories', {
+    anonymous: true,
+  });
 }
 
-export function fetchMyOrders() {
-  // Без параметров роут отдаёт заявки текущего пользователя (с ?open=1 — ленту открытых).
-  return apiFetch<{ orders: Order[] }>('/api/orders');
+/**
+ * Мои заявки (все статусы), постранично: `offset`/`limit`, в ответе `nextOffset`
+ * (null или отсутствует — это последняя страница). Без параметров роут отдаёт
+ * первую страницу; с ?open=1 — ленту открытых заявок (fetchOpenOrders).
+ */
+export function fetchMyOrders(params: { offset?: number; limit?: number } = {}) {
+  const query = new URLSearchParams();
+  if (params.offset) query.set('offset', String(params.offset));
+  if (params.limit) query.set('limit', String(params.limit));
+  const suffix = query.toString();
+  return apiFetch<{ orders: Order[]; nextOffset?: number | null }>(
+    `/api/orders${suffix ? `?${suffix}` : ''}`,
+  );
 }
 
 export function fetchOrderById(id: string) {
@@ -408,6 +554,12 @@ export function createOrder(input: {
   desiredStartDate: string;
   desiredEndDate: string;
   categoryId?: string;
+  /** «Любая» выбрана рукой: сервер не берёт вид из описания. */
+  anyCategory?: boolean;
+  /** Адрес объекта: сервер геокодирует его для погоды и карты. */
+  address?: string;
+  /** Положение телефона (lib/near.ts): адрес ищется сначала рядом. */
+  near?: NearPoint | null;
 }) {
   return apiFetch<{ order: Order }>('/api/orders', { method: 'POST', body: input });
 }
@@ -451,7 +603,7 @@ export function sendAgentMessage(messages: { role: 'user' | 'assistant'; content
   });
 }
 
-// ---- Сторона поставщика (роль PROVIDER_ADMIN) ----
+// ---- Сторона исполнителя (роль PROVIDER_ADMIN) ----
 
 /**
  * Своя машина для формы правки: с токеном, в любом статусе и с ценами из
@@ -461,7 +613,7 @@ export function fetchMyEquipmentById(id: string) {
   return apiFetch<{ equipment: Equipment }>(`/api/equipment/${encodeURIComponent(id)}?mine=1`);
 }
 
-/** Техника компании текущего поставщика. */
+/** Техника компании текущего исполнителя. */
 export function fetchMyEquipment(params: { page?: number; pageSize?: number } = {}) {
   const search = new URLSearchParams({ mine: '1' });
   search.set('page', String(params.page ?? 1));
@@ -530,7 +682,7 @@ export async function uploadFile(file: { uri: string; name: string; type: string
 
 // ---- Карта исполнителей ----
 
-/** Точка поставщика на карте (/map) — GET/PATCH /api/companies/me. */
+/** Точка исполнителя на карте (/map) — GET/PATCH /api/companies/me. */
 export interface CompanyPin {
   id: string;
   name: string;
@@ -539,6 +691,9 @@ export interface CompanyPin {
   baseAddress: string | null;
   pinImageUrl: string | null;
   pinNote: string | null;
+  /** Радиус выезда от базы, км, и цена подачи за км (null — не задана). */
+  deliveryRadiusKm?: number;
+  deliveryPricePerKm?: string | number | null;
 }
 
 export function fetchMyCompanyPin() {
@@ -549,23 +704,53 @@ export function fetchMyCompanyPin() {
 
 export function updateMyCompanyPin(input: {
   baseAddress?: string;
+  near?: NearPoint | null;
   pinImageUrl?: string | null;
   pinNote?: string;
+  deliveryRadiusKm?: number;
+  deliveryPricePerKm?: number | null;
 }) {
   return apiFetch<{ company: CompanyPin }>('/api/companies/me', { method: 'PATCH', body: input });
 }
 
-/** Открытые заявки клиентов (для предложений поставщика). */
-export function fetchOpenOrders() {
-  return apiFetch<{ orders: Order[] }>('/api/orders?open=1');
+/**
+ * Открытые заявки заказчиков (для предложений исполнителя), постранично.
+ * scope 'near' — только виды техники компании в её радиусе подачи; заявки со
+ * своими ожидающими предложениями сервер ставит в начало первой страницы.
+ */
+export function fetchOpenOrders(params: { scope?: 'near' | 'all'; offset?: number } = {}) {
+  const query = new URLSearchParams({ open: '1' });
+  if (params.scope === 'near') query.set('scope', 'near');
+  if (params.offset) query.set('offset', String(params.offset));
+  return apiFetch<{ orders: Order[]; nextOffset?: number | null }>(`/api/orders?${query}`);
+}
+
+/** Исполнители на карте: точки баз компаний (публично, без контактов). */
+export function fetchProviderPins() {
+  return apiFetch<{ providers: ProviderPin[]; intake?: IntakePin[] }>('/api/providers/map');
+}
+
+/** Все открытые заявки с ожидающими предложениями своей компании («Мои предложения»). */
+export function fetchMyBidOrders() {
+  return apiFetch<{ orders: Order[] }>('/api/orders?open=1&mine=1');
 }
 
 export function createBid(
   orderId: string,
-  input: { equipmentId: string; price: number; message?: string },
+  input: {
+    equipmentId: string;
+    price: number;
+    message?: string;
+    /** Разбивка: подача + цена смены × смен; сервер проверяет, что сумма равна price. */
+    deliveryPrice?: number;
+    shiftPrice?: number;
+    shifts?: number;
+    optionsNote?: string;
+  },
 ) {
   // 201 — новое предложение, 200 — обновлено прежнее (одно предложение от компании).
-  return apiFetch<{ bid: Bid; message?: string }>(
+  // late: предложение после срока приёма (всё равно принято).
+  return apiFetch<{ bid: Bid; message?: string; late?: boolean }>(
     `/api/orders/${encodeURIComponent(orderId)}/bids`,
     {
       method: 'POST',
@@ -635,4 +820,575 @@ export interface Guide {
 
 export function fetchGuide() {
   return apiFetch<Guide>('/api/guide?links=plain');
+}
+
+// ---- Чат по заявке (заказчик ↔ исполнитель, одна переписка на компанию) ----
+
+export interface OrderThread {
+  id: string;
+  orderId: string;
+  companyId: string;
+  companyName: string;
+  lastMessageAt: string;
+  /** Контакты открыты (бронь подтверждена) — иначе телефоны и ссылки скрываются. */
+  contactsOpen: boolean;
+  unread?: number;
+  lastMessage?: { body: string; createdAt: string } | null;
+}
+
+export interface OrderThreadView {
+  id: string;
+  orderId: string;
+  companyId: string;
+  role: 'customer' | 'provider' | 'admin';
+  canWrite: boolean;
+  contactsOpen: boolean;
+  /** Собеседник: заказчику — компания, исполнителю — «Анна П.». */
+  counterpart: string;
+  /** «Контакты откроются после подтверждения брони», пока они скрыты. */
+  notice: string | null;
+}
+
+export interface OrderChatMessage {
+  id: string;
+  body: string;
+  attachmentUrl: string | null;
+  createdAt: string;
+  /** Написано нашей стороной (заказчиком или нашей компанией). */
+  mine: boolean;
+  readAt: string | null;
+}
+
+/** Переписки по заявке: заказчик видит все (по компаниям), исполнитель — свою. */
+export function fetchOrderThreads(orderId: string) {
+  return apiFetch<{
+    threads: OrderThread[];
+    companies: { id: string; name: string; contactsOpen: boolean }[];
+  }>(`/api/orders/${encodeURIComponent(orderId)}/threads`);
+}
+
+/** Открывает (или находит) переписку: заказчик указывает компанию, исполнитель — нет. */
+export function openOrderThread(orderId: string, companyId?: string) {
+  return apiFetch<{ thread: OrderThread & { role: OrderThreadView['role'] } }>(
+    `/api/orders/${encodeURIComponent(orderId)}/threads`,
+    { method: 'POST', body: companyId ? { companyId } : {} },
+  );
+}
+
+/** Сообщения (старые сверху). `cursor` — страница раньше сообщения, `after` — новее него. */
+export function fetchThreadMessages(
+  threadId: string,
+  params: { cursor?: string; after?: string } = {},
+) {
+  const search = new URLSearchParams();
+  if (params.cursor) search.set('cursor', params.cursor);
+  if (params.after) search.set('after', params.after);
+  const query = search.toString();
+  return apiFetch<{
+    thread: OrderThreadView;
+    messages: OrderChatMessage[];
+    nextCursor: string | null;
+  }>(`/api/threads/${encodeURIComponent(threadId)}/messages${query ? `?${query}` : ''}`);
+}
+
+/** Отправка; `masked` — сервер скрыл контакты (бронь ещё не подтверждена). */
+export function sendThreadMessage(threadId: string, body: string) {
+  return apiFetch<{ message: OrderChatMessage; masked: boolean; notice: string | null }>(
+    `/api/threads/${encodeURIComponent(threadId)}/messages`,
+    { method: 'POST', body: { body } },
+  );
+}
+
+export function markThreadRead(threadId: string) {
+  return apiFetch<{ ok: boolean; read: number }>(
+    `/api/threads/${encodeURIComponent(threadId)}/read`,
+    { method: 'POST' },
+  );
+}
+
+// ---- Документы исполнителя, телефон заявки, спрос ----
+
+export type DocumentStatus = 'ok' | 'expiring' | 'expired' | 'none';
+
+/** Документ компании, машины или машиниста (GET /api/documents). */
+export interface ProviderDocument {
+  id: string;
+  kind: string;
+  number: string | null;
+  equipmentId: string | null;
+  operatorName: string | null;
+  fileUrl: string | null;
+  issuedAt: string | null;
+  expiresAt: string | null;
+  status: DocumentStatus;
+}
+
+export interface DocumentsSummary {
+  expired: number;
+  expiring: number;
+  total: number;
+}
+
+export function fetchMyDocuments(equipmentId?: string) {
+  const query = equipmentId ? `?equipmentId=${encodeURIComponent(equipmentId)}` : '';
+  return apiFetch<{ documents: ProviderDocument[]; summary: DocumentsSummary }>(
+    `/api/documents${query}`,
+  );
+}
+
+export interface DocumentInput {
+  kind: string;
+  equipmentId?: string | null;
+  operatorName?: string | null;
+  number?: string | null;
+  fileUrl?: string | null;
+  /** YYYY-MM-DD или null. */
+  issuedAt?: string | null;
+  expiresAt?: string | null;
+}
+
+export function createDocument(input: DocumentInput) {
+  return apiFetch<{ document: ProviderDocument }>('/api/documents', {
+    method: 'POST',
+    body: input,
+  });
+}
+
+export function updateDocument(id: string, input: Partial<DocumentInput>) {
+  return apiFetch<{ document: ProviderDocument }>(`/api/documents/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    body: input,
+  });
+}
+
+export function deleteDocument(id: string) {
+  return apiFetch<{ ok: boolean }>(`/api/documents/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+  });
+}
+
+/** «Показать телефон» заявки из чата или с сайта: показ записывается, лимит в сутки. */
+export function revealOrderPhone(orderId: string) {
+  return apiFetch<{ phone: string | null; name: string | null; note?: string }>(
+    `/api/orders/${encodeURIComponent(orderId)}/phone`,
+    { method: 'POST' },
+  );
+}
+
+/** Все непрочитанные сообщения пользователя — бейдж на вкладке заказов. */
+export function fetchUnreadMessages() {
+  return apiFetch<{ unread: number }>('/api/threads/unread');
+}
+
+export type DemandLevel = 'low' | 'medium' | 'high';
+
+/** Индикатор спроса (GET /api/demand): по видам техники и по городам за 14 дней. */
+export interface DemandSummary {
+  categories: {
+    categoryId: string;
+    name: string;
+    orders: number;
+    upcoming: number;
+    supply: number;
+    level: DemandLevel;
+  }[];
+  cities: {
+    city: string;
+    lat: number;
+    lon: number;
+    orders: number;
+    supply: number;
+    level: DemandLevel;
+    topCategory: string | null;
+  }[];
+  labels: Record<DemandLevel, string>;
+  colors: Record<DemandLevel, string>;
+  providerText: string | null;
+}
+
+export function fetchDemand() {
+  return apiFetch<DemandSummary>('/api/demand', { anonymous: true });
+}
+
+// ---- Смены машиниста, табель, машинисты, календарь занятости ----
+
+export type ShiftStatus = 'PLANNED' | 'EN_ROUTE' | 'ON_SITE' | 'WORKING' | 'IDLE' | 'FINISHED';
+export type TimesheetState = 'none' | 'waiting' | 'disputed' | 'final';
+
+export interface ShiftEvent {
+  id: string;
+  kind: ShiftStatus | string;
+  label: string;
+  at: string;
+  note: string | null;
+  photoUrl: string | null;
+}
+
+export interface Timesheet {
+  id: string;
+  shiftId: string;
+  hoursWorked: string;
+  idleHours: string;
+  note: string | null;
+  customerConfirmedAt: string | null;
+  providerConfirmedAt: string | null;
+  disputedAt: string | null;
+  disputeNote: string | null;
+  state: TimesheetState;
+  updatedAt: string;
+}
+
+/** Смена по брони (GET /api/shifts): статусы с отметками времени, таймер, табель. */
+export interface Shift {
+  id: string;
+  bookingId: string;
+  /** YYYY-MM-DD */
+  date: string;
+  status: ShiftStatus | string;
+  statusLabel: string;
+  startedAt: string | null;
+  arrivedAt: string | null;
+  workStartedAt: string | null;
+  finishedAt: string | null;
+  startPhotoUrl: string | null;
+  endPhotoUrl: string | null;
+  operator: { id: string; name: string } | null;
+  events: ShiftEvent[];
+  workedMinutes: number;
+  idleMinutes: number;
+  workedLabel: string;
+  idleLabel: string;
+  /** Статусы, в которые можно перейти. */
+  next: ShiftStatus[];
+  timesheet: Timesheet | null;
+}
+
+export type ShiftRole = 'customer' | 'provider' | 'operator';
+
+/**
+ * Бронь глазами машиниста: без цен и имени заказчика; адрес объекта и
+ * телефон контакта на объекте — только у подтверждённой/активной брони.
+ */
+export interface OperatorBooking {
+  id: string;
+  status: BookingStatus;
+  startDate: string;
+  endDate: string;
+  equipment: { id: string; name: string; imageUrls: string[] };
+  siteAddress: string | null;
+  contactPhone: string | null;
+  notes: string | null;
+  shifts: Shift[];
+}
+
+export function fetchBookingShifts(bookingId: string) {
+  return apiFetch<{ role: ShiftRole; shifts: Shift[] }>(
+    `/api/shifts?bookingId=${encodeURIComponent(bookingId)}`,
+  );
+}
+
+/** Брони, назначенные машинисту, со сменами. */
+export function fetchMyAssignments() {
+  return apiFetch<{ operator: { name: string; active: boolean }; bookings: OperatorBooking[] }>(
+    '/api/shifts?mine=1',
+  );
+}
+
+/** Открыть смену на день (по умолчанию сегодня); повтор вернёт уже открытую. */
+export function openShift(bookingId: string, date?: string) {
+  return apiFetch<{ shift: Shift }>('/api/shifts', { method: 'POST', body: { bookingId, date } });
+}
+
+export function transitionShift(
+  shiftId: string,
+  input: { status: ShiftStatus; note?: string; photoUrl?: string },
+) {
+  return apiFetch<{ shift: Shift }>(`/api/shifts/${encodeURIComponent(shiftId)}`, {
+    method: 'PATCH',
+    body: input,
+  });
+}
+
+export function submitTimesheet(input: {
+  shiftId: string;
+  hoursWorked: number;
+  idleHours: number;
+  note?: string;
+}) {
+  return apiFetch<{ shift: Shift }>('/api/timesheets', { method: 'POST', body: input });
+}
+
+export function reviewTimesheet(
+  timesheetId: string,
+  input: { action: 'confirm' | 'dispute'; note?: string },
+) {
+  return apiFetch<{ shift: Shift }>(`/api/timesheets/${encodeURIComponent(timesheetId)}`, {
+    method: 'PATCH',
+    body: input,
+  });
+}
+
+/** Доход за месяц по каждой машине (GET /api/shifts/income). */
+export interface MachineIncomeReport {
+  month: string;
+  total: number;
+  machines: {
+    equipmentId: string;
+    name: string;
+    income: number;
+    bookings: number;
+    confirmedHours: number;
+  }[];
+}
+
+export function fetchMachineIncome() {
+  return apiFetch<MachineIncomeReport>('/api/shifts/income');
+}
+
+export interface Operator {
+  id: string;
+  name: string;
+  phone: string | null;
+  licenseNumber: string | null;
+  active: boolean;
+  /** E-mail для входа в приложение, если администратор его создал. */
+  email: string | null;
+  createdAt: string;
+}
+
+export interface OperatorInput {
+  name?: string;
+  phone?: string;
+  licenseNumber?: string;
+  active?: boolean;
+  email?: string;
+  password?: string;
+}
+
+export function fetchOperators() {
+  return apiFetch<{ operators: Operator[] }>('/api/operators');
+}
+
+export function createOperator(input: OperatorInput & { name: string }) {
+  return apiFetch<{ operator: Operator }>('/api/operators', { method: 'POST', body: input });
+}
+
+export function updateOperator(id: string, input: OperatorInput) {
+  return apiFetch<{ operator: Operator }>(`/api/operators/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    body: input,
+  });
+}
+
+/** Назначить машиниста на бронь (null — снять). */
+export function assignOperator(bookingId: string, operatorId: string | null) {
+  return apiFetch<{ bookingId: string; operator: { id: string; name: string } | null }>(
+    '/api/operators/assign',
+    { method: 'POST', body: { bookingId, operatorId } },
+  );
+}
+
+export type CalendarDayKind = 'free' | 'booked' | 'pending' | 'blocked' | 'maintenance';
+
+export interface CalendarDay {
+  date: string;
+  kind: CalendarDayKind;
+  bookingId?: string;
+  blockId?: string;
+  past: boolean;
+}
+
+export interface MachineCalendar {
+  equipment: { id: string; name: string; status: string };
+  year: number;
+  month: number;
+  days: CalendarDay[];
+  summary: Record<CalendarDayKind, number>;
+  nextFree: string | null;
+  bookings: {
+    id: string;
+    status: BookingStatus;
+    startDate: string;
+    endDate: string;
+    customer: string;
+    totalPrice: string;
+    currency: string;
+    operator: { id: string; name: string } | null;
+  }[];
+  blocks: { id: string; from: string; to: string; reason: string | null }[];
+}
+
+/** Календарь занятости машины за месяц (`month` — YYYY-MM). */
+export function fetchMachineCalendar(equipmentId: string, month?: string) {
+  const query = month ? `?month=${encodeURIComponent(month)}` : '';
+  return apiFetch<MachineCalendar>(
+    `/api/equipment/${encodeURIComponent(equipmentId)}/calendar${query}`,
+  );
+}
+
+export function createEquipmentBlock(
+  equipmentId: string,
+  input: { from: string; to: string; reason?: string },
+) {
+  return apiFetch<{ block: MachineCalendar['blocks'][number] }>(
+    `/api/equipment/${encodeURIComponent(equipmentId)}/blocks`,
+    { method: 'POST', body: input },
+  );
+}
+
+export function deleteEquipmentBlock(equipmentId: string, blockId: string) {
+  return apiFetch<{ ok: true }>(
+    `/api/equipment/${encodeURIComponent(equipmentId)}/blocks/${encodeURIComponent(blockId)}`,
+    { method: 'DELETE' },
+  );
+}
+
+// ---- Исполнители (публичный список, GET /api/providers) ----
+
+/**
+ * Карточка исполнителя: без телефонов, e-mail и адресов — контакты открываются
+ * после подтверждения брони. Поля считает сервер (lib/providerCards.ts).
+ */
+export interface ProviderCard {
+  id: string;
+  name: string;
+  verified: boolean;
+  isHouse: boolean;
+  rating: number | null;
+  ratingCount: number;
+  completed: number;
+  cancelLabel: string | null;
+  badges: string[];
+  city: string;
+  fleetCount: number;
+  /** «12 машин: экскаваторы, краны». */
+  fleetSummary: string;
+  categories: string[];
+  groupIds: string[];
+  /** До трёх фото техники (абсолютные https-ссылки или пути сайта). */
+  photos: string[];
+  radiusKm: number;
+  radiusLabel: string;
+  sinceLabel: string;
+}
+
+export function fetchProviders(params: { sort?: 'rating' | 'fleet' | 'newest' } = {}) {
+  const search = new URLSearchParams();
+  if (params.sort) search.set('sort', params.sort);
+  const query = search.toString();
+  return apiFetch<{
+    providers: ProviderCard[];
+    total: number;
+    groups: { id: string; label: string }[];
+    cities: string[];
+  }>(`/api/providers${query ? `?${query}` : ''}`, { anonymous: true });
+}
+
+/** Машина «на линии» на карте заказчика (GET /api/line/nearby). */
+export interface LiveMachine {
+  id: string;
+  lat: number;
+  lon: number;
+  driver: string;
+  company: { id: string; name: string; verified: boolean; isHouse: boolean };
+  equipment: {
+    id: string;
+    name: string;
+    category: string | null;
+    categorySlug: string | null;
+    hourlyRate: number;
+    dailyRate: number;
+  } | null;
+  note: string | null;
+  distanceKm: number | null;
+  /** Подпись на карте: «Я на линии · машина · цена · имя». */
+  bubble: string;
+  updatedAt: string;
+}
+
+/**
+ * Свободная машина СпецПласт16 на базе (GET /api/line/nearby → base): цена
+ * по прайсу, подпись «СпецПласт16 · машина · от N ₽/ч · на базе».
+ */
+export interface BaseMachine {
+  id: string;
+  lat: number;
+  lon: number;
+  company: { name: string; isHouse: true };
+  equipment: {
+    id: string;
+    name: string;
+    category: string | null;
+    categorySlug: string | null;
+    hourlyRate: number;
+    dailyRate: number;
+  };
+  /** «от 2 500 ₽/ч» или «цена договорная». */
+  priceText: string;
+  distanceKm: number | null;
+  bubble: string;
+}
+
+/**
+ * Техника на линии вокруг точки; без точки — вся свежая (карта по центру
+ * города). `base` — машины СпецПласт16 на базе (старый сервер его не шлёт).
+ */
+export function fetchNearbyLine(around: { lat: number; lon: number } | null, km?: number) {
+  const q = new URLSearchParams();
+  if (around) {
+    q.set('lat', String(around.lat));
+    q.set('lon', String(around.lon));
+  }
+  if (km) q.set('km', String(km));
+  const query = q.toString();
+  return apiFetch<{ machines: LiveMachine[]; base?: BaseMachine[] }>(
+    `/api/line/nearby${query ? `?${query}` : ''}`,
+  );
+}
+
+/** «Сейчас на площадке» (GET /api/activity): реальные числа за московский день. */
+export interface Activity {
+  today: { orders: number; online: number; confirmed: number };
+  summary: string;
+  events: { kind: 'order' | 'line' | 'booking'; text: string; ago: string; at: string }[];
+  updatedAt: string;
+}
+
+export function fetchActivity() {
+  return apiFetch<Activity>('/api/activity', { anonymous: true });
+}
+
+export interface LinePresence {
+  online: boolean;
+  lat: number;
+  lon: number;
+  equipmentId: string | null;
+  note: string | null;
+  updatedAt: string;
+}
+
+/**
+ * «На линии»: положение телефона и машина (PUT /api/line); offline — только
+ * { online: false }. `source` — кто отправляет (открытое приложение или
+ * фоновая задача), `timeZone` — пояс телефона для вечернего выключения.
+ * `autoOff` в ответе: вечер, фоновой задаче вернуть машину на линию нельзя.
+ */
+export function putLinePresence(input: {
+  online: boolean;
+  lat?: number;
+  lon?: number;
+  equipmentId?: string | null;
+  note?: string;
+  source?: 'foreground' | 'background';
+  timeZone?: string;
+}) {
+  return apiFetch<{
+    presence: LinePresence | null;
+    throttled?: boolean;
+    autoOff?: boolean;
+    online?: boolean;
+  }>('/api/line', {
+    method: 'PUT',
+    body: input,
+  });
 }

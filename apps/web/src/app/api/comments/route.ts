@@ -6,6 +6,7 @@ import { checkRateLimit } from '@/lib/rateLimit';
 import { notifyTelegram } from '@/lib/notify';
 import { isProvider } from '@/lib/fleet';
 import { commentAccessError } from '@/lib/commentAccess';
+import { notifyAdmins } from '@/lib/notifications/notifyUser';
 import {
   COMMENT_RATE_LIMITS,
   COMMENT_SENT_MESSAGE,
@@ -111,6 +112,12 @@ export async function POST(request: NextRequest) {
       'Опубликовать или отклонить — в /admin',
     ].join('\n'),
   );
+  await notifyAdmins({
+    type: 'comment.pending',
+    authorShortName: shortAuthorName(user.name),
+    about,
+    text: prepared.text,
+  });
 
   return NextResponse.json(
     { comment: { id: comment.id, status: comment.status }, message: COMMENT_SENT_MESSAGE },

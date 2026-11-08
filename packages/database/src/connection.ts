@@ -59,6 +59,18 @@ function yandexCaPath(): string | null {
   return path;
 }
 
+/**
+ * The Neon database connected through Vercel Storage publishes its URLs with
+ * the `NEON_` prefix (NEON_DATABASE_URL pooled, NEON_DATABASE_URL_UNPOOLED
+ * direct), so the older DATABASE_URL / DIRECT_URL stay untouched for a rollback.
+ * When the NEON_ pair is present it wins. Production moved there on 2026-10-28
+ * after the previous database stopped answering.
+ */
+export function applyDatabaseEnvOverrides(env: NodeJS.ProcessEnv = process.env): void {
+  if (env.NEON_DATABASE_URL) env.DATABASE_URL = env.NEON_DATABASE_URL;
+  if (env.NEON_DATABASE_URL_UNPOOLED) env.DIRECT_URL = env.NEON_DATABASE_URL_UNPOOLED;
+}
+
 /** The URL to actually connect with (adds Yandex TLS settings when needed). */
 export function resolveDatabaseUrl(url: string | undefined): string | undefined {
   if (!url || !isYandexDatabaseUrl(url)) return url;

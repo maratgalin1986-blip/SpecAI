@@ -1,0 +1,21 @@
+# Приёмка
+
+| Требование                                                                         | Итог      | Доказательство                                                                                                                                                                 |
+| ---------------------------------------------------------------------------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| R1 руководители исполнителей, без парка СпецПласт16                                | выполнено | `demandNudgeData.test.ts` «never goes to the house fleet, machinists, customers, far or retired fleets»                                                                        |
+| R2 N — сегодняшние OPEN-заявки по правилам уведомления; без своих и уже с откликом | выполнено | `demandNudge.test.ts` (countNearbyOrders), `demandNudgeData.test.ts` «does not count the orders the company already bid on»                                                    |
+| R3 при N = 0 ничего                                                                | выполнено | `demandNudgeData.test.ts` «sends nothing when no order fits»                                                                                                                   |
+| R4 раз в сутки по Москве, захват в базе                                            | выполнено | `demandNudgeData.test.ts` «once per Moscow day», «two runs at once claim a user only once»                                                                                     |
+| R5 окно 09:00–12:00 МСК (днём по местному времени по всей России)                  | выполнено | `demandNudge.test.ts` края окна; `demandNudgeData.test.ts` вне окна — без запросов                                                                                             |
+| R6 компания с машиной на линии не получает                                         | выполнено | `demandNudgeData.test.ts` машинист c1 на линии → u1 пропущен                                                                                                                   |
+| R7 только push и Telegram                                                          | выполнено | `deliver.test.ts` «only push and Telegram» (`EVENT_CHANNELS`)                                                                                                                  |
+| R8 выключатель на сайте и в приложении                                             | выполнено | `api/account/demand-nudge/route.test.ts` (401/403/400/200, парк — недоступно); `components/DemandNudgeSetting.tsx` (сайт и приложение); `apps/mobile/src/lib/aktualno.test.ts` |
+| R9 нажатие ведёт к заявкам                                                         | выполнено | путь `/orders`; в приложении `appRouteFor('/orders')` → «Лента» (`apps/mobile/src/lib/push.ts`)                                                                                |
+| R10 запуск из `/api/cron/notices`, с дедлайном                                     | выполнено | `api/cron/notices/route.test.ts`                                                                                                                                               |
+| R11 только новые колонки                                                           | выполнено | `schema.prisma`: `demandNudge @default(true)`, `demandNudgeSentAt`                                                                                                             |
+| R12 тесты                                                                          | выполнено | web 1668, mobile 189 — все зелёные                                                                                                                                             |
+
+Ревью (`/code-review`, средняя глубина): подтверждены и исправлены часовые пояса, уже
+отмеченные заявки, «на линии» по компании; доставка с ошибкой оставляет отметку дня.
+Отложено (не ошибки сейчас): больше 1000 компаний-исполнителей за прогон — курсор, как у
+«Актуализации», когда их станет столько; общий компонент выключателей вместо копий.

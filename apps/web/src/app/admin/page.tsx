@@ -1,17 +1,46 @@
 import type { Metadata } from 'next';
-import { prisma } from '@specai/database';
+import { SignupCounters } from '@/components/admin/SignupCounters';
+import { loadAdminStats } from '@/lib/adminStats';
+import { HOUSE_COMPANY_ID, prisma } from '@specai/database';
 import { Card } from '@specai/ui';
-import { AdminLogin, AdminLogout } from '@/components/AdminLogin';
+import { AdminLogin } from '@/components/AdminLogin';
 import { LeadOutcome } from '@/components/LeadOutcome';
 import { LeadStatusSelect } from '@/components/LeadStatusSelect';
 import { LinkOwnerForm } from '@/components/LinkOwnerForm';
+import { SupportSettingsForm } from '@/components/admin/SupportSettingsForm';
+import { ReviewLinksForm } from '@/components/admin/ReviewLinksForm';
 import { CommentModerationButtons } from '@/components/Comments';
+import { EraseOrderButton } from '@/components/ChatOrderContact';
 import { ModerationButtons, CopyField, TelegramSetupButton } from '@/components/AdminIntegrations';
 import { headers } from 'next/headers';
 import { inboundApiToken, telegramWebhookSecret, whatsappWebhookToken } from '@/lib/integrations';
 import { isAdminConfigured, isAdminRequest } from '@/lib/admin';
 import { SITE } from '@/lib/site';
 import { formLabel, splitSource } from '@/lib/marketing';
+import { AdminVerifyToggle } from '@/components/AdminVerifyToggle';
+import { providerPath } from '@/lib/providerSeo';
+import { chipClass } from '@/components/admin/AdminUi';
+import { PhoneLink } from '@/components/admin/PhoneLink';
+import { ProposalsCard } from '@/components/admin/ProposalsCard';
+import { AiDecisionsCard } from '@/components/admin/AiDecisionsCard';
+import { aiModerationEnabled, loadAiDecisions } from '@/lib/orderModeration';
+import { BotChatsCard } from '@/components/admin/BotChatsCard';
+import { loadBotChats } from '@/lib/groupBot';
+import { channelFromEnv, loadPickedChannelChatId } from '@/lib/channelTarget';
+import { ADMIN_PROPOSAL_SELECT } from '@/lib/proposals';
+import { PriceSurveyCard } from '@/components/admin/PriceSurveyCard';
+import { aktualnoAdminCount } from '@/lib/aktualnoData';
+import { loadAdminPriceReports } from '@/lib/priceReportStore';
+import { surveyAdminView } from '@/lib/groupPriceSurvey';
+import {
+  LEAD_FILTERS,
+  filterLeads,
+  leadFilterCounts,
+  leadSourceLabel,
+  parseLeadFilter,
+  sortLeads,
+} from '@/lib/adminLeads';
+import { capList, parseShowAll, showAllHref } from '@/lib/adminList';
 
 export const dynamic = 'force-dynamic';
 export const metadata: Metadata = { title: 'Заявки на звонок', robots: { index: false } };
@@ -23,6 +52,9 @@ const SOURCE_LABELS: Record<string, string> = {
   OTHER: 'Другое',
 };
 
+/** Callbacks loaded for the list and the 30-day marketing table. */
+const LEADS_LOADED = 200;
+
 function siteOrigin() {
   const h = headers();
   const host = h.get('x-forwarded-host') ?? h.get('host') ?? 'localhost:3000';
@@ -30,7 +62,9 @@ function siteOrigin() {
   return `${proto}://${host}`;
 }
 
-export default async function AdminPage() {
+type Query = Record<string, string | string[] | undefined>;
+
+export default async function AdminPage({ searchParams = {} }: { searchParams?: Query }) {
   if (!isAdminConfigured()) {
     return (
       <Card className="mx-auto max-w-lg">
@@ -53,13 +87,22 @@ export default async function AdminPage() {
     );
   }
 
+  // «Чаты с ботом», loaded alongside the rest; before the first deploy with
+  // the table, an empty list.
+  const botChatsLoad = loadBotChats().catch(() => ({ chats: [], active: 0 }));
+  const digestChatLoad = loadPickedChannelChatId().catch(() => null);
   // Bot drafts without a phone are not leads yet (lib/botDrafts.ts).
-  const leads = await prisma.lead.findMany({
-    where: { NOT: { phone: '' } },
-    orderBy: { createdAt: 'desc' },
-    take: 200,
-  });
-  const [pendingOrders, importedStats] = await Promise.all([
+  const leadsWhere = { NOT: { phone: '' } };
+  const [stats, leads, leadsTotal] = await Promise.all([
+    loadAdminStats(),
+    prisma.lead.findMany({
+      where: leadsWhere,
+      orderBy: { createdAt: 'desc' },
+      take: LEADS_LOADED,
+    }),
+    prisma.lead.count({ where: leadsWhere }),
+  ]);
+  const [pendingOrders, importedStats, aiDecisions] = await Promise.all([
     prisma.order.findMany({
       where: { status: 'PENDING_REVIEW' },
       include: { category: true, location: true },
@@ -71,6 +114,7 @@ export default async function AdminPage() {
       where: { source: { not: 'SITE' }, createdAt: { gte: new Date(Date.now() - 7 * 86_400_000) } },
       _count: true,
     }),
+    loadAiDecisions().catch(() => []),
   ]);
   const pendingComments = await prisma.comment.findMany({
     where: { status: 'PENDING' },
@@ -83,7 +127,7 @@ export default async function AdminPage() {
     take: 100,
   });
   const pendingReviews = await prisma.review.findMany({
-    where: { textStatus: 'PENDING', comment: { not: null } },
+    where: { textStatus: 'PENDING' },
     include: {
       author: { select: { name: true, email: true } },
       company: { select: { name: true } },
@@ -92,11 +136,63 @@ export default async function AdminPage() {
     orderBy: { createdAt: 'asc' },
     take: 100,
   });
+  // «Предложения и партнёрство»: every new one up to 100, then the latest read
+  // ones (separately, so read messages never push new ones out); no archive.
+  const loadProposals = (status: 'NEW' | 'READ', take: number) =>
+    prisma.proposal
+      .findMany({
+        where: { status },
+        select: ADMIN_PROPOSAL_SELECT,
+        orderBy: { createdAt: 'desc' },
+        take,
+      })
+      .catch(() => []);
+  const proposals = [...(await loadProposals('NEW', 100)), ...(await loadProposals('READ', 30))];
+  // «Актуализация» and «Опрос цен»: before the first deploy with the new
+  // columns and table, zero and an empty list.
+  const [aktualnoCompanies, priceSurvey, groupSurvey] = await Promise.all([
+    aktualnoAdminCount().catch(() => 0),
+    loadAdminPriceReports().catch(() => ({ reports: [], week: 0, total: 0 })),
+    surveyAdminView().catch(() => null),
+  ]);
+  const botChats = await botChatsLoad;
+  const digestChatId = await digestChatLoad;
+  // «Исполнители»: provider companies with the «Проверен» switch, unchecked first.
+  const providers = await prisma.company.findMany({
+    where: { isProvider: true },
+    select: {
+      id: true,
+      name: true,
+      taxId: true,
+      phone: true,
+      verified: true,
+      baseAddress: true,
+      createdAt: true,
+      _count: { select: { equipment: { where: { status: { not: 'RETIRED' } } } } },
+    },
+    orderBy: [{ verified: 'asc' }, { createdAt: 'desc' }],
+    take: 200,
+  });
+  const houseManagers = await prisma.user.findMany({
+    where: { companyId: HOUSE_COMPANY_ID, role: 'PROVIDER_ADMIN' },
+    select: { name: true, email: true },
+    take: 20,
+  });
   const origin = siteOrigin();
   const tgSecretReady = Boolean(telegramWebhookSecret());
   const whatsappToken = whatsappWebhookToken();
   const inboundToken = inboundApiToken();
   const newCount = leads.filter((lead) => lead.status === 'NEW').length;
+  const moderationCount = pendingOrders.length;
+  const commentsCount = pendingComments.length + pendingReviews.length;
+  const proposalsCount = stats.proposals;
+  // Callbacks: new ones on top, a status filter, the first 30 and «Показать ещё».
+  const leadFilter = parseLeadFilter(searchParams.leads);
+  const showAll = parseShowAll(searchParams.all);
+  const leadCounts = leadFilterCounts(leads);
+  const leadList = capList(filterLeads(sortLeads(leads), leadFilter), showAll);
+  const leadsHref = (filter: string) =>
+    filter === 'all' ? '/admin#leads' : `/admin?leads=${filter}#leads`;
   // Marketing: which channels and which forms brought requests in 30 days.
   const monthAgo = Date.now() - 30 * 86_400_000;
   const recentLeads = leads.filter((lead) => lead.createdAt.getTime() >= monthAgo);
@@ -123,16 +219,277 @@ export default async function AdminPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold">Панель управления</h1>
           <p className="text-slate-600">
             Заявок на звонок — новых:{' '}
-            <span className="font-semibold text-amber-700">{newCount}</span> · всего {leads.length}
+            <span className="font-semibold text-amber-700">{newCount}</span> · всего {leadsTotal}
           </p>
         </div>
-        <AdminLogout />
+        {/* The day's work with its counters first, then the other sections. */}
+        <nav aria-label="Разделы CRM" className="flex flex-wrap gap-1.5 text-xs">
+          <a href="#leads" className={chipClass(false)}>
+            Звонки{newCount > 0 ? ` · ${newCount}` : ''}
+          </a>
+          <a
+            href="#moderation"
+            className={`${chipClass(false)} ${moderationCount > 0 ? 'border-amber-400' : ''}`}
+          >
+            Модерация{moderationCount > 0 ? ` · ${moderationCount}` : ''}
+          </a>
+          <a
+            href="#comments"
+            className={`${chipClass(false)} ${commentsCount > 0 ? 'border-amber-400' : ''}`}
+          >
+            Комментарии{commentsCount > 0 ? ` · ${commentsCount}` : ''}
+          </a>
+          <a
+            href="#proposals"
+            className={`${chipClass(false)} ${proposalsCount > 0 ? 'border-amber-400' : ''}`}
+          >
+            Предложения{proposalsCount > 0 ? ` · ${proposalsCount}` : ''}
+          </a>
+          <a href="#bot-chats" className={chipClass(false)}>
+            Чаты с ботом · {botChats.active}
+          </a>
+          <a href="/admin/providers" className={chipClass(false)}>
+            Исполнители
+          </a>
+          <a href="/admin/funnel" className={chipClass(false)}>
+            Воронка
+          </a>
+          <a href="/admin/feed" className={chipClass(false)}>
+            Уведомления
+          </a>
+        </nav>
       </div>
+
+      <form action="/admin/search" className="flex gap-2">
+        <input
+          type="search"
+          name="q"
+          placeholder="Найти по телефону или имени"
+          aria-label="Найти по телефону или имени"
+          className="min-h-[44px] min-w-0 flex-1 rounded-full border border-slate-300 bg-white px-4 text-sm"
+        />
+        <button type="submit" className="cab-action">
+          Найти
+        </button>
+      </form>
+
+      <SignupCounters stats={stats} />
+      <p className="-mt-4 text-xs text-slate-600">
+        Обновили цены и свободные дни за 7 дней: исполнителей {aktualnoCompanies} ·{' '}
+        <a href="/ceny" className="font-semibold text-signal-700 underline">
+          Цены на рынке
+        </a>{' '}
+        ·{' '}
+        <a href="#price-survey" className="font-semibold text-signal-700 underline">
+          Опрос цен · {priceSurvey.week} за неделю
+        </a>
+      </p>
+
+      {/* Daily actions right under the top: moderation of chat orders,
+          comments and reviews. Empty ones take one line; the calls follow. */}
+      <Card className="flex scroll-mt-24 flex-col gap-3" id="moderation">
+        <div>
+          <h2 className="font-semibold">
+            Заявки из мессенджеров на модерации{' '}
+            <span className="text-amber-700">({moderationCount})</span>
+          </h2>
+          <p className="text-sm text-slate-600">
+            Уверенные заявки из чатов публикуются на торгах сразу, сомнительные проверяет ИИ (см.
+            «Решения ИИ»); здесь остаются те, что он ещё не решил. За 7 дней импортировано:{' '}
+            {importedStats.length === 0
+              ? '0'
+              : importedStats.map((s) => `${SOURCE_LABELS[s.source]} — ${s._count}`).join(', ')}
+            .
+          </p>
+        </div>
+        {pendingOrders.length === 0 && (
+          <p className="text-sm text-slate-500">Заявок на модерации нет.</p>
+        )}
+        {pendingOrders.map((order) => (
+          <div
+            key={order.id}
+            className="flex flex-col gap-2 border-t border-slate-100 pt-3 sm:flex-row sm:justify-between"
+          >
+            <div className="min-w-0 text-sm">
+              <p className="whitespace-pre-wrap">{order.rawText ?? order.description}</p>
+              <p className="mt-1 text-xs text-slate-500">
+                {SOURCE_LABELS[order.source]}
+                {order.sourceChat ? ` · ${order.sourceChat}` : ''}
+                {order.category ? ` · ${order.category.name}` : ''}
+                {order.location ? ` · ${order.location.city}` : ''}
+                {order.contactName ? ` · ${order.contactName}` : ''}
+                {order.contactPhone && (
+                  <>
+                    {' · '}
+                    <PhoneLink phone={order.contactPhone} />
+                  </>
+                )}
+              </p>
+            </div>
+            <div className="flex flex-col items-start gap-2">
+              <ModerationButtons orderId={order.id} />
+              <EraseOrderButton orderId={order.id} />
+            </div>
+          </div>
+        ))}
+      </Card>
+
+      <AiDecisionsCard decisions={aiDecisions} enabled={aiModerationEnabled()} />
+      <BotChatsCard
+        chats={botChats.chats}
+        active={botChats.active}
+        digestChatId={digestChatId}
+        digestFromEnv={channelFromEnv()}
+      />
+
+      <Card className="flex scroll-mt-24 flex-col gap-3" id="comments">
+        <div>
+          <h2 className="font-semibold">
+            Комментарии и отзывы на модерации{' '}
+            <span className="text-amber-700">({commentsCount})</span>
+          </h2>
+          <p className="text-sm text-slate-600">
+            Заказчики пишут об исполнителях, исполнители — о заказчиках. На сайте и в приложении
+            видны только опубликованные; телефоны, e-mail и ссылки скрыты автоматически. Отзыв
+            целиком (звёзды и текст) появляется и входит в рейтинг только после публикации.
+          </p>
+        </div>
+        {commentsCount === 0 && (
+          <p className="text-sm text-slate-500">Новых комментариев и отзывов нет.</p>
+        )}
+        {pendingReviews.map((review) => (
+          <div
+            key={review.id}
+            className="flex flex-col gap-2 border-t border-slate-100 pt-3 sm:flex-row sm:justify-between"
+          >
+            <div className="min-w-0 text-sm">
+              <p className="text-amber-500">
+                {'★'.repeat(review.rating)}
+                {'☆'.repeat(5 - review.rating)}{' '}
+                <span className="text-xs font-semibold text-slate-600">Отзыв</span>
+              </p>
+              {review.comment ? (
+                <p className="whitespace-pre-wrap break-words">{review.comment}</p>
+              ) : (
+                <p className="text-slate-500">Только оценка, без текста</p>
+              )}
+              <p className="mt-1 text-xs text-slate-500">
+                {review.author.name} ({review.author.email}) → «{review.company.name}»
+                {review.equipment ? `, ${review.equipment.name}` : ''} ·{' '}
+                {review.createdAt.toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' })}
+              </p>
+            </div>
+            <CommentModerationButtons commentId={review.id} kind="reviews" />
+          </div>
+        ))}
+        {pendingComments.map((comment) => (
+          <div
+            key={comment.id}
+            className="flex flex-col gap-2 border-t border-slate-100 pt-3 sm:flex-row sm:justify-between"
+          >
+            <div className="min-w-0 text-sm">
+              <p className="whitespace-pre-wrap break-words">{comment.text}</p>
+              <p className="mt-1 text-xs text-slate-500">
+                {comment.author.name} ({comment.author.email}) →{' '}
+                {comment.targetCompany
+                  ? `исполнитель «${comment.targetCompany.name}»`
+                  : `заказчик ${comment.targetUser?.name ?? ''}`}{' '}
+                · {comment.createdAt.toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' })}
+              </p>
+            </div>
+            <CommentModerationButtons commentId={comment.id} />
+          </div>
+        ))}
+      </Card>
+
+      <ProposalsCard proposals={proposals} />
+
+      <PriceSurveyCard {...priceSurvey} survey={groupSurvey} />
+
+      <section className="flex scroll-mt-24 flex-col gap-3" id="leads">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="font-semibold">
+            Заявки на звонок{' '}
+            <a href="/admin/leads" className="ml-2 text-sm font-semibold text-signal-700 underline">
+              Открыть CRM
+            </a>
+          </h2>
+          <nav aria-label="Фильтр звонков" className="flex flex-wrap gap-1.5">
+            {LEAD_FILTERS.map((item) => (
+              <a
+                key={item.id}
+                href={leadsHref(item.id)}
+                aria-current={item.id === leadFilter ? 'page' : undefined}
+                className={chipClass(item.id === leadFilter)}
+              >
+                {item.label} · {leadCounts[item.id]}
+              </a>
+            ))}
+          </nav>
+        </div>
+        {leadList.shown.length === 0 ? (
+          <Card>
+            {leads.length === 0
+              ? 'Заявок пока нет. Они появятся здесь, как только клиенты заполнят форму.'
+              : 'В этом списке заявок нет.'}
+          </Card>
+        ) : (
+          leadList.shown.map((lead) => (
+            <Card
+              key={lead.id}
+              className={`flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between ${
+                lead.status === 'NEW' ? 'border-amber-300' : ''
+              }`}
+            >
+              <div className="min-w-0">
+                <div className="font-semibold">
+                  {lead.name} · <PhoneLink phone={lead.phone} />
+                </div>
+                {lead.message && (
+                  <p className="mt-1 whitespace-pre-wrap text-sm text-slate-700">{lead.message}</p>
+                )}
+                <p className="mt-1 text-xs text-slate-500">
+                  {lead.createdAt.toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' })}
+                  {leadSourceLabel(lead.source) ? ` · ${leadSourceLabel(lead.source)}` : ''}
+                </p>
+              </div>
+              <div className="flex flex-col items-end gap-2">
+                <LeadStatusSelect id={lead.id} status={lead.status} />
+                <LeadOutcome id={lead.id} outcome={lead.outcome} amount={lead.amount} />
+              </div>
+            </Card>
+          ))
+        )}
+        {leadList.hidden > 0 && (
+          <p className="flex flex-wrap items-center gap-3 text-sm text-slate-600">
+            Показаны {leadList.shown.length} из {leadList.total}.
+            <a
+              href={showAllHref(
+                '/admin',
+                { leads: leadFilter === 'all' ? undefined : leadFilter },
+                'leads',
+              )}
+              className="cab-action"
+            >
+              Показать ещё {leadList.hidden}
+            </a>
+          </p>
+        )}
+        {showAll && leadsTotal > leads.length && (
+          <p className="text-xs text-slate-500">
+            Загружены последние {leads.length} из {leadsTotal}; более старые —{' '}
+            <a href="/admin/search" className="underline">
+              через поиск
+            </a>
+            .
+          </p>
+        )}
+      </section>
 
       <Card className="flex flex-col gap-4">
         <div>
@@ -185,211 +542,163 @@ export default async function AdminPage() {
         </p>
       </Card>
 
-      <Card className="flex flex-col gap-3">
-        <div>
-          <h2 className="font-semibold">
-            Заявки из мессенджеров на модерации{' '}
-            <span className="text-amber-700">({pendingOrders.length})</span>
-          </h2>
-          <p className="text-sm text-slate-600">
-            Уверенные заявки из чатов публикуются на торгах сразу, сомнительные ждут здесь. За 7
-            дней импортировано:{' '}
-            {importedStats.length === 0
-              ? '0'
-              : importedStats.map((s) => `${SOURCE_LABELS[s.source]} — ${s._count}`).join(', ')}
-            .
-          </p>
-        </div>
-        {pendingOrders.map((order) => (
-          <div
-            key={order.id}
-            className="flex flex-col gap-2 border-t border-slate-100 pt-3 sm:flex-row sm:justify-between"
-          >
-            <div className="min-w-0 text-sm">
-              <p className="whitespace-pre-wrap">{order.rawText ?? order.description}</p>
-              <p className="mt-1 text-xs text-slate-500">
-                {SOURCE_LABELS[order.source]}
-                {order.sourceChat ? ` · ${order.sourceChat}` : ''}
-                {order.category ? ` · ${order.category.name}` : ''}
-                {order.location ? ` · ${order.location.city}` : ''}
-                {order.contactName ? ` · ${order.contactName}` : ''}
-                {order.contactPhone ? ` · ${order.contactPhone}` : ''}
+      {/* Reference and one-time setup: collapsed, the daily work is above. */}
+      <details className="rounded-xl border border-slate-200 bg-white p-4" id="settings">
+        <summary className="cursor-pointer font-semibold">
+          Настройки и справочники: исполнители, мессенджеры, парк компании, донаты
+        </summary>
+        <div className="mt-4 flex flex-col gap-6">
+          <Card className="flex flex-col gap-3" id="providers">
+            <div>
+              <h2 className="font-semibold">
+                Исполнители · {providers.length} · проверено{' '}
+                {providers.filter((company) => company.verified).length}
+              </h2>
+              <p className="text-sm text-slate-600">
+                Отметка «Проверен» видна заказчикам в предложениях и на странице исполнителя.
+                Ставьте её после звонка и проверки ИНН и документов на технику.
               </p>
             </div>
-            <ModerationButtons orderId={order.id} />
-          </div>
-        ))}
-      </Card>
+            {providers.length === 0 ? (
+              <p className="text-sm text-slate-500">Исполнителей пока нет.</p>
+            ) : (
+              <ul className="flex flex-col divide-y divide-slate-100">
+                {providers.map((company) => (
+                  <li
+                    key={company.id}
+                    className="flex flex-col gap-2 py-2 text-sm sm:flex-row sm:items-center sm:justify-between"
+                  >
+                    <div className="min-w-0">
+                      <a
+                        href={providerPath(company.id)}
+                        className="break-words font-medium hover:text-amber-700"
+                      >
+                        {company.name}
+                      </a>
+                      <p className="text-xs text-slate-500">
+                        Техники: {company._count.equipment}
+                        {company.taxId ? ` · ИНН ${company.taxId}` : ''}
+                        {company.phone ? ` · ${company.phone}` : ''}
+                        {company.baseAddress ? ` · ${company.baseAddress}` : ''} · с{' '}
+                        {company.createdAt.toLocaleDateString('ru-RU')}
+                      </p>
+                    </div>
+                    <AdminVerifyToggle companyId={company.id} initial={company.verified} />
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Card>
 
-      <Card className="flex flex-col gap-3" id="comments">
-        <div>
-          <h2 className="font-semibold">
-            Комментарии и отзывы на модерации{' '}
-            <span className="text-amber-700">
-              ({pendingComments.length + pendingReviews.length})
-            </span>
-          </h2>
-          <p className="text-sm text-slate-600">
-            Заказчики пишут об исполнителях, исполнители — о заказчиках. На сайте и в приложении
-            видны только опубликованные; телефоны, e-mail и ссылки скрыты автоматически. У отзывов
-            звёзды видны сразу, текст — после публикации.
-          </p>
-        </div>
-        {pendingComments.length === 0 && pendingReviews.length === 0 && (
-          <p className="text-sm text-slate-500">Новых комментариев и отзывов нет.</p>
-        )}
-        {pendingReviews.map((review) => (
-          <div
-            key={review.id}
-            className="flex flex-col gap-2 border-t border-slate-100 pt-3 sm:flex-row sm:justify-between"
-          >
-            <div className="min-w-0 text-sm">
-              <p className="text-amber-500">
-                {'★'.repeat(review.rating)}
-                {'☆'.repeat(5 - review.rating)}{' '}
-                <span className="text-xs font-semibold text-slate-600">Отзыв</span>
-              </p>
-              <p className="whitespace-pre-wrap break-words">{review.comment}</p>
-              <p className="mt-1 text-xs text-slate-500">
-                {review.author.name} ({review.author.email}) → «{review.company.name}»
-                {review.equipment ? `, ${review.equipment.name}` : ''} ·{' '}
-                {review.createdAt.toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' })}
+          <Card className="flex flex-col gap-4">
+            <div>
+              <h2 className="font-semibold">Подключение мессенджеров</h2>
+              <p className="text-sm text-slate-600">
+                Заявки из групп и чатов автоматически попадают к вам в заявки и в Telegram — на
+                сайте их видите только вы. Реклама и болтовня отсекаются.
               </p>
             </div>
-            <CommentModerationButtons commentId={review.id} kind="reviews" />
-          </div>
-        ))}
-        {pendingComments.map((comment) => (
-          <div
-            key={comment.id}
-            className="flex flex-col gap-2 border-t border-slate-100 pt-3 sm:flex-row sm:justify-between"
-          >
-            <div className="min-w-0 text-sm">
-              <p className="whitespace-pre-wrap break-words">{comment.text}</p>
-              <p className="mt-1 text-xs text-slate-500">
-                {comment.author.name} ({comment.author.email}) →{' '}
-                {comment.targetCompany
-                  ? `исполнитель «${comment.targetCompany.name}»`
-                  : `заказчик ${comment.targetUser?.name ?? ''}`}{' '}
-                · {comment.createdAt.toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' })}
-              </p>
-            </div>
-            <CommentModerationButtons commentId={comment.id} />
-          </div>
-        ))}
-      </Card>
-
-      <Card className="flex flex-col gap-4">
-        <div>
-          <h2 className="font-semibold">Подключение мессенджеров</h2>
-          <p className="text-sm text-slate-600">
-            Заявки из групп и чатов автоматически попадают к вам в заявки и в Telegram — на сайте их
-            видите только вы. Реклама и болтовня отсекаются.
-          </p>
-        </div>
-        <div className="flex flex-col gap-2 rounded-lg border border-slate-200 p-3">
-          <h3 className="text-sm font-semibold">Telegram</h3>
-          <ol className="list-decimal space-y-1 pl-5 text-sm text-slate-600">
-            <li>
-              В Telegram у @BotFather: /newbot → получите токен → добавьте его в Vercel как
-              TELEGRAM_BOT_TOKEN → Redeploy.
-            </li>
-            <li>Нажмите кнопку ниже — бот начнёт присылать сообщения на сайт.</li>
-            <li>
-              У @BotFather: /setprivacy → выберите бота → Disable (чтобы бот видел все сообщения в
-              группах).
-            </li>
-            <li>
-              Добавьте бота в нужные группы (в каналы — администратором). Клиенты могут писать и
-              боту напрямую.
-            </li>
-          </ol>
-          <TelegramSetupButton
-            configured={Boolean(process.env.TELEGRAM_BOT_TOKEN) && tgSecretReady}
-          />
-        </div>
-        <div className="flex flex-col gap-2 rounded-lg border border-slate-200 p-3">
-          <h3 className="text-sm font-semibold">WhatsApp (через Green API)</h3>
-          <p className="text-sm text-slate-600">
-            У WhatsApp нет официального способа читать группы, поэтому используется шлюз
-            green-api.com: зарегистрируйтесь, создайте инстанс, отсканируйте QR-код с отдельного
-            номера (лучше не основного — неофициальные шлюзы нарушают правила WhatsApp и номер могут
-            заблокировать). В настройках инстанса вставьте URL и токен ниже и включите «Получать
-            уведомления о входящих сообщениях».
-          </p>
-          {whatsappToken && (
-            <>
-              <CopyField
-                label="URL для уведомлений"
-                value={`${origin}/api/integrations/whatsapp`}
+            <div className="flex flex-col gap-2 rounded-lg border border-slate-200 p-3">
+              <h3 className="text-sm font-semibold">Telegram</h3>
+              <ol className="list-decimal space-y-1 pl-5 text-sm text-slate-600">
+                <li>
+                  В Telegram у @BotFather: /newbot → получите токен → добавьте его в Vercel как
+                  TELEGRAM_BOT_TOKEN → Redeploy.
+                </li>
+                <li>Нажмите кнопку ниже — бот начнёт присылать сообщения на сайт.</li>
+                <li>
+                  У @BotFather: /setprivacy → выберите бота → Disable (чтобы бот видел все сообщения
+                  в группах).
+                </li>
+                <li>
+                  Добавьте бота в нужные группы (в каналы — администратором). Клиенты могут писать и
+                  боту напрямую.
+                </li>
+              </ol>
+              <TelegramSetupButton
+                configured={Boolean(process.env.TELEGRAM_BOT_TOKEN) && tgSecretReady}
               />
-              <CopyField label="Токен (webhookUrlToken)" value={whatsappToken} />
-            </>
-          )}
-        </div>
-        <div className="flex flex-col gap-2 rounded-lg border border-slate-200 p-3">
-          <h3 className="text-sm font-semibold">Другие источники (n8n, Make, парсеры)</h3>
-          <p className="text-sm text-slate-600">
-            POST JSON{' '}
-            {
-              '{ "text": "...", "source": "telegram|whatsapp|other", "chat": "...", "author": "...", "phone": "..." }'
-            }{' '}
-            с заголовком Authorization: Bearer &lt;токен&gt;.
-          </p>
-          {inboundToken && (
-            <>
-              <CopyField label="URL" value={`${origin}/api/integrations/inbound`} />
-              <CopyField label="Токен" value={inboundToken} />
-            </>
-          )}
-        </div>
-      </Card>
+            </div>
+            <div className="flex flex-col gap-2 rounded-lg border border-slate-200 p-3">
+              <h3 className="text-sm font-semibold">WhatsApp (через Green API)</h3>
+              <p className="text-sm text-slate-600">
+                У WhatsApp нет официального способа читать группы, поэтому используется шлюз
+                green-api.com: зарегистрируйтесь, создайте инстанс, отсканируйте QR-код с отдельного
+                номера (лучше не основного — неофициальные шлюзы нарушают правила WhatsApp и номер
+                могут заблокировать). В настройках инстанса вставьте URL и токен ниже и включите
+                «Получать уведомления о входящих сообщениях».
+              </p>
+              {whatsappToken && (
+                <>
+                  <CopyField
+                    label="URL для уведомлений"
+                    value={`${origin}/api/integrations/whatsapp`}
+                  />
+                  <CopyField label="Токен (webhookUrlToken)" value={whatsappToken} />
+                </>
+              )}
+            </div>
+            <div className="flex flex-col gap-2 rounded-lg border border-slate-200 p-3">
+              <h3 className="text-sm font-semibold">Другие источники (n8n, Make, парсеры)</h3>
+              <p className="text-sm text-slate-600">
+                POST JSON{' '}
+                {
+                  '{ "text": "...", "source": "telegram|whatsapp|other", "chat": "...", "author": "...", "phone": "..." }'
+                }{' '}
+                с заголовком Authorization: Bearer &lt;токен&gt;.
+              </p>
+              {inboundToken && (
+                <>
+                  <CopyField label="URL" value={`${origin}/api/integrations/inbound`} />
+                  <CopyField label="Токен" value={inboundToken} />
+                </>
+              )}
+            </div>
+          </Card>
 
-      <Card className="flex flex-col gap-3">
-        <div>
-          <h2 className="font-semibold">Парк компании в каталоге</h2>
-          <p className="text-sm text-slate-600">
-            Техника СпецПласт16 публикуется в каталоге автоматически. Чтобы менять цены и статусы,
-            зарегистрируйтесь на сайте и привяжите аккаунт:
-          </p>
-        </div>
-        <LinkOwnerForm />
-      </Card>
+          <Card className="flex flex-col gap-3">
+            <div>
+              <h2 className="font-semibold">Парк компании в каталоге</h2>
+              <p className="text-sm text-slate-600">
+                Техника СпецПласт16 публикуется в каталоге автоматически. Чтобы менять цены и
+                статусы, зарегистрируйтесь на сайте и привяжите аккаунт:
+              </p>
+            </div>
+            <LinkOwnerForm />
+            {houseManagers.length > 0 && (
+              <p className="text-sm text-slate-600">
+                Управляют парком:{' '}
+                {houseManagers.map((user) => `${user.name} (${user.email})`).join(', ')}
+              </p>
+            )}
+          </Card>
 
-      {leads.length === 0 ? (
-        <Card>Заявок пока нет. Они появятся здесь, как только клиенты заполнят форму.</Card>
-      ) : (
-        <div className="flex flex-col gap-3">
-          {leads.map((lead) => (
-            <Card
-              key={lead.id}
-              className={`flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between ${
-                lead.status === 'NEW' ? 'border-amber-300' : ''
-              }`}
-            >
-              <div className="min-w-0">
-                <div className="font-semibold">
-                  {lead.name} ·{' '}
-                  <a href={`tel:${lead.phone.replace(/[^\d+]/g, '')}`} className="text-amber-700">
-                    {lead.phone}
-                  </a>
-                </div>
-                {lead.message && (
-                  <p className="mt-1 whitespace-pre-wrap text-sm text-slate-700">{lead.message}</p>
-                )}
-                <p className="mt-1 text-xs text-slate-500">
-                  {lead.createdAt.toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' })}
-                  {lead.source ? ` · ${lead.source}` : ''}
-                </p>
-              </div>
-              <div className="flex flex-col items-end gap-2">
-                <LeadStatusSelect id={lead.id} status={lead.status} />
-                <LeadOutcome id={lead.id} outcome={lead.outcome} amount={lead.amount} />
-              </div>
-            </Card>
-          ))}
+          <Card className="flex flex-col gap-3" id="support">
+            <div>
+              <h2 className="font-semibold">Поддержка приложения (донаты)</h2>
+              <p className="text-sm text-slate-600">
+                После завершённого заказа заказчик и исполнитель видят ненавязчивое предложение
+                поддержать площадку любой суммой — переводом по номеру карты в своём банке. Номер
+                хранится только здесь и показывается, пока предложение включено.
+              </p>
+            </div>
+            <SupportSettingsForm />
+          </Card>
+
+          <Card className="flex flex-col gap-3" id="reviews">
+            <div>
+              <h2 className="font-semibold">Отзывы о площадке</h2>
+              <p className="text-sm text-slate-600">
+                Когда исполнитель отмечает бронь выполненной, заказчик получает одно сообщение:
+                «Оцените исполнителя», ссылки на карточки площадки в 2ГИС и Яндекс Картах и личную
+                ссылку «Пригласите коллегу». Пустое поле — этой карточки в сообщении нет. Награды за
+                отзыв не предлагаем: правила карт это запрещают.
+              </p>
+            </div>
+            <ReviewLinksForm />
+          </Card>
         </div>
-      )}
+      </details>
     </div>
   );
 }

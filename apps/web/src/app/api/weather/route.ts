@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { geocodeAddress } from '@/lib/geo';
+import { clientIp } from '@/lib/loginErrors';
+import { geocodeAddress, parseNear } from '@/lib/geo';
 import {
   assessWork,
-  CHELNY,
   fetchForecast,
   machineGroup,
   mskToday,
@@ -13,8 +13,9 @@ import { checkRateLimit } from '@/lib/rateLimit';
 import { liftingStop, nearestPoint } from '@/lib/stroykaSky';
 
 // Forecast for a work shift and what it means for a machine:
-// GET /api/weather?date=YYYY-MM-DD&kind=crane[&lat=&lon= | &q=address]
-// Without a place the forecast is for Naberezhnye Chelny.
+// GET /api/weather?date=YYYY-MM-DD&kind=crane&(lat=&lon= | q=address[&near=lat,lon])
+// The platform serves all of Russia: without a place (or with an address the
+// geocoder cannot find) there is no forecast — 400 / 404, never a default town.
 
 const DAY_MS = 86_400_000;
 
@@ -29,22 +30,26 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Прогноз есть на ближайшие 9 дней' }, { status: 400 });
   }
 
-  let place = { lat: CHELNY.lat, lon: CHELNY.lon, label: 'Набережные Челны' };
+  let place: { lat: number; lon: number; label: string } | null = null;
   const lat = Number(params.get('lat'));
   const lon = Number(params.get('lon'));
   const q = params.get('q');
   if (Number.isFinite(lat) && Number.isFinite(lon) && params.has('lat') && params.has('lon')) {
     place = { lat, lon, label: params.get('label') || 'Объект' };
   } else if (q) {
-    const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown';
+    const ip = clientIp(request);
     if (!checkRateLimit(`geocode:${ip}`, { limit: 20, windowMs: 60_000 }).ok) {
       return NextResponse.json(
         { error: 'Слишком часто, попробуйте через минуту' },
         { status: 429 },
       );
     }
-    const found = await geocodeAddress(q);
-    if (found) place = found;
+    const found = await geocodeAddress(q, { near: parseNear(params.get('near')) });
+    if (!found) return NextResponse.json({ error: 'Адрес не найден' }, { status: 404 });
+    place = found;
+  }
+  if (!place) {
+    return NextResponse.json({ error: 'Укажите место работ' }, { status: 400 });
   }
 
   const points = await fetchForecast(place.lat, place.lon);

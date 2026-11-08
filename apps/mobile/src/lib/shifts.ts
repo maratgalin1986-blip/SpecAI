@@ -1,0 +1,178 @@
+import type { BadgeTone } from '@/components/ui';
+import type { CalendarDayKind, Shift, ShiftStatus, TimesheetState } from './api';
+
+/**
+ * Чистые помощники экранов смены, табеля и календаря (без сети): подписи
+ * статусов, цвета, таймер, сетка месяца. Правила переходов проверяет сервер
+ * (packages/shared/src/schemas/shift.ts), здесь только представление.
+ */
+
+export const SHIFT_STATUS_LABELS: Record<ShiftStatus, string> = {
+  PLANNED: 'Смена не начата',
+  EN_ROUTE: 'Выехал',
+  ON_SITE: 'На объекте',
+  WORKING: 'Работа',
+  IDLE: 'Простой',
+  FINISHED: 'Смена завершена',
+};
+
+/** Подпись кнопки перехода в статус. */
+export const SHIFT_ACTION_LABELS: Record<ShiftStatus, string> = {
+  PLANNED: 'Смена не начата',
+  EN_ROUTE: 'Выехал',
+  ON_SITE: 'На объекте',
+  WORKING: 'Начать работу',
+  IDLE: 'Простой',
+  FINISHED: 'Завершить смену',
+};
+
+export const SHIFT_STATUS_TONES: Record<ShiftStatus, BadgeTone> = {
+  PLANNED: 'neutral',
+  EN_ROUTE: 'info',
+  ON_SITE: 'info',
+  WORKING: 'success',
+  IDLE: 'warning',
+  FINISHED: 'dark',
+};
+
+export function shiftTone(status: string): BadgeTone {
+  return (SHIFT_STATUS_TONES as Record<string, BadgeTone>)[status] ?? 'neutral';
+}
+
+/** Переход, который просит фото: первый выезд/прибытие и завершение смены. */
+export function transitionWantsPhoto(
+  shift: Pick<Shift, 'status' | 'startPhotoUrl'>,
+  next: ShiftStatus,
+) {
+  if (next === 'FINISHED') return true;
+  return shift.status === 'PLANNED' && !shift.startPhotoUrl;
+}
+
+export const TIMESHEET_STATE_LABELS: Record<TimesheetState, string> = {
+  none: 'Табель не заполнен',
+  waiting: 'Ждёт подтверждения',
+  disputed: 'Есть замечания',
+  final: 'Подтверждён обеими сторонами',
+};
+
+export const TIMESHEET_STATE_TONES: Record<TimesheetState, BadgeTone> = {
+  none: 'neutral',
+  waiting: 'warning',
+  disputed: 'danger',
+  final: 'success',
+};
+
+/** «7 ч 30 мин» из минут. */
+export function formatMinutes(minutes: number): string {
+  const safe = Math.max(0, Math.round(minutes));
+  const h = Math.floor(safe / 60);
+  const m = safe % 60;
+  if (h === 0) return `${m} мин`;
+  return m === 0 ? `${h} ч` : `${h} ч ${m} мин`;
+}
+
+/**
+ * Таймер на экране: сервер отдаёт минуты на момент ответа, а пока смена в
+ * «Работе» или «Простое», к ним прибавляется время с момента загрузки.
+ */
+export function liveMinutes(
+  shift: Pick<Shift, 'status' | 'workedMinutes' | 'idleMinutes'>,
+  loadedAt: number,
+  now: number,
+): { worked: number; idle: number } {
+  const extra = Math.max(0, Math.floor((now - loadedAt) / 60_000));
+  return {
+    worked: shift.workedMinutes + (shift.status === 'WORKING' ? extra : 0),
+    idle: shift.idleMinutes + (shift.status === 'IDLE' ? extra : 0),
+  };
+}
+
+/** Часы с шагом четверть часа: 460 мин → 7.75. */
+export function suggestedHours(minutes: number): number {
+  return Math.round((minutes / 60) * 4) / 4;
+}
+
+/** «12:05» по местному времени телефона. */
+export function formatTime(iso: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return '—';
+  return date.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+}
+
+/** «08.10» из «2026-10-08». */
+export function shortDay(key: string): string {
+  const [, month, day] = key.split('-');
+  return month && day ? `${day}.${month}` : key;
+}
+
+export const CALENDAR_KIND_LABELS: Record<CalendarDayKind, string> = {
+  free: 'Свободна',
+  booked: 'Занята',
+  pending: 'Ждёт подтверждения',
+  blocked: 'Не сдаётся',
+  maintenance: 'На ремонте',
+};
+
+export const MONTH_NAMES = [
+  'Январь',
+  'Февраль',
+  'Март',
+  'Апрель',
+  'Май',
+  'Июнь',
+  'Июль',
+  'Август',
+  'Сентябрь',
+  'Октябрь',
+  'Ноябрь',
+  'Декабрь',
+] as const;
+
+export function monthKey(year: number, month: number): string {
+  return `${year}-${String(month).padStart(2, '0')}`;
+}
+
+export function shiftMonth(year: number, month: number, delta: number) {
+  const date = new Date(Date.UTC(year, month - 1 + delta, 1));
+  return { year: date.getUTCFullYear(), month: date.getUTCMonth() + 1 };
+}
+
+/** Сколько пустых клеток перед 1-м числом (неделя с понедельника). */
+export function leadingBlanks(year: number, month: number): number {
+  return (new Date(Date.UTC(year, month - 1, 1)).getUTCDay() + 6) % 7;
+}
+
+const MSK_OFFSET_MS = 3 * 3_600_000;
+
+/**
+ * YYYY-MM-DD того дня, которым сервер считает «сегодня» — по Москве, как
+ * shift.date из /api/shifts и даты брони. Экран смен сравнивает с ним
+ * shift.date: телефон в другом часовом поясе иначе видел бы «Начать смену
+ * сегодня» рядом с уже открытой сегодняшней сменой.
+ */
+export function dayKey(date: Date): string {
+  return moscowDayKey(date);
+}
+
+/** YYYY-MM-DD по Москве — так сервер считает день смены и даты брони. */
+export function moscowDayKey(date: Date | string): string {
+  const time = new Date(date).getTime();
+  return new Date(time + MSK_OFFSET_MS).toISOString().slice(0, 10);
+}
+
+/**
+ * Можно ли открыть смену сегодня: сегодня (по Москве) входит в даты брони,
+ * обе границы включительно. До начала работ сервер ответил бы 409.
+ */
+export function canOpenShiftToday(
+  booking: { startDate: string; endDate: string },
+  now: Date = new Date(),
+): boolean {
+  const today = moscowDayKey(now);
+  return today >= moscowDayKey(booking.startDate) && today <= moscowDayKey(booking.endDate);
+}
+
+/** Смена будущего дня: её статусы ещё нельзя вести, только смотреть. */
+export function isFutureShift(shiftDate: string, now: Date = new Date()): boolean {
+  return shiftDate.slice(0, 10) > moscowDayKey(now);
+}

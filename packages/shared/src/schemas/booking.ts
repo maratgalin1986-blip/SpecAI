@@ -9,6 +9,18 @@ export const bookingStatusSchema = z.enum([
 ]);
 export type BookingStatus = z.infer<typeof bookingStatusSchema>;
 
+/**
+ * Who cancelled a booking (Booking.cancelledBy). A plain string column, not a
+ * Prisma enum: adding enum values cannot run through the pooled connection.
+ * Null on bookings cancelled before the column existed — unknown.
+ */
+export const CANCELLED_BY = {
+  CUSTOMER: 'CUSTOMER',
+  PROVIDER: 'PROVIDER',
+  ADMIN: 'ADMIN',
+} as const;
+export type CancelledBy = (typeof CANCELLED_BY)[keyof typeof CANCELLED_BY];
+
 export const createBookingSchema = z
   .object({
     // Equipment ids are not always cuids: the owner's fleet uses "sp16-*".

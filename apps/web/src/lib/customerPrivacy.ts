@@ -13,8 +13,20 @@ export function canSeeCustomerContacts(bookingStatus: string): boolean {
   return (CONTACT_STATUSES as readonly string[]).includes(bookingStatus);
 }
 
+/**
+ * Names of the technical accounts that own orders without an author account
+ * (TECHNICAL_CUSTOMERS in lib/ingest.ts). Shortened like a person's name they
+ * read as a fake author («Заявка И.»), so they get a neutral label instead.
+ */
+const TECHNICAL_AUTHOR_LABELS: Record<string, string> = {
+  'Заявка из мессенджера': 'Заявка из чата',
+  'Заявка с сайта': 'Заявка с сайта',
+};
+
 /** «Анна Петрова» → «Анна П.»; an e-mail or an empty name → «Заказчик». */
 export function customerShortName(name: string | null | undefined): string {
+  const technical = TECHNICAL_AUTHOR_LABELS[(name ?? '').trim()];
+  if (technical) return technical;
   const short = shortAuthorName(name);
   return short === 'Пользователь' ? 'Заказчик' : short;
 }

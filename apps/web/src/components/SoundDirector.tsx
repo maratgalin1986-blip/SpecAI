@@ -5,6 +5,7 @@ import type { MachineType } from '@/lib/machinePhotos';
 import {
   announcedMachines,
   MIC_EVENT,
+  noteWakeGesture,
   onCue,
   onMachine,
   prefersReducedMotion,
@@ -19,8 +20,9 @@ import { asSpeaker } from '@/lib/soundVoices';
 import { stripEmoji } from '@/lib/stripEmoji';
 import { currentNature, NATURE_EVENT, type NatureEventDetail } from '@/lib/sceneEvents';
 
-// The cinematic sound layer, mounted once in the layout. On by default; it
-// wakes at the visitor's first real gesture (or the SoundToggle press), as
+// The cinematic sound layer, mounted once in the layout (not on the cabinets,
+// CinemaLayer). On by default (owner, 2026-10-03); it wakes at the visitor's
+// first real gesture (or the SoundToggle press), as
 // browsers require: no AudioContext exists before that. Until then it
 // downloads nothing: the engine and the recordings load with import()/fetch
 // on demand (the beds after the gesture, a machine when it is announced).
@@ -61,6 +63,11 @@ export function SoundDirector() {
     let ctx: AudioContext | null = null;
     let engine: SoundEngine | null = null;
     let loading: Promise<SoundEngine | null> | null = null;
+    // One import of the engine chunk, shared by the idle prefetch and the start.
+    let engineModule: Promise<typeof import('@/lib/soundEngine')> | null = null;
+    const loadModule = () => (engineModule ??= import('@/lib/soundEngine'));
+    // The sound is being started by the visitor's own touch (not the switch).
+    let byGesture = false;
     let listening = false;
     let typing = false;
     let disposed = false;
@@ -101,7 +108,7 @@ export function SoundDirector() {
     };
 
     const loadEngine = () => {
-      loading ??= import('@/lib/soundEngine')
+      loading ??= loadModule()
         .then((mod) => {
           if (disposed || !ctx) return null;
           engine = new mod.SoundEngine(ctx);
@@ -131,6 +138,11 @@ export function SoundDirector() {
       applyMachine(true);
       // Sound came on while the opening titles are up: the brass hit for the
       // partner card, and a whoosh as the camera dives in.
+      if (!introAtGesture && !wasRunning && byGesture && !reduced) {
+        // The very first sound of the visit, started by a touch: the brass
+        // sting, right away (the switch has its own click).
+        void engine.cue('boom');
+      }
       if (introAtGesture && !wasRunning) {
         // The brass hit lands with the logo (1.75 s into the titles, which
         // start with the page); a later tap gets it at once.
@@ -202,6 +214,9 @@ export function SoundDirector() {
       const activation = (navigator as Navigator & { userActivation?: { isActive: boolean } })
         .userActivation;
       if (activation && !activation.isActive) return;
+      // Before the sound ever ran: a sound button pressed now is this touch.
+      if (!wasRunning) noteWakeGesture(event.target);
+      byGesture = true;
       wake();
     };
     const addGestures = () => {
@@ -258,6 +273,20 @@ export function SoundDirector() {
       const activation = (navigator as Navigator & { userActivation?: { hasBeenActive: boolean } })
         .userActivation;
       if (activation?.hasBeenActive) wake();
+      // Download (not play) the first sounds while the page is looked at, so
+      // the first touch is heard at once (owner, 2026-10-17). Not on «экономия
+      // трафика».
+      const saveData = (navigator as Navigator & { connection?: { saveData?: boolean } }).connection
+        ?.saveData;
+      if (!saveData) {
+        const idle =
+          (window as Window & { requestIdleCallback?: (cb: () => void) => number })
+            .requestIdleCallback ?? ((cb: () => void) => window.setTimeout(cb, 1200));
+        idle(() => {
+          if (disposed) return;
+          void import('@/lib/soundEngine').then((mod) => mod.prefetchSamples()).catch(() => {});
+        });
+      }
     }
 
     const onVisibility = () => {

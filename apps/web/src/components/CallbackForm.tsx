@@ -6,6 +6,7 @@ import { readLeadDraft, submitLead, leadErrorText } from '@/lib/submitLead';
 import { LeadSuccess } from '@/components/LeadSuccess';
 import { PointPicker } from '@/components/PointPicker';
 import { POINT_LINE_PREFIX, withPointLine, type MapPoint } from '@/lib/mapPoint';
+import { onOrderPrefill, withPrefillLine } from '@/lib/orderPrefillEvent';
 import { ConsentText } from '@/components/ConsentText';
 import { useHydrated } from '@/lib/useHydrated';
 
@@ -44,6 +45,12 @@ export function CallbackForm({
     if (draft.name) setName(draft.name);
     if (draft.message) setMessage(draft.message);
   }, []);
+
+  // «Заказать» on a machine above the form (OfferNow): the machine's line first.
+  useEffect(
+    () => onOrderPrefill(({ text }) => setMessage((current) => withPrefillLine(current, text))),
+    [],
+  );
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
