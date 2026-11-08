@@ -230,3 +230,60 @@ test('stroyka order stays in the film', async ({ page }) => {
   expect(new URL(page.url()).pathname).toBe('/stroyka');
   expect(errors, 'page errors').toEqual([]);
 });
+
+// «Сторож» (owner, 2026-11-08): on a desktop the mouse leaving through the top
+// edge after 20 s brings Иван's card (not a modal), and «Позвоните мне» sends a
+// lead with source «storozh». The clock is faked: the test takes no 20 s.
+test('storozh: desktop exit brings the card and sends a lead', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop', 'desktop trigger');
+  const errors = await guard(page);
+  const sent: { body?: Record<string, unknown> } = {};
+  await page.route('**/api/leads', (route) => {
+    sent.body = route.request().postDataJSON();
+    return route.fulfill({ status: 201, contentType: 'application/json', body: '{"ok":true}' });
+  });
+  await page.clock.install();
+  await page.goto('/?intro=0', { waitUntil: 'load' });
+  // The cookie strip takes the corner first: answer it.
+  await page.getByTestId('cookie-strip').getByRole('button', { name: 'Согласен' }).click();
+  const leave = () =>
+    page.evaluate(() =>
+      document.documentElement.dispatchEvent(new MouseEvent('mouseleave', { clientY: -3 })),
+    );
+  // Too early: nothing.
+  await page.clock.fastForward(10_000);
+  await leave();
+  await expect(page.getByTestId('storozh')).toHaveCount(0);
+  await page.clock.fastForward(11_000);
+  await leave();
+  const card = page.getByTestId('storozh');
+  await expect(card).toBeVisible();
+  await expect(card).toContainText('Подобрать технику и цену за минуту?');
+  await expect(card).toContainText('Иван');
+  // The page stays usable: nothing covers the header phone link.
+  await expect(page.locator('a[href^="tel:"]:visible').first()).toBeVisible();
+  await card.getByRole('button', { name: 'Позвоните мне' }).click();
+  await card.getByLabel('Телефон').fill('+7 927 000-00-01');
+  await card.locator('input[name="consent"]').check();
+  await card.getByRole('button', { name: 'Жду звонка' }).click();
+  await expect(card).toContainText('Заявка у Ивана');
+  expect(sent.body?.phone).toBe('+7 927 000-00-01');
+  expect(String(sent.body?.source)).toMatch(/^storozh/);
+  expect(await page.evaluate(() => localStorage.getItem('lead-sent'))).toBeTruthy();
+  expect(errors, 'page errors').toEqual([]);
+});
+
+// Legal pages are left alone: no card on /privacy however the visitor leaves.
+test('storozh stays quiet on /privacy', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop', 'desktop trigger');
+  const errors = await guard(page);
+  await page.clock.install();
+  await page.goto('/privacy', { waitUntil: 'load' });
+  await page.clock.fastForward(40_000);
+  await page.evaluate(() =>
+    document.documentElement.dispatchEvent(new MouseEvent('mouseleave', { clientY: -3 })),
+  );
+  await page.waitForTimeout(300);
+  await expect(page.getByTestId('storozh')).toHaveCount(0);
+  expect(errors, 'page errors').toEqual([]);
+});

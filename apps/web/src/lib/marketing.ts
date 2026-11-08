@@ -77,6 +77,7 @@ const FORM_LABELS: Record<string, string> = {
   'smeta-app': 'Полная смета (ранний доступ к приложению)',
   'smeta-snab': 'Смета для снабженца, заказ материалов',
   stroyka: 'Стройка (прогулка)',
+  storozh: 'Сторож (вопрос Ивана перед уходом)',
   dizain: 'Дизайн-проект',
   provider: 'Поставщикам (старая форма)',
 };
@@ -163,7 +164,11 @@ export type Goal =
   // Telegram funnel (2026-10-03): deep link taps, the Mini App, the calculator.
   | 'telegram_click'
   | 'miniapp_open'
-  | 'calc_done';
+  | 'calc_done'
+  // «Сторож» (2026-11-08): the exit question from Иван, its lead and its «Нет, спасибо».
+  | 'storozh_shown'
+  | 'storozh_lead'
+  | 'storozh_close';
 
 /**
  * The cookie choice in localStorage: 'yes' («Согласен», Metrika on), 'no'
