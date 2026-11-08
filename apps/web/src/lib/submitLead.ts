@@ -9,6 +9,7 @@ import {
   reachGoal,
   withChannel,
 } from '@/lib/marketing';
+import { markLeadSent } from '@/lib/storozh';
 
 export interface LeadPayload {
   name?: string;
@@ -102,12 +103,23 @@ export async function submitLead(payload: LeadPayload): Promise<void> {
     // dispatcher, so this is a success for the visitor, not an error.
     if (body?.alreadyReceived) {
       saveDraft(null);
+      markLeadSent(storage());
       return;
     }
     throw new Error(typeof body?.error === 'string' ? body.error : 'Не удалось отправить');
   }
   saveDraft(null);
+  // Сторож (components/Storozh.tsx) never asks a customer who already wrote.
+  markLeadSent(storage());
   reachGoal('lead');
+}
+
+function storage(): Storage | null {
+  try {
+    return localStorage;
+  } catch {
+    return null;
+  }
 }
 
 /** A form's error text, with the phone added only if the server did not give it. */

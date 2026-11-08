@@ -1469,7 +1469,11 @@ html {
   bottom: calc(4.75rem + env(safe-area-inset-bottom));
 }
 /* The callback form is on screen (CallbackIris): the chat button steps aside. */
-html[data-callback-view] .chat-fab {
+html[data-callback-view] .chat-fab,
+/* Сторож (components/Storozh.tsx) takes the corner: the chat button and the
+   Telegram chip wait (the card covers the chip anyway; this keeps it tidy). */
+html[data-storozh] .chat-fab,
+html[data-storozh] [data-bottom-bar]:has([data-telegram-link]) {
   opacity: 0;
   pointer-events: none;
 }
@@ -2102,8 +2106,9 @@ html[data-vt-kind='fade']::view-transition-group(root) {
   }
 }
 
-/* The install prompt steps aside while the visitor types in a form. */
-html[data-typing] [aria-label='Установить приложение'] {
+/* The install prompt steps aside while the visitor types in a form or Сторож speaks. */
+html[data-typing] [aria-label='Установить приложение'],
+html[data-storozh] [aria-label='Установить приложение'] {
   display: none;
 }
 
