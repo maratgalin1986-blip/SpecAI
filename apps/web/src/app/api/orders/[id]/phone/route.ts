@@ -4,14 +4,24 @@ import { getRequestUser } from '@/lib/requestUser';
 import { checkRateLimit } from '@/lib/rateLimit';
 import { isHouseManager } from '@/lib/fleet';
 import { isEmailConfigured } from '@/lib/email';
-import { DAY_MS, revealDecision, revealNote } from '@/lib/chatOrders';
+import { notifyTelegram } from '@/lib/notify';
+import {
+  DAY_MS,
+  HOUR_MS,
+  companyRevealLimit,
+  revealAlertText,
+  revealDecision,
+  revealNote,
+} from '@/lib/chatOrders';
 
 export const dynamic = 'force-dynamic';
 
 /**
  * «Показать телефон» на заявке из открытого чата: только для исполнителя,
- * каждый показ записывается (кто, когда), не больше
- * CHAT_PHONE_REVEALS_PER_DAY разных заявок в сутки на компанию.
+ * каждый показ записывается (кто, когда), не больше companyRevealLimit разных
+ * заявок в сутки на компанию (5 — новой или непроверенной) и
+ * CHAT_PHONE_REVEALS_PER_USER_PER_DAY на сотрудника; больше
+ * REVEAL_ALERT_PER_HOUR показов за час — тревога владельцу в Telegram.
  */
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
   const user = await getRequestUser(request);
@@ -26,7 +36,8 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     }
   }
 
-  const [order, account] = await Promise.all([
+  const companyId = user?.companyId ?? null;
+  const [order, account, company] = await Promise.all([
     prisma.order.findUnique({
       where: { id: params.id },
       select: { id: true, source: true, status: true, contactPhone: true, contactName: true },
@@ -34,11 +45,17 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     user
       ? prisma.user.findUnique({ where: { id: user.id }, select: { emailVerified: true } })
       : Promise.resolve(null),
+    companyId
+      ? prisma.company.findUnique({
+          where: { id: companyId },
+          select: { name: true, verified: true, createdAt: true },
+        })
+      : Promise.resolve(null),
   ]);
 
-  const since = new Date(Date.now() - DAY_MS);
-  const companyId = user?.companyId ?? null;
-  const [alreadyRevealed, revealedToday] =
+  const now = Date.now();
+  const since = new Date(now - DAY_MS);
+  const [alreadyRevealed, revealedToday, revealedTodayByUser, revealedThisHour] =
     user && companyId && order
       ? await Promise.all([
           prisma.contactReveal.findFirst({
@@ -50,9 +67,18 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
             distinct: ['orderId'],
             select: { orderId: true },
           }),
+          prisma.contactReveal.findMany({
+            where: { userId: user.id, createdAt: { gte: since } },
+            distinct: ['orderId'],
+            select: { orderId: true },
+          }),
+          prisma.contactReveal.count({
+            where: { companyId, createdAt: { gte: new Date(now - HOUR_MS) } },
+          }),
         ])
-      : [null, []];
+      : [null, [], [], 0];
 
+  const house = isHouseManager(user);
   const decision = revealDecision({
     viewer: user
       ? {
@@ -65,7 +91,9 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     order,
     alreadyRevealed: Boolean(alreadyRevealed),
     // The house fleet works guest and chat leads itself: logged, not limited.
-    revealsToday: isHouseManager(user) ? 0 : revealedToday.length,
+    revealsToday: house ? 0 : revealedToday.length,
+    revealsTodayByUser: house ? 0 : revealedTodayByUser.length,
+    companyLimit: companyRevealLimit(company, new Date(now)),
     requireVerifiedEmail: isEmailConfigured(),
   });
   if (!decision.ok) {
@@ -76,6 +104,20 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
   await prisma.contactReveal.create({
     data: { orderId: order!.id, userId: user!.id, companyId },
   });
+  // A harvesting pace from one company: the owner hears of it once per hour.
+  const alert =
+    !house && companyId
+      ? revealAlertText({
+          companyName: company?.name ?? companyId,
+          companyId,
+          hourCount: revealedThisHour + 1,
+        })
+      : null;
+  if (alert) {
+    void notifyTelegram(alert).catch((error) =>
+      console.error('[phone] reveal alert failed', error),
+    );
+  }
   return NextResponse.json({
     phone: order!.contactPhone,
     name: order!.contactName,

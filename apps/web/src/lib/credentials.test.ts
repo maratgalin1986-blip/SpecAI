@@ -6,6 +6,8 @@ const findUserByEmail = vi.fn();
 vi.mock('@/lib/findUserByEmail', () => ({
   findUserByEmail: (...args: unknown[]) => findUserByEmail(...args),
 }));
+// No database here: the in-memory layer of the limit is under test.
+vi.mock('@/lib/rateLimitStore', () => ({ rateLimitStore: () => null }));
 
 const { authenticateWithCredentials } = await import('./credentials');
 

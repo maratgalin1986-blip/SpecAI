@@ -12,6 +12,12 @@ import {
   revealDecision,
   revealNote,
   stripChatOrderNote,
+  companyRevealLimit,
+  revealAlertText,
+  CHAT_PHONE_REVEALS_PER_USER_PER_DAY,
+  DAY_MS,
+  NEW_COMPANY_REVEALS_PER_DAY,
+  REVEAL_ALERT_PER_HOUR,
   type RevealViewer,
 } from './chatOrders';
 
@@ -123,6 +129,60 @@ describe('revealDecision', () => {
       ok: true,
       counts: false,
     });
+  });
+
+  it('limits each person too, so a second account does not double the share', () => {
+    expect(decide({ revealsTodayByUser: CHAT_PHONE_REVEALS_PER_USER_PER_DAY - 1 })).toEqual({
+      ok: true,
+      counts: true,
+    });
+    expect(decide({ revealsTodayByUser: CHAT_PHONE_REVEALS_PER_USER_PER_DAY })).toMatchObject({
+      ok: false,
+      status: 429,
+      error: expect.stringContaining('на сотрудника'),
+    });
+  });
+
+  it('applies the small limit a new or unverified company gets', () => {
+    expect(decide({ revealsToday: NEW_COMPANY_REVEALS_PER_DAY, companyLimit: 5 })).toMatchObject({
+      ok: false,
+      status: 429,
+      error: 'Лимит: 5 телефонов в сутки на компанию. Попробуйте завтра',
+    });
+    expect(decide({ revealsToday: NEW_COMPANY_REVEALS_PER_DAY, companyLimit: 30 })).toEqual({
+      ok: true,
+      counts: true,
+    });
+  });
+});
+
+describe('companyRevealLimit', () => {
+  const now = new Date('2026-11-08T12:00:00Z');
+  const old = new Date(now.getTime() - 30 * DAY_MS);
+  const fresh = new Date(now.getTime() - 2 * DAY_MS);
+
+  it('gives the full share only to a verified company older than a week', () => {
+    expect(companyRevealLimit({ verified: true, createdAt: old }, now)).toBe(
+      CHAT_PHONE_REVEALS_PER_DAY,
+    );
+    expect(companyRevealLimit({ verified: false, createdAt: old }, now)).toBe(
+      NEW_COMPANY_REVEALS_PER_DAY,
+    );
+    expect(companyRevealLimit({ verified: true, createdAt: fresh }, now)).toBe(
+      NEW_COMPANY_REVEALS_PER_DAY,
+    );
+    expect(companyRevealLimit(null, now)).toBe(NEW_COMPANY_REVEALS_PER_DAY);
+  });
+});
+
+describe('revealAlertText', () => {
+  const company = { companyName: 'ООО Ромашка', companyId: 'c1' };
+  it('fires once, as the hourly count crosses the mark, without customer data', () => {
+    expect(revealAlertText({ ...company, hourCount: REVEAL_ALERT_PER_HOUR })).toBeNull();
+    const text = revealAlertText({ ...company, hourCount: REVEAL_ALERT_PER_HOUR + 1 });
+    expect(text).toContain('ООО Ромашка');
+    expect(text).toContain(`${REVEAL_ALERT_PER_HOUR + 1} телефонов`);
+    expect(revealAlertText({ ...company, hourCount: REVEAL_ALERT_PER_HOUR + 2 })).toBeNull();
   });
 });
 
