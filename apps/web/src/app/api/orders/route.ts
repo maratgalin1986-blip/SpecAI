@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@specai/database';
 import { createOrderSchema } from '@specai/shared';
 import { getRequestUser } from '@/lib/requestUser';
-import { isOperator, isProvider } from '@/lib/fleet';
+import { isHouseManager, isOperator, isProvider } from '@/lib/fleet';
 import { matchIncoming, todayStartMsk } from '@/lib/providerFeed';
 import { loadProviderMatch } from '@/lib/providerFeedData';
 import { bidsUntilFor } from '@/lib/bidWindow';
@@ -19,7 +19,8 @@ import { checkBookingDates } from '@/lib/bookingRules';
 import { orderCategoryId } from '@/lib/orderCategoryData';
 import { customerShortName } from '@/lib/customerPrivacy';
 import { unreadMessagesByOrder } from '@/lib/orderChatAccess';
-import { bidForCustomer } from '@/lib/bidPrivacy';
+import { bidForCustomer, bookedProviderSees } from '@/lib/bidPrivacy';
+import { companyBase, locationForViewer } from '@/lib/orderLocationPrivacy';
 import { maskContactsAndLinks } from '@/lib/privacy';
 import { buyerJson, resolveBuyer } from '@/lib/buyerRequisites';
 import {
@@ -49,7 +50,7 @@ const ORDER_INCLUDE = {
   category: { select: { id: true, name: true } },
   customer: { select: { id: true, name: true } },
   bids: { include: { equipment: { select: { companyId: true } } } },
-  booking: { select: { status: true } },
+  booking: { select: { status: true, equipment: { select: { companyId: true } } } },
   location: { select: { addressLine: true, city: true, latitude: true, longitude: true } },
 } as const;
 
@@ -170,6 +171,18 @@ export async function GET(request: NextRequest) {
     nextOffset = rows.length > limit ? offset + limit : null;
   }
 
+  // The work site of someone else's order (REVIEW.md §1): a provider reads the
+  // city and the distance from its base, the address and the exact point only
+  // once its booking is confirmed. The house managers see everything.
+  const house = isHouseManager(currentUser);
+  const viewerCompany =
+    openFeed && !house && currentUser.companyId
+      ? await prisma.company.findUnique({
+          where: { id: currentUser.companyId },
+          select: { baseLat: true, baseLon: true },
+        })
+      : null;
+  const base = companyBase(viewerCompany);
   // Never expose contacts of people whose requests were imported from chats.
   // In the open feed a provider sees only its own bids (and how many there
   // are), the customer only as «Анна П.» and without the account id:
@@ -198,6 +211,10 @@ export async function GET(request: NextRequest) {
       );
       return {
         ...rest,
+        location: locationForViewer(rest.location, {
+          full: house || bookedProviderSees(booking, currentUser.companyId),
+          base,
+        }),
         // Phones typed into the task text stay private until the booking.
         description: maskContactsAndLinks(rest.description),
         ...(chatContact ? { chatContact } : {}),

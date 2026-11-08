@@ -11,6 +11,7 @@ import { INVALID_JSON_MESSAGE, readJson, zodErrorMessage } from '@/lib/apiInput'
 import { unreadMessagesByOrder } from '@/lib/orderChatAccess';
 import { maskContactsAndLinks } from '@/lib/privacy';
 import { bidForCustomer, bookedProviderSees } from '@/lib/bidPrivacy';
+import { companyBase, locationForViewer } from '@/lib/orderLocationPrivacy';
 import { notifyCompany } from '@/lib/notifications/notifyUser';
 import { matchedOrderCancelError } from '@/lib/orderCancel';
 
@@ -121,6 +122,24 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     : ordered.filter((bid) => bid.equipment.company.id === currentUser.companyId);
   const { booking, ...publicRest } = rest;
   void booking;
+  // The work site (REVIEW.md §1): the address and the exact point only to the
+  // customer, the house managers and the booked company once confirmed;
+  // another provider reads the city and the distance from its base.
+  const seesAddress =
+    isOwner ||
+    isHouseManager(currentUser) ||
+    bookedProviderSees(rest.booking, currentUser.companyId);
+  const viewerCompany =
+    !seesAddress && currentUser.companyId
+      ? await prisma.company.findUnique({
+          where: { id: currentUser.companyId },
+          select: { baseLat: true, baseLon: true },
+        })
+      : null;
+  const location = locationForViewer(rest.location, {
+    full: seesAddress,
+    base: companyBase(viewerCompany),
+  });
   // Unread chat messages for the «Открыть чат» badges in the app.
   const unread = await unreadMessagesByOrder([order.id], currentUser).catch(
     () => new Map<string, number>(),
@@ -128,6 +147,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
   return NextResponse.json({
     order: {
       ...publicRest,
+      location,
       ...(isOwner || bookedProviderSees(rest.booking, currentUser.companyId)
         ? {}
         : { description: maskContactsAndLinks(rest.description) }),
