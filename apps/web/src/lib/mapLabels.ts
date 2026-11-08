@@ -23,16 +23,28 @@ export interface MapLabel {
   sub: string;
 }
 
-/** A provider's base: «Стройтех» / «4 машины»; the house fleet: «СпецПласт16» / «парк · 12 машин». */
+/**
+ * A provider's base: «Стройтех» / «4 машины»; the house fleet: «СпецПласт16» /
+ * «свой парк · 12 машин»; with a machine on the line now «на линии · 4 машины»
+ * (owner, 2026-11-08: offline providers stay on the map, only quieter — the
+ * label never says when they registered or were last seen).
+ */
 export function providerLabel(pin: {
   name: string;
   equipmentCount: number;
   isHouse: boolean;
+  onLine?: boolean;
 }): MapLabel {
   const machines = pluralizeRu(pin.equipmentCount, ['машина', 'машины', 'машин']);
+  const line = pin.onLine ? 'на линии · ' : '';
   return pin.isHouse
-    ? { title: SITE.name, sub: `свой парк · ${machines}` }
-    : { title: cut(pin.name), sub: machines };
+    ? { title: SITE.name, sub: `${line}свой парк · ${machines}` }
+    : { title: cut(pin.name), sub: `${line}${machines}` };
+}
+
+/** A customer's open order: «Заказчик рядом» / «нужно: Экскаваторы · Анна П.» (lib/mapCustomers.ts). */
+export function customerLabel(pin: { title: string; sub: string }): MapLabel {
+  return { title: cut(pin.title, 40), sub: cut(pin.sub, 60) };
 }
 
 /**

@@ -137,6 +137,13 @@ model Company {
   // the trip to the site costs (prefills «подача» in a bid).
   deliveryRadiusKm   Int      @default(100)
   deliveryPricePerKm Decimal? @db.Decimal(10, 2)
+  // «Все видят всех на карте, офлайн и навсегда» (owner, 2026-11-08): a
+  // provider with machinery and a point is on the customers' map until it
+  // switches itself off (showOnMap), and its phone is on the pin until it
+  // hides it (showPhoneOnMap). Nullable Booleans with a default, no enum
+  // (CLAUDE.md rule 2); null reads as true.
+  showOnMap          Boolean? @default(true)
+  showPhoneOnMap     Boolean? @default(true)
 
   // Полная регистрация исполнителя (owner, 2026-10-28, lib/providerVerification.ts).
   // provisional — вошёл по лёгкой форме, данные не проверены (заказчики видят

@@ -4,11 +4,12 @@
 // database and can be imported by client components.
 
 import { HOUSE_COMPANY_ID } from './fleet';
-import { inServiceArea } from './geo';
+import { cityInText, distanceKm, inServiceArea, nearestCity } from './geo';
 import { maskContacts } from './privacy';
 import { pluralizeRu } from './pluralize';
 import { MACHINE_TYPES, photosOf } from './machinePhotos';
 import { providerPath } from './providerSeo';
+import { SITE } from './site';
 import { storedKeyFromUrl } from './fileUrls';
 
 export const PIN_NOTE_MAX = 120;
@@ -146,6 +147,16 @@ export function isDisplayableImage(value: string | null | undefined): value is s
     return false;
   }
 }
+/** A published machine of the company, as the pin lists it (customer rates, lib/equipmentCatalog.ts). */
+export interface MapMachineRow {
+  name: string;
+  /** The category's name; the machine's own name when it has none. */
+  category: string | null;
+  /** The customer's price of a shift, 0 when not set. */
+  dailyRate: number;
+  /** The machine's own point, when it has one: a base for a company without `baseLat`. */
+  location?: { latitude: number | null; longitude: number | null } | null;
+}
 
 /** The fields the map reads from a Company (plus whatever else a query returns). */
 export interface ProviderMapRow {
@@ -157,9 +168,26 @@ export interface ProviderMapRow {
   pinImageUrl: string | null;
   pinNote: string | null;
   equipmentCount: number;
+  // «Все видят всех» (owner, 2026-11-08): the provider's own switches, null = on.
+  showOnMap?: boolean | null;
+  showPhoneOnMap?: boolean | null;
+  /** The company's contact phone; on the pin while showPhoneOnMap is on. */
+  phone?: string | null;
+  /** Only its city reaches the map, never the address itself. */
+  baseAddress?: string | null;
+  machines?: readonly MapMachineRow[];
+  /** A machine of the company is «на линии» right now (lib/linePresence.ts isOnLine). */
+  onLine?: boolean;
 }
 
-/** One marker on the public map: nothing personal, no phones or e-mails. */
+/** How many machinery types the pin names before «ещё N». */
+export const PIN_TYPES_MAX = 3;
+
+/**
+ * One marker on the public map. Personal data: only the company's own
+ * contact phone, and only while its «Показывать телефон на карте» is on;
+ * never an e-mail, an address or a person.
+ */
 export interface ProviderMapPin {
   id: string;
   name: string;
@@ -170,35 +198,156 @@ export interface ProviderMapPin {
   equipmentCount: number;
   isHouse: boolean;
   catalogUrl: string;
+  /** Distinct machinery types, at most PIN_TYPES_MAX («Экскаваторы», «Самосвалы»). */
+  machines: string[];
+  /** How many more types the company has. */
+  machinesMore: number;
+  /** The city or town of the base («Набережные Челны»), null when unknown. */
+  city: string | null;
+  /** «от 24 000 ₽/смена» from the cheapest priced machine; null without prices. */
+  priceText: string | null;
+  /** «+7 927 242-80-88» or null (hidden by the provider, or no phone). */
+  phone: string | null;
+  /** «tel:+79272428088» for a tap-to-call link; null with `phone`. */
+  phoneHref: string | null;
+  /** On the line now: the pin is highlighted; offline pins are dimmed, never hidden. */
+  onLine: boolean;
+  /** «Написать»: an order addressed to this provider. */
+  orderUrl: string;
+}
+
+/** The order form addressed to one provider (the same link as on its page). */
+export function providerOrderUrl(id: string): string {
+  return `/orders?provider=${encodeURIComponent(id)}`;
 }
 
 /**
- * The public map's markers. Fields are copied one by one, so a phone, an
- * e-mail, an address or a user that a query happens to include never reaches
- * the response. Companies without published machinery, without a base (or
- * outside the area) are skipped;
- * coordinates are rounded to four decimals (~10 m).
+ * Where a provider stands on the map: its base, else the first machine with
+ * a point of its own (a provider that filled only its machines' addresses is
+ * still «рядом»). Null when nothing is known.
+ */
+export function providerMapPoint(
+  row: Pick<ProviderMapRow, 'baseLat' | 'baseLon' | 'machines'>,
+): { lat: number; lon: number } | null {
+  if (row.baseLat !== null && row.baseLon !== null && inServiceArea(row.baseLat, row.baseLon)) {
+    return { lat: row.baseLat, lon: row.baseLon };
+  }
+  for (const machine of row.machines ?? []) {
+    const lat = machine.location?.latitude;
+    const lon = machine.location?.longitude;
+    if (typeof lat === 'number' && typeof lon === 'number' && inServiceArea(lat, lon)) {
+      return { lat, lon };
+    }
+  }
+  return null;
+}
+
+/** 79272428088 → «+7 927 242-80-88»; other lengths with a plus. */
+export function formatPhoneDigits(digits: string): string {
+  if (digits.length === 11 && digits.startsWith('7')) {
+    return `+7 ${digits.slice(1, 4)} ${digits.slice(4, 7)}-${digits.slice(7, 9)}-${digits.slice(9)}`;
+  }
+  return `+${digits}`;
+}
+
+/** The digits of a phone with the country code, or null when it is not one (11–15 digits). */
+export function mapPhoneDigits(phone: string | null | undefined): string | null {
+  if (!phone) return null;
+  let digits = phone.replace(/\D/g, '');
+  if (digits.length === 11 && digits.startsWith('8')) digits = `7${digits.slice(1)}`;
+  if (digits.length === 10) digits = `7${digits}`;
+  return digits.length >= 11 && digits.length <= 15 ? digits : null;
+}
+
+/**
+ * The phone on a provider's pin (owner, 2026-11-08: «так вот и номер»): the
+ * company's contact phone while its «Показывать телефон на карте» switch is on
+ * (null = on, the default); the house fleet's is the site's. Off, or no
+ * phone → null, and the pin shows «Написать» instead.
+ */
+export function providerMapPhone(
+  row: Pick<ProviderMapRow, 'id' | 'phone' | 'showPhoneOnMap'>,
+): { phone: string; phoneHref: string } | null {
+  if (row.showPhoneOnMap === false) return null;
+  const digits = mapPhoneDigits(
+    row.id === HOUSE_COMPANY_ID ? row.phone?.trim() || SITE.phone : row.phone,
+  );
+  return digits ? { phone: formatPhoneDigits(digits), phoneHref: `tel:+${digits}` } : null;
+}
+
+/** Distinct machinery types in the company's order: the first PIN_TYPES_MAX and how many more. */
+export function pinMachineTypes(machines: readonly MapMachineRow[] | undefined): {
+  machines: string[];
+  machinesMore: number;
+} {
+  const types: string[] = [];
+  for (const machine of machines ?? []) {
+    const type = (machine.category ?? machine.name).replace(/\s+/g, ' ').trim();
+    if (type && !types.includes(type)) types.push(type);
+  }
+  return {
+    machines: types.slice(0, PIN_TYPES_MAX),
+    machinesMore: Math.max(0, types.length - PIN_TYPES_MAX),
+  };
+}
+
+/** «от 24 000 ₽/смена» from the cheapest machine with a shift price; null without one. */
+export function pinPriceText(machines: readonly MapMachineRow[] | undefined): string | null {
+  const prices = (machines ?? [])
+    .map((machine) => machine.dailyRate)
+    .filter((price) => Number.isFinite(price) && price > 0);
+  if (prices.length === 0) return null;
+  return `от ${Math.round(Math.min(...prices)).toLocaleString('ru-RU')}\u00a0₽/смена`;
+}
+
+/** The base's city: the one its address names, else the nearest known town within 80 km. */
+export function pinCity(
+  row: Pick<ProviderMapRow, 'baseAddress'>,
+  point: { lat: number; lon: number },
+): string | null {
+  return cityInText(row.baseAddress)?.name ?? nearestCity(point.lat, point.lon)?.name ?? null;
+}
+
+/**
+ * The public map's markers (owner, 2026-11-08: «все всех всегда должны
+ * видеть на карте в режиме офлайн и навсегда, пока не поменяют сами
+ * вручную»). Every provider with published machinery and a point is here,
+ * online or not, with no registration date or time; the only way off the map
+ * is its own «Показывать меня на карте» switch (`showOnMap: false`). Fields
+ * are copied one by one, so an e-mail, an address or a user that a query
+ * happens to include never reaches the response; the phone only through
+ * providerMapPhone. Coordinates are rounded to four decimals (~10 m).
  */
 export function toMapPins(rows: readonly ProviderMapRow[]): ProviderMapPin[] {
   const pins: ProviderMapPin[] = [];
   for (const row of rows) {
     if (row.isProvider === false) continue;
+    // The provider's own choice, and the only one that takes it off the map.
+    if (row.showOnMap === false) continue;
     // Nothing published (no machinery, or all of it taken off the site): not on the map.
     if (row.equipmentCount < 1) continue;
-    if (row.baseLat === null || row.baseLon === null) continue;
-    if (!inServiceArea(row.baseLat, row.baseLon)) continue;
+    const point = providerMapPoint(row);
+    if (!point) continue;
     const note = sanitizePinNote(row.pinNote);
+    const contact = providerMapPhone(row);
     pins.push({
       id: row.id,
       name: row.name.trim().slice(0, 120),
-      lat: round(row.baseLat, 4),
-      lon: round(row.baseLon, 4),
+      lat: round(point.lat, 4),
+      lon: round(point.lon, 4),
       note: note.ok ? note.value : null,
       imageUrl: isDisplayableImage(row.pinImageUrl) ? row.pinImageUrl : null,
       equipmentCount: Math.max(0, Math.floor(row.equipmentCount)),
       isHouse: row.id === HOUSE_COMPANY_ID,
       // The provider's public page lists its machinery.
       catalogUrl: providerPath(row.id),
+      ...pinMachineTypes(row.machines),
+      city: pinCity(row, point),
+      priceText: pinPriceText(row.machines),
+      phone: contact?.phone ?? null,
+      phoneHref: contact?.phoneHref ?? null,
+      onLine: row.onLine === true,
+      orderUrl: providerOrderUrl(row.id),
     });
   }
   // The own fleet first, then the providers with the most machinery.
@@ -208,6 +357,65 @@ export function toMapPins(rows: readonly ProviderMapRow[]): ProviderMapPin[] {
       b.equipmentCount - a.equipmentCount ||
       a.name.localeCompare(b.name, 'ru'),
   );
+}
+
+/** A viewport of the map: south-west and north-east corners. */
+export interface MapBbox {
+  south: number;
+  west: number;
+  north: number;
+  east: number;
+}
+
+/** The map gets at most this many providers at a time: the nearest to its centre. */
+export const MAP_PINS_LIMIT = 300;
+/** The map gets at most this many customers' orders at a time. */
+export const MAP_CUSTOMERS_LIMIT = 200;
+
+/** «south,west,north,east» → a box, or null when it is not one. */
+export function parseBbox(raw: string | null | undefined): MapBbox | null {
+  if (!raw) return null;
+  const parts = raw.split(',').map((part) => Number(part.trim()));
+  if (parts.length !== 4 || parts.some((part) => !Number.isFinite(part))) return null;
+  const [south, west, north, east] = parts as [number, number, number, number];
+  if (south < -90 || north > 90 || south >= north || west >= east) return null;
+  if (west < -180 || east > 180) return null;
+  return { south, west, north, east };
+}
+
+/** The centre of a box: what the API sorts by distance from. */
+export function bboxCentre(bbox: MapBbox): { lat: number; lon: number } {
+  return { lat: (bbox.south + bbox.north) / 2, lon: (bbox.west + bbox.east) / 2 };
+}
+
+/** Whether a point is inside the box (inclusive). */
+export function inBbox(point: { lat: number; lon: number }, bbox: MapBbox): boolean {
+  return (
+    point.lat >= bbox.south &&
+    point.lat <= bbox.north &&
+    point.lon >= bbox.west &&
+    point.lon <= bbox.east
+  );
+}
+
+/**
+ * The pins nearest to a point, at most `limit`; the first `limit` in their
+ * own order without a point. The house fleet stays first when it is in the
+ * list at all. Pure, so the API's cap is unit-tested.
+ */
+export function nearestPins<T extends { lat: number; lon: number; isHouse?: boolean }>(
+  pins: readonly T[],
+  around: { lat: number; lon: number } | null,
+  limit: number,
+): T[] {
+  if (!around) return pins.slice(0, limit);
+  return [...pins]
+    .sort(
+      (a, b) =>
+        Number(b.isHouse ?? false) - Number(a.isHouse ?? false) ||
+        distanceKm(around, a) - distanceKm(around, b),
+    )
+    .slice(0, limit);
 }
 
 /**

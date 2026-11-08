@@ -153,21 +153,32 @@ export function escapeHtml(value: string) {
 const MACHINE_SVG =
   '<svg viewBox="0 0 24 24" width="60%" height="60%" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 17h11V11H8l-2 3H3z"/><path d="M14 13h3l3-6"/><path d="M20 7l1 4h-3"/><circle cx="6" cy="18" r="2"/><circle cx="12" cy="18" r="2"/></svg>';
 
-/** A round marker: the provider's photo or the machine icon. */
+/**
+ * A round marker: the provider's photo or the machine icon. `dim` is a
+ * provider that is not on the line now (owner, 2026-11-08: shown anyway,
+ * offline and for good, only quieter); `onLine` rings it green.
+ */
 export function pinIcon(
   L: LeafletModule,
-  pin: { imageUrl: string | null; isHouse?: boolean; selected?: boolean },
+  pin: {
+    imageUrl: string | null;
+    isHouse?: boolean;
+    selected?: boolean;
+    dim?: boolean;
+    onLine?: boolean;
+  },
   size = 52,
 ) {
-  const ring = pin.isHouse ? '#f59e0b' : '#0f172a';
+  const ring = pin.onLine ? '#16a34a' : pin.isHouse ? '#f59e0b' : pin.dim ? '#94a3b8' : '#0f172a';
   const inner = pin.imageUrl
     ? `<img src="${escapeHtml(pin.imageUrl)}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:9999px;display:block" loading="lazy" referrerpolicy="no-referrer"/>`
     : `<span style="display:flex;width:100%;height:100%;align-items:center;justify-content:center;border-radius:9999px;background:${pin.isHouse ? '#f59e0b' : '#1e293b'};color:${pin.isHouse ? '#0f172a' : '#fbbf24'}">${MACHINE_SVG}</span>`;
   const scale = pin.selected ? 1.15 : 1;
   const px = Math.round(size * scale);
+  const dim = pin.dim && !pin.isHouse && !pin.onLine;
   return L.divIcon({
-    className: 'provider-pin',
-    html: `<div style="width:${px}px;height:${px}px;border-radius:9999px;border:3px solid ${ring};background:#fff;box-shadow:0 4px 14px rgba(15,23,42,.35);overflow:hidden">${inner}</div><div style="width:0;height:0;margin:-2px auto 0;border-left:7px solid transparent;border-right:7px solid transparent;border-top:9px solid ${ring}"></div>`,
+    className: `provider-pin${dim ? ' provider-pin-offline' : ''}${pin.onLine ? ' provider-pin-online' : ''}`,
+    html: `<div style="width:${px}px;height:${px}px;border-radius:9999px;border:3px solid ${ring};background:#fff;box-shadow:0 4px 14px rgba(15,23,42,.35);overflow:hidden${dim ? ';opacity:.62;filter:grayscale(.55)' : ''}">${inner}</div><div style="width:0;height:0;margin:-2px auto 0;border-left:7px solid transparent;border-right:7px solid transparent;border-top:9px solid ${ring}${dim ? ';opacity:.62' : ''}"></div>`,
     iconSize: [px, px + 9],
     iconAnchor: [px / 2, px + 9],
   });
@@ -176,9 +187,9 @@ export function pinIcon(
 /**
  * Label ranks: when two labels would overlap, the lower rank stays —
  * СпецПласт16 first (the owner's rule), then machines on the line, then
- * provider bases, then the platform's «приём заявок» points.
+ * provider bases, then the platform's «приём заявок» points, then customers.
  */
-export const LABEL_RANK = { house: 0, live: 1, provider: 2, intake: 3 } as const;
+export const LABEL_RANK = { house: 0, live: 1, provider: 2, intake: 3, customer: 4 } as const;
 export type LabelRank = (typeof LABEL_RANK)[keyof typeof LABEL_RANK];
 
 /** Below this zoom (the whole country, a region) labels hide; a city shows them all. */
@@ -189,13 +200,19 @@ export const LABELS_MIN_ZOOM = 8;
  * иконками», not only on tap). `html` must be escaped by the caller;
  * `iconHeight` is how far the icon reaches above its point.
  */
-export function labelAbove(marker: Marker, html: string, rank: LabelRank, iconHeight: number) {
+export function labelAbove(
+  marker: Marker,
+  html: string,
+  rank: LabelRank,
+  iconHeight: number,
+  extraClass = '',
+) {
   return marker.bindTooltip(html, {
     permanent: true,
     direction: 'top',
     offset: [0, -iconHeight],
     opacity: 1,
-    className: `map-label map-label-r${rank}`,
+    className: `map-label map-label-r${rank}${extraClass ? ` ${extraClass}` : ''}`,
   });
 }
 
@@ -249,5 +266,15 @@ export function intakeIcon(L: LeafletModule) {
     html: '<span style="display:flex;width:32px;height:32px;align-items:center;justify-content:center;border-radius:9999px;background:#fffbeb;border:2px dashed #b45309;font-size:16px;box-shadow:0 2px 8px rgba(15,23,42,.25)">📝</span>',
     iconSize: [32, 32],
     iconAnchor: [16, 16],
+  });
+}
+
+/** A customer with an open order (owner, 2026-11-08): not a machine, not a company — a place that needs one. */
+export function customerIcon(L: LeafletModule) {
+  return L.divIcon({
+    className: 'customer-pin',
+    html: '<span style="display:flex;width:30px;height:30px;align-items:center;justify-content:center;border-radius:9999px;background:#f5f3ff;border:2px solid #7c3aed;font-size:15px;box-shadow:0 2px 8px rgba(15,23,42,.25)">👷</span>',
+    iconSize: [30, 30],
+    iconAnchor: [15, 15],
   });
 }

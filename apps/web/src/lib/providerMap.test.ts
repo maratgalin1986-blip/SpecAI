@@ -11,8 +11,11 @@ import {
   isAllowedPinImage,
   isDisplayableImage,
   machineCountLabel,
+  nearestPins,
   parseBaseCoords,
+  parseBbox,
   pinPhotoChoices,
+  providerMapPhone,
   sanitizePinNote,
   siteMachinePhotos,
   spreadOverlapping,
@@ -169,14 +172,15 @@ describe('toMapPins', () => {
     equipmentCount: 3,
   };
 
-  it('returns only the safe fields, without phones, e-mails or addresses', () => {
+  it('returns only the safe fields: the contact phone by the owner’s rule, never e-mails, addresses or people', () => {
     const row = {
       ...base,
       phone: '+79270000000',
       email: 'ivan@example.ru',
-      baseAddress: 'ул. Ленина, 1, кв. 5',
+      baseAddress: 'Набережные Челны, ул. Ленина, 1, кв. 5',
       taxId: '123456789012',
-      users: [{ email: 'ivan@example.ru', phone: '+79270000000' }],
+      createdAt: new Date('2026-01-02T03:04:05Z'),
+      users: [{ email: 'ivan@example.ru', phone: '+79270000001', name: 'Иван Иванов' }],
     };
     const [pin] = toMapPins([row]);
     expect(pin).toEqual({
@@ -189,12 +193,132 @@ describe('toMapPins', () => {
       equipmentCount: 3,
       isHouse: false,
       catalogUrl: '/providers/p1',
+      machines: [],
+      machinesMore: 0,
+      city: 'Набережные Челны',
+      priceText: null,
+      phone: '+7 927 000-00-00',
+      phoneHref: 'tel:+79270000000',
+      onLine: false,
+      orderUrl: '/orders?provider=p1',
     });
     const json = JSON.stringify(toMapPins([row]));
-    expect(json).not.toContain('79270000000');
+    expect(json).not.toContain('79270000001'); // a person's phone, not the company's
     expect(json).not.toContain('@');
     expect(json).not.toContain('Ленина');
     expect(json).not.toContain('123456789012');
+    expect(json).not.toContain('2026-01-02'); // no registration date or time
+    expect(json).not.toContain('Иван Иванов');
+  });
+
+  // «Все всех всегда должны видеть на карте в режиме офлайн и навсегда, пока
+  // не поменяют сами вручную» (owner, 2026-11-08).
+  describe('visibility rule', () => {
+    it('shows a provider that is not on the line, dimmed, not hidden', () => {
+      const [pin] = toMapPins([{ ...base, onLine: false }]);
+      expect(pin).toBeDefined();
+      expect(pin?.onLine).toBe(false);
+      expect(toMapPins([{ ...base, onLine: true }])[0]?.onLine).toBe(true);
+    });
+
+    it('older rows without the switches (null) are on the map with the phone', () => {
+      const [pin] = toMapPins([
+        { ...base, showOnMap: null, showPhoneOnMap: null, phone: '8 (927) 000-00-00' },
+      ]);
+      expect(pin?.phone).toBe('+7 927 000-00-00');
+      expect(pin?.phoneHref).toBe('tel:+79270000000');
+    });
+
+    it('hides a provider only by its own switch', () => {
+      expect(toMapPins([{ ...base, showOnMap: false }])).toEqual([]);
+      expect(toMapPins([{ ...base, showOnMap: true }])).toHaveLength(1);
+    });
+
+    it('hides the phone by its own switch and offers «Написать» instead', () => {
+      const [pin] = toMapPins([{ ...base, phone: '+79270000000', showPhoneOnMap: false }]);
+      expect(pin?.phone).toBeNull();
+      expect(pin?.phoneHref).toBeNull();
+      expect(pin?.orderUrl).toBe('/orders?provider=p1');
+      expect(JSON.stringify(pin)).not.toContain('79270000000');
+    });
+
+    it('a text that is not a phone is not a phone', () => {
+      expect(
+        providerMapPhone({ id: 'p1', phone: 'Telegram @ivan', showPhoneOnMap: true }),
+      ).toBeNull();
+      expect(providerMapPhone({ id: 'p1', phone: null, showPhoneOnMap: null })).toBeNull();
+    });
+
+    it('the house fleet shows the site phone', () => {
+      const [pin] = toMapPins([{ ...base, id: HOUSE_COMPANY_ID, phone: null }]);
+      expect(pin?.isHouse).toBe(true);
+      expect(pin?.phoneHref).toBe('tel:+79272428088');
+    });
+
+    it('a provider without a base stands at its machine’s own point', () => {
+      const [pin] = toMapPins([
+        {
+          ...base,
+          baseLat: null,
+          baseLon: null,
+          machines: [
+            {
+              name: 'JCB 3CX',
+              category: 'Экскаваторы-погрузчики',
+              dailyRate: 24000,
+              location: { latitude: 55.79, longitude: 49.12 },
+            },
+          ],
+        },
+      ]);
+      expect(pin).toMatchObject({ lat: 55.79, lon: 49.12, city: 'Казань' });
+    });
+
+    it('lists machinery types, «ещё N» and the cheapest shift', () => {
+      const [pin] = toMapPins([
+        {
+          ...base,
+          machines: [
+            { name: 'JCB 3CX', category: 'Экскаваторы-погрузчики', dailyRate: 24000 },
+            { name: 'JCB 4CX', category: 'Экскаваторы-погрузчики', dailyRate: 0 },
+            { name: 'КамАЗ', category: 'Самосвалы', dailyRate: 18000 },
+            { name: 'Hitachi', category: 'Гусеничные экскаваторы', dailyRate: 32000 },
+            { name: 'Ивановец', category: 'Автокраны', dailyRate: 28000 },
+            { name: 'Без категории', category: null, dailyRate: 0 },
+          ],
+        },
+      ]);
+      expect(pin?.machines).toEqual([
+        'Экскаваторы-погрузчики',
+        'Самосвалы',
+        'Гусеничные экскаваторы',
+      ]);
+      expect(pin?.machinesMore).toBe(2);
+      expect(pin?.priceText).toBe('от 18\u00a0000\u00a0₽/смена');
+    });
+  });
+
+  describe('viewport', () => {
+    it('parses a box and refuses a broken one', () => {
+      expect(parseBbox('55,52,56,53')).toEqual({ south: 55, west: 52, north: 56, east: 53 });
+      expect(parseBbox('56,52,55,53')).toBeNull();
+      expect(parseBbox('a,b,c,d')).toBeNull();
+      expect(parseBbox('1,2,3')).toBeNull();
+      expect(parseBbox(null)).toBeNull();
+    });
+
+    it('keeps the nearest pins to a point, the house fleet first', () => {
+      const pins = [
+        { id: 'far', lat: 59.9, lon: 30.3 },
+        { id: 'house', lat: 55.74, lon: 52.4, isHouse: true },
+        { id: 'near', lat: 55.8, lon: 49.1 },
+        { id: 'mid', lat: 56.3, lon: 44.0 },
+      ];
+      const around = { lat: 55.79, lon: 49.12 }; // Kazan
+      expect(nearestPins(pins, around, 2).map((pin) => pin.id)).toEqual(['house', 'near']);
+      expect(nearestPins(pins, around, 3).map((pin) => pin.id)).toEqual(['house', 'near', 'mid']);
+      expect(nearestPins(pins, null, 2).map((pin) => pin.id)).toEqual(['far', 'house']);
+    });
   });
 
   it('skips companies without a base, outside the area or not providers', () => {
