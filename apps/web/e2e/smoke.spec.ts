@@ -432,3 +432,140 @@ test('storozh stays quiet on /privacy', async ({ page }, testInfo) => {
   await expect(page.getByTestId('storozh')).toHaveCount(0);
   expect(errors, 'page errors').toEqual([]);
 });
+
+// «Все всех всегда должны видеть на карте в режиме офлайн и навсегда» (owner,
+// 2026-11-08): a provider that is not on the line is on /map anyway, its card
+// has the phone as a tap-to-call link, and a tap lists who is around. The map
+// API is answered here, so the test needs no database and no network.
+test.describe('map: everyone sees everyone', () => {
+  // The visitor stands a few kilometres from the pin, so the tap always moves the map.
+  // The service worker would answer the map API itself, past the routes below.
+  test.use({
+    geolocation: { latitude: 55.7, longitude: 52.3 },
+    permissions: ['geolocation'],
+    serviceWorkers: 'block',
+  });
+
+  const PNG_1X1 = Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=',
+    'base64',
+  );
+  const pins = {
+    providers: [
+      {
+        id: 'p-offline',
+        name: 'Стройтех Челны',
+        lat: 55.745,
+        lon: 52.4,
+        note: 'Работаем без выходных',
+        imageUrl: null,
+        equipmentCount: 4,
+        isHouse: false,
+        catalogUrl: '/providers/p-offline',
+        machines: ['Экскаваторы-погрузчики', 'Самосвалы'],
+        machinesMore: 0,
+        city: 'Набережные Челны',
+        priceText: 'от 18\u00a0000\u00a0₽/смена',
+        phone: '+7 927 100-00-00',
+        phoneHref: 'tel:+79271000000',
+        onLine: false,
+        orderUrl: '/orders?provider=p-offline',
+      },
+      {
+        id: 'p-online',
+        name: 'Казань-Экскаватор',
+        lat: 55.79,
+        lon: 49.12,
+        note: null,
+        imageUrl: null,
+        equipmentCount: 2,
+        isHouse: false,
+        catalogUrl: '/providers/p-online',
+        machines: ['Экскаваторы'],
+        machinesMore: 0,
+        city: 'Казань',
+        priceText: null,
+        phone: null,
+        phoneHref: null,
+        onLine: true,
+        orderUrl: '/orders?provider=p-online',
+      },
+    ],
+    customers: [
+      {
+        id: 'o1',
+        lat: 55.76,
+        lon: 52.45,
+        title: 'Заказчик рядом',
+        sub: 'нужно: Автокраны · Анна П.',
+        machinery: 'Автокраны',
+        customer: 'Анна П.',
+        orderUrl: '/orders/o1',
+        approximate: true,
+      },
+    ],
+    intake: [],
+  };
+
+  test('an offline provider is on the map with a tap-to-call phone, and the neighbours are listed', async ({
+    page,
+  }, testInfo) => {
+    const errors = await guard(page);
+    const asked: string[] = [];
+    await page.route('**/api/tiles/**', (route) =>
+      route.fulfill({ status: 200, contentType: 'image/png', body: PNG_1X1 }),
+    );
+    await page.route('**/api/line/nearby**', (route) =>
+      route.fulfill({ status: 401, contentType: 'application/json', body: '{"error":"login"}' }),
+    );
+    // A regex, not a glob: the viewport query («?bbox=…») must be caught too.
+    await page.route(/\/api\/providers\/map(\?.*)?$/, (route) => {
+      asked.push(new URL(route.request().url()).search);
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(pins),
+      });
+    });
+    await page.goto('/map', { waitUntil: 'load' });
+
+    const offline = page.locator('.leaflet-marker-icon.provider-pin-offline');
+    await expect(offline).toHaveCount(1);
+    await expect(page.locator('.leaflet-marker-icon.provider-pin-online')).toHaveCount(1);
+    await expect(page.locator('.leaflet-marker-icon.customer-pin')).toHaveCount(1);
+
+    await offline.click();
+    const popup = page.locator('.leaflet-popup-content');
+    await expect(popup).toContainText('Стройтех Челны');
+    await expect(popup).toContainText('Не на линии');
+    await expect(popup).toContainText(/от 18.000.₽\/смена/);
+    await expect(popup.locator('a[href="tel:+79271000000"]')).toHaveText(/\+7 927 100-00-00/);
+    await expect(popup).not.toContainText(/20\d\d-\d\d-\d\d/); // no registration date
+
+    // The tap centred the map: the viewport query went out with a box, and the
+    // tapped pin with its open card survived the reload.
+    await expect.poll(() => asked.some((query) => query.includes('bbox='))).toBe(true);
+    await expect(popup).toContainText('Стройтех Челны');
+
+    const nearby = page.getByTestId('map-nearby');
+    await expect(nearby).toContainText('Стройтех Челны');
+    await expect(nearby).toContainText('рядом: 1 экскаватор, 1 заказчик');
+    await expect(nearby.getByRole('link', { name: /Заказчик рядом/ })).toHaveAttribute(
+      'href',
+      '/orders/o1',
+    );
+
+    if (process.env.MAP_SHOT_DIR && testInfo.project.name === 'iphone-13') {
+      await page.screenshot({ path: `${process.env.MAP_SHOT_DIR}/offline-pin-popup.png` });
+      await nearby.scrollIntoViewIfNeeded();
+      await page.waitForTimeout(1000); // smooth scrolling and the reveal animation
+      await page.screenshot({ path: `${process.env.MAP_SHOT_DIR}/offline-pin-nearby.png` });
+    }
+    // With service workers blocked the site's own registration finds none
+    // («reading 'waiting'»); that is the test's doing, not the map's.
+    expect(
+      errors.filter((message) => !message.includes("'waiting'")),
+      'page errors',
+    ).toEqual([]);
+  });
+});

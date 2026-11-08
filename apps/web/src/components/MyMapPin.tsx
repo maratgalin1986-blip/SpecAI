@@ -15,6 +15,10 @@ export interface MyPinCompany {
   baseAddress: string | null;
   pinImageUrl: string | null;
   pinNote: string | null;
+  /** «Показывать меня на карте»: the only way off the map (owner, 2026-11-08). Null = on. */
+  showOnMap?: boolean | null;
+  /** «Показывать телефон на карте»: off → the pin shows «Написать» instead. Null = on. */
+  showPhoneOnMap?: boolean | null;
 }
 
 export function MyMapPin({
@@ -38,6 +42,8 @@ export function MyMapPin({
       : photos,
   );
   const [note, setNote] = useState(company.pinNote ?? '');
+  const [showOnMap, setShowOnMap] = useState(company.showOnMap !== false);
+  const [showPhone, setShowPhone] = useState(company.showPhoneOnMap !== false);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
@@ -87,6 +93,8 @@ export function MyMapPin({
             : {}),
           pinImageUrl: image,
           pinNote: note,
+          showOnMap,
+          showPhoneOnMap: showPhone,
         }),
       });
       const body = (await response.json().catch(() => null)) as {
@@ -103,7 +111,15 @@ export function MyMapPin({
         lon: body.company.baseLon,
       });
       setNote(body.company.pinNote ?? '');
-      setMessage({ ok: true, text: 'Сохранено — так вас видят заказчики на карте' });
+      setShowOnMap(body.company.showOnMap !== false);
+      setShowPhone(body.company.showPhoneOnMap !== false);
+      setMessage({
+        ok: true,
+        text:
+          body.company.showOnMap === false
+            ? 'Сохранено — на карте вас не видно, пока не включите снова'
+            : 'Сохранено — так вас видят заказчики на карте',
+      });
     } catch {
       setMessage({ ok: false, text: 'Нет связи с сервером, попробуйте ещё раз' });
     } finally {
@@ -227,6 +243,41 @@ export function MyMapPin({
           ))}
         </span>
       </label>
+
+      <fieldset className="flex flex-col gap-2 rounded-xl border border-slate-200 p-3 text-sm">
+        <legend className="px-1 font-medium">Кто вас видит</legend>
+        <label className="flex items-start gap-2">
+          <input
+            type="checkbox"
+            checked={showOnMap}
+            onChange={(event) => setShowOnMap(event.target.checked)}
+            className="mt-0.5"
+          />
+          <span>
+            Показывать меня на карте
+            <span className="block text-xs text-slate-500">
+              Заказчики видят вас всегда — и когда вы не на линии, — пока вы сами не снимете
+              галочку. Без даты регистрации.
+            </span>
+          </span>
+        </label>
+        <label className="flex items-start gap-2">
+          <input
+            type="checkbox"
+            checked={showPhone}
+            disabled={!showOnMap}
+            onChange={(event) => setShowPhone(event.target.checked)}
+            className="mt-0.5"
+          />
+          <span>
+            Показывать телефон на карте
+            <span className="block text-xs text-slate-500">
+              Номер компании из профиля — заказчик звонит в одно нажатие. Выключите — вместо номера
+              будет кнопка «Написать» (заявка вам).
+            </span>
+          </span>
+        </label>
+      </fieldset>
 
       <div className="flex flex-wrap items-center gap-3">
         <button
