@@ -8,14 +8,17 @@ vi.mock('@/lib/demandNudgeData', () => ({ sendDemandNudges }));
 
 const { GET } = await import('./route');
 
-function call(ip: string) {
+function call(ip: string, auth = 'Bearer cron-test') {
   return GET(
-    new NextRequest('http://localhost/api/cron/notices', { headers: { 'x-forwarded-for': ip } }),
+    new NextRequest('http://localhost/api/cron/notices', {
+      headers: { 'x-forwarded-for': ip, authorization: auth },
+    }),
   );
 }
 
 describe('GET /api/cron/notices', () => {
   beforeEach(() => {
+    vi.stubEnv('CRON_SECRET', 'cron-test');
     flushDeferredOrderNotices.mockReset();
     flushDeferredOrderNotices.mockResolvedValue({ due: 2, sent: 1, skipped: 1 });
     sendDemandNudges.mockReset();
@@ -32,6 +35,15 @@ describe('GET /api/cron/notices', () => {
     expect((await call('10.0.0.1')).status).toBe(403);
     expect(flushDeferredOrderNotices).not.toHaveBeenCalled();
     expect(sendDemandNudges).not.toHaveBeenCalled();
+  });
+
+  it('requires CRON_SECRET (audit 2026-11-08, №5)', async () => {
+    vi.stubEnv('VERCEL_ENV', 'production');
+    expect((await call('10.0.0.9', 'Bearer wrong')).status).toBe(403);
+    expect((await call('10.0.0.9', '')).status).toBe(403);
+    vi.stubEnv('CRON_SECRET', '');
+    expect((await call('10.0.0.9', 'Bearer ')).status).toBe(403);
+    expect(flushDeferredOrderNotices).not.toHaveBeenCalled();
   });
 
   it('answers counts only', async () => {

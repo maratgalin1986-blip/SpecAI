@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { cronAllowed } from '@/lib/cronAuth';
 import { prisma } from '@specai/database';
 import { onceADay } from '@/lib/cronOnce';
 import { notifyTelegram } from '@/lib/notify';
@@ -22,15 +23,10 @@ const NEWSLETTER_BUDGET_MS = 35_000;
 // Its sends time out after 8 s (lib/aktualnoData.ts), so the run ends within maxDuration.
 const PRICE_ASK_BUDGET_MS = 48_000;
 
-// Called by Vercel Cron on Monday mornings (apps/web/vercel.json). With
-// CRON_SECRET set in Vercel, only requests carrying it are accepted.
+// Called by Vercel Cron on Monday mornings (apps/web/vercel.json); only
+// requests carrying CRON_SECRET are accepted (lib/cronAuth.ts).
 export async function GET(request: NextRequest) {
-  const secret = process.env.CRON_SECRET;
-  const auth = request.headers.get('authorization');
-  const fromCron = request.headers.get('user-agent')?.startsWith('vercel-cron');
-  if (secret ? auth !== `Bearer ${secret}` : !fromCron) {
-    return NextResponse.json({ error: 'forbidden' }, { status: 403 });
-  }
+  if (!cronAllowed(request)) return NextResponse.json({ error: 'forbidden' }, { status: 403 });
   const started = Date.now();
   // Once a day (lib/cronOnce.ts): a repeated call does not resend the report.
   let result: Awaited<ReturnType<typeof sendWeeklyReport>> | null = null;
