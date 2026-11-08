@@ -6,13 +6,15 @@ import {
   issueAdminAppToken,
 } from '@/lib/admin';
 import { ADMIN_LOGIN_LIMIT, clientIpFrom } from '@/lib/loginErrors';
-import { checkRateLimit } from '@/lib/rateLimit';
+import { durableCheck } from '@/lib/durableRateLimit';
+import { rateLimitStore } from '@/lib/rateLimitStore';
 
 export async function POST(request: NextRequest) {
   // One shared password: limit guesses per IP (the delay below does not stop
-  // parallel requests).
+  // parallel requests), counted in the database too, so a cold start or a
+  // second instance does not hand out a fresh limit (lib/durableRateLimit.ts).
   const ip = clientIpFrom((name) => request.headers.get(name));
-  const rate = checkRateLimit(`admin-login:${ip}`, ADMIN_LOGIN_LIMIT);
+  const rate = await durableCheck(`admin-login:${ip}`, ADMIN_LOGIN_LIMIT, rateLimitStore());
   if (!rate.ok) {
     return NextResponse.json(
       { error: 'Слишком много попыток входа. Подождите 15 минут и попробуйте снова' },

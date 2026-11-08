@@ -723,6 +723,22 @@ model ContactReveal {
   @@index([orderId])
 }
 
+// Durable rate-limit counters (audit 2026-11-08, №4): the in-memory counters of
+// apps/web/src/lib/rateLimit.ts live in one serverless instance, so the login,
+// lead and admin-password limits also count here, one row per keyed hash of
+// the limit key (IP, e-mail — never stored raw) and fixed window. Rows expire
+// with the window; apps/web/src/lib/durableRateLimit.ts cleans them up.
+model RateLimitWindow {
+  id          String   @id
+  keyHash     String
+  windowStart DateTime
+  count       Int      @default(0)
+  expiresAt   DateTime
+
+  @@index([keyHash])
+  @@index([expiresAt])
+}
+
 // ---- Order chat ----
 // Chat between the customer of an order and one provider company: one
 // thread per (order, company), so bidders never see each other. No relations

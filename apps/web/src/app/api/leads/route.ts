@@ -6,7 +6,9 @@ import { notifyTelegram } from '@/lib/notify';
 import { acceptLead } from '@/lib/leadIntake';
 import { siteUrl } from '@/lib/siteUrl';
 import { PHOTO_AFTER_PATH } from '@/lib/photoShare';
-import { LEAD_RATE_LIMIT, checkRateLimit } from '@/lib/rateLimit';
+import { LEAD_RATE_LIMIT } from '@/lib/rateLimit';
+import { durableCheck } from '@/lib/durableRateLimit';
+import { rateLimitStore } from '@/lib/rateLimitStore';
 import { phoneLimitMessage, prismaRecentLeads } from '@/lib/leadLimit';
 import { SITE } from '@/lib/site';
 
@@ -27,8 +29,10 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  // Per IP, in memory and in the database (lib/durableRateLimit.ts); the
+  // per-phone limit below (lib/leadLimit.ts) is durable as well.
   const ip = clientIp(request);
-  if (!checkRateLimit(`leads:${ip}`, LEAD_RATE_LIMIT).ok) {
+  if (!(await durableCheck(`leads:${ip}`, LEAD_RATE_LIMIT, rateLimitStore())).ok) {
     return NextResponse.json(
       { error: `Слишком много заявок. Позвоните нам: ${SITE.phone}` },
       { status: 429 },

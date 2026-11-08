@@ -16,6 +16,8 @@ import { maskContactsAndLinks, maskMessagesForAi } from '@/lib/privacy';
 import { EXCERPT_MAX } from '@/lib/orderBoard';
 import { orderCategoryId } from '@/lib/orderCategoryData';
 import { LEAD_RATE_LIMIT, checkRateLimit } from '@/lib/rateLimit';
+import { durableCheck } from '@/lib/durableRateLimit';
+import { rateLimitStore } from '@/lib/rateLimitStore';
 import { HOUSE_FIRST_ORDER, PUBLIC_FLEET, isProvider, isPublicEquipment } from '@/lib/fleet';
 import { notifyTelegram } from '@/lib/notify';
 import { acceptLead } from '@/lib/leadIntake';
@@ -107,8 +109,9 @@ export async function POST(request: NextRequest) {
         phone: leadStep.phone,
       });
     }
-    // The same per-IP lead limit as the site's forms (/api/leads).
-    if (!checkRateLimit(`leads:${ip}`, LEAD_RATE_LIMIT).ok) {
+    // The same per-IP lead limit as the site's forms (/api/leads), in memory
+    // and in the database (lib/durableRateLimit.ts).
+    if (!(await durableCheck(`leads:${ip}`, LEAD_RATE_LIMIT, rateLimitStore())).ok) {
       return NextResponse.json(
         {
           agentId,
