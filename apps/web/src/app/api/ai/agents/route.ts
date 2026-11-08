@@ -131,8 +131,12 @@ export async function POST(request: NextRequest) {
       notify: notifyTelegram,
       siteName: SITE.name,
       phoneLimit: prismaRecentLeads(prisma),
+      // No personal data in the log (audit 2026-11-08, №6): counts only.
       onSaveError: (error, data) =>
-        console.error('[agents] failed to save chat lead', error, JSON.stringify(data)),
+        console.error('[agents] failed to save chat lead', error, {
+          source: data.source ?? null,
+          messageLength: data.message?.length ?? 0,
+        }),
     });
     if (outcome === 'limited') {
       // A friendly answer, not an error: the earlier leads already reached us.

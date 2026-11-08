@@ -52,11 +52,15 @@ export async function POST(request: NextRequest) {
     siteName: SITE.name,
     phoneLimit: prismaRecentLeads(prisma),
     footer: `📷 После работ можно попросить фото: ${siteUrl()}${PHOTO_AFTER_PATH}`,
-    // The database is down: Telegram gets only the phone (lib/leadIntake.ts),
-    // the full lead stays in the server log so it can be recovered (losing a
-    // customer's request is worse; Vercel keeps runtime logs only briefly).
+    // The database is down: Telegram gets only the phone (lib/leadIntake.ts).
+    // The log holds no personal data (audit 2026-11-08, №6: Vercel's logs are
+    // a third-party store) — only what was lost, so the owner knows to look at
+    // the Telegram message.
     onSaveError: (error, data) =>
-      console.error('[leads] failed to save lead', error, JSON.stringify(data)),
+      console.error('[leads] failed to save lead', error, {
+        source: data.source ?? null,
+        messageLength: data.message?.length ?? 0,
+      }),
   });
   if (outcome === 'limited') {
     return NextResponse.json(
