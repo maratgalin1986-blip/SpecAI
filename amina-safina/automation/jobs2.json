@@ -1,0 +1,12 @@
+[
+ {"id":"l-01","cat":"lifestyle","den":0.78,"prompt":"sitting in a cozy Kazan cafe with a cappuccino and croissant, cream blouse, laughing, window light"},
+ {"id":"l-02","cat":"lifestyle","den":0.78,"prompt":"walking with shopping bags on a Moscow street at night, festive lights, black coat, smiling"},
+ {"id":"l-03","cat":"lifestyle","den":0.78,"prompt":"in an airport lounge with a suitcase and passport, travel outfit, excited smile"},
+ {"id":"l-04","cat":"lifestyle","den":0.78,"prompt":"luxury hotel room balcony at sunrise, white silk robe, holding a cup of tea, city view"},
+ {"id":"l-05","cat":"lifestyle","den":0.78,"prompt":"getting ready at a vanity mirror with makeup brushes, satin robe, playful look at camera"},
+ {"id":"l-06","cat":"lifestyle","den":0.78,"prompt":"winter snowy Kazan Kremlin in the background, white fur-collar coat, snowflakes in hair"},
+ {"id":"g-04","cat":"lifestyle","den":0.8,"prompt":"holding a huge bouquet of white roses in both hands in front of her, a man's hand in a suit sleeve gives it to her, she smiles and says thank you, restaurant"},
+ {"id":"g-05","cat":"lifestyle","den":0.8,"prompt":"sitting on a sofa surrounded by many wrapped gift boxes with ribbons and teddy bear, holding one box up, delighted laugh"},
+ {"id":"g-06","cat":"lifestyle","den":0.8,"prompt":"receiving a bottle of champagne and a box of chocolates at a party, raising glass to camera, sparkling dress"},
+ {"id":"s-03","cat":"swimwear","src":"t02","den":0.72,"prompt":"tropical beach, white one-piece swimsuit, linen shirt open, sun hat, turquoise sea, walking along the shore"}
+]
