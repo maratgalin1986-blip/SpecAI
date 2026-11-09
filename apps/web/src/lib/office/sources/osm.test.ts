@@ -224,17 +224,19 @@ describe('osmSource.search', () => {
       headers: { 'Content-Type': 'application/json' },
     });
 
-  it('делает POST на Overpass и возвращает кандидатов без сайта', async () => {
+  it('делает POST на Overpass и возвращает всех, и с сайтом (они нужны досье)', async () => {
     const fetchMock = vi.fn(async () => jsonResponse(fixture));
     const source = createOsmSource(fetchMock);
     const result = await source.search({ niche: dentist, city: kazan, radiusKm: 15, limit: 10 });
     expect(result.status).toBe('ok');
     if (result.status !== 'ok') return;
     expect(result.candidates.map((c) => c.sourceRef)).toEqual([
+      'osm:node/2',
       'osm:node/3',
       'osm:way/4',
       'osm:node/6',
     ]);
+    expect(result.candidates[0]!.website).toBe('https://denta.example');
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
@@ -248,10 +250,42 @@ describe('osmSource.search', () => {
     expect(init.signal).toBeInstanceOf(AbortSignal);
   });
 
-  it('обрезает по limit', async () => {
+  it('limit считает только фирмы без сайта, фирмы с сайтом остаются соседями', async () => {
     const source = createOsmSource(async () => jsonResponse(fixture));
     const result = await source.search({ niche: dentist, city: kazan, radiusKm: 15, limit: 2 });
-    expect(result.status === 'ok' && result.candidates).toHaveLength(2);
+    expect(result.status).toBe('ok');
+    if (result.status !== 'ok') return;
+    expect(result.candidates.map((c) => c.sourceRef)).toEqual([
+      'osm:node/2',
+      'osm:node/3',
+      'osm:way/4',
+    ]);
+  });
+
+  it('фирмы с сайтом в начале ответа не съедают лимит кандидатов', async () => {
+    const withSite = Array.from({ length: 5 }, (_, i) => ({
+      type: 'node',
+      id: 100 + i,
+      lat: 55.8,
+      lon: 49.1,
+      tags: {
+        name: `Стоматология ${i}`,
+        phone: `+7 843 200-20-${10 + i}`,
+        website: `https://s${i}.example`,
+      },
+    }));
+    const source = createOsmSource(async () =>
+      jsonResponse({ elements: [...withSite, ...fixture.elements] }),
+    );
+    const result = await source.search({ niche: dentist, city: kazan, radiusKm: 15, limit: 3 });
+    expect(result.status).toBe('ok');
+    if (result.status !== 'ok') return;
+    expect(result.candidates.filter((c) => c.website)).toHaveLength(6);
+    expect(result.candidates.filter((c) => !c.website).map((c) => c.sourceRef)).toEqual([
+      'osm:node/3',
+      'osm:way/4',
+      'osm:node/6',
+    ]);
   });
 
   it('HTTP 504 на всех зеркалах → unavailable, каждое зеркало спрошено один раз', async () => {

@@ -2,11 +2,21 @@
 // шаблоны письма и сообщения WhatsApp и выбор каналов. Одно сообщение на компанию и
 // канал; адресат — только контакт из открытой карточки компании; в каждом тексте —
 // строка «ответьте «стоп»» (R18a). Без «лучшая цена / гарантируем / самые»
-// (REVIEW § 5), без выдуманных цифр: единственные числа — цены из настроек.
+// (REVIEW § 5), без выдуманных цифр: числа — цены из настроек и посчитанные факты досье.
+// «Сайты под ключ» (S8, S12): в письме и WhatsApp для сайта — ссылка «Кто мы и цены» на
+// страницу услуги с метками и строка о заявках на почту; одно напоминание по почте.
+// Персональное предложение (U2): если рассылка передала `offer` (offer.ts, при включённом
+// ИИ — aiOffer.ts), письмо и WhatsApp для сайта строятся из него: тема, вступление, три
+// пункта и рекомендованный пакет с ценой.
+// Отписка (К3): если рассылка передала `unsubscribeUrl`, последней строкой письма идёт
+// «Больше не писать: <ссылка>» (заголовок List-Unsubscribe ставит outreachRun.ts).
+import { SERVICE_PAGE_PATH } from './clientSite';
 import { quotedName } from './pages';
 import { PLATFORM_PROMISE, PLATFORM_PROMISE_DETAIL } from '@specai/shared';
 import { escapeHtml } from '@/lib/emailTemplates';
 import { SITE } from '@/lib/site';
+import { sitePackages } from '@/lib/prices';
+import type { Offer } from './offer';
 import type { PageProspect } from './pageTypes';
 import { phoneDigits } from './pages';
 import { rubles } from './scripts';
@@ -18,11 +28,17 @@ export type OutreachProspect = PageProspect & { email: string | null };
 
 export interface OutreachInput {
   previewUrl: string;
+  /** Базовый адрес площадки (siteUrl()): ссылка «Кто мы и цены» на страницу услуги. */
+  baseUrl: string;
   /** Цена сайта и поддержка в месяц (R16), в рублях. */
   prices: { setup: number; monthly: number };
   nicheTitle: string;
   /** Адрес, на который приходят ответы (Reply-To). */
   replyTo: string;
+  /** Персональное предложение (U2) — только для сайта; без него — общее письмо. */
+  offer?: Pick<Offer, 'subject' | 'opener' | 'bullets' | 'packageKey' | 'packageReason'>;
+  /** Ссылка «Больше не писать» (К3, unsubscribe.ts): в письме строкой и ссылкой внизу. */
+  unsubscribeUrl?: string;
 }
 
 export interface OutreachEmail {
@@ -56,14 +72,42 @@ export interface OutreachContact {
 /** Рассылка идёт только этим статусам: READY — ещё не писали, CONTACTED — второй канал. */
 export const OUTREACH_STATUSES: readonly string[] = ['READY', 'CONTACTED'];
 
+/** Подпись ссылки отписки в письмах офиса (К3). */
+export const UNSUBSCRIBE_LABEL = 'Больше не писать';
+
 /** Последняя строка каждого сообщения (R18a). */
 export const STOP_LINE = 'Если не нужно — ответьте «стоп», больше не напишем.';
 
-const EMAIL_ONCE_LINE = 'Письмо отправлено один раз на адрес из открытой карточки компании.';
+/** Первое письмо: откуда адрес и что будет дальше — одно напоминание, если не ответят (S8). */
+const EMAIL_ONCE_LINE =
+  'Адрес — из открытой карточки компании; если не ответите, напомним один раз, не больше.';
 const WHATSAPP_ONCE_LINE = 'Сообщение отправлено один раз на номер из открытой карточки компании.';
+const FOLLOW_UP_ONCE_LINE = 'Это единственное напоминание.';
 
-/** Не длиннее этого — текст WhatsApp. */
-export const WHATSAPP_MAX_LENGTH = 600;
+/** Страница услуги «Сайт под ключ» (S2): на неё ведут письма, WhatsApp и подвал клиентских сайтов. */
+export const SERVICE_PATH = SERVICE_PAGE_PATH;
+
+/** Подпись ссылки на страницу услуги в письмах и WhatsApp (S12). */
+export const SERVICE_LINK_LABEL = 'Кто мы и цены';
+
+/** Строка о форме заявки на сайте клиента (S4, S12): заявки уходят на почту компании. */
+export const LEADS_TO_EMAIL_LINE = 'Заявки с сайта будут приходить вам на почту';
+
+/**
+ * Ссылка на страницу услуги с метками: канал (`utm_source`) и страница какой компании
+ * привела человека (`utm_campaign` — адрес её страницы, не секрет превью).
+ */
+export function serviceUrl(baseUrl: string, source: OutreachChannel, slug: string): string {
+  const query = new URLSearchParams({ utm_source: source, utm_campaign: slug });
+  return `${baseUrl.replace(/\/+$/, '')}${SERVICE_PATH}?${query.toString()}`;
+}
+
+/**
+ * Не длиннее этого — текст WhatsApp. 750, а не прежние 600: с S12 в сообщении для сайта ещё
+ * ссылка «Кто мы и цены» (до 140 знаков с меткой) и строка о заявках на почту; длиннее —
+ * сначала уходят необязательные строки (buildWhatsAppText).
+ */
+export const WHATSAPP_MAX_LENGTH = 750;
 
 function where(p: Pick<PageProspect, 'city'>): string {
   const city = p.city?.trim();
@@ -84,8 +128,18 @@ interface Letter {
   subject: string;
   greeting: string;
   paragraphs: string[];
+  /** Пункты списком после абзацев (персональное предложение). */
+  bullets?: string[];
+  /** Абзацы после пунктов. */
+  after?: string[];
   button: string;
+  /** Ссылки под кнопкой («Кто мы и цены»). */
+  links: { label: string; url: string }[];
   closing: string[];
+}
+
+function serviceLinks(p: OutreachProspect, input: OutreachInput): Letter['links'] {
+  return [{ label: SERVICE_LINK_LABEL, url: serviceUrl(input.baseUrl, 'email', p.slug) }];
 }
 
 function siteLetter(p: OutreachProspect, input: OutreachInput): Letter {
@@ -98,14 +152,63 @@ function siteLetter(p: OutreachProspect, input: OutreachInput): Letter {
       `Мы увидели вашу компанию ${name} на карте${where(p)}: ${niche}, есть телефон и адрес, ` +
         'а своей страницы в интернете нет. Поэтому мы уже сделали вам страницу-визитку по данным ' +
         'открытой карточки — посмотреть можно по ссылке ниже, страница пока закрыта от поисковиков.',
-      'Что на странице: название, чем занимаетесь, услуги, адрес, часы работы, кнопки ' +
-        '«Позвонить» и «Написать в WhatsApp», ссылка на карту. Всё с вашей карточки, ничего не ' +
-        'придумано; если что-то не так — поправим за день.',
+      // Превью показывает то, что есть в карточке; форма заявки включается только после
+      // подключения (К10), кнопка WhatsApp — только если номер есть в карточке.
+      'Что на странице: название, чем занимаетесь, услуги, адрес, часы работы, кнопка ' +
+        '«Позвонить» и ссылка на карту. Всё с вашей карточки, ничего не придумано; если что-то ' +
+        'не так — поправим за день. После подключения добавим форму заявки: ' +
+        `${LEADS_TO_EMAIL_LINE.charAt(0).toLowerCase()}${LEADS_TO_EMAIL_LINE.slice(1)} — на этот адрес.`,
       `Предложение: страница под ключ — ${rubles(input.prices.setup)} один раз, дальше поддержка ` +
         `${rubles(input.prices.monthly)} в месяц: правки, работа страницы, ответы на вопросы. ` +
         'Как согласуем — страница откроется по своему адресу в тот же день.',
     ],
     button: 'Открыть страницу',
+    links: serviceLinks(p, input),
+    closing: [
+      `Если интересно — ответьте на это письмо или позвоните ${SITE.phone}.`,
+      `${STOP_LINE} ${EMAIL_ONCE_LINE}`,
+    ],
+  };
+}
+
+/** «Сайт-визитка — 15 000 ₽ один раз, поддержка 1 500 ₽ в месяц» для рекомендованного пакета. */
+export function packageLine(
+  packageKey: Offer['packageKey'],
+  prices: OutreachInput['prices'],
+): string {
+  const all = sitePackages(prices);
+  const pkg = all.find((p) => p.key === packageKey) ?? all[0]!;
+  return (
+    `«${pkg.title}» — ${rubles(pkg.setup)} один раз, дальше поддержка ` +
+    `${rubles(pkg.monthly)} в месяц`
+  );
+}
+
+/** Письмо для сайта из персонального предложения (U2). */
+function offerLetter(
+  p: OutreachProspect,
+  input: OutreachInput,
+  offer: NonNullable<OutreachInput['offer']>,
+): Letter {
+  return {
+    subject: offer.subject,
+    greeting: `Здравствуйте! Пишет ${SITE.name}, площадка ${SITE.platform}.`,
+    paragraphs: [
+      `${offer.opener} Поэтому мы уже сделали вам страницу-визитку по данным открытой карточки — ` +
+        'посмотреть можно по ссылке ниже, страница пока закрыта от поисковиков.',
+      'Что даст страница именно вам:',
+    ],
+    bullets: offer.bullets,
+    after: [
+      'Всё с вашей карточки, ничего не придумано; если что-то не так — поправим за день. ' +
+        'После подключения добавим форму заявки: ' +
+        `${LEADS_TO_EMAIL_LINE.charAt(0).toLowerCase()}${LEADS_TO_EMAIL_LINE.slice(1)} — на этот адрес.`,
+      `Советуем: ${packageLine(offer.packageKey, input.prices)} — правки, работа страницы, ` +
+        `ответы на вопросы. Почему он: ${offer.packageReason}. Как согласуем — страница ` +
+        'откроется по своему адресу в тот же день.',
+    ],
+    button: 'Открыть страницу',
+    links: serviceLinks(p, input),
     closing: [
       `Если интересно — ответьте на это письмо или позвоните ${SITE.phone}.`,
       `${STOP_LINE} ${EMAIL_ONCE_LINE}`,
@@ -129,6 +232,7 @@ function providerLetter(p: OutreachProspect, _input: OutreachInput): Letter {
         'заявки рядом с вами и сами называете цену.',
     ],
     button: 'Открыть мою страницу',
+    links: [],
     closing: [
       `Вопросы — ответьте на это письмо или позвоните ${SITE.phone}.`,
       `${STOP_LINE} ${EMAIL_ONCE_LINE}`,
@@ -137,12 +241,51 @@ function providerLetter(p: OutreachProspect, _input: OutreachInput): Letter {
 }
 
 function letterFor(p: OutreachProspect, input: OutreachInput): Letter {
-  return p.kind === 'provider' ? providerLetter(p, input) : siteLetter(p, input);
+  if (p.kind === 'provider') return providerLetter(p, input);
+  return input.offer ? offerLetter(p, input, input.offer) : siteLetter(p, input);
+}
+
+/** Напоминание (S8): короче первого письма — что сделали, ссылка, «стоп». */
+function followUpLetter(p: OutreachProspect, input: OutreachInput): Letter {
+  const name = quotedName(p.name);
+  const greeting = `Здравствуйте! Это снова ${SITE.name}, площадка ${SITE.platform}.`;
+  const closing = (ask: string) => [
+    `${ask} — ответьте на это письмо или позвоните ${SITE.phone}.`,
+    `${STOP_LINE} ${FOLLOW_UP_ONCE_LINE}`,
+  ];
+  if (p.kind === 'provider') {
+    return {
+      subject: `Напоминаем: ваша страница на ${SITE.platform} готова`,
+      greeting,
+      paragraphs: [
+        `Недавно мы писали вам: сделали для ${name} страницу исполнителя на площадке заявок на ` +
+          'спецтехнику. Посмотрите — это 30 секунд. Чтобы получать заявки, нажмите на странице ' +
+          '«Это моя компания».',
+      ],
+      button: 'Открыть мою страницу',
+      links: [],
+      closing: closing('Вопросы'),
+    };
+  }
+  return {
+    subject: `Напоминаем: страница для ${name} готова`,
+    greeting,
+    paragraphs: [
+      `Недавно мы писали вам: сделали страницу для ${name} по данным открытой карточки ` +
+        `компании. Посмотрите — это 30 секунд. ${LEADS_TO_EMAIL_LINE} после подключения.`,
+    ],
+    button: 'Открыть страницу',
+    links: serviceLinks(p, input),
+    closing: closing('Если интересно'),
+  };
 }
 
 /** Простой HTML в одну колонку, без картинок: заголовок, абзацы, кнопка-ссылка. */
-function renderHtml(letter: Letter, previewUrl: string): string {
+function renderHtml(letter: Letter, previewUrl: string, unsubscribeUrl?: string): string {
   const href = escapeHtml(previewUrl);
+  const unsubscribe = unsubscribeUrl
+    ? `<p style="margin:12px 0 0;color:#6b7280;font-size:13px">${UNSUBSCRIBE_LABEL}: <a href="${escapeHtml(unsubscribeUrl)}">${escapeHtml(unsubscribeUrl)}</a></p>`
+    : '';
   const paragraph = (text: string) => `<p style="margin:0 0 12px">${escapeHtml(text)}</p>`;
   return `<!doctype html>
 <html lang="ru">
@@ -151,61 +294,133 @@ function renderHtml(letter: Letter, previewUrl: string): string {
 <h1 style="margin:0 0 16px;font-size:20px">${escapeHtml(letter.subject)}</h1>
 ${paragraph(letter.greeting)}
 ${letter.paragraphs.map(paragraph).join('\n')}
+${letter.bullets?.length ? `<ul style="margin:0 0 12px;padding-left:20px">${letter.bullets.map((b) => `<li style="margin:0 0 6px">${escapeHtml(b)}</li>`).join('')}</ul>` : ''}
+${(letter.after ?? []).map(paragraph).join('\n')}
 <p style="margin:20px 0"><a href="${href}" style="display:inline-block;padding:10px 18px;background:#0f766e;color:#ffffff;text-decoration:none;border-radius:6px">${escapeHtml(letter.button)}</a></p>
 <p style="margin:0 0 12px;color:#6b7280;font-size:13px">Или откройте ссылку: <a href="${href}">${href}</a></p>
+${letter.links.map((link) => `<p style="margin:0 0 12px"><a href="${escapeHtml(link.url)}">${escapeHtml(link.label)}</a></p>`).join('\n')}
 ${letter.closing.map(paragraph).join('\n')}
 <p style="margin:24px 0 0;color:#6b7280;font-size:13px">${escapeHtml(`${SITE.name} · ${SITE.platform} · ${SITE.phone}`)}</p>
+${unsubscribe}
 </div>
 </body>
 </html>`;
 }
 
-function renderText(letter: Letter, previewUrl: string): string {
+function renderText(letter: Letter, previewUrl: string, unsubscribeUrl?: string): string {
   return [
     letter.greeting,
     '',
     ...letter.paragraphs.flatMap((text) => [text, '']),
+    ...(letter.bullets?.length ? [...letter.bullets.map((b) => `• ${b}`), ''] : []),
+    ...(letter.after ?? []).flatMap((text) => [text, '']),
     `${letter.button}: ${previewUrl}`,
+    ...letter.links.map((link) => `${link.label}: ${link.url}`),
     '',
     ...letter.closing,
     '',
     `— ${SITE.name} · ${SITE.platform} · ${SITE.phone}`,
+    ...(unsubscribeUrl ? ['', `${UNSUBSCRIBE_LABEL}: ${unsubscribeUrl}`] : []),
   ].join('\n');
+}
+
+function render(letter: Letter, input: OutreachInput): OutreachEmail {
+  return {
+    subject: letter.subject,
+    text: renderText(letter, input.previewUrl, input.unsubscribeUrl),
+    html: renderHtml(letter, input.previewUrl, input.unsubscribeUrl),
+  };
 }
 
 /** Письмо кандидату по виду агента: сайт-визитка или страница исполнителя. */
 export function buildEmail(p: OutreachProspect, input: OutreachInput): OutreachEmail {
-  const letter = letterFor(p, input);
-  return {
-    subject: letter.subject,
-    text: renderText(letter, input.previewUrl),
-    html: renderHtml(letter, input.previewUrl),
-  };
+  return render(letterFor(p, input), input);
 }
 
-/** Короткое сообщение WhatsApp (≤ WHATSAPP_MAX_LENGTH): те же смыслы, ссылка, строка «стоп». */
+/**
+ * Одно напоминание по почте (S8), если кандидат не ответил на первое письмо: что сделали,
+ * ссылка на превью (и «Кто мы и цены» для сайта), строка «стоп» последней.
+ */
+export function buildFollowUpEmail(p: OutreachProspect, input: OutreachInput): OutreachEmail {
+  return render(followUpLetter(p, input), input);
+}
+
+/**
+ * Короткое сообщение WhatsApp (≤ WHATSAPP_MAX_LENGTH): те же смыслы, ссылка, строка «стоп»
+ * последней. Для сайта — строка о заявках на почту и «Кто мы и цены».
+ */
 export function buildWhatsAppText(p: OutreachProspect, input: OutreachInput): string {
   const name = quotedName(p.name);
   const intro = `Здравствуйте! Это ${SITE.name}, площадка ${SITE.platform}.`;
+  const reply = `Ответьте здесь или позвоните ${SITE.phone}.`;
+  const stop = `${STOP_LINE} ${WHATSAPP_ONCE_LINE}`;
+  if (p.kind === 'provider') {
+    const body =
+      `Увидели ${name} на карте${where(p)} и сделали вам страницу исполнителя на площадке ` +
+      'заявок на спецтехнику по всей России: техника, город, кнопка «Заказать технику». ' +
+      `${PLATFORM_PROMISE}. Заказчики смогут заказывать у вас напрямую. Посмотреть и встать на ` +
+      `линию (кнопка «Это моя компания»): ${input.previewUrl}`;
+    return firstThatFits([
+      [intro, body, reply, stop],
+      [intro, body, stop],
+      [intro, body, STOP_LINE],
+    ]);
+  }
+  if (input.offer) return offerWhatsAppText(p, input, input.offer);
   const body =
-    p.kind === 'provider'
-      ? `Увидели ${name} на карте${where(p)} и сделали вам страницу исполнителя на площадке ` +
-        'заявок на спецтехнику по всей России: техника, город, кнопка «Заказать технику». ' +
-        `${PLATFORM_PROMISE}. Заказчики смогут заказывать у вас напрямую. Посмотреть и встать на ` +
-        `линию (кнопка «Это моя компания»): ${input.previewUrl}`
-      : `Увидели ${name} на карте${where(p)} без своей страницы в интернете и сделали вам ` +
-        `страницу-визитку по данным карточки: ${input.previewUrl} Страница под ключ — ` +
-        `${rubles(input.prices.setup)} один раз, поддержка ${rubles(input.prices.monthly)} в месяц.`;
-  const text = [
-    intro,
-    body,
-    `Ответьте здесь или позвоните ${SITE.phone}.`,
-    `${STOP_LINE} ${WHATSAPP_ONCE_LINE}`,
-  ].join('\n\n');
-  if (text.length <= WHATSAPP_MAX_LENGTH) return text;
-  // A very long company name: keep the link and the stop line whole, shorten the body.
-  const shorter = [intro, body, `${STOP_LINE} ${WHATSAPP_ONCE_LINE}`].join('\n\n');
-  return shorter.length <= WHATSAPP_MAX_LENGTH ? shorter : [intro, body, STOP_LINE].join('\n\n');
+    `Увидели ${name} на карте${where(p)} без сайта и сделали вам ` +
+    `страницу-визитку по данным карточки: ${input.previewUrl} Страница под ключ — ` +
+    `${rubles(input.prices.setup)} один раз, поддержка ${rubles(input.prices.monthly)} в месяц.`;
+  // Без адреса почты в карточке пересылать заявки некуда — просим его в ответ.
+  const leads = p.email?.trim()
+    ? `${LEADS_TO_EMAIL_LINE}.`
+    : `${LEADS_TO_EMAIL_LINE} — пришлите адрес в ответ.`;
+  const service = `${SERVICE_LINK_LABEL}: ${serviceUrl(input.baseUrl, 'whatsapp', p.slug)}`;
+  // A long company name or address: keep the preview link and the stop line whole; drop the
+  // «once» note first, then the reply line, then the service link and the leads line.
+  return firstThatFits([
+    [intro, body, leads, service, reply, stop],
+    [intro, body, leads, service, reply, STOP_LINE],
+    [intro, body, leads, service, STOP_LINE],
+    [intro, body, leads, STOP_LINE],
+    [intro, body, STOP_LINE],
+  ]);
+}
+
+/**
+ * WhatsApp для сайта из персонального предложения (U2): вступление, ссылка, пункты, пакет с
+ * ценой. Длинное — сначала уходят строка «один раз», ответ, пункты, «Кто мы и цены», заявки;
+ * ссылка на превью, цена и «стоп» (последней) остаются всегда.
+ */
+function offerWhatsAppText(
+  p: OutreachProspect,
+  input: OutreachInput,
+  offer: NonNullable<OutreachInput['offer']>,
+): string {
+  const intro = `Здравствуйте! Это ${SITE.name}, площадка ${SITE.platform}.`;
+  const body = `${offer.opener} Сделали вам страницу-визитку по данным карточки: ${input.previewUrl}`;
+  const bullets = offer.bullets.map((b) => `• ${b}`).join('\n');
+  const price = `Советуем: ${packageLine(offer.packageKey, input.prices)}.`;
+  const leads = p.email?.trim()
+    ? `${LEADS_TO_EMAIL_LINE}.`
+    : `${LEADS_TO_EMAIL_LINE} — пришлите адрес в ответ.`;
+  const service = `${SERVICE_LINK_LABEL}: ${serviceUrl(input.baseUrl, 'whatsapp', p.slug)}`;
+  const reply = `Ответьте здесь или позвоните ${SITE.phone}.`;
+  const stop = `${STOP_LINE} ${WHATSAPP_ONCE_LINE}`;
+  return firstThatFits([
+    [intro, body, bullets, price, leads, service, reply, stop],
+    [intro, body, bullets, price, leads, service, reply, STOP_LINE],
+    [intro, body, bullets, price, leads, service, STOP_LINE],
+    [intro, body, price, leads, service, STOP_LINE],
+    [intro, body, price, leads, STOP_LINE],
+    [intro, body, price, STOP_LINE],
+  ]);
+}
+
+/** Первый вариант не длиннее WHATSAPP_MAX_LENGTH, иначе самый короткий (последний). */
+function firstThatFits(variants: readonly (readonly string[])[]): string {
+  const texts = variants.map((parts) => parts.join('\n\n'));
+  return texts.find((text) => text.length <= WHATSAPP_MAX_LENGTH) ?? texts[texts.length - 1]!;
 }
 
 /**

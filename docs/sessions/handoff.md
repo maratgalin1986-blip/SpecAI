@@ -203,3 +203,15 @@ machinery, customer, orderUrl, approximate: true }); параметры `?bbox=s
 REGISTERED. Шапка, подвал и виджеты платформы скрыты на `/s/*` и `/preview/*` (`isStandalonePage`
 в `components/PublicOnly.tsx`, `hidesContactBar`). Приложению ничего делать не нужно: API не менялся.
 Файлы линии, карты и бота (кроме команды `/office` для владельца в личке) не трогались.
+
+2026-11-09, вечер («Сайты под ключ» как бизнес, ветка `claude/pensive-feynman-bila02`, для всех сессий):
+`middleware.ts` теперь переписывает запросы с хоста клиента (не хост площадки) на `/s/<slug>`; карта
+«хост → slug» берётся с `siteUrl()` + `/api/office/domains` (не с origin запроса), заголовок `x-client-domain`
+от посетителя срезается. Схема: в `Prospect` добавлены необязательные поля (siteJson, domain с
+`@@index`, цены и оплата клиента, dossierJson, offerAngle/offerJson, previewViews…, optOutAt,
+outreachErrorAt) и модель `SiteLead` — только добавление. Новые публичные адреса: `/sajt-pod-klyuch`,
+`/oplata/<token>`, `/otpiska/<token>`, `/s/<slug>/politika`, `POST /api/office/site-lead`,
+`POST /api/office/unsubscribe`, `GET /api/office/domains` (в REVIEW.md). **Для сессии сайта:** (1) на
+iPhone 13 (390 px) кнопка меню в шапке вылезает за край на ~10 px на всех страницах площадки — поправьте в
+`SiteHeader`; (2) плашка «Бесплатно · без посредников» видна на платных страницах `/sajt-pod-klyuch` и
+`/oplata/*` — по бизнес-плану (К11) её там скрыть или уточнить («заказ техники — бесплатно»).

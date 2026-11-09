@@ -132,3 +132,11 @@ export function learningTable(stats: ReadonlyMap<OfferAngle, AngleStat>): (Angle
     }))
     .sort((a, b) => b.score - a.score || b.sent - a.sent);
 }
+
+/**
+ * Лидер для админки и сводки: первый заход таблицы, у которого есть письма и хоть один отклик
+ * (открыли, ответили или согласились); нет такого — null (хвалить пока нечего).
+ */
+export function angleLeader<T extends AngleStat>(table: readonly T[]): T | null {
+  return table.find((s) => s.sent > 0 && s.opened + s.replied + s.agreed > 0) ?? null;
+}

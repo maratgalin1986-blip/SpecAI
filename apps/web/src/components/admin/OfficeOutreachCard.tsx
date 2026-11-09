@@ -6,7 +6,7 @@ export interface OfficeOutreachCardProps {
   settings: OfficeOutreachSettings;
   /** Отправлено за московские сутки (count по emailSentAt / whatsappSentAt). */
   today: { email: number; whatsapp: number };
-  /** Каналы сервера (serverChannels()): есть ли ключи Resend и Green API. */
+  /** Каналы: почта — свой ящик офиса по SMTP (lib/office/smtp.ts), WhatsApp — Green API. */
   channels: { email: boolean; whatsapp: boolean };
 }
 
@@ -53,7 +53,9 @@ export function OfficeOutreachCard({ settings, today, channels }: OfficeOutreach
         <li className="flex items-center gap-2">
           <AdminTag tone={channels.email ? 'green' : 'quiet'}>E-mail</AdminTag>
           <span className="text-slate-700">
-            {channels.email ? 'подключён' : 'не настроен — нужны RESEND_API_KEY и EMAIL_FROM'}
+            {channels.email
+              ? 'подключён'
+              : 'не настроен — нужны OUTREACH_SMTP_USER и OUTREACH_SMTP_PASS (ящик Яндекс 360)'}
           </span>
         </li>
         <li className="flex items-center gap-2">

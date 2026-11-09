@@ -88,13 +88,14 @@ describe('createDgisSource', () => {
     expect(createDgisSource(undefined)).toBeNull();
   });
 
-  it('спрашивает 2ГИС с ключом, фразой ниши и точкой города; отдаёт только без сайта', async () => {
+  it('спрашивает 2ГИС с ключом, фразой ниши и точкой города; отдаёт всех, и с сайтом', async () => {
     const fetchMock = vi.fn(async () => json(fixture));
     const source = createDgisSource('KEY', fetchMock)!;
     const result = await source.search({ niche: dentist, city: kazan, radiusKm: 15, limit: 10 });
     expect(result.status).toBe('ok');
     if (result.status !== 'ok') return;
-    expect(result.candidates.map((c) => c.sourceRef)).toEqual(['2gis:1', '2gis:5']);
+    expect(result.candidates.map((c) => c.sourceRef)).toEqual(['2gis:1', '2gis:2', '2gis:5']);
+    expect(result.candidates[1]!.website).toBe('https://denta.example');
     const url = (fetchMock.mock.calls[0] as unknown as [string])[0];
     expect(url).toBe(dgisUrl('KEY', 'стоматология', kazan, 15, 1));
     expect(url).toContain(
@@ -124,6 +125,27 @@ describe('createDgisSource', () => {
     expect(result.status === 'ok' && result.candidates.length).toBe(
       DGIS_PAGE_SIZE * DGIS_MAX_PAGES,
     );
+  });
+
+  it('limit считает только фирмы без сайта: страницы фирм с сайтом листаются дальше', async () => {
+    let page = 0;
+    const fetchMock = vi.fn(async () => {
+      page++;
+      const items = Array.from({ length: DGIS_PAGE_SIZE }, (_, i) =>
+        item(`p${page}-${i}`, `Фирма ${page}-${i}`, [
+          { type: 'phone', value: `+7843${String(1000000 + page * 100 + i).slice(-7)}` },
+          ...(page === 1 ? [{ type: 'website', value: `https://f${i}.example` }] : []),
+        ]),
+      );
+      return json({ result: { items } });
+    });
+    const source = createDgisSource('KEY', fetchMock)!;
+    const result = await source.search({ niche: dentist, city: kazan, radiusKm: 15, limit: 3 });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(result.status).toBe('ok');
+    if (result.status !== 'ok') return;
+    expect(result.candidates.filter((c) => c.website)).toHaveLength(DGIS_PAGE_SIZE);
+    expect(result.candidates.filter((c) => !c.website)).toHaveLength(3);
   });
 
   it('ниша без фразы — пустой ответ без запроса; ошибка сети — unavailable', async () => {

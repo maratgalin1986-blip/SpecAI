@@ -5,6 +5,7 @@
 // Ответ разбирается без доверия к полям: всё необязательное.
 
 import { GEO_USER_AGENT } from '@/lib/geo';
+import { capWithoutSite, countWithoutSite } from './limit';
 import { candidateEmail, candidatePhone, candidateTelegram } from './phone';
 import type { Candidate, ProspectSource, SourceNiche } from './types';
 
@@ -169,8 +170,7 @@ export function createDgisSource(
             if (niche.machineryTags) c.tags = niche.machineryTags(c.name, {});
             found.push(c);
           }
-          if (batch.length < DGIS_PAGE_SIZE || found.filter((c) => !c.website).length >= limit)
-            break;
+          if (batch.length < DGIS_PAGE_SIZE || countWithoutSite(found) >= limit) break;
         } catch {
           break;
         } finally {
@@ -180,7 +180,8 @@ export function createDgisSource(
       if (!answered) return { status: 'unavailable', error: DGIS_UNAVAILABLE };
       return {
         status: 'ok',
-        candidates: found.filter((c) => !c.website).slice(0, Math.max(0, limit)),
+        // Все с сайтом (соседи для досье) и не больше `limit` без сайта — кандидатов отбирает прогон.
+        candidates: capWithoutSite(found, limit),
       };
     },
   };

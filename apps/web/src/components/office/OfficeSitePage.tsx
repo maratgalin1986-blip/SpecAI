@@ -1,12 +1,21 @@
 import type { CSSProperties } from 'react';
-import type { SitePage } from '@/lib/office/pages';
+import { galleryPhotos, moreSitesHref } from '@/lib/office/clientSite';
+import { contactWaysText, sitePolicyHref, type SitePage } from '@/lib/office/pages';
 import { SITE } from '@/lib/site';
+import { siteUrl } from '@/lib/siteUrl';
+import { SiteLeadForm } from './SiteLeadForm';
 
 // The business card page the «Сайты под ключ» agent makes for a company found
 // on the map (R9). It is the client's site, not the platform's: its own light
 // look with the niche accent, no catalogue, no platform chrome inside. Server
-// component; gets only the built `SitePage`, so no id, token, note or status
-// can reach the markup (R19). No external images: the decoration is CSS.
+// component; gets only the built `SitePage` and the public slug, so no id,
+// token, note or status can reach the markup (R19). Pictures only from the
+// owner's uploads (S5: `page.photos`, checked by siteContent), the decoration
+// is CSS. The site may open on the client's own domain (S7), so every link to
+// the platform is absolute. WhatsApp buttons only when the card or the owner's
+// edits name WhatsApp (8.2); the lead form only once the owner switched it on
+// after the offer (К10), with the company's own privacy policy /s/<slug>/politika
+// (К17); «Хотите такой же сайт?» can be switched off in the editor.
 
 /** Full class names per accent (Tailwind only keeps classes it can read). */
 const ACCENT: Record<
@@ -98,10 +107,23 @@ function ChatIcon() {
   );
 }
 
-export function OfficeSitePage({ page }: { page: SitePage }) {
+export function OfficeSitePage({
+  page,
+  slug = null,
+  mode = 'live',
+}: {
+  page: SitePage;
+  /** The site's slug: the lead form sends it, the «Хотите такой же сайт?» link carries it. */
+  slug?: string | null;
+  /** live — the published site; preview — the owner's preview or an example: the form is off. */
+  mode?: 'live' | 'preview';
+}) {
   const a = ACCENT[page.accent] ?? ACCENT.teal;
   const eyebrow = [page.eyebrow, page.city].filter(Boolean).join(' · ');
   const hasPlace = Boolean(page.address || page.hours || page.mapHref);
+  const photos = galleryPhotos(page.photos);
+  const base = siteUrl();
+  const formOn = mode === 'live' && Boolean(slug);
 
   return (
     <div className="min-h-screen bg-white text-slate-900">
@@ -148,15 +170,17 @@ export function OfficeSitePage({ page }: { page: SitePage }) {
               <PhoneIcon />
               Позвонить
             </a>
-            <a
-              href={page.whatsappHref}
-              target="_blank"
-              rel="noopener noreferrer"
-              className={`${BUTTON} border border-white/40 bg-white/10 text-white hover:bg-white/20 focus-visible:outline-white sm:flex-none sm:px-7`}
-            >
-              <ChatIcon />
-              Написать в WhatsApp
-            </a>
+            {page.whatsappHref && (
+              <a
+                href={page.whatsappHref}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={`${BUTTON} border border-white/40 bg-white/10 text-white hover:bg-white/20 focus-visible:outline-white sm:flex-none sm:px-7`}
+              >
+                <ChatIcon />
+                Написать в WhatsApp
+              </a>
+            )}
           </div>
           <p className="text-sm text-white/75">{page.phone}</p>
         </div>
@@ -182,11 +206,91 @@ export function OfficeSitePage({ page }: { page: SitePage }) {
               </li>
             ))}
           </ul>
-          <p className="text-sm text-slate-600">
-            Уточнить детали и записаться можно по телефону или в WhatsApp.
-          </p>
+          <p className="text-sm text-slate-600">{contactWaysText(page)}</p>
         </div>
       </section>
+
+      {/* About: only the owner's own text (S5), never invented. */}
+      {page.about && (
+        <section
+          className="border-t border-slate-100 px-4 py-10 sm:px-6 sm:py-14"
+          aria-labelledby="about"
+        >
+          <div className="mx-auto flex max-w-5xl flex-col gap-4">
+            <div>
+              <p className={`text-xs font-semibold uppercase tracking-[0.18em] ${a.text}`}>
+                О компании
+              </p>
+              <h2 id="about" className="mt-1 text-2xl font-extrabold tracking-tight sm:text-3xl">
+                {page.title}
+              </h2>
+            </div>
+            <p className="max-w-3xl whitespace-pre-line break-words text-base leading-relaxed text-slate-700 sm:text-lg">
+              {page.about}
+            </p>
+          </div>
+        </section>
+      )}
+
+      {/* Photos the owner uploaded in the admin (S5), up to six. */}
+      {photos.length > 0 && (
+        <section
+          className="border-t border-slate-100 px-4 py-10 sm:px-6 sm:py-14"
+          aria-labelledby="photos"
+        >
+          <div className="mx-auto flex max-w-5xl flex-col gap-6">
+            <div>
+              <p className={`text-xs font-semibold uppercase tracking-[0.18em] ${a.text}`}>
+                Галерея
+              </p>
+              <h2 id="photos" className="mt-1 text-2xl font-extrabold tracking-tight sm:text-3xl">
+                Фотографии
+              </h2>
+            </div>
+            <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+              {photos.map((src) => (
+                <li key={src} className="overflow-hidden rounded-2xl bg-slate-100">
+                  <img
+                    src={src}
+                    alt={`Фото: ${page.title}`}
+                    loading="lazy"
+                    decoding="async"
+                    className="aspect-[4/3] h-full w-full object-cover"
+                  />
+                </li>
+              ))}
+            </ul>
+          </div>
+        </section>
+      )}
+
+      {/* Lead form (S4): on the published site it sends; in a preview it is shown but off. */}
+      {page.leadForm && (
+        <section
+          className={`border-t border-slate-100 px-4 py-10 sm:px-6 sm:py-14 ${a.tint}`}
+          aria-labelledby="lead"
+        >
+          <div className="mx-auto flex max-w-3xl flex-col gap-5">
+            <div>
+              <p className={`text-xs font-semibold uppercase tracking-[0.18em] ${a.text}`}>
+                Заявка
+              </p>
+              <h2 id="lead" className="mt-1 text-2xl font-extrabold tracking-tight sm:text-3xl">
+                Оставьте заявку — мы перезвоним
+              </h2>
+            </div>
+            <SiteLeadForm
+              slug={slug}
+              companyTitle={page.title}
+              companyPhone={page.phone}
+              privacyHref={slug ? sitePolicyHref(base, slug) : null}
+              processorName={SITE.legalName}
+              buttonClass={a.button}
+              disabled={!formOn}
+            />
+          </div>
+        </section>
+      )}
 
       {/* Where to find us */}
       {hasPlace && (
@@ -249,10 +353,27 @@ export function OfficeSitePage({ page }: { page: SitePage }) {
         </p>
         <p className="mt-1">
           Сайт сделан{' '}
-          <a href="/" className="font-semibold text-slate-700 hover:underline">
+          <a href={base} className="font-semibold text-slate-700 hover:underline">
             {SITE.platform} от {SITE.name}
           </a>
         </p>
+        {page.leadForm && slug && (
+          <p className="mt-1">
+            <a href={sitePolicyHref(base, slug)} className="hover:underline">
+              Политика обработки персональных данных
+            </a>
+          </p>
+        )}
+        {!page.hideCredit && (
+          <p className="mt-3">
+            <a
+              href={moreSitesHref(base, slug)}
+              className={`inline-flex min-h-[44px] items-center justify-center rounded-full border px-4 py-2 text-sm font-semibold transition ${a.ghost}`}
+            >
+              Хотите такой же сайт?
+            </a>
+          </p>
+        )}
       </footer>
 
       {/* Sticky call bar on phones */}
@@ -262,15 +383,17 @@ export function OfficeSitePage({ page }: { page: SitePage }) {
             <PhoneIcon />
             Позвонить
           </a>
-          <a
-            href={page.whatsappHref}
-            target="_blank"
-            rel="noopener noreferrer"
-            className={`${BUTTON} border ${a.ghost}`}
-          >
-            <ChatIcon />
-            WhatsApp
-          </a>
+          {page.whatsappHref && (
+            <a
+              href={page.whatsappHref}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={`${BUTTON} border ${a.ghost}`}
+            >
+              <ChatIcon />
+              WhatsApp
+            </a>
+          )}
         </div>
       </div>
     </div>

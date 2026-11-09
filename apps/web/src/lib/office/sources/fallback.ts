@@ -22,7 +22,9 @@ export function withFallback(sources: readonly ProspectSource[]): ProspectSource
         const result = await source.search(
           left === undefined ? input : { ...input, budgetMs: left },
         );
-        if (result.status === 'ok' && result.candidates.length > 0) return result;
+        // Источники отдают и фирмы с сайтом (для досье): побеждает ответ, где есть кого
+        // сделать кандидатом, — иначе спрашиваем следующий источник.
+        if (result.status === 'ok' && result.candidates.some((c) => !c.website)) return result;
         // Пустой «ok» или отказ запоминаем: если лучше никто не ответит, вернём его.
         last = result;
       }

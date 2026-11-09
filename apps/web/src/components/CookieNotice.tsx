@@ -118,6 +118,7 @@ export function CookieNotice() {
       role="region"
       aria-label="Согласие на обработку персональных данных"
       data-testid="cookie-strip"
+      data-platform-chrome
       data-bottom-bar={stroyka ? undefined : true}
       className={`fixed ${place} flex items-center gap-1.5 rounded-full border border-slate-200 bg-white/95 py-1 pl-3 pr-1 text-xs text-slate-700 shadow-md backdrop-blur motion-safe:transition motion-safe:duration-300 ${
         shown ? 'translate-y-0 opacity-100' : `${hiddenShift} opacity-0 motion-reduce:translate-y-0`

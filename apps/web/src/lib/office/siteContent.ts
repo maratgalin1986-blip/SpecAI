@@ -5,7 +5,7 @@
 
 import { z } from 'zod';
 import { candidatePhone } from './sources/phone';
-import { mapHref, phoneDigits, phoneText, type SitePage } from './pages';
+import { mapHref, phoneDigits, phoneText, whatsappHrefFor, type SitePage } from './pages';
 
 export const SITE_ACCENTS = ['teal', 'amber', 'rose', 'sky', 'lime', 'orange'] as const;
 
@@ -45,7 +45,10 @@ export const siteContentSchema = z
     whatsapp: text(30).optional(),
     accent: z.enum(SITE_ACCENTS).optional(),
     photos: z.array(z.string().regex(PHOTO_URL)).max(SITE_CONTENT_LIMITS.photos).optional(),
+    /** Форма заявки: true — включена владельцем после оферты (К10); иначе выключена. */
     leadForm: z.boolean().optional(),
+    /** true — без «Хотите такой же сайт?» в подвале. */
+    hideCredit: z.boolean().optional(),
   })
   .strict();
 
@@ -104,6 +107,7 @@ function fieldTitle(field: PropertyKey | undefined): string {
     accent: 'Цвет',
     photos: 'Фото',
     leadForm: 'Форма заявки',
+    hideCredit: 'Подвал',
   };
   return typeof field === 'string' ? (titles[field] ?? field) : 'форма';
 }
@@ -117,7 +121,10 @@ function issueText(issue: z.ZodIssue | undefined): string {
   return 'неверное значение';
 }
 
-/** Страница по карточке + правки владельца. Телефон в правке пересчитывает ссылки. */
+/**
+ * Страница по карточке + правки владельца. Телефон в правке пересчитывает ссылку «Позвонить»,
+ * но не WhatsApp: WhatsApp — только тот, что указан в карточке или в правке (8.2).
+ */
 export function applySiteContent(page: SitePage, content: SiteContent): SitePage {
   const next: SitePage = { ...page };
   if (content.title) next.title = content.title;
@@ -133,11 +140,11 @@ export function applySiteContent(page: SitePage, content: SiteContent): SitePage
   if (content.phone) {
     next.phone = phoneText(content.phone);
     next.phoneHref = `tel:+${phoneDigits(content.phone)}`;
-    if (!content.whatsapp) next.whatsappHref = `https://wa.me/${phoneDigits(content.phone)}`;
   }
-  if (content.whatsapp) next.whatsappHref = `https://wa.me/${phoneDigits(content.whatsapp)}`;
+  if (content.whatsapp) next.whatsappHref = whatsappHrefFor(content.whatsapp) ?? next.whatsappHref;
   if (content.accent) next.accent = content.accent;
   if (content.photos) next.photos = [...content.photos];
   if (content.leadForm !== undefined) next.leadForm = content.leadForm;
+  if (content.hideCredit !== undefined) next.hideCredit = content.hideCredit;
   return next;
 }

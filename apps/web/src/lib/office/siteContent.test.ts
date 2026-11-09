@@ -54,7 +54,7 @@ describe('validateSiteContent', () => {
 });
 
 describe('applySiteContent', () => {
-  it('правки поверх карточки; телефон пересчитывает ссылки; адрес — карту по адресу', () => {
+  it('правки поверх карточки; телефон пересчитывает «Позвонить», не WhatsApp; адрес — карту', () => {
     const page = applySiteContent(base, {
       title: 'Улыбка',
       about: 'Работаем с 2010 года.',
@@ -70,12 +70,55 @@ describe('applySiteContent', () => {
       services: ['Чистка', 'Имплантация'],
       phone: '+7 917 000-11-22',
       phoneHref: 'tel:+79170001122',
-      whatsappHref: 'https://wa.me/79170001122',
+      whatsappHref: null,
       photos: ['/api/files/office/a.jpg'],
       leadForm: false,
     });
     expect(page.mapHref).toContain(encodeURIComponent('ул. Пушкина, 1, Казань'));
     expect(applySiteContent(base, {})).toEqual(base);
-    expect(base).toMatchObject({ about: null, photos: [], leadForm: true });
+    expect(base).toMatchObject({
+      about: null,
+      photos: [],
+      leadForm: false,
+      hideCredit: false,
+      whatsappHref: null,
+    });
+  });
+
+  it('WhatsApp — только из правки или карточки (8.2)', () => {
+    expect(applySiteContent(base, { whatsapp: '+79170001122' }).whatsappHref).toBe(
+      'https://wa.me/79170001122',
+    );
+    const withCard = buildSitePage(
+      {
+        kind: 'site',
+        status: 'PUBLISHED',
+        slug: 'ulybka-kazan-ab12',
+        name: 'Улыбка',
+        phone: '+78432123456',
+        address: null,
+        city: null,
+        lat: null,
+        lon: null,
+        tags: null,
+        hours: null,
+        whatsapp: '8 917 000-33-44',
+      },
+      { key: 'dentist', title: 'Стоматология', services: [], heroLine: 'X', accent: 'teal' },
+    );
+    expect(withCard.whatsappHref).toBe('https://wa.me/79170003344');
+    expect(applySiteContent(withCard, { phone: '+79170001122' }).whatsappHref).toBe(
+      'https://wa.me/79170003344',
+    );
+  });
+
+  it('форма заявки включается только правкой; «Хотите такой же сайт?» убирается галочкой', () => {
+    expect(applySiteContent(base, { leadForm: true }).leadForm).toBe(true);
+    expect(applySiteContent(base, { hideCredit: true }).hideCredit).toBe(true);
+    expect(parseSiteContent(JSON.stringify({ hideCredit: true, leadForm: true }))).toEqual({
+      hideCredit: true,
+      leadForm: true,
+    });
+    expect(validateSiteContent({ hideCredit: 'да' })).toMatchObject({ ok: false });
   });
 });

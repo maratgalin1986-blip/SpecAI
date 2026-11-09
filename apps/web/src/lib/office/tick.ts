@@ -7,14 +7,17 @@
 // вызывает и ежедневный крон Vercel — страховка на случай, когда GitHub молчит
 // весь день. Два вызова подряд (два workflow, ручной перезапуск) не удваивают
 // работу: второй тик в течение TICK_LOCK_MS отвечает `skipped: 'busy'`.
+// В режиме рассылки 'approve' (К2, по умолчанию) тик писем не отправляет: sendOutreach готовит
+// «письма дня» и возвращает, сколько их ждёт кнопки владельца, — это число уходит в сводку.
 
 import { prisma } from '@specai/database';
 import { onceADay } from '@/lib/cronOnce';
 import { notifyTelegram } from '@/lib/notify';
-import { DIGEST_HOURS, collectDigest, moscowHour } from './digest';
+import { DIGEST_HOURS, collectDigest, moscowHour, type DigestExtra } from './digest';
 import { sendOutreach, type OutreachResult } from './outreachRun';
 import { runScheduledStep, type ScheduledStepResult } from './run';
 import { OVERPASS_TOTAL_MS } from './sources/osm';
+import { SITE_LEAD_RETENTION_MONTHS } from './sitePolicy';
 
 export interface TickOptions {
   /** Сколько миллисекунд есть у всего тика (функция Vercel живёт 60 с). */
@@ -29,9 +32,11 @@ export interface TickOptions {
 }
 
 export interface TickDeps {
+  /** Удаление заявок с клиентских сайтов старше срока хранения. */
+  purgeLeads?: (now: Date) => Promise<unknown>;
   step?: (now: Date, budgetMs: number) => Promise<ScheduledStepResult>;
   outreach?: (now: Date, budgetMs: number) => Promise<OutreachResult>;
-  sendDigest?: (now: Date) => Promise<boolean | null>;
+  sendDigest?: (now: Date, extra: DigestExtra) => Promise<boolean | null>;
   /** Замок от одновременных тиков: true — замок взят, false — занято. */
   lock?: (now: Date) => Promise<boolean>;
   clock?: () => number;
@@ -88,8 +93,20 @@ async function defaultLock(now: Date): Promise<boolean> {
   }
 }
 
-async function defaultDigest(now: Date): Promise<boolean | null> {
-  return onceADay('office-digest', async () => notifyTelegram(await collectDigest(now)), now);
+/** Заявки посетителей клиентских сайтов старше срока из политики — удаляются. */
+export async function purgeOldSiteLeads(now: Date): Promise<number> {
+  const before = new Date(now);
+  before.setMonth(before.getMonth() - SITE_LEAD_RETENTION_MONTHS);
+  const { count } = await prisma.siteLead.deleteMany({ where: { createdAt: { lt: before } } });
+  return count;
+}
+
+async function defaultDigest(now: Date, extra: DigestExtra): Promise<boolean | null> {
+  return onceADay(
+    'office-digest',
+    async () => notifyTelegram(await collectDigest(now, undefined, extra)),
+    now,
+  );
 }
 
 /** Ответ содержит только числа и служебные слова — без имён, телефонов и токенов. */
@@ -138,11 +155,18 @@ export async function officeTick(
     return { email: 0, whatsapp: 0, skipped: 'error', errors: 0 } as OutreachResult;
   });
 
+  // Политика клиентских сайтов обещает хранить заявки посетителей не дольше
+  // SITE_LEAD_RETENTION_MONTHS (lib/office/sitePolicy.ts): старше — удаляем.
+  await (deps.purgeLeads ?? purgeOldSiteLeads)(now).catch((error: unknown) => {
+    console.error('[office] site lead purge failed', error);
+  });
+
   let digest = false;
   const hour = moscowHour(now);
   const inWindow = hour >= DIGEST_HOURS.from && hour <= DIGEST_HOURS.to;
   if (options.digest === 'any' || inWindow) {
-    const sent = await (deps.sendDigest ?? defaultDigest)(now).catch((error: unknown) => {
+    const extra: DigestExtra = outreach.waiting ? { outboxWaiting: outreach.waiting } : {};
+    const sent = await (deps.sendDigest ?? defaultDigest)(now, extra).catch((error: unknown) => {
       console.error('[office] digest failed', error);
       return null;
     });

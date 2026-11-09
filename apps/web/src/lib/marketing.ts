@@ -63,6 +63,7 @@ export function withChannel(source: string, channel: string) {
 
 const FORM_LABELS: Record<string, string> = {
   home: 'Главная, форма звонка',
+  'sajt-pod-klyuch': 'Сайт под ключ (страница услуги)',
   wizard: 'Подбор техники',
   estimate: 'Расчёт на странице техники',
   calculator: 'Калькулятор аренды',

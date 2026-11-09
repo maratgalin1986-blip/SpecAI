@@ -2,6 +2,7 @@
 // Без ключа; компании ниши в радиусе города с названием и телефоном, без сайта.
 
 import { GEO_USER_AGENT } from '@/lib/geo';
+import { capWithoutSite } from './limit';
 import { candidateEmail, candidatePhone, candidateTelegram } from './phone';
 import type { Candidate, ProspectSource, SourceCity, SourceNiche } from './types';
 
@@ -109,7 +110,10 @@ export function parseOverpass(json: unknown, niche: SourceNiche): Candidate[] {
   return result;
 }
 
-/** Кандидаты без сайта — им и предлагаем сайт под ключ (R5). */
+/**
+ * Кандидаты без сайта — им и предлагаем сайт под ключ (R5). Источники отдают всех: фирмы с
+ * сайтом нужны досье для подсчёта конкурентов, отбор делает прогон (`run.ts`).
+ */
 export function withoutWebsite(list: Candidate[]): Candidate[] {
   return list.filter((c) => !c.website);
 }
@@ -153,7 +157,8 @@ export function createOsmSource(
           const json: unknown = await response.json();
           return {
             status: 'ok',
-            candidates: withoutWebsite(parseOverpass(json, niche)).slice(0, Math.max(0, limit)),
+            // `limit` — только фирмы без сайта; с сайтом все остаются соседями для досье.
+            candidates: capWithoutSite(parseOverpass(json, niche), limit),
           };
         } catch {
           // сеть, таймаут, не JSON — следующее зеркало

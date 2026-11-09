@@ -65,6 +65,7 @@ export function TelegramChip() {
   return (
     <div
       data-bottom-bar
+      data-platform-chrome
       className="fixed inset-x-2 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-[44] flex items-center gap-1 rounded-full bg-[#2aabee] py-1 pl-4 pr-1 text-sm font-semibold text-white shadow-lg sm:hidden"
     >
       <a

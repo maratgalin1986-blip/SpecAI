@@ -44,7 +44,7 @@ export const NICHE_NEEDS: Record<string, string> = {
   machinery: 'какая у вас техника и как её заказать',
 };
 
-const GENERIC_NEED = 'чем вы занимаетесь, где вы и как с вами связаться';
+const GENERIC_NEED = 'ваши услуги, адрес и как с вами связаться';
 
 export interface Offer {
   angle: OfferAngle;
@@ -89,10 +89,13 @@ export function buildOffer(input: {
   dossier: Dossier | null;
   angle: OfferAngle;
   companyName: string;
+  /** Город строки — когда досье нет (старые кандидаты, ручной ввод без адреса). */
+  city?: string | null;
 }): Offer {
   const d = input.dossier;
   const name = input.companyName.trim();
-  const where = d?.city ? ` в городе ${d.city}` : '';
+  const city = d?.city ?? input.city ?? null;
+  const where = city ? ` в городе ${city}` : '';
   const need = (d && NICHE_NEEDS[d.niche]) || GENERIC_NEED;
   const c = d?.competitors ?? null;
   const niche = d ? nicheLower(d) : 'компаний';
@@ -128,7 +131,7 @@ export function buildOffer(input: {
       if (d?.hours?.lateClose) {
         subject = `Вы работаете до ${d.hours.lateClose} — пусть клиенты видят это сразу`;
         opener = `Вы работаете до ${d.hours.lateClose} — это сильная сторона, но без сайта её видно только в карточке на карте.`;
-        angleBullet = `На странице сразу видно «работаем до ${d.hours.lateClose}», а заявку можно оставить в любое время.`;
+        angleBullet = `На странице сразу видно «работаем до ${d.hours.lateClose}», а после подключения заявку можно будет оставить в любое время.`;
       }
       break;
     case 'weekends':
@@ -145,7 +148,7 @@ export function buildOffer(input: {
     case 'leads_to_email':
       subject = `${name}: сделали вам страницу, заявки — вам на почту`;
       angleBullet =
-        'Если телефон занят, клиент оставит заявку на странице — она придёт вам на почту.';
+        'После подключения: если телефон занят, клиент оставит заявку на странице — она придёт вам на почту.';
       break;
     case 'search':
       subject = `Люди ищут «${niche}${d?.city ? ` ${d.city}` : ''}» — сделали вам страницу`;
@@ -159,7 +162,7 @@ export function buildOffer(input: {
     angleBullet,
     input.angle === 'leads_to_email'
       ? 'Тексты, услуги, часы и фото поменяем по вашей просьбе — без программиста.'
-      : 'Заявки со страницы приходят вам на почту — даже когда телефон занят.',
+      : 'После подключения заявки со страницы будут приходить вам на почту — даже когда телефон занят.',
   ];
 
   const domen = Boolean(c && c.withSite >= 2);

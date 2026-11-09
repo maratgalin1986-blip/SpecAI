@@ -2,13 +2,16 @@
 
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
+import { publishSite } from './officePublish';
 
-// Отметка результата по кандидату на /admin/office (R15): заметка, «Согласился» (публикует),
-// «Ответил», «Напомнить» (дата, по умолчанию завтра по Москве), «Отказ»; у опубликованного —
-// «Снять», у отказавшегося — «Вернуть». PATCH /api/admin/office/prospects/[id], затем
+// Отметка результата по кандидату на /admin/office (R15): заметка, «Согласился», «Ответил»,
+// «Напомнить» (дата, по умолчанию завтра по Москве), «Отказ»; у опубликованного — «Снять», у
+// отказавшегося — «Вернуть». «Согласился» публикует страницу подрядчика сразу, а клиентский
+// сайт (К10) — только отмечает договорённость: у него (variant agreed) — «Опубликовать»
+// (неоплаченный — с подтверждением) и «Отказ». PATCH /api/admin/office/prospects/[id], затем
 // router.refresh(), чтобы серверные списки перестроились.
 
-type Action = 'agree' | 'callback' | 'decline' | 'note' | 'replied';
+type Action = 'agree' | 'callback' | 'decline' | 'note' | 'replied' | 'publish';
 
 /** Московская дата YYYY-MM-DD через `days` дней от сейчас. */
 function mskDay(days: number): string {
@@ -24,12 +27,19 @@ export function OfficeProspectControls({
   id,
   variant,
   note,
+  kind = 'provider',
+  paid = false,
 }: {
   id: string;
-  /** open — кандидат в работе; published — на странице; declined — отказ. */
-  variant: 'open' | 'published' | 'declined';
+  /** open — кандидат в работе; agreed — сайт, с которым договорились; published — на странице; declined — отказ. */
+  variant: 'open' | 'agreed' | 'published' | 'declined';
   note: string | null;
+  /** site — «Согласился» не публикует (К10). */
+  kind?: 'site' | 'provider';
+  /** Сайт оплачен (setupPaidAt) — «Опубликовать» без вопроса. */
+  paid?: boolean;
 }) {
+  const site = kind === 'site';
   const router = useRouter();
   const [noteValue, setNote] = useState(note ?? '');
   const [savedNote, setSavedNote] = useState(note ?? '');
@@ -37,7 +47,23 @@ export function OfficeProspectControls({
   const [busy, setBusy] = useState<Action | null>(null);
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
 
+  async function publish() {
+    if (busy) return;
+    setBusy('publish');
+    setMessage(null);
+    const outcome = await publishSite(id, paid);
+    setBusy(null);
+    if ('cancelled' in outcome) return;
+    if (!outcome.ok) {
+      setMessage({ ok: false, text: outcome.error });
+      return;
+    }
+    setMessage({ ok: true, text: 'Опубликовано' });
+    router.refresh();
+  }
+
   async function send(action: Action) {
+    if (action === 'publish') return publish();
     if (busy) return;
     setBusy(action);
     setMessage(null);
@@ -99,7 +125,7 @@ export function OfficeProspectControls({
               disabled={busy !== null}
               className="rounded-md bg-graphite-900 px-3 py-1.5 text-xs font-bold text-signal-300 disabled:opacity-40"
             >
-              {busy === 'agree' ? 'Публикую…' : 'Согласился'}
+              {busy === 'agree' ? (site ? 'Отмечаю…' : 'Публикую…') : 'Согласился'}
             </button>
             <button
               type="button"
@@ -134,6 +160,27 @@ export function OfficeProspectControls({
               className="rounded-md border border-red-300 px-3 py-1.5 text-xs font-semibold text-red-700 disabled:opacity-40"
             >
               Отказ
+            </button>
+          </>
+        )}
+        {variant === 'agreed' && (
+          <>
+            <button
+              type="button"
+              onClick={() => void send('publish')}
+              disabled={busy !== null}
+              className="rounded-md bg-graphite-900 px-3 py-1.5 text-xs font-bold text-signal-300 disabled:opacity-40"
+            >
+              {busy === 'publish' ? 'Публикую…' : 'Опубликовать'}
+            </button>
+            {!paid && <span className="text-xs text-graphite-600">Сайт не оплачен</span>}
+            <button
+              type="button"
+              onClick={() => void send('decline')}
+              disabled={busy !== null}
+              className="rounded-md border border-red-300 px-3 py-1.5 text-xs font-semibold text-red-700 disabled:opacity-40"
+            >
+              {busy === 'decline' ? 'Снимаю…' : 'Отказ'}
             </button>
           </>
         )}

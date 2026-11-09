@@ -2,15 +2,20 @@
 // (spec §6, §12; R15). Чистая функция — маршрут PATCH /api/admin/office/prospects/[id]
 // только применяет результат к строке Prospect.
 //
-// READY | CONTACTED | CALLBACK → «Согласился» (сразу PUBLISHED), «Напомнить» (CALLBACK с датой),
-// «Отказ» (DECLINED), «Ответил» (только отметка repliedAt);
+// READY | CONTACTED | CALLBACK → «Согласился», «Напомнить» (CALLBACK с датой),
+// «Отказ» (DECLINED и optOutAt: фирма в работе отказалась — ни её почта, ни её номера больше ничего
+// не получают, К3), «Ответил» (только отметка repliedAt);
+// «Согласился» у подрядчика (kind provider) сразу публикует (PUBLISHED); у клиентского сайта
+// (kind site, К10) — только AGREED: сайт публикует отдельное «Опубликовать» (AGREED →
+// PUBLISHED), обычно после оплаты и оферты;
+// AGREED (сайт) → «Опубликовать» или «Отказ»;
 // PUBLISHED | REGISTERED → только «Отказ» (снять с публикации);
-// DECLINED → только «Согласился» (вернуть на публикацию);
+// DECLINED → только «Согласился» (подрядчик — снова на публикацию, сайт — снова AGREED);
 // заметка — всегда, статус не меняется.
 
 import type { ProspectStatus } from './types';
 
-export type ProspectAction = 'agree' | 'callback' | 'decline' | 'note' | 'replied';
+export type ProspectAction = 'agree' | 'callback' | 'decline' | 'note' | 'replied' | 'publish';
 
 export const PROSPECT_ACTIONS: readonly ProspectAction[] = [
   'agree',
@@ -18,12 +23,17 @@ export const PROSPECT_ACTIONS: readonly ProspectAction[] = [
   'decline',
   'note',
   'replied',
+  'publish',
 ];
+
+/** Подтверждение перед публикацией неоплаченного сайта (К10): спрашивает админка и маршрут. */
+export const PUBLISH_UNPAID_QUESTION = 'Сайт не оплачен — опубликовать?';
 
 export interface ActionData {
   agreedAt: Date;
   publishedAt: Date;
   declinedAt: Date;
+  optOutAt: Date;
   callAt: Date | null;
   repliedAt: Date;
 }
@@ -51,6 +61,7 @@ const ACTION_TITLES: Record<ProspectAction, string> = {
   decline: '«Отказ»',
   note: 'заметка',
   replied: '«Ответил»',
+  publish: '«Опубликовать»',
 };
 
 /** Московская дата YYYY-MM-DD; Москва без перевода часов — смещение +03:00 точное. */
@@ -65,22 +76,49 @@ function cannot(status: ProspectStatus, action: ProspectAction, allowed: string)
   };
 }
 
+/**
+ * Новый статус кандидата по отметке владельца. `kind` — 'site' или 'provider' (что угодно,
+ * кроме 'site', ведёт себя как подрядчик — как было до К10).
+ */
 export function applyAction(
   status: ProspectStatus,
   action: ProspectAction,
   now: Date,
   callAt?: Date | null,
+  kind: string = 'provider',
 ): ActionResult {
   if (action === 'note') return { ok: true, status, data: {} };
+  const site = kind === 'site';
+
+  if (action === 'publish') {
+    if (site && status === 'AGREED') {
+      return { ok: true, status: 'PUBLISHED', data: { publishedAt: now } };
+    }
+    return {
+      ok: false,
+      error: site
+        ? `Так отметить нельзя: кандидат «${STATUS_TITLES[status]}». Опубликовать можно сайт, с которым договорились («Согласился»).`
+        : 'Так отметить нельзя: страница подрядчика публикуется сразу по «Согласился».',
+    };
+  }
+
+  if (site && status === 'AGREED') {
+    if (action === 'decline') {
+      return { ok: true, status: 'DECLINED', data: { declinedAt: now, callAt: null } };
+    }
+    return cannot(status, action, 'Сайт можно опубликовать («Опубликовать») или снять («Отказ»).');
+  }
 
   if (OPEN.includes(status)) {
     switch (action) {
       case 'agree':
-        return {
-          ok: true,
-          status: 'PUBLISHED',
-          data: { agreedAt: now, publishedAt: now, callAt: null },
-        };
+        return site
+          ? { ok: true, status: 'AGREED', data: { agreedAt: now, callAt: null } }
+          : {
+              ok: true,
+              status: 'PUBLISHED',
+              data: { agreedAt: now, publishedAt: now, callAt: null },
+            };
       case 'callback': {
         if (!callAt || Number.isNaN(callAt.getTime())) {
           return { ok: false, error: 'Так отметить нельзя: укажите дату напоминания' };
@@ -94,7 +132,11 @@ export function applyAction(
         return { ok: true, status: 'CALLBACK', data: { callAt } };
       }
       case 'decline':
-        return { ok: true, status: 'DECLINED', data: { declinedAt: now, callAt: null } };
+        return {
+          ok: true,
+          status: 'DECLINED',
+          data: { declinedAt: now, optOutAt: now, callAt: null },
+        };
       case 'replied':
         return { ok: true, status, data: { repliedAt: now } };
     }
@@ -109,11 +151,13 @@ export function applyAction(
 
   if (status === 'DECLINED') {
     if (action === 'agree') {
-      return { ok: true, status: 'PUBLISHED', data: { agreedAt: now, publishedAt: now } };
+      return site
+        ? { ok: true, status: 'AGREED', data: { agreedAt: now } }
+        : { ok: true, status: 'PUBLISHED', data: { agreedAt: now, publishedAt: now } };
     }
     return cannot(status, action, 'После отказа можно только вернуть страницу («Согласился»).');
   }
 
-  // NEW и AGREED — промежуточные состояния прогона, владелец их не отмечает.
+  // NEW (и AGREED подрядчика) — промежуточные состояния прогона, владелец их не отмечает.
   return cannot(status, action, 'Дождитесь, пока кандидат станет готов к отправке.');
 }

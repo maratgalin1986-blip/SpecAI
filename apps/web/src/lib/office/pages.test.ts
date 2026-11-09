@@ -6,7 +6,11 @@ import {
   heroWithCity,
   mapHref,
   phoneDigits,
+  contactWaysText,
+  sitePolicyHref,
   previewBannerText,
+  previewSourceCredit,
+  whatsappHrefFor,
   phoneText,
 } from './pages';
 
@@ -73,12 +77,25 @@ describe('buildSitePage', () => {
     expect(heroWithCity('Шиномонтаж', null)).toBe('Шиномонтаж');
   });
 
-  it('links phone, WhatsApp (digits only) and the map', () => {
+  it('links phone and the map; no WhatsApp unless the card names it (8.2)', () => {
     expect(page.phone).toBe('+7 927 123-45-67');
     expect(page.phoneHref).toBe(`tel:+${DIGITS}`);
-    expect(page.whatsappHref).toBe(`https://wa.me/${DIGITS}`);
-    expect(page.whatsappHref).toMatch(/^https:\/\/wa\.me\/\d+$/);
+    expect(page.whatsappHref).toBeNull();
     expect(page.mapHref).toBe('https://yandex.ru/maps/?pt=49.1221,55.7887&z=16&l=map');
+  });
+
+  it('WhatsApp from the card, digits only', () => {
+    const withWa = buildSitePage({ ...prospect, whatsapp: PHONE }, niche);
+    expect(withWa.whatsappHref).toBe(`https://wa.me/${DIGITS}`);
+    expect(withWa.whatsappHref).toMatch(/^https:\/\/wa\.me\/\d+$/);
+    expect(buildSitePage({ ...prospect, whatsapp: null }, niche).whatsappHref).toBeNull();
+    expect(whatsappHrefFor('12')).toBeNull();
+    expect(whatsappHrefFor('  ')).toBeNull();
+  });
+
+  it('the lead form is off and the footer credit is on by default (К10)', () => {
+    expect(page.leadForm).toBe(false);
+    expect(page.hideCredit).toBe(false);
   });
 });
 
@@ -161,12 +178,21 @@ describe('buildProviderPage', () => {
   });
 });
 
-describe('previewBannerText', () => {
-  it('names the company and says the page waits for consent', () => {
-    expect(previewBannerText(prospect)).toBe(
-      'Предпросмотр: страница сделана для Стоматология «Улыбка» агентом ИИСтройка24 ' +
-        'и будет опубликована после согласия владельца компании',
+describe('previewBannerText (К6)', () => {
+  it('a draft by the platform from open card data, not the official site', () => {
+    expect(previewBannerText()).toBe(
+      'Черновик: подготовлен ИИСтройка24 по открытым данным карточки на карте. ' +
+        'Это не официальный сайт компании',
     );
+  });
+
+  it('credits OpenStreetMap only for OSM cards', () => {
+    expect(previewSourceCredit({ source: 'osm' })).toBe(
+      'Данные карточки: © участники OpenStreetMap',
+    );
+    expect(previewSourceCredit({ source: 'manual' })).toBeNull();
+    expect(previewSourceCredit({ source: '2gis' })).toBeNull();
+    expect(previewSourceCredit({})).toBeNull();
   });
 });
 
@@ -176,5 +202,28 @@ describe('phoneText', () => {
     expect(phoneText('89170001122')).toBe('+7 917 000-11-22');
     expect(phoneText('12345')).toBe('12345');
     expect(phoneText('+1 234 567 8901')).toBe('+1 234 567 8901');
+  });
+});
+
+describe('contactWaysText and sitePolicyHref', () => {
+  it('names only the ways the site has', () => {
+    expect(contactWaysText({ whatsappHref: null, leadForm: false })).toBe(
+      'Уточнить детали и записаться можно по телефону.',
+    );
+    expect(contactWaysText({ whatsappHref: 'https://wa.me/7', leadForm: false })).toBe(
+      'Уточнить детали и записаться можно по телефону или в WhatsApp.',
+    );
+    expect(contactWaysText({ whatsappHref: null, leadForm: true })).toBe(
+      'Уточнить детали и записаться можно по телефону или через заявку ниже.',
+    );
+    expect(contactWaysText({ whatsappHref: 'https://wa.me/7', leadForm: true })).toBe(
+      'Уточнить детали и записаться можно по телефону, в WhatsApp или через заявку ниже.',
+    );
+  });
+
+  it('the policy lives at /s/<slug>/politika on the platform', () => {
+    expect(sitePolicyHref('https://example.ru/', 'ulybka-kazan')).toBe(
+      'https://example.ru/s/ulybka-kazan/politika',
+    );
   });
 });

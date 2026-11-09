@@ -7,6 +7,8 @@ import { JOBS } from '@/lib/jobs';
 import { siteUrl } from '@/lib/siteUrl';
 import { PUBLIC_FLEET } from '@/lib/fleet';
 import { providerPath } from '@/lib/providerSeo';
+import { SERVICE_PAGE_PATH } from '@/lib/office/clientSite';
+import { SITEMAP_PROSPECT_WHERE, officeSitemapEntries } from '@/lib/office/visibility';
 
 export const revalidate = 3600;
 
@@ -52,6 +54,8 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     '/kak-polzovatsya',
     '/predlozheniya',
     '/bot',
+    // «Сайт под ключ» (S2): indexed, though not in the main menu.
+    SERVICE_PAGE_PATH,
   ];
   const equipment = await prisma.equipment
     .findMany({
@@ -70,6 +74,18 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       take: 5000,
     })
     .catch(() => []);
+  // Published pages of the office (S11): clients' sites /s/<slug> and provider
+  // pages /p/<slug>. Without a database they are left out this hour.
+  const officePages = officeSitemapEntries(
+    await prisma.prospect
+      .findMany({
+        where: SITEMAP_PROSPECT_WHERE,
+        select: { kind: true, status: true, slug: true, updatedAt: true },
+        orderBy: { publishedAt: { sort: 'desc', nulls: 'last' } },
+        take: 5000,
+      })
+      .catch(() => []),
+  );
   return [
     ...staticPages.map((path) => ({
       url: `${base}${path}`,
@@ -87,6 +103,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       lastModified: company.updatedAt,
       changeFrequency: 'weekly' as const,
       priority: 0.6,
+    })),
+    ...officePages.map((entry) => ({
+      url: `${base}${entry.path}`,
+      lastModified: entry.lastModified,
+      changeFrequency: 'monthly' as const,
+      priority: 0.5,
     })),
   ];
 }

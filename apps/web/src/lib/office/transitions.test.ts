@@ -52,10 +52,11 @@ describe('applyAction', () => {
   });
 
   it.each<ProspectStatus>(['READY', 'CONTACTED', 'CALLBACK'])('из %s «Отказ»', (status) => {
+    // К3: отказ фирмы в работе — её почта и номера больше ничего не получают (optOutAt).
     expect(applyAction(status, 'decline', now)).toEqual({
       ok: true,
       status: 'DECLINED',
-      data: { declinedAt: now, callAt: null },
+      data: { declinedAt: now, optOutAt: now, callAt: null },
     });
   });
 
@@ -136,5 +137,70 @@ describe('applyAction', () => {
     for (const text of errors) {
       expect(text).not.toMatch(/кабинет|вкладк|сайт|приложени/);
     }
+  });
+});
+
+describe('applyAction — клиентский сайт (К10)', () => {
+  it.each<ProspectStatus>(['READY', 'CONTACTED', 'CALLBACK'])(
+    'из %s «Согласился» ставит AGREED и не публикует',
+    (status) => {
+      expect(applyAction(status, 'agree', now, undefined, 'site')).toEqual({
+        ok: true,
+        status: 'AGREED',
+        data: { agreedAt: now, callAt: null },
+      });
+    },
+  );
+
+  it('«Опубликовать» переводит AGREED в PUBLISHED с датой публикации', () => {
+    expect(applyAction('AGREED', 'publish', now, undefined, 'site')).toEqual({
+      ok: true,
+      status: 'PUBLISHED',
+      data: { publishedAt: now },
+    });
+  });
+
+  it('у AGREED можно «Отказ», остальное — нет', () => {
+    expect(applyAction('AGREED', 'decline', now, undefined, 'site')).toEqual({
+      ok: true,
+      status: 'DECLINED',
+      data: { declinedAt: now, callAt: null },
+    });
+    for (const action of ['agree', 'callback', 'replied'] as const) {
+      const result = applyAction('AGREED', action, now, tomorrow, 'site');
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.error).toMatch(/Опубликовать/);
+    }
+  });
+
+  it.each<ProspectStatus>(['NEW', 'READY', 'CONTACTED', 'CALLBACK', 'PUBLISHED', 'DECLINED'])(
+    '«Опубликовать» из %s нельзя',
+    (status) => {
+      expect(applyAction(status, 'publish', now, undefined, 'site').ok).toBe(false);
+    },
+  );
+
+  it('после отказа «Согласился» возвращает сайт в AGREED, а не на публикацию', () => {
+    expect(applyAction('DECLINED', 'agree', now, undefined, 'site')).toEqual({
+      ok: true,
+      status: 'AGREED',
+      data: { agreedAt: now },
+    });
+  });
+
+  it('опубликованный сайт можно снять', () => {
+    expect(applyAction('PUBLISHED', 'decline', now, undefined, 'site')).toMatchObject({
+      ok: true,
+      status: 'DECLINED',
+    });
+  });
+
+  it('подрядчик — как раньше: «Согласился» сразу публикует, «Опубликовать» не нужно', () => {
+    expect(applyAction('READY', 'agree', now, undefined, 'provider')).toMatchObject({
+      ok: true,
+      status: 'PUBLISHED',
+    });
+    expect(applyAction('AGREED', 'publish', now, undefined, 'provider').ok).toBe(false);
+    expect(applyAction('READY', 'publish', now).ok).toBe(false);
   });
 });

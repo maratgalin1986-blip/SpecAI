@@ -141,6 +141,7 @@ function StorozhCard({ trigger, onClose }: { trigger: StorozhTrigger; onClose: (
       aria-modal="false"
       aria-labelledby="storozh-title"
       data-testid="storozh"
+      data-platform-chrome
       className={`fixed inset-x-2 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-[46] rounded-2xl bg-slate-950 p-4 text-white shadow-2xl ring-1 ring-white/10 sm:inset-x-auto sm:bottom-6 sm:right-[5.5rem] sm:w-[22rem] sm:p-5 motion-safe:transition motion-safe:duration-300 motion-safe:ease-out ${
         entered ? 'translate-y-0 opacity-100' : 'translate-y-4 opacity-0'
       }`}

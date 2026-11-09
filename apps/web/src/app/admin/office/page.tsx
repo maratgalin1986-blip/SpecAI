@@ -1,8 +1,12 @@
 import type { Metadata } from 'next';
+import Link from 'next/link';
 import { prisma } from '@specai/database';
 import { Card } from '@specai/ui';
 import { adminGate } from '@/components/admin/AdminGate';
 import { AdminPageHeader, AdminTag, StatTile } from '@/components/admin/AdminUi';
+import { OfficeAiForm } from '@/components/admin/OfficeAiForm';
+import { OfficeFunnel } from '@/components/admin/OfficeFunnel';
+import { OfficeLearning } from '@/components/admin/OfficeLearning';
 import { OfficeManualForm } from '@/components/admin/OfficeManualForm';
 import { OfficeOutreachCard } from '@/components/admin/OfficeOutreachCard';
 import { OfficePlanForm } from '@/components/admin/OfficePlanForm';
@@ -11,14 +15,21 @@ import { OfficeProspectControls } from '@/components/admin/OfficeProspectControl
 import { OfficeRunForm } from '@/components/admin/OfficeRunForm';
 import { PhoneLink } from '@/components/admin/PhoneLink';
 import { mskDayBounds } from '@/lib/adminCrm';
+import { integrationFlags } from '@/lib/integrationFlags';
 import { serverChannels } from '@/lib/notifications/adapters';
+import { officeMailConfigured } from '@/lib/office/smtp';
+import { unsubscribeConfigured } from '@/lib/office/unsubscribe';
 import { AGENTS, AGENT_IDS } from '@/lib/office/agents';
+import { HOT_DAYS, HOT_STATUSES } from '@/lib/office/digest';
+import { collectFunnel } from '@/lib/office/funnel';
+import { collectAngleStats, learningTable } from '@/lib/office/learning';
 import { nicheTitle, nichesOf } from '@/lib/office/niches';
 import type { PageProspect } from '@/lib/office/pageTypes';
 import { nextStep, parsePlan } from '@/lib/office/plan';
+import { previewViewsLabel } from '@/lib/office/previewViews';
 import { officePrices } from '@/lib/office/prices';
 import { buildCallScript } from '@/lib/office/scripts';
-import { readOfficeSettings } from '@/lib/office/settings';
+import { AI_DAILY_CAP_MAX, readOfficeSettings } from '@/lib/office/settings';
 import { SITE } from '@/lib/site';
 import { siteUrl } from '@/lib/siteUrl';
 
@@ -29,6 +40,7 @@ const CANDIDATES_SHOWN = 200;
 const PUBLISHED_SHOWN = 100;
 const DECLINED_SHOWN = 50;
 const RUNS_SHOWN = 20;
+const HOT_SHOWN = 20;
 
 const when = (date: Date) =>
   date.toLocaleString('ru-RU', {
@@ -81,6 +93,7 @@ export default async function AdminOfficePage() {
   const now = new Date();
   const { start: todayStart, end: todayEnd } = mskDayBounds(now);
   const weekAgo = new Date(now.getTime() - 7 * 86_400_000);
+  const hotSince = new Date(now.getTime() - HOT_DAYS * 86_400_000);
   const base = siteUrl();
 
   const [
@@ -98,6 +111,9 @@ export default async function AdminOfficePage() {
     runs,
     emailToday,
     whatsappToday,
+    funnel,
+    angleStats,
+    hot,
   ] = await Promise.all([
     readOfficeSettings(),
     officePrices(),
@@ -108,7 +124,7 @@ export default async function AdminOfficePage() {
     prisma.prospect.count({ where: { status: 'CALLBACK', callAt: { lt: todayEnd } } }),
     prisma.prospect.count({ where: { status: 'DECLINED' } }),
     prisma.prospect.findMany({
-      where: { status: { in: ['READY', 'CONTACTED', 'CALLBACK'] } },
+      where: { status: { in: ['READY', 'CONTACTED', 'CALLBACK', 'AGREED'] } },
       orderBy: { createdAt: 'desc' },
       take: CANDIDATES_SHOWN,
     }),
@@ -146,6 +162,27 @@ export default async function AdminOfficePage() {
     prisma.officeRun.findMany({ orderBy: { startedAt: 'desc' }, take: RUNS_SHOWN }),
     prisma.prospect.count({ where: { emailSentAt: { gte: todayStart, lt: todayEnd } } }),
     prisma.prospect.count({ where: { whatsappSentAt: { gte: todayStart, lt: todayEnd } } }),
+    collectFunnel(prisma, now),
+    collectAngleStats(prisma),
+    // «Горячие»: открыли превью за HOT_DAYS дней и не ответили — им пора позвонить.
+    prisma.prospect.findMany({
+      where: {
+        status: { in: [...HOT_STATUSES] },
+        repliedAt: null,
+        previewViewedAt: { gte: hotSince },
+      },
+      orderBy: { previewViewedAt: 'desc' },
+      take: HOT_SHOWN,
+      select: {
+        id: true,
+        name: true,
+        phone: true,
+        city: true,
+        niche: true,
+        previewViews: true,
+        previewViewedAt: true,
+      },
+    }),
   ]);
 
   // Overdue reminders first (the oldest first), then the newest candidates.
@@ -171,6 +208,19 @@ export default async function AdminOfficePage() {
       >
         {settings.paused && <AdminTag tone="warn">Поиск на паузе</AdminTag>}
         {settings.outreachPaused && <AdminTag tone="warn">Рассылка на паузе</AdminTag>}
+        <Link
+          href="/admin/office/clients"
+          className="text-sm font-semibold text-signal-700 hover:underline"
+        >
+          Клиенты
+        </Link>
+        <Link
+          href="/sajt-pod-klyuch"
+          target="_blank"
+          className="text-sm font-semibold text-signal-700 hover:underline"
+        >
+          Страница услуги
+        </Link>
       </AdminPageHeader>
 
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
@@ -184,6 +234,49 @@ export default async function AdminOfficePage() {
           tone={remindCount ? 'dark' : 'default'}
         />
       </div>
+
+      <OfficeFunnel data={funnel} />
+
+      {hot.length > 0 && (
+        <section className="flex flex-col gap-3">
+          <h2 className="text-lg font-bold text-graphite-950">
+            Горячие <span className="font-mono text-base text-graphite-500">{hot.length}</span>
+          </h2>
+          <p className="-mt-2 text-xs text-graphite-600">
+            Открыли превью за {HOT_DAYS} дней и ещё не ответили — самое время позвонить.
+          </p>
+          <Card className="flex flex-col divide-y divide-graphite-100 p-0">
+            {hot.map((p) => (
+              <div
+                key={p.id}
+                className="flex flex-col gap-1 px-4 py-2 text-sm sm:flex-row sm:items-center sm:justify-between"
+              >
+                <div className="min-w-0">
+                  <Link
+                    href={`/admin/office/${p.id}`}
+                    className="font-semibold text-signal-700 hover:underline"
+                  >
+                    {p.name}
+                  </Link>{' '}
+                  <PhoneLink phone={p.phone} />
+                  <span className="text-xs text-graphite-600">
+                    {' '}
+                    · {[p.city, nicheTitle(p.niche)].filter(Boolean).join(' · ')}
+                  </span>
+                </div>
+                <div className="flex flex-wrap items-center gap-1.5 text-xs">
+                  {previewViewsLabel(p.previewViews) && (
+                    <AdminTag tone="accent">{previewViewsLabel(p.previewViews)}</AdminTag>
+                  )}
+                  {p.previewViewedAt && (
+                    <span className="text-graphite-500">впервые {when(p.previewViewedAt)}</span>
+                  )}
+                </div>
+              </div>
+            ))}
+          </Card>
+        </section>
+      )}
 
       <div className="grid gap-3 md:grid-cols-2">
         {AGENT_IDS.map((id) => {
@@ -278,6 +371,9 @@ export default async function AdminOfficePage() {
                         напомнить {dayMonth(p.callAt)}
                       </AdminTag>
                     )}
+                    {previewViewsLabel(p.previewViews) && (
+                      <AdminTag tone="accent">{previewViewsLabel(p.previewViews)}</AdminTag>
+                    )}
                     {p.outreachError && (
                       <AdminTag tone="red" title={p.outreachError}>
                         ошибка отправки
@@ -293,6 +389,12 @@ export default async function AdminOfficePage() {
                     >
                       Превью
                     </a>
+                    <Link
+                      href={`/admin/office/${p.id}`}
+                      className="font-semibold text-signal-700 hover:underline"
+                    >
+                      Досье и сайт
+                    </Link>
                     {p.telegram && (
                       <a
                         href={`https://t.me/${p.telegram}`}
@@ -321,7 +423,13 @@ export default async function AdminOfficePage() {
                   </details>
                 </div>
                 <div className="lg:w-3/5">
-                  <OfficeProspectControls id={p.id} variant="open" note={p.note} />
+                  <OfficeProspectControls
+                    id={p.id}
+                    variant={p.status === 'AGREED' ? 'agreed' : 'open'}
+                    note={p.note}
+                    kind={p.kind === 'site' ? 'site' : 'provider'}
+                    paid={p.setupPaidAt !== null}
+                  />
                 </div>
               </Card>
             );
@@ -412,7 +520,7 @@ export default async function AdminOfficePage() {
           <p className="text-xs text-graphite-600">
             Подставляются в текст звонка и письма агента «Сайты под ключ».
           </p>
-          <OfficePricesForm setup={prices.setup} monthly={prices.monthly} />
+          <OfficePricesForm setup={prices.setup} monthly={prices.monthly} yearly={prices.yearly} />
         </Card>
         <Card className="flex flex-col gap-3">
           <h2 className="text-lg font-bold text-graphite-950">План обхода</h2>
@@ -424,9 +532,27 @@ export default async function AdminOfficePage() {
         <OfficeOutreachCard
           settings={settings}
           today={{ email: emailToday, whatsapp: whatsappToday }}
-          channels={serverChannels()}
+          channels={{
+            email: officeMailConfigured() && unsubscribeConfigured(),
+            whatsapp: serverChannels().whatsapp,
+          }}
         />
+        <Card className="flex flex-col gap-3">
+          <h2 className="text-lg font-bold text-graphite-950">ИИ-аналитик</h2>
+          <p className="text-xs text-graphite-600">
+            Переписывает вступление и три пункта персонального предложения живым языком — только по
+            фактам из карточки компании. Сбой или лимит — письмо уходит без ИИ.
+          </p>
+          <OfficeAiForm
+            enabled={settings.aiOffers}
+            dailyCap={settings.aiDailyCap}
+            maxCap={AI_DAILY_CAP_MAX}
+            keyConfigured={integrationFlags().ai}
+          />
+        </Card>
       </div>
+
+      <OfficeLearning rows={learningTable(angleStats)} />
 
       <section className="flex flex-col gap-3">
         <h2 className="text-lg font-bold text-graphite-950">Журнал прогонов</h2>

@@ -3,10 +3,13 @@ import { describe, expect, it, vi } from 'vitest';
 vi.mock('@specai/database', () => ({ prisma: {} }));
 
 import {
+  DIGEST_HOT_LIMIT,
   DIGEST_HOURS,
   DIGEST_LIST_LIMIT,
   buildDigest,
+  collectDigest,
   moscowHour,
+  type DigestDb,
   type DigestInput,
   type ProspectLite,
 } from './digest';
@@ -137,10 +140,224 @@ describe('buildDigest', () => {
   });
 });
 
+describe('buildDigest: клиентские сайты и оплата', () => {
+  it('заявки с клиентских сайтов — новость дня, недоставленные видны', () => {
+    const text = buildDigest(input({ siteLeads: { total: 3, undelivered: 1 } }));
+    expect(text).toContain('Офис за сутки (09.11):');
+    expect(text).toContain('Заявок с клиентских сайтов: 3 (не доставлено клиентам: 1)');
+    expect(text.trim().endsWith(`Открыть офис: ${SITE}/admin/office`)).toBe(true);
+  });
+
+  it('все заявки доставлены — без скобки; ноль заявок — без строки', () => {
+    const delivered = buildDigest(
+      input({ toContact: [lite(1)], siteLeads: { total: 2, undelivered: 0 } }),
+    );
+    expect(delivered).toContain('Заявок с клиентских сайтов: 2\n');
+    expect(delivered).not.toContain('не доставлено');
+    const none = buildDigest(
+      input({ toContact: [lite(1)], siteLeads: { total: 0, undelivered: 0 } }),
+    );
+    expect(none).not.toContain('Заявок с клиентских сайтов');
+  });
+
+  it('оплата: истекает и просрочена, со ссылкой на клиентов', () => {
+    const text = buildDigest(input({ toContact: [lite(1)], billing: { expiring: 2, overdue: 1 } }));
+    expect(text).toContain(
+      `Оплата: истекает за 7 дней — 2, просрочена — 1. Клиенты: ${SITE}/admin/office/clients`,
+    );
+  });
+
+  it('оплата: только ненулевые части, нули — без строки', () => {
+    expect(
+      buildDigest(input({ toContact: [lite(1)], billing: { expiring: 0, overdue: 4 } })),
+    ).toContain('Оплата: просрочена — 4.');
+    expect(
+      buildDigest(input({ toContact: [lite(1)], billing: { expiring: 1, overdue: 0 } })),
+    ).toContain('Оплата: истекает за 7 дней — 1.');
+    const zero = buildDigest(input({ toContact: [lite(1)], billing: { expiring: 0, overdue: 0 } }));
+    expect(zero).not.toContain('Оплата:');
+  });
+
+  it('оплата не отменяет тихую сводку: короткая строка и строка про оплату', () => {
+    const text = buildDigest(input({ billing: { expiring: 0, overdue: 2 } }));
+    const lines = text.split('\n');
+    expect(lines).toHaveLength(2);
+    expect(lines[0]).toContain('за ночь новых кандидатов нет');
+    expect(lines[1]).toBe(`Оплата: просрочена — 2. Клиенты: ${SITE}/admin/office/clients`);
+  });
+
+  it('без данных о сайтах и оплате — как раньше', () => {
+    const text = buildDigest(input({ siteLeads: undefined, billing: undefined }));
+    expect(text.split('\n')).toHaveLength(1);
+  });
+});
+
+describe('buildDigest: горячие и лучший заход (U3)', () => {
+  it('горячие — отдельный список не длиннее DIGEST_HOT_LIMIT, тихую сводку отменяют', () => {
+    const hot = Array.from({ length: 7 }, (_, i) => lite(i + 1));
+    const text = buildDigest(input({ hot }));
+    expect(text).toContain('Горячие (открыли превью) (7):');
+    expect(text).toContain(`${DIGEST_HOT_LIMIT}. Компания ${DIGEST_HOT_LIMIT}`);
+    expect(text).not.toContain(`${DIGEST_HOT_LIMIT + 1}. Компания`);
+    expect(text).toContain(`${SITE}/preview/${lite(1).token}`);
+    expect(text).not.toContain('за ночь новых кандидатов нет');
+  });
+
+  it('лучший заход — строка «ответили N из M» только при данных', () => {
+    const news = { contacted: { email: 3, whatsapp: 0 } };
+    const text = buildDigest(
+      input({ ...news, bestAngle: { title: 'Работаете допоздна', replied: 2, sent: 9 } }),
+    );
+    expect(text).toContain('Лучший заход: Работаете допоздна (ответили 2 из 9)');
+    expect(buildDigest(input({ ...news, bestAngle: null }))).not.toContain('Лучший заход');
+    expect(
+      buildDigest(input({ ...news, bestAngle: { title: 'x', replied: 0, sent: 0 } })),
+    ).not.toContain('Лучший заход');
+  });
+
+  it('тихая ночь остаётся одной строкой и без лучшего захода', () => {
+    const text = buildDigest(input({ bestAngle: { title: 'Поиск', replied: 1, sent: 5 } }));
+    expect(text.split('\n')).toHaveLength(1);
+  });
+});
+
+describe('collectDigest', () => {
+  const NOW = new Date('2026-11-09T06:30:00Z');
+  const DAY = 86_400_000;
+
+  function fakeDb(
+    over: {
+      leads?: number;
+      undelivered?: number;
+      expiring?: number;
+      overdue?: number;
+      groupBy?: NonNullable<DigestDb['prospect']['groupBy']>;
+    } = {},
+  ) {
+    const prospectCounts: Record<string, unknown>[] = [];
+    const leadCounts: Record<string, unknown>[] = [];
+    const finds: Record<string, unknown>[] = [];
+    const db: DigestDb = {
+      officeRun: { findMany: vi.fn(async () => []) },
+      prospect: {
+        ...(over.groupBy ? { groupBy: over.groupBy } : {}),
+        findMany: vi.fn(async ({ where }) => {
+          finds.push(where);
+          return 'previewLastViewedAt' in where
+            ? [
+                {
+                  name: 'Улыбка',
+                  city: 'Казань',
+                  niche: 'dentist',
+                  phone: '+78432000001',
+                  token: 'a'.repeat(32),
+                  kind: 'site',
+                  email: null,
+                  whatsapp: null,
+                },
+              ]
+            : [];
+        }),
+        count: vi.fn(async ({ where }) => {
+          prospectCounts.push(where);
+          const paidUntil = where.paidUntil as { gt?: Date; lte?: Date } | undefined;
+          if (paidUntil?.gt) return over.expiring ?? 0;
+          if (paidUntil?.lte) return over.overdue ?? 0;
+          return 0;
+        }),
+      },
+      appSetting: { findMany: vi.fn(async () => []) },
+      siteLead: {
+        count: vi.fn(async ({ where }) => {
+          leadCounts.push(where);
+          return 'forwardedAt' in where ? (over.undelivered ?? 0) : (over.leads ?? 0);
+        }),
+      },
+    };
+    return { db, prospectCounts, leadCounts, finds };
+  }
+
+  it('горячие: написали, не ответили, открыли превью за 7 дней; лучший заход из статистики', async () => {
+    const groupBy = vi.fn(async ({ where }: { where: Record<string, unknown> }) => {
+      if ('previewViews' in where) return [{ offerAngle: 'open_late', _count: { _all: 4 } }];
+      if ('repliedAt' in where) return [{ offerAngle: 'open_late', _count: { _all: 2 } }];
+      if ('agreedAt' in where) return [];
+      return [
+        { offerAngle: 'open_late', _count: { _all: 9 } },
+        { offerAngle: 'search', _count: { _all: 6 } },
+      ];
+    });
+    const { db, finds } = fakeDb({ groupBy });
+    const text = await collectDigest(NOW, db);
+    expect(finds).toContainEqual({
+      status: { in: ['CONTACTED', 'CALLBACK'] },
+      repliedAt: null,
+      previewLastViewedAt: { gte: new Date(NOW.getTime() - 7 * DAY) },
+    });
+    expect(groupBy).toHaveBeenCalledTimes(4);
+    expect(text).toContain('Горячие (открыли превью) (1):');
+    expect(text).toContain(`/preview/${'a'.repeat(32)}`);
+    expect(text).toContain('Лучший заход: Работаете допоздна (ответили 2 из 9)');
+  });
+
+  it('сбой статистики заходов сводку не ломает', async () => {
+    const groupBy = vi.fn(async () => {
+      throw new Error('db down');
+    });
+    const { db } = fakeDb({ groupBy });
+    const text = await collectDigest(NOW, db);
+    expect(text).toContain('Горячие (открыли превью) (1):');
+    expect(text).not.toContain('Лучший заход');
+  });
+
+  it('считает заявки за окно сводки и оплату только у клиентов-сайтов', async () => {
+    const { db, prospectCounts, leadCounts } = fakeDb({
+      leads: 4,
+      undelivered: 1,
+      expiring: 2,
+      overdue: 3,
+    });
+    const text = await collectDigest(NOW, db);
+    const since = new Date(NOW.getTime() - DAY);
+    expect(leadCounts).toEqual([
+      { createdAt: { gte: since } },
+      { createdAt: { gte: since }, forwardedAt: null },
+    ]);
+    const clients = { kind: 'site', status: { in: ['AGREED', 'PUBLISHED'] } };
+    expect(prospectCounts).toContainEqual({
+      ...clients,
+      paidUntil: { gt: NOW, lte: new Date(NOW.getTime() + 7 * DAY) },
+    });
+    expect(prospectCounts).toContainEqual({ ...clients, paidUntil: { lte: NOW } });
+    expect(text).toContain('Заявок с клиентских сайтов: 4 (не доставлено клиентам: 1)');
+    expect(text).toContain('Оплата: истекает за 7 дней — 2, просрочена — 3.');
+  });
+
+  it('тихая ночь без заявок и долгов — одна строка', async () => {
+    const { db } = fakeDb();
+    db.prospect.findMany = vi.fn(async () => []);
+    const text = await collectDigest(NOW, db);
+    expect(text.split('\n')).toHaveLength(1);
+    expect(text).toContain('за ночь новых кандидатов нет');
+  });
+});
+
 describe('moscowHour', () => {
   it('переводит в московское время', () => {
     expect(moscowHour(new Date('2026-11-09T06:30:00Z'))).toBe(9);
     expect(moscowHour(new Date('2026-11-09T21:05:00Z'))).toBe(0);
     expect(DIGEST_HOURS).toEqual({ from: 8, to: 23 });
+  });
+});
+
+describe('buildDigest — письма дня (К2)', () => {
+  it('строка со ссылкой на /admin/office/pisma, и сводка уже не «тихая»', () => {
+    const text = buildDigest(input({ outboxWaiting: 7 }));
+    expect(text).toContain(`Письма дня ждут вашего «Отправить»: 7 — ${SITE}/admin/office/pisma`);
+    expect(text).not.toContain('новых кандидатов нет');
+  });
+
+  it('ноль писем — строки нет', () => {
+    expect(buildDigest(input({ outboxWaiting: 0 }))).not.toContain('Письма дня');
   });
 });
