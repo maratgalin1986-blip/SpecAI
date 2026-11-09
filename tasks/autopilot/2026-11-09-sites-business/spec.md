@@ -228,3 +228,79 @@ REVIEW.md — новые публичные адреса; документы; р
   из `offerJson`, иначе как будет — `buildOffer` с первым подходящим заходом), просмотры превью.
 - Сводка: «Лучший заход: <название> (ответили N из M)», если есть данные; «Горячие (открыли превью): …» —
   до 5 строк.
+
+## Третья волна — выводы бизнес-плана (`docs/business/sajty-pod-klyuch.md`, К1–К17)
+
+Готово координатором: колонка `Prospect.optOutAt`; зависимость `nodemailer` в apps/web.
+
+### V1. Письма со своего ящика, утверждение владельцем, отписка, напоминания (К1–К4)
+
+Файлы: `lib/office/smtp.ts` (+ тест), `lib/office/outreach.ts`, `lib/office/outreachRun.ts` (+ тесты),
+`lib/office/unsubscribe.ts` (+ тест), `app/otpiska/[token]/page.tsx` и `app/api/office/unsubscribe/route.ts`,
+`app/admin/office/pisma/page.tsx`, `components/admin/OfficeOutboxControls.tsx`,
+`app/api/admin/office/outreach/route.ts`, `lib/office/settings.ts` и маршрут настроек (ключ
+`office.outreachMode` 'approve' | 'auto', по умолчанию 'approve'), `lib/office/digest.ts` (+ тест),
+`lib/office/tick.ts` (+ тест).
+
+- К1: холодные письма (первое и напоминание) — только через `sendOfficeMail` (nodemailer, SMTP из переменных
+  `OUTREACH_SMTP_HOST` (по умолчанию smtp.yandex.ru), `OUTREACH_SMTP_PORT` (465), `OUTREACH_SMTP_USER`,
+  `OUTREACH_SMTP_PASS`, `OUTREACH_FROM` (по умолчанию user)); `officeMailConfigured()`. Никогда не через
+  Resend (`lib/email.ts`): нет SMTP — письма не уходят, причина `no-smtp` без записи ошибок в строки.
+  Пересылка заявок с клиентских сайтов (siteLeads.ts) остаётся на Resend.
+- К2: режим 'approve' (по умолчанию): тик крона НЕ отправляет письма; вместо этого готовит «письма дня»
+  (у строк без `offerJson` выбирает заход и сохраняет `offerAngle`/`offerJson` — то, что утверждается, то и
+  уходит). Страница `/admin/office/pisma` (adminGate с await): список первых писем и напоминаний на сегодня
+  в пределах дневного лимита — кому (название, город, адрес почты), тема, вступление, пункты; галочки
+  «не отправлять»; кнопка «Отправить N писем» → POST `/api/admin/office/outreach` `{ send: true, exclude: id[] }`
+  → `sendOutreach(now, { budgetMs, onlyApproved })` (отправка по клику владельца — «с участием человека»);
+  ответ — числа. Режим 'auto' — как сейчас (по крону), с предупреждением в админке про ч. 2 ст. 18.
+  Сводка: «Письма дня ждут вашего «Отправить»: N — <siteUrl>/admin/office/pisma».
+- К3: в каждом холодном письме — строка «Больше не писать: <ссылка>» и заголовок `List-Unsubscribe`;
+  ссылка `/otpiska/<token>?s=<HMAC от token>` (секрет — `CRON_SECRET` или `NEXTAUTH_SECRET`) → страница с
+  кнопкой «Больше не писать» (POST, чтобы превью ссылок в почте не отписывали сами) → `optOutAt`,
+  статус DECLINED, `declinedAt`; офис не пишет на адрес, если у любой строки с таким же `email` есть
+  `optOutAt`. Ответ «стоп» (WhatsApp) — как раньше.
+- К4: напоминания тоже идут через «письма дня» (в режиме approve).
+
+### V2. Продажа и юридические страницы (К6, К10, К12, К16, К17, раздел 8.2)
+
+Файлы: `lib/office/pages.ts` (+ тест), `lib/office/pageTypes.ts`, `lib/office/siteContent.ts` (+ тест),
+`components/office/OfficeSitePage.tsx`, `components/office/SiteLeadForm.tsx`, `components/office/PreviewBanner.tsx`,
+`app/preview/[token]/page.tsx`, `app/s/[slug]/page.tsx`, `app/s/[slug]/politika/page.tsx`,
+`lib/office/siteLeads.ts` (+ тест), `lib/office/transitions.ts` (+ тест),
+`app/api/admin/office/prospects/[id]/route.ts`, `components/admin/OfficeProspectControls.tsx`,
+`components/admin/OfficeSiteEditor.tsx`, `lib/prices.ts`, `lib/office/prices.ts` (+ тест),
+`lib/office/billing.ts` (+ тест), `app/oplata/[token]/page.tsx`, `app/admin/office/clients/page.tsx`,
+`components/admin/OfficeClientControls.tsx`, `lib/office/landing.ts` (если нужно для цен/WhatsApp).
+
+- К6: плашка превью — «Черновик: подготовлен ИИСтройка24 по открытым данным карточки на карте. Это не
+  официальный сайт компании». Если источник OSM — строка «Данные карточки: © участники OpenStreetMap».
+- 8.2: кнопки WhatsApp на клиентском сайте — только если WhatsApp указан в карточке (`Prospect.whatsapp`)
+  или в правках; иначе нет (`SitePage.whatsappHref: string | null`). Пример на странице услуги — как есть.
+- К10: для kind site «Согласился» → статус AGREED (не публикует); новое действие «Опубликовать»
+  (AGREED → PUBLISHED, `publishedAt`), в админке рядом с оплатой; если сайт не оплачен — подтверждение
+  «Сайт не оплачен — опубликовать?». Для kind provider — как раньше (сразу PUBLISHED). Форма заявки
+  выключена по умолчанию (`leadForm` по умолчанию false; включается в редакторе галочкой «Форма заявки —
+  только после принятия клиентом оферты и согласия на поручение»); siteLeads принимает заявку только при
+  `leadForm === true`. Владельцу в Telegram о заявке с сайта — только «Заявка с сайта <компания>
+  (доставлена/не доставлена)», без имени и телефона посетителя.
+- Подвал «Хотите такой же сайт?» — убирается галочкой в редакторе (`siteContent.hideCredit`).
+- К12: цены по умолчанию `SITE_PRICES = { setup: 3900, monthly: 990, yearly: 9900 }`, настройка
+  `office.siteYearly`; в пакетах и на счёте — вариант «на год»; действие оплаты 'year' продлевает на 12 мес.
+- К16: на странице счёта (после оплаты) и в админке «Клиенты» — инструкция «Как поставить ссылку на сайт в
+  карточку Яндекс Карт и 2ГИС» (шаги текстом).
+- К17: `/s/<slug>/politika` — политика обработки персональных данных посетителей сайта: оператор —
+  компания (название и адрес из карточки), обработка по поручению — СпецПласт16 (`SITE`), какие данные
+  (имя, телефон, комментарий), цель (ответ на заявку), хранение в России, срок, как отозвать согласие;
+  noindex. Галочка в форме — со ссылкой на неё.
+
+### V3. Чистота поиска и запас кандидатов (К5, К15)
+
+Файлы: `lib/office/candidateFilter.ts` (+ тест), `lib/office/run.ts` (+ тест), `lib/office/agents.ts`,
+`lib/office/plan.ts`/`plan.test.ts` (если нужно), `lib/office/funnel.ts` (+ тест), `components/admin/OfficeFunnel.tsx`.
+
+- К5: не делать кандидатами ИП и людей: название начинается с «ИП »/«И.П.», содержит «индивидуальный
+  предприниматель», или похоже на ФИО (2–3 слова с заглавной, одно из окончаний -ович/-евич/-овна/-евна/-ична
+  или «Фамилия И. О.»); такие — в `skipped` с причиной. Медицинские ниши (стоматология — реклама медуслуг,
+  ст. 24 закона «О рекламе») — убрать из ниш по умолчанию агента «Сайты» (ниша остаётся для ручных строк плана).
+- К15: в воронке — «Запас кандидатов с почтой: N (≈ D рабочих дней при лимите L в день)» по агентам.

@@ -1171,6 +1171,8 @@ model Prospect {
   previewViewedAt DateTime?
   // Последнее открытие превью — «горячие» в сводке считаются по нему.
   previewLastViewedAt DateTime?
+  // «Больше не писать» по ссылке из письма (К3): этому адресу офис не пишет никогда.
+  optOutAt            DateTime?
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
