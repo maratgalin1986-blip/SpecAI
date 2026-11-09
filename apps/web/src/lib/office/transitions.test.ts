@@ -52,10 +52,11 @@ describe('applyAction', () => {
   });
 
   it.each<ProspectStatus>(['READY', 'CONTACTED', 'CALLBACK'])('из %s «Отказ»', (status) => {
+    // К3: отказ фирмы в работе — её почта и номера больше ничего не получают (optOutAt).
     expect(applyAction(status, 'decline', now)).toEqual({
       ok: true,
       status: 'DECLINED',
-      data: { declinedAt: now, callAt: null },
+      data: { declinedAt: now, optOutAt: now, callAt: null },
     });
   });
 

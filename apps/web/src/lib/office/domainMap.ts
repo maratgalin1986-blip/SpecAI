@@ -1,8 +1,10 @@
 // Свой домен клиента (S7): карта «хост клиента → slug его опубликованного сайта» для middleware.
-// Middleware работает на edge и в базу не ходит: карту отдаёт GET /api/office/domains того же
-// развёртывания, здесь она проверяется и держится в памяти модуля 5 минут. Модуль не тянет базу
-// данных (только lib/office/domains и lib/siteUrl), поэтому его можно импортировать в middleware.
+// Middleware работает на edge и в базу не ходит: карту отдаёт GET /api/office/domains с адреса
+// площадки (siteUrl(), не из запроса), здесь она проверяется и держится в памяти модуля 5 минут.
+// Модуль не тянет базу данных (только lib/office/domains и lib/siteUrl), поэтому его можно
+// импортировать в middleware.
 
+import { siteUrl } from '@/lib/siteUrl';
 import { domainKeys, isPlatformHost, normalizeHost } from './domains';
 
 /** Откуда middleware берёт карту (app/api/office/domains/route.ts). */
@@ -103,7 +105,16 @@ export function clientSitePath(slug: string): string {
 /** Загрузчик карты: возвращает JSON ответа или бросает ошибку. */
 export type DomainMapFetcher = () => Promise<unknown>;
 
-/** Карта с того же развёртывания (origin запроса), не дольше DOMAIN_MAP_TIMEOUT_MS. */
+/**
+ * Откуда брать карту: только адрес площадки из настроек (siteUrl()), никогда не origin запроса.
+ * Origin запроса — это хост, который прислал посетитель: с подставленным Host карту отдал бы
+ * чужой сервер, и она в общей памяти модуля открыла бы на домене одного клиента сайт другого.
+ */
+export function domainMapOrigin(): string {
+  return siteUrl();
+}
+
+/** Загрузчик карты с адреса `origin` (domainMapOrigin()), не дольше DOMAIN_MAP_TIMEOUT_MS. */
 export function domainMapFetcher(
   origin: string,
   fetchImpl: typeof fetch = fetch,

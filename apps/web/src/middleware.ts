@@ -7,6 +7,7 @@ import {
   clientSiteFor,
   clientSitePath,
   domainMapFetcher,
+  domainMapOrigin,
   getDomainMap,
 } from '@/lib/office/domainMap';
 import { isPlatformHost } from '@/lib/office/domains';
@@ -33,9 +34,10 @@ export default async function middleware(request: NextRequest, event: NextFetchE
   // A client's own domain («Сайты под ключ», S7): any page of it shows the
   // client's site (/s/<slug>), and the page learns the host from the header to
   // put the domain into its canonical. Unknown hosts serve the platform as before.
+  // The map comes from the platform's own address, never from the request's origin.
   const host = request.nextUrl.hostname;
   if (!isPlatformHost(host)) {
-    const site = clientSiteFor(host, await getDomainMap(domainMapFetcher(request.nextUrl.origin)));
+    const site = clientSiteFor(host, await getDomainMap(domainMapFetcher(domainMapOrigin())));
     if (site) {
       const headers = new Headers(request.headers);
       headers.set(CLIENT_DOMAIN_HEADER, site.host);

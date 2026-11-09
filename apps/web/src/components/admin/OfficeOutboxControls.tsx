@@ -6,9 +6,10 @@ import { AdminTag, chipClass } from '@/components/admin/AdminUi';
 import { pluralizeRu } from '@/lib/pluralize';
 
 // «Письма дня» на /admin/office/pisma (К2): владелец читает каждое письмо — кому, тема,
-// вступление, пункты, — снимает галочку «не отправлять» с лишних и нажимает «Отправить N
-// писем» → POST /api/admin/office/outreach { send: true, ids, exclude }. Уходят только
-// показанные письма без снятых. Здесь же переключатель режима (PUT /api/admin/office/settings).
+// вступление, пункты, — ставит галочку «не отправлять» у лишних и нажимает «Отправить N
+// писем» → POST /api/admin/office/outreach { send: true, ids, exclude }. ids и exclude — ключи
+// утверждения по каналам (approve у письма): уходят только показанные каналы показанных писем без
+// снятых. Здесь же переключатель режима (PUT /api/admin/office/settings).
 
 /** Одно письмо дня, как его передаёт страница (OutboxItem из lib/office/outreachRun.ts). */
 export interface OutboxItemView {
@@ -22,6 +23,13 @@ export interface OutboxItemView {
   subject: string;
   opener: string;
   bullets: string[];
+  /** Ключи утверждения: по одному на показанный канал (approvalKey в outreachRun.ts). */
+  approve: string[];
+}
+
+/** Одна строка может прийти и первым письмом (WhatsApp), и напоминанием — ключ списка разный. */
+function itemKey(item: OutboxItemView): string {
+  return `${item.id}:${item.type}`;
 }
 
 type Mode = 'approve' | 'auto';
@@ -68,7 +76,7 @@ export function OfficeOutboxControls({
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
   const [currentMode, setCurrentMode] = useState<Mode>(mode);
 
-  const chosen = items.filter((item) => !excluded.has(item.id)).length;
+  const chosen = items.filter((item) => !excluded.has(itemKey(item))).length;
 
   function toggle(id: string) {
     setExcluded((prev) => {
@@ -88,8 +96,8 @@ export function OfficeOutboxControls({
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         send: true,
-        ids: items.map((item) => item.id),
-        exclude: [...excluded],
+        ids: items.flatMap((item) => item.approve),
+        exclude: items.filter((item) => excluded.has(itemKey(item))).flatMap((i) => i.approve),
       }),
     }).catch(() => null);
     const data = (await response?.json().catch(() => null)) as SendAnswer | null;
@@ -166,10 +174,11 @@ export function OfficeOutboxControls({
       ) : (
         <ul className="flex flex-col gap-3">
           {items.map((item) => {
-            const off = excluded.has(item.id);
+            const key = itemKey(item);
+            const off = excluded.has(key);
             return (
               <li
-                key={item.id}
+                key={key}
                 className={`rounded-xl border bg-white p-4 text-sm ${
                   off ? 'border-graphite-200 opacity-60' : 'border-graphite-300'
                 }`}
@@ -201,7 +210,7 @@ export function OfficeOutboxControls({
                   <input
                     type="checkbox"
                     checked={off}
-                    onChange={() => toggle(item.id)}
+                    onChange={() => toggle(key)}
                     disabled={busy}
                   />
                   Не отправлять

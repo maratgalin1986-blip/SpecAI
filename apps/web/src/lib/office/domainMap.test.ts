@@ -9,11 +9,15 @@ import {
   clientSitePath,
   domainMapEntries,
   domainMapFetcher,
+  domainMapOrigin,
   getDomainMap,
   parseDomainMap,
   resetDomainMapCache,
 } from './domainMap';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { SLUG_RE } from './visibility';
+import { DEFAULT_SITE_URL } from '@/lib/siteUrl';
 
 const NOW = Date.parse('2026-11-09T10:00:00Z');
 
@@ -224,12 +228,12 @@ describe('getDomainMap: кэш в памяти на 5 минут', () => {
 describe('domainMapFetcher', () => {
   afterEach(() => vi.useRealTimers());
 
-  it('берёт карту с того же адреса, что и запрос', async () => {
+  it('берёт карту с переданного адреса площадки', async () => {
     const fetchImpl = vi.fn(async () => Response.json(mapJson(['cafe.ru', 'cafe'])));
-    const json = await domainMapFetcher('https://cafe.ru', fetchImpl as unknown as typeof fetch)();
+    const json = await domainMapFetcher(DEFAULT_SITE_URL, fetchImpl as unknown as typeof fetch)();
     expect(json).toEqual(mapJson(['cafe.ru', 'cafe']));
     const [url, init] = fetchImpl.mock.calls[0] as unknown as [URL, RequestInit];
-    expect(String(url)).toBe(`https://cafe.ru${DOMAIN_MAP_PATH}`);
+    expect(String(url)).toBe(`${DEFAULT_SITE_URL}${DOMAIN_MAP_PATH}`);
     expect(init.signal).toBeInstanceOf(AbortSignal);
   });
 
@@ -252,5 +256,24 @@ describe('domainMapFetcher', () => {
     const check = expect(pending).rejects.toThrow('прервано');
     await vi.advanceTimersByTimeAsync(3_000);
     await check;
+  });
+});
+
+describe('domainMapOrigin: карта только с адреса площадки', () => {
+  afterEach(() => vi.unstubAllEnvs());
+
+  it('адрес площадки из настроек, а не хост запроса', () => {
+    vi.stubEnv('NEXT_PUBLIC_SITE_URL', '');
+    vi.stubEnv('VERCEL_PROJECT_PRODUCTION_URL', '');
+    expect(domainMapOrigin()).toBe(DEFAULT_SITE_URL);
+    vi.stubEnv('NEXT_PUBLIC_SITE_URL', 'https://staging.example.ru/');
+    expect(domainMapOrigin()).toBe('https://staging.example.ru');
+  });
+
+  it('middleware не берёт карту с origin запроса (подставленный Host не подменит карту)', () => {
+    const source = readFileSync(join(__dirname, '../../middleware.ts'), 'utf8');
+    expect(source).toContain('domainMapFetcher(domainMapOrigin())');
+    expect(source).not.toMatch(/domainMapFetcher\(\s*request/);
+    expect(source).not.toContain('nextUrl.origin');
   });
 });

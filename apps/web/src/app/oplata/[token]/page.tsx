@@ -74,7 +74,7 @@ export default async function InvoicePage(props: { params: Promise<{ token: stri
           {SITE.platform} от {SITE.name} · Сайты под ключ
         </p>
         <h1 className="text-2xl font-extrabold leading-tight tracking-[-0.02em] text-slate-900 sm:text-4xl">
-          Счёт за сайт для {invoice.company}
+          {invoice.heading}
         </h1>
         {invoice.city && <p className="text-sm text-slate-600">{invoice.city}</p>}
       </header>
@@ -172,7 +172,7 @@ export default async function InvoicePage(props: { params: Promise<{ token: stri
               {invoice.payDetails}
             </p>
             <p className="text-sm text-slate-600">
-              В назначении платежа укажите: «Сайт для {invoice.company}».
+              В назначении платежа укажите: «{invoice.paymentPurpose}».
             </p>
           </>
         ) : (

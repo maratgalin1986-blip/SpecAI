@@ -3,7 +3,8 @@
 // только применяет результат к строке Prospect.
 //
 // READY | CONTACTED | CALLBACK → «Согласился», «Напомнить» (CALLBACK с датой),
-// «Отказ» (DECLINED), «Ответил» (только отметка repliedAt);
+// «Отказ» (DECLINED и optOutAt: фирма в работе отказалась — ни её почта, ни её номера больше ничего
+// не получают, К3), «Ответил» (только отметка repliedAt);
 // «Согласился» у подрядчика (kind provider) сразу публикует (PUBLISHED); у клиентского сайта
 // (kind site, К10) — только AGREED: сайт публикует отдельное «Опубликовать» (AGREED →
 // PUBLISHED), обычно после оплаты и оферты;
@@ -32,6 +33,7 @@ export interface ActionData {
   agreedAt: Date;
   publishedAt: Date;
   declinedAt: Date;
+  optOutAt: Date;
   callAt: Date | null;
   repliedAt: Date;
 }
@@ -130,7 +132,11 @@ export function applyAction(
         return { ok: true, status: 'CALLBACK', data: { callAt } };
       }
       case 'decline':
-        return { ok: true, status: 'DECLINED', data: { declinedAt: now, callAt: null } };
+        return {
+          ok: true,
+          status: 'DECLINED',
+          data: { declinedAt: now, optOutAt: now, callAt: null },
+        };
       case 'replied':
         return { ok: true, status, data: { repliedAt: now } };
     }

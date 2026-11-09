@@ -1151,6 +1151,8 @@ model Prospect {
   contactedAt    DateTime?
   repliedAt      DateTime?
   outreachError  String?
+  // Когда отправка упала (повтор — на следующие сутки); не updatedAt: его двигает любая запись.
+  outreachErrorAt DateTime?
   runId          String?
   // «Сайты под ключ» как бизнес (tasks/autopilot/2026-11-09-sites-business): правки сайта из
   // админки (JSON, lib/office/siteContent.ts), свой домен клиента, цены клиента и оплата,

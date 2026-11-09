@@ -76,11 +76,7 @@ export function whatsappHrefFor(phone: string | null | undefined): string | null
   return digits.length >= 10 ? `https://wa.me/${digits}` : null;
 }
 
-/** Название в «ёлочках», если компания сама не написала его в кавычках («Стоматология «Улыбка»» → без дубля). */
-export function quotedName(name: string): string {
-  const clean = name.trim();
-  return /[«»"“”]/.test(clean) ? clean : `«${clean}»`;
-}
+export { quotedName } from './quotedName';
 
 /** «+7 843 212-34-56» — как номер пишут люди; нестандартную длину оставляет как есть. */
 export function phoneText(phone: string): string {

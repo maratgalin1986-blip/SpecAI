@@ -13,9 +13,12 @@
 // - К2: в режиме 'approve' (по умолчанию) проход крона ничего не отправляет, а готовит «письма
 //   дня» (planOutreach: выбирает заход и записывает offerAngle/offerJson — что утверждено, то и
 //   уходит); отправляет их владелец кнопкой на /admin/office/pisma (`onlyApproved`);
-// - К3: в каждом письме ссылка «Больше не писать» и List-Unsubscribe (unsubscribe.ts); на адрес,
-//   у которого хоть одна строка отписана (optOutAt), офис не пишет ни в какой канал;
-// - К4: напоминания — тоже через «письма дня».
+// - К2: владелец утверждает каждое письмо по каналу (approvalKey: строка, канал, первое письмо или
+//   напоминание): что показано без WhatsApp, то в WhatsApp и не уходит;
+// - К3: в каждом письме ссылка «Больше не писать» и List-Unsubscribe (unsubscribe.ts); на адрес
+//   и номер, у которых хоть одна строка отписана (optOutAt), офис не пишет ни в какой канал;
+// - К4: напоминания — только через «письма дня»: ответы на почту офис не читает, поэтому в режиме
+//   'auto' крон напоминаний не шлёт.
 // База и отправители внедряются через deps, чтобы тесты шли без сети и без Prisma.
 import { prisma } from '@specai/database';
 import { mskDayBounds } from '@/lib/adminCrm';
@@ -29,6 +32,7 @@ import {
   pickChannels,
   isStopReply,
   whatsappTarget,
+  type OutreachChannel,
   type OutreachChannels,
   type OutreachEmail,
   type OutreachInput,
@@ -36,7 +40,7 @@ import {
   OUTREACH_STATUSES,
 } from './outreach';
 import { officePrices } from './prices';
-import { improveOffer, parseSentOffer, type SentOffer } from './aiOffer';
+import { AI_OFFER_TIMEOUT_MS, improveOffer, parseSentOffer, type SentOffer } from './aiOffer';
 import { parseDossier } from './dossier';
 import { collectAngleStats, chooseAngle, type AngleStat, type LearningDb } from './learning';
 import { applicableAngles, buildOffer, type OfferAngle } from './offer';
@@ -49,10 +53,11 @@ import {
 } from './smtp';
 import {
   emailKey,
-  optedOutEmails,
+  optedOutContacts,
   unsubscribeConfigured,
   unsubscribeHeaders,
   unsubscribeLinks,
+  type OptedOutContacts,
   type UnsubscribeLinks,
 } from './unsubscribe';
 
@@ -106,6 +111,18 @@ export interface OutreachRow {
 
 type DateRange = { gte: Date; lt: Date };
 
+/** Ответ из WhatsApp: строка с таким номером WhatsApp или телефоном. */
+type ReplyMatch = { whatsapp?: { endsWith: string }; phone?: { endsWith: string } };
+
+/** Первому проходу ещё есть что отправить: письма не было и адрес есть, или WhatsApp — так же. */
+type PendingMatch =
+  | { emailSentAt: null; email: { not: null } }
+  | { whatsappSentAt: null; whatsapp: { startsWith: string } }
+  | { whatsappSentAt: null; phone: { startsWith: string } };
+
+/** Начало российского мобильного номера, как его хранит Prospect (+79…, sources/phone.ts). */
+const RU_MOBILE_PREFIX = '+79';
+
 /** Ровно те запросы к Prospect, которые делает этот модуль (prisma подходит структурно). */
 export interface OutreachDb {
   prospect: LearningDb['prospect'] & {
@@ -121,8 +138,9 @@ export interface OutreachDb {
     findMany(args: {
       where: {
         status: { in: string[] };
-        OR?: { whatsapp?: { endsWith: string }; phone?: { endsWith: string } }[];
-        NOT?: { outreachError: { not: null }; updatedAt: { gte: Date } };
+        OR?: (ReplyMatch | PendingMatch)[];
+        /** Упавшие сегодня ждут до завтра (outreachErrorAt — время ошибки, не updatedAt). */
+        NOT?: { outreachErrorAt: { gte: Date } };
         /** Напоминание (S8): первое письмо ушло в этом окне, напоминания и ответа ещё не было. */
         emailSentAt?: { gte: Date; lte: Date };
         email?: { not: null };
@@ -150,6 +168,7 @@ export interface OutreachDb {
         contactedAt?: Date;
         repliedAt?: Date;
         declinedAt?: Date;
+        optOutAt?: Date;
         outreachError?: string | null;
       };
     }): Promise<unknown>;
@@ -181,11 +200,12 @@ export interface OutreachDeps {
   random?: () => number;
   /** Ссылки «Больше не писать» для письма (по умолчанию unsubscribeLinks). */
   unsubscribe?: (baseUrl: string, token: string) => UnsubscribeLinks | null;
-  /** Какие из адресов отписаны (по умолчанию optedOutEmails по базе). */
-  optedOut?: (emails: string[]) => Promise<Set<string>>;
+  /** Какие из адресов и номеров отписаны (по умолчанию optedOutContacts по базе). */
+  optedOut?: (emails: string[], phones: string[]) => Promise<OptedOutContacts>;
   /**
-   * Строки, которые владелец утвердил на /admin/office/pisma (К2): проход пишет только им,
-   * в любом режиме, и только с уже записанным предложением — что утверждено, то и уходит.
+   * Что владелец утвердил на /admin/office/pisma (К2) — ключи approvalKey(строка, канал, тип):
+   * проход отправляет только их, в любом режиме, и только с уже записанным предложением — что
+   * утверждено, то и уходит, ни в какой другой канал.
    */
   onlyApproved?: Iterable<string>;
 }
@@ -228,6 +248,16 @@ export interface OutboxItem {
   /** Вступление персонального предложения; у прочих писем — первый абзац. */
   opener: string;
   bullets: string[];
+  /** Ключи утверждения (approvalKey): по одному на канал, который показан владельцу. */
+  approve: string[];
+}
+
+/** Первое письмо или напоминание — утверждаются отдельно. */
+export type ApprovalType = OutboxItem['type'];
+
+/** Ключ утверждения одного отправления (К2): строка, канал, первое письмо или напоминание. */
+export function approvalKey(id: string, channel: OutreachChannel, type: ApprovalType): string {
+  return `${id}:${channel}:${type}`;
 }
 
 export interface OutreachPlan {
@@ -413,14 +443,17 @@ async function runOutreach(
   const sleep = deps.sleep ?? defaultSleep;
   const clock = deps.clock ?? Date.now;
   const startedAt = clock();
-  const outOfTime = () => clock() - startedAt > budgetMs;
+  const timeLeft = () => budgetMs - (clock() - startedAt);
+  const outOfTime = () => timeLeft() < 0;
   const baseUrl = (deps.baseUrl ?? siteUrl)();
   const linksFor = (row: OutreachRow) =>
     (deps.unsubscribe ?? ((base: string, token: string) => unsubscribeLinks(base, token)))(
       baseUrl,
       row.token,
     );
-  const optedOutOf = deps.optedOut ?? ((emails: string[]) => optedOutEmails(emails, prisma));
+  const optedOutOf =
+    deps.optedOut ??
+    ((emails: string[], phones: string[]) => optedOutContacts(emails, phones, prisma));
   let prices: Promise<{ setup: number; monthly: number }> | null = null;
   const inputFor = async (
     row: OutreachRow,
@@ -463,23 +496,31 @@ async function runOutreach(
         })),
     );
     if (aiLeft <= 0) return offer;
+    // ИИ — только если после его ответа ещё останется время на отправку.
+    if (timeLeft() < AI_OFFER_TIMEOUT_MS + SEND_TIMEOUT_MS) return offer;
     aiLeft -= 1;
     return improve(offer, dossier).catch(() => offer);
   };
 
-  // Отписка (К3): адрес, у которого хоть одна строка отписана, снимается с рассылки и здесь —
-  // во всех каналах; строка уходит в DECLINED с optOutAt, чтобы больше не попадать в проход.
+  // Отписка (К3): адрес или номер, у которых хоть одна строка отписана (ссылка, «стоп», «Отказ»
+  // владельца), снимается с рассылки и здесь — во всех каналах; строка уходит в DECLINED с
+  // optOutAt, чтобы больше не попадать в проход.
   const dropOptedOut = async (
     list: OutreachRow[],
     statuses: readonly string[],
   ): Promise<OutreachRow[]> => {
     const emails = list.map((r) => emailKey(r.email)).filter((e) => e.length > 0);
-    if (emails.length === 0) return list;
-    const blocked = await optedOutOf(emails);
-    if (blocked.size === 0) return list;
+    const phones = list.flatMap((r) => [r.phone, r.whatsapp ?? '']).filter((p) => p.length > 0);
+    if (emails.length === 0 && phones.length === 0) return list;
+    const blocked = await optedOutOf(emails, phones);
+    if (blocked.emails.size === 0 && blocked.phones.size === 0) return list;
+    const isBlocked = (row: OutreachRow) =>
+      blocked.emails.has(emailKey(row.email)) ||
+      blocked.phones.has(row.phone.trim()) ||
+      (!!row.whatsapp && blocked.phones.has(row.whatsapp.trim()));
     const kept: OutreachRow[] = [];
     for (const row of list) {
-      if (!blocked.has(emailKey(row.email))) {
+      if (!isBlocked(row)) {
         kept.push(row);
         continue;
       }
@@ -495,10 +536,20 @@ async function runOutreach(
 
   // Сначала те, у кого отправка ещё не падала; упавшие сегодня ждут до завтра —
   // одна повторная попытка в день, чтобы вечно битые адреса не съедали проход.
-  const notFailedToday = { outreachError: { not: null }, updatedAt: { gte: bounds.start } };
+  const notFailedToday = { outreachErrorAt: { gte: bounds.start } };
+  // Только строки, которым ещё есть что отправить по включённым каналам: иначе пачку заняли бы
+  // кандидаты без контактов и те, кому уже написали, и до новых очередь не дошла бы.
+  const pending: PendingMatch[] = [];
+  if (active.email) pending.push({ emailSentAt: null, email: { not: null } });
+  if (active.whatsapp) {
+    pending.push({ whatsappSentAt: null, whatsapp: { startsWith: RU_MOBILE_PREFIX } });
+    if (settings.whatsappToPhone) {
+      pending.push({ whatsappSentAt: null, phone: { startsWith: RU_MOBILE_PREFIX } });
+    }
+  }
   const rows = await dropOptedOut(
     await db.prospect.findMany({
-      where: { status: { in: ['READY', 'CONTACTED'] }, NOT: notFailedToday },
+      where: { status: { in: ['READY', 'CONTACTED'] }, NOT: notFailedToday, OR: pending },
       orderBy: [{ outreachError: { sort: 'asc', nulls: 'first' } }, { createdAt: 'asc' }],
       take: OUTREACH_BATCH,
     }),
@@ -512,9 +563,11 @@ async function runOutreach(
     if (emailLeft <= 0) active.email = false;
     if (whatsappLeft <= 0) active.whatsapp = false;
     if (!active.email && !active.whatsapp) break;
-    if (only && !only.has(row.id)) continue;
 
-    const wanted = pickChannels(row, pick);
+    // Утверждённое владельцем — по каналу: что он видел без WhatsApp, в WhatsApp не уходит.
+    const wanted = pickChannels(row, pick).filter(
+      (channel) => !only || only.has(approvalKey(row.id, channel, 'first')),
+    );
     if (wanted.length === 0) continue;
     const prospect = toProspect(row);
     // Утверждённое письмо о сайте уходит только с тем предложением, что видел владелец.
@@ -541,6 +594,10 @@ async function runOutreach(
         subject: letter.subject,
         opener: offer?.opener ?? firstParagraph(letter),
         bullets: offer?.bullets ?? [],
+        approve: [
+          ...(mailTo ? [approvalKey(row.id, 'email', 'first')] : []),
+          ...(toWhatsApp ? [approvalKey(row.id, 'whatsapp', 'first')] : []),
+        ],
       });
       if (mailTo) emailLeft -= 1;
       if (toWhatsApp) whatsappLeft -= 1;
@@ -554,10 +611,17 @@ async function runOutreach(
       continue;
     }
 
+    // Строка начинается, только если все её отправки успевают в остаток бюджета: иначе функцию
+    // могут остановить между отправкой и отметкой, и завтра письмо уйдёт ещё раз.
+    const needed =
+      (mailTo ? SEND_TIMEOUT_MS : 0) + (toWhatsApp ? SEND_TIMEOUT_MS + WHATSAPP_PAUSE_MS[1] : 0);
+    if (timeLeft() < needed) break;
+
     const sentAt = new Date();
     const success = {
       status: 'CONTACTED',
       outreachError: null,
+      outreachErrorAt: null,
       ...(row.contactedAt ? {} : { contactedAt: sentAt }),
       ...offerData,
     };
@@ -585,7 +649,10 @@ async function runOutreach(
         result.errors += 1;
         await db.prospect.updateMany({
           where: { id: row.id, status: { in: [...OUTREACH_STATUSES] } },
-          data: { outreachError: outreachErrorText('email', sent.reason) },
+          data: {
+            outreachError: outreachErrorText('email', sent.reason),
+            outreachErrorAt: new Date(),
+          },
         });
       }
     }
@@ -612,16 +679,20 @@ async function runOutreach(
         result.errors += 1;
         await db.prospect.updateMany({
           where: { id: row.id, status: { in: [...OUTREACH_STATUSES] } },
-          data: { outreachError: outreachErrorText('whatsapp', sent.error) },
+          data: {
+            outreachError: outreachErrorText('whatsapp', sent.error),
+            outreachErrorAt: new Date(),
+          },
         });
       }
     }
   }
 
   // Напоминания (S8): одно письмо тем, кому писали 4–14 дней назад и кто не ответил;
-  // в остатке дневного лимита писем и бюджета времени.
+  // в остатке дневного лимита писем и бюджета времени. Только через «письма дня» (К4): ответы на
+  // почту офис не читает, и крон в режиме 'auto' не напомнит тому, кто уже ответил «стоп» письмом.
   if (
-    (mode === 'send' && (!channels.email || result.mail === 'no-smtp')) ||
+    (mode === 'send' && (!only || !channels.email || result.mail === 'no-smtp')) ||
     emailLeft <= 0 ||
     outOfTime()
   ) {
@@ -644,7 +715,8 @@ async function runOutreach(
   );
   for (const row of due) {
     if (emailLeft <= 0 || outOfTime()) break;
-    if (only && !only.has(row.id)) continue;
+    if (mode === 'send' && timeLeft() < SEND_TIMEOUT_MS) break;
+    if (only && !only.has(approvalKey(row.id, 'email', 'followUp'))) continue;
     const to = row.email?.trim();
     if (!to) continue;
     const links = linksFor(row);
@@ -662,6 +734,7 @@ async function runOutreach(
         subject: letter.subject,
         opener: firstParagraph(letter),
         bullets: [],
+        approve: [approvalKey(row.id, 'email', 'followUp')],
       });
       emailLeft -= 1;
       continue;
@@ -674,7 +747,7 @@ async function runOutreach(
       result.followUps = (result.followUps ?? 0) + 1;
       await db.prospect.updateMany({
         where: guard,
-        data: { followUpSentAt: new Date(), outreachError: null },
+        data: { followUpSentAt: new Date(), outreachError: null, outreachErrorAt: null },
       });
     } else if (sent.reason === 'no-smtp') {
       result.mail = 'no-smtp';
@@ -683,7 +756,10 @@ async function runOutreach(
       result.errors += 1;
       await db.prospect.updateMany({
         where: guard,
-        data: { outreachError: outreachErrorText('followUp', sent.reason) },
+        data: {
+          outreachError: outreachErrorText('followUp', sent.reason),
+          outreachErrorAt: new Date(),
+        },
       });
     }
   }
@@ -736,7 +812,8 @@ const REPLY_STATUSES = ['CONTACTED', 'READY', 'CALLBACK'];
 
 /**
  * Входящее сообщение WhatsApp от кандидата (вебхук Green API): отмечает `repliedAt`
- * у кандидата с таким номером WhatsApp или телефоном; «стоп» → DECLINED.
+ * у кандидата с таким номером WhatsApp или телефоном; «стоп» → DECLINED и optOutAt, чтобы
+ * ни его почта, ни этот номер больше ничего не получили (К3).
  */
 export async function markReplied(
   fromPhoneDigits: string,
@@ -764,7 +841,7 @@ export async function markReplied(
       where: { id: row.id },
       data: {
         repliedAt: now,
-        ...(stopped ? { status: 'DECLINED', declinedAt: now } : {}),
+        ...(stopped ? { status: 'DECLINED', declinedAt: now, optOutAt: now } : {}),
       },
     });
   }

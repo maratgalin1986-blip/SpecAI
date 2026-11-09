@@ -4,6 +4,8 @@
 // Чистый построитель: компания и реквизиты исполнителя на входе, разделы текста на выходе.
 // Текст — шаблон до заключения юриста (docs/business/sajty-pod-klyuch.md, 9.3).
 
+import { quotedName } from './quotedName';
+
 /** Срок хранения заявки после её получения, месяцев (если цель не достигнута раньше). */
 export const SITE_LEAD_RETENTION_MONTHS = 12;
 
@@ -49,7 +51,7 @@ export function buildSitePolicy(company: PolicyCompany, processor: PolicyProcess
     `${processor.legalName} (ИНН ${processor.inn}, ОГРН ${processor.ogrn}, ` +
     `адрес: ${processor.legalAddress}), площадка ${processor.platform}`;
   return {
-    title: `Политика обработки персональных данных посетителей сайта ${name}`,
+    title: `Политика обработки персональных данных посетителей сайта компании ${quotedName(name)}`,
     sections: [
       {
         title: '1. Кто обрабатывает данные',

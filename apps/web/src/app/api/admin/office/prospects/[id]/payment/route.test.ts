@@ -10,7 +10,15 @@ const { POST } = await import('./route');
 
 const ID = 'ckclient123';
 
+/** По умолчанию клиент видел «не оплачено» (expectedPaidUntil: null), как строка в findUnique. */
 function post(body: unknown, id = ID) {
+  if (body && typeof body === 'object' && !('expectedPaidUntil' in body)) {
+    body = { expectedPaidUntil: null, ...body };
+  }
+  return raw(body, id);
+}
+
+function raw(body: unknown, id = ID) {
   return POST(
     new Request(`http://localhost/api/admin/office/prospects/${id}/payment`, {
       method: 'POST',
@@ -61,9 +69,9 @@ describe('POST /api/admin/office/prospects/[id]/payment', () => {
   it('extends a running period by 12 months', async () => {
     const current = new Date('2027-01-15T09:00:00Z');
     findUnique.mockResolvedValue({ id: ID, kind: 'site', status: 'PUBLISHED', paidUntil: current });
-    const response = await post({ action: 'year' });
+    const response = await post({ action: 'year', expectedPaidUntil: current.toISOString() });
     expect(await response.json()).toEqual({ ok: true, paidUntil: '2028-01-15T09:00:00.000Z' });
-    expect(updateMany.mock.calls[0]![0].where.paidUntil).toBe(current);
+    expect(updateMany.mock.calls[0]![0].where.paidUntil).toEqual(current);
   });
 
   it('undo clears both marks', async () => {
@@ -73,7 +81,7 @@ describe('POST /api/admin/office/prospects/[id]/payment', () => {
       status: 'PUBLISHED',
       paidUntil: new Date('2027-01-15T09:00:00Z'),
     });
-    const response = await post({ action: 'undo' });
+    const response = await post({ action: 'undo', expectedPaidUntil: '2027-01-15T09:00:00.000Z' });
     expect(await response.json()).toEqual({ ok: true, paidUntil: null });
     expect(updateMany.mock.calls[0]![0].data).toEqual({ setupPaidAt: null, paidUntil: null });
   });
@@ -127,5 +135,45 @@ describe('POST /api/admin/office/prospects/[id]/payment', () => {
     const response = await post({ action: 'month' });
     expect(response.status).toBe(409);
     expect(JSON.stringify(await response.json())).not.toContain(ID);
+  });
+
+  it('requires the paidUntil the owner saw, with a Russian error', async () => {
+    for (const body of [
+      { action: 'month' },
+      { action: 'month', expectedPaidUntil: 'вчера' },
+      { action: 'month', expectedPaidUntil: 5 },
+    ]) {
+      const response = await raw(body);
+      expect(response.status).toBe(400);
+      expect((await response.json()).error).toContain('оплачено до');
+    }
+    expect(updateMany).not.toHaveBeenCalled();
+  });
+
+  it('a repeated «+1 month» with the same expected value gets 409, not a second month', async () => {
+    let stored: Date | null = new Date('2026-12-01T09:00:00Z');
+    findUnique.mockImplementation(async () => ({
+      id: ID,
+      kind: 'site',
+      status: 'PUBLISHED',
+      paidUntil: stored,
+    }));
+    updateMany.mockImplementation(
+      async (args: { where: { paidUntil: Date | null }; data: { paidUntil?: Date } }) => {
+        if ((args.where.paidUntil?.getTime() ?? null) !== (stored?.getTime() ?? null)) {
+          return { count: 0 };
+        }
+        if (args.data.paidUntil !== undefined) stored = args.data.paidUntil;
+        return { count: 1 };
+      },
+    );
+    const body = { action: 'month', expectedPaidUntil: '2026-12-01T09:00:00.000Z' };
+    const first = await post(body);
+    expect(await first.json()).toEqual({ ok: true, paidUntil: '2027-01-01T09:00:00.000Z' });
+    const second = await post(body);
+    expect(second.status).toBe(409);
+    expect((await second.json()).error).toBe('Дата оплаты уже изменилась — обновите страницу');
+    expect(updateMany).toHaveBeenCalledTimes(1);
+    expect(stored).toEqual(new Date('2027-01-01T09:00:00Z'));
   });
 });

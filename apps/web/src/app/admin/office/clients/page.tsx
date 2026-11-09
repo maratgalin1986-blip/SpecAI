@@ -222,7 +222,7 @@ export default async function AdminOfficeClientsPage() {
                     monthlyPrice={client.monthlyPrice}
                     defaults={{ setup: pkg.setup, monthly: pkg.monthly }}
                     setupPaid={client.setupPaidAt !== null}
-                    hasPaidPeriod={client.paidUntil !== null}
+                    paidUntil={client.paidUntil ? client.paidUntil.toISOString() : null}
                     invoiceUrl={invoiceUrl}
                     published={published}
                   />

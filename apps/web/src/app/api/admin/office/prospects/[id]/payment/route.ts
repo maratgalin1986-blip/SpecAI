@@ -17,9 +17,16 @@ export const dynamic = 'force-dynamic';
 // клиент платит по счёту /oplata/<token>, владелец нажимает «Сайт оплачен», «+1 месяц»,
 // «+12 месяцев» или «Отменить оплату»; prices — только сохранить цены клиента. Цены клиента
 // (целые 0…CLIENT_PRICE_MAX ₽, null — по базе из настроек офиса) сохраняются с любым действием.
-// Только сайты (kind site) в статусе AGREED / PUBLISHED. Запись защищена: если строку за это
-// время поменяли (двойное нажатие, вторая вкладка), продление не удваивается — 409.
+// Только сайты (kind site) в статусе AGREED / PUBLISHED. Клиент присылает «оплачено до», которое
+// видел владелец (expectedPaidUntil, ISO или null): продление считается от него и пишется только
+// если в базе то же значение. Вторая вкладка, двойное нажатие или повтор после таймаута — 409,
+// продление не удваивается.
 const ID = /^[\w-]{1,64}$/;
+
+const PAID_UNTIL_CHANGED = 'Дата оплаты уже изменилась — обновите страницу';
+
+const EXPECTED_MESSAGE =
+  'Не передана дата «оплачено до», которую видно на экране, — обновите страницу и повторите';
 
 const clientPrice = z
   .number({ invalid_type_error: 'Цена — целое число рублей' })
@@ -35,6 +42,13 @@ const schema = z.object({
   }),
   setupPrice: clientPrice,
   monthlyPrice: clientPrice,
+  expectedPaidUntil: z
+    .string({
+      required_error: EXPECTED_MESSAGE,
+      invalid_type_error: EXPECTED_MESSAGE,
+    })
+    .datetime({ offset: true, message: EXPECTED_MESSAGE })
+    .nullable(),
 });
 
 export async function POST(request: NextRequest, props: { params: Promise<{ id: string }> }) {
@@ -52,6 +66,8 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
     return NextResponse.json({ error: zodErrorMessage(parsed.error) }, { status: 400 });
   }
   const { action, setupPrice, monthlyPrice } = parsed.data;
+  const expectedPaidUntil =
+    parsed.data.expectedPaidUntil === null ? null : new Date(parsed.data.expectedPaidUntil);
 
   const prospect = await prisma.prospect.findUnique({
     where: { id: params.id },
@@ -67,12 +83,16 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
     );
   }
 
+  if ((prospect.paidUntil?.getTime() ?? null) !== (expectedPaidUntil?.getTime() ?? null)) {
+    return NextResponse.json({ error: PAID_UNTIL_CHANGED }, { status: 409 });
+  }
+
   const data: {
     setupPaidAt?: Date | null;
     paidUntil?: Date | null;
     setupPrice?: number | null;
     monthlyPrice?: number | null;
-  } = paymentUpdate(prospect, action, new Date());
+  } = paymentUpdate({ paidUntil: expectedPaidUntil }, action, new Date());
   if (setupPrice !== undefined) data.setupPrice = setupPrice;
   if (monthlyPrice !== undefined) data.monthlyPrice = monthlyPrice;
   if (Object.keys(data).length === 0) {
@@ -84,16 +104,13 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
       id: prospect.id,
       kind: 'site',
       status: { in: [...BILLABLE_STATUSES] },
-      paidUntil: prospect.paidUntil,
+      paidUntil: expectedPaidUntil,
     },
     data,
   });
   if (updated.count === 0) {
-    return NextResponse.json(
-      { error: 'Данные клиента только что изменились — обновите страницу и повторите' },
-      { status: 409 },
-    );
+    return NextResponse.json({ error: PAID_UNTIL_CHANGED }, { status: 409 });
   }
-  const paidUntil = data.paidUntil === undefined ? prospect.paidUntil : data.paidUntil;
+  const paidUntil = data.paidUntil === undefined ? expectedPaidUntil : data.paidUntil;
   return NextResponse.json({ ok: true, paidUntil: paidUntil ? paidUntil.toISOString() : null });
 }

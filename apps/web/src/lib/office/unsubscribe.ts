@@ -4,8 +4,9 @@
 // CRON_SECRET или NEXTAUTH_SECRET, чтобы по одному токену нельзя было отписать чужого.
 // Открытие страницы ничего не меняет (почтовые сканеры открывают ссылки сами): отписывает
 // только POST — кнопка на странице или почтовый клиент по List-Unsubscribe-Post.
-// Отписка ставит optOutAt (навсегда) и переводит кандидата в DECLINED; рассылка не пишет на
-// адрес, если хоть у одной строки с таким же e-mail есть optOutAt (у обоих агентов).
+// Отписка ставит optOutAt (навсегда) и переводит кандидата в DECLINED; рассылка не пишет ни на
+// адрес, ни на номер, если хоть у одной строки с таким же e-mail, телефоном или WhatsApp есть
+// optOutAt (у обоих агентов). optOutAt ставят и «стоп» в WhatsApp, и «Отказ» владельца.
 import { createHmac, timingSafeEqual } from 'node:crypto';
 
 const PURPOSE = 'office-optout:v1';
@@ -126,30 +127,59 @@ export function emailKey(email: string | null | undefined): string {
   return (email ?? '').trim().toLowerCase();
 }
 
-/** Запрос «у каких из этих адресов есть отписка» (prisma подходит структурно). */
+type OptOutMatch =
+  | { email: { in: string[]; mode: 'insensitive' } }
+  | { phone: { in: string[] } }
+  | { whatsapp: { in: string[] } };
+
+/** Запрос «у каких из этих адресов и номеров есть отписка» (prisma подходит структурно). */
 export interface OptedOutDb {
   prospect: {
     findMany(args: {
-      where: { optOutAt: { not: null }; email: { in: string[]; mode: 'insensitive' } };
-      select: { email: true };
+      where: { optOutAt: { not: null }; OR: OptOutMatch[] };
+      select: { email: true; phone: true; whatsapp: true };
       orderBy: { optOutAt: 'asc' };
       take: number;
-    }): Promise<{ email: string | null }[]>;
+    }): Promise<{ email: string | null; phone: string | null; whatsapp: string | null }[]>;
   };
 }
 
-/** Какие из адресов отписаны (хоть у одной строки с таким e-mail есть optOutAt). */
-export async function optedOutEmails(
+/** Отписанные контакты: адреса почты (emailKey) и номера в том виде, как их хранит Prospect. */
+export interface OptedOutContacts {
+  emails: Set<string>;
+  phones: Set<string>;
+}
+
+/**
+ * Какие контакты отписаны. Отписка, «стоп» и «Отказ» владельца ставят optOutAt на строку; её
+ * адрес почты, телефон и WhatsApp не получают больше ничего ни в каком канале — даже если ту же
+ * фирму нашёл другой агент или другой прогон (номер +7…, как его пишет sources/phone.ts).
+ */
+export async function optedOutContacts(
   emails: readonly (string | null | undefined)[],
+  phones: readonly (string | null | undefined)[],
   db: OptedOutDb,
-): Promise<Set<string>> {
-  const keys = [...new Set(emails.map(emailKey).filter((e) => e.length > 0))];
-  if (keys.length === 0) return new Set();
+): Promise<OptedOutContacts> {
+  const emailKeys = [...new Set(emails.map(emailKey).filter((e) => e.length > 0))];
+  const phoneKeys = [...new Set(phones.map((p) => (p ?? '').trim()).filter((p) => p.length > 0))];
+  const out: OptedOutContacts = { emails: new Set(), phones: new Set() };
+  if (emailKeys.length === 0 && phoneKeys.length === 0) return out;
+  const or: OptOutMatch[] = [];
+  if (emailKeys.length > 0) or.push({ email: { in: emailKeys, mode: 'insensitive' } });
+  if (phoneKeys.length > 0) or.push({ phone: { in: phoneKeys } }, { whatsapp: { in: phoneKeys } });
   const rows = await db.prospect.findMany({
-    where: { optOutAt: { not: null }, email: { in: keys, mode: 'insensitive' } },
-    select: { email: true },
+    where: { optOutAt: { not: null }, OR: or },
+    select: { email: true, phone: true, whatsapp: true },
     orderBy: { optOutAt: 'asc' },
-    take: keys.length * 5,
+    take: (emailKeys.length + phoneKeys.length) * 5,
   });
-  return new Set(rows.map((r) => emailKey(r.email)).filter((e) => e.length > 0));
+  for (const row of rows) {
+    const e = emailKey(row.email);
+    if (e) out.emails.add(e);
+    for (const phone of [row.phone, row.whatsapp]) {
+      const p = (phone ?? '').trim();
+      if (p) out.phones.add(p);
+    }
+  }
+  return out;
 }

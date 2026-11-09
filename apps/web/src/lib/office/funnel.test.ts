@@ -378,8 +378,14 @@ describe('collectFunnel', () => {
       expect(countCalls).toContainEqual(stockWhere(kind));
       expect(countCalls).toContainEqual({ kind });
       expect(countCalls).toContainEqual({ kind, contactedAt: { not: null } });
-      expect(countCalls).toContainEqual({ kind, paidUntil: { gt: NOW } });
     }
+    // «Активные» сайты — только клиенты: отказ с неистёкшим paidUntil не считается.
+    expect(countCalls).toContainEqual({
+      kind: 'site',
+      paidUntil: { gt: NOW },
+      status: { in: ['AGREED', 'PUBLISHED'] },
+    });
+    expect(countCalls).toContainEqual({ kind: 'provider', paidUntil: { gt: NOW } });
     const since = new Date(NOW.getTime() - 30 * DAY);
     expect(leadCalls).toEqual(
       expect.arrayContaining([
@@ -389,7 +395,7 @@ describe('collectFunnel', () => {
     );
     expect(findManyCalls).toEqual([
       expect.objectContaining({
-        where: { kind: 'site', paidUntil: { gt: NOW } },
+        where: { kind: 'site', paidUntil: { gt: NOW }, status: { in: ['AGREED', 'PUBLISHED'] } },
         orderBy: { paidUntil: 'desc' },
         take: 5000,
       }),

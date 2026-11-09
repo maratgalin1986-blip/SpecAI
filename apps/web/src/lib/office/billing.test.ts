@@ -250,6 +250,8 @@ describe('billing: buildInvoice', () => {
     const view = buildInvoice(row(), DEFAULTS, ctx, NOW);
     expect(view).toMatchObject({
       company: 'Стоматология «Улыбка»',
+      heading: 'Счёт за сайт для компании Стоматология «Улыбка»',
+      paymentPurpose: 'Сайт для компании Стоматология «Улыбка»',
       city: 'Казань',
       packageTitle: 'Сайт-визитка',
       setup: 15000,
@@ -262,6 +264,12 @@ describe('billing: buildInvoice', () => {
       payDetails: 'ООО «Пример», р/с …',
     });
     expect(view?.due?.amount).toBe(15000);
+  });
+
+  it('puts a plain company name in «ёлочки» in the heading and the payment purpose', () => {
+    const view = buildInvoice(row({ name: 'Дента' }), DEFAULTS, ctx, NOW);
+    expect(view?.heading).toBe('Счёт за сайт для компании «Дента»');
+    expect(view?.paymentPurpose).toBe('Сайт для компании «Дента»');
   });
 
   it("uses the client's domain, the domain package and the client's own prices", () => {

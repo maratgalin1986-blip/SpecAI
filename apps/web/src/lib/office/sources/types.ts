@@ -54,6 +54,7 @@ export interface ProspectSource {
     radiusKm: number;
     /** Сколько миллисекунд источник может потратить (крон делит своё время между шагами). */
     budgetMs?: number;
+    /** Сколько фирм без сайта вернуть (кандидаты); фирмы с сайтом — соседи для досье, без лимита. */
     limit: number;
   }): Promise<SearchResult>;
 }

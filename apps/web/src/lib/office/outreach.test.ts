@@ -91,7 +91,7 @@ describe('buildEmail', () => {
     expect(letter.text).toContain('1 500 ₽');
     expect(letter.text).toContain(`позвоните ${SITE.phone}`);
     expect(letter.text).toContain(
-      `${STOP_LINE} Письмо отправлено один раз на адрес из открытой карточки компании.`,
+      `${STOP_LINE} Адрес — из открытой карточки компании; если не ответите, напомним один раз, не больше.`,
     );
     stopLineIsLast(letter.text);
     expect(letter.text).not.toMatch(FORBIDDEN);
@@ -101,8 +101,10 @@ describe('buildEmail', () => {
   it('site letter: «Кто мы и цены» link to the service page and leads to the company mail', () => {
     const letter = buildEmail(site, input);
     expect(letter.text).toContain(`${SERVICE_LINK_LABEL}: ${SERVICE_EMAIL}`);
-    expect(letter.text).toContain(`${LEADS_TO_EMAIL_LINE} — на этот адрес.`);
-    expect(letter.text).toContain('форма заявки');
+    // The preview has no lead form yet (К10): the letter promises it after the site is connected.
+    expect(letter.text).toContain('После подключения добавим форму заявки: заявки с сайта');
+    expect(letter.text).toContain('на почту — на этот адрес.');
+    expect(letter.text).not.toContain('Написать в WhatsApp');
     // The service link comes after the preview link and before the closing lines.
     const text = letter.text;
     expect(text.indexOf(input.previewUrl)).toBeLessThan(text.indexOf(SERVICE_EMAIL));
@@ -111,7 +113,7 @@ describe('buildEmail', () => {
     expect(letter.html).toContain(
       `<a href="${SERVICE_EMAIL.replace('&', '&amp;')}">${SERVICE_LINK_LABEL}</a>`,
     );
-    expect(letter.html).toContain(LEADS_TO_EMAIL_LINE);
+    expect(letter.html.toLowerCase()).toContain(LEADS_TO_EMAIL_LINE.toLowerCase());
     expect(letter.html.indexOf(SERVICE_LINK_LABEL)).toBeLessThan(letter.html.indexOf(STOP_LINE));
   });
 
@@ -375,7 +377,7 @@ describe('personal offer in the site letter and WhatsApp (U2)', () => {
     expect(letter.text).toContain('«Сайт на своём домене» — 17 000 ₽ один раз');
     expect(letter.text).toContain('1 500 ₽ в месяц');
     expect(letter.text).toContain(offer.packageReason);
-    expect(letter.text).toContain(`${LEADS_TO_EMAIL_LINE} — на этот адрес.`);
+    expect(letter.text).toContain('После подключения добавим форму заявки: заявки с сайта');
     expect(letter.text).toContain(input.previewUrl);
     expect(letter.text).toContain(`${SERVICE_LINK_LABEL}: ${SERVICE_EMAIL}`);
     stopLineIsLast(letter.text);

@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { CLIENT_PRICE_MAX, formatDayMsk, type PaymentAction } from '@/lib/office/billing';
 import { rub } from '@/lib/prices';
 import { publishSite } from './officePublish';
@@ -11,7 +11,8 @@ import { publishSite } from './officePublish';
 // У сайта, с которым договорились, но ещё не опубликовали (AGREED, К10), рядом с оплатой —
 // «Опубликовать»; неоплаченный — только после «Сайт не оплачен — опубликовать?».
 // POST /api/admin/office/prospects/[id]/payment, затем router.refresh(): плитки и статусы
-// пересчитывает сервер.
+// пересчитывает сервер. С каждым действием уходит «оплачено до», которое видит владелец
+// (expectedPaidUntil): вторая вкладка или повтор после таймаута получат 409, а не второй месяц.
 
 /** '' — по базе (null); иначе целое 0…1 000 000; undefined — ошибка ввода. */
 function parsePrice(value: string): number | null | undefined {
@@ -37,7 +38,7 @@ export function OfficeClientControls({
   monthlyPrice,
   defaults,
   setupPaid,
-  hasPaidPeriod,
+  paidUntil,
   invoiceUrl,
   published = true,
 }: {
@@ -49,7 +50,8 @@ export function OfficeClientControls({
   /** Цены пакета клиента по настройкам офиса — подсказка в пустых полях. */
   defaults: { setup: number; monthly: number };
   setupPaid: boolean;
-  hasPaidPeriod: boolean;
+  /** «Оплачено до» на экране, ISO; null — периода нет. */
+  paidUntil: string | null;
   /** Абсолютная ссылка /oplata/<token>. */
   invoiceUrl: string;
   /** false — договорились, но сайт ещё не опубликован: показать «Опубликовать». */
@@ -62,12 +64,17 @@ export function OfficeClientControls({
   const [busy, setBusy] = useState<PaymentAction | 'publish' | null>(null);
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
 
+  // Что показано владельцу: после успешного действия — ответ сервера, после refresh — проп.
+  const [shownPaidUntil, setShownPaidUntil] = useState(paidUntil);
+  useEffect(() => setShownPaidUntil(paidUntil), [paidUntil]);
+  const hasPaidPeriod = shownPaidUntil !== null;
+
   const pricesDirty = setupValue !== saved.setup || monthlyValue !== saved.monthly;
 
   async function send(action: PaymentAction) {
     if (busy) return;
     if (action === 'undo' && !window.confirm(`Снять отметки оплаты у «${name}»?`)) return;
-    const body: Record<string, unknown> = { action };
+    const body: Record<string, unknown> = { action, expectedPaidUntil: shownPaidUntil };
     if (pricesDirty) {
       const setup = parsePrice(setupValue);
       const monthly = parsePrice(monthlyValue);
@@ -102,6 +109,7 @@ export function OfficeClientControls({
       return;
     }
     if (pricesDirty) setSaved({ setup: setupValue, monthly: monthlyValue });
+    if (data.paidUntil !== undefined) setShownPaidUntil(data.paidUntil);
     const until =
       action !== 'undo' && action !== 'prices' && data.paidUntil
         ? `, оплачено до ${formatDayMsk(new Date(data.paidUntil))}`

@@ -4,6 +4,7 @@
 // чистые функции; маршрут и страницы только читают и пишут строки Prospect.
 
 import { siteYearlyPrice, sitePackages, type SitePackage } from '@/lib/prices';
+import { quotedName } from './quotedName';
 
 /** Базовые цены (настройки офиса, lib/office/prices.ts → officePrices), ₽. */
 export interface BillingDefaults {
@@ -272,6 +273,10 @@ export interface InvoiceRow extends BillingProspect {
  */
 export interface InvoiceView {
   company: string;
+  /** «Счёт за сайт для компании «Стоматология Улыбка»» — заголовок страницы. */
+  heading: string;
+  /** «Сайт для компании «…»» — назначение платежа. */
+  paymentPurpose: string;
   city: string | null;
   packageTitle: string;
   includes: readonly string[];
@@ -311,6 +316,8 @@ export function buildInvoice(
   const payDetails = ctx.payDetails?.trim();
   return {
     company: row.name,
+    heading: `Счёт за сайт для компании ${quotedName(row.name)}`,
+    paymentPurpose: `Сайт для компании ${quotedName(row.name)}`,
     city: row.city,
     packageTitle: pkg.title,
     includes: pkg.includes,

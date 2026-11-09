@@ -6,7 +6,7 @@
 // оплативших для выручки), `funnelRows` / `funnelNotes` — чистые, их проверяют тесты.
 
 import { prisma } from '@specai/database';
-import { monthlyRevenue, type BillingProspect } from './billing';
+import { BILLABLE_STATUSES, monthlyRevenue, type BillingProspect } from './billing';
 import { AGENTS } from './agents';
 import { OFFICE_SETTINGS } from './plan';
 import { parseOfficePrices } from './prices';
@@ -328,9 +328,19 @@ export function agentFunnel(
   };
 }
 
+/** Оплаченные сейчас; у сайтов — только клиенты (AGREED/PUBLISHED), не отказавшиеся. */
+function activeWhere(kind: ProspectKind, now: Date): Record<string, unknown> {
+  return {
+    kind,
+    paidUntil: { gt: now },
+    ...(kind === 'site' ? { status: { in: [...BILLABLE_STATUSES] } } : {}),
+  };
+}
+
 /**
  * Воронка из базы. «Активные» — оплата поддержки ещё не кончилась (`paidUntil` позже
- * текущего момента — как «оплачен»/«истекает» в lib/office/billing.ts); выручка — их
+ * текущего момента — как «оплачен»/«истекает» в lib/office/billing.ts), а сайт в статусе
+ * клиента (BILLABLE_STATUSES: отказ с неистёкшим `paidUntil` не считается); выручка — их
  * поддержка в месяц по ценам клиента или базовым ценам офиса.
  */
 export async function collectFunnel(
@@ -345,7 +355,7 @@ export async function collectFunnel(
     const [all, contacted, active, stock] = await Promise.all([
       counts({ kind }),
       counts({ kind, contactedAt: { not: null } }),
-      counts({ kind, paidUntil: { gt: now } }),
+      counts(activeWhere(kind, now)),
       counts(stockWhere(kind)),
     ]);
     return {
@@ -356,7 +366,7 @@ export async function collectFunnel(
   const [perAgentData, paying, settings, siteLeads, siteLeadsUndelivered] = await Promise.all([
     Promise.all(perAgent),
     db.prospect.findMany({
-      where: { kind: AGENTS.sites.kind, paidUntil: { gt: now } },
+      where: activeWhere(AGENTS.sites.kind, now),
       select: REVENUE_SELECT,
       orderBy: { paidUntil: 'desc' },
       take: REVENUE_TAKE,

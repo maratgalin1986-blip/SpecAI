@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   optOutByToken,
-  optedOutEmails,
+  optedOutContacts,
   unsubscribeConfigured,
   unsubscribeHeaders,
   unsubscribeLinks,
@@ -82,26 +82,33 @@ describe('optOutByToken', () => {
   });
 });
 
-describe('optedOutEmails', () => {
-  it('ищет без учёта регистра и возвращает адреса в нижнем регистре', async () => {
+describe('optedOutContacts', () => {
+  it('почта без учёта регистра, номера как есть; отдаёт все контакты отписанных строк', async () => {
     const findMany = vi.fn<OptedOutDb['prospect']['findMany']>(async () => [
-      { email: 'Firm@Example.ru' },
+      { email: 'Firm@Example.ru', phone: '+78435550000', whatsapp: '+79170000001' },
+      { email: null, phone: '+79170000002', whatsapp: null },
     ]);
-    const set = await optedOutEmails([' FIRM@example.ru ', null, 'other@x.ru'], {
-      prospect: { findMany },
-    });
-    expect(set).toEqual(new Set(['firm@example.ru']));
+    const found = await optedOutContacts(
+      [' FIRM@example.ru ', null, 'other@x.ru'],
+      ['+79170000002', null, ' '],
+      { prospect: { findMany } },
+    );
+    expect(found.emails).toEqual(new Set(['firm@example.ru']));
+    expect(found.phones).toEqual(new Set(['+78435550000', '+79170000001', '+79170000002']));
     const args = findMany.mock.calls[0]![0];
-    expect(args.where.email).toEqual({
-      in: ['firm@example.ru', 'other@x.ru'],
-      mode: 'insensitive',
-    });
+    expect(args.where.optOutAt).toEqual({ not: null });
+    expect(args.where.OR).toEqual([
+      { email: { in: ['firm@example.ru', 'other@x.ru'], mode: 'insensitive' } },
+      { phone: { in: ['+79170000002'] } },
+      { whatsapp: { in: ['+79170000002'] } },
+    ]);
     expect(args.take).toBeGreaterThan(0);
   });
 
-  it('пустой список — без запроса', async () => {
+  it('пустые списки — без запроса', async () => {
     const findMany = vi.fn();
-    expect(await optedOutEmails([null, ''], { prospect: { findMany } })).toEqual(new Set());
+    const found = await optedOutContacts([null, ''], [null], { prospect: { findMany } });
+    expect(found).toEqual({ emails: new Set(), phones: new Set() });
     expect(findMany).not.toHaveBeenCalled();
   });
 });
