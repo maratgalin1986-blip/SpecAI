@@ -194,3 +194,12 @@ machinery, customer, orderUrl, approximate: true }); параметры `?bbox=s
 сдвиге (debounce ~400 мс); (6) в профиле исполнителя — два переключателя через `PATCH /api/companies/me`:
 `showOnMap` («Показывать меня на карте») и `showPhoneOnMap` («Показывать телефон на карте»), оба читаются
 из `GET /api/companies/me → company`. Подробности и приватность — `docs/owner-requests.md`.
+
+2026-11-09 (задача «Офис из двух агентов», ветка `claude/pensive-feynman-bila02`, для всех сессий):
+новые модели `Prospect` и `OfficeRun` в конце `schema.prisma` (только добавление), новые маршруты
+`/admin/office`, `/api/admin/office/**`, `/api/cron/office` (вызывается из `bot-reminders.yml` раз в
+час), публичные `/preview/[token]`, `/s/[slug]`, `/p/[slug]`; `quickSignupSchema` принимает
+необязательный `prospect` (slug), после регистрации кандидат-подрядчик с тем же телефоном помечается
+REGISTERED. Шапка, подвал и виджеты платформы скрыты на `/s/*` и `/preview/*` (`isStandalonePage`
+в `components/PublicOnly.tsx`, `hidesContactBar`). Приложению ничего делать не нужно: API не менялся.
+Файлы линии, карты и бота (кроме команды `/office` для владельца в личке) не трогались.
