@@ -212,6 +212,7 @@ export function InstallPrompt() {
       aria-label="Установка на экран"
       data-testid="install-hint"
       data-bottom-bar
+      data-platform-chrome
       className="install-hint fixed inset-x-2 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-[44] flex items-center gap-2 rounded-2xl border border-slate-200 bg-white/95 py-1 pl-2 pr-1 text-slate-800 shadow-lg backdrop-blur sm:inset-x-auto sm:bottom-auto sm:right-4 sm:top-[5.5rem] sm:max-w-sm"
     >
       <img

@@ -9,8 +9,8 @@ export const dynamic = 'force-dynamic';
 
 // The published page of a machinery company the office found (R12): visible
 // once the company agreed (PUBLISHED) or signed up from it (REGISTERED);
-// otherwise 404. Public and indexable, but not in the sitemap (the owner did
-// not ask for it). The phone is shown: the company agreed (R13).
+// otherwise 404. Public, indexable and in the sitemap (app/sitemap.ts, S11).
+// The phone is shown: the company agreed (R13).
 
 async function loadProviderPage(slug: string) {
   const prospect = await loadProspectBySlug(slug);

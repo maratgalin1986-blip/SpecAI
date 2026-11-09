@@ -1,5 +1,6 @@
 import { cityByName } from '@specai/shared';
 import { describe, expect, it } from 'vitest';
+import { AGENTS } from './agents';
 import { defaultPlan, formatPlan, homeRegionCities, nextStep, parsePlan } from './plan';
 
 describe('office plan: parsePlan', () => {
@@ -80,7 +81,10 @@ describe('office plan: defaultPlan', () => {
     expect(siteCities.slice(0, home.length)).toEqual(home);
     expect(siteCities).toContain('Уфа');
     // 5 ниш на каждый город «Сайтов».
-    expect(plan.filter((s) => s.agent === 'sites')).toHaveLength((home.length + 4) * 5);
+    // По каждой нише агента «Сайты» на каждый город.
+    expect(plan.filter((s) => s.agent === 'sites')).toHaveLength(
+      (home.length + 4) * AGENTS.sites.defaultNiches.length,
+    );
     for (const step of plan) expect(cityByName(step.city)?.name).toBe(step.city);
   });
 });

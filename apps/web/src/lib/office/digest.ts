@@ -1,12 +1,15 @@
 // Офис агентов: утренняя сводка владельцу в Telegram (spec §7, §12; R3, R15, R17).
 // `buildDigest` — чистый текст по собранным данным; `collectDigest` достаёт их из базы.
 // Сводку читает только владелец, поэтому телефоны и ссылки превью в ней уместны.
+// «Сайты под ключ» как бизнес (S4, S6): заявки с клиентских сайтов за сутки и оплата
+// клиентов, которая скоро кончится или уже кончилась.
 
 import { phoneText } from './pages';
 import { prisma } from '@specai/database';
 import { MSK, mskDate, mskDayBounds } from '@/lib/adminCrm';
 import { siteUrl } from '@/lib/siteUrl';
 import { AGENTS, AGENT_IDS } from './agents';
+import { BILLABLE_STATUSES, EXPIRING_DAYS } from './billing';
 import { nicheTitle } from './niches';
 import { OFFICE_SETTINGS, formatPlan, nextStep } from './plan';
 import { resolvePlan } from './run';
@@ -72,6 +75,13 @@ export interface DigestInput {
   outreachPaused: boolean;
   /** Следующий шаг плана — для короткой строки, когда новостей нет. */
   nextStep?: string | null;
+  /** Заявки с клиентских сайтов за сутки: всего и не доставлено компании. */
+  siteLeads?: { total: number; undelivered: number };
+  /**
+   * Клиенты «Сайтов под ключ»: оплата поддержки кончается за EXPIRING_DAYS дней и уже
+   * кончилась. Это состояние, а не новость дня, поэтому тихую сводку оно не отменяет.
+   */
+  billing?: { expiring: number; overdue: number };
 }
 
 function formatDay(date: Date): string {
@@ -95,6 +105,21 @@ function list(title: string, items: ProspectLite[], base: string): string[] {
   return out;
 }
 
+function siteLeadsLine(leads: DigestInput['siteLeads']): string | null {
+  if (!leads || leads.total <= 0) return null;
+  const lost = leads.undelivered > 0 ? ` (не доставлено клиентам: ${leads.undelivered})` : '';
+  return `Заявок с клиентских сайтов: ${leads.total}${lost}`;
+}
+
+function billingLine(billing: DigestInput['billing'], base: string): string | null {
+  if (!billing) return null;
+  const parts: string[] = [];
+  if (billing.expiring > 0) parts.push(`истекает за ${EXPIRING_DAYS} дней — ${billing.expiring}`);
+  if (billing.overdue > 0) parts.push(`просрочена — ${billing.overdue}`);
+  if (parts.length === 0) return null;
+  return `Оплата: ${parts.join(', ')}. Клиенты: ${base}/admin/office/clients`;
+}
+
 function agentSummary(runs: DigestRun[]): string {
   const parts = AGENT_IDS.map((id: AgentId) => {
     const own = runs.filter((r) => r.agent === id);
@@ -113,6 +138,8 @@ export function buildDigest(input: DigestInput): string {
   const base = input.siteUrl.replace(/\/+$/, '');
   const created = input.runs.reduce((s, r) => s + r.created, 0);
   const failedRuns = input.runs.filter((r) => r.error).length;
+  const leads = siteLeadsLine(input.siteLeads);
+  const billing = billingLine(input.billing, base);
   const quiet =
     created === 0 &&
     input.toContact.length === 0 &&
@@ -120,7 +147,8 @@ export function buildDigest(input: DigestInput): string {
     input.callbacks.length === 0 &&
     input.contacted.email === 0 &&
     input.contacted.whatsapp === 0 &&
-    input.registered === 0;
+    input.registered === 0 &&
+    !leads;
 
   if (quiet) {
     const tail = input.paused
@@ -129,7 +157,8 @@ export function buildDigest(input: DigestInput): string {
         ? `следующий шаг — ${input.nextStep}`
         : 'план продолжается';
     const maps = failedRuns ? `; источник карт не отвечал (${failedRuns})` : '';
-    return `Офис: за ночь новых кандидатов нет, ${tail}${maps}. Открыть офис: ${base}/admin/office`;
+    const text = `Офис: за ночь новых кандидатов нет, ${tail}${maps}. Открыть офис: ${base}/admin/office`;
+    return billing ? `${text}\n${billing}` : text;
   }
 
   const out: string[] = [`Офис за сутки (${formatDay(input.date)}):`, agentSummary(input.runs)];
@@ -142,6 +171,8 @@ export function buildDigest(input: DigestInput): string {
   out.push(...list('Готовы к отправке', input.toContact, base));
   out.push(...list('Напомнить сегодня', input.callbacks, base));
   if (input.registered > 0) out.push(`Зарегистрировались по ссылке: ${input.registered}`);
+  if (leads) out.push(leads);
+  if (billing) out.push(billing);
   out.push(`Открыть офис: ${base}/admin/office`);
   return out.join('\n');
 }
@@ -208,9 +239,14 @@ export interface DigestDb {
       select: { key: true; value: true };
     }): Promise<{ key: string; value: string }[]>;
   };
+  /** Заявки с клиентских сайтов (S4). */
+  siteLead: {
+    count(args: { where: Record<string, unknown> }): Promise<number>;
+  };
 }
 
 const LIST_TAKE = 50;
+const DAY_MS = 86_400_000;
 
 function lite(rows: LiteRow[]): ProspectLite[] {
   return rows.map((r) => ({
@@ -295,6 +331,15 @@ export async function collectDigest(
         select: { key: true, value: true },
       }),
     ]);
+  // Заявки с клиентских сайтов за окно сводки и оплата клиентов (S4, S6).
+  const clients = { kind: 'site', status: { in: [...BILLABLE_STATUSES] } };
+  const expiringBy = new Date(now.getTime() + EXPIRING_DAYS * DAY_MS);
+  const [leadsTotal, leadsUndelivered, expiring, overdue] = await Promise.all([
+    db.siteLead.count({ where: { createdAt: { gte: since } } }),
+    db.siteLead.count({ where: { createdAt: { gte: since }, forwardedAt: null } }),
+    db.prospect.count({ where: { ...clients, paidUntil: { gt: now, lte: expiringBy } } }),
+    db.prospect.count({ where: { ...clients, paidUntil: { lte: now } } }),
+  ]);
   const plan = resolvePlan(settings);
   const { step } = nextStep(plan.steps, plan.cursor);
   const outreachPaused =
@@ -311,5 +356,7 @@ export async function collectDigest(
     paused: plan.paused,
     outreachPaused,
     nextStep: step ? formatPlan([step]) : null,
+    siteLeads: { total: leadsTotal, undelivered: leadsUndelivered },
+    billing: { expiring, overdue },
   });
 }

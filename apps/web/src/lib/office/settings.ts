@@ -8,7 +8,12 @@ import { OFFICE_SETTINGS, defaultPlan, formatPlan } from './plan';
 export const OFFICE_EXTRA_SETTINGS = {
   /** «1» — WhatsApp можно слать на обычный мобильный из карточки, не только на contact:whatsapp. */
   whatsappToPhone: 'office.whatsappToPhone',
+  /** Реквизиты для оплаты сайта (свободный текст) — на странице счёта /oplata/<token> (S6). */
+  payDetails: 'office.payDetails',
 } as const;
+
+/** Реквизиты для оплаты — не длиннее, знаков. */
+export const PAY_DETAILS_MAX = 2000;
 
 export const OFFICE_SETTING_KEYS: readonly string[] = [
   ...Object.values(OFFICE_SETTINGS),
@@ -33,6 +38,8 @@ export interface OfficeSettings {
   replyTo: string;
   /** WhatsApp на обычный мобильный из карточки. */
   whatsappToPhone: boolean;
+  /** Реквизиты для оплаты сайта; пусто — на счёте «пришлём в ответ на письмо». */
+  payDetails: string;
 }
 
 function flag(value: string | undefined): boolean {
@@ -60,6 +67,9 @@ export function parseOfficeSettings(
     dailyCap: int(byKey.get(OFFICE_SETTINGS.dailyCap), DEFAULT_DAILY_CAP),
     replyTo: replyTo || SITE.email,
     whatsappToPhone: flag(byKey.get(OFFICE_EXTRA_SETTINGS.whatsappToPhone)),
+    payDetails: (byKey.get(OFFICE_EXTRA_SETTINGS.payDetails) ?? '')
+      .trim()
+      .slice(0, PAY_DETAILS_MAX),
   };
 }
 

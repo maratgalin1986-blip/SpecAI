@@ -132,6 +132,7 @@ export function SiteHeader() {
   return (
     <header
       ref={headerRef}
+      data-platform-chrome
       data-dark={dark ? 'true' : undefined}
       className="site-header-vt sticky top-0 z-40 border-b border-slate-200/70 bg-white/75 backdrop-blur-md"
     >

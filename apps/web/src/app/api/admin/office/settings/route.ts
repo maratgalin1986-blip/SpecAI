@@ -4,12 +4,13 @@ import { z } from 'zod';
 import { isAdminRequest } from '@/lib/admin';
 import { INVALID_JSON_MESSAGE, readJson, zodErrorMessage } from '@/lib/apiInput';
 import { OFFICE_SETTINGS, parsePlan } from '@/lib/office/plan';
-import { OFFICE_EXTRA_SETTINGS } from '@/lib/office/settings';
+import { OFFICE_EXTRA_SETTINGS, PAY_DETAILS_MAX } from '@/lib/office/settings';
 
 export const dynamic = 'force-dynamic';
 
 // Настройки офиса из /admin/office (spec §6, §12): план обхода, пауза поиска, цены сайта,
-// рассылка (пауза, лимит в день, адрес для ответов, WhatsApp на обычный мобильный).
+// рассылка (пауза, лимит в день, адрес для ответов, WhatsApp на обычный мобильный),
+// реквизиты для оплаты сайта (страница счёта /oplata/<token>, S6; пусто — убрать).
 // Каждое поле необязательно — сохраняются только присланные.
 const price = z
   .number({ invalid_type_error: 'Цена — целое число рублей' })
@@ -36,12 +37,16 @@ const schema = z
       .email('Адрес для ответов — обычная почта вида name@example.ru')
       .max(200),
     whatsappToPhone: z.boolean().optional(),
+    payDetails: z
+      .string({ invalid_type_error: 'Реквизиты — обычный текст' })
+      .max(PAY_DETAILS_MAX, `Реквизиты — не длиннее ${PAY_DETAILS_MAX} знаков`),
   })
   .partial();
 
 export async function PUT(request: NextRequest) {
-  if (!(await isAdminRequest()))
+  if (!(await isAdminRequest())) {
     return NextResponse.json({ error: 'Нет доступа' }, { status: 401 });
+  }
   const json = await readJson(request);
   if (json === null) return NextResponse.json({ error: INVALID_JSON_MESSAGE }, { status: 400 });
   const parsed = schema.safeParse(json);
@@ -81,6 +86,9 @@ export async function PUT(request: NextRequest) {
   if (input.replyTo !== undefined) values[OFFICE_SETTINGS.replyTo] = input.replyTo;
   if (input.whatsappToPhone !== undefined) {
     values[OFFICE_EXTRA_SETTINGS.whatsappToPhone] = input.whatsappToPhone ? '1' : '0';
+  }
+  if (input.payDetails !== undefined) {
+    values[OFFICE_EXTRA_SETTINGS.payDetails] = input.payDetails.trim();
   }
 
   const entries = Object.entries(values);

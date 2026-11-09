@@ -69,6 +69,7 @@ export function MessengerButtons() {
       <nav
         aria-label="Быстрая связь"
         data-bottom-bar
+        data-platform-chrome
         className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-3 gap-1.5 border-t border-slate-200 bg-white/95 p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] backdrop-blur sm:hidden"
       >
         <a
@@ -114,7 +115,7 @@ export function MessengerButtons() {
           <Icon name="document" className="h-4 w-4" /> Заказать
         </a>
       </nav>
-      <aside aria-label="WhatsApp">
+      <aside aria-label="WhatsApp" data-platform-chrome>
         <a
           href={SITE.whatsappHref}
           target="_blank"

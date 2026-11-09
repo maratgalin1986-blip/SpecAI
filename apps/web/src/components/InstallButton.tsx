@@ -95,7 +95,12 @@ export function InstallButton() {
         : INSTALL_BUTTON_TEXTS.manual;
 
   return (
-    <div data-bottom-bar data-testid="install-fab" className="install-fab fixed left-3 z-[45]">
+    <div
+      data-bottom-bar
+      data-platform-chrome
+      data-testid="install-fab"
+      className="install-fab fixed left-3 z-[45]"
+    >
       {help && (
         <div
           role="dialog"

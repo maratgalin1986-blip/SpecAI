@@ -1,6 +1,8 @@
 // Рассылка кандидатам (R18): один проход крона — кому ещё не писали, тем одно письмо и/или
 // одно сообщение WhatsApp со ссылкой на превью; дневной лимит на канал по московским суткам;
 // пауза одной кнопкой. Ответ «стоп» из вебхука WhatsApp переводит кандидата в DECLINED.
+// После основного прохода — одно напоминание по почте тем, кто не ответил (S8), в том же
+// дневном лимите писем. WhatsApp-напоминаний нет.
 // База и отправители внедряются через deps, чтобы тесты шли без сети и без Prisma.
 import { prisma } from '@specai/database';
 import { mskDayBounds } from '@/lib/adminCrm';
@@ -10,11 +12,14 @@ import { siteUrl } from '@/lib/siteUrl';
 import { nicheTitle } from './niches';
 import {
   buildEmail,
+  buildFollowUpEmail,
   buildWhatsAppText,
   pickChannels,
   isStopReply,
   whatsappTarget,
   type OutreachChannels,
+  type OutreachEmail,
+  type OutreachInput,
   type OutreachProspect,
   OUTREACH_STATUSES,
 } from './outreach';
@@ -50,6 +55,8 @@ export interface OutreachRow {
   emailSentAt: Date | null;
   whatsappSentAt: Date | null;
   contactedAt: Date | null;
+  followUpSentAt: Date | null;
+  repliedAt: Date | null;
 }
 
 type DateRange = { gte: Date; lt: Date };
@@ -58,17 +65,23 @@ type DateRange = { gte: Date; lt: Date };
 export interface OutreachDb {
   prospect: {
     count(args: {
-      where: { emailSentAt?: DateRange; whatsappSentAt?: DateRange };
+      where: { emailSentAt?: DateRange; whatsappSentAt?: DateRange; followUpSentAt?: DateRange };
     }): Promise<number>;
     findMany(args: {
       where: {
         status: { in: string[] };
         OR?: { whatsapp?: { endsWith: string }; phone?: { endsWith: string } }[];
         NOT?: { outreachError: { not: null }; updatedAt: { gte: Date } };
+        /** Напоминание (S8): первое письмо ушло в этом окне, напоминания и ответа ещё не было. */
+        emailSentAt?: { gte: Date; lte: Date };
+        email?: { not: null };
+        followUpSentAt?: null;
+        repliedAt?: null;
       };
       orderBy:
         | { createdAt: 'asc' }
         | { contactedAt: 'desc' }
+        | { emailSentAt: 'asc' }
         | ({ outreachError: { sort: 'asc'; nulls: 'first' } } | { createdAt: 'asc' })[];
       take: number;
     }): Promise<OutreachRow[]>;
@@ -111,6 +124,11 @@ export interface OutreachDeps {
 export interface OutreachResult {
   email: number;
   whatsapp: number;
+  /**
+   * Напоминаний по почте (S8). sendOutreach заполняет всегда; необязательное — чтобы
+   * заглушки результата в тике и его тестах оставались верными.
+   */
+  followUps?: number;
   /** Почему проход ничего не сделал: 'paused' — рассылка на паузе; null — работал. */
   skipped: string | null;
   errors: number;
@@ -122,6 +140,14 @@ export const OUTREACH_BATCH = 50;
 export const OUTREACH_BUDGET_MS = 40_000;
 /** Одна отправка (Resend / Green API) не длиннее этого — иначе функция крона не успеет записать отметку. */
 export const SEND_TIMEOUT_MS = 8_000;
+/** Напоминание — не раньше, чем через столько дней после первого письма (S8). */
+export const FOLLOW_UP_AFTER_DAYS = 4;
+/** …и не позже: напоминание о письме месячной давности («недавно мы писали») уже не к месту. */
+export const FOLLOW_UP_MAX_DAYS = 14;
+/** Напоминание получает только тот, кому писали и кто ещё в рассылке (не ответил отказом, не согласился). */
+export const FOLLOW_UP_STATUSES: readonly string[] = ['CONTACTED'];
+
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
   return new Promise<T>((resolve, reject) => {
@@ -153,10 +179,51 @@ function pauseMs(): number {
   return min + Math.floor(Math.random() * (max - min + 1));
 }
 
+const ERROR_LABELS = {
+  email: 'Письмо не отправлено',
+  whatsapp: 'WhatsApp не отправлен',
+  followUp: 'Напоминание не отправлено',
+} as const;
+
 /** Текст ошибки для outreachError: по-русски, не длиннее 300 символов. */
-export function outreachErrorText(channel: 'email' | 'whatsapp', reason: string): string {
-  const label = channel === 'email' ? 'Письмо не отправлено' : 'WhatsApp не отправлен';
-  return `${label}: ${reason}`.slice(0, 300);
+export function outreachErrorText(channel: keyof typeof ERROR_LABELS, reason: string): string {
+  return `${ERROR_LABELS[channel]}: ${reason}`.slice(0, 300);
+}
+
+/** Окно первого письма для напоминания (S8): от FOLLOW_UP_MAX_DAYS до FOLLOW_UP_AFTER_DAYS назад. */
+export function followUpWindow(now: Date): { gte: Date; lte: Date } {
+  return {
+    gte: new Date(now.getTime() - FOLLOW_UP_MAX_DAYS * DAY_MS),
+    lte: new Date(now.getTime() - FOLLOW_UP_AFTER_DAYS * DAY_MS),
+  };
+}
+
+type Delivery = { ok: true } | { ok: false; reason: string };
+
+/** Одно письмо через Resend с таймаутом; Reply-To — адрес владельца из настроек. */
+async function deliverEmail(
+  send: typeof sendEmail,
+  to: string,
+  letter: OutreachEmail,
+  replyTo: string,
+): Promise<Delivery> {
+  const sent = await withTimeout(
+    send({
+      to,
+      subject: letter.subject,
+      html: letter.html,
+      text: letter.text,
+      ...(replyTo.trim() ? { headers: { 'Reply-To': replyTo.trim() } } : {}),
+    }),
+    SEND_TIMEOUT_MS,
+    'Почта',
+  ).catch((error: unknown) => ({
+    skipped: false as const,
+    ok: false as const,
+    error: error instanceof Error ? error.message : String(error),
+  }));
+  if (!sent.skipped && sent.ok) return { ok: true };
+  return { ok: false, reason: sent.skipped ? sent.reason : sent.error };
 }
 
 function previewUrlOf(baseUrl: string, token: string): string {
@@ -181,26 +248,28 @@ function toProspect(row: OutreachRow): OutreachProspect {
 }
 
 /**
- * Один проход рассылки. Возвращает, сколько писем и сообщений ушло, сколько ошибок,
- * и `skipped: 'paused'`, если владелец поставил рассылку на паузу.
+ * Один проход рассылки. Возвращает, сколько писем, сообщений и напоминаний ушло, сколько
+ * ошибок, и `skipped: 'paused'`, если владелец поставил рассылку на паузу.
  */
 export async function sendOutreach(now: Date, deps: OutreachDeps = {}): Promise<OutreachResult> {
   const budgetMs = Math.max(0, deps.budgetMs ?? OUTREACH_BUDGET_MS);
-  if (budgetMs < 2_000) return { email: 0, whatsapp: 0, skipped: 'no-time', errors: 0 };
+  const result: OutreachResult = { email: 0, whatsapp: 0, followUps: 0, skipped: null, errors: 0 };
+  if (budgetMs < 2_000) return { ...result, skipped: 'no-time' };
   const db: OutreachDb = deps.db ?? prisma;
   const settings = await (deps.settings ?? readOfficeSettings)();
-  const result: OutreachResult = { email: 0, whatsapp: 0, skipped: null, errors: 0 };
   if (settings.outreachPaused) return { ...result, skipped: 'paused' };
 
   const channels = (deps.channels ?? serverChannels)();
   const cap = Math.max(0, Math.floor(settings.dailyCap));
   const bounds = mskDayBounds(now);
   const day = { gte: bounds.start, lt: bounds.end };
-  const [emailToday, whatsappToday] = await Promise.all([
+  // Напоминания — в том же дневном лимите писем, что и первые письма.
+  const [emailToday, followUpsToday, whatsappToday] = await Promise.all([
     db.prospect.count({ where: { emailSentAt: day } }),
+    db.prospect.count({ where: { followUpSentAt: day } }),
     db.prospect.count({ where: { whatsappSentAt: day } }),
   ]);
-  let emailLeft = Math.max(0, cap - emailToday);
+  let emailLeft = Math.max(0, cap - emailToday - followUpsToday);
   let whatsappLeft = Math.max(0, cap - whatsappToday);
   const active: OutreachChannels = {
     email: channels.email && emailLeft > 0,
@@ -208,30 +277,35 @@ export async function sendOutreach(now: Date, deps: OutreachDeps = {}): Promise<
   };
   if (!active.email && !active.whatsapp) return result;
 
-  // Сначала те, у кого отправка ещё не падала; упавшие сегодня ждут до завтра —
-  // одна повторная попытка в день, чтобы вечно битые адреса не съедали проход.
-  const rows = await db.prospect.findMany({
-    where: {
-      status: { in: ['READY', 'CONTACTED'] },
-      NOT: { outreachError: { not: null }, updatedAt: { gte: bounds.start } },
-    },
-    orderBy: [{ outreachError: { sort: 'asc', nulls: 'first' } }, { createdAt: 'asc' }],
-    take: OUTREACH_BATCH,
-  });
-  if (rows.length === 0) return result;
-
-  const prices = await (deps.prices ?? officePrices)();
-  const baseUrl = (deps.baseUrl ?? siteUrl)();
   const email = deps.email ?? sendEmail;
   const whatsapp = deps.whatsapp ?? sendWhatsApp;
   const sleep = deps.sleep ?? defaultSleep;
   const clock = deps.clock ?? Date.now;
   const startedAt = clock();
+  const outOfTime = () => clock() - startedAt > budgetMs;
+  const baseUrl = (deps.baseUrl ?? siteUrl)();
+  let prices: Promise<{ setup: number; monthly: number }> | null = null;
+  const inputFor = async (row: OutreachRow): Promise<OutreachInput> => ({
+    previewUrl: previewUrlOf(baseUrl, row.token),
+    baseUrl,
+    prices: await (prices ??= (deps.prices ?? officePrices)()),
+    nicheTitle: nicheTitle(row.niche),
+    replyTo: settings.replyTo,
+  });
+
+  // Сначала те, у кого отправка ещё не падала; упавшие сегодня ждут до завтра —
+  // одна повторная попытка в день, чтобы вечно битые адреса не съедали проход.
+  const notFailedToday = { outreachError: { not: null }, updatedAt: { gte: bounds.start } };
+  const rows = await db.prospect.findMany({
+    where: { status: { in: ['READY', 'CONTACTED'] }, NOT: notFailedToday },
+    orderBy: [{ outreachError: { sort: 'asc', nulls: 'first' } }, { createdAt: 'asc' }],
+    take: OUTREACH_BATCH,
+  });
   const pick = { whatsappToPhone: settings.whatsappToPhone, channels: active };
   let whatsappSent = false;
 
   for (const row of rows) {
-    if (clock() - startedAt > budgetMs) break;
+    if (outOfTime()) break;
     if (emailLeft <= 0) active.email = false;
     if (whatsappLeft <= 0) active.whatsapp = false;
     if (!active.email && !active.whatsapp) break;
@@ -239,12 +313,7 @@ export async function sendOutreach(now: Date, deps: OutreachDeps = {}): Promise<
     const wanted = pickChannels(row, pick);
     if (wanted.length === 0) continue;
     const prospect = toProspect(row);
-    const input = {
-      previewUrl: previewUrlOf(baseUrl, row.token),
-      prices,
-      nicheTitle: nicheTitle(row.niche),
-      replyTo: settings.replyTo,
-    };
+    const input = await inputFor(row);
     const sentAt = new Date();
     const success = {
       status: 'CONTACTED',
@@ -253,23 +322,13 @@ export async function sendOutreach(now: Date, deps: OutreachDeps = {}): Promise<
     };
 
     if (wanted.includes('email') && row.email) {
-      const letter = buildEmail(prospect, input);
-      const sent = await withTimeout(
-        email({
-          to: row.email,
-          subject: letter.subject,
-          html: letter.html,
-          text: letter.text,
-          ...(settings.replyTo.trim() ? { headers: { 'Reply-To': settings.replyTo.trim() } } : {}),
-        }),
-        SEND_TIMEOUT_MS,
-        'Почта',
-      ).catch((error: unknown) => ({
-        skipped: false as const,
-        ok: false as const,
-        error: error instanceof Error ? error.message : String(error),
-      }));
-      if (!sent.skipped && sent.ok) {
+      const sent = await deliverEmail(
+        email,
+        row.email,
+        buildEmail(prospect, input),
+        settings.replyTo,
+      );
+      if (sent.ok) {
         emailLeft -= 1;
         result.email += 1;
         await db.prospect.updateMany({
@@ -278,10 +337,9 @@ export async function sendOutreach(now: Date, deps: OutreachDeps = {}): Promise<
         });
       } else {
         result.errors += 1;
-        const reason = sent.skipped ? sent.reason : sent.error;
         await db.prospect.updateMany({
           where: { id: row.id, status: { in: [...OUTREACH_STATUSES] } },
-          data: { outreachError: outreachErrorText('email', reason) },
+          data: { outreachError: outreachErrorText('email', sent.reason) },
         });
       }
     }
@@ -314,6 +372,49 @@ export async function sendOutreach(now: Date, deps: OutreachDeps = {}): Promise<
           });
         }
       }
+    }
+  }
+
+  // Напоминания (S8): одно письмо тем, кому писали 4–14 дней назад и кто не ответил;
+  // в остатке дневного лимита писем и бюджета времени.
+  if (!channels.email || emailLeft <= 0 || outOfTime()) return result;
+  const due = await db.prospect.findMany({
+    where: {
+      status: { in: [...FOLLOW_UP_STATUSES] },
+      emailSentAt: followUpWindow(now),
+      email: { not: null },
+      followUpSentAt: null,
+      repliedAt: null,
+      NOT: notFailedToday,
+    },
+    orderBy: { emailSentAt: 'asc' },
+    take: OUTREACH_BATCH,
+  });
+  for (const row of due) {
+    if (emailLeft <= 0 || outOfTime()) break;
+    const to = row.email?.trim();
+    if (!to) continue;
+    const sent = await deliverEmail(
+      email,
+      to,
+      buildFollowUpEmail(toProspect(row), await inputFor(row)),
+      settings.replyTo,
+    );
+    // Запись — только пока кандидат ещё CONTACTED: «Согласился»/«стоп» за время прохода не перетираются.
+    const guard = { id: row.id, status: { in: [...FOLLOW_UP_STATUSES] } };
+    if (sent.ok) {
+      emailLeft -= 1;
+      result.followUps = (result.followUps ?? 0) + 1;
+      await db.prospect.updateMany({
+        where: guard,
+        data: { followUpSentAt: new Date(), outreachError: null },
+      });
+    } else {
+      result.errors += 1;
+      await db.prospect.updateMany({
+        where: guard,
+        data: { outreachError: outreachErrorText('followUp', sent.reason) },
+      });
     }
   }
   return result;

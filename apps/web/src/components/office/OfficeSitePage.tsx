@@ -1,12 +1,18 @@
 import type { CSSProperties } from 'react';
+import { galleryPhotos, moreSitesHref } from '@/lib/office/clientSite';
 import type { SitePage } from '@/lib/office/pages';
 import { SITE } from '@/lib/site';
+import { siteUrl } from '@/lib/siteUrl';
+import { SiteLeadForm } from './SiteLeadForm';
 
 // The business card page the «Сайты под ключ» agent makes for a company found
 // on the map (R9). It is the client's site, not the platform's: its own light
 // look with the niche accent, no catalogue, no platform chrome inside. Server
-// component; gets only the built `SitePage`, so no id, token, note or status
-// can reach the markup (R19). No external images: the decoration is CSS.
+// component; gets only the built `SitePage` and the public slug, so no id,
+// token, note or status can reach the markup (R19). Pictures only from the
+// owner's uploads (S5: `page.photos`, checked by siteContent), the decoration
+// is CSS. The site may open on the client's own domain (S7), so every link to
+// the platform is absolute.
 
 /** Full class names per accent (Tailwind only keeps classes it can read). */
 const ACCENT: Record<
@@ -98,10 +104,23 @@ function ChatIcon() {
   );
 }
 
-export function OfficeSitePage({ page }: { page: SitePage }) {
+export function OfficeSitePage({
+  page,
+  slug = null,
+  mode = 'live',
+}: {
+  page: SitePage;
+  /** The site's slug: the lead form sends it, the «Хотите такой же сайт?» link carries it. */
+  slug?: string | null;
+  /** live — the published site; preview — the owner's preview or an example: the form is off. */
+  mode?: 'live' | 'preview';
+}) {
   const a = ACCENT[page.accent] ?? ACCENT.teal;
   const eyebrow = [page.eyebrow, page.city].filter(Boolean).join(' · ');
   const hasPlace = Boolean(page.address || page.hours || page.mapHref);
+  const photos = galleryPhotos(page.photos);
+  const base = siteUrl();
+  const formOn = mode === 'live' && Boolean(slug);
 
   return (
     <div className="min-h-screen bg-white text-slate-900">
@@ -183,10 +202,94 @@ export function OfficeSitePage({ page }: { page: SitePage }) {
             ))}
           </ul>
           <p className="text-sm text-slate-600">
-            Уточнить детали и записаться можно по телефону или в WhatsApp.
+            {page.leadForm
+              ? 'Уточнить детали и записаться можно по телефону, в WhatsApp или через заявку ниже.'
+              : 'Уточнить детали и записаться можно по телефону или в WhatsApp.'}
           </p>
         </div>
       </section>
+
+      {/* About: only the owner's own text (S5), never invented. */}
+      {page.about && (
+        <section
+          className="border-t border-slate-100 px-4 py-10 sm:px-6 sm:py-14"
+          aria-labelledby="about"
+        >
+          <div className="mx-auto flex max-w-5xl flex-col gap-4">
+            <div>
+              <p className={`text-xs font-semibold uppercase tracking-[0.18em] ${a.text}`}>
+                О компании
+              </p>
+              <h2 id="about" className="mt-1 text-2xl font-extrabold tracking-tight sm:text-3xl">
+                {page.title}
+              </h2>
+            </div>
+            <p className="max-w-3xl whitespace-pre-line break-words text-base leading-relaxed text-slate-700 sm:text-lg">
+              {page.about}
+            </p>
+          </div>
+        </section>
+      )}
+
+      {/* Photos the owner uploaded in the admin (S5), up to six. */}
+      {photos.length > 0 && (
+        <section
+          className="border-t border-slate-100 px-4 py-10 sm:px-6 sm:py-14"
+          aria-labelledby="photos"
+        >
+          <div className="mx-auto flex max-w-5xl flex-col gap-6">
+            <div>
+              <p className={`text-xs font-semibold uppercase tracking-[0.18em] ${a.text}`}>
+                Галерея
+              </p>
+              <h2 id="photos" className="mt-1 text-2xl font-extrabold tracking-tight sm:text-3xl">
+                Фотографии
+              </h2>
+            </div>
+            <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+              {photos.map((src) => (
+                <li key={src} className="overflow-hidden rounded-2xl bg-slate-100">
+                  <img
+                    src={src}
+                    alt={`Фото: ${page.title}`}
+                    loading="lazy"
+                    decoding="async"
+                    className="aspect-[4/3] h-full w-full object-cover"
+                  />
+                </li>
+              ))}
+            </ul>
+          </div>
+        </section>
+      )}
+
+      {/* Lead form (S4): on the published site it sends; in a preview it is shown but off. */}
+      {page.leadForm && (
+        <section
+          className={`border-t border-slate-100 px-4 py-10 sm:px-6 sm:py-14 ${a.tint}`}
+          aria-labelledby="lead"
+        >
+          <div className="mx-auto flex max-w-3xl flex-col gap-5">
+            <div>
+              <p className={`text-xs font-semibold uppercase tracking-[0.18em] ${a.text}`}>
+                Заявка
+              </p>
+              <h2 id="lead" className="mt-1 text-2xl font-extrabold tracking-tight sm:text-3xl">
+                Оставьте заявку — мы перезвоним
+              </h2>
+            </div>
+            <SiteLeadForm
+              slug={slug}
+              companyTitle={page.title}
+              companyPhone={page.phone}
+              privacyHref={`${base}/privacy`}
+              platformName={`${SITE.platform} от ${SITE.name}`}
+              buttonClass={a.button}
+              disabled={!formOn}
+            />
+          </div>
+        </section>
+      )}
 
       {/* Where to find us */}
       {hasPlace && (
@@ -249,8 +352,16 @@ export function OfficeSitePage({ page }: { page: SitePage }) {
         </p>
         <p className="mt-1">
           Сайт сделан{' '}
-          <a href="/" className="font-semibold text-slate-700 hover:underline">
+          <a href={base} className="font-semibold text-slate-700 hover:underline">
             {SITE.platform} от {SITE.name}
+          </a>
+        </p>
+        <p className="mt-3">
+          <a
+            href={moreSitesHref(base, slug)}
+            className={`inline-flex min-h-[44px] items-center justify-center rounded-full border px-4 py-2 text-sm font-semibold transition ${a.ghost}`}
+          >
+            Хотите такой же сайт?
           </a>
         </p>
       </footer>

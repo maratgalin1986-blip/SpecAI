@@ -6,7 +6,9 @@ import {
   DIGEST_HOURS,
   DIGEST_LIST_LIMIT,
   buildDigest,
+  collectDigest,
   moscowHour,
+  type DigestDb,
   type DigestInput,
   type ProspectLite,
 } from './digest';
@@ -134,6 +136,121 @@ describe('buildDigest', () => {
     const text = buildDigest(input({ siteUrl: `${SITE}/`, toContact: [lite(1)] }));
     expect(text).toContain(`${SITE}/preview/`);
     expect(text).not.toContain('//preview');
+  });
+});
+
+describe('buildDigest: клиентские сайты и оплата', () => {
+  it('заявки с клиентских сайтов — новость дня, недоставленные видны', () => {
+    const text = buildDigest(input({ siteLeads: { total: 3, undelivered: 1 } }));
+    expect(text).toContain('Офис за сутки (09.11):');
+    expect(text).toContain('Заявок с клиентских сайтов: 3 (не доставлено клиентам: 1)');
+    expect(text.trim().endsWith(`Открыть офис: ${SITE}/admin/office`)).toBe(true);
+  });
+
+  it('все заявки доставлены — без скобки; ноль заявок — без строки', () => {
+    const delivered = buildDigest(
+      input({ toContact: [lite(1)], siteLeads: { total: 2, undelivered: 0 } }),
+    );
+    expect(delivered).toContain('Заявок с клиентских сайтов: 2\n');
+    expect(delivered).not.toContain('не доставлено');
+    const none = buildDigest(
+      input({ toContact: [lite(1)], siteLeads: { total: 0, undelivered: 0 } }),
+    );
+    expect(none).not.toContain('Заявок с клиентских сайтов');
+  });
+
+  it('оплата: истекает и просрочена, со ссылкой на клиентов', () => {
+    const text = buildDigest(input({ toContact: [lite(1)], billing: { expiring: 2, overdue: 1 } }));
+    expect(text).toContain(
+      `Оплата: истекает за 7 дней — 2, просрочена — 1. Клиенты: ${SITE}/admin/office/clients`,
+    );
+  });
+
+  it('оплата: только ненулевые части, нули — без строки', () => {
+    expect(
+      buildDigest(input({ toContact: [lite(1)], billing: { expiring: 0, overdue: 4 } })),
+    ).toContain('Оплата: просрочена — 4.');
+    expect(
+      buildDigest(input({ toContact: [lite(1)], billing: { expiring: 1, overdue: 0 } })),
+    ).toContain('Оплата: истекает за 7 дней — 1.');
+    const zero = buildDigest(input({ toContact: [lite(1)], billing: { expiring: 0, overdue: 0 } }));
+    expect(zero).not.toContain('Оплата:');
+  });
+
+  it('оплата не отменяет тихую сводку: короткая строка и строка про оплату', () => {
+    const text = buildDigest(input({ billing: { expiring: 0, overdue: 2 } }));
+    const lines = text.split('\n');
+    expect(lines).toHaveLength(2);
+    expect(lines[0]).toContain('за ночь новых кандидатов нет');
+    expect(lines[1]).toBe(`Оплата: просрочена — 2. Клиенты: ${SITE}/admin/office/clients`);
+  });
+
+  it('без данных о сайтах и оплате — как раньше', () => {
+    const text = buildDigest(input({ siteLeads: undefined, billing: undefined }));
+    expect(text.split('\n')).toHaveLength(1);
+  });
+});
+
+describe('collectDigest', () => {
+  const NOW = new Date('2026-11-09T06:30:00Z');
+  const DAY = 86_400_000;
+
+  function fakeDb(
+    over: { leads?: number; undelivered?: number; expiring?: number; overdue?: number } = {},
+  ) {
+    const prospectCounts: Record<string, unknown>[] = [];
+    const leadCounts: Record<string, unknown>[] = [];
+    const db: DigestDb = {
+      officeRun: { findMany: vi.fn(async () => []) },
+      prospect: {
+        findMany: vi.fn(async () => []),
+        count: vi.fn(async ({ where }) => {
+          prospectCounts.push(where);
+          const paidUntil = where.paidUntil as { gt?: Date; lte?: Date } | undefined;
+          if (paidUntil?.gt) return over.expiring ?? 0;
+          if (paidUntil?.lte) return over.overdue ?? 0;
+          return 0;
+        }),
+      },
+      appSetting: { findMany: vi.fn(async () => []) },
+      siteLead: {
+        count: vi.fn(async ({ where }) => {
+          leadCounts.push(where);
+          return 'forwardedAt' in where ? (over.undelivered ?? 0) : (over.leads ?? 0);
+        }),
+      },
+    };
+    return { db, prospectCounts, leadCounts };
+  }
+
+  it('считает заявки за окно сводки и оплату только у клиентов-сайтов', async () => {
+    const { db, prospectCounts, leadCounts } = fakeDb({
+      leads: 4,
+      undelivered: 1,
+      expiring: 2,
+      overdue: 3,
+    });
+    const text = await collectDigest(NOW, db);
+    const since = new Date(NOW.getTime() - DAY);
+    expect(leadCounts).toEqual([
+      { createdAt: { gte: since } },
+      { createdAt: { gte: since }, forwardedAt: null },
+    ]);
+    const clients = { kind: 'site', status: { in: ['AGREED', 'PUBLISHED'] } };
+    expect(prospectCounts).toContainEqual({
+      ...clients,
+      paidUntil: { gt: NOW, lte: new Date(NOW.getTime() + 7 * DAY) },
+    });
+    expect(prospectCounts).toContainEqual({ ...clients, paidUntil: { lte: NOW } });
+    expect(text).toContain('Заявок с клиентских сайтов: 4 (не доставлено клиентам: 1)');
+    expect(text).toContain('Оплата: истекает за 7 дней — 2, просрочена — 3.');
+  });
+
+  it('тихая ночь без заявок и долгов — одна строка', async () => {
+    const { db } = fakeDb();
+    const text = await collectDigest(NOW, db);
+    expect(text.split('\n')).toHaveLength(1);
+    expect(text).toContain('за ночь новых кандидатов нет');
   });
 });
 

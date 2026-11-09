@@ -5,14 +5,16 @@ import { OfficeProviderPage } from '@/components/office/OfficeProviderPage';
 import { OfficeSitePage } from '@/components/office/OfficeSitePage';
 import { PreviewBanner } from '@/components/office/PreviewBanner';
 import { nicheByKey } from '@/lib/office/niches';
-import { buildProviderPage, buildSitePage } from '@/lib/office/pages';
-import { loadProspectByToken, toPageNiche, visibleFor } from '@/lib/office/visibility';
+import { buildProviderPage } from '@/lib/office/pages';
+import { loadProspectByToken, sitePageFor, toPageNiche, visibleFor } from '@/lib/office/visibility';
 
 export const dynamic = 'force-dynamic';
 
 // The private preview of a page the office made for a company (R11): opened
 // by the owner of the platform through the secret link, shown with a banner,
 // never indexed. The phone is on it (R13): only the owner sees the preview.
+// A site shows the owner's edits (S5) as the published one will; its lead
+// form is visible but off until publication (S4).
 
 export const metadata: Metadata = {
   title: 'Предпросмотр страницы',
@@ -30,7 +32,11 @@ export default async function PreviewPage(props: { params: Promise<{ token: stri
     return (
       <>
         <PreviewBanner name={prospect.name} />
-        <OfficeSitePage page={buildSitePage(prospect, toPageNiche(niche))} />
+        <OfficeSitePage
+          page={sitePageFor(prospect, toPageNiche(niche))}
+          slug={prospect.slug}
+          mode="preview"
+        />
       </>
     );
   }

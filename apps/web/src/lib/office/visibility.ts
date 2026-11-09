@@ -2,10 +2,15 @@
 // three routes. The loaders select only what a page renders: no id, token,
 // note, contacts of the candidate (e-mail, WhatsApp, Telegram) or dates, so
 // nothing of that can end up in the markup by accident (R19). The token itself
-// is read from the URL and never selected back.
+// is read from the URL and never selected back. The owner's edits of a site
+// (`siteJson`, S5) and the client's own domain (S7) are public by nature: they
+// are what the site shows and where it lives.
 import { prisma } from '@specai/database';
+import { domainKeys, normalizeHost } from './domains';
 import type { Niche } from './niches';
+import { buildSitePage, type SitePage } from './pages';
 import type { PageNiche, PageProspect } from './pageTypes';
+import { applySiteContent, parseSiteContent } from './siteContent';
 
 export type PublicRoute = 'preview' | 'site' | 'provider';
 
@@ -53,8 +58,14 @@ export function toPageNiche(n: Niche): PageNiche {
   };
 }
 
-/** A prospect as the pages need it: the builders' input plus the niche key. */
-export type ProspectPageRow = PageProspect & { niche: string };
+/** A prospect as the pages need it: the builders' input plus the niche key, the edits and the domain. */
+export type ProspectPageRow = PageProspect & {
+  niche: string;
+  /** The owner's edits of the site (lib/office/siteContent.ts), JSON; null — as the card. */
+  siteJson: string | null;
+  /** The client's own domain («ulybka-kazan.ru»), null — only /s/<slug>. */
+  domain: string | null;
+};
 
 const PAGE_SELECT = {
   kind: true,
@@ -69,6 +80,8 @@ const PAGE_SELECT = {
   niche: true,
   tags: true,
   hours: true,
+  siteJson: true,
+  domain: true,
 } as const;
 
 function narrow(row: {
@@ -84,6 +97,8 @@ function narrow(row: {
   niche: string;
   tags: string | null;
   hours: string | null;
+  siteJson: string | null;
+  domain: string | null;
 }): ProspectPageRow | null {
   if (row.kind !== 'site' && row.kind !== 'provider') return null;
   return {
@@ -99,6 +114,8 @@ function narrow(row: {
     niche: row.niche,
     tags: row.tags,
     hours: row.hours,
+    siteJson: row.siteJson,
+    domain: row.domain,
   };
 }
 
@@ -112,4 +129,58 @@ export async function loadProspectByToken(token: string): Promise<ProspectPageRo
   if (!isValidToken(token)) return null;
   const row = await prisma.prospect.findUnique({ where: { token }, select: PAGE_SELECT });
   return row ? narrow(row) : null;
+}
+
+/** The client's site as /s and /preview show it: the card's page with the owner's edits on top (S5). */
+export function sitePageFor(row: ProspectPageRow, niche: PageNiche): SitePage {
+  return applySiteContent(buildSitePage(row, niche), parseSiteContent(row.siteJson));
+}
+
+/**
+ * Where a client's site lives (S7): on the client's own domain when the request came through
+ * it (the middleware passes the host as `x-client-domain`) and it is this site's domain;
+ * otherwise /s/<slug> on the platform. A header naming any other host is ignored, so it
+ * cannot point the canonical of one site at another address.
+ * `canonical` goes to the metadata (relative paths resolve against `metadataBase`),
+ * `url` is absolute (structured data).
+ */
+export function clientSiteAddress(
+  p: { slug: string; domain: string | null },
+  requestDomain: string | null | undefined,
+  base: string,
+): { canonical: string; url: string } {
+  const host = normalizeHost(requestDomain);
+  const [bare, ...aliases] = p.domain ? domainKeys(p.domain) : [];
+  if (host && bare && (host === bare || aliases.includes(host))) {
+    const url = `https://${bare}/`;
+    return { canonical: url, url };
+  }
+  const path = `/s/${encodeURIComponent(p.slug)}`;
+  return { canonical: path, url: `${base.replace(/\/+$/, '')}${path}` };
+}
+
+/** Published office pages in the sitemap (S11): the same rules as `visibleFor`. */
+export const SITEMAP_PROSPECT_WHERE = {
+  OR: [
+    { kind: 'site', status: 'PUBLISHED' },
+    { kind: 'provider', status: { in: ['PUBLISHED', 'REGISTERED'] } },
+  ],
+};
+
+/** Sitemap paths of the published office pages; anything not public is dropped. */
+export function officeSitemapEntries(
+  rows: readonly { kind: string; status: string; slug: string; updatedAt: Date }[],
+): { path: string; lastModified: Date }[] {
+  const out: { path: string; lastModified: Date }[] = [];
+  const seen = new Set<string>();
+  for (const row of rows) {
+    if (!isValidSlug(row.slug)) continue;
+    const route = visibleFor(row, 'site') ? 's' : visibleFor(row, 'provider') ? 'p' : null;
+    if (!route) continue;
+    const path = `/${route}/${row.slug}`;
+    if (seen.has(path)) continue;
+    seen.add(path);
+    out.push({ path, lastModified: row.updatedAt });
+  }
+  return out;
 }
