@@ -102,3 +102,29 @@ describe('PUT /api/admin/office/settings — ИИ-аналитик (U2)', () => 
     expect(transaction).not.toHaveBeenCalled();
   });
 });
+
+describe('PUT /api/admin/office/settings — режим рассылки (К2)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    isAdminRequest.mockResolvedValue(true);
+  });
+
+  it('saves «approve» or «auto»', async () => {
+    for (const outreachMode of ['approve', 'auto']) {
+      upsert.mockClear();
+      expect((await put({ outreachMode })).status).toBe(200);
+      expect(upsert).toHaveBeenCalledWith({
+        where: { key: 'office.outreachMode' },
+        update: { value: outreachMode },
+        create: { key: 'office.outreachMode', value: outreachMode },
+      });
+    }
+  });
+
+  it('rejects anything else with a Russian message', async () => {
+    const response = await put({ outreachMode: 'always' });
+    expect(response.status).toBe(400);
+    expect((await response.json()).error).toMatch(/Режим рассылки/);
+    expect(transaction).not.toHaveBeenCalled();
+  });
+});

@@ -12,6 +12,7 @@ import {
   SERVICE_LINK_LABEL,
   serviceUrl,
   STOP_LINE,
+  UNSUBSCRIBE_LABEL,
   WHATSAPP_MAX_LENGTH,
   whatsappTarget,
   type OutreachContact,
@@ -423,5 +424,25 @@ describe('personal offer in the site letter and WhatsApp (U2)', () => {
     expect(text).toContain('17 000 ₽');
     const parts = text.split('\n\n');
     expect(parts[parts.length - 1]!.startsWith(STOP_LINE)).toBe(true);
+  });
+});
+
+describe('ссылка «Больше не писать» (К3)', () => {
+  const url = `${BASE}/otpiska/tok?s=sig`;
+
+  it('есть в первом письме и в напоминании — текстом и ссылкой', () => {
+    for (const letter of [
+      buildEmail(site, { ...input, unsubscribeUrl: url }),
+      buildFollowUpEmail(site, { ...input, unsubscribeUrl: url }),
+      buildEmail(provider, { ...input, unsubscribeUrl: url }),
+    ]) {
+      expect(letter.text.trim().split('\n').at(-1)).toBe(`${UNSUBSCRIBE_LABEL}: ${url}`);
+      expect(letter.html).toContain(`<a href="${url}">`);
+      expect(letter.html).toContain(UNSUBSCRIBE_LABEL);
+    }
+  });
+
+  it('без ссылки строки нет', () => {
+    expect(buildEmail(site, input).text).not.toContain(UNSUBSCRIBE_LABEL);
   });
 });

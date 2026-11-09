@@ -43,7 +43,7 @@ const page = buildSitePage(
 );
 
 describe('editorDraft / draftToContent', () => {
-  it('пустая правка — пустая форма с включённой формой заявки', () => {
+  it('пустая правка — пустая форма, форма заявки выключена, подвал на месте', () => {
     expect(emptyDraft).toEqual({
       title: '',
       hero: '',
@@ -55,7 +55,8 @@ describe('editorDraft / draftToContent', () => {
       whatsapp: '',
       accent: '',
       photos: [],
-      leadForm: true,
+      leadForm: false,
+      hideCredit: false,
     });
     expect(draftToContent(emptyDraft)).toEqual({});
   });
@@ -70,7 +71,8 @@ describe('editorDraft / draftToContent', () => {
       phone: ' 8 (843) 212-34-56 ',
       accent: 'rose',
       photos: ['/api/files/office/a.jpg', '/api/files/office/a.jpg', ' '],
-      leadForm: false,
+      leadForm: true,
+      hideCredit: true,
     });
     expect(content).toEqual({
       title: 'Улыбка',
@@ -79,7 +81,8 @@ describe('editorDraft / draftToContent', () => {
       phone: '8 (843) 212-34-56',
       accent: 'rose',
       photos: ['/api/files/office/a.jpg'],
-      leadForm: false,
+      leadForm: true,
+      hideCredit: true,
     });
   });
 
@@ -94,7 +97,8 @@ describe('editorDraft / draftToContent', () => {
       whatsapp: '+79272428088',
       accent: 'sky',
       photos: ['/api/files/office/ulybka/abc-photo.jpg'],
-      leadForm: false,
+      leadForm: true,
+      hideCredit: true,
     };
     const checked = validateSiteContent(draftToContent(draft));
     expect(checked.ok).toBe(true);
@@ -104,25 +108,29 @@ describe('editorDraft / draftToContent', () => {
     expect(editorDraft(parseSiteContent(json))).toEqual(draft);
   });
 
-  it('форма заявки: включена — поле не пишется, выключена — false', () => {
-    expect(draftToContent({ ...emptyDraft, leadForm: true })).toEqual({});
-    expect(draftToContent({ ...emptyDraft, leadForm: false })).toEqual({ leadForm: false });
-    expect(editorDraft({ leadForm: false }).leadForm).toBe(false);
+  it('форма заявки (К10): выключена — поле не пишется, включена — true; старая правка без поля — выключена', () => {
+    expect(draftToContent({ ...emptyDraft, leadForm: false })).toEqual({});
+    expect(draftToContent({ ...emptyDraft, leadForm: true })).toEqual({ leadForm: true });
+    expect(editorDraft({}).leadForm).toBe(false);
+    expect(editorDraft({ leadForm: true }).leadForm).toBe(true);
+    expect(draftToContent({ ...emptyDraft, hideCredit: true })).toEqual({ hideCredit: true });
+    expect(editorDraft({ hideCredit: true }).hideCredit).toBe(true);
   });
 });
 
 describe('siteJsonFor', () => {
   it('пустая правка → null', () => {
     expect(siteJsonFor({})).toBeNull();
-    expect(siteJsonFor({ photos: [], leadForm: true })).toBeNull();
+    expect(siteJsonFor({ photos: [], leadForm: false, hideCredit: false })).toBeNull();
     expect(siteJsonFor({ title: '   ' })).toBeNull();
   });
 
   it('пишет только значимые поля', () => {
-    expect(siteJsonFor({ title: 'Улыбка', photos: [], leadForm: true })).toBe(
+    expect(siteJsonFor({ title: 'Улыбка', photos: [], leadForm: false })).toBe(
       JSON.stringify({ title: 'Улыбка' }),
     );
-    expect(siteJsonFor({ leadForm: false })).toBe(JSON.stringify({ leadForm: false }));
+    expect(siteJsonFor({ leadForm: true })).toBe(JSON.stringify({ leadForm: true }));
+    expect(siteJsonFor({ hideCredit: true })).toBe(JSON.stringify({ hideCredit: true }));
   });
 
   it('пустой ввод из формы через проверку сервера → null (сайт как по карточке)', () => {

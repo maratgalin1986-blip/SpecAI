@@ -100,6 +100,13 @@ describe('packagePriceLine', () => {
       '17\u00a0000\u00a0₽ разово и 1\u00a0500\u00a0₽ в месяц',
     );
   });
+
+  it('год дешевле 12 месяцев — «или … сразу за год» (К12); не дешевле — без года', () => {
+    expect(packagePriceLine({ setup: 3900, monthly: 990, yearly: 9900 })).toBe(
+      '3\u00a0900\u00a0₽ разово и 990\u00a0₽ в месяц или 9\u00a0900\u00a0₽ сразу за год',
+    );
+    expect(packagePriceLine({ setup: 3900, monthly: 990, yearly: 11880 })).not.toContain('за год');
+  });
 });
 
 describe('demoCompanyName', () => {
@@ -178,8 +185,8 @@ describe('demoSitePage', () => {
     expect(page.city).toBe(DEMO_CITY);
     expect(page.hero).toContain(DEMO_CITY);
     expect(page.phoneHref).toBe(SITE.phoneHref);
-    expect(page.whatsappHref.startsWith(`${SITE.whatsappHref}?text=`)).toBe(true);
-    expect(decodeURIComponent(page.whatsappHref)).toContain('пример сайта «Автосервис»');
+    expect(page.whatsappHref!.startsWith(`${SITE.whatsappHref}?text=`)).toBe(true);
+    expect(decodeURIComponent(page.whatsappHref!)).toContain('пример сайта «Автосервис»');
     expect(page.mapHref).toBe(`https://yandex.ru/maps/?text=${encodeURIComponent(DEMO_CITY)}`);
   });
 

@@ -1,13 +1,14 @@
 // Офис агентов: прогон одного шага плана (spec §4, R1, R4, R6). Создаёт запись журнала
 // `OfficeRun`, ищет кандидатов в источнике (по умолчанию — карты OpenStreetMap), отбрасывает
-// компании с сайтом и уже известные (тот же объект источника или телефон; для агента
-// «Подрядчики» — ещё компании, которые уже на площадке), создаёт `Prospect` со статусом READY
+// компании с сайтом, ИП и людей (К5, `candidateFilter.ts`) и уже известные (тот же объект
+// источника или телефон; для агента «Подрядчики» — ещё компании, которые уже на площадке), создаёт `Prospect` со статусом READY
 // и досье (`dossier.ts`): соседи для подсчёта конкурентов — весь ответ источника, и с сайтом.
 // База и источник передаются зависимостями, чтобы логика проверялась без Postgres.
 
 import { prisma } from '@specai/database';
 import { cityByName, findCityInText } from '@specai/shared';
 import { AGENTS, agentById } from './agents';
+import { candidateSkipText } from './candidateFilter';
 import { buildDossier } from './dossier';
 import { machineryTags, nicheByKey, type Niche } from './niches';
 import { OFFICE_SETTINGS, defaultPlan, nextStep, parsePlan } from './plan';
@@ -186,8 +187,8 @@ export interface CreateResult {
 }
 
 /**
- * Дедупликация и создание кандидатов (R6). Компания с сайтом — мимо; `Prospect` с тем же
- * `sourceRef` или телефоном (любой статус) — skipped; для «Подрядчиков» — ещё `Company`
+ * Дедупликация и создание кандидатов (R6). Компания с сайтом, ИП и люди (К5) — мимо;
+ * `Prospect` с тем же `sourceRef` или телефоном (любой статус) — skipped; для «Подрядчиков» — ещё `Company`
  * с тем же номером на площадке. Возвращает счётчики и причины пропусков.
  */
 /** Кандидаты, которых ещё нет в базе (по идентификатору источника и телефону). */
@@ -241,9 +242,17 @@ async function createProspects(
 ): Promise<CreateResult> {
   const errors: string[] = [];
   const fresh = candidates.filter((c) => {
-    if (!c.website) return true;
-    errors.push(`${c.name}: у компании уже есть сайт`);
-    return false;
+    if (c.website) {
+      errors.push(`${c.name}: у компании уже есть сайт`);
+      return false;
+    }
+    // К5: ИП и люди кандидатами не становятся.
+    const personal = candidateSkipText(c.name);
+    if (personal) {
+      errors.push(personal);
+      return false;
+    }
+    return true;
   });
   let skipped = candidates.length - fresh.length;
   if (fresh.length === 0) return { created: 0, skipped, errors };
@@ -382,9 +391,12 @@ export async function runStep(input: RunStepInput, deps: RunDeps = {}): Promise<
     // Источник отдаёт всех: фирмы с сайтом — только соседи для досье, кандидатами не становятся.
     const withoutSite = search.candidates.filter((c) => !c.website);
     const withSite = search.candidates.length - withoutSite.length;
+    // К5: ИП и люди — тоже только соседи; отсеиваем до обрезки, чтобы места шага шли компаниям.
+    const companies = withoutSite.filter((c) => !candidateSkipText(c.name));
+    const personal = withoutSite.length - companies.length;
     // Сначала убираем уже известных, потом берём первые STEP_LIMIT новых.
-    const unknown = await dropKnown(withoutSite, db);
-    const alreadyKnown = withoutSite.length - unknown.length;
+    const unknown = await dropKnown(companies, db);
+    const alreadyKnown = companies.length - unknown.length;
     const candidates = unknown.slice(0, STEP_LIMIT);
     result.found = search.candidates.length;
     const counts = await createProspects(candidates, {
@@ -398,7 +410,7 @@ export async function runStep(input: RunStepInput, deps: RunDeps = {}): Promise<
       db,
     });
     result.created = counts.created;
-    result.skipped = counts.skipped + alreadyKnown + withSite;
+    result.skipped = counts.skipped + alreadyKnown + withSite + personal;
   } catch (error) {
     console.error('[office/run] step failed', error);
     result.error = 'Шаг не выполнен: ошибка при сохранении кандидатов';

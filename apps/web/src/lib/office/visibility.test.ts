@@ -110,13 +110,17 @@ const row: ProspectPageRow = {
 };
 
 describe('sitePageFor', () => {
-  it('without edits — the page from the card: no about, no photos, the form on', () => {
+  it('without edits — the page from the card: no about, no photos, no WhatsApp, the form off (К10)', () => {
     const page = sitePageFor(row, niche);
     expect(page.title).toBe('Улыбка');
     expect(page.hero).toBe('Лечение зубов без боли в городе Казань');
     expect(page.about).toBeNull();
     expect(page.photos).toEqual([]);
-    expect(page.leadForm).toBe(true);
+    expect(page.leadForm).toBe(false);
+    expect(page.whatsappHref).toBeNull();
+    expect(sitePageFor({ ...row, whatsapp: '+79272428088' }, niche).whatsappHref).toBe(
+      'https://wa.me/79272428088',
+    );
   });
 
   it("the owner's edits go on top of the card (S5)", () => {

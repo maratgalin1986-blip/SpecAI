@@ -16,7 +16,8 @@ export const dynamic = 'force-dynamic';
 
 // The private preview of a page the office made for a company (R11): opened
 // by the owner of the platform through the secret link, shown with a banner,
-// never indexed. The phone is on it (R13): only the owner sees the preview.
+// never indexed. The banner says it is a draft by the platform, not the company's
+// official site (К6). The phone is on it (R13): only the owner sees the preview.
 // A site shows the owner's edits (S5) as the published one will; its lead
 // form is visible but off until publication (S4). Each opening by a person
 // (not the owner, not a link-preview bot) is counted (U3, lib/office/previewViews.ts).
@@ -48,7 +49,7 @@ export default async function PreviewPage(props: { params: Promise<{ token: stri
     if (!niche) notFound();
     return (
       <>
-        <PreviewBanner name={prospect.name} />
+        <PreviewBanner source={prospect.source} />
         <OfficeSitePage
           page={sitePageFor(prospect, toPageNiche(niche))}
           slug={prospect.slug}
@@ -61,7 +62,7 @@ export default async function PreviewPage(props: { params: Promise<{ token: stri
   const page = buildProviderPage(prospect, [...CATEGORIES], { published: true });
   return (
     <div className="flex flex-col gap-6">
-      <PreviewBanner name={prospect.name} />
+      <PreviewBanner source={prospect.source} />
       <div className="mx-auto w-full max-w-6xl px-4 pb-8 sm:px-6">
         <OfficeProviderPage page={page} />
       </div>

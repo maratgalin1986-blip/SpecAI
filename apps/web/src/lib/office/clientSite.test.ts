@@ -3,7 +3,6 @@ import {
   CLIENT_SITE_MAX_PHOTOS,
   galleryPhotos,
   moreSitesHref,
-  siteLeadConsentText,
   siteLeadOfflineText,
   siteLeadPayload,
   siteLeadReply,
@@ -46,17 +45,6 @@ describe('moreSitesHref', () => {
     const url = new URL(moreSitesHref('https://example.ru', null));
     expect(url.searchParams.get('utm_source')).toBe('client-site');
     expect(url.searchParams.has('utm_campaign')).toBe(false);
-  });
-});
-
-describe('siteLeadConsentText', () => {
-  it('names the company in quotes once', () => {
-    expect(siteLeadConsentText('Улыбка')).toBe(
-      'Согласен на передачу имени и телефона компании «Улыбка» для ответа на заявку',
-    );
-    expect(siteLeadConsentText('Стоматология «Улыбка»')).toContain(
-      'компании Стоматология «Улыбка» для',
-    );
   });
 });
 

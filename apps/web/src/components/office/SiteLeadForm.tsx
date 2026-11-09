@@ -4,17 +4,18 @@ import { useState } from 'react';
 import {
   SITE_LEAD_ENDPOINT,
   SITE_LEAD_LIMITS,
-  siteLeadConsentText,
   siteLeadOfflineText,
   siteLeadPayload,
   siteLeadReply,
 } from '@/lib/office/clientSite';
+import { siteLeadConsentLabel } from '@/lib/office/siteLeadText';
 import { useHydrated } from '@/lib/useHydrated';
 
-// «Оставить заявку» на клиентском сайте (S4): имя, телефон, комментарий и согласие на
-// передачу данных компании. Заявку принимает площадка (/api/office/site-lead, T3) и
-// пересылает компании на почту. В превью и на примере форма видна, но выключена: заявки
-// принимаются только у опубликованного сайта.
+// «Оставить заявку» на клиентском сайте (S4): имя, телефон, комментарий и согласие на их
+// обработку компанией — оператором данных своих посетителей (К10, К17). Галочка не стоит
+// заранее и ведёт на политику компании /s/<slug>/politika. Приём заявки (/api/office/site-lead)
+// по поручению компании ведёт площадка и пересылает заявку компании на почту. В превью и на
+// примере форма видна, но выключена: заявки принимаются только у опубликованного сайта.
 
 const FIELD =
   'min-h-12 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-base text-slate-900 placeholder:text-slate-400 focus:border-slate-500 focus:outline-none disabled:bg-slate-50';
@@ -24,7 +25,7 @@ export function SiteLeadForm({
   companyTitle,
   companyPhone,
   privacyHref,
-  platformName,
+  processorName,
   buttonClass,
   disabled = false,
 }: {
@@ -33,9 +34,10 @@ export function SiteLeadForm({
   companyTitle: string;
   /** Телефон компании — в подсказках, если заявка не ушла. */
   companyPhone: string;
-  /** Абсолютная ссылка на политику конфиденциальности площадки. */
-  privacyHref: string;
-  platformName: string;
+  /** Абсолютная ссылка на политику компании (/s/<slug>/politika); null — превью без адреса. */
+  privacyHref: string | null;
+  /** Кто ведёт приём заявок по поручению компании (юрлицо площадки). */
+  processorName: string;
   /** Цвет кнопки по акценту сайта. */
   buttonClass: string;
   /** Превью и пример: поля видны, отправить нельзя. */
@@ -156,18 +158,28 @@ export function SiteLeadForm({
             onChange={(e) => setConsent(e.target.checked)}
             className="mt-1 h-4 w-4 shrink-0"
           />
-          <span>{siteLeadConsentText(companyTitle)}</span>
+          <span>
+            {siteLeadConsentLabel(companyTitle)}
+            {privacyHref && (
+              <>
+                {' '}
+                (
+                <a
+                  href={privacyHref}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline hover:text-slate-700"
+                >
+                  политика обработки персональных данных
+                </a>
+                )
+              </>
+            )}
+          </span>
         </label>
         <p className="text-xs text-slate-500">
-          Заявку принимает {platformName} и передаёт компании.{' '}
-          <a
-            href={privacyHref}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="underline hover:text-slate-700"
-          >
-            Политика конфиденциальности
-          </a>
+          Заявку получает {companyTitle.trim()}. Приём заявок по поручению компании ведёт{' '}
+          {processorName}; заявки записываются в базу данных в России.
         </p>
         {error && (
           <p role="alert" className="text-sm font-semibold text-red-700">

@@ -1,6 +1,6 @@
 import { cityByName } from '@specai/shared';
 import { describe, expect, it } from 'vitest';
-import { AGENTS } from './agents';
+import { AGENTS, MEDICAL_NICHES } from './agents';
 import { defaultPlan, formatPlan, homeRegionCities, nextStep, parsePlan } from './plan';
 
 describe('office plan: parsePlan', () => {
@@ -86,5 +86,12 @@ describe('office plan: defaultPlan', () => {
       (home.length + 4) * AGENTS.sites.defaultNiches.length,
     );
     for (const step of plan) expect(cityByName(step.city)?.name).toBe(step.city);
+  });
+  it('К5: медицинских ниш в плане по умолчанию нет, в ручной строке ниша работает', () => {
+    expect(MEDICAL_NICHES).toContain('dentist');
+    for (const step of plan) expect(MEDICAL_NICHES).not.toContain(step.niche);
+    expect(parsePlan('sites; dentist; Казань').steps).toEqual([
+      { agent: 'sites', niche: 'dentist', city: 'Казань' },
+    ]);
   });
 });

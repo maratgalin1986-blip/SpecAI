@@ -1,13 +1,16 @@
 // Заявки с клиентских сайтов «Сайты под ключ» (S4): посетитель опубликованного сайта
 // /s/<slug> (или домена клиента) оставляет имя, телефон и комментарий, площадка сохраняет
-// заявку (SiteLead), пересылает её письмом на почту компании и коротко сообщает владельцу
-// в Telegram. Публичный адрес без входа (REVIEW.md §2): ловушка для ботов, лимит по IP и не
+// заявку (SiteLead) в базу в России и только после этого пересылает её письмом на почту
+// компании (К10, 152-ФЗ ст. 18 ч. 5); владельцу в Telegram — только «заявка с сайта такой-то
+// компании, доставлена или нет», без имени и телефона посетителя: данные посетителей
+// обрабатываются по поручению компании, а не для нас. Публичный адрес без входа (REVIEW.md §2): ловушка для ботов, лимит по IP и не
 // больше SITE_LEAD_DAILY_CAP заявок в сутки на сайт; ответ — только `{ ok }` или текст ошибки.
 //
 // Здесь — вся логика приёма: база, письмо, уведомление, часы и лимит приходят извне
 // (`acceptSiteLead(input, deps)`), поэтому модуль проверяется тестами без сети и базы.
-// Комментарий не маскируется (lib/privacy.ts): его читает только сама компания, которой
-// посетитель и пишет, с галочкой согласия на передачу имени и телефона.
+// Форма принимает заявки, только когда владелец включил её в редакторе (`leadForm === true`)
+// после оферты с поручением. Комментарий не маскируется (lib/privacy.ts): его читает только
+// сама компания, которой посетитель и пишет, с галочкой согласия на обработку.
 
 import { z } from 'zod';
 import type { SendEmailInput, SendEmailResult } from '@/lib/email';
@@ -59,7 +62,7 @@ function multiLine(value: string): string {
 
 const NAME_ERROR = 'Как к вам обращаться? Напишите имя';
 const PHONE_ERROR = 'Укажите российский номер телефона: от 10 цифр';
-const CONSENT_ERROR = 'Отметьте согласие на передачу имени и телефона компании';
+const CONSENT_ERROR = 'Отметьте согласие на обработку имени и телефона компанией';
 
 export const siteLeadSchema = z.object({
   slug: z
@@ -99,7 +102,7 @@ export const siteLeadSchema = z.object({
         ),
     )
     .transform((value) => value || null),
-  // Согласие на передачу имени и телефона компании (152-ФЗ) обязательно.
+  // Согласие на обработку имени и телефона компанией (152-ФЗ) обязательно.
   consent: z.literal(true, { errorMap: () => ({ message: CONSENT_ERROR }) }),
 });
 
@@ -168,7 +171,7 @@ export interface SiteLeadDb {
 export interface SiteLeadDeps {
   db: SiteLeadDb;
   sendEmail: (input: SendEmailInput) => Promise<SendEmailResult>;
-  /** Строка владельцу в Telegram (`notifyTelegram`): true — доставлена. */
+  /** Строка владельцу в Telegram (`notifyTelegram`), без данных посетителя: true — доставлена. */
   notify: (text: string) => Promise<boolean>;
   now: () => Date;
   /** Лимит по ключу, каждый вызов засчитывается (`checkRateLimit`). */
@@ -209,12 +212,16 @@ export const SITE_LEAD_ERRORS = {
     'Не удалось отправить заявку. Попробуйте ещё раз через минуту или позвоните по телефону на сайте',
 } as const;
 
-/** Сайт принимает заявки: клиентский сайт опубликован (как `visibleFor(…, 'site')`) и форма не выключена. */
+/**
+ * Сайт принимает заявки: клиентский сайт опубликован (как `visibleFor(…, 'site')`) и форма
+ * включена владельцем в редакторе (К10: только после оферты с поручением). Без правки или с
+ * битой правкой форма выключена.
+ */
 export function acceptsSiteLeads(
   p: Pick<SiteLeadProspect, 'kind' | 'status' | 'siteJson'>,
 ): boolean {
   if (p.kind !== 'site' || p.status !== 'PUBLISHED') return false;
-  return parseSiteContent(p.siteJson).leadForm !== false;
+  return parseSiteContent(p.siteJson).leadForm === true;
 }
 
 /**
@@ -251,7 +258,8 @@ export function buildSiteLeadEmail(lead: SiteLeadEmailInput): {
   const phone = phoneText(lead.phone);
   const telHref = `tel:+${phoneDigits(lead.phone)}`;
   const origin = `Заявка пришла с вашего сайта ${lead.siteAddress}. Сайт сделан ${SITE.platform} от ${SITE.name}.`;
-  const consent = 'Человек согласился передать вам имя и телефон для ответа на эту заявку.';
+  const consent =
+    'Человек дал согласие на обработку имени и телефона для ответа на эту заявку. Используйте их только для ответа.';
   const questions = `Вопросы по сайту — звоните ${SITE.phone}.`;
 
   const text = [
@@ -307,16 +315,18 @@ export function siteLeadForwardError(
   return text.slice(0, FORWARD_ERROR_MAX);
 }
 
-/** Строка владельцу: «Заявка с сайта «Улыбка»: Анна, +7 927 …» и, если не ушла, — почему. */
+/**
+ * Строка владельцу (К10): «Заявка с сайта «Улыбка» (доставлена)» или «(не доставлена)» и
+ * почему — без имени, телефона и комментария посетителя. Причина — наш текст из
+ * siteLeadForwardError, в нём нет данных посетителя.
+ */
 export function siteLeadTelegramText(
   companyName: string,
-  lead: { name: string; phone: string },
-  problems: { forwardError: string | null; saved: boolean },
+  outcome: { forwardError: string | null },
 ): string {
-  let line = `Заявка с сайта ${quotedName(oneLine(companyName))}: ${oneLine(lead.name)}, ${phoneText(lead.phone)}`;
-  if (problems.forwardError) line += ` — не доставлена клиенту (${problems.forwardError})`;
-  if (!problems.saved) line += ' — в базе не сохранена';
-  return oneLine(line);
+  const head = `Заявка с сайта ${quotedName(oneLine(companyName))}`;
+  if (!outcome.forwardError) return `${head} (доставлена)`;
+  return oneLine(`${head} (не доставлена: ${outcome.forwardError})`);
 }
 
 function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
@@ -364,8 +374,10 @@ async function forward(
 
 /**
  * Приём заявки с клиентского сайта: ловушка → проверка полей → лимит по IP → сайт опубликован
- * и форма включена → не больше SITE_LEAD_DAILY_CAP за сутки → сохранить → переслать компании →
- * строка владельцу. Ответ без id и данных компании.
+ * и форма включена → не больше SITE_LEAD_DAILY_CAP за сутки → сохранить в базу в России →
+ * только после записи переслать компании → строка владельцу без данных посетителя.
+ * Не записалась — не пересылаем (152-ФЗ ст. 18 ч. 5), посетитель видит 503 и звонит.
+ * Ответ без id и данных компании.
  */
 export async function acceptSiteLead(
   request: SiteLeadRequest,
@@ -430,28 +442,22 @@ export async function acceptSiteLead(
       return null;
     });
 
+  // Сначала запись в базу в России, потом пересылка: без записи данные никуда не уходят.
+  if (!saved) return { status: 503, body: { error: SITE_LEAD_ERRORS.unavailable } };
+
   const forwardError = await forward(
     site,
     lead,
     siteLeadSiteAddress(site, request.host, deps.baseUrl),
     deps,
   );
-  if (saved) {
-    await deps.db.siteLead
-      .update({
-        where: { id: saved.id },
-        data: forwardError ? { forwardError } : { forwardedAt: deps.now() },
-      })
-      .catch((error: unknown) => console.error('[site-lead] failed to mark forwarding', error));
-  }
+  await deps.db.siteLead
+    .update({
+      where: { id: saved.id },
+      data: forwardError ? { forwardError } : { forwardedAt: deps.now() },
+    })
+    .catch((error: unknown) => console.error('[site-lead] failed to mark forwarding', error));
 
-  const notified = await deps
-    .notify(siteLeadTelegramText(site.name, lead, { forwardError, saved: Boolean(saved) }))
-    .catch(() => false);
-
-  // Заявка потерялась бы целиком: не сохранена, не ушла компании и владелец не узнал.
-  if (!saved && forwardError && !notified) {
-    return { status: 503, body: { error: SITE_LEAD_ERRORS.unavailable } };
-  }
+  await deps.notify(siteLeadTelegramText(site.name, { forwardError })).catch(() => false);
   return OK;
 }

@@ -1,6 +1,6 @@
 import { categoryBySlug } from '@specai/shared';
 import { describe, expect, it } from 'vitest';
-import { AGENTS } from './agents';
+import { AGENTS, MEDICAL_NICHES } from './agents';
 import { SITE_ACCENTS } from './siteContent';
 import { parseOfficeCommand } from './telegramCommand';
 import {
@@ -34,7 +34,11 @@ describe('office niches: dictionary', () => {
   });
 
   it('agents walk every niche of their own, keys match the dictionary', () => {
-    expect(AGENTS.sites.defaultNiches).toEqual(nichesOf('sites').map((n) => n.key));
+    expect(AGENTS.sites.defaultNiches).toEqual(
+      nichesOf('sites')
+        .map((n) => n.key)
+        .filter((k) => !MEDICAL_NICHES.includes(k)),
+    );
     expect(AGENTS.providers.defaultNiches).toEqual(['machinery']);
     for (const [key, niche] of Object.entries(NICHES)) {
       expect(niche.key).toBe(key);

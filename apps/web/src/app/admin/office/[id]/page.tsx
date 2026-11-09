@@ -77,6 +77,8 @@ export default async function AdminOfficeProspectPage(props: { params: Promise<{
       name: true,
       phone: true,
       email: true,
+      whatsapp: true,
+      source: true,
       address: true,
       city: true,
       lat: true,
@@ -136,6 +138,8 @@ export default async function AdminOfficeProspectPage(props: { params: Promise<{
       lon: prospect.lon,
       tags: prospect.tags,
       hours: prospect.hours,
+      whatsapp: prospect.whatsapp,
+      source: prospect.source,
     },
     pageNiche,
   );

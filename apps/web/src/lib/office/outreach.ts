@@ -8,6 +8,8 @@
 // Персональное предложение (U2): если рассылка передала `offer` (offer.ts, при включённом
 // ИИ — aiOffer.ts), письмо и WhatsApp для сайта строятся из него: тема, вступление, три
 // пункта и рекомендованный пакет с ценой.
+// Отписка (К3): если рассылка передала `unsubscribeUrl`, последней строкой письма идёт
+// «Больше не писать: <ссылка>» (заголовок List-Unsubscribe ставит outreachRun.ts).
 import { SERVICE_PAGE_PATH } from './clientSite';
 import { quotedName } from './pages';
 import { PLATFORM_PROMISE, PLATFORM_PROMISE_DETAIL } from '@specai/shared';
@@ -35,6 +37,8 @@ export interface OutreachInput {
   replyTo: string;
   /** Персональное предложение (U2) — только для сайта; без него — общее письмо. */
   offer?: Pick<Offer, 'subject' | 'opener' | 'bullets' | 'packageKey' | 'packageReason'>;
+  /** Ссылка «Больше не писать» (К3, unsubscribe.ts): в письме строкой и ссылкой внизу. */
+  unsubscribeUrl?: string;
 }
 
 export interface OutreachEmail {
@@ -67,6 +71,9 @@ export interface OutreachContact {
 
 /** Рассылка идёт только этим статусам: READY — ещё не писали, CONTACTED — второй канал. */
 export const OUTREACH_STATUSES: readonly string[] = ['READY', 'CONTACTED'];
+
+/** Подпись ссылки отписки в письмах офиса (К3). */
+export const UNSUBSCRIBE_LABEL = 'Больше не писать';
 
 /** Последняя строка каждого сообщения (R18a). */
 export const STOP_LINE = 'Если не нужно — ответьте «стоп», больше не напишем.';
@@ -269,8 +276,11 @@ function followUpLetter(p: OutreachProspect, input: OutreachInput): Letter {
 }
 
 /** Простой HTML в одну колонку, без картинок: заголовок, абзацы, кнопка-ссылка. */
-function renderHtml(letter: Letter, previewUrl: string): string {
+function renderHtml(letter: Letter, previewUrl: string, unsubscribeUrl?: string): string {
   const href = escapeHtml(previewUrl);
+  const unsubscribe = unsubscribeUrl
+    ? `<p style="margin:12px 0 0;color:#6b7280;font-size:13px">${UNSUBSCRIBE_LABEL}: <a href="${escapeHtml(unsubscribeUrl)}">${escapeHtml(unsubscribeUrl)}</a></p>`
+    : '';
   const paragraph = (text: string) => `<p style="margin:0 0 12px">${escapeHtml(text)}</p>`;
   return `<!doctype html>
 <html lang="ru">
@@ -286,12 +296,13 @@ ${(letter.after ?? []).map(paragraph).join('\n')}
 ${letter.links.map((link) => `<p style="margin:0 0 12px"><a href="${escapeHtml(link.url)}">${escapeHtml(link.label)}</a></p>`).join('\n')}
 ${letter.closing.map(paragraph).join('\n')}
 <p style="margin:24px 0 0;color:#6b7280;font-size:13px">${escapeHtml(`${SITE.name} · ${SITE.platform} · ${SITE.phone}`)}</p>
+${unsubscribe}
 </div>
 </body>
 </html>`;
 }
 
-function renderText(letter: Letter, previewUrl: string): string {
+function renderText(letter: Letter, previewUrl: string, unsubscribeUrl?: string): string {
   return [
     letter.greeting,
     '',
@@ -304,20 +315,21 @@ function renderText(letter: Letter, previewUrl: string): string {
     ...letter.closing,
     '',
     `— ${SITE.name} · ${SITE.platform} · ${SITE.phone}`,
+    ...(unsubscribeUrl ? ['', `${UNSUBSCRIBE_LABEL}: ${unsubscribeUrl}`] : []),
   ].join('\n');
 }
 
-function render(letter: Letter, previewUrl: string): OutreachEmail {
+function render(letter: Letter, input: OutreachInput): OutreachEmail {
   return {
     subject: letter.subject,
-    text: renderText(letter, previewUrl),
-    html: renderHtml(letter, previewUrl),
+    text: renderText(letter, input.previewUrl, input.unsubscribeUrl),
+    html: renderHtml(letter, input.previewUrl, input.unsubscribeUrl),
   };
 }
 
 /** Письмо кандидату по виду агента: сайт-визитка или страница исполнителя. */
 export function buildEmail(p: OutreachProspect, input: OutreachInput): OutreachEmail {
-  return render(letterFor(p, input), input.previewUrl);
+  return render(letterFor(p, input), input);
 }
 
 /**
@@ -325,7 +337,7 @@ export function buildEmail(p: OutreachProspect, input: OutreachInput): OutreachE
  * ссылка на превью (и «Кто мы и цены» для сайта), строка «стоп» последней.
  */
 export function buildFollowUpEmail(p: OutreachProspect, input: OutreachInput): OutreachEmail {
-  return render(followUpLetter(p, input), input.previewUrl);
+  return render(followUpLetter(p, input), input);
 }
 
 /**

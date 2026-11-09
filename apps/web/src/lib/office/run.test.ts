@@ -380,6 +380,53 @@ describe('runStep', () => {
     expect(result).toMatchObject({ created: 1, error: null });
     expect(prospects).toHaveLength(1);
   });
+
+  it('К5: ИП и люди не становятся кандидатами, но остаются соседями в досье', async () => {
+    const { db, prospects } = fakeDb();
+    const result = await runStep(
+      { agent: 'sites', niche: 'car_repair', city: 'Казань', trigger: 'cron' },
+      {
+        db,
+        source: source(
+          ok([
+            candidate({ name: 'ИП Петров', sourceRef: 'osm:node/1', phone: '+78432000001' }),
+            candidate({
+              name: 'Иванов Иван Иванович',
+              sourceRef: 'osm:node/2',
+              phone: '+78432000002',
+            }),
+            candidate({ name: 'Автосервис Мотор', sourceRef: 'osm:node/3', phone: '+78432000003' }),
+          ]),
+        ),
+      },
+    );
+    expect(result).toMatchObject({ found: 3, created: 1, skipped: 2, error: null });
+    expect(prospects.map((p) => p.name)).toEqual(['Автосервис Мотор']);
+    // Соседи для подсчёта конкурентов — весь ответ источника, вместе с ИП.
+    expect(parseDossier(prospects[0]!.dossierJson)!.competitors).toMatchObject({ sameNiche: 2 });
+  });
+
+  it('К5: ИП отсеиваются до обрезки — места шага достаются компаниям', async () => {
+    const { db, prospects } = fakeDb();
+    const persons = Array.from({ length: 12 }, (_, i) =>
+      candidate({
+        name: `ИП Петров ${i}`,
+        sourceRef: `osm:node/${i}`,
+        phone: `+7843200${1000 + i}`,
+      }),
+    );
+    const company = candidate({
+      name: 'Автосервис Мотор',
+      sourceRef: 'osm:node/99',
+      phone: '+78432009999',
+    });
+    const result = await runStep(
+      { agent: 'sites', niche: 'car_repair', city: 'Казань', trigger: 'cron' },
+      { db, source: source(ok([...persons, company])) },
+    );
+    expect(result).toMatchObject({ found: 13, created: 1, skipped: 12 });
+    expect(prospects.map((p) => p.name)).toEqual(['Автосервис Мотор']);
+  });
 });
 
 describe('createManualProspects', () => {
@@ -418,6 +465,30 @@ describe('createManualProspects', () => {
       competitors: null,
     });
     expect(dossier!.facts).toContain('адрес: Набережные Челны, пр. Мира 1');
+  });
+
+  it('К5: вручную добавленные ИП и люди пропускаются с причиной', async () => {
+    const { db, prospects } = fakeDb();
+    const result = await createManualProspects(
+      'sites',
+      [
+        candidate({ name: 'ИП Сидорова', phone: '+79170000011', sourceRef: 'manual:1' }),
+        candidate({ name: 'Ольга Петровна', phone: '+79170000012', sourceRef: 'manual:2' }),
+        candidate({ name: 'Цветочная лавка', phone: '+79170000013', sourceRef: 'manual:3' }),
+      ],
+      { db },
+    );
+    expect(result).toEqual({
+      created: 1,
+      skipped: 2,
+      errors: [
+        'ИП Сидорова: индивидуальный предприниматель — не пишем',
+        'Ольга Петровна: название похоже на имя человека — не пишем',
+      ],
+    });
+    expect(prospects.map((p) => p.name)).toEqual(['Цветочная лавка']);
+    // Ниша по умолчанию — первая ниша агента, не медицинская.
+    expect(prospects[0]!.niche).toBe('car_repair');
   });
 });
 

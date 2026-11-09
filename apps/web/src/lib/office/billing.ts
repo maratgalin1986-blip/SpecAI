@@ -3,12 +3,14 @@
 // /admin/office/clients. Сайты при просрочке не отключаются (решение владельца). Всё здесь —
 // чистые функции; маршрут и страницы только читают и пишут строки Prospect.
 
-import { sitePackages, type SitePackage } from '@/lib/prices';
+import { siteYearlyPrice, sitePackages, type SitePackage } from '@/lib/prices';
 
 /** Базовые цены (настройки офиса, lib/office/prices.ts → officePrices), ₽. */
 export interface BillingDefaults {
   setup: number;
   monthly: number;
+  /** Поддержка за 12 месяцев (К12); без неё год — 12 × месяц. */
+  yearly?: number;
 }
 
 /** Поля оплаты кандидата (Prospect). */
@@ -38,7 +40,10 @@ export const EXPIRING_DAYS = 7;
 /** Цена клиента, которую владелец может задать вручную: целое 0…1 000 000 ₽. */
 export const CLIENT_PRICE_MAX = 1_000_000;
 
-/** Кнопки оплаты на /admin/office/clients; prices — только сохранить цены клиента. */
+/**
+ * Кнопки оплаты на /admin/office/clients; year — оплачена поддержка на год (продление на 12
+ * месяцев по годовой цене, К12); prices — только сохранить цены клиента.
+ */
 export const PAYMENT_ACTIONS = ['setup', 'month', 'year', 'undo', 'prices'] as const;
 export type PaymentAction = (typeof PAYMENT_ACTIONS)[number];
 
@@ -67,6 +72,18 @@ export function clientPrices(
     setup: validPrice(p.setupPrice) ? p.setupPrice : defaults.setup,
     monthly: validPrice(p.monthlyPrice) ? p.monthlyPrice : defaults.monthly,
   };
+}
+
+/**
+ * Поддержка клиента за 12 месяцев одним счётом, ₽ (К12): годовая цена пакета при его цене
+ * месяца, при своей цене месяца — с той же скидкой (siteYearlyPrice).
+ */
+export function clientYearly(
+  p: Pick<BillingProspect, 'setupPrice' | 'monthlyPrice'>,
+  pkg: BillingDefaults,
+): number {
+  const monthly = clientPrices(p, pkg).monthly;
+  return siteYearlyPrice(monthly, { monthly: pkg.monthly, yearly: pkg.yearly });
 }
 
 /**
@@ -260,7 +277,7 @@ export interface InvoiceView {
   includes: readonly string[];
   setup: number;
   monthly: number;
-  /** Поддержка за 12 месяцев, ₽. */
+  /** Поддержка сразу за 12 месяцев, ₽ (годовая цена, К12). */
   yearly: number;
   /** «09.11.2026» — когда отмечена оплата сайта, иначе null. */
   setupPaidOn: string | null;
@@ -299,7 +316,7 @@ export function buildInvoice(
     includes: pkg.includes,
     setup: prices.setup,
     monthly: prices.monthly,
-    yearly: prices.monthly * 12,
+    yearly: clientYearly(row, pkg),
     setupPaidOn: row.setupPaidAt ? formatDayMsk(row.setupPaidAt) : null,
     paidUntil: row.paidUntil ? formatDayMsk(row.paidUntil) : null,
     due: invoiceDue(row, prices, now),
@@ -307,6 +324,42 @@ export function buildInvoice(
     sitePublished: published,
     payDetails: payDetails || null,
   };
+}
+
+/** Одна площадка в инструкции «ссылка на сайт в карточке» (К16). */
+export interface MapLinkGuideSection {
+  title: string;
+  steps: readonly string[];
+}
+
+/**
+ * Инструкция «Как поставить ссылку на сайт в карточку Яндекс Карт и 2ГИС» (К16): шаги текстом
+ * для клиента (страница счёта после оплаты) и для владельца (/admin/office/clients). Ссылку в
+ * карточку может поставить только её владелец; без неё посетителей у сайта почти не будет.
+ */
+export function mapLinkGuide(siteHref: string): MapLinkGuideSection[] {
+  return [
+    {
+      title: 'Яндекс Карты',
+      steps: [
+        'Откройте yandex.ru/sprav (Яндекс Бизнес) и войдите под той учётной записью Яндекса, к которой привязана карточка компании.',
+        'Если карточки в списке нет — найдите компанию через «Добавить организацию» и подтвердите, что вы её владелец (звонок или письмо на контакты из карточки).',
+        'Выберите компанию и откройте данные об организации, раздел с контактами.',
+        `В поле «Сайт» вставьте адрес: ${siteHref}`,
+        'Сохраните. Яндекс проверяет изменения, обычно это занимает от нескольких часов до нескольких дней.',
+      ],
+    },
+    {
+      title: '2ГИС',
+      steps: [
+        'Откройте account.2gis.com («2ГИС для бизнеса») и войдите или зарегистрируйтесь по телефону компании.',
+        'Найдите свою компанию и подтвердите, что вы её владелец, — 2ГИС подскажет, как.',
+        `В контактах компании добавьте сайт: ${siteHref}`,
+        'Сохраните. 2ГИС проверяет изменения, обычно несколько дней.',
+        'Нет доступа к карточке — в самой карточке в 2ГИС нажмите «Исправить информацию» и предложите адрес сайта.',
+      ],
+    },
+  ];
 }
 
 /** «09.12.2026» по Москве — одинаково на сервере и в браузере, без данных локали. */

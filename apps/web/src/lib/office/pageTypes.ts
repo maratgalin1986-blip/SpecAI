@@ -34,6 +34,13 @@ export interface PageProspect {
   tags: string | null;
   /** Opening hours as the source gives them. */
   hours: string | null;
+  /**
+   * WhatsApp from the card (`Prospect.whatsapp`). The site shows WhatsApp buttons only when
+   * the card or the owner's edits name it (8.2); absent or null — no WhatsApp on the site.
+   */
+  whatsapp?: string | null;
+  /** Where the card came from: 'osm', '2gis', 'manual'… The preview credits OpenStreetMap (К6). */
+  source?: string | null;
 }
 
 /** A machine type: the slug stored in `tags` and its Russian name. */

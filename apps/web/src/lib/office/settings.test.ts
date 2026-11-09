@@ -25,3 +25,18 @@ describe('parseOfficeSettings — ИИ-аналитик (U2)', () => {
     expect(read('1', '9000').aiDailyCap).toBe(500);
   });
 });
+
+describe('parseOfficeSettings — режим рассылки (К2)', () => {
+  it('по умолчанию письма ждут утверждения владельцем', () => {
+    expect(parseOfficeSettings([]).outreachMode).toBe('approve');
+  });
+
+  it('«auto» — только явно; всё остальное — утверждение', () => {
+    const read = (value: string) =>
+      parseOfficeSettings([{ key: OFFICE_EXTRA_SETTINGS.outreachMode, value }]).outreachMode;
+    expect(read('auto')).toBe('auto');
+    expect(read(' auto ')).toBe('auto');
+    expect(read('approve')).toBe('approve');
+    expect(read('1')).toBe('approve');
+  });
+});

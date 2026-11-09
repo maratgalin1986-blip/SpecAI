@@ -7,6 +7,7 @@ import { AdminPageHeader, AdminTag, StatTile, type TagTone } from '@/components/
 import { OfficeClientControls } from '@/components/admin/OfficeClientControls';
 import { OfficePayDetailsForm } from '@/components/admin/OfficePayDetailsForm';
 import { PhoneLink } from '@/components/admin/PhoneLink';
+import { MAP_LINK_GUIDE_TITLE, MapLinkGuide } from '@/components/office/MapLinkGuide';
 import {
   BILLING_STATUS_TITLES,
   EXPIRING_DAYS,
@@ -27,7 +28,7 @@ import { siteUrl } from '@/lib/siteUrl';
 export const dynamic = 'force-dynamic';
 export const metadata: Metadata = { title: 'Клиенты: сайты', robots: { index: false } };
 
-/** Опубликованных сайтов на странице. */
+/** Сайтов (договорились или опубликованы) на странице. */
 const CLIENTS_SHOWN = 500;
 
 const STATUS_TONES: Record<BillingStatus, TagTone> = {
@@ -38,9 +39,10 @@ const STATUS_TONES: Record<BillingStatus, TagTone> = {
 };
 
 /**
- * Клиенты «Сайтов под ключ» (S6): опубликованные сайты, их цены и оплата, выручка в месяц и
- * просрочки; ссылка на счёт для клиента и реквизиты, которые он там увидит. Онлайн-оплаты нет —
- * владелец отмечает оплату сам; сайты при просрочке не отключаются.
+ * Клиенты «Сайтов под ключ» (S6): сайты, с которыми договорились (AGREED, ждут «Опубликовать»,
+ * К10), и опубликованные; их цены и оплата, выручка в месяц и просрочки; ссылка на счёт для
+ * клиента и реквизиты, которые он там увидит; инструкция «ссылка на сайт в карточке» (К16).
+ * Онлайн-оплаты нет — владелец отмечает оплату сам; сайты при просрочке не отключаются.
  */
 export default async function AdminOfficeClientsPage() {
   const gate = await adminGate();
@@ -52,8 +54,8 @@ export default async function AdminOfficeClientsPage() {
     officePrices(),
     readOfficeSettings(),
     prisma.prospect.findMany({
-      where: { kind: 'site', status: 'PUBLISHED' },
-      orderBy: { publishedAt: 'desc' },
+      where: { kind: 'site', status: { in: ['AGREED', 'PUBLISHED'] } },
+      orderBy: [{ publishedAt: { sort: 'desc', nulls: 'first' } }, { agreedAt: 'desc' }],
       take: CLIENTS_SHOWN,
       select: {
         id: true,
@@ -64,6 +66,7 @@ export default async function AdminOfficeClientsPage() {
         city: true,
         niche: true,
         domain: true,
+        status: true,
         publishedAt: true,
         setupPrice: true,
         monthlyPrice: true,
@@ -80,7 +83,7 @@ export default async function AdminOfficeClientsPage() {
     <div className="flex flex-col gap-5">
       <AdminPageHeader
         title="Клиенты: сайты"
-        text="Опубликованные сайты, цены и оплата. Онлайн-оплаты нет: клиент платит по счёту, вы отмечаете оплату здесь. Сайт при просрочке не отключается."
+        text="Сайты, с которыми договорились, и опубликованные: цены, оплата и публикация. Онлайн-оплаты нет: клиент платит по счёту, вы отмечаете оплату здесь. Сайт при просрочке не отключается."
       >
         <Link href="/admin/office" className="cab-action">
           Назад в офис
@@ -106,15 +109,19 @@ export default async function AdminOfficeClientsPage() {
         </h2>
         {clients.length === 0 ? (
           <Card>
-            Опубликованных сайтов пока нет: когда компания согласится, отметьте «Согласился» в офисе
-            — сайт появится здесь.
+            Клиентов пока нет: когда компания согласится, отметьте «Согласился» в офисе — сайт
+            появится здесь, а после оплаты и оферты его можно опубликовать.
           </Card>
         ) : (
           clients.map((client) => {
             const pkg = clientPackage(client, prices);
             const own = clientPrices(client, pkg);
             const status = billingStatus(client, now);
-            const sitePath = `/s/${client.slug}`;
+            const published = client.status === 'PUBLISHED';
+            const sitePath = published ? `/s/${client.slug}` : `/preview/${client.token}`;
+            const siteHref = client.domain
+              ? `https://${client.domain}/`
+              : `${base}/s/${client.slug}`;
             const invoiceUrl = `${base}/oplata/${client.token}`;
             return (
               <Card
@@ -137,6 +144,7 @@ export default async function AdminOfficeClientsPage() {
                     >
                       {client.name}
                     </a>
+                    {!published && <AdminTag tone="warn">ждёт публикации</AdminTag>}
                     <AdminTag tone={STATUS_TONES[status]}>{BILLING_STATUS_TITLES[status]}</AdminTag>
                     <PhoneLink phone={client.phone} />
                   </div>
@@ -192,9 +200,19 @@ export default async function AdminOfficeClientsPage() {
                       rel="noopener noreferrer"
                       className="text-graphite-600 hover:underline"
                     >
-                      {sitePath}
+                      {published ? sitePath : 'Превью'}
                     </a>
                   </p>
+                  {published && (
+                    <details className="mt-2 text-xs text-graphite-700">
+                      <summary className="cursor-pointer font-semibold text-graphite-900">
+                        {MAP_LINK_GUIDE_TITLE}
+                      </summary>
+                      <div className="mt-2">
+                        <MapLinkGuide siteHref={siteHref} />
+                      </div>
+                    </details>
+                  )}
                 </div>
                 <div className="lg:w-3/5">
                   <OfficeClientControls
@@ -206,6 +224,7 @@ export default async function AdminOfficeClientsPage() {
                     setupPaid={client.setupPaidAt !== null}
                     hasPaidPeriod={client.paidUntil !== null}
                     invoiceUrl={invoiceUrl}
+                    published={published}
                   />
                 </div>
               </Card>

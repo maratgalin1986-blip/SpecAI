@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { prisma } from '@specai/database';
+import { MAP_LINK_GUIDE_TITLE, MapLinkGuide } from '@/components/office/MapLinkGuide';
 import { buildInvoice } from '@/lib/office/billing';
 import { officePrices } from '@/lib/office/prices';
 import { OFFICE_EXTRA_SETTINGS } from '@/lib/office/settings';
@@ -15,7 +16,8 @@ export const dynamic = 'force-dynamic';
 // токен, что у превью), только у сайта, который согласовали или опубликовали. Суммы — цены
 // клиента или базовые цены его пакета, реквизиты — текст владельца из настроек офиса.
 // Онлайн-оплаты нет: перевод по реквизитам, владелец отмечает оплату в админке. Без
-// индексации, без id и служебных полей (всё, что выводится, — buildInvoice).
+// индексации, без id и служебных полей (всё, что выводится, — buildInvoice). После оплаты
+// сайта — инструкция, как поставить ссылку на него в карточки Яндекс Карт и 2ГИС (К16).
 
 export const metadata: Metadata = {
   title: 'Счёт за сайт',
@@ -98,7 +100,7 @@ export default async function InvoicePage(props: { params: Promise<{ token: stri
           <dd className="text-right font-semibold text-slate-900">{money(invoice.monthly)}</dd>
           {invoice.monthly > 0 && (
             <>
-              <dt className="text-slate-600">Поддержка сразу за 12 месяцев</dt>
+              <dt className="text-slate-600">Или поддержка сразу за 12 месяцев</dt>
               <dd className="text-right text-slate-700">{money(invoice.yearly)}</dd>
             </>
           )}
@@ -144,6 +146,18 @@ export default async function InvoicePage(props: { params: Promise<{ token: stri
           </a>
         </p>
       </section>
+
+      {invoice.setupPaidOn && invoice.sitePublished && (
+        <section
+          aria-labelledby="ssylka-v-kartochke"
+          className="flex flex-col gap-3 rounded-3xl border border-emerald-200 bg-emerald-50/50 p-5 sm:p-7"
+        >
+          <h2 id="ssylka-v-kartochke" className="text-lg font-bold text-slate-900">
+            {MAP_LINK_GUIDE_TITLE}
+          </h2>
+          <MapLinkGuide siteHref={invoice.siteHref} />
+        </section>
+      )}
 
       <section
         aria-labelledby="kak-oplatit"

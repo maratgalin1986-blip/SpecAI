@@ -6,11 +6,17 @@ import {
   FUNNEL_AGENTS,
   FUNNEL_STAGES,
   SITE_LEADS_DAYS,
+  STOCK_LOW_DAYS,
   agentFunnel,
   collectFunnel,
   funnelNotes,
   funnelRows,
   funnelShare,
+  parseDailyCap,
+  stockDays,
+  stockNotes,
+  stockWhere,
+  workingDays,
   type AgentFunnel,
   type FunnelData,
   type FunnelDb,
@@ -141,6 +147,8 @@ describe('funnelRows', () => {
 describe('funnelNotes', () => {
   const data = (over: Partial<FunnelData> = {}): FunnelData => ({
     agents: [],
+    stock: [],
+    dailyCap: 20,
     revenue: 4500,
     siteLeads: 7,
     siteLeadsUndelivered: 0,
@@ -162,6 +170,85 @@ describe('funnelNotes', () => {
       'Выручка в месяц: 0 ₽',
       'Заявок с клиентских сайтов за 30 дней: 0',
     ]);
+  });
+});
+
+describe('запас кандидатов (К15)', () => {
+  it('рабочие дни склоняются', () => {
+    expect(workingDays(1)).toBe('1 рабочий день');
+    expect(workingDays(3)).toBe('3 рабочих дня');
+    expect(workingDays(0)).toBe('0 рабочих дней');
+    expect(workingDays(11)).toBe('11 рабочих дней');
+    expect(workingDays(12)).toBe('12 рабочих дней');
+    expect(workingDays(21)).toBe('21 рабочий день');
+    expect(workingDays(24)).toBe('24 рабочих дня');
+  });
+
+  it('дни — запас, делённый на лимит, вниз; лимит 0 — дней нет', () => {
+    expect(stockDays(250, 20)).toBe(12);
+    expect(stockDays(19, 20)).toBe(0);
+    expect(stockDays(0, 20)).toBe(0);
+    expect(stockDays(100, 0)).toBeNull();
+    expect(stockDays(100, Number.NaN)).toBeNull();
+    expect(stockDays(-5, 20)).toBe(0);
+  });
+
+  it('строки по агентам в порядке столбцов, с лимитом и отметкой «мало»', () => {
+    const notes = stockNotes({
+      stock: [
+        { agent: 'providers', withEmail: 45 },
+        { agent: 'sites', withEmail: 250 },
+      ],
+      dailyCap: 20,
+    });
+    expect(notes).toEqual([
+      {
+        agent: 'sites',
+        text: 'Сайты под ключ: запас кандидатов с почтой — 250 (≈ 12 рабочих дней при лимите 20 в день)',
+        low: false,
+      },
+      {
+        agent: 'providers',
+        text:
+          'Подрядчики: запас кандидатов с почтой — 45 (≈ 2 рабочих дня при лимите 20 в день)' +
+          ' — пора добавить ниши или города',
+        low: true,
+      },
+    ]);
+    expect(STOCK_LOW_DAYS).toBe(10);
+    // Ровно 10 дней — уже не мало.
+    expect(stockNotes({ stock: [{ agent: 'sites', withEmail: 200 }], dailyCap: 20 })[0]!.low).toBe(
+      false,
+    );
+  });
+
+  it('лимит 0 — рассылка не идёт, дней не считаем', () => {
+    expect(stockNotes({ stock: [{ agent: 'sites', withEmail: 30 }], dailyCap: 0 })).toEqual([
+      {
+        agent: 'sites',
+        text: 'Сайты под ключ: запас кандидатов с почтой — 30 (лимит писем в день — 0, рассылка не идёт)',
+        low: false,
+      },
+    ]);
+  });
+
+  it('запас — ждущие кандидаты с почтой, без письма и отписки', () => {
+    expect(stockWhere('site')).toEqual({
+      kind: 'site',
+      status: 'READY',
+      email: { not: null },
+      NOT: { email: '' },
+      emailSentAt: null,
+      optOutAt: null,
+    });
+  });
+
+  it('лимит из настройки, пусто или мусор — по умолчанию', () => {
+    expect(parseDailyCap('35')).toBe(35);
+    expect(parseDailyCap(' 0 ')).toBe(0);
+    expect(parseDailyCap(undefined)).toBe(20);
+    expect(parseDailyCap('много')).toBe(20);
+    expect(parseDailyCap('-3')).toBe(20);
   });
 });
 
@@ -197,6 +284,9 @@ describe('collectFunnel', () => {
         count: vi.fn(async ({ where }) => {
           countCalls.push(where);
           const site = where.kind === 'site';
+          if ('emailSentAt' in where) {
+            return site ? stage({ _all: 250 }) : stage({ _all: 45 });
+          }
           if ('contactedAt' in where) {
             return site
               ? stage({ _all: 20, repliedAt: 5, agreedAt: 2, setupPaidAt: 1 })
@@ -243,7 +333,10 @@ describe('collectFunnel', () => {
         }),
       },
       appSetting: {
-        findMany: vi.fn(async () => [{ key: OFFICE_SETTINGS.siteMonthly, value: '1800' }]),
+        findMany: vi.fn(async () => [
+          { key: OFFICE_SETTINGS.siteMonthly, value: '1800' },
+          { key: OFFICE_SETTINGS.dailyCap, value: '25' },
+        ]),
       },
     };
     return { db, countCalls, leadCalls, findManyCalls };
@@ -269,13 +362,20 @@ describe('collectFunnel', () => {
     expect(data.revenue).toBe(3800);
     expect(data.siteLeads).toBe(6);
     expect(data.siteLeadsUndelivered).toBe(1);
+    expect(data.stock).toEqual([
+      { agent: 'sites', withEmail: 250 },
+      { agent: 'providers', withEmail: 45 },
+    ]);
+    expect(data.dailyCap).toBe(25);
+    expect(stockNotes(data)[0]!.text).toContain('≈ 10 рабочих дней при лимите 25 в день');
   });
 
   it('спрашивает базу только счётчиками и ограниченным списком', async () => {
     const { db, countCalls, leadCalls, findManyCalls } = fakeDb();
     await collectFunnel(db, NOW);
-    expect(countCalls).toHaveLength(6);
-    for (const kind of ['site', 'provider']) {
+    expect(countCalls).toHaveLength(8);
+    for (const kind of ['site', 'provider'] as const) {
+      expect(countCalls).toContainEqual(stockWhere(kind));
       expect(countCalls).toContainEqual({ kind });
       expect(countCalls).toContainEqual({ kind, contactedAt: { not: null } });
       expect(countCalls).toContainEqual({ kind, paidUntil: { gt: NOW } });

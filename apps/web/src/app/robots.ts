@@ -8,7 +8,7 @@ export default function robots(): MetadataRoute.Robots {
       allow: '/',
       // /preview: private previews of the office agents' pages (R11);
       // /oplata: a client's invoice for a site, by its secret link (S6).
-      disallow: ['/admin', '/api/', '/dashboard', '/login', '/preview', '/oplata'],
+      disallow: ['/admin', '/api/', '/dashboard', '/login', '/preview', '/otpiska', '/oplata'],
     },
     sitemap: `${siteUrl()}/sitemap.xml`,
   };

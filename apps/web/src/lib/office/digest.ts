@@ -96,6 +96,19 @@ export interface DigestInput {
   bestAngle?: { title: string; replied: number; sent: number } | null;
   /** Открыли превью за HOT_DAYS дней и не ответили (новые первыми). */
   hot?: ProspectLite[];
+  /** Писем дня ждут кнопки «Отправить» на /admin/office/pisma (К2). */
+  outboxWaiting?: number;
+}
+
+/** То, что тик знает сам и передаёт в сводку (К2: сколько писем дня ждут владельца). */
+export interface DigestExtra {
+  outboxWaiting?: number;
+}
+
+/** Строка сводки о письмах дня (К2). */
+export function outboxLine(waiting: number | undefined, base: string): string | null {
+  if (!waiting || waiting <= 0) return null;
+  return `Письма дня ждут вашего «Отправить»: ${waiting} — ${base}/admin/office/pisma`;
 }
 
 function formatDay(date: Date): string {
@@ -160,7 +173,9 @@ export function buildDigest(input: DigestInput): string {
   const leads = siteLeadsLine(input.siteLeads);
   const billing = billingLine(input.billing, base);
   const hot = input.hot ?? [];
+  const outbox = outboxLine(input.outboxWaiting, base);
   const quiet =
+    !outbox &&
     created === 0 &&
     input.toContact.length === 0 &&
     input.replied.length === 0 &&
@@ -199,6 +214,7 @@ export function buildDigest(input: DigestInput): string {
     const b = input.bestAngle;
     out.push(`Лучший заход: ${b.title} (ответили ${b.replied} из ${b.sent})`);
   }
+  if (outbox) out.push(outbox);
   out.push(`Открыть офис: ${base}/admin/office`);
   return out.join('\n');
 }
@@ -313,6 +329,7 @@ export async function digestSince(now: Date, db: DigestDb): Promise<Date> {
 export async function collectDigest(
   now: Date = new Date(),
   db: DigestDb = prisma,
+  extra: DigestExtra = {},
 ): Promise<string> {
   const since = await digestSince(now, db);
   const { end: todayEnd } = mskDayBounds(now);
@@ -406,6 +423,7 @@ export async function collectDigest(
     siteLeads: { total: leadsTotal, undelivered: leadsUndelivered },
     billing: { expiring, overdue },
     hot: lite(hot),
+    ...(extra.outboxWaiting ? { outboxWaiting: extra.outboxWaiting } : {}),
     bestAngle: leader
       ? { title: ANGLE_TITLES[leader.angle], replied: leader.replied, sent: leader.sent }
       : null,

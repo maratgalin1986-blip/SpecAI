@@ -3,12 +3,14 @@ import { prisma } from '@specai/database';
 import { z } from 'zod';
 import { isAdminRequest } from '@/lib/admin';
 import { INVALID_JSON_MESSAGE, readJson, zodErrorMessage } from '@/lib/apiInput';
-import { PROSPECT_ACTIONS, applyAction } from '@/lib/office/transitions';
+import { PROSPECT_ACTIONS, PUBLISH_UNPAID_QUESTION, applyAction } from '@/lib/office/transitions';
 import { PROSPECT_STATUSES, type ProspectStatus } from '@/lib/office/types';
 
 export const dynamic = 'force-dynamic';
 
-// Отметка результата по кандидату из /admin/office (R15): «Согласился» публикует,
+// Отметка результата по кандидату из /admin/office (R15): «Согласился» публикует страницу
+// подрядчика, а клиентский сайт только отмечает AGREED (К10); «Опубликовать» публикует сайт
+// (неоплаченный — только с подтверждением `confirmUnpaid`, иначе 409 с вопросом);
 // «Напомнить» ставит дату, «Отказ» снимает, «Ответил» — отметка, заметка — текст.
 const ID = /^[\w-]{1,64}$/;
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
@@ -18,6 +20,8 @@ const schema = z.object({
   action: z.enum(PROSPECT_ACTIONS as [string, ...string[]]),
   callAt: z.string().trim().max(40).optional().nullable(),
   note: z.string().max(5000).optional().nullable(),
+  /** «Сайт не оплачен — опубликовать?» — владелец ответил «да». */
+  confirmUnpaid: z.boolean().optional(),
 });
 
 /** Дата напоминания: «YYYY-MM-DD» — 09:00 того дня по Москве, иначе момент ISO. */
@@ -47,7 +51,7 @@ export async function PATCH(request: NextRequest, props: { params: Promise<{ id:
 
   const prospect = await prisma.prospect.findUnique({
     where: { id: params.id },
-    select: { id: true, status: true },
+    select: { id: true, kind: true, status: true, setupPaidAt: true },
   });
   if (!prospect) return NextResponse.json({ error: 'Кандидат не найден' }, { status: 404 });
   const status = (PROSPECT_STATUSES as readonly string[]).includes(prospect.status)
@@ -57,8 +61,14 @@ export async function PATCH(request: NextRequest, props: { params: Promise<{ id:
     return NextResponse.json({ error: 'Так отметить нельзя: неизвестный статус' }, { status: 409 });
   }
 
-  const result = applyAction(status, action, new Date(), callAt);
+  const result = applyAction(status, action, new Date(), callAt, prospect.kind);
   if (!result.ok) return NextResponse.json({ error: result.error }, { status: 409 });
+  if (action === 'publish' && !prospect.setupPaidAt && parsed.data.confirmUnpaid !== true) {
+    return NextResponse.json(
+      { error: PUBLISH_UNPAID_QUESTION, needsConfirm: true },
+      { status: 409 },
+    );
+  }
 
   const data: Record<string, unknown> = { ...result.data, status: result.status };
   if (parsed.data.note !== undefined) {

@@ -1,7 +1,8 @@
 // «Сайты под ключ» как бизнес (S10): воронка офиса для /admin/office. По каждому агенту —
 // найдено → написали → ответили → согласились → оплатили → активные (у «Подрядчиков» вместо
 // оплаты — регистрация по ссылке); доли — от «написали»; выручка в месяц и заявки с
-// клиентских сайтов за 30 дней. `collectFunnel` — только count-запросы (и один список
+// клиентских сайтов за 30 дней; запас кандидатов с почтой в днях отправки (К15).
+// `collectFunnel` — только count-запросы (и один список
 // оплативших для выручки), `funnelRows` / `funnelNotes` — чистые, их проверяют тесты.
 
 import { prisma } from '@specai/database';
@@ -10,6 +11,7 @@ import { AGENTS } from './agents';
 import { OFFICE_SETTINGS } from './plan';
 import { parseOfficePrices } from './prices';
 import { rubles } from './scripts';
+import { DEFAULT_DAILY_CAP } from './settings';
 import type { AgentId, ProspectKind } from './types';
 
 /** Порядок столбцов: сначала «Сайты под ключ» — это бизнес, затем «Подрядчики». */
@@ -22,6 +24,12 @@ export const SITE_LEADS_DAYS = 30;
 export const REVENUE_TAKE = 5000;
 
 const DAY_MS = 86_400_000;
+
+/**
+ * Запас меньше стольких рабочих дней отправки — пора подключать новые ниши и города
+ * (docs/business/sajty-pod-klyuch.md: «когда запас кандидатов с почтой меньше 10 рабочих дней»).
+ */
+export const STOCK_LOW_DAYS = 10;
 
 export type FunnelStage =
   'found' | 'contacted' | 'replied' | 'agreed' | 'paid' | 'active' | 'registered';
@@ -96,8 +104,18 @@ export interface AgentFunnel {
   fromContacted: Record<LaterStage, number>;
 }
 
+/** Запас агента (К15): кандидаты с почтой, которым ещё не писали. */
+export interface AgentStock {
+  agent: AgentId;
+  withEmail: number;
+}
+
 export interface FunnelData {
   agents: AgentFunnel[];
+  /** Запас кандидатов с почтой по агентам. */
+  stock: AgentStock[];
+  /** Писем в день (`office.dailyCap`, общий для агентов). */
+  dailyCap: number;
   /** Выручка в месяц, ₽: поддержка клиентов с действующей оплатой. */
   revenue: number;
   /** Заявок с клиентских сайтов за SITE_LEADS_DAYS дней. */
@@ -159,6 +177,48 @@ export function funnelNotes(data: FunnelData): string[] {
   return [`Выручка в месяц: ${rubles(data.revenue)}`, leads];
 }
 
+/** «1 рабочий день», «3 рабочих дня», «12 рабочих дней». */
+export function workingDays(n: number): string {
+  const mod10 = n % 10;
+  const mod100 = n % 100;
+  if (mod10 === 1 && mod100 !== 11) return `${n} рабочий день`;
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return `${n} рабочих дня`;
+  return `${n} рабочих дней`;
+}
+
+/** На сколько рабочих дней отправки хватит запаса; null — лимит 0, рассылка не идёт. */
+export function stockDays(withEmail: number, dailyCap: number): number | null {
+  const cap = Number.isFinite(dailyCap) ? Math.floor(dailyCap) : 0;
+  if (cap <= 0) return null;
+  const n = Number.isFinite(withEmail) ? Math.max(0, Math.floor(withEmail)) : 0;
+  return Math.floor(n / cap);
+}
+
+export interface StockNote {
+  agent: AgentId;
+  text: string;
+  /** Запаса меньше STOCK_LOW_DAYS дней — пора добавлять ниши или города. */
+  low: boolean;
+}
+
+/** Строки запаса по агентам (К15), в порядке столбцов воронки. */
+export function stockNotes(data: Pick<FunnelData, 'stock' | 'dailyCap'>): StockNote[] {
+  return FUNNEL_AGENTS.flatMap((agent) => {
+    const row = data.stock.find((s) => s.agent === agent);
+    if (!row) return [];
+    const days = stockDays(row.withEmail, data.dailyCap);
+    const head = `${AGENTS[agent].name}: запас кандидатов с почтой — ${row.withEmail}`;
+    if (days === null) {
+      return [{ agent, text: `${head} (лимит писем в день — 0, рассылка не идёт)`, low: false }];
+    }
+    const low = days < STOCK_LOW_DAYS;
+    const text =
+      `${head} (≈ ${workingDays(days)} при лимите ${Math.floor(data.dailyCap)} в день)` +
+      (low ? ' — пора добавить ниши или города' : '');
+    return [{ agent, text, low }];
+  });
+}
+
 /** Названия столбцов таблицы. */
 export function funnelAgentTitle(agent: AgentId): string {
   return AGENTS[agent].name;
@@ -218,6 +278,28 @@ export interface FunnelDb {
 }
 
 /**
+ * Кандидаты агента, которым можно написать первое письмо (К15): ждут (READY), почта есть,
+ * письма не было, не отписаны.
+ */
+export function stockWhere(kind: ProspectKind): Record<string, unknown> {
+  return {
+    kind,
+    status: 'READY',
+    email: { not: null },
+    NOT: { email: '' },
+    emailSentAt: null,
+    optOutAt: null,
+  };
+}
+
+/** Лимит писем в день из настройки; пусто или мусор — DEFAULT_DAILY_CAP (как в settings.ts). */
+export function parseDailyCap(value: string | undefined): number {
+  if (value === undefined) return DEFAULT_DAILY_CAP;
+  const n = Number(value.trim());
+  return Number.isSafeInteger(n) && n >= 0 ? n : DEFAULT_DAILY_CAP;
+}
+
+/**
  * Числа агента из трёх счётчиков: все кандидаты, те, кому написали, и с действующей оплатой
  * (`_all` — сколько активных, `contactedAt` — сколько из них получили письмо).
  */
@@ -260,14 +342,18 @@ export async function collectFunnel(
     db.prospect.count({ where, select: STAGE_SELECT });
   const perAgent = FUNNEL_AGENTS.map(async (agent) => {
     const kind: ProspectKind = AGENTS[agent].kind;
-    const [all, contacted, active] = await Promise.all([
+    const [all, contacted, active, stock] = await Promise.all([
       counts({ kind }),
       counts({ kind, contactedAt: { not: null } }),
       counts({ kind, paidUntil: { gt: now } }),
+      counts(stockWhere(kind)),
     ]);
-    return agentFunnel(agent, all, contacted, active);
+    return {
+      funnel: agentFunnel(agent, all, contacted, active),
+      stock: { agent, withEmail: stock._all },
+    };
   });
-  const [agents, paying, settings, siteLeads, siteLeadsUndelivered] = await Promise.all([
+  const [perAgentData, paying, settings, siteLeads, siteLeadsUndelivered] = await Promise.all([
     Promise.all(perAgent),
     db.prospect.findMany({
       where: { kind: AGENTS.sites.kind, paidUntil: { gt: now } },
@@ -276,14 +362,20 @@ export async function collectFunnel(
       take: REVENUE_TAKE,
     }),
     db.appSetting.findMany({
-      where: { key: { in: [OFFICE_SETTINGS.sitePrice, OFFICE_SETTINGS.siteMonthly] } },
+      where: {
+        key: {
+          in: [OFFICE_SETTINGS.sitePrice, OFFICE_SETTINGS.siteMonthly, OFFICE_SETTINGS.dailyCap],
+        },
+      },
       select: { key: true, value: true },
     }),
     db.siteLead.count({ where: { createdAt: { gte: leadsSince } } }),
     db.siteLead.count({ where: { createdAt: { gte: leadsSince }, forwardedAt: null } }),
   ]);
   return {
-    agents,
+    agents: perAgentData.map((a) => a.funnel),
+    stock: perAgentData.map((a) => a.stock),
+    dailyCap: parseDailyCap(settings.find((r) => r.key === OFFICE_SETTINGS.dailyCap)?.value),
     revenue: monthlyRevenue(paying, parseOfficePrices(settings), now),
     siteLeads,
     siteLeadsUndelivered,

@@ -56,6 +56,11 @@ export function PackageCards({
                   — работа сайта, поддержка, правки
                 </span>
               </p>
+              {pkg.yearly < pkg.monthly * 12 && (
+                <p className="text-sm text-slate-600">
+                  или {rub(pkg.yearly)}&nbsp;₽ сразу за год поддержки
+                </p>
+              )}
             </div>
             <ul className="flex flex-1 flex-col gap-2.5 text-sm text-slate-700">
               {pkg.includes.map((line) => (

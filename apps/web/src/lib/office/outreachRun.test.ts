@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { mskDayBounds } from '@/lib/adminCrm';
-import type { SendEmailInput } from '@/lib/email';
+import type { OfficeMail as SendEmailInput } from './smtp';
 
 // Written by T6 in parallel; the runner takes the settings through deps in every test.
 vi.mock('@/lib/office/settings', () => ({
@@ -13,6 +13,9 @@ vi.mock('@/lib/office/settings', () => ({
 }));
 // Never touch a real database from the tests: prisma is only the default for `db`.
 vi.mock('@specai/database', () => ({ prisma: {} }));
+// К1: the office never sends through Resend — the spy proves it.
+const resendSpy = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/email', () => ({ sendEmail: resendSpy, isEmailConfigured: () => true }));
 
 import { STOP_LINE, WHATSAPP_MAX_LENGTH } from './outreach';
 import type { SentOffer } from './aiOffer';
@@ -25,6 +28,7 @@ import {
   markReplied,
   OUTREACH_BUDGET_MS,
   outreachErrorText,
+  planOutreach,
   sendOutreach,
   type OutreachDb,
   type OutreachRow,
@@ -176,15 +180,12 @@ function settings(over: Partial<OutreachRunSettings> = {}): () => Promise<Outrea
     dailyCap: 20,
     replyTo: 'office@example.com',
     whatsappToPhone: false,
+    outreachMode: 'auto',
     ...over,
   });
 }
 
-const okEmail = vi.fn(async (_input: SendEmailInput) => ({
-  skipped: false as const,
-  ok: true as const,
-  id: 'm1',
-}));
+const okEmail = vi.fn(async (_input: SendEmailInput) => ({ ok: true as const }));
 const okWhatsApp = vi.fn(async (_digits: string, _text: string) => ({ ok: true as const }));
 const noSleep = vi.fn(async (_ms: number) => {});
 const prices = async () => ({ setup: 15000, monthly: 1500 });
@@ -199,6 +200,11 @@ function deps(db: OutreachDb, over: Record<string, unknown> = {}) {
     prices,
     sleep: noSleep,
     baseUrl: () => 'https://example.test',
+    unsubscribe: (base: string, token: string) => ({
+      page: `${base}/otpiska/${token}?s=sig`,
+      oneClick: `${base}/api/office/unsubscribe?t=${token}&s=sig`,
+    }),
+    optedOut: async () => new Set<string>(),
     ...over,
   };
 }
@@ -228,7 +234,14 @@ describe('sendOutreach', () => {
     expect(okEmail).toHaveBeenCalledTimes(1);
     const sent = okEmail.mock.calls[0]![0];
     expect(sent.to).toBe('a@example.com');
-    expect(sent.headers).toEqual({ 'Reply-To': 'office@example.com' });
+    expect(sent.replyTo).toBe('office@example.com');
+    // К3: «Больше не писать» in the letter and the one-click header for mail clients.
+    expect(sent.headers).toEqual({
+      'List-Unsubscribe': '<https://example.test/api/office/unsubscribe?t=tok-a&s=sig>',
+      'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+    });
+    expect(sent.text).toContain('Больше не писать: https://example.test/otpiska/tok-a?s=sig');
+    expect(sent.html).toContain('https://example.test/otpiska/tok-a?s=sig');
     expect(sent.text).toContain('https://example.test/preview/tok-a');
     // «Кто мы и цены» leads to the service page, labelled with the channel and the slug (S12).
     expect(sent.text).toContain(
@@ -340,7 +353,14 @@ describe('sendOutreach', () => {
       NOW,
       deps(db, { channels: () => ({ email: false, whatsapp: false }) }),
     );
-    expect(result).toEqual({ email: 0, whatsapp: 0, followUps: 0, skipped: null, errors: 0 });
+    expect(result).toEqual({
+      email: 0,
+      whatsapp: 0,
+      followUps: 0,
+      skipped: null,
+      errors: 0,
+      mail: 'no-smtp',
+    });
     expect(updates).toEqual([]);
   });
 
@@ -348,27 +368,26 @@ describe('sendOutreach', () => {
     const { db, updates } = fakeDb([row({ id: 'a' }), row({ id: 'b' })]);
     const failing = vi
       .fn<(input: SendEmailInput) => Promise<Awaited<ReturnType<typeof okEmail>>>>()
-      .mockResolvedValueOnce({ skipped: false, ok: false, error: 'resend 429' } as never)
+      .mockResolvedValueOnce({ ok: false, reason: 'smtp 421' } as never)
       .mockRejectedValueOnce(new Error('сеть недоступна'));
     const result = await sendOutreach(NOW, deps(db, { email: failing }));
     expect(result).toEqual({ email: 0, whatsapp: 0, followUps: 0, skipped: null, errors: 2 });
     expect(updates).toHaveLength(2);
-    expect(updates[0]!.data).toEqual({ outreachError: 'Письмо не отправлено: resend 429' });
+    expect(updates[0]!.data).toEqual({ outreachError: 'Письмо не отправлено: smtp 421' });
     expect(updates[1]!.data).toEqual({ outreachError: 'Письмо не отправлено: сеть недоступна' });
     expect(String(updates[0]!.data.outreachError).length).toBeLessThanOrEqual(300);
   });
 
-  it('a skipped send (channel not configured at send time) is an error, not a contact', async () => {
-    const { db, updates } = fakeDb([row({ id: 'a' })]);
+  it('no SMTP at send time (К1): no letter, no error on the row, e-mail stops for the pass', async () => {
+    const { db, updates } = fakeDb([row({ id: 'a' }), row({ id: 'b' }), contacted('r', 5)]);
     const skipping = vi.fn(async (_input: SendEmailInput) => ({
-      skipped: true as const,
-      reason: 'RESEND_API_KEY is not set',
+      ok: false as const,
+      reason: 'no-smtp',
     }));
     const result = await sendOutreach(NOW, deps(db, { email: skipping }));
-    expect(result.errors).toBe(1);
-    expect(updates[0]!.data).toEqual({
-      outreachError: 'Письмо не отправлено: RESEND_API_KEY is not set',
-    });
+    expect(result).toMatchObject({ email: 0, followUps: 0, errors: 0, mail: 'no-smtp' });
+    expect(skipping).toHaveBeenCalledTimes(1);
+    expect(updates).toEqual([]);
   });
 
   it('stops when the time budget is spent', async () => {
@@ -396,7 +415,7 @@ describe('sendOutreach', () => {
     const email = vi.fn(async (input: SendEmailInput) => {
       // «Согласился» arrives while the first letter is in flight.
       if (input.to === rows[0]!.email) rows[1]!.status = 'PUBLISHED';
-      return { ok: true as const, skipped: false as const };
+      return { ok: true as const };
     });
     const result = await sendOutreach(NOW, deps(db, { email }));
     // The second row is re-checked before its send: nothing goes out and nothing is overwritten.
@@ -439,14 +458,23 @@ describe('sendOutreach — reminders (S8)', () => {
     const sent = okEmail.mock.calls[0]![0];
     expect(sent.to).toBe('a@example.com');
     expect(sent.subject).toBe('Напоминаем: страница для «Компания a» готова');
-    expect(sent.headers).toEqual({ 'Reply-To': 'office@example.com' });
+    expect(sent.replyTo).toBe('office@example.com');
+    // К3: «Больше не писать» in the letter and the one-click header for mail clients.
+    expect(sent.headers).toEqual({
+      'List-Unsubscribe': '<https://example.test/api/office/unsubscribe?t=tok-a&s=sig>',
+      'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+    });
+    expect(sent.text).toContain('Больше не писать: https://example.test/otpiska/tok-a?s=sig');
+    expect(sent.html).toContain('https://example.test/otpiska/tok-a?s=sig');
     expect(sent.text).toContain('Посмотрите — это 30 секунд.');
     expect(sent.text).toContain('https://example.test/preview/tok-a');
     expect(sent.text).toContain(
       'https://example.test/sajt-pod-klyuch?utm_source=email&utm_campaign=slug-a',
     );
     const lines = sent.text!.trim().split('\n').filter(Boolean);
-    expect(lines[lines.length - 2]).toContain(STOP_LINE);
+    // The «стоп» line closes the letter; the signature and «Больше не писать» follow (К3).
+    expect(lines[lines.length - 3]).toContain(STOP_LINE);
+    expect(lines[lines.length - 1]).toMatch(/^Больше не писать: /);
     expect(okWhatsApp).not.toHaveBeenCalled();
     expect(updates).toHaveLength(1);
     expect(updates[0]!.data).toEqual({
@@ -578,14 +606,13 @@ describe('sendOutreach — reminders (S8)', () => {
     const rows: Row[] = [contacted('a', 5)];
     const { db, updates } = fakeDb(rows);
     const failing = vi.fn(async (_input: SendEmailInput) => ({
-      skipped: false as const,
       ok: false as const,
-      error: 'resend 429',
+      reason: 'smtp 421',
     }));
     const result = await sendOutreach(NOW, deps(db, { email: failing }));
     expect(result).toMatchObject({ followUps: 0, errors: 1 });
     expect(updates).toEqual([
-      { id: 'a', data: { outreachError: 'Напоминание не отправлено: resend 429' } },
+      { id: 'a', data: { outreachError: 'Напоминание не отправлено: smtp 421' } },
     ]);
     expect(rows[0]!.followUpSentAt).toBeNull();
     // Same day: the failed row is not picked again.
@@ -612,7 +639,7 @@ describe('sendOutreach — reminders (S8)', () => {
     const email = vi.fn(async (_input: SendEmailInput) => {
       // The owner presses «Согласился» while the reminder is in flight.
       rows[0]!.status = 'AGREED';
-      return { ok: true as const, skipped: false as const, id: null };
+      return { ok: true as const };
     });
     const result = await sendOutreach(NOW, deps(db, { email }));
     expect(result.followUps).toBe(1);
@@ -627,7 +654,7 @@ describe('sendOutreach — reminders (S8)', () => {
     // Every send takes the whole budget.
     const slowEmail = vi.fn(async (_input: SendEmailInput) => {
       now += OUTREACH_BUDGET_MS + 1;
-      return { skipped: false as const, ok: true as const, id: null };
+      return { ok: true as const };
     });
     const result = await sendOutreach(NOW, deps(db, { clock: () => now, email: slowEmail }));
     expect(result).toMatchObject({ email: 1, followUps: 0 });
@@ -639,7 +666,7 @@ describe('sendOutreach — reminders (S8)', () => {
     let now = 0;
     const slowEmail = vi.fn(async (_input: SendEmailInput) => {
       now += OUTREACH_BUDGET_MS + 1;
-      return { skipped: false as const, ok: true as const, id: null };
+      return { ok: true as const };
     });
     const result = await sendOutreach(NOW, deps(db, { clock: () => now, email: slowEmail }));
     expect(result.followUps).toBe(1);
@@ -684,7 +711,9 @@ describe('sendOutreach — personal offer (U2)', () => {
     expect(letter.text).toContain('https://example.test/preview/tok-a');
     expect(letter.text).toContain('Кто мы и цены: ');
     const lines = letter.text!.trim().split('\n').filter(Boolean);
-    expect(lines[lines.length - 2]).toContain(STOP_LINE);
+    // The «стоп» line closes the letter; the signature and «Больше не писать» follow (К3).
+    expect(lines[lines.length - 3]).toContain(STOP_LINE);
+    expect(lines[lines.length - 1]).toMatch(/^Больше не писать: /);
     const wa = okWhatsApp.mock.calls[0]![1];
     expect(wa).toContain(expected.opener);
     expect(wa).toContain('https://example.test/preview/tok-a');
@@ -797,13 +826,177 @@ describe('sendOutreach — personal offer (U2)', () => {
 
   it('a failed send writes no angle', async () => {
     const { db, updates } = fakeDb([withDossier({ id: 'a', whatsapp: null })]);
-    const failing = vi.fn(async () => ({
-      skipped: false as const,
-      ok: false as const,
-      error: 'x',
-    }));
+    const failing = vi.fn(async () => ({ ok: false as const, reason: 'x' }));
     await sendOutreach(NOW, deps(db, { email: failing, improve: noAi }));
     expect(updates[0]!.data).not.toHaveProperty('offerAngle');
+  });
+});
+
+describe('К1: только свой ящик, никогда Resend', () => {
+  it('without SMTP in the environment nothing goes out and no row gets an error', async () => {
+    vi.stubEnv('OUTREACH_SMTP_USER', '');
+    vi.stubEnv('OUTREACH_SMTP_PASS', '');
+    const { db, updates } = fakeDb([row({ id: 'a' }), contacted('r', 5)]);
+    const rest: Record<string, unknown> = deps(db);
+    delete rest.email;
+    delete rest.channels;
+    const result = await sendOutreach(NOW, rest as never);
+    expect(result).toMatchObject({ email: 0, followUps: 0, errors: 0, mail: 'no-smtp' });
+    expect(updates).toEqual([]);
+    expect(resendSpy).not.toHaveBeenCalled();
+    vi.unstubAllEnvs();
+  });
+
+  it('even with the e-mail channel forced on, the default sender is SMTP, not Resend', async () => {
+    vi.stubEnv('OUTREACH_SMTP_USER', '');
+    vi.stubEnv('OUTREACH_SMTP_PASS', '');
+    const { db, updates } = fakeDb([row({ id: 'a' })]);
+    const rest: Record<string, unknown> = deps(db);
+    delete rest.email;
+    const result = await sendOutreach(NOW, rest as never);
+    expect(result).toMatchObject({ email: 0, errors: 0, mail: 'no-smtp' });
+    expect(resendSpy).not.toHaveBeenCalled();
+    expect(updates).toEqual([]);
+    vi.unstubAllEnvs();
+  });
+});
+
+describe('К2: письма дня ждут утверждения владельцем', () => {
+  const approve = settings({ outreachMode: 'approve' });
+
+  it('in approve mode (the default) the cron pass sends nothing and prepares the offers', async () => {
+    const rows = [row({ id: 'a' }), contacted('r', 5)];
+    const { db, updates } = fakeDb(rows);
+    const result = await sendOutreach(NOW, deps(db, { settings: approve }));
+    expect(result).toMatchObject({ email: 0, whatsapp: 0, followUps: 0, skipped: 'approve' });
+    expect(result.waiting).toBe(2);
+    expect(okEmail).not.toHaveBeenCalled();
+    expect(okWhatsApp).not.toHaveBeenCalled();
+    // The offer is stored (what is approved is what goes), the status stays READY.
+    expect(updates).toHaveLength(1);
+    expect(updates[0]!.data).toEqual({
+      offerAngle: expect.any(String),
+      offerJson: expect.any(String),
+    });
+    expect(rows[0]!.status).toBe('READY');
+    expect(rows[0]!.emailSentAt).toBeNull();
+  });
+
+  it('a mode not set at all means approve', async () => {
+    const { db } = fakeDb([row({ id: 'a' })]);
+    const plain: OutreachRunSettings = await settings()();
+    delete plain.outreachMode;
+    const result = await sendOutreach(NOW, deps(db, { settings: async () => plain }));
+    expect(result.skipped).toBe('approve');
+    expect(okEmail).not.toHaveBeenCalled();
+  });
+
+  it('planOutreach lists whom, subject, opener and points, reminders too, within the daily cap', async () => {
+    const { db } = fakeDb([
+      row({ id: 'a', whatsapp: '+79170000001' }),
+      row({ id: 'p', kind: 'provider' }),
+      row({ id: 'c' }),
+      contacted('r', 5),
+    ]);
+    const plan = await planOutreach(NOW, deps(db, { settings: settings({ dailyCap: 3 }) }));
+    expect(plan.skipped).toBeNull();
+    expect(plan.items.map((i) => [i.id, i.type])).toEqual([
+      ['a', 'first'],
+      ['p', 'first'],
+      ['c', 'first'],
+    ]);
+    const a = plan.items[0]!;
+    expect(a).toMatchObject({ name: 'Компания a', city: 'Казань', email: 'a@example.com' });
+    expect(a.whatsapp).toBe(true);
+    expect(a.subject.length).toBeGreaterThan(0);
+    expect(a.opener.length).toBeGreaterThan(0);
+    expect(a.bullets.length).toBeGreaterThan(0);
+    expect(plan.items[1]!.bullets).toEqual([]);
+    expect(okEmail).not.toHaveBeenCalled();
+
+    const roomy = fakeDb([contacted('r', 5)]);
+    const reminders = await planOutreach(NOW, deps(roomy.db));
+    expect(reminders.items).toEqual([
+      expect.objectContaining({ id: 'r', type: 'followUp', email: 'r@example.com' }),
+    ]);
+  });
+
+  it('the owner click sends only the approved rows, with the offer the owner saw', async () => {
+    const rows = [row({ id: 'a' }), row({ id: 'b' }), row({ id: 'c' }), contacted('r', 5)];
+    const { db } = fakeDb(rows);
+    const plan = await planOutreach(NOW, deps(db, { settings: approve }));
+    const shown = plan.items.find((i) => i.id === 'a')!;
+    // A new company appears after the page was opened: it is not in the approved list.
+    rows.push(row({ id: 'late' }));
+    const result = await sendOutreach(
+      NOW,
+      deps(db, { settings: approve, onlyApproved: ['a', 'r'] }),
+    );
+    expect(result).toMatchObject({ email: 1, followUps: 1, skipped: null });
+    expect(okEmail.mock.calls.map((c) => c[0].to)).toEqual(['a@example.com', 'r@example.com']);
+    const sent = okEmail.mock.calls[0]![0];
+    expect(sent.subject).toBe(shown.subject);
+    expect(sent.text).toContain(shown.opener);
+    expect(rows.find((r) => r.id === 'b')!.status).toBe('READY');
+    expect(rows.find((r) => r.id === 'late')!.status).toBe('READY');
+  });
+
+  it('an approved site row without a prepared offer is not sent (nothing unseen goes out)', async () => {
+    const { db } = fakeDb([row({ id: 'a' })]);
+    const result = await sendOutreach(NOW, deps(db, { onlyApproved: ['a'] }));
+    expect(result.email).toBe(0);
+    expect(okEmail).not.toHaveBeenCalled();
+  });
+
+  it('paused: no list, nothing prepared', async () => {
+    const { db, updates } = fakeDb([row({ id: 'a' })]);
+    const plan = await planOutreach(
+      NOW,
+      deps(db, { settings: settings({ outreachPaused: true }) }),
+    );
+    expect(plan).toEqual({ items: [], skipped: 'paused' });
+    expect(updates).toEqual([]);
+  });
+});
+
+describe('К3: отписанный адрес не получает ничего', () => {
+  it('a row whose address was unsubscribed anywhere is declined, not written to in any channel', async () => {
+    const rows = [
+      row({ id: 'a', email: 'Same@Example.com', whatsapp: '+79170000001' }),
+      row({ id: 'b' }),
+      contacted('r', 5, { email: 'same@example.com' }),
+    ];
+    const { db } = fakeDb(rows);
+    const optedOut = vi.fn(async (emails: string[]) => {
+      expect(emails).toContain('same@example.com');
+      return new Set(['same@example.com']);
+    });
+    const result = await sendOutreach(NOW, deps(db, { optedOut }));
+    expect(result).toMatchObject({ email: 1, whatsapp: 0, followUps: 0, optedOut: 2 });
+    expect(okEmail.mock.calls.map((c) => c[0].to)).toEqual(['b@example.com']);
+    expect(okWhatsApp).not.toHaveBeenCalled();
+    for (const id of ['a', 'r']) {
+      const r = rows.find((x) => x.id === id)! as Row & { optOutAt?: Date };
+      expect(r.status).toBe('DECLINED');
+      expect(r.optOutAt).toBeInstanceOf(Date);
+    }
+  });
+
+  it('nor is it in the letters of the day', async () => {
+    const { db } = fakeDb([row({ id: 'a' }), row({ id: 'b' })]);
+    const plan = await planOutreach(
+      NOW,
+      deps(db, { optedOut: async () => new Set(['a@example.com']) }),
+    );
+    expect(plan.items.map((i) => i.id)).toEqual(['b']);
+    expect(plan.optedOut).toBe(1);
+  });
+
+  it('no unsubscribe link (no secret) — the letter does not go', async () => {
+    const { db } = fakeDb([row({ id: 'a' })]);
+    const result = await sendOutreach(NOW, deps(db, { unsubscribe: () => null }));
+    expect(result.email).toBe(0);
+    expect(okEmail).not.toHaveBeenCalled();
   });
 });
 

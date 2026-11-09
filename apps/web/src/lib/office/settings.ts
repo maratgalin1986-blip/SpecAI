@@ -14,7 +14,21 @@ export const OFFICE_EXTRA_SETTINGS = {
   aiOffers: 'office.aiOffers',
   /** Сколько предложений в московские сутки ИИ может переписать (целое 0…500). */
   aiDailyCap: 'office.aiDailyCap',
+  /**
+   * Как уходят письма офиса (К2): 'approve' (по умолчанию) — крон только готовит «письма дня»,
+   * уходят они по кнопке владельца на /admin/office/pisma; 'auto' — крон отправляет сам.
+   */
+  outreachMode: 'office.outreachMode',
 } as const;
+
+/** Режим рассылки: с утверждением владельцем или сама по крону. */
+export type OutreachMode = 'approve' | 'auto';
+export const OUTREACH_MODES: readonly OutreachMode[] = ['approve', 'auto'];
+
+/** Режим из строки настройки: всё, кроме «auto», — утверждение владельцем. */
+export function parseOutreachMode(value: string | undefined): OutreachMode {
+  return value?.trim() === 'auto' ? 'auto' : 'approve';
+}
 
 /** Лимит ИИ-предложений в сутки, если владелец не задал свой. */
 export const DEFAULT_AI_DAILY_CAP = 30;
@@ -53,6 +67,8 @@ export interface OfficeSettings {
   aiOffers: boolean;
   /** ИИ-предложений в сутки, 0…AI_DAILY_CAP_MAX. */
   aiDailyCap: number;
+  /** Режим рассылки (К2), по умолчанию 'approve'. */
+  outreachMode: OutreachMode;
 }
 
 function flag(value: string | undefined): boolean {
@@ -88,6 +104,7 @@ export function parseOfficeSettings(
       AI_DAILY_CAP_MAX,
       int(byKey.get(OFFICE_EXTRA_SETTINGS.aiDailyCap), DEFAULT_AI_DAILY_CAP),
     ),
+    outreachMode: parseOutreachMode(byKey.get(OFFICE_EXTRA_SETTINGS.outreachMode)),
   };
 }
 

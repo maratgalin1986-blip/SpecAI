@@ -31,7 +31,7 @@ function site(over: Partial<SiteLeadProspect> = {}): SiteLeadProspect {
     name: 'Стоматология Улыбка',
     email: 'Info@Ulybka.ru',
     domain: null,
-    siteJson: null,
+    siteJson: JSON.stringify({ leadForm: true }),
     ...over,
   };
 }
@@ -199,6 +199,8 @@ describe('acceptSiteLead — какой сайт принимает заявки
     ['отказался', site({ status: 'DECLINED' })],
     ['страница подрядчика', site({ kind: 'provider' })],
     ['форма выключена в редакторе', site({ siteJson: JSON.stringify({ leadForm: false }) })],
+    ['форма не включена (по умолчанию)', site({ siteJson: null })],
+    ['правка битая', site({ siteJson: '{broken' })],
   ])('404 when the site is %s', async (_label, row) => {
     const { db, created } = fakeDb(row);
     const d = deps(db);
@@ -218,10 +220,11 @@ describe('acceptSiteLead — какой сайт принимает заявки
     expect(outcome.status).toBe(404);
   });
 
-  it('the form is on by default, with the switch on and with broken edits', () => {
+  it('the form is off by default and with broken edits; on only when the owner switched it on', () => {
     expect(acceptsSiteLeads(site())).toBe(true);
-    expect(acceptsSiteLeads(site({ siteJson: JSON.stringify({ leadForm: true }) }))).toBe(true);
-    expect(acceptsSiteLeads(site({ siteJson: '{broken' }))).toBe(true);
+    expect(acceptsSiteLeads(site({ siteJson: null }))).toBe(false);
+    expect(acceptsSiteLeads(site({ siteJson: JSON.stringify({ title: 'Улыбка' }) }))).toBe(false);
+    expect(acceptsSiteLeads(site({ siteJson: '{broken' }))).toBe(false);
     expect(acceptsSiteLeads(site({ siteJson: JSON.stringify({ leadForm: false }) }))).toBe(false);
   });
 
@@ -294,7 +297,7 @@ describe('acceptSiteLead — пересылка компании и строка
     expect(d.emails[0]!.text).toContain('+7 927 242-80-88');
     expect(d.emails[0]!.text).toContain(`${BASE}/s/ulybka-kazan`);
     expect(updated).toEqual([{ where: { id: 'lead-1' }, data: { forwardedAt: NOW } }]);
-    expect(d.notes).toEqual(['Заявка с сайта «Стоматология Улыбка»: Анна, +7 927 242-80-88']);
+    expect(d.notes).toEqual(['Заявка с сайта «Стоматология Улыбка» (доставлена)']);
   });
 
   it('no e-mail of the company → forwardError, nothing sent, the owner learns it was not delivered', async () => {
@@ -307,7 +310,7 @@ describe('acceptSiteLead — пересылка компании и строка
     expect(error).toMatch(/не указана почта/);
     expect(updated).toEqual([{ where: { id: 'lead-1' }, data: { forwardError: error } }]);
     expect(d.notes).toHaveLength(1);
-    expect(d.notes[0]).toContain('не доставлена клиенту');
+    expect(d.notes[0]).toContain('(не доставлена: У компании не указана почта');
     expect(d.notes[0]).not.toContain('\n');
   });
 
@@ -335,7 +338,7 @@ describe('acceptSiteLead — пересылка компании и строка
     expect(error.startsWith('Письмо компании не отправлено: Domain not verified')).toBe(true);
     expect(error.length).toBeLessThanOrEqual(FORWARD_ERROR_MAX);
     expect(error).not.toContain('\n');
-    expect(d.notes[0]).toContain('не доставлена клиенту');
+    expect(d.notes[0]).toContain('не доставлена');
   });
 
   it('a hanging mail service does not hold the visitor: timeout → forwardError', async () => {
@@ -349,21 +352,27 @@ describe('acceptSiteLead — пересылка компании и строка
     expect(updated[0]!.data.forwardError).toMatch(/не ответила/);
   });
 
-  it('a lead that was not saved still goes to the company; lost everywhere → 503', async () => {
+  it('a lead that was not saved in the database is not forwarded anywhere → 503', async () => {
     const saveFails = fakeDb(site(), { failCreate: true });
-    const ok = deps(saveFails.db);
-    expect((await acceptSiteLead({ body: BODY, ip: ip() }, ok)).status).toBe(200);
-    expect(ok.emails).toHaveLength(1);
-    expect(ok.notes[0]).toContain('в базе не сохранена');
-    expect(saveFails.updated).toHaveLength(0);
-
-    const lost = deps(fakeDb(site({ email: null }), { failCreate: true }).db, {
-      notify: async () => false,
-    });
-    expect(await acceptSiteLead({ body: BODY, ip: ip() }, lost)).toEqual({
+    const d = deps(saveFails.db);
+    expect(await acceptSiteLead({ body: BODY, ip: ip() }, d)).toEqual({
       status: 503,
       body: { error: SITE_LEAD_ERRORS.unavailable },
     });
+    expect(d.emails).toHaveLength(0);
+    expect(d.notes).toHaveLength(0);
+    expect(saveFails.updated).toHaveLength(0);
+  });
+
+  it("the owner never gets the visitor's name, phone or comment in Telegram", async () => {
+    for (const row of [site(), site({ email: null })]) {
+      const d = deps(fakeDb(row).db);
+      await acceptSiteLead({ body: BODY, ip: ip() }, d);
+      expect(d.notes).toHaveLength(1);
+      for (const secret of ['Анна', '927', '242', 'консультац']) {
+        expect(d.notes[0]).not.toContain(secret);
+      }
+    }
   });
 
   it('a failing Telegram does not fail a saved lead', async () => {
@@ -469,24 +478,19 @@ describe('siteLeadSiteAddress', () => {
 });
 
 describe('siteLeadTelegramText', () => {
-  it('one line with the company, the name and the phone', () => {
-    expect(
-      siteLeadTelegramText(
-        'Автомойка\n«Блеск»',
-        { name: 'Иван', phone: '+79272428088' },
-        { forwardError: null, saved: true },
-      ),
-    ).toBe('Заявка с сайта Автомойка «Блеск»: Иван, +7 927 242-80-88');
+  it('one line with the company and «доставлена», nothing of the visitor', () => {
+    expect(siteLeadTelegramText('Автомойка\n«Блеск»', { forwardError: null })).toBe(
+      'Заявка с сайта Автомойка «Блеск» (доставлена)',
+    );
   });
 
-  it('adds why it was not delivered', () => {
-    const text = siteLeadTelegramText(
-      'Улыбка',
-      { name: 'Иван', phone: '+79272428088' },
-      { forwardError: siteLeadForwardError('no-email'), saved: false },
+  it('says it was not delivered and why', () => {
+    const text = siteLeadTelegramText('Улыбка', {
+      forwardError: siteLeadForwardError('no-email'),
+    });
+    expect(text).toBe(
+      'Заявка с сайта «Улыбка» (не доставлена: У компании не указана почта — заявка не переслана)',
     );
-    expect(text).toContain('не доставлена клиенту (У компании не указана почта');
-    expect(text).toContain('в базе не сохранена');
     expect(text).not.toContain('\n');
   });
 });

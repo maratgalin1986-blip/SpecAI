@@ -34,7 +34,10 @@ export interface SiteEditorDraft {
   /** '' — цвет ниши. */
   accent: SiteAccent | '';
   photos: string[];
+  /** Форма заявки: по умолчанию выключена, включается только после оферты (К10). */
   leadForm: boolean;
+  /** Убрать «Хотите такой же сайт?» из подвала. */
+  hideCredit: boolean;
 }
 
 const TEXT_FIELDS = ['title', 'hero', 'about', 'hours', 'address', 'phone', 'whatsapp'] as const;
@@ -82,14 +85,15 @@ export function editorDraft(content: SiteContent): SiteEditorDraft {
     whatsapp: content.whatsapp ?? '',
     accent: content.accent ?? '',
     photos: [...(content.photos ?? [])],
-    leadForm: content.leadForm !== false,
+    leadForm: content.leadForm === true,
+    hideCredit: content.hideCredit === true,
   };
 }
 
 /**
  * Поля формы → тело правки для PUT: строки без пробелов по краям, пустые не отправляются
- * (значит «как в карточке»), пустые услуги и повторы фото убраны, форма заявки — только
- * когда выключена (по умолчанию она есть).
+ * (значит «как в карточке»), пустые услуги и повторы фото убраны; форма заявки и «без
+ * подвала» — только когда включены (по умолчанию формы нет, подвал есть).
  */
 export function draftToContent(draft: SiteEditorDraft): SiteContent {
   const content: SiteContent = {};
@@ -102,13 +106,15 @@ export function draftToContent(draft: SiteEditorDraft): SiteContent {
   if (draft.accent) content.accent = draft.accent;
   const photos = [...new Set(draft.photos.map((p) => p.trim()).filter(Boolean))];
   if (photos.length) content.photos = photos;
-  if (!draft.leadForm) content.leadForm = false;
+  if (draft.leadForm) content.leadForm = true;
+  if (draft.hideCredit) content.hideCredit = true;
   return content;
 }
 
 /**
  * Проверенная правка → значение `Prospect.siteJson`. Всё, что совпадает с сайтом без правок
- * (пустые строки и списки, форма заявки включена), не записывается; ничего не осталось — null.
+ * (пустые строки и списки, форма заявки выключена, подвал на месте), не записывается; ничего
+ * не осталось — null.
  */
 export function siteJsonFor(content: SiteContent): string | null {
   const out: Record<string, unknown> = {};
@@ -116,7 +122,7 @@ export function siteJsonFor(content: SiteContent): string | null {
     if (value === undefined || value === null) continue;
     if (typeof value === 'string' && value.trim() === '') continue;
     if (Array.isArray(value) && value.length === 0) continue;
-    if (key === 'leadForm' && value === true) continue;
+    if ((key === 'leadForm' || key === 'hideCredit') && value === false) continue;
     out[key] = value;
   }
   return Object.keys(out).length ? JSON.stringify(out) : null;

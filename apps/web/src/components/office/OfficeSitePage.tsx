@@ -1,6 +1,6 @@
 import type { CSSProperties } from 'react';
 import { galleryPhotos, moreSitesHref } from '@/lib/office/clientSite';
-import type { SitePage } from '@/lib/office/pages';
+import { contactWaysText, sitePolicyHref, type SitePage } from '@/lib/office/pages';
 import { SITE } from '@/lib/site';
 import { siteUrl } from '@/lib/siteUrl';
 import { SiteLeadForm } from './SiteLeadForm';
@@ -12,7 +12,10 @@ import { SiteLeadForm } from './SiteLeadForm';
 // token, note or status can reach the markup (R19). Pictures only from the
 // owner's uploads (S5: `page.photos`, checked by siteContent), the decoration
 // is CSS. The site may open on the client's own domain (S7), so every link to
-// the platform is absolute.
+// the platform is absolute. WhatsApp buttons only when the card or the owner's
+// edits name WhatsApp (8.2); the lead form only once the owner switched it on
+// after the offer (К10), with the company's own privacy policy /s/<slug>/politika
+// (К17); «Хотите такой же сайт?» can be switched off in the editor.
 
 /** Full class names per accent (Tailwind only keeps classes it can read). */
 const ACCENT: Record<
@@ -167,15 +170,17 @@ export function OfficeSitePage({
               <PhoneIcon />
               Позвонить
             </a>
-            <a
-              href={page.whatsappHref}
-              target="_blank"
-              rel="noopener noreferrer"
-              className={`${BUTTON} border border-white/40 bg-white/10 text-white hover:bg-white/20 focus-visible:outline-white sm:flex-none sm:px-7`}
-            >
-              <ChatIcon />
-              Написать в WhatsApp
-            </a>
+            {page.whatsappHref && (
+              <a
+                href={page.whatsappHref}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={`${BUTTON} border border-white/40 bg-white/10 text-white hover:bg-white/20 focus-visible:outline-white sm:flex-none sm:px-7`}
+              >
+                <ChatIcon />
+                Написать в WhatsApp
+              </a>
+            )}
           </div>
           <p className="text-sm text-white/75">{page.phone}</p>
         </div>
@@ -201,11 +206,7 @@ export function OfficeSitePage({
               </li>
             ))}
           </ul>
-          <p className="text-sm text-slate-600">
-            {page.leadForm
-              ? 'Уточнить детали и записаться можно по телефону, в WhatsApp или через заявку ниже.'
-              : 'Уточнить детали и записаться можно по телефону или в WhatsApp.'}
-          </p>
+          <p className="text-sm text-slate-600">{contactWaysText(page)}</p>
         </div>
       </section>
 
@@ -282,8 +283,8 @@ export function OfficeSitePage({
               slug={slug}
               companyTitle={page.title}
               companyPhone={page.phone}
-              privacyHref={`${base}/privacy`}
-              platformName={`${SITE.platform} от ${SITE.name}`}
+              privacyHref={slug ? sitePolicyHref(base, slug) : null}
+              processorName={SITE.legalName}
               buttonClass={a.button}
               disabled={!formOn}
             />
@@ -356,14 +357,23 @@ export function OfficeSitePage({
             {SITE.platform} от {SITE.name}
           </a>
         </p>
-        <p className="mt-3">
-          <a
-            href={moreSitesHref(base, slug)}
-            className={`inline-flex min-h-[44px] items-center justify-center rounded-full border px-4 py-2 text-sm font-semibold transition ${a.ghost}`}
-          >
-            Хотите такой же сайт?
-          </a>
-        </p>
+        {page.leadForm && slug && (
+          <p className="mt-1">
+            <a href={sitePolicyHref(base, slug)} className="hover:underline">
+              Политика обработки персональных данных
+            </a>
+          </p>
+        )}
+        {!page.hideCredit && (
+          <p className="mt-3">
+            <a
+              href={moreSitesHref(base, slug)}
+              className={`inline-flex min-h-[44px] items-center justify-center rounded-full border px-4 py-2 text-sm font-semibold transition ${a.ghost}`}
+            >
+              Хотите такой же сайт?
+            </a>
+          </p>
+        )}
       </footer>
 
       {/* Sticky call bar on phones */}
@@ -373,15 +383,17 @@ export function OfficeSitePage({
             <PhoneIcon />
             Позвонить
           </a>
-          <a
-            href={page.whatsappHref}
-            target="_blank"
-            rel="noopener noreferrer"
-            className={`${BUTTON} border ${a.ghost}`}
-          >
-            <ChatIcon />
-            WhatsApp
-          </a>
+          {page.whatsappHref && (
+            <a
+              href={page.whatsappHref}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={`${BUTTON} border ${a.ghost}`}
+            >
+              <ChatIcon />
+              WhatsApp
+            </a>
+          )}
         </div>
       </div>
     </div>

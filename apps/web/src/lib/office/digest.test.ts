@@ -349,3 +349,15 @@ describe('moscowHour', () => {
     expect(DIGEST_HOURS).toEqual({ from: 8, to: 23 });
   });
 });
+
+describe('buildDigest — письма дня (К2)', () => {
+  it('строка со ссылкой на /admin/office/pisma, и сводка уже не «тихая»', () => {
+    const text = buildDigest(input({ outboxWaiting: 7 }));
+    expect(text).toContain(`Письма дня ждут вашего «Отправить»: 7 — ${SITE}/admin/office/pisma`);
+    expect(text).not.toContain('новых кандидатов нет');
+  });
+
+  it('ноль писем — строки нет', () => {
+    expect(buildDigest(input({ outboxWaiting: 0 }))).not.toContain('Письма дня');
+  });
+});

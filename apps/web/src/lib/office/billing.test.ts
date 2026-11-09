@@ -7,9 +7,11 @@ import {
   byBillingUrgency,
   clientPackage,
   clientPrices,
+  clientYearly,
   extendPaidUntil,
   formatDayMsk,
   invoiceDue,
+  mapLinkGuide,
   monthlyRevenue,
   paymentUpdate,
   type BillingProspect,
@@ -314,5 +316,55 @@ describe('billing: formatDayMsk', () => {
   it('formats the Moscow day', () => {
     expect(formatDayMsk(new Date('2026-11-09T12:00:00Z'))).toBe('09.11.2026');
     expect(formatDayMsk(new Date('2026-12-31T21:30:00Z'))).toBe('01.01.2027');
+  });
+});
+
+describe('billing: the yearly price (К12)', () => {
+  const PLAN = { setup: 3900, monthly: 990, yearly: 9900 };
+  const bare = {
+    setupPrice: null,
+    monthlyPrice: null,
+    setupPaidAt: null,
+    paidUntil: null,
+  } satisfies BillingProspect;
+
+  it('the base year at the base month, the same discount for an own month, 12 months without a setting', () => {
+    expect(clientYearly(bare, PLAN)).toBe(9900);
+    expect(clientYearly({ ...bare, monthlyPrice: 1500 }, PLAN)).toBe(15000);
+    expect(clientYearly({ ...bare, monthlyPrice: 0 }, PLAN)).toBe(0);
+    expect(clientYearly(bare, { setup: 3900, monthly: 990 })).toBe(11880);
+  });
+
+  it('the invoice shows the yearly price of the package, also for the domain package', () => {
+    const row: InvoiceRow = {
+      ...bare,
+      kind: 'site',
+      status: 'PUBLISHED',
+      name: 'Улыбка',
+      city: null,
+      slug: 'ulybka',
+      token: 'a'.repeat(32),
+      domain: 'ulybka.ru',
+    };
+    const ctx = { payDetails: null, baseUrl: 'https://example.ru' };
+    expect(buildInvoice(row, PLAN, ctx, NOW)?.yearly).toBe(9900);
+    expect(buildInvoice({ ...row, domain: null }, PLAN, ctx, NOW)?.yearly).toBe(9900);
+  });
+
+  it('the «year» payment extends by twelve months', () => {
+    const until = paymentUpdate({ paidUntil: null }, 'year', NOW).paidUntil;
+    expect(until && formatDayMsk(until)).toBe('09.11.2027');
+  });
+});
+
+describe('billing: mapLinkGuide (К16)', () => {
+  it('two sections, Yandex Maps and 2GIS, each with the site address in a step', () => {
+    const guide = mapLinkGuide('https://ulybka-kazan.ru/');
+    expect(guide.map((s) => s.title)).toEqual(['Яндекс Карты', '2ГИС']);
+    for (const section of guide) {
+      expect(section.steps.length).toBeGreaterThanOrEqual(3);
+      expect(section.steps.some((step) => step.includes('https://ulybka-kazan.ru/'))).toBe(true);
+    }
+    expect(JSON.stringify(guide)).not.toMatch(/кабинет|вкладк/i);
   });
 });

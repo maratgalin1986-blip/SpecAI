@@ -4,9 +4,12 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { CLIENT_PRICE_MAX, formatDayMsk, type PaymentAction } from '@/lib/office/billing';
 import { rub } from '@/lib/prices';
+import { publishSite } from './officePublish';
 
 // Оплата клиента на /admin/office/clients (S6): «Сайт оплачен», «+1 месяц», «+12 месяцев»,
 // «Отменить оплату», цены клиента (пусто — базовая цена пакета) и ссылка на счёт для клиента.
+// У сайта, с которым договорились, но ещё не опубликовали (AGREED, К10), рядом с оплатой —
+// «Опубликовать»; неоплаченный — только после «Сайт не оплачен — опубликовать?».
 // POST /api/admin/office/prospects/[id]/payment, затем router.refresh(): плитки и статусы
 // пересчитывает сервер.
 
@@ -36,6 +39,7 @@ export function OfficeClientControls({
   setupPaid,
   hasPaidPeriod,
   invoiceUrl,
+  published = true,
 }: {
   id: string;
   name: string;
@@ -48,12 +52,14 @@ export function OfficeClientControls({
   hasPaidPeriod: boolean;
   /** Абсолютная ссылка /oplata/<token>. */
   invoiceUrl: string;
+  /** false — договорились, но сайт ещё не опубликован: показать «Опубликовать». */
+  published?: boolean;
 }) {
   const router = useRouter();
   const [setupValue, setSetup] = useState(setupPrice === null ? '' : String(setupPrice));
   const [monthlyValue, setMonthly] = useState(monthlyPrice === null ? '' : String(monthlyPrice));
   const [saved, setSaved] = useState({ setup: setupValue, monthly: monthlyValue });
-  const [busy, setBusy] = useState<PaymentAction | null>(null);
+  const [busy, setBusy] = useState<PaymentAction | 'publish' | null>(null);
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
 
   const pricesDirty = setupValue !== saved.setup || monthlyValue !== saved.monthly;
@@ -104,6 +110,21 @@ export function OfficeClientControls({
     router.refresh();
   }
 
+  async function publish() {
+    if (busy) return;
+    setBusy('publish');
+    setMessage(null);
+    const outcome = await publishSite(id, setupPaid);
+    setBusy(null);
+    if ('cancelled' in outcome) return;
+    if (!outcome.ok) {
+      setMessage({ ok: false, text: outcome.error });
+      return;
+    }
+    setMessage({ ok: true, text: 'Сайт опубликован' });
+    router.refresh();
+  }
+
   async function copy() {
     try {
       await navigator.clipboard.writeText(invoiceUrl);
@@ -116,6 +137,16 @@ export function OfficeClientControls({
   return (
     <div className="flex w-full flex-col gap-2 text-sm">
       <div className="flex flex-wrap items-center gap-2">
+        {!published && (
+          <button
+            type="button"
+            onClick={() => void publish()}
+            disabled={busy !== null}
+            className="rounded-md bg-signal-500 px-3 py-1.5 text-xs font-bold text-graphite-950 disabled:opacity-40"
+          >
+            {busy === 'publish' ? 'Публикую…' : 'Опубликовать'}
+          </button>
+        )}
         {!setupPaid && (
           <button
             type="button"

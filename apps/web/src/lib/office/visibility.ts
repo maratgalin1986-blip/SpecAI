@@ -1,7 +1,9 @@
 // Which public route may show a prospect (R11–R13), and the loaders of the
 // three routes. The loaders select only what a page renders: no id, token,
-// note, contacts of the candidate (e-mail, WhatsApp, Telegram) or dates, so
-// nothing of that can end up in the markup by accident (R19). The token itself
+// note, e-mail, Telegram or dates, so nothing of that can end up in the markup
+// by accident (R19). WhatsApp from the card is selected because the client's
+// site shows its button (8.2), and the card's source — for the OpenStreetMap
+// credit on the preview (К6). The token itself
 // is read from the URL and never selected back. The owner's edits of a site
 // (`siteJson`, S5) and the client's own domain (S7) are public by nature: they
 // are what the site shows and where it lives.
@@ -82,6 +84,8 @@ const PAGE_SELECT = {
   hours: true,
   siteJson: true,
   domain: true,
+  whatsapp: true,
+  source: true,
 } as const;
 
 function narrow(row: {
@@ -99,6 +103,8 @@ function narrow(row: {
   hours: string | null;
   siteJson: string | null;
   domain: string | null;
+  whatsapp: string | null;
+  source: string | null;
 }): ProspectPageRow | null {
   if (row.kind !== 'site' && row.kind !== 'provider') return null;
   return {
@@ -116,6 +122,8 @@ function narrow(row: {
     hours: row.hours,
     siteJson: row.siteJson,
     domain: row.domain,
+    whatsapp: row.whatsapp,
+    source: row.source,
   };
 }
 

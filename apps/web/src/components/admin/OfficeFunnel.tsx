@@ -4,12 +4,14 @@ import {
   funnelAgentTitle,
   funnelNotes,
   funnelRows,
+  stockNotes,
+  STOCK_LOW_DAYS,
   type FunnelCell,
   type FunnelData,
 } from '@/lib/office/funnel';
 
 // Воронка офиса для /admin/office (S10): этапы по строкам, агенты по столбцам, доля — от
-// «написали». Данные собирает страница: `collectFunnel(prisma, now)` из lib/office/funnel.ts.
+// «написали»; под таблицей — запас кандидатов с почтой в днях отправки (К15). Данные собирает страница: `collectFunnel(prisma, now)` из lib/office/funnel.ts.
 // Серверный компонент, без состояния.
 
 function Cell({ cell }: { cell: FunnelCell | null }) {
@@ -35,6 +37,7 @@ function Cell({ cell }: { cell: FunnelCell | null }) {
 export function OfficeFunnel({ data }: { data: FunnelData }) {
   const rows = funnelRows(data);
   const notes = funnelNotes(data);
+  const stock = stockNotes(data);
   return (
     <Card className="flex flex-col gap-3">
       <div>
@@ -86,6 +89,24 @@ export function OfficeFunnel({ data }: { data: FunnelData }) {
           <li key={note}>{note}</li>
         ))}
       </ul>
+      {stock.length > 0 && (
+        <div className="flex flex-col gap-1">
+          <ul className="flex flex-col gap-1 text-sm text-graphite-800">
+            {stock.map((note) => (
+              <li
+                key={note.agent}
+                className={note.low ? 'font-semibold text-amber-800' : undefined}
+              >
+                {note.text}
+              </li>
+            ))}
+          </ul>
+          <p className="text-xs text-graphite-500">
+            Запас — кандидаты с почтой, которым ещё не писали. Лимит писем в день общий для агентов.
+            Меньше {STOCK_LOW_DAYS} рабочих дней — подключайте новые ниши и города.
+          </p>
+        </div>
+      )}
     </Card>
   );
 }

@@ -27,6 +27,8 @@ export const DEMO_CITY = 'Казань';
 export interface LandingPriceBase {
   setup: number;
   monthly: number;
+  /** Поддержка за год (К12); без неё — 12 × месяц. */
+  yearly?: number;
 }
 
 export interface LandingStep {
@@ -76,9 +78,17 @@ function money(value: number): string {
   return `${rub(value)}\u00a0₽`;
 }
 
-/** Цена пакета одной строкой: «15 000 ₽ разово и 1 500 ₽ в месяц». */
-export function packagePriceLine(pkg: Pick<SitePackage, 'setup' | 'monthly'>): string {
-  return `${money(pkg.setup)} разово и ${money(pkg.monthly)} в месяц`;
+/**
+ * Цена пакета одной строкой: «3 900 ₽ разово и 990 ₽ в месяц», а когда год дешевле 12 месяцев
+ * (К12) — «… в месяц или 9 900 ₽ сразу за год».
+ */
+export function packagePriceLine(
+  pkg: Pick<SitePackage, 'setup' | 'monthly'> & { yearly?: number },
+): string {
+  const line = `${money(pkg.setup)} разово и ${money(pkg.monthly)} в месяц`;
+  const yearly = pkg.yearly;
+  if (yearly === undefined || yearly <= 0 || yearly >= pkg.monthly * 12) return line;
+  return `${line} или ${money(yearly)} сразу за год`;
 }
 
 /**

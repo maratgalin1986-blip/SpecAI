@@ -25,6 +25,7 @@ const NIGHT = new Date('2026-11-09T00:30:00Z'); // 03:30 по Москве — �
 function deps(over: Partial<TickDeps> = {}): TickDeps {
   return {
     lock: vi.fn(async () => true),
+    purgeLeads: vi.fn(async () => 0),
     step: vi.fn(async () => okStep('Казань')),
     outreach: vi.fn(async () => ({ email: 1, whatsapp: 0, skipped: null, errors: 0 })),
     sendDigest: vi.fn(async () => true),
@@ -139,5 +140,43 @@ describe('officeTick', () => {
     const budget = (step.mock.calls[0] as unknown as [Date, number])[1];
     expect(budget).toBeLessThanOrEqual(60_000 - TICK_RESERVE_MS);
     expect(budget).toBeGreaterThanOrEqual(STEP_MIN_MS);
+  });
+});
+
+describe('officeTick — письма дня (К2)', () => {
+  it('сколько писем ждут владельца — передаётся в сводку', async () => {
+    const d = deps({
+      outreach: vi.fn(async () => ({
+        email: 0,
+        whatsapp: 0,
+        skipped: 'approve',
+        errors: 0,
+        waiting: 5,
+      })),
+    });
+    const result = await officeTick(MORNING, { budgetMs: 60_000, maxSteps: 0, digest: 'any' }, d);
+    expect(result).toMatchObject({ outreach: { skipped: 'approve', waiting: 5 }, digest: true });
+    expect(d.sendDigest).toHaveBeenCalledWith(MORNING, { outboxWaiting: 5 });
+  });
+
+  it('без писем дня сводка получает пустое дополнение', async () => {
+    const d = deps();
+    await officeTick(MORNING, { budgetMs: 60_000, maxSteps: 0, digest: 'any' }, d);
+    expect(d.sendDigest).toHaveBeenCalledWith(MORNING, {});
+  });
+
+  it('удаляет заявки с клиентских сайтов старше срока хранения — и не роняет тик при ошибке', async () => {
+    const purgeLeads = vi.fn(async () => {
+      throw new Error('db down');
+    });
+    const silent = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const r = await officeTick(
+      MORNING,
+      { budgetMs: 60_000, maxSteps: 1, digest: 'window' },
+      deps({ purgeLeads }),
+    );
+    silent.mockRestore();
+    expect(purgeLeads).toHaveBeenCalledWith(MORNING);
+    expect(r).toMatchObject({ digest: true });
   });
 });

@@ -17,6 +17,8 @@ import { PhoneLink } from '@/components/admin/PhoneLink';
 import { mskDayBounds } from '@/lib/adminCrm';
 import { integrationFlags } from '@/lib/integrationFlags';
 import { serverChannels } from '@/lib/notifications/adapters';
+import { officeMailConfigured } from '@/lib/office/smtp';
+import { unsubscribeConfigured } from '@/lib/office/unsubscribe';
 import { AGENTS, AGENT_IDS } from '@/lib/office/agents';
 import { HOT_DAYS, HOT_STATUSES } from '@/lib/office/digest';
 import { collectFunnel } from '@/lib/office/funnel';
@@ -122,7 +124,7 @@ export default async function AdminOfficePage() {
     prisma.prospect.count({ where: { status: 'CALLBACK', callAt: { lt: todayEnd } } }),
     prisma.prospect.count({ where: { status: 'DECLINED' } }),
     prisma.prospect.findMany({
-      where: { status: { in: ['READY', 'CONTACTED', 'CALLBACK'] } },
+      where: { status: { in: ['READY', 'CONTACTED', 'CALLBACK', 'AGREED'] } },
       orderBy: { createdAt: 'desc' },
       take: CANDIDATES_SHOWN,
     }),
@@ -421,7 +423,13 @@ export default async function AdminOfficePage() {
                   </details>
                 </div>
                 <div className="lg:w-3/5">
-                  <OfficeProspectControls id={p.id} variant="open" note={p.note} />
+                  <OfficeProspectControls
+                    id={p.id}
+                    variant={p.status === 'AGREED' ? 'agreed' : 'open'}
+                    note={p.note}
+                    kind={p.kind === 'site' ? 'site' : 'provider'}
+                    paid={p.setupPaidAt !== null}
+                  />
                 </div>
               </Card>
             );
@@ -512,7 +520,7 @@ export default async function AdminOfficePage() {
           <p className="text-xs text-graphite-600">
             Подставляются в текст звонка и письма агента «Сайты под ключ».
           </p>
-          <OfficePricesForm setup={prices.setup} monthly={prices.monthly} />
+          <OfficePricesForm setup={prices.setup} monthly={prices.monthly} yearly={prices.yearly} />
         </Card>
         <Card className="flex flex-col gap-3">
           <h2 className="text-lg font-bold text-graphite-950">План обхода</h2>
@@ -524,7 +532,10 @@ export default async function AdminOfficePage() {
         <OfficeOutreachCard
           settings={settings}
           today={{ email: emailToday, whatsapp: whatsappToday }}
-          channels={serverChannels()}
+          channels={{
+            email: officeMailConfigured() && unsubscribeConfigured(),
+            whatsapp: serverChannels().whatsapp,
+          }}
         />
         <Card className="flex flex-col gap-3">
           <h2 className="text-lg font-bold text-graphite-950">ИИ-аналитик</h2>

@@ -2,8 +2,6 @@
 // заявки (клиентской). Файл попадает в браузер вместе с SiteLeadForm, поэтому здесь нет
 // базы, zod и node-модулей: только pages.ts (сам чистый) и строки.
 
-import { quotedName } from './pages';
-
 /** Страница услуги «Сайт под ключ» на площадке (T1). */
 export const SERVICE_PAGE_PATH = '/sajt-pod-klyuch';
 
@@ -38,11 +36,6 @@ export function moreSitesHref(base: string, slug?: string | null): string {
   const query = new URLSearchParams({ utm_source: 'client-site' });
   if (slug) query.set('utm_campaign', slug);
   return `${base.replace(/\/+$/, '')}${SERVICE_PAGE_PATH}?${query.toString()}`;
-}
-
-/** Текст галочки согласия под формой заявки. */
-export function siteLeadConsentText(companyTitle: string): string {
-  return `Согласен на передачу имени и телефона компании ${quotedName(companyTitle)} для ответа на заявку`;
 }
 
 export interface SiteLeadFields {

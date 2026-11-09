@@ -14,8 +14,11 @@ export interface SitePage {
   phone: string;
   /** `tel:+7…` */
   phoneHref: string;
-  /** `https://wa.me/7…`, digits only. */
-  whatsappHref: string;
+  /**
+   * `https://wa.me/7…`, digits only — only when WhatsApp is named in the card or in the
+   * owner's edits (8.2); null — the site shows no WhatsApp buttons.
+   */
+  whatsappHref: string | null;
   /** Yandex Maps by coordinates, else by address, else null. */
   mapHref: string | null;
   accent: PageNiche['accent'];
@@ -24,8 +27,13 @@ export interface SitePage {
   about: string | null;
   /** Фото из правок владельца (загруженные админом), иначе пусто — без чужих картинок. */
   photos: string[];
-  /** Показывать форму «Оставить заявку» (S4); выключается в редакторе. */
+  /**
+   * Показывать форму «Оставить заявку» (S4). По умолчанию выключена (К10): владелец включает
+   * её в редакторе только после того, как клиент принял оферту с поручением.
+   */
   leadForm: boolean;
+  /** Убрать из подвала «Хотите такой же сайт?» (галочка в редакторе, siteContent.hideCredit). */
+  hideCredit: boolean;
 }
 
 export interface ProviderPage {
@@ -58,6 +66,13 @@ export function phoneDigits(phone: string): string {
 
 function telHref(phone: string): string {
   return `tel:+${phoneDigits(phone)}`;
+}
+
+/** `https://wa.me/7…` for a number written any way; null without a number of 10+ digits. */
+export function whatsappHrefFor(phone: string | null | undefined): string | null {
+  if (!phone?.trim()) return null;
+  const digits = phoneDigits(phone);
+  return digits.length >= 10 ? `https://wa.me/${digits}` : null;
 }
 
 /** Название в «ёлочках», если компания сама не написала его в кавычках («Стоматология «Улыбка»» → без дубля). */
@@ -113,13 +128,14 @@ export function buildSitePage(p: PageProspect, niche: PageNiche): SitePage {
     hours: p.hours?.trim() || null,
     phone: phoneText(p.phone),
     phoneHref: telHref(p.phone),
-    whatsappHref: `https://wa.me/${phoneDigits(p.phone)}`,
+    whatsappHref: whatsappHrefFor(p.whatsapp),
     mapHref: mapHref(p),
     accent: niche.accent,
     city,
     about: null,
     photos: [],
-    leadForm: true,
+    leadForm: false,
+    hideCredit: false,
   };
 }
 
@@ -175,10 +191,37 @@ export function buildProviderPage(
   };
 }
 
-/** The banner over a preview page (R11). */
-export function previewBannerText(p: Pick<PageProspect, 'name'>): string {
+/**
+ * The banner over a preview page (R11, К6): a draft made by the platform from the open data
+ * of the map card, not the company's official site. The company name is not in it: the
+ * preview is the company's page, the banner says only who made the draft and from what.
+ */
+export function previewBannerText(): string {
   return (
-    `Предпросмотр: страница сделана для ${quotedName(p.name)} агентом ИИСтройка24 ` +
-    'и будет опубликована после согласия владельца компании'
+    'Черновик: подготовлен ИИСтройка24 по открытым данным карточки на карте. ' +
+    'Это не официальный сайт компании'
   );
+}
+
+/** The data credit under the banner when the card came from OpenStreetMap (ODbL), else null. */
+export function previewSourceCredit(p: Pick<PageProspect, 'source'>): string | null {
+  return p.source === 'osm' ? 'Данные карточки: © участники OpenStreetMap' : null;
+}
+
+/**
+ * «Уточнить детали и записаться можно …» under the services — only the ways the site really
+ * has: the phone always, WhatsApp only when named (8.2), the form only when it is on (К10).
+ */
+export function contactWaysText(page: Pick<SitePage, 'whatsappHref' | 'leadForm'>): string {
+  const ways = ['по телефону'];
+  if (page.whatsappHref) ways.push('в WhatsApp');
+  if (page.leadForm) ways.push('через заявку ниже');
+  const last = ways[ways.length - 1];
+  const list = ways.length === 1 ? last : `${ways.slice(0, -1).join(', ')} или ${last}`;
+  return `Уточнить детали и записаться можно ${list}.`;
+}
+
+/** The company's privacy policy for the visitors of its site (К17), on the platform's address. */
+export function sitePolicyHref(base: string, slug: string): string {
+  return `${base.replace(/\/+$/, '')}/s/${encodeURIComponent(slug)}/politika`;
 }

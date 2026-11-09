@@ -365,7 +365,10 @@ export function OfficeSiteEditor({
             className={INPUT}
           />
         </Field>
-        <Field label="WhatsApp" hint="Пусто — тот же номер, что и телефон">
+        <Field
+          label="WhatsApp"
+          hint="Пусто — как в карточке; нет WhatsApp в карточке — кнопок WhatsApp на сайте не будет"
+        >
           <input
             value={draft.whatsapp}
             maxLength={EDITOR_PHONE_MAX}
@@ -479,9 +482,29 @@ export function OfficeSiteEditor({
             className="mt-0.5"
           />
           <span>
-            Показывать на сайте форму «Оставить заявку»
+            Форма заявки — только после принятия клиентом оферты и согласия на поручение
             <span className="block text-xs text-graphite-500">
-              Заявки уходят на почту компании и видны ниже на этой странице.
+              По умолчанию выключена. Включайте, когда клиент принял оферту с поручением на
+              обработку заявок: тогда на сайте появятся форма и политика компании (/s/{slug}
+              /politika). Заявки уходят на почту компании и видны ниже на этой странице.
+            </span>
+          </span>
+        </label>
+      </section>
+
+      <section className="flex flex-col gap-1">
+        <h3 className="font-bold text-graphite-950">Подвал</h3>
+        <label className="flex items-start gap-2">
+          <input
+            type="checkbox"
+            checked={draft.hideCredit}
+            onChange={(event) => set('hideCredit', event.target.checked)}
+            className="mt-0.5"
+          />
+          <span>
+            Убрать кнопку «Хотите такой же сайт?» из подвала
+            <span className="block text-xs text-graphite-500">
+              Строка «Сайт сделан …» остаётся.
             </span>
           </span>
         </label>

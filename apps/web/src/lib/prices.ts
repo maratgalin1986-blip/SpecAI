@@ -107,12 +107,32 @@ export function priceFaqAnswer(): string {
 }
 
 /**
- * Сайт под ключ для компаний без сайта (офис агентов,
- * tasks/autopilot/2026-11-09-office-agents): разовая цена и поддержка в месяц, ₽.
- * PLACEHOLDER — уточнить у владельца; владелец меняет в /admin/office
- * (AppSetting office.sitePrice / office.siteMonthly), см. lib/office/prices.ts.
+ * Сайт под ключ для компаний без сайта (офис агентов): разовая цена, поддержка в месяц и
+ * поддержка сразу за год (12 месяцев одним счётом, К12), ₽. Цифры — из бизнес-плана
+ * (docs/business/sajty-pod-klyuch.md, раздел 3); владелец меняет их в /admin/office
+ * (AppSetting office.sitePrice / office.siteMonthly / office.siteYearly), см. lib/office/prices.ts.
  */
-export const SITE_PRICES = { setup: 15000, monthly: 1500 } as const;
+export const SITE_PRICES = { setup: 3900, monthly: 990, yearly: 9900 } as const;
+
+/** База цен сайта из настроек офиса; без `yearly` год стоит 12 месяцев. */
+export interface SitePriceBase {
+  setup: number;
+  monthly: number;
+  yearly?: number;
+}
+
+/**
+ * Поддержка за 12 месяцев одним счётом, ₽, при цене месяца `monthly`. При базовой цене месяца —
+ * годовая цена из настроек; при своей цене клиента — с той же скидкой, что у базы; никогда не
+ * дороже 12 месяцев по отдельности. Без годовой цены в настройках — 12 × месяц.
+ */
+export function siteYearlyPrice(monthly: number, base: Omit<SitePriceBase, 'setup'>): number {
+  const twelve = monthly * 12;
+  const yearly = base.yearly;
+  if (yearly === undefined || base.monthly <= 0 || monthly <= 0) return twelve;
+  if (monthly === base.monthly) return Math.min(yearly, twelve);
+  return Math.min(Math.round((monthly * yearly) / base.monthly), twelve);
+}
 
 /** Пакет услуги «Сайт под ключ» (страница /sajt-pod-klyuch, письма, счёт). */
 export interface SitePackage {
@@ -122,6 +142,8 @@ export interface SitePackage {
   setup: number;
   /** В месяц, ₽. */
   monthly: number;
+  /** Поддержка сразу за 12 месяцев одним счётом, ₽ (К12). */
+  yearly: number;
   includes: readonly string[];
 }
 
@@ -133,16 +155,18 @@ export const SITE_DOMAIN_SETUP_EXTRA = 2000;
  * меняет базу в /admin/office, пакеты пересчитываются сами. Цифры обоснованы в
  * docs/business/sajty-pod-klyuch.md.
  */
-export function sitePackages(base: { setup: number; monthly: number }): SitePackage[] {
+export function sitePackages(base: SitePriceBase): SitePackage[] {
+  const yearly = siteYearlyPrice(base.monthly, base);
   return [
     {
       key: 'vizitka',
       title: 'Сайт-визитка',
       setup: base.setup,
       monthly: base.monthly,
+      yearly,
       includes: [
         'Готовая страница компании: услуги, адрес, часы, кнопки «Позвонить» и «WhatsApp», карта',
-        'Форма заявки — заявки приходят вам на почту',
+        'Форма заявки (включаем после принятия оферты) — заявки приходят вам на почту',
         'Правки текстов, услуг, часов и фото по вашей просьбе',
         'Адрес на нашем домене, работа сайта и поддержка',
       ],
@@ -152,6 +176,7 @@ export function sitePackages(base: { setup: number; monthly: number }): SitePack
       title: 'Сайт на своём домене',
       setup: base.setup + SITE_DOMAIN_SETUP_EXTRA,
       monthly: base.monthly,
+      yearly,
       includes: [
         'Всё из «Сайта-визитки»',
         'Ваш адрес в интернете (например, ulybka-kazan.ru): подключим и настроим',
