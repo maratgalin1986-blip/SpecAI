@@ -114,6 +114,53 @@ export function priceFaqAnswer(): string {
  */
 export const SITE_PRICES = { setup: 15000, monthly: 1500 } as const;
 
+/** Пакет услуги «Сайт под ключ» (страница /sajt-pod-klyuch, письма, счёт). */
+export interface SitePackage {
+  key: 'vizitka' | 'domen';
+  title: string;
+  /** Разово, ₽. */
+  setup: number;
+  /** В месяц, ₽. */
+  monthly: number;
+  includes: readonly string[];
+}
+
+/** Надбавка к разовой цене за подключение своего домена клиента, ₽ (сам домен оплачивает клиент). */
+export const SITE_DOMAIN_SETUP_EXTRA = 2000;
+
+/**
+ * Пакеты от базовой цены (настройки офиса, lib/office/prices.ts → officePrices): владелец
+ * меняет базу в /admin/office, пакеты пересчитываются сами. Цифры обоснованы в
+ * docs/business/sajty-pod-klyuch.md.
+ */
+export function sitePackages(base: { setup: number; monthly: number }): SitePackage[] {
+  return [
+    {
+      key: 'vizitka',
+      title: 'Сайт-визитка',
+      setup: base.setup,
+      monthly: base.monthly,
+      includes: [
+        'Готовая страница компании: услуги, адрес, часы, кнопки «Позвонить» и «WhatsApp», карта',
+        'Форма заявки — заявки приходят вам на почту',
+        'Правки текстов, услуг, часов и фото по вашей просьбе',
+        'Адрес на нашем домене, работа сайта и поддержка',
+      ],
+    },
+    {
+      key: 'domen',
+      title: 'Сайт на своём домене',
+      setup: base.setup + SITE_DOMAIN_SETUP_EXTRA,
+      monthly: base.monthly,
+      includes: [
+        'Всё из «Сайта-визитки»',
+        'Ваш адрес в интернете (например, ulybka-kazan.ru): подключим и настроим',
+        'Домен оформляется на вас; его продление — по цене регистратора',
+      ],
+    },
+  ];
+}
+
 /**
  * «Поддержать площадку»: amount chips that only help choose a sum, ₽. The
  * transfer itself happens in the person's bank app, and any sum is fine.

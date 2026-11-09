@@ -20,6 +20,12 @@ export interface SitePage {
   mapHref: string | null;
   accent: PageNiche['accent'];
   city: string | null;
+  /** «О компании» — только из правок владельца в админке (siteContent), иначе null. */
+  about: string | null;
+  /** Фото из правок владельца (загруженные админом), иначе пусто — без чужих картинок. */
+  photos: string[];
+  /** Показывать форму «Оставить заявку» (S4); выключается в редакторе. */
+  leadForm: boolean;
 }
 
 export interface ProviderPage {
@@ -111,6 +117,9 @@ export function buildSitePage(p: PageProspect, niche: PageNiche): SitePage {
     mapHref: mapHref(p),
     accent: niche.accent,
     city,
+    about: null,
+    photos: [],
+    leadForm: true,
   };
 }
 
