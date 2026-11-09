@@ -6,7 +6,8 @@
 //
 // Localisation (152-ФЗ): personal data is first recorded in the database. When
 // that fails, Telegram gets only the phone number, without the name and the
-// message; the full lead goes to the server log (onSaveError) for recovery.
+// message; onSaveError tells the route, which logs counts only — never the
+// name, phone or text (Vercel's logs are a third-party store).
 //
 // Forms and the chat pass `phoneLimit`: a durable per-phone limit counted in
 // the `Lead` table (lib/leadLimit.ts) on top of the in-memory per-IP limit.

@@ -16,6 +16,7 @@ import { CinemaLayer } from '@/components/CinemaLayer';
 import { MessengerButtons } from '@/components/MessengerButtons';
 import { TelegramChip } from '@/components/TelegramChip';
 import { CookieNotice } from '@/components/CookieNotice';
+import { Storozh } from '@/components/Storozh';
 import { BrandPresence } from '@/components/BrandPresence';
 import { SITE } from '@/lib/site';
 import { siteUrl } from '@/lib/siteUrl';
@@ -174,6 +175,8 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           <InstallButton />
           <TelegramMiniApp />
           <CookieNotice />
+          {/* «Сторож»: Иван's question before the visitor leaves (home, machine and city pages). */}
+          <Storozh />
           <YandexMetrika />
           <MarketingTracker />
           {/* Cross-document view transitions must listen from the first render. */}

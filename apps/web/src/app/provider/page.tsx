@@ -167,6 +167,8 @@ export default async function ProviderPage({
         baseAddress: true,
         pinImageUrl: true,
         pinNote: true,
+        showOnMap: true,
+        showPhoneOnMap: true,
       },
     }),
     prisma.equipment.findMany({
@@ -595,7 +597,9 @@ export default async function ProviderPage({
               <p className="text-sm text-slate-600">
                 {pinCompany.baseLat === null
                   ? 'Вас пока нет на карте исполнителей — укажите, где стоит техника.'
-                  : 'Так заказчики находят ближайшего исполнителя на карте.'}
+                  : pinCompany.showOnMap === false
+                    ? 'Вы сняли себя с карты — заказчики вас там не видят, пока не включите снова.'
+                    : 'Заказчики видят вас на карте всегда, и когда вы не на линии: техника, город, цена и телефон.'}
               </p>
             </div>
             <Card className="max-w-xl">

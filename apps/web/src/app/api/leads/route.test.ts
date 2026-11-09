@@ -56,13 +56,21 @@ describe('POST /api/leads', () => {
   it('still delivers the lead to Telegram when the database is down', async () => {
     create.mockRejectedValue(new Error('db down'));
     notifyTelegram.mockResolvedValue(true);
-    const response = await POST(request());
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const response = await POST(request({ name: 'Иван', message: 'Нужен кран завтра' }));
     expect(response.status).toBe(202);
     const text = notifyTelegram.mock.calls[0]?.[0] as string;
     expect(text).toContain('база недоступна');
     expect(text).toContain('+79270000000');
     // Localisation: without the database the name stays off the messenger.
     expect(text).not.toContain('Иван');
+    // And off the server log too (audit 2026-11-08, №6): counts only.
+    const log = JSON.stringify(logged.mock.calls);
+    expect(log).toContain('failed to save lead');
+    expect(log).not.toContain('79270000000');
+    expect(log).not.toContain('Иван');
+    expect(log).not.toContain('Нужен кран');
+    logged.mockRestore();
   });
 
   it('refuses a 4th lead from the same phone in 10 minutes, from any IP', async () => {

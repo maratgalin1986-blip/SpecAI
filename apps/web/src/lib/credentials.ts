@@ -2,7 +2,8 @@ import bcrypt from 'bcryptjs';
 import { type UserRole } from '@specai/database';
 import { findUserByEmail } from '@/lib/findUserByEmail';
 import { loginSchema } from '@specai/shared';
-import { isRateLimited, recordAttempt, resetRateLimit } from '@/lib/rateLimit';
+import { durableIsLimited, durableRecord, durableReset } from '@/lib/durableRateLimit';
+import { rateLimitStore } from '@/lib/rateLimitStore';
 import {
   LOGIN_LIMIT_PER_EMAIL,
   LOGIN_LIMIT_PER_IP,
@@ -28,31 +29,34 @@ export interface AuthenticatedUser {
  *
  * Считаются только неудачные попытки: диспетчер, входящий с телефона, планшета
  * и компьютера, или офис за одним адресом не упираются в лимит без единой
- * ошибки пароля. Успешный вход сбрасывает счётчики e-mail и IP.
+ * ошибки пароля. Успешный вход сбрасывает счётчик e-mail. Счётчики живут в
+ * памяти и в базе (lib/durableRateLimit.ts): на Vercel память одного
+ * инстанса подбор не останавливает.
  */
 export async function authenticateWithCredentials(
   credentials: unknown,
   options: { ip?: string } = {},
 ): Promise<AuthenticatedUser | null> {
+  const store = rateLimitStore();
   const ipKey = options.ip ? `login:ip:${options.ip}` : null;
   if (ipKey) {
-    const byIp = isRateLimited(ipKey, LOGIN_LIMIT_PER_IP);
+    const byIp = await durableIsLimited(ipKey, LOGIN_LIMIT_PER_IP, store);
     if (!byIp.ok) throw new LoginError(LOGIN_RATE_LIMITED, byIp.retryAfterSec);
   }
 
   const parsed = loginSchema.safeParse(credentials);
   if (!parsed.success) {
-    if (ipKey) recordAttempt(ipKey, LOGIN_LIMIT_PER_IP);
+    if (ipKey) await durableRecord(ipKey, LOGIN_LIMIT_PER_IP, store);
     return null;
   }
 
   const emailKey = `login:email:${parsed.data.email}`;
-  const byEmail = isRateLimited(emailKey, LOGIN_LIMIT_PER_EMAIL);
+  const byEmail = await durableIsLimited(emailKey, LOGIN_LIMIT_PER_EMAIL, store);
   if (!byEmail.ok) throw new LoginError(LOGIN_RATE_LIMITED, byEmail.retryAfterSec);
 
-  const failed = () => {
-    recordAttempt(emailKey, LOGIN_LIMIT_PER_EMAIL);
-    if (ipKey) recordAttempt(ipKey, LOGIN_LIMIT_PER_IP);
+  const failed = async () => {
+    await durableRecord(emailKey, LOGIN_LIMIT_PER_EMAIL, store);
+    if (ipKey) await durableRecord(ipKey, LOGIN_LIMIT_PER_IP, store);
     return null;
   };
 
@@ -74,7 +78,7 @@ export async function authenticateWithCredentials(
 
   // Only the address's own counter: clearing the IP's would let one valid
   // account at that IP wipe the limit after every batch of guesses.
-  resetRateLimit(emailKey);
+  await durableReset(emailKey, store);
   return {
     id: user.id,
     email: user.email,

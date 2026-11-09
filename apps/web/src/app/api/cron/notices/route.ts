@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { clientIp } from '@/lib/loginErrors';
+import { cronAllowed } from '@/lib/cronAuth';
 import { checkRateLimit } from '@/lib/rateLimit';
 import { flushDeferredOrderNotices } from '@/lib/deferredOrderNotices';
 import { sendDemandNudges, type DemandNudgeResult } from '@/lib/demandNudgeData';
@@ -24,9 +25,10 @@ function demandCounts(result: DemandNudgeResult) {
 
 // «Пригласи друга»: sends the new-order alerts that waited 5 minutes for the
 // providers without the bonus (lib/deferredOrderNotices.ts). Called every
-// 5 minutes by .github/workflows/order-notices.yml. Public and safe: it only
-// sends alerts already due, each once, so extra calls change nothing; the
-// answer is counts only. Then the daily «Спрос рядом» (lib/demandNudgeData.ts:
+// 5 minutes by .github/workflows/order-notices.yml with the CRON_SECRET
+// repository secret (lib/cronAuth.ts; a stranger's call would spend the
+// Resend/Expo quotas ahead of time). Idempotent: it only sends alerts already
+// due, each once; the answer is counts only. Then the daily «Спрос рядом» (lib/demandNudgeData.ts:
 // 09:00–12:00 Moscow, once a day per provider manager), with its own time
 // budget and its own error handling, so it never holds back the alerts.
 // Production only, so a preview deployment never sends anything;
@@ -34,6 +36,9 @@ function demandCounts(result: DemandNudgeResult) {
 export async function GET(request: NextRequest) {
   if (process.env.VERCEL_ENV !== 'production') {
     return NextResponse.json({ ok: false, error: 'production only' }, { status: 403 });
+  }
+  if (!cronAllowed(request)) {
+    return NextResponse.json({ ok: false, error: 'forbidden' }, { status: 403 });
   }
   const rate = checkRateLimit(`order-notices:${clientIp(request)}`, {
     limit: 5,

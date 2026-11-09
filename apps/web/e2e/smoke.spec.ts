@@ -375,3 +375,197 @@ test('3D city: poster first, machine chips open the order card', async ({ page }
   );
   expect(errors).toEqual([]);
 });
+
+// «Сторож» (owner, 2026-11-08): on a desktop the mouse leaving through the top
+// edge after 20 s brings Иван's card (not a modal), and «Позвоните мне» sends a
+// lead with source «storozh». The clock is faked: the test takes no 20 s.
+test('storozh: desktop exit brings the card and sends a lead', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop', 'desktop trigger');
+  const errors = await guard(page);
+  const sent: { body?: Record<string, unknown> } = {};
+  await page.route('**/api/leads', (route) => {
+    sent.body = route.request().postDataJSON();
+    return route.fulfill({ status: 201, contentType: 'application/json', body: '{"ok":true}' });
+  });
+  await page.clock.install();
+  await page.goto('/?intro=0', { waitUntil: 'load' });
+  // The cookie strip takes the corner first: answer it.
+  await page.getByTestId('cookie-strip').getByRole('button', { name: 'Согласен' }).click();
+  const leave = () =>
+    page.evaluate(() =>
+      document.documentElement.dispatchEvent(new MouseEvent('mouseleave', { clientY: -3 })),
+    );
+  // Too early: nothing.
+  await page.clock.fastForward(10_000);
+  await leave();
+  await expect(page.getByTestId('storozh')).toHaveCount(0);
+  await page.clock.fastForward(11_000);
+  await leave();
+  const card = page.getByTestId('storozh');
+  await expect(card).toBeVisible();
+  await expect(card).toContainText('Подобрать технику и цену за минуту?');
+  await expect(card).toContainText('Иван');
+  // The page stays usable: nothing covers the header phone link.
+  await expect(page.locator('a[href^="tel:"]:visible').first()).toBeVisible();
+  await card.getByRole('button', { name: 'Позвоните мне' }).click();
+  await card.getByLabel('Телефон').fill('+7 927 000-00-01');
+  await card.locator('input[name="consent"]').check();
+  await card.getByRole('button', { name: 'Жду звонка' }).click();
+  await expect(card).toContainText('Заявка у Ивана');
+  expect(sent.body?.phone).toBe('+7 927 000-00-01');
+  expect(String(sent.body?.source)).toMatch(/^storozh/);
+  expect(await page.evaluate(() => localStorage.getItem('lead-sent'))).toBeTruthy();
+  expect(errors, 'page errors').toEqual([]);
+});
+
+// Legal pages are left alone: no card on /privacy however the visitor leaves.
+test('storozh stays quiet on /privacy', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop', 'desktop trigger');
+  const errors = await guard(page);
+  await page.clock.install();
+  await page.goto('/privacy', { waitUntil: 'load' });
+  await page.clock.fastForward(40_000);
+  await page.evaluate(() =>
+    document.documentElement.dispatchEvent(new MouseEvent('mouseleave', { clientY: -3 })),
+  );
+  await page.waitForTimeout(300);
+  await expect(page.getByTestId('storozh')).toHaveCount(0);
+  expect(errors, 'page errors').toEqual([]);
+});
+
+// «Все всех всегда должны видеть на карте в режиме офлайн и навсегда» (owner,
+// 2026-11-08): a provider that is not on the line is on /map anyway, its card
+// has the phone as a tap-to-call link, and a tap lists who is around. The map
+// API is answered here, so the test needs no database and no network.
+test.describe('map: everyone sees everyone', () => {
+  // The visitor stands a few kilometres from the pin, so the tap always moves the map.
+  // The service worker would answer the map API itself, past the routes below.
+  test.use({
+    geolocation: { latitude: 55.7, longitude: 52.3 },
+    permissions: ['geolocation'],
+    serviceWorkers: 'block',
+  });
+
+  const PNG_1X1 = Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=',
+    'base64',
+  );
+  const pins = {
+    providers: [
+      {
+        id: 'p-offline',
+        name: 'Стройтех Челны',
+        lat: 55.745,
+        lon: 52.4,
+        note: 'Работаем без выходных',
+        imageUrl: null,
+        equipmentCount: 4,
+        isHouse: false,
+        catalogUrl: '/providers/p-offline',
+        machines: ['Экскаваторы-погрузчики', 'Самосвалы'],
+        machinesMore: 0,
+        city: 'Набережные Челны',
+        priceText: 'от 18\u00a0000\u00a0₽/смена',
+        phone: '+7 927 100-00-00',
+        phoneHref: 'tel:+79271000000',
+        onLine: false,
+        orderUrl: '/orders?provider=p-offline',
+      },
+      {
+        id: 'p-online',
+        name: 'Казань-Экскаватор',
+        lat: 55.79,
+        lon: 49.12,
+        note: null,
+        imageUrl: null,
+        equipmentCount: 2,
+        isHouse: false,
+        catalogUrl: '/providers/p-online',
+        machines: ['Экскаваторы'],
+        machinesMore: 0,
+        city: 'Казань',
+        priceText: null,
+        phone: null,
+        phoneHref: null,
+        onLine: true,
+        orderUrl: '/orders?provider=p-online',
+      },
+    ],
+    customers: [
+      {
+        id: 'o1',
+        lat: 55.76,
+        lon: 52.45,
+        title: 'Заказчик рядом',
+        sub: 'нужно: Автокраны · Анна П.',
+        machinery: 'Автокраны',
+        customer: 'Анна П.',
+        orderUrl: '/orders/o1',
+        approximate: true,
+      },
+    ],
+    intake: [],
+  };
+
+  test('an offline provider is on the map with a tap-to-call phone, and the neighbours are listed', async ({
+    page,
+  }, testInfo) => {
+    const errors = await guard(page);
+    const asked: string[] = [];
+    await page.route('**/api/tiles/**', (route) =>
+      route.fulfill({ status: 200, contentType: 'image/png', body: PNG_1X1 }),
+    );
+    await page.route('**/api/line/nearby**', (route) =>
+      route.fulfill({ status: 401, contentType: 'application/json', body: '{"error":"login"}' }),
+    );
+    // A regex, not a glob: the viewport query («?bbox=…») must be caught too.
+    await page.route(/\/api\/providers\/map(\?.*)?$/, (route) => {
+      asked.push(new URL(route.request().url()).search);
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(pins),
+      });
+    });
+    await page.goto('/map', { waitUntil: 'load' });
+
+    const offline = page.locator('.leaflet-marker-icon.provider-pin-offline');
+    await expect(offline).toHaveCount(1);
+    await expect(page.locator('.leaflet-marker-icon.provider-pin-online')).toHaveCount(1);
+    await expect(page.locator('.leaflet-marker-icon.customer-pin')).toHaveCount(1);
+
+    await offline.click();
+    const popup = page.locator('.leaflet-popup-content');
+    await expect(popup).toContainText('Стройтех Челны');
+    await expect(popup).toContainText('Не на линии');
+    await expect(popup).toContainText(/от 18.000.₽\/смена/);
+    await expect(popup.locator('a[href="tel:+79271000000"]')).toHaveText(/\+7 927 100-00-00/);
+    await expect(popup).not.toContainText(/20\d\d-\d\d-\d\d/); // no registration date
+
+    // The tap centred the map: the viewport query went out with a box, and the
+    // tapped pin with its open card survived the reload.
+    await expect.poll(() => asked.some((query) => query.includes('bbox='))).toBe(true);
+    await expect(popup).toContainText('Стройтех Челны');
+
+    const nearby = page.getByTestId('map-nearby');
+    await expect(nearby).toContainText('Стройтех Челны');
+    await expect(nearby).toContainText('рядом: 1 экскаватор, 1 заказчик');
+    await expect(nearby.getByRole('link', { name: /Заказчик рядом/ })).toHaveAttribute(
+      'href',
+      '/orders/o1',
+    );
+
+    if (process.env.MAP_SHOT_DIR && testInfo.project.name === 'iphone-13') {
+      await page.screenshot({ path: `${process.env.MAP_SHOT_DIR}/offline-pin-popup.png` });
+      await nearby.scrollIntoViewIfNeeded();
+      await page.waitForTimeout(1000); // smooth scrolling and the reveal animation
+      await page.screenshot({ path: `${process.env.MAP_SHOT_DIR}/offline-pin-nearby.png` });
+    }
+    // With service workers blocked the site's own registration finds none
+    // («reading 'waiting'»); that is the test's doing, not the map's.
+    expect(
+      errors.filter((message) => !message.includes("'waiting'")),
+      'page errors',
+    ).toEqual([]);
+  });
+});

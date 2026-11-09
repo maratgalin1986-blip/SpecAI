@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Map as LeafletMap, Marker } from 'leaflet';
 import { createBaseMap, loadLeaflet, nearParam, pinIcon, showVisitor } from '@/components/leaflet';
-import { drawProviderLayer } from '@/components/providerLayer';
+import { drawProviderLayer, type MapSelection } from '@/components/providerLayer';
 import { TAP_ERRORS, tapVisitorFix } from '@/components/visitorPosition';
 import { ConsentText } from '@/components/ConsentText';
 import { LeadSuccess } from '@/components/LeadSuccess';
@@ -38,6 +38,8 @@ export function OrderMap({ embed = false }: { embed?: boolean }) {
   const [website, setWebsite] = useState('');
   const [status, setStatus] = useState<'idle' | 'sending' | 'sent'>('idle');
   const [error, setError] = useState<string | null>(null);
+  // «При выборе заказчика или исполнителя — видно вокруг него, кто рядом» (owner, 2026-11-08).
+  const [selection, setSelection] = useState<MapSelection | null>(null);
   const hydrated = useHydrated();
 
   useEffect(() => {
@@ -49,9 +51,14 @@ export function OrderMap({ embed = false }: { embed?: boolean }) {
         const map = createBaseMap(L, element.current);
         mapRef.current = map;
         showVisitor(L, map, { centreZoom: 11 });
-        // Every provider with a label over its pin, the machines on the line
-        // (signed in) and the «приём заявок» points where nobody is near.
-        void drawProviderLayer(L, map, () => !cancelled && mapRef.current === map);
+        // Every provider with a label over its pin — on the line or not —, the
+        // machines on the line (signed in), customers with open orders and the
+        // «приём заявок» points where nobody is near. A tap lists the neighbours.
+        void drawProviderLayer(L, map, () => !cancelled && mapRef.current === map, {
+          onSelect: (next) => {
+            if (!cancelled) setSelection(next);
+          },
+        });
         const place = (lat: number, lon: number, zoom?: number) => {
           if (!inServiceArea(lat, lon)) {
             setHint('Поставьте точку в России');
@@ -189,6 +196,46 @@ export function OrderMap({ embed = false }: { embed?: boolean }) {
             ? `📍 Место работ: ${formatCoords(point.lat, point.lon)} Значок можно перетащить.`
             : 'Нажмите на карту там, где будет работать техника.')}
       </p>
+
+      {selection && (
+        <section
+          aria-label="Кто рядом"
+          data-testid="map-nearby"
+          className="flex flex-col gap-2 rounded-2xl bg-white p-4 ring-1 ring-slate-200"
+        >
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <h2 className="truncate text-base font-semibold">{selection.focus.title}</h2>
+              <p className="text-sm text-slate-600">{selection.focus.sub}</p>
+              <p className="mt-1 text-sm font-medium text-amber-700">{selection.summary}</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setSelection(null)}
+              className="shrink-0 rounded-md border border-slate-300 px-2 py-1 text-xs text-slate-600 hover:border-slate-900"
+              aria-label="Скрыть список"
+            >
+              Скрыть
+            </button>
+          </div>
+          {selection.items.length > 0 && (
+            <ol className="divide-y divide-slate-100 text-sm">
+              {selection.items.map((item) => (
+                <li key={`${item.kind}:${item.id}`} className="flex items-baseline gap-3 py-2">
+                  <span className="w-14 shrink-0 text-xs text-slate-500">{item.distanceText}</span>
+                  <a href={item.href} className="min-w-0 flex-1 hover:underline">
+                    <span className="font-medium">
+                      {item.kind === 'live' ? '🟢 ' : item.kind === 'customer' ? '👷 ' : ''}
+                      {item.title}
+                    </span>
+                    {item.sub && <span className="block truncate text-slate-600">{item.sub}</span>}
+                  </a>
+                </li>
+              ))}
+            </ol>
+          )}
+        </section>
+      )}
 
       <form
         method="post"

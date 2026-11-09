@@ -9,7 +9,51 @@
 import { SITE } from './site';
 
 export const CHAT_PHONE_REVEALS_PER_DAY = 30;
+/**
+ * Per person inside the company: one dispatcher does not call 30 new
+ * customers a day, and a second account in the same company does not double
+ * the company's share (audit 2026-11-08, №3).
+ */
+export const CHAT_PHONE_REVEALS_PER_USER_PER_DAY = 15;
+/** A company younger than this, or not yet «Проверен», gets the small limit. */
+export const NEW_COMPANY_DAYS = 7;
+export const NEW_COMPANY_REVEALS_PER_DAY = 5;
+/** More reveals than this within an hour from one company alert the owner. */
+export const REVEAL_ALERT_PER_HOUR = 10;
 export const DAY_MS = 24 * 60 * 60_000;
+export const HOUR_MS = 60 * 60_000;
+
+/**
+ * How many different orders a company may open a day: the full share for a
+ * verified company older than a week, NEW_COMPANY_REVEALS_PER_DAY for a fresh
+ * or unverified one (sign-up is free and open — N accounts must not mean N×30
+ * phones). The house fleet is not limited (the route passes 0 reveals).
+ */
+export function companyRevealLimit(
+  company: { verified: boolean; createdAt: Date } | null | undefined,
+  now: Date = new Date(),
+): number {
+  if (!company) return NEW_COMPANY_REVEALS_PER_DAY;
+  const young = now.getTime() - company.createdAt.getTime() < NEW_COMPANY_DAYS * DAY_MS;
+  return company.verified && !young ? CHAT_PHONE_REVEALS_PER_DAY : NEW_COMPANY_REVEALS_PER_DAY;
+}
+
+/**
+ * The owner's Telegram alert when a company opens more than
+ * REVEAL_ALERT_PER_HOUR phones in an hour — sent once, as the count crosses
+ * the mark (`hourCount` includes the reveal being made). No customer data.
+ */
+export function revealAlertText(input: {
+  companyName: string;
+  companyId: string;
+  hourCount: number;
+}): string | null {
+  if (input.hourCount !== REVEAL_ALERT_PER_HOUR + 1) return null;
+  return (
+    `⚠️ Исполнитель «${input.companyName}» открыл ${input.hourCount} телефонов заказчиков за час ` +
+    `(лимит тревоги ${REVEAL_ALERT_PER_HOUR}). Проверьте компанию в /admin: ${input.companyId}`
+  );
+}
 
 /** «+7 917 •••-••-34»: enough to recognise a number, not to call it. */
 export function maskPhone(phone: string | null | undefined): string | null {
@@ -192,14 +236,20 @@ export type RevealDecision =
  * - a confirmed e-mail when the site can send letters (accountability);
  * - only open/matched orders (from chats or guests of the site) that still
  *   have a phone — an order of a signed-in customer never has one;
- * - at most CHAT_PHONE_REVEALS_PER_DAY different orders per company a day;
- *   opening the same order again does not count.
+ * - at most `companyLimit` (companyRevealLimit, CHAT_PHONE_REVEALS_PER_DAY by
+ *   default) different orders per company a day and
+ *   CHAT_PHONE_REVEALS_PER_USER_PER_DAY per person; opening the same order
+ *   again does not count.
  */
 export function revealDecision(input: {
   viewer: RevealViewer | null;
   order: RevealOrder | null;
   alreadyRevealed: boolean;
+  /** Different orders the company opened today. */
   revealsToday: number;
+  /** Different orders this person opened today. */
+  revealsTodayByUser?: number;
+  companyLimit?: number;
   requireVerifiedEmail: boolean;
 }): RevealDecision {
   const { viewer, order } = input;
@@ -217,11 +267,19 @@ export function revealDecision(input: {
     return { ok: false, status: 410, error: 'Телефон недоступен: заявка закрыта или удалена' };
   }
   if (input.alreadyRevealed) return { ok: true, counts: false };
-  if (input.revealsToday >= CHAT_PHONE_REVEALS_PER_DAY) {
+  const companyLimit = input.companyLimit ?? CHAT_PHONE_REVEALS_PER_DAY;
+  if (input.revealsToday >= companyLimit) {
     return {
       ok: false,
       status: 429,
-      error: `Лимит: ${CHAT_PHONE_REVEALS_PER_DAY} телефонов в сутки на компанию. Попробуйте завтра`,
+      error: `Лимит: ${companyLimit} телефонов в сутки на компанию. Попробуйте завтра`,
+    };
+  }
+  if ((input.revealsTodayByUser ?? 0) >= CHAT_PHONE_REVEALS_PER_USER_PER_DAY) {
+    return {
+      ok: false,
+      status: 429,
+      error: `Лимит: ${CHAT_PHONE_REVEALS_PER_USER_PER_DAY} телефонов в сутки на сотрудника. Попробуйте завтра`,
     };
   }
   return { ok: true, counts: true };

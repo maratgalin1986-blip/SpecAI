@@ -24,6 +24,9 @@ const PIN_SELECT = {
   phone: true,
   deliveryRadiusKm: true,
   deliveryPricePerKm: true,
+  // «Все видят всех на карте» (owner, 2026-11-08): null reads as on.
+  showOnMap: true,
+  showPhoneOnMap: true,
 } as const;
 
 /** Delivery settings from the request: radius 5–1000 km, a price per km or null. */
@@ -113,7 +116,19 @@ export async function PATCH(request: NextRequest) {
     pinNote?: string | null;
     description?: string | null;
     phone?: string | null;
+    showOnMap?: boolean;
+    showPhoneOnMap?: boolean;
   } & DeliveryPatch = {};
+
+  // The map switches: the only way off the map, and the phone on the pin.
+  for (const key of ['showOnMap', 'showPhoneOnMap'] as const) {
+    if (key in input) {
+      if (typeof input[key] !== 'boolean') {
+        return NextResponse.json({ error: 'Переключатель карты — да или нет' }, { status: 400 });
+      }
+      data[key] = input[key];
+    }
+  }
 
   // Delivery radius and price per km (the feed and the bid form use them).
   const delivery = parseDelivery(input);

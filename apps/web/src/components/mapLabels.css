@@ -45,3 +45,16 @@
 .leaflet-tooltip.map-label.label-clash {
   visibility: hidden;
 }
+.leaflet-tooltip.map-label-r4 {
+  border: 1px solid #7c3aed;
+  background: #f5f3ff;
+}
+.leaflet-tooltip.map-label.map-label-offline {
+  opacity: 0.78;
+}
+/* An open card reads whole: on a phone it is as wide as the map, and the zoom
+   control (its own stacking context, above every pane) would cover its corner,
+   so the control steps aside while a card is open. */
+.leaflet-container:has(.leaflet-popup) .leaflet-control-zoom {
+  visibility: hidden;
+}

@@ -55,6 +55,10 @@ describe('POST /api/line/renew (public, signed link)', () => {
   });
 
   it('a second tap changes nothing', async () => {
+    // Pinned: with the real clock the renewed period is over since 2026-11-07,
+    // and an ended line answers «gone» — a different case, tested below.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-10-30T10:00:00Z'));
     const renewed = new Date('2026-11-06T20:59:59.999Z');
     findUnique.mockResolvedValue({
       id: 'p1',
@@ -67,6 +71,7 @@ describe('POST /api/line/renew (public, signed link)', () => {
     expect(status).toBe(200);
     expect(body.already).toBe(true);
     expect(updateMany).not.toHaveBeenCalled();
+    vi.useRealTimers();
   });
 
   it('refuses a forged token and does not bring back a line switched off', async () => {

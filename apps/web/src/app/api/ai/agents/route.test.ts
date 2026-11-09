@@ -63,13 +63,18 @@ describe('POST /api/ai/agents — a phone in the chat', () => {
     expect(text).not.toContain('автокран');
   });
 
-  it('asks to call when the lead reached nobody', async () => {
+  it('asks to call when the lead reached nobody, and logs no personal data', async () => {
     create.mockRejectedValue(new Error('db down'));
     notifyTelegram.mockResolvedValue(false);
-    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
     const data = await (await POST(request({ messages: phoneMessage, consent: true }))).json();
     expect(data.lead).toBeUndefined();
     expect(data.reply).toContain('Позвоните');
+    const log = JSON.stringify(logged.mock.calls);
+    expect(log).toContain('failed to save chat lead');
+    expect(log).not.toContain('9000000000');
+    expect(log).not.toContain('автокран');
+    logged.mockRestore();
   });
 
   it('answers kindly when the phone already sent 3 leads in 10 minutes', async () => {
