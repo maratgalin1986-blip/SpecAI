@@ -902,7 +902,9 @@ Vercel (`NEXT_PUBLIC_SITE_URL`, `NEXT_PUBLIC_SITE_DOMAIN_CONNECTED=1`, `NEXTAUTH
   «Письмо не отправлено: канал не настроен», повтор раз в день). Поиск, страницы, превью и утренняя
   сводка в Telegram работают. **Нужно от владельца:** добавить в Vercel `RESEND_API_KEY` и
   `EMAIL_FROM` (адрес с подтверждённого в Resend домена) — тогда рассылка по почте включится сама;
-  для WhatsApp — `GREEN_API_INSTANCE_ID` и `GREEN_API_TOKEN`.
+  для WhatsApp — `GREEN_API_INSTANCE_ID` и `GREEN_API_TOKEN`; для поиска по 2ГИС (карточки полнее
+  OSM, Overpass не любит облака) — `DGIS_API_KEY` с dev.2gis.ru (бесплатный тариф): адаптер уже
+  написан (`lib/office/sources/dgis.ts`), с ключом 2ГИС спрашивается первым, OSM — запасным.
 - **Проверка источника 2026-11-09, 13:00 МСК:** из облачной сессии все зеркала Overpass недоступны
   (overpass-api.de сбрасывает соединение, остальные молчат) при рабочих openstreetmap.org и Nominatim —
   Overpass не любит адреса облаков. Для устойчивости на Vercel источник теперь пробует зеркала по

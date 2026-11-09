@@ -10,6 +10,8 @@ import { AGENTS, agentById } from './agents';
 import { machineryTags, nicheByKey, type Niche } from './niches';
 import { OFFICE_SETTINGS, defaultPlan, nextStep, parsePlan } from './plan';
 import { prospectSlug, newToken } from './slug';
+import { createDgisSource } from './sources/dgis';
+import { withFallback } from './sources/fallback';
 import { osmSource } from './sources/osm';
 import type { Candidate, ProspectSource, SourceNiche } from './sources/types';
 import type { AgentId, PlanStep } from './types';
@@ -135,8 +137,15 @@ function sourceNiche(niche: Niche): SourceNiche {
     osm: niche.osm.tags.map(([k, v]) => [k, v] as [string, string]),
     nameRegex: niche.osm.nameRegex,
     osmNameFilter: niche.osm.osmNameFilter,
+    dgisQuery: niche.osm.dgisQuery,
     machineryTags: niche.key === 'machinery' ? machineryTags : undefined,
   };
+}
+
+/** 2ГИС первым, когда есть `DGIS_API_KEY`, иначе только OSM. */
+export function defaultSource(): ProspectSource {
+  const dgis = createDgisSource();
+  return dgis ? withFallback([dgis, osmSource]) : osmSource;
 }
 
 /** Последние 10 цифр телефона — так сравниваются `+7…`, `8…` и городские номера. */
@@ -302,7 +311,7 @@ function inputError(input: RunStepInput): string | null {
 /** Один шаг плана: журнал, поиск, дедупликация, создание кандидатов (spec §4). */
 export async function runStep(input: RunStepInput, deps: RunDeps = {}): Promise<RunStepResult> {
   const db = deps.db ?? defaultDb();
-  const source = input.source ?? deps.source ?? osmSource;
+  const source = input.source ?? deps.source ?? defaultSource();
   const now = input.now ?? new Date();
   const run = await db.officeRun.create({
     data: {
