@@ -14,6 +14,7 @@ export default tseslint.config(
       'apps/web/public/**',
       'apps/mobile/.expo/**',
       'apps/mobile/expo-env.d.ts',
+      'apps/web/next-env.d.ts',
       'apps/mobile/android/**',
       'apps/mobile/ios/**',
     ],
