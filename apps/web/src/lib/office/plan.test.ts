@@ -1,6 +1,6 @@
-import { RUSSIAN_CITIES, cityByName } from '@specai/shared';
+import { cityByName } from '@specai/shared';
 import { describe, expect, it } from 'vitest';
-import { defaultPlan, formatPlan, nextStep, parsePlan } from './plan';
+import { defaultPlan, formatPlan, homeRegionCities, nextStep, parsePlan } from './plan';
 
 describe('office plan: parsePlan', () => {
   it('reads «agent; niche; city» lines and reports errors by line number', () => {
@@ -55,6 +55,7 @@ describe('office plan: nextStep', () => {
 
 describe('office plan: defaultPlan', () => {
   const plan = defaultPlan();
+  const home = homeRegionCities();
 
   it('alternates the agents: providers, sites, providers, …', () => {
     expect(plan.slice(0, 4).map((s) => s.agent)).toEqual([
@@ -63,15 +64,23 @@ describe('office plan: defaultPlan', () => {
       'providers',
       'sites',
     ]);
-    expect(plan.filter((s) => s.agent === 'providers')).toHaveLength(30);
-    // 5 ниш × 8 городов.
-    expect(plan.filter((s) => s.agent === 'sites')).toHaveLength(40);
   });
 
-  it('covers the first 30 cities for providers and known cities only', () => {
+  it('весь Татарстан идёт первым у обоих агентов, потом остальная Россия', () => {
+    expect(home.length).toBeGreaterThanOrEqual(18);
+    expect(home).toContain('Казань');
+    expect(home).toContain('Набережные Челны');
+    expect(home).toContain('Арск');
     const providerCities = plan.filter((s) => s.agent === 'providers').map((s) => s.city);
-    expect(providerCities).toEqual(RUSSIAN_CITIES.slice(0, 30).map((c) => c.name));
+    expect(providerCities.slice(0, home.length)).toEqual(home);
+    // Остальные 30 крупных городов без повторов Татарстана.
+    expect(new Set(providerCities).size).toBe(providerCities.length);
+    expect(providerCities).toContain('Москва');
+    const siteCities = [...new Set(plan.filter((s) => s.agent === 'sites').map((s) => s.city))];
+    expect(siteCities.slice(0, home.length)).toEqual(home);
+    expect(siteCities).toContain('Уфа');
+    // 5 ниш на каждый город «Сайтов».
+    expect(plan.filter((s) => s.agent === 'sites')).toHaveLength((home.length + 4) * 5);
     for (const step of plan) expect(cityByName(step.city)?.name).toBe(step.city);
-    expect(plan.some((s) => s.city === 'Набережные Челны' && s.niche === 'dentist')).toBe(true);
   });
 });

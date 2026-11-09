@@ -18,35 +18,39 @@ export const OFFICE_SETTINGS = {
   replyTo: 'office.replyTo',
 } as const;
 
-/** Сколько городов из RUSSIAN_CITIES обходит агент «Подрядчики» в плане по умолчанию. */
+/** Регион, который офис обходит целиком и первым (владелец, 2026-11-09: «возьми весь Татарстан»). */
+export const HOME_REGION = 'Республика Татарстан';
+
+/** Сколько городов из RUSSIAN_CITIES обходит агент «Подрядчики» после домашнего региона. */
 export const DEFAULT_PROVIDER_CITIES = 30;
 
-/** Города агента «Сайты» в плане по умолчанию. */
-export const DEFAULT_SITE_CITIES: readonly string[] = [
-  'Набережные Челны',
-  'Казань',
-  'Нижнекамск',
-  'Альметьевск',
-  'Уфа',
-  'Самара',
-  'Пермь',
-  'Екатеринбург',
-];
+/** Города агента «Сайты» за пределами домашнего региона в плане по умолчанию. */
+export const DEFAULT_SITE_CITIES: readonly string[] = ['Уфа', 'Самара', 'Пермь', 'Екатеринбург'];
+
+/** Все города домашнего региона из списка городов России, крупные первыми. */
+export function homeRegionCities(): string[] {
+  return RUSSIAN_CITIES.filter((city) => city.region === HOME_REGION).map((city) => city.name);
+}
 
 /**
- * providers × machinery по первым 30 городам и sites × ниши × 8 городов, чередуя агентов:
- * providers, sites, providers, … Когда один список кончается, идёт остаток другого.
+ * Сначала весь Татарстан (оба агента, каждый его город), затем остальная Россия:
+ * providers × machinery по первым 30 городам и sites × ниши × 4 города; агенты
+ * чередуются: providers, sites, providers, … Когда один список кончается, идёт
+ * остаток другого.
  */
 export function defaultPlan(): PlanStep[] {
-  const providers: PlanStep[] = RUSSIAN_CITIES.slice(0, DEFAULT_PROVIDER_CITIES).flatMap((city) =>
-    AGENTS.providers.defaultNiches.map((niche) => ({
-      agent: 'providers' as const,
-      niche,
-      city: city.name,
-    })),
+  const home = homeRegionCities();
+  const providerCities = [
+    ...home,
+    ...RUSSIAN_CITIES.slice(0, DEFAULT_PROVIDER_CITIES)
+      .map((city) => city.name)
+      .filter((name) => !home.includes(name)),
+  ];
+  const providers: PlanStep[] = providerCities.flatMap((city) =>
+    AGENTS.providers.defaultNiches.map((niche) => ({ agent: 'providers' as const, niche, city })),
   );
   const sites: PlanStep[] = [];
-  for (const cityName of DEFAULT_SITE_CITIES) {
+  for (const cityName of [...home, ...DEFAULT_SITE_CITIES]) {
     const city = cityByName(cityName);
     if (!city) continue;
     for (const niche of AGENTS.sites.defaultNiches) {
