@@ -20,6 +20,8 @@ export const dynamic = 'force-dynamic';
 export const fetchCache = 'force-no-store';
 // The AI moderation sweep makes up to 20 calls (four at a time).
 export const maxDuration = 60;
+/** К этому моменту от старта функции офисный тик должен закончиться (запас до maxDuration). */
+const OFFICE_DEADLINE_MS = 52_000;
 
 /**
  * Daily cron (19:00 Moscow, apps/web/vercel.json): document reminders 30
@@ -88,17 +90,6 @@ export async function GET(request: NextRequest) {
   // «Заявки за сутки» in the platform's own Telegram channel (off without TELEGRAM_CHANNEL_ID);
   // before the AI sweep, which may use the rest of the function's time.
   const channel = await postChannelDigest().catch((error: unknown) => ({ error: String(error) }));
-  // Офис агентов — страховка на день, когда расписание GitHub молчало: один
-  // шаг плана, рассылка и сводка владельцу, если её сегодня ещё не было
-  // (lib/office/tick.ts). Бюджет небольшой: дальше ещё опрос и модерация.
-  const office = await officeTick(new Date(), {
-    budgetMs: 20_000,
-    maxSteps: 1,
-    digest: 'any',
-  }).catch((error: unknown) => {
-    console.error('[cron/daily] office tick failed', error);
-    return { error: String(error) };
-  });
   // «Опрос цен в группе»: posted once in the owner's group, closed after 7
   // days with the results to the owner (lib/groupPriceSurvey.ts).
   const priceSurvey = await runGroupPriceSurvey().catch((error: unknown) => {
@@ -115,6 +106,18 @@ export async function GET(request: NextRequest) {
     if (line) await notifyTelegram(line);
     return line;
   }).catch(() => null);
+  // Офис агентов — страховка на день, когда расписание GitHub молчало: шаг
+  // плана, рассылка и сводка владельцу, если её сегодня ещё не было
+  // (lib/office/tick.ts). Последним, на остаток времени функции: ничего из
+  // ежедневного он не отодвигает, а без времени делает только рассылку и сводку.
+  const office = await officeTick(new Date(), {
+    budgetMs: Math.max(0, OFFICE_DEADLINE_MS - (Date.now() - now.getTime())),
+    maxSteps: 1,
+    digest: 'any',
+  }).catch((error: unknown) => {
+    console.error('[cron/daily] office tick failed', error);
+    return { error: String(error) };
+  });
   return NextResponse.json({
     ok: true,
     checked: candidates.length,

@@ -121,6 +121,8 @@ export interface OfficeDb {
 export interface RunDeps {
   db?: OfficeDb;
   source?: ProspectSource;
+  /** Сколько миллисекунд есть у поиска (остаток времени функции крона). */
+  budgetMs?: number;
 }
 
 function defaultDb(): OfficeDb {
@@ -340,6 +342,7 @@ export async function runStep(input: RunStepInput, deps: RunDeps = {}): Promise<
       city: { name: city.name, lat: city.lat, lon: city.lon },
       radiusKm: STEP_RADIUS_KM,
       limit: SEARCH_LIMIT,
+      ...(deps.budgetMs !== undefined ? { budgetMs: deps.budgetMs } : {}),
     });
     if (search.status !== 'ok') {
       result.error = search.error;
@@ -431,6 +434,9 @@ export async function runScheduledStep(
     create: { key: OFFICE_SETTINGS.cursor, value: String(nextCursor) },
     update: { value: String(nextCursor) },
   });
-  const result = await runStep({ ...step, trigger: 'cron', now }, { db, source: deps.source });
+  const result = await runStep(
+    { ...step, trigger: 'cron', now },
+    { db, source: deps.source, budgetMs: deps.budgetMs },
+  );
   return { skipped: null, step, result };
 }

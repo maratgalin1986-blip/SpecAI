@@ -50,6 +50,8 @@ export interface ProspectSource {
     niche: SourceNiche;
     city: SourceCity;
     radiusKm: number;
+    /** Сколько миллисекунд источник может потратить (крон делит своё время между шагами). */
+    budgetMs?: number;
     limit: number;
   }): Promise<SearchResult>;
 }

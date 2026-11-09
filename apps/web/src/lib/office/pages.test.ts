@@ -7,6 +7,7 @@ import {
   mapHref,
   phoneDigits,
   previewBannerText,
+  phoneText,
 } from './pages';
 
 const PHONE = '+7 (927) 123-45-67';
@@ -170,10 +171,10 @@ describe('previewBannerText', () => {
 });
 
 describe('phoneText', () => {
-  it('пишет номер как люди: +7 843 212-34-56', async () => {
-    const { phoneText } = await import('./pages');
+  it('пишет номер как люди: +7 843 212-34-56; иностранный — как записан', () => {
     expect(phoneText('+78432123456')).toBe('+7 843 212-34-56');
     expect(phoneText('89170001122')).toBe('+7 917 000-11-22');
     expect(phoneText('12345')).toBe('12345');
+    expect(phoneText('+1 234 567 8901')).toBe('+1 234 567 8901');
   });
 });

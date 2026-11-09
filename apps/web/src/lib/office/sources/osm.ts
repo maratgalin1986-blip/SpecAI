@@ -123,12 +123,13 @@ export function createOsmSource(
 ): ProspectSource {
   return {
     id: 'osm',
-    async search({ niche, city, radiusKm, limit }) {
+    async search({ niche, city, radiusKm, limit, budgetMs }) {
+      const total = Math.min(OVERPASS_TOTAL_MS, Math.max(0, budgetMs ?? OVERPASS_TOTAL_MS));
       const doFetch: FetchLike = fetchImpl ?? ((input, init) => fetch(input, init));
       const query = buildOverpassQuery(niche, city, radiusKm);
       const startedAt = clock();
       for (const url of mirrors) {
-        const left = OVERPASS_TOTAL_MS - (clock() - startedAt);
+        const left = total - (clock() - startedAt);
         if (left < 3_000) break;
         const controller = new AbortController();
         const timer = setTimeout(() => controller.abort(), Math.min(OVERPASS_TIMEOUT_MS, left));

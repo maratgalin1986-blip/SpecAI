@@ -169,6 +169,14 @@ type LiteRow = {
 
 /** Минимум базы для сводки; `prisma` подходит как есть. */
 export interface DigestDb {
+  /** Отметки onceADay («cron:office-digest:<день>:done») — с них начинается следующая сводка. */
+  adminFeedRead?: {
+    findFirst(args: {
+      where: { key: { startsWith: string; endsWith: string } };
+      orderBy: { readAt: 'desc' };
+      select: { readAt: true };
+    }): Promise<{ readAt: Date } | null>;
+  };
   officeRun: {
     findMany(args: {
       where: { startedAt: { gte: Date } };
@@ -217,11 +225,31 @@ function lite(rows: LiteRow[]): ProspectLite[] {
 }
 
 /** Собирает данные за сутки и возвращает текст сводки. */
+/**
+ * Начало окна сводки: момент предыдущей сводки (сводки уходят в разное время —
+ * когда GitHub соизволит, — и окно «ровно сутки» то накладывалось бы, то рвалось),
+ * но не раньше чем 48 часов назад и не позже чем сутки назад.
+ */
+export async function digestSince(now: Date, db: DigestDb): Promise<Date> {
+  const dayAgo = new Date(now.getTime() - 86_400_000);
+  const twoDaysAgo = new Date(now.getTime() - 2 * 86_400_000);
+  const last = await db.adminFeedRead
+    ?.findFirst({
+      where: { key: { startsWith: 'cron:office-digest:', endsWith: ':done' } },
+      orderBy: { readAt: 'desc' },
+      select: { readAt: true },
+    })
+    .catch(() => null);
+  if (!last) return dayAgo;
+  const at = last.readAt.getTime();
+  return new Date(Math.min(dayAgo.getTime(), Math.max(twoDaysAgo.getTime(), at)));
+}
+
 export async function collectDigest(
   now: Date = new Date(),
   db: DigestDb = prisma,
 ): Promise<string> {
-  const since = new Date(now.getTime() - 86_400_000);
+  const since = await digestSince(now, db);
   const { end: todayEnd } = mskDayBounds(now);
   const [runs, toContact, emailSent, whatsappSent, replied, callbacks, registered, settings] =
     await Promise.all([
