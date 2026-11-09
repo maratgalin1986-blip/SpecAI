@@ -1162,6 +1162,13 @@ model Prospect {
   setupPaidAt    DateTime?
   paidUntil      DateTime?
   followUpSentAt DateTime?
+  // Досье фирмы и персональное предложение (S13–S17): факты карточки и окружения, выбранный
+  // заход письма (по нему офис учится), текст предложения как отправлен, просмотры превью.
+  dossierJson     String?
+  offerAngle      String?
+  offerJson       String?
+  previewViews    Int       @default(0)
+  previewViewedAt DateTime?
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
