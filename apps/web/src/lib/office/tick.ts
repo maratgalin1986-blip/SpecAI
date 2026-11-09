@@ -86,10 +86,14 @@ export async function officeTick(
 
   for (let i = 0; i < Math.max(0, options.maxSteps); i++) {
     if (left() - TICK_RESERVE_MS < STEP_MIN_MS) break;
-    const result = await runStep(new Date()).catch((error: unknown) => {
+    let result: ScheduledStepResult;
+    try {
+      result = await runStep(new Date());
+    } catch (error) {
       console.error('[office] step failed', error);
-      return { skipped: 'error' as const, step: null, result: null } as ScheduledStepResult;
-    });
+      steps.push({ skipped: 'error' });
+      break;
+    }
     steps.push(publicStep(result));
     // На паузе, пустой план или ошибка источника — дальше шаги не нужны.
     if (result.skipped || result.result.error) break;
