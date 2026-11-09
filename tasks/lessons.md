@@ -84,3 +84,17 @@
     и был переписан force-push; классификатор блокирует такие загрузки — и правильно).
 26. **Расширение Яндекс Браузера делят сессии** — группа вкладок живёт ~1 мин; выкладку
     делать одним browser_batch, а при «not connected» (браузер закрыт) — откладывать.
+
+## 2026-11-09 — обновление Next.js 15 (сессия безопасности)
+
+27. **Кодмод `next-async-request-api` не трогает sync-хелперы.** `cookies()`/`headers()`
+    внутри обычной функции (`isAdminRequest`) он оборачивает в каст `UnsafeUnwrapped*`
+    с пометкой `@next-codemod-error` — это компилируется, но в рантайме падает. После
+    кодмода: `grep -rn "@next-codemod-error\|UnsafeUnwrapped" src` должен быть пуст;
+    хелпер делать `async` и ждать во всех вызовах (у нас 31). Также кодмод теряет
+    значения по умолчанию (`searchParams = {}` → `await props.searchParams` без `?? {}`),
+    а тесты route handlers должны передавать `params: Promise.resolve(...)`.
+28. **React 19 убрал глобальный `JSX`** — `JSX.Element` писать как `ReactElement` из
+    `react`. В монорепе с Expo pnpm переиспользует уже имеющийся `react` (19.2.3 у
+    приложения) для веба, а `react-dom` берёт свежий — peer-рассинхрон; лечится
+    `pnpm update react react-dom --filter @specai/web --filter @specai/ui`.
