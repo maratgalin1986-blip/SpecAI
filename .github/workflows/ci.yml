@@ -54,5 +54,18 @@ jobs:
       - name: Test
         run: pnpm test
 
+      # The production build runs `prisma db push` without --accept-data-loss and stops on a
+      # risky change (a new @unique, a dropped column): PR #110 never reached production on
+      # 2026-11-09 because of a new @unique. The same check here: main's schema first, then
+      # this branch's schema on top.
+      - name: Schema push from the base branch needs no data-loss flag
+        if: github.event_name == 'pull_request'
+        run: |
+          git fetch --depth=1 origin "${{ github.base_ref }}"
+          git show "origin/${{ github.base_ref }}:packages/database/prisma/schema.prisma" > "$RUNNER_TEMP/base.prisma"
+          cd packages/database
+          npx prisma db push --skip-generate --schema "$RUNNER_TEMP/base.prisma"
+          npx prisma db push --skip-generate --schema prisma/schema.prisma
+
       - name: Build
         run: pnpm build

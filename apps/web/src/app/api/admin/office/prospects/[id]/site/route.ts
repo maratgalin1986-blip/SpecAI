@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@specai/database';
 import { isAdminRequest } from '@/lib/admin';
 import { INVALID_JSON_MESSAGE, prismaErrorCode, readJson } from '@/lib/apiInput';
-import { normalizeDomain } from '@/lib/office/domains';
+import { domainKeys, normalizeDomain } from '@/lib/office/domains';
 import { validateSiteContent } from '@/lib/office/siteContent';
 import { siteJsonFor } from '@/lib/office/siteEditor';
 
@@ -49,6 +49,18 @@ export async function PUT(request: NextRequest, props: { params: Promise<{ id: s
       { error: 'Редактор только для сайтов агента «Сайты под ключ»' },
       { status: 409 },
     );
+  }
+
+  // Один домен — один сайт. Уникального индекса в базе нет (db push на проде остановился бы
+  // на нём), поэтому проверка здесь — по обоим вариантам записи (с «www.» и без).
+  if (data.domain) {
+    const taken = await prisma.prospect.findFirst({
+      where: { domain: { in: domainKeys(data.domain) }, NOT: { id: prospect.id } },
+      select: { id: true },
+    });
+    if (taken) {
+      return NextResponse.json({ error: 'Этот домен уже у другого сайта' }, { status: 409 });
+    }
   }
 
   try {
