@@ -6,6 +6,18 @@ import { candidateEmail, candidatePhone, candidateTelegram } from './phone';
 import type { Candidate, ProspectSource, SourceCity, SourceNiche } from './types';
 
 export const OVERPASS_URL = 'https://overpass-api.de/api/interpreter';
+/**
+ * Зеркала Overpass по порядку: основное, затем запасные. Overpass не любит
+ * адреса облаков (сбрасывает соединение или молчит), поэтому при отказе одного
+ * зеркала шаг пробует следующее; на каждое — свой таймаут, общий — не больше
+ * OVERPASS_TOTAL_MS, чтобы крон успел записать результат.
+ */
+export const OVERPASS_MIRRORS: readonly string[] = [
+  OVERPASS_URL,
+  'https://maps.mail.ru/osm/tools/overpass/api/interpreter',
+  'https://overpass.kumi.systems/api/interpreter',
+];
+export const OVERPASS_TOTAL_MS = 40_000;
 export const OVERPASS_TIMEOUT_MS = 25_000;
 export const OVERPASS_UNAVAILABLE = 'Источник карт не ответил';
 
@@ -104,35 +116,51 @@ export function withoutWebsite(list: Candidate[]): Candidate[] {
 
 type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;
 
-export function createOsmSource(fetchImpl?: FetchLike): ProspectSource {
+export function createOsmSource(
+  fetchImpl?: FetchLike,
+  mirrors: readonly string[] = OVERPASS_MIRRORS,
+  clock: () => number = Date.now,
+): ProspectSource {
   return {
     id: 'osm',
     async search({ niche, city, radiusKm, limit }) {
       const doFetch: FetchLike = fetchImpl ?? ((input, init) => fetch(input, init));
       const query = buildOverpassQuery(niche, city, radiusKm);
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), OVERPASS_TIMEOUT_MS);
-      try {
-        const response = await doFetch(OVERPASS_URL, {
-          method: 'POST',
-          body: `data=${encodeURIComponent(query)}`,
-          headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
-            'User-Agent': GEO_USER_AGENT,
-          },
-          signal: controller.signal,
-        });
-        if (!response.ok) return { status: 'unavailable', error: OVERPASS_UNAVAILABLE };
-        const json: unknown = await response.json();
-        return {
-          status: 'ok',
-          candidates: withoutWebsite(parseOverpass(json, niche)).slice(0, Math.max(0, limit)),
-        };
-      } catch {
-        return { status: 'unavailable', error: OVERPASS_UNAVAILABLE };
-      } finally {
-        clearTimeout(timer);
+      const startedAt = clock();
+      for (const url of mirrors) {
+        const left = OVERPASS_TOTAL_MS - (clock() - startedAt);
+        if (left < 3_000) break;
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), Math.min(OVERPASS_TIMEOUT_MS, left));
+        try {
+          const response = await doFetch(url, {
+            method: 'POST',
+            body: `data=${encodeURIComponent(query)}`,
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded',
+              'User-Agent': GEO_USER_AGENT,
+            },
+            signal: controller.signal,
+          });
+          // 4xx — ошибка запроса, другое зеркало её не исправит; 5xx/429 — пробуем дальше.
+          if (!response.ok) {
+            if (response.status >= 400 && response.status < 500 && response.status !== 429) {
+              return { status: 'unavailable', error: OVERPASS_UNAVAILABLE };
+            }
+            continue;
+          }
+          const json: unknown = await response.json();
+          return {
+            status: 'ok',
+            candidates: withoutWebsite(parseOverpass(json, niche)).slice(0, Math.max(0, limit)),
+          };
+        } catch {
+          // сеть, таймаут, не JSON — следующее зеркало
+        } finally {
+          clearTimeout(timer);
+        }
       }
+      return { status: 'unavailable', error: OVERPASS_UNAVAILABLE };
     },
   };
 }

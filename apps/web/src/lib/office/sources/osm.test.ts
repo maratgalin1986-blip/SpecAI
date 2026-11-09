@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
+  OVERPASS_MIRRORS,
+  OVERPASS_TOTAL_MS,
   OVERPASS_URL,
   buildOverpassQuery,
   createOsmSource,
@@ -252,10 +254,44 @@ describe('osmSource.search', () => {
     expect(result.status === 'ok' && result.candidates).toHaveLength(2);
   });
 
-  it('HTTP 504 → unavailable', async () => {
-    const source = createOsmSource(async () => new Response('Gateway Timeout', { status: 504 }));
+  it('HTTP 504 на всех зеркалах → unavailable, каждое зеркало спрошено один раз', async () => {
+    const fetchMock = vi.fn(async () => new Response('Gateway Timeout', { status: 504 }));
+    const source = createOsmSource(fetchMock);
     const result = await source.search({ niche: dentist, city: kazan, radiusKm: 15, limit: 10 });
     expect(result).toEqual({ status: 'unavailable', error: 'Источник карт не ответил' });
+    expect(fetchMock.mock.calls.map((c) => (c as unknown as [string])[0])).toEqual([
+      ...OVERPASS_MIRRORS,
+    ]);
+  });
+
+  it('основное зеркало сбросило соединение — ответ приходит со следующего', async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url === OVERPASS_URL) throw new Error('ECONNRESET');
+      return jsonResponse(fixture);
+    });
+    const source = createOsmSource(fetchMock);
+    const result = await source.search({ niche: dentist, city: kazan, radiusKm: 15, limit: 10 });
+    expect(result.status).toBe('ok');
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect((fetchMock.mock.calls[1] as unknown as [string])[0]).toBe(OVERPASS_MIRRORS[1]);
+  });
+
+  it('ошибка самого запроса (400) не лечится другим зеркалом', async () => {
+    const fetchMock = vi.fn(async () => new Response('Bad Request', { status: 400 }));
+    const source = createOsmSource(fetchMock);
+    await source.search({ niche: dentist, city: kazan, radiusKm: 15, limit: 10 });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('когда общее время вышло, следующее зеркало не спрашивается', async () => {
+    let now = 0;
+    const fetchMock = vi.fn(async () => {
+      now += OVERPASS_TOTAL_MS;
+      throw new Error('timeout');
+    });
+    const source = createOsmSource(fetchMock, OVERPASS_MIRRORS, () => now);
+    await source.search({ niche: dentist, city: kazan, radiusKm: 15, limit: 10 });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it('исключение сети и плохой JSON → unavailable', async () => {

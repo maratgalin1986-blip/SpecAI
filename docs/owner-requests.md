@@ -903,6 +903,15 @@ Vercel (`NEXT_PUBLIC_SITE_URL`, `NEXT_PUBLIC_SITE_DOMAIN_CONNECTED=1`, `NEXTAUTH
   сводка в Telegram работают. **Нужно от владельца:** добавить в Vercel `RESEND_API_KEY` и
   `EMAIL_FROM` (адрес с подтверждённого в Resend домена) — тогда рассылка по почте включится сама;
   для WhatsApp — `GREEN_API_INSTANCE_ID` и `GREEN_API_TOKEN`.
+- **Проверка источника 2026-11-09, 13:00 МСК:** из облачной сессии все зеркала Overpass недоступны
+  (overpass-api.de сбрасывает соединение, остальные молчат) при рабочих openstreetmap.org и Nominatim —
+  Overpass не любит адреса облаков. Для устойчивости на Vercel источник теперь пробует зеркала по
+  очереди (overpass-api.de → maps.mail.ru → kumi.systems, `OVERPASS_MIRRORS`), общий лимит 40 с.
+  Проверить на проде из сессии нельзя (нет `ADMIN_PASSWORD`/`CRON_SECRET`, запуск workflow — 403):
+  **владельцу написать боту `/office стоматология Казань`** или нажать «Запустить шаг» в
+  /admin/office — в ответе будет «найдено N». Ежечасный workflow GitHub на деле срабатывает раз в
+  ~4 часа (02:42, 22:55, 18:51 UTC) — это ~6 шагов в сутки; если мало, добавить шаг в Vercel-крон
+  (лимит Hobby — 2 крона, оба заняты) или вынести на внешний планировщик.
 - **Ждёт владельца (PLACEHOLDER):** цена сайта под ключ и поддержки — по умолчанию 15 000 ₽ и
   1 500 ₽/мес (`lib/prices.ts` `SITE_PRICES`, меняется в админке); WhatsApp-рассылка заработает,
   когда в среде Vercel появятся `GREEN_API_INSTANCE_ID` и `GREEN_API_TOKEN` (платно); ключи 2ГИС /
