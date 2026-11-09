@@ -22,6 +22,8 @@ export interface Niche {
     nameRegex?: RegExp;
     /** Та же выборка слов для запроса к Overpass (без lookbehind, POSIX). */
     osmNameFilter?: string;
+    /** Поисковая фраза для 2ГИС. */
+    dgisQuery?: string;
   };
   /** 5–8 услуг ниши для страницы-визитки, без цен. */
   services: readonly string[];
@@ -48,6 +50,7 @@ export const NICHES: Record<NicheKey, Niche> = {
     title: 'Стоматология',
     agent: 'sites',
     osm: {
+      dgisQuery: 'стоматология',
       tags: [
         ['amenity', 'dentist'],
         ['healthcare', 'dentist'],
@@ -69,7 +72,10 @@ export const NICHES: Record<NicheKey, Niche> = {
     key: 'car_repair',
     title: 'Автосервис',
     agent: 'sites',
-    osm: { tags: [['shop', 'car_repair']] },
+    osm: {
+      dgisQuery: 'автосервис',
+      tags: [['shop', 'car_repair']],
+    },
     services: [
       'Диагностика автомобиля',
       'Ремонт двигателя',
@@ -87,7 +93,10 @@ export const NICHES: Record<NicheKey, Niche> = {
     key: 'tyres',
     title: 'Шиномонтаж',
     agent: 'sites',
-    osm: { tags: [['shop', 'tyres']] },
+    osm: {
+      dgisQuery: 'шиномонтаж',
+      tags: [['shop', 'tyres']],
+    },
     services: [
       'Сезонная замена шин',
       'Балансировка колёс',
@@ -104,6 +113,7 @@ export const NICHES: Record<NicheKey, Niche> = {
     title: 'Салон красоты',
     agent: 'sites',
     osm: {
+      dgisQuery: 'салон красоты',
       tags: [
         ['shop', 'beauty'],
         ['shop', 'hairdresser'],
@@ -125,7 +135,10 @@ export const NICHES: Record<NicheKey, Niche> = {
     key: 'vet',
     title: 'Ветеринарная клиника',
     agent: 'sites',
-    osm: { tags: [['amenity', 'veterinary']] },
+    osm: {
+      dgisQuery: 'ветеринарная клиника',
+      tags: [['amenity', 'veterinary']],
+    },
     services: [
       'Приём и осмотр животных',
       'Вакцинация',
@@ -144,6 +157,7 @@ export const NICHES: Record<NicheKey, Niche> = {
     title: 'Спецтехника',
     agent: 'providers',
     osm: {
+      dgisQuery: 'аренда спецтехники',
       tags: [
         ['shop', 'rental'],
         ['office', 'company'],

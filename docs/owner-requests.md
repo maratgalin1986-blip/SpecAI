@@ -902,7 +902,9 @@ Vercel (`NEXT_PUBLIC_SITE_URL`, `NEXT_PUBLIC_SITE_DOMAIN_CONNECTED=1`, `NEXTAUTH
   «Письмо не отправлено: канал не настроен», повтор раз в день). Поиск, страницы, превью и утренняя
   сводка в Telegram работают. **Нужно от владельца:** добавить в Vercel `RESEND_API_KEY` и
   `EMAIL_FROM` (адрес с подтверждённого в Resend домена) — тогда рассылка по почте включится сама;
-  для WhatsApp — `GREEN_API_INSTANCE_ID` и `GREEN_API_TOKEN`.
+  для WhatsApp — `GREEN_API_INSTANCE_ID` и `GREEN_API_TOKEN`; для поиска по 2ГИС (карточки полнее
+  OSM, Overpass не любит облака) — `DGIS_API_KEY` с dev.2gis.ru (бесплатный тариф): адаптер уже
+  написан (`lib/office/sources/dgis.ts`), с ключом 2ГИС спрашивается первым, OSM — запасным.
 - **Проверка источника 2026-11-09, 13:00 МСК:** из облачной сессии все зеркала Overpass недоступны
   (overpass-api.de сбрасывает соединение, остальные молчат) при рабочих openstreetmap.org и Nominatim —
   Overpass не любит адреса облаков. Для устойчивости на Vercel источник теперь пробует зеркала по
@@ -918,6 +920,13 @@ Vercel (`NEXT_PUBLIC_SITE_URL`, `NEXT_PUBLIC_SITE_DOMAIN_CONNECTED=1`, `NEXTAUTH
   Азнакаево, Менделеевск, Мензелинск, Мамадыш, Агрыз, Нурлат, Буинск, Арск) для обоих агентов, и
   только потом идёт остальная Россия (30 крупных городов для техники, Уфа/Самара/Пермь/Екатеринбург
   для сайтов). Правило «вся Россия» (2026-10-17) сохраняется — Татарстан просто первый.
+- **Срочно, владельцу (найдено 2026-11-09, 16:00 МСК): в GitHub не задан секрет `CRON_SECRET`.**
+  Лог workflow `order-notices` 05:58 UTC: «CRON_SECRET repository secret is not set»; после аудита
+  2026-11-08 крон без секрета отвечает 403, поэтому из GitHub не работают ни 5-минутные уведомления
+  о заявках, ни напоминания бота, ни шаг офиса. Исправить: GitHub → репозиторий SpecAI → Settings →
+  Secrets and variables → Actions → New repository secret → имя `CRON_SECRET`, значение — то же, что
+  `CRON_SECRET` в Vercel. До этого офис работает только из дневного крона Vercel (19:00 МСК, один
+  шаг + рассылка + сводка) — страховка добавлена в `api/cron/daily`.
 - **Ждёт владельца (PLACEHOLDER):** цена сайта под ключ и поддержки — по умолчанию 15 000 ₽ и
   1 500 ₽/мес (`lib/prices.ts` `SITE_PRICES`, меняется в админке); WhatsApp-рассылка заработает,
   когда в среде Vercel появятся `GREEN_API_INSTANCE_ID` и `GREEN_API_TOKEN` (платно); ключи 2ГИС /

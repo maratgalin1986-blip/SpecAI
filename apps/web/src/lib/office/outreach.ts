@@ -3,6 +3,7 @@
 // канал; адресат — только контакт из открытой карточки компании; в каждом тексте —
 // строка «ответьте «стоп»» (R18a). Без «лучшая цена / гарантируем / самые»
 // (REVIEW § 5), без выдуманных цифр: единственные числа — цены из настроек.
+import { quotedName } from './pages';
 import { PLATFORM_PROMISE, PLATFORM_PROMISE_DETAIL } from '@specai/shared';
 import { escapeHtml } from '@/lib/emailTemplates';
 import { SITE } from '@/lib/site';
@@ -88,13 +89,13 @@ interface Letter {
 }
 
 function siteLetter(p: OutreachProspect, input: OutreachInput): Letter {
-  const name = p.name.trim();
+  const name = quotedName(p.name);
   const niche = input.nicheTitle.trim().toLowerCase();
   return {
-    subject: `Сделали страницу для «${name}» — посмотрите`,
+    subject: `Сделали страницу для ${name} — посмотрите`,
     greeting: `Здравствуйте! Пишет ${SITE.name}, площадка ${SITE.platform}.`,
     paragraphs: [
-      `Мы увидели вашу компанию «${name}» на карте${where(p)}: ${niche}, есть телефон и адрес, ` +
+      `Мы увидели вашу компанию ${name} на карте${where(p)}: ${niche}, есть телефон и адрес, ` +
         'а своей страницы в интернете нет. Поэтому мы уже сделали вам страницу-визитку по данным ' +
         'открытой карточки — посмотреть можно по ссылке ниже, страница пока закрыта от поисковиков.',
       'Что на странице: название, чем занимаетесь, услуги, адрес, часы работы, кнопки ' +
@@ -113,13 +114,13 @@ function siteLetter(p: OutreachProspect, input: OutreachInput): Letter {
 }
 
 function providerLetter(p: OutreachProspect, _input: OutreachInput): Letter {
-  const name = p.name.trim();
+  const name = quotedName(p.name);
   return {
     subject: `Ваша страница на ${SITE.platform} уже готова`,
     greeting: `Здравствуйте! Пишет ${SITE.name}, площадка ${SITE.platform}.`,
     paragraphs: [
       `${SITE.platform} — площадка заявок на спецтехнику по всей России. ${promiseSentence()}`,
-      `Мы увидели вашу компанию «${name}» на карте${where(p)} и уже сделали вам страницу ` +
+      `Мы увидели вашу компанию ${name} на карте${where(p)} и уже сделали вам страницу ` +
         'исполнителя на площадке: название, город, ваша техника и кнопка «Заказать технику». ' +
         'Заказчики смогут заказывать у вас напрямую, заявка уходит сразу вам. Всё с вашей ' +
         'карточки, ничего не придумано; телефон покажем только с вашего согласия.',
@@ -184,15 +185,15 @@ export function buildEmail(p: OutreachProspect, input: OutreachInput): OutreachE
 
 /** Короткое сообщение WhatsApp (≤ WHATSAPP_MAX_LENGTH): те же смыслы, ссылка, строка «стоп». */
 export function buildWhatsAppText(p: OutreachProspect, input: OutreachInput): string {
-  const name = p.name.trim();
+  const name = quotedName(p.name);
   const intro = `Здравствуйте! Это ${SITE.name}, площадка ${SITE.platform}.`;
   const body =
     p.kind === 'provider'
-      ? `Увидели «${name}» на карте${where(p)} и сделали вам страницу исполнителя на площадке ` +
+      ? `Увидели ${name} на карте${where(p)} и сделали вам страницу исполнителя на площадке ` +
         'заявок на спецтехнику по всей России: техника, город, кнопка «Заказать технику». ' +
         `${PLATFORM_PROMISE}. Заказчики смогут заказывать у вас напрямую. Посмотреть и встать на ` +
         `линию (кнопка «Это моя компания»): ${input.previewUrl}`
-      : `Увидели «${name}» на карте${where(p)} без своей страницы в интернете и сделали вам ` +
+      : `Увидели ${name} на карте${where(p)} без своей страницы в интернете и сделали вам ` +
         `страницу-визитку по данным карточки: ${input.previewUrl} Страница под ключ — ` +
         `${rubles(input.prices.setup)} один раз, поддержка ${rubles(input.prices.monthly)} в месяц.`;
   const text = [

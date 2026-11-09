@@ -2,6 +2,7 @@
 // `buildDigest` — чистый текст по собранным данным; `collectDigest` достаёт их из базы.
 // Сводку читает только владелец, поэтому телефоны и ссылки превью в ней уместны.
 
+import { phoneText } from './pages';
 import { prisma } from '@specai/database';
 import { MSK, mskDate, mskDayBounds } from '@/lib/adminCrm';
 import { siteUrl } from '@/lib/siteUrl';
@@ -15,7 +16,12 @@ import type { AgentId, ProspectKind } from './types';
 export const DIGEST_LIST_LIMIT = 10;
 
 /** Окно отправки сводки — московские часы, включительно. */
-export const DIGEST_HOURS = { from: 8, to: 10 } as const;
+/**
+ * Сводка уходит при первом вызове после 08:00 по Москве и до конца дня (раз в
+ * день — onceADay): расписание GitHub срабатывает редко и окно 08–10 можно
+ * просто проспать.
+ */
+export const DIGEST_HOURS = { from: 8, to: 23 } as const;
 
 /** Час по Москве, 0–23. */
 export function moscowHour(now: Date): number {
@@ -74,7 +80,7 @@ function formatDay(date: Date): string {
 }
 
 function line(p: ProspectLite, base: string): string {
-  const parts = [p.name, p.city, nicheTitle(p.niche), p.phone].filter(
+  const parts = [p.name, p.city, nicheTitle(p.niche), phoneText(p.phone)].filter(
     (x): x is string => typeof x === 'string' && x.length > 0,
   );
   return `${parts.join(' · ')} · превью: ${base}/preview/${p.token}`;
@@ -164,6 +170,14 @@ type LiteRow = {
 
 /** Минимум базы для сводки; `prisma` подходит как есть. */
 export interface DigestDb {
+  /** Отметки onceADay («cron:office-digest:<день>:done») — с них начинается следующая сводка. */
+  adminFeedRead?: {
+    findFirst(args: {
+      where: { key: { startsWith: string; endsWith: string } };
+      orderBy: { readAt: 'desc' };
+      select: { readAt: true };
+    }): Promise<{ readAt: Date } | null>;
+  };
   officeRun: {
     findMany(args: {
       where: { startedAt: { gte: Date } };
@@ -212,11 +226,31 @@ function lite(rows: LiteRow[]): ProspectLite[] {
 }
 
 /** Собирает данные за сутки и возвращает текст сводки. */
+/**
+ * Начало окна сводки: момент предыдущей сводки (сводки уходят в разное время —
+ * когда GitHub соизволит, — и окно «ровно сутки» то накладывалось бы, то рвалось),
+ * но не раньше чем 48 часов назад и не позже чем сутки назад.
+ */
+export async function digestSince(now: Date, db: DigestDb): Promise<Date> {
+  const dayAgo = new Date(now.getTime() - 86_400_000);
+  const twoDaysAgo = new Date(now.getTime() - 2 * 86_400_000);
+  const last = await db.adminFeedRead
+    ?.findFirst({
+      where: { key: { startsWith: 'cron:office-digest:', endsWith: ':done' } },
+      orderBy: { readAt: 'desc' },
+      select: { readAt: true },
+    })
+    .catch(() => null);
+  if (!last) return dayAgo;
+  const at = last.readAt.getTime();
+  return new Date(Math.min(dayAgo.getTime(), Math.max(twoDaysAgo.getTime(), at)));
+}
+
 export async function collectDigest(
   now: Date = new Date(),
   db: DigestDb = prisma,
 ): Promise<string> {
-  const since = new Date(now.getTime() - 86_400_000);
+  const since = await digestSince(now, db);
   const { end: todayEnd } = mskDayBounds(now);
   const [runs, toContact, emailSent, whatsappSent, replied, callbacks, registered, settings] =
     await Promise.all([

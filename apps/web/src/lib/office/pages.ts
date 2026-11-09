@@ -54,6 +54,20 @@ function telHref(phone: string): string {
   return `tel:+${phoneDigits(phone)}`;
 }
 
+/** Название в «ёлочках», если компания сама не написала его в кавычках («Стоматология «Улыбка»» → без дубля). */
+export function quotedName(name: string): string {
+  const clean = name.trim();
+  return /[«»"“”]/.test(clean) ? clean : `«${clean}»`;
+}
+
+/** «+7 843 212-34-56» — как номер пишут люди; нестандартную длину оставляет как есть. */
+export function phoneText(phone: string): string {
+  const d = phoneDigits(phone);
+  // Только российские номера (+7…); иностранный показываем как записан.
+  if (d.length !== 11 || d[0] !== '7') return phone;
+  return `+7 ${d.slice(1, 4)} ${d.slice(4, 7)}-${d.slice(7, 9)}-${d.slice(9, 11)}`;
+}
+
 /** Yandex Maps: a point by coordinates, else a search by the address. */
 export function mapHref(p: Pick<PageProspect, 'lat' | 'lon' | 'address'>): string | null {
   if (typeof p.lat === 'number' && typeof p.lon === 'number') {
@@ -91,7 +105,7 @@ export function buildSitePage(p: PageProspect, niche: PageNiche): SitePage {
     services: [...niche.services],
     address: p.address?.trim() || null,
     hours: p.hours?.trim() || null,
-    phone: p.phone,
+    phone: phoneText(p.phone),
     phoneHref: telHref(p.phone),
     whatsappHref: `https://wa.me/${phoneDigits(p.phone)}`,
     mapHref: mapHref(p),
@@ -145,7 +159,7 @@ export function buildProviderPage(
     machines: [...machines],
     orderHref: orderQuery ? `/orders?${orderQuery}` : '/orders',
     joinHref: `/register?${join.toString()}`,
-    phone: opts.published ? p.phone : null,
+    phone: opts.published ? phoneText(p.phone) : null,
     phoneHref: opts.published ? telHref(p.phone) : null,
     address: p.address?.trim() || null,
     hours: p.hours?.trim() || null,
@@ -155,7 +169,7 @@ export function buildProviderPage(
 /** The banner over a preview page (R11). */
 export function previewBannerText(p: Pick<PageProspect, 'name'>): string {
   return (
-    `Предпросмотр: страница сделана для «${p.name.trim()}» агентом ИИСтройка24 ` +
+    `Предпросмотр: страница сделана для ${quotedName(p.name)} агентом ИИСтройка24 ` +
     'и будет опубликована после согласия владельца компании'
   );
 }

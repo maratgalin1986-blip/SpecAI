@@ -1,0 +1,25 @@
+name: Office tick
+
+# Every hour (GitHub starts scheduled runs late and rarely, so the endpoint does
+# up to three plan steps per call): the office agents search for companies
+# without a site, build their pages, send the outreach and, from 08:00 Moscow
+# once a day, the owner's digest (apps/web/src/app/api/cron/office,
+# lib/office/tick.ts). The endpoint is idempotent, refuses a second tick within
+# ten minutes and needs CRON_SECRET (repository secret, equal to the one in Vercel).
+# Scheduled at :37 so that it never coincides with bot-reminders.yml (:17).
+on:
+  schedule:
+    - cron: '37 * * * *'
+  workflow_dispatch:
+
+jobs:
+  tick:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Office tick
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          if [ -z "$CRON_SECRET" ]; then echo "::error::CRON_SECRET repository secret is not set — add it in Settings → Secrets and variables → Actions"; exit 1; fi
+          curl -fsS --max-time 70 -H "Authorization: Bearer $CRON_SECRET" https://spec-ai-web.vercel.app/api/cron/office

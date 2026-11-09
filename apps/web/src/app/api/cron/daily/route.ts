@@ -12,6 +12,7 @@ import { FLUSH_BATCH, tickDeferredOrderNotices } from '@/lib/deferredOrderNotice
 import { runGroupPriceSurvey } from '@/lib/groupPriceSurvey';
 import { callbackReminderText } from '@/lib/adminCrm';
 import { sendLineRenewOffers } from '@/lib/lineRenewData';
+import { officeTick } from '@/lib/office/tick';
 
 export const dynamic = 'force-dynamic';
 // A GET handler: without this Next keeps outgoing sends (Telegram, push,
@@ -19,6 +20,8 @@ export const dynamic = 'force-dynamic';
 export const fetchCache = 'force-no-store';
 // The AI moderation sweep makes up to 20 calls (four at a time).
 export const maxDuration = 60;
+/** К этому моменту от старта функции офисный тик должен закончиться (запас до maxDuration). */
+const OFFICE_DEADLINE_MS = 52_000;
 
 /**
  * Daily cron (19:00 Moscow, apps/web/vercel.json): document reminders 30
@@ -103,6 +106,18 @@ export async function GET(request: NextRequest) {
     if (line) await notifyTelegram(line);
     return line;
   }).catch(() => null);
+  // Офис агентов — страховка на день, когда расписание GitHub молчало: шаг
+  // плана, рассылка и сводка владельцу, если её сегодня ещё не было
+  // (lib/office/tick.ts). Последним, на остаток времени функции: ничего из
+  // ежедневного он не отодвигает, а без времени делает только рассылку и сводку.
+  const office = await officeTick(new Date(), {
+    budgetMs: Math.max(0, OFFICE_DEADLINE_MS - (Date.now() - now.getTime())),
+    maxSteps: 1,
+    digest: 'any',
+  }).catch((error: unknown) => {
+    console.error('[cron/daily] office tick failed', error);
+    return { error: String(error) };
+  });
   return NextResponse.json({
     ok: true,
     checked: candidates.length,
@@ -112,6 +127,7 @@ export async function GET(request: NextRequest) {
     digest,
     channel,
     priceSurvey,
+    office,
     notices,
     callbacks,
     lineRenew,

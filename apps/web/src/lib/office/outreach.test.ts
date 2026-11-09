@@ -52,7 +52,7 @@ const FORBIDDEN = /лучш|гарантир|самые|самый|самая/i;
 describe('buildEmail', () => {
   it('site letter: subject, who we are, link, prices, stop line last', () => {
     const letter = buildEmail(site, input);
-    expect(letter.subject).toBe('Сделали страницу для «Стоматология «Улыбка»» — посмотрите');
+    expect(letter.subject).toBe('Сделали страницу для Стоматология «Улыбка» — посмотрите');
     expect(letter.text).toContain(SITE.name);
     expect(letter.text).toContain(SITE.platform);
     expect(letter.text).toContain('в городе Казань');

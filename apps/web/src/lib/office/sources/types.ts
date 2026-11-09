@@ -9,6 +9,8 @@ export interface SourceNiche {
   osm: [string, string][];
   /** Для широких тегов (техника): оставлять только объекты, чьё название совпало. */
   nameRegex?: RegExp;
+  /** Поисковая фраза для 2ГИС («стоматология», «аренда спецтехники»); без неё 2ГИС не спрашивается. */
+  dgisQuery?: string;
   /** Фильтр по названию для самого Overpass (POSIX-регулярка без lookbehind): иначе широкие теги в большом городе не влезают в 25 с. */
   osmNameFilter?: string;
   /** Виды техники по названию и тегам объекта — slug'и из `packages/shared`. */
@@ -50,6 +52,8 @@ export interface ProspectSource {
     niche: SourceNiche;
     city: SourceCity;
     radiusKm: number;
+    /** Сколько миллисекунд источник может потратить (крон делит своё время между шагами). */
+    budgetMs?: number;
     limit: number;
   }): Promise<SearchResult>;
 }

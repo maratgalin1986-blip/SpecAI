@@ -3,6 +3,7 @@
 // platform does not do (REVIEW § 5: no «лучшая цена», no «гарантируем»), no
 // numbers but the prices passed in, and no name of the person calling — the
 // owner introduces himself.
+import { quotedName } from './pages';
 import { PLATFORM_PROMISE, PLATFORM_PROMISE_DETAIL } from '@specai/shared';
 import { rub } from '@/lib/prices';
 import { SITE } from '@/lib/site';
@@ -36,16 +37,16 @@ function where(p: PageProspect): string {
 }
 
 function siteScript(p: PageProspect, input: CallScriptInput): CallScript {
-  const name = p.name.trim();
+  const name = quotedName(p.name);
   const niche = input.nicheTitle.trim().toLowerCase();
   return {
-    title: `Звонок: «${name}» — страница-визитка`,
+    title: `Звонок: ${name} — страница-визитка`,
     steps: [
       {
         heading: 'Приветствие',
         text:
           `Здравствуйте! Это ${SITE.name}, площадка ${SITE.platform}. ` +
-          `Я говорю с владельцем или руководителем «${name}»? Удобно сейчас пару минут?`,
+          `Я говорю с владельцем или руководителем ${name}? Удобно сейчас пару минут?`,
       },
       {
         heading: 'Зачем звоню',
@@ -92,15 +93,15 @@ function siteScript(p: PageProspect, input: CallScriptInput): CallScript {
 }
 
 function providerScript(p: PageProspect, input: CallScriptInput): CallScript {
-  const name = p.name.trim();
+  const name = quotedName(p.name);
   return {
-    title: `Звонок: «${name}» — страница исполнителя`,
+    title: `Звонок: ${name} — страница исполнителя`,
     steps: [
       {
         heading: 'Приветствие',
         text:
           `Здравствуйте! Это ${SITE.name}, площадка ${SITE.platform}. ` +
-          `Я говорю с владельцем или руководителем «${name}»? Удобно сейчас пару минут?`,
+          `Я говорю с владельцем или руководителем ${name}? Удобно сейчас пару минут?`,
       },
       {
         heading: 'Зачем звоню',

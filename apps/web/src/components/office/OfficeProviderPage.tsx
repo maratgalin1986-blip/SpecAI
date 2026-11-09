@@ -90,7 +90,6 @@ export function OfficeProviderPage({ page }: { page: ProviderPage }) {
             Это моя компания
           </a>
         </div>
-        <PromiseNote />
       </section>
 
       {(page.address || page.hours || page.phone) && (

@@ -107,7 +107,7 @@ describe('buildDigest', () => {
     expect(text).toContain('Готовы к отправке (2):');
     expect(text).toContain('Напомнить сегодня (1):');
     expect(text).toContain(
-      `1. Компания 1 · Казань · Стоматология · +78432000001 · превью: ${SITE}/preview/${lite(1).token}`,
+      `1. Компания 1 · Казань · Стоматология · +7 843 200-00-01 · превью: ${SITE}/preview/${lite(1).token}`,
     );
     expect(text).toContain('Уфа · Спецтехника');
     expect(text).toContain('Зарегистрировались по ссылке: 2');
@@ -141,6 +141,6 @@ describe('moscowHour', () => {
   it('переводит в московское время', () => {
     expect(moscowHour(new Date('2026-11-09T06:30:00Z'))).toBe(9);
     expect(moscowHour(new Date('2026-11-09T21:05:00Z'))).toBe(0);
-    expect(DIGEST_HOURS).toEqual({ from: 8, to: 10 });
+    expect(DIGEST_HOURS).toEqual({ from: 8, to: 23 });
   });
 });
