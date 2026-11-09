@@ -59,3 +59,46 @@ describe('PUT /api/admin/office/settings — реквизиты для опла�
     expect(transaction).not.toHaveBeenCalled();
   });
 });
+
+describe('PUT /api/admin/office/settings — ИИ-аналитик (U2)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    isAdminRequest.mockResolvedValue(true);
+  });
+
+  it('saves the switch as 1/0 and the daily cap as an integer', async () => {
+    expect((await put({ aiOffers: true, aiDailyCap: 40 })).status).toBe(200);
+    expect(upsert).toHaveBeenCalledWith({
+      where: { key: 'office.aiOffers' },
+      update: { value: '1' },
+      create: { key: 'office.aiOffers', value: '1' },
+    });
+    expect(upsert).toHaveBeenCalledWith({
+      where: { key: 'office.aiDailyCap' },
+      update: { value: '40' },
+      create: { key: 'office.aiDailyCap', value: '40' },
+    });
+    upsert.mockClear();
+    expect((await put({ aiOffers: false, aiDailyCap: 0 })).status).toBe(200);
+    expect(upsert).toHaveBeenCalledWith(
+      expect.objectContaining({ create: { key: 'office.aiOffers', value: '0' } }),
+    );
+    expect(upsert).toHaveBeenCalledWith(
+      expect.objectContaining({ create: { key: 'office.aiDailyCap', value: '0' } }),
+    );
+  });
+
+  it('rejects a cap outside 0…500, a fraction and a switch that is not true/false', async () => {
+    for (const body of [
+      { aiDailyCap: 501 },
+      { aiDailyCap: -1 },
+      { aiDailyCap: 2.5 },
+      { aiOffers: '1' },
+    ]) {
+      const response = await put(body);
+      expect(response.status).toBe(400);
+      expect((await response.json()).error).toMatch(/ИИ/);
+    }
+    expect(transaction).not.toHaveBeenCalled();
+  });
+});

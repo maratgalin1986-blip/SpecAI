@@ -15,6 +15,9 @@ vi.mock('@/lib/office/settings', () => ({
 vi.mock('@specai/database', () => ({ prisma: {} }));
 
 import { STOP_LINE, WHATSAPP_MAX_LENGTH } from './outreach';
+import type { SentOffer } from './aiOffer';
+import type { Dossier } from './dossier';
+import { buildOffer } from './offer';
 import {
   FOLLOW_UP_AFTER_DAYS,
   FOLLOW_UP_MAX_DAYS,
@@ -54,6 +57,8 @@ function row(over: Partial<OutreachRow> & { id: string }): OutreachRow {
     contactedAt: null,
     followUpSentAt: null,
     repliedAt: null,
+    dossierJson: null,
+    offerJson: null,
     ...over,
   };
 }
@@ -65,7 +70,12 @@ function contacted(id: string, days: number, over: Partial<OutreachRow> = {}): O
 }
 
 type Update = { id: string; data: Record<string, unknown> };
-type Row = OutreachRow & { outreachError?: string | null };
+type Row = OutreachRow & {
+  outreachError?: string | null;
+  offerAngle?: string | null;
+  previewViews?: number;
+  agreedAt?: Date | null;
+};
 
 /**
  * A fake Prospect table: counts by the day, lists by the filters the runner uses, records
@@ -78,7 +88,31 @@ function fakeDb(rows: Row[]) {
     !!at && at.getTime() >= range.gte.getTime() && at.getTime() < range.lt.getTime();
   const db: OutreachDb = {
     prospect: {
+      async groupBy({ where }) {
+        const w = where as {
+          kind: string;
+          previewViews?: unknown;
+          repliedAt?: unknown;
+          agreedAt?: unknown;
+        };
+        const counts = new Map<string, number>();
+        for (const r of rows) {
+          if (r.kind !== w.kind || !r.offerAngle || !r.contactedAt) continue;
+          if (w.previewViews && !(r.previewViews ?? 0)) continue;
+          if (w.repliedAt && !r.repliedAt) continue;
+          if (w.agreedAt && !r.agreedAt) continue;
+          counts.set(r.offerAngle, (counts.get(r.offerAngle) ?? 0) + 1);
+        }
+        return [...counts].map(([offerAngle, n]) => ({ offerAngle, _count: { _all: n } }));
+      },
       async count({ where }) {
+        if (where.offerJson) {
+          return rows.filter(
+            (r) =>
+              inRange(r.contactedAt, where.contactedAt!) &&
+              !!r.offerJson?.includes(where.offerJson!.contains),
+          ).length;
+        }
         return rows.filter((r) =>
           where.emailSentAt
             ? inRange(r.emailSentAt, where.emailSentAt)
@@ -202,7 +236,8 @@ describe('sendOutreach', () => {
     );
     expect(sent.text).toContain('Заявки с сайта будут приходить вам на почту');
     expect(sent.text).toContain('15 000 ₽');
-    expect(sent.text).toContain('стоматология');
+    // No dossier: the personal offer with a general angle (U2).
+    expect(sent.text).toContain('Что даст страница именно вам:');
     expect(updates).toHaveLength(1);
     expect(updates[0]!.id).toBe('a');
     expect(updates[0]!.data).toMatchObject({ status: 'CONTACTED', outreachError: null });
@@ -609,6 +644,166 @@ describe('sendOutreach — reminders (S8)', () => {
     const result = await sendOutreach(NOW, deps(db, { clock: () => now, email: slowEmail }));
     expect(result.followUps).toBe(1);
     expect(slowEmail.mock.calls.map((c) => c[0].to)).toEqual(['r1@example.com']);
+  });
+});
+
+describe('sendOutreach — personal offer (U2)', () => {
+  const dossier: Dossier = {
+    v: 1,
+    niche: 'dentist',
+    nicheTitle: 'Стоматология',
+    city: 'Казань',
+    facts: ['адрес: ул. Баумана, 10', 'часы: пн-пт 09:00-21:00'],
+    hours: { lateClose: '21:00', weekends: false, roundTheClock: false },
+    competitors: { radiusKm: 2, sameNiche: 4, withSite: 3 },
+    channels: { email: true, whatsapp: true, telegram: false },
+    gaps: ['нет своего сайта'],
+  };
+  const withDossier = (over: Partial<OutreachRow> & { id: string }) =>
+    row({ dossierJson: JSON.stringify(dossier), whatsapp: '+79170000001', ...over });
+  const noAi = vi.fn(async (o: SentOffer) => o);
+
+  beforeEach(() => noAi.mockClear());
+
+  it('builds the letter and WhatsApp from the dossier offer and records the angle and the offer', async () => {
+    const { db, updates } = fakeDb([withDossier({ id: 'a' })]);
+    // Every angle is fresh: the first applicable one is chosen.
+    const result = await sendOutreach(NOW, deps(db, { improve: noAi, random: () => 0.99 }));
+    expect(result).toMatchObject({ email: 1, whatsapp: 1, errors: 0 });
+    const expected = buildOffer({
+      dossier,
+      angle: 'competitors_have_sites',
+      companyName: 'Компания a',
+    });
+    const letter = okEmail.mock.calls[0]![0];
+    expect(letter.subject).toBe(expected.subject);
+    expect(letter.text).toContain(expected.opener);
+    for (const bullet of expected.bullets) expect(letter.text).toContain(`• ${bullet}`);
+    // Three or more neighbours with a site: the own-domain package with its price.
+    expect(letter.text).toContain('«Сайт на своём домене» — 17\u00a0000\u00a0₽ один раз');
+    expect(letter.text).toContain('https://example.test/preview/tok-a');
+    expect(letter.text).toContain('Кто мы и цены: ');
+    const lines = letter.text!.trim().split('\n').filter(Boolean);
+    expect(lines[lines.length - 2]).toContain(STOP_LINE);
+    const wa = okWhatsApp.mock.calls[0]![1];
+    expect(wa).toContain(expected.opener);
+    expect(wa).toContain('https://example.test/preview/tok-a');
+    expect(wa).toContain('17\u00a0000\u00a0₽');
+    expect(wa.length).toBeLessThanOrEqual(WHATSAPP_MAX_LENGTH);
+    expect(wa.split('\n\n').pop()!.startsWith(STOP_LINE)).toBe(true);
+    for (const u of updates) {
+      expect(u.data.offerAngle).toBe('competitors_have_sites');
+      expect(JSON.parse(u.data.offerJson as string)).toMatchObject({
+        angle: 'competitors_have_sites',
+        subject: expected.subject,
+        ai: false,
+      });
+    }
+    expect(noAi).not.toHaveBeenCalled();
+  });
+
+  it('learning: angles with fewer trials go first', async () => {
+    const old = new Date('2026-10-01T10:00:00+03:00');
+    const history: Row[] = [];
+    for (let i = 0; i < 6; i++) {
+      history.push({
+        ...row({ id: `h${i}`, status: 'PUBLISHED', contactedAt: old }),
+        offerAngle: 'competitors_have_sites',
+      });
+    }
+    const { db, updates } = fakeDb([...history, withDossier({ id: 'a', whatsapp: null })]);
+    await sendOutreach(NOW, deps(db, { improve: noAi }));
+    expect(updates[0]!.data.offerAngle).toBe('open_late');
+  });
+
+  it('a provider letter stays as it was: no offer, no angle written', async () => {
+    const { db, updates } = fakeDb([withDossier({ id: 'a', kind: 'provider', whatsapp: null })]);
+    await sendOutreach(NOW, deps(db, { improve: noAi }));
+    expect(okEmail.mock.calls[0]![0].text).not.toContain('Что даст страница');
+    expect(updates[0]!.data).not.toHaveProperty('offerAngle');
+    expect(updates[0]!.data).not.toHaveProperty('offerJson');
+  });
+
+  it('the second channel reuses the offer already sent', async () => {
+    const sentOffer = {
+      ...buildOffer({ dossier, angle: 'weekends', companyName: 'Компания a' }),
+      opener: 'Записанное вступление для этой компании.',
+      ai: true,
+    };
+    const { db } = fakeDb([
+      withDossier({
+        id: 'a',
+        status: 'CONTACTED',
+        emailSentAt: new Date('2026-11-08T10:00:00+03:00'),
+        contactedAt: new Date('2026-11-08T10:00:00+03:00'),
+        offerJson: JSON.stringify(sentOffer),
+      }),
+    ]);
+    const improve = vi.fn(async (o: SentOffer) => o);
+    await sendOutreach(NOW, deps(db, { improve, settings: settings({ aiOffers: true }) }));
+    expect(okWhatsApp.mock.calls[0]![1]).toContain('Записанное вступление для этой компании.');
+    expect(improve).not.toHaveBeenCalled();
+  });
+
+  it('AI rewrites only when switched on, within the daily cap counted from today', async () => {
+    const improve = vi.fn(async (o: SentOffer) => ({
+      ...o,
+      opener: 'Переписанное вступление про вашу клинику рядом с соседями.',
+      ai: true,
+    }));
+    const today = new Date('2026-11-09T07:00:00+03:00');
+    const usedToday = row({
+      id: 'u',
+      status: 'PUBLISHED',
+      contactedAt: today,
+      offerJson: '{"angle":"search","ai":true}',
+    });
+    const { db, updates } = fakeDb([
+      usedToday,
+      withDossier({ id: 'a', whatsapp: null }),
+      withDossier({ id: 'b', whatsapp: null }),
+      withDossier({ id: 'c', whatsapp: null }),
+    ]);
+    const result = await sendOutreach(
+      NOW,
+      deps(db, { improve, settings: settings({ aiOffers: true, aiDailyCap: 2 }) }),
+    );
+    expect(result.email).toBe(3);
+    expect(improve).toHaveBeenCalledTimes(1);
+    expect(okEmail.mock.calls[0]![0].text).toContain('Переписанное вступление');
+    expect(JSON.parse(updates[0]!.data.offerJson as string).ai).toBe(true);
+    expect(JSON.parse(updates[1]!.data.offerJson as string).ai).toBe(false);
+    expect(okEmail.mock.calls[1]![0].text).not.toContain('Переписанное вступление');
+  });
+
+  it('AI switched off: never called; a failing AI falls back to the plain offer', async () => {
+    const { db } = fakeDb([withDossier({ id: 'a', whatsapp: null })]);
+    const improve = vi.fn(async (o: SentOffer) => o);
+    await sendOutreach(NOW, deps(db, { improve }));
+    expect(improve).not.toHaveBeenCalled();
+
+    const { db: db2, updates } = fakeDb([withDossier({ id: 'b', whatsapp: null })]);
+    const broken = vi.fn(async (_o: SentOffer): Promise<SentOffer> => {
+      throw new Error('boom');
+    });
+    const result = await sendOutreach(
+      NOW,
+      deps(db2, { improve: broken, settings: settings({ aiOffers: true }) }),
+    );
+    expect(broken).toHaveBeenCalledTimes(1);
+    expect(result.email).toBe(1);
+    expect(JSON.parse(updates[0]!.data.offerJson as string).ai).toBe(false);
+  });
+
+  it('a failed send writes no angle', async () => {
+    const { db, updates } = fakeDb([withDossier({ id: 'a', whatsapp: null })]);
+    const failing = vi.fn(async () => ({
+      skipped: false as const,
+      ok: false as const,
+      error: 'x',
+    }));
+    await sendOutreach(NOW, deps(db, { email: failing, improve: noAi }));
+    expect(updates[0]!.data).not.toHaveProperty('offerAngle');
   });
 });
 

@@ -169,8 +169,7 @@ export function createDgisSource(
             if (niche.machineryTags) c.tags = niche.machineryTags(c.name, {});
             found.push(c);
           }
-          if (batch.length < DGIS_PAGE_SIZE || found.filter((c) => !c.website).length >= limit)
-            break;
+          if (batch.length < DGIS_PAGE_SIZE || found.length >= limit) break;
         } catch {
           break;
         } finally {
@@ -180,7 +179,8 @@ export function createDgisSource(
       if (!answered) return { status: 'unavailable', error: DGIS_UNAVAILABLE };
       return {
         status: 'ok',
-        candidates: found.filter((c) => !c.website).slice(0, Math.max(0, limit)),
+        // Всех, и с сайтом: они нужны досье как конкуренты; кандидатов отбирает прогон.
+        candidates: found.slice(0, Math.max(0, limit)),
       };
     },
   };

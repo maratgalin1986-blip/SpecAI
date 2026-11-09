@@ -4,13 +4,14 @@ import { z } from 'zod';
 import { isAdminRequest } from '@/lib/admin';
 import { INVALID_JSON_MESSAGE, readJson, zodErrorMessage } from '@/lib/apiInput';
 import { OFFICE_SETTINGS, parsePlan } from '@/lib/office/plan';
-import { OFFICE_EXTRA_SETTINGS, PAY_DETAILS_MAX } from '@/lib/office/settings';
+import { AI_DAILY_CAP_MAX, OFFICE_EXTRA_SETTINGS, PAY_DETAILS_MAX } from '@/lib/office/settings';
 
 export const dynamic = 'force-dynamic';
 
 // Настройки офиса из /admin/office (spec §6, §12): план обхода, пауза поиска, цены сайта,
 // рассылка (пауза, лимит в день, адрес для ответов, WhatsApp на обычный мобильный),
-// реквизиты для оплаты сайта (страница счёта /oplata/<token>, S6; пусто — убрать).
+// реквизиты для оплаты сайта (страница счёта /oplata/<token>, S6; пусто — убрать),
+// ИИ-аналитик персональных предложений (U2: выключатель и лимит в сутки).
 // Каждое поле необязательно — сохраняются только присланные.
 const price = z
   .number({ invalid_type_error: 'Цена — целое число рублей' })
@@ -40,6 +41,12 @@ const schema = z
     payDetails: z
       .string({ invalid_type_error: 'Реквизиты — обычный текст' })
       .max(PAY_DETAILS_MAX, `Реквизиты — не длиннее ${PAY_DETAILS_MAX} знаков`),
+    aiOffers: z.boolean({ invalid_type_error: 'ИИ-аналитик — включён или выключен' }),
+    aiDailyCap: z
+      .number({ invalid_type_error: 'Лимит ИИ в день — целое число' })
+      .int('Лимит ИИ в день — целое число')
+      .min(0, 'Лимит ИИ в день не может быть отрицательным')
+      .max(AI_DAILY_CAP_MAX, `Лимит ИИ в день — не больше ${AI_DAILY_CAP_MAX}`),
   })
   .partial();
 
@@ -89,6 +96,13 @@ export async function PUT(request: NextRequest) {
   }
   if (input.payDetails !== undefined) {
     values[OFFICE_EXTRA_SETTINGS.payDetails] = input.payDetails.trim();
+  }
+
+  if (input.aiOffers !== undefined) {
+    values[OFFICE_EXTRA_SETTINGS.aiOffers] = input.aiOffers ? '1' : '0';
+  }
+  if (input.aiDailyCap !== undefined) {
+    values[OFFICE_EXTRA_SETTINGS.aiDailyCap] = String(input.aiDailyCap);
   }
 
   const entries = Object.entries(values);

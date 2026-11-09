@@ -44,7 +44,7 @@ export const NICHE_NEEDS: Record<string, string> = {
   machinery: 'какая у вас техника и как её заказать',
 };
 
-const GENERIC_NEED = 'чем вы занимаетесь, где вы и как с вами связаться';
+const GENERIC_NEED = 'ваши услуги, адрес и как с вами связаться';
 
 export interface Offer {
   angle: OfferAngle;
@@ -89,10 +89,13 @@ export function buildOffer(input: {
   dossier: Dossier | null;
   angle: OfferAngle;
   companyName: string;
+  /** Город строки — когда досье нет (старые кандидаты, ручной ввод без адреса). */
+  city?: string | null;
 }): Offer {
   const d = input.dossier;
   const name = input.companyName.trim();
-  const where = d?.city ? ` в городе ${d.city}` : '';
+  const city = d?.city ?? input.city ?? null;
+  const where = city ? ` в городе ${city}` : '';
   const need = (d && NICHE_NEEDS[d.niche]) || GENERIC_NEED;
   const c = d?.competitors ?? null;
   const niche = d ? nicheLower(d) : 'компаний';

@@ -10,7 +10,16 @@ export const OFFICE_EXTRA_SETTINGS = {
   whatsappToPhone: 'office.whatsappToPhone',
   /** Реквизиты для оплаты сайта (свободный текст) — на странице счёта /oplata/<token> (S6). */
   payDetails: 'office.payDetails',
+  /** «1» — ИИ-аналитик переписывает вступление и пункты персонального предложения (U2). */
+  aiOffers: 'office.aiOffers',
+  /** Сколько предложений в московские сутки ИИ может переписать (целое 0…500). */
+  aiDailyCap: 'office.aiDailyCap',
 } as const;
+
+/** Лимит ИИ-предложений в сутки, если владелец не задал свой. */
+export const DEFAULT_AI_DAILY_CAP = 30;
+/** Больше этого ИИ-предложений в сутки не бывает. */
+export const AI_DAILY_CAP_MAX = 500;
 
 /** Реквизиты для оплаты — не длиннее, знаков. */
 export const PAY_DETAILS_MAX = 2000;
@@ -40,6 +49,10 @@ export interface OfficeSettings {
   whatsappToPhone: boolean;
   /** Реквизиты для оплаты сайта; пусто — на счёте «пришлём в ответ на письмо». */
   payDetails: string;
+  /** ИИ-аналитик включён (по умолчанию выключен). */
+  aiOffers: boolean;
+  /** ИИ-предложений в сутки, 0…AI_DAILY_CAP_MAX. */
+  aiDailyCap: number;
 }
 
 function flag(value: string | undefined): boolean {
@@ -70,6 +83,11 @@ export function parseOfficeSettings(
     payDetails: (byKey.get(OFFICE_EXTRA_SETTINGS.payDetails) ?? '')
       .trim()
       .slice(0, PAY_DETAILS_MAX),
+    aiOffers: flag(byKey.get(OFFICE_EXTRA_SETTINGS.aiOffers)),
+    aiDailyCap: Math.min(
+      AI_DAILY_CAP_MAX,
+      int(byKey.get(OFFICE_EXTRA_SETTINGS.aiDailyCap), DEFAULT_AI_DAILY_CAP),
+    ),
   };
 }
 

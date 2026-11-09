@@ -355,3 +355,73 @@ describe('isStopReply', () => {
     }
   });
 });
+
+describe('personal offer in the site letter and WhatsApp (U2)', () => {
+  const offer = {
+    subject: 'Вы работаете до 21:00 — пусть клиенты видят это сразу',
+    opener: 'Вы работаете до 21:00 — это сильная сторона.',
+    bullets: ['Первый пункт про услуги.', 'Второй пункт про часы.', 'Третий пункт про заявки.'],
+    packageKey: 'domen' as const,
+    packageReason: 'рядом несколько конкурентов со своими сайтами',
+  };
+  const withOffer: OutreachInput = { ...input, offer };
+
+  it('letter: subject, opener, bullets, recommended package with its price, links, stop last', () => {
+    const letter = buildEmail(site, withOffer);
+    expect(letter.subject).toBe(offer.subject);
+    expect(letter.text).toContain(offer.opener);
+    for (const b of offer.bullets) expect(letter.text).toContain(`• ${b}`);
+    expect(letter.text).toContain('«Сайт на своём домене» — 17 000 ₽ один раз');
+    expect(letter.text).toContain('1 500 ₽ в месяц');
+    expect(letter.text).toContain(offer.packageReason);
+    expect(letter.text).toContain(`${LEADS_TO_EMAIL_LINE} — на этот адрес.`);
+    expect(letter.text).toContain(input.previewUrl);
+    expect(letter.text).toContain(`${SERVICE_LINK_LABEL}: ${SERVICE_EMAIL}`);
+    stopLineIsLast(letter.text);
+    expect(letter.html).toContain('<ul');
+    expect(letter.html).toContain(`<li style="margin:0 0 6px">${offer.bullets[0]}</li>`);
+    expect(letter.text).not.toMatch(FORBIDDEN);
+  });
+
+  it('the starter package and its base price for «vizitka»', () => {
+    const letter = buildEmail(site, { ...input, offer: { ...offer, packageKey: 'vizitka' } });
+    expect(letter.text).toContain('«Сайт-визитка» — 15 000 ₽ один раз');
+  });
+
+  it('html escapes the offer text', () => {
+    const letter = buildEmail(site, {
+      ...input,
+      offer: { ...offer, bullets: ['<b>жирно</b>', 'два', 'три'] },
+    });
+    expect(letter.html).toContain('&lt;b&gt;жирно&lt;/b&gt;');
+    expect(letter.html).not.toContain('<b>жирно');
+  });
+
+  it('a provider ignores the offer', () => {
+    const letter = buildEmail(provider, withOffer);
+    expect(letter.subject).toBe(`Ваша страница на ${SITE.platform} уже готова`);
+    expect(buildWhatsAppText(provider, withOffer)).not.toContain(offer.opener);
+  });
+
+  it('WhatsApp: opener, link, bullets, price, stop line last, within the limit', () => {
+    const text = buildWhatsAppText(site, withOffer);
+    expect(text.length).toBeLessThanOrEqual(WHATSAPP_MAX_LENGTH);
+    expect(text).toContain(offer.opener);
+    expect(text).toContain(input.previewUrl);
+    expect(text).toContain(`• ${offer.bullets[1]}`);
+    expect(text).toContain('17 000 ₽');
+    expect(text).toContain(`${SERVICE_LINK_LABEL}: ${SERVICE_WHATSAPP}`);
+    expect(text.trim().endsWith('из открытой карточки компании.')).toBe(true);
+  });
+
+  it('WhatsApp: long bullets go before the link, the price or the stop line', () => {
+    const long = { ...offer, bullets: [1, 2, 3].map((i) => `Пункт ${i} `.repeat(30)) };
+    const text = buildWhatsAppText(site, { ...input, offer: long });
+    expect(text.length).toBeLessThanOrEqual(WHATSAPP_MAX_LENGTH);
+    expect(text).not.toContain('Пункт 1');
+    expect(text).toContain(input.previewUrl);
+    expect(text).toContain('17 000 ₽');
+    const parts = text.split('\n\n');
+    expect(parts[parts.length - 1]!.startsWith(STOP_LINE)).toBe(true);
+  });
+});

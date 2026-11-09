@@ -3,6 +3,10 @@
 // пауза одной кнопкой. Ответ «стоп» из вебхука WhatsApp переводит кандидата в DECLINED.
 // После основного прохода — одно напоминание по почте тем, кто не ответил (S8), в том же
 // дневном лимите писем. WhatsApp-напоминаний нет.
+// Персональное предложение (U2): для сайта письмо и WhatsApp строятся из досье — заход
+// выбирает обучение (learning.ts) по статистике, один раз за проход; при включённом
+// ИИ-аналитике и в его дневном лимите вступление и пункты переписывает aiOffer.ts. Ушедшее
+// предложение записывается в offerAngle/offerJson; второй канал берёт уже записанное.
 // База и отправители внедряются через deps, чтобы тесты шли без сети и без Prisma.
 import { prisma } from '@specai/database';
 import { mskDayBounds } from '@/lib/adminCrm';
@@ -24,6 +28,10 @@ import {
   OUTREACH_STATUSES,
 } from './outreach';
 import { officePrices } from './prices';
+import { improveOffer, parseSentOffer, type SentOffer } from './aiOffer';
+import { parseDossier } from './dossier';
+import { collectAngleStats, chooseAngle, type AngleStat, type LearningDb } from './learning';
+import { applicableAngles, buildOffer, type OfferAngle } from './offer';
 import { readOfficeSettings } from '@/lib/office/settings';
 
 /** Настройки рассылки из /admin/office (lib/office/settings.ts, T6). */
@@ -32,7 +40,16 @@ export interface OutreachRunSettings {
   dailyCap: number;
   replyTo: string;
   whatsappToPhone: boolean;
+  /** ИИ-аналитик предложений включён (по умолчанию нет). */
+  aiOffers?: boolean;
+  /** ИИ-предложений в московские сутки (по умолчанию DEFAULT_AI_DAILY_CAP). */
+  aiDailyCap?: number;
 }
+
+/** Лимит ИИ-предложений в сутки, если настройки его не дали (как в settings.ts). */
+export const DEFAULT_AI_DAILY_CAP = 30;
+/** Метка в offerJson: предложение переписал ИИ (для подсчёта дневного лимита). */
+export const AI_OFFER_MARK = '"ai":true';
 
 /** Строка Prospect, как её читает рассылка. */
 export interface OutreachRow {
@@ -57,15 +74,25 @@ export interface OutreachRow {
   contactedAt: Date | null;
   followUpSentAt: Date | null;
   repliedAt: Date | null;
+  /** Досье фирмы (U1); нет — общий заход. */
+  dossierJson: string | null;
+  /** Предложение, с которым уже писали (второй канал берёт его же). */
+  offerJson: string | null;
 }
 
 type DateRange = { gte: Date; lt: Date };
 
 /** Ровно те запросы к Prospect, которые делает этот модуль (prisma подходит структурно). */
 export interface OutreachDb {
-  prospect: {
+  prospect: LearningDb['prospect'] & {
     count(args: {
-      where: { emailSentAt?: DateRange; whatsappSentAt?: DateRange; followUpSentAt?: DateRange };
+      where: {
+        emailSentAt?: DateRange;
+        whatsappSentAt?: DateRange;
+        followUpSentAt?: DateRange;
+        contactedAt?: DateRange;
+        offerJson?: { contains: string };
+      };
     }): Promise<number>;
     findMany(args: {
       where: {
@@ -119,6 +146,10 @@ export interface OutreachDeps {
   clock?: () => number;
   /** Сколько миллисекунд есть у этого прохода (крон делит своё время между шагами). */
   budgetMs?: number;
+  /** ИИ-аналитик предложения (по умолчанию improveOffer). */
+  improve?: (offer: SentOffer, dossier: ReturnType<typeof parseDossier>) => Promise<SentOffer>;
+  /** Случайность выбора захода (learning.chooseAngle), для тестов. */
+  random?: () => number;
 }
 
 export interface OutreachResult {
@@ -285,13 +316,45 @@ export async function sendOutreach(now: Date, deps: OutreachDeps = {}): Promise<
   const outOfTime = () => clock() - startedAt > budgetMs;
   const baseUrl = (deps.baseUrl ?? siteUrl)();
   let prices: Promise<{ setup: number; monthly: number }> | null = null;
-  const inputFor = async (row: OutreachRow): Promise<OutreachInput> => ({
+  const inputFor = async (row: OutreachRow, offer?: SentOffer): Promise<OutreachInput> => ({
     previewUrl: previewUrlOf(baseUrl, row.token),
     baseUrl,
     prices: await (prices ??= (deps.prices ?? officePrices)()),
     nicheTitle: nicheTitle(row.niche),
     replyTo: settings.replyTo,
+    ...(offer ? { offer } : {}),
   });
+
+  // Персональное предложение (U2): статистика заходов — один раз за проход и только если
+  // есть кому писать о сайте; ИИ — в остатке дневного лимита.
+  let stats: Promise<Map<OfferAngle, AngleStat>> | null = null;
+  let aiLeft: number | null = null;
+  const aiCap = Math.max(0, Math.floor(settings.aiDailyCap ?? DEFAULT_AI_DAILY_CAP));
+  const improve = deps.improve ?? ((offer, dossier) => improveOffer(offer, dossier));
+  const offerFor = async (row: OutreachRow): Promise<SentOffer> => {
+    const stored = parseSentOffer(row.offerJson);
+    if (stored) return stored;
+    const dossier = parseDossier(row.dossierJson);
+    const angleStats = await (stats ??= collectAngleStats(db, 'site').catch(
+      () => new Map<OfferAngle, AngleStat>(),
+    ));
+    const angle = chooseAngle(applicableAngles(dossier), angleStats, deps.random);
+    const offer: SentOffer = {
+      ...buildOffer({ dossier, angle, companyName: row.name, city: row.city }),
+      ai: false,
+    };
+    if (!settings.aiOffers || aiCap === 0) return offer;
+    aiLeft ??= Math.max(
+      0,
+      aiCap -
+        (await db.prospect.count({
+          where: { contactedAt: day, offerJson: { contains: AI_OFFER_MARK } },
+        })),
+    );
+    if (aiLeft <= 0) return offer;
+    aiLeft -= 1;
+    return improve(offer, dossier).catch(() => offer);
+  };
 
   // Сначала те, у кого отправка ещё не падала; упавшие сегодня ждут до завтра —
   // одна повторная попытка в день, чтобы вечно битые адреса не съедали проход.
@@ -313,12 +376,15 @@ export async function sendOutreach(now: Date, deps: OutreachDeps = {}): Promise<
     const wanted = pickChannels(row, pick);
     if (wanted.length === 0) continue;
     const prospect = toProspect(row);
-    const input = await inputFor(row);
+    // Подрядчикам (provider) — прежнее письмо, без персонального предложения.
+    const offer = prospect.kind === 'site' ? await offerFor(row) : undefined;
+    const input = await inputFor(row, offer);
     const sentAt = new Date();
     const success = {
       status: 'CONTACTED',
       outreachError: null,
       ...(row.contactedAt ? {} : { contactedAt: sentAt }),
+      ...(offer ? { offerAngle: offer.angle, offerJson: JSON.stringify(offer) } : {}),
     };
 
     if (wanted.includes('email') && row.email) {

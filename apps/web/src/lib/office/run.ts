@@ -1,12 +1,14 @@
 // Офис агентов: прогон одного шага плана (spec §4, R1, R4, R6). Создаёт запись журнала
 // `OfficeRun`, ищет кандидатов в источнике (по умолчанию — карты OpenStreetMap), отбрасывает
 // компании с сайтом и уже известные (тот же объект источника или телефон; для агента
-// «Подрядчики» — ещё компании, которые уже на площадке), создаёт `Prospect` со статусом READY.
+// «Подрядчики» — ещё компании, которые уже на площадке), создаёт `Prospect` со статусом READY
+// и досье (`dossier.ts`): соседи для подсчёта конкурентов — весь ответ источника, и с сайтом.
 // База и источник передаются зависимостями, чтобы логика проверялась без Postgres.
 
 import { prisma } from '@specai/database';
 import { cityByName, findCityInText } from '@specai/shared';
 import { AGENTS, agentById } from './agents';
+import { buildDossier } from './dossier';
 import { machineryTags, nicheByKey, type Niche } from './niches';
 import { OFFICE_SETTINGS, defaultPlan, nextStep, parsePlan } from './plan';
 import { prospectSlug, newToken } from './slug';
@@ -64,6 +66,8 @@ export interface ProspectCreateData {
   source: string;
   sourceRef: string;
   runId: string | null;
+  /** JSON досье (`buildDossier`); null — не собрано. */
+  dossierJson: string | null;
 }
 
 export interface OfficeRunCreateData {
@@ -162,6 +166,12 @@ function isUniqueViolation(error: unknown): boolean {
 interface CreateContext {
   agent: AgentId;
   niche: string;
+  nicheTitle: string;
+  /**
+   * Весь ответ источника (и фирмы с сайтом) — соседи для подсчёта конкурентов в досье.
+   * null — сравнивать не с чем (ручное добавление): конкурентов в досье нет, а не «ноль».
+   */
+  neighbors: readonly Candidate[] | null;
   city: string | null;
   source: string;
   runId: string | null;
@@ -212,6 +222,17 @@ async function companyWithPhone(db: OfficeDb, tail: string): Promise<boolean> {
     take: COMPANY_SCAN_LIMIT,
   });
   return companies.some((c) => phoneTail(c.phone ?? '') === tail);
+}
+
+function dossierFor(c: Candidate, ctx: CreateContext, city: string | null) {
+  const dossier = buildDossier({
+    candidate: c,
+    neighbors: ctx.neighbors ?? [],
+    niche: ctx.niche,
+    nicheTitle: ctx.nicheTitle,
+    city,
+  });
+  return ctx.neighbors ? dossier : { ...dossier, competitors: null };
 }
 
 async function createProspects(
@@ -279,6 +300,7 @@ async function createProspects(
       source: ctx.source,
       sourceRef: c.sourceRef,
       runId: ctx.runId,
+      dossierJson: JSON.stringify(dossierFor(c, ctx, city)),
     };
     // Случайный хвост адреса совпадает редко; при совпадении — вторая попытка с новым.
     for (let attempt = 0; attempt < 2; attempt++) {
@@ -357,21 +379,26 @@ export async function runStep(input: RunStepInput, deps: RunDeps = {}): Promise<
       result.error = search.error;
       return finish();
     }
+    // Источник отдаёт всех: фирмы с сайтом — только соседи для досье, кандидатами не становятся.
+    const withoutSite = search.candidates.filter((c) => !c.website);
+    const withSite = search.candidates.length - withoutSite.length;
     // Сначала убираем уже известных, потом берём первые STEP_LIMIT новых.
-    const unknown = await dropKnown(search.candidates, db);
-    const alreadyKnown = search.candidates.length - unknown.length;
+    const unknown = await dropKnown(withoutSite, db);
+    const alreadyKnown = withoutSite.length - unknown.length;
     const candidates = unknown.slice(0, STEP_LIMIT);
     result.found = search.candidates.length;
     const counts = await createProspects(candidates, {
       agent: input.agent,
       niche: niche.key,
+      nicheTitle: niche.title,
+      neighbors: search.candidates,
       city: city.name,
       source: source.id,
       runId: run.id,
       db,
     });
     result.created = counts.created;
-    result.skipped = counts.skipped + alreadyKnown;
+    result.skipped = counts.skipped + alreadyKnown + withSite;
   } catch (error) {
     console.error('[office/run] step failed', error);
     result.error = 'Шаг не выполнен: ошибка при сохранении кандидатов';
@@ -382,7 +409,7 @@ export async function runStep(input: RunStepInput, deps: RunDeps = {}): Promise<
 /**
  * Кандидаты, добавленные владельцем вручную (R7): та же дедупликация и создание, без
  * журнала прогона. Ниша — `deps.niche`, иначе первая ниша агента по умолчанию; город —
- * из адреса строки.
+ * из адреса строки. Досье — без соседей: конкурентов не с чем сравнить.
  */
 export async function createManualProspects(
   agent: AgentId,
@@ -394,6 +421,8 @@ export async function createManualProspects(
   return createProspects(candidates, {
     agent,
     niche: niche?.key ?? AGENTS[agent].defaultNiches[0] ?? 'machinery',
+    nicheTitle: niche?.title ?? '',
+    neighbors: null,
     city: null,
     source: 'manual',
     runId: null,

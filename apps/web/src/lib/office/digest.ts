@@ -3,6 +3,8 @@
 // Сводку читает только владелец, поэтому телефоны и ссылки превью в ней уместны.
 // «Сайты под ключ» как бизнес (S4, S6): заявки с клиентских сайтов за сутки и оплата
 // клиентов, которая скоро кончится или уже кончилась.
+// Вторая волна (U3): лучший заход персональных предложений и «горячие» — открыли превью за
+// 7 дней и ещё не ответили (им пора позвонить).
 
 import { phoneText } from './pages';
 import { prisma } from '@specai/database';
@@ -10,13 +12,21 @@ import { MSK, mskDate, mskDayBounds } from '@/lib/adminCrm';
 import { siteUrl } from '@/lib/siteUrl';
 import { AGENTS, AGENT_IDS } from './agents';
 import { BILLABLE_STATUSES, EXPIRING_DAYS } from './billing';
+import { angleLeader, collectAngleStats, learningTable, type LearningDb } from './learning';
 import { nicheTitle } from './niches';
+import { ANGLE_TITLES } from './offer';
 import { OFFICE_SETTINGS, formatPlan, nextStep } from './plan';
 import { resolvePlan } from './run';
 import type { AgentId, ProspectKind } from './types';
 
 /** Не больше стольких кандидатов в каждом списке сводки; остальное — «и ещё N». */
 export const DIGEST_LIST_LIMIT = 10;
+/** «Горячих» в сводке — не больше стольких строк. */
+export const DIGEST_HOT_LIMIT = 5;
+/** «Горячие» — открыли превью за столько дней и не ответили. */
+export const HOT_DAYS = 7;
+/** Кто ещё может ответить: написали или ждут звонка. */
+export const HOT_STATUSES = ['CONTACTED', 'CALLBACK'] as const;
 
 /** Окно отправки сводки — московские часы, включительно. */
 /**
@@ -82,6 +92,10 @@ export interface DigestInput {
    * кончилась. Это состояние, а не новость дня, поэтому тихую сводку оно не отменяет.
    */
   billing?: { expiring: number; overdue: number };
+  /** Лучший заход предложений по ответам (learningTable → angleLeader); нет данных — не задан. */
+  bestAngle?: { title: string; replied: number; sent: number } | null;
+  /** Открыли превью за HOT_DAYS дней и не ответили (новые первыми). */
+  hot?: ProspectLite[];
 }
 
 function formatDay(date: Date): string {
@@ -96,11 +110,16 @@ function line(p: ProspectLite, base: string): string {
   return `${parts.join(' · ')} · превью: ${base}/preview/${p.token}`;
 }
 
-function list(title: string, items: ProspectLite[], base: string): string[] {
+function list(
+  title: string,
+  items: ProspectLite[],
+  base: string,
+  limit: number = DIGEST_LIST_LIMIT,
+): string[] {
   if (items.length === 0) return [];
   const out = [`${title} (${items.length}):`];
-  items.slice(0, DIGEST_LIST_LIMIT).forEach((p, i) => out.push(`${i + 1}. ${line(p, base)}`));
-  const rest = items.length - DIGEST_LIST_LIMIT;
+  items.slice(0, limit).forEach((p, i) => out.push(`${i + 1}. ${line(p, base)}`));
+  const rest = items.length - limit;
   if (rest > 0) out.push(`и ещё ${rest} в админке`);
   return out;
 }
@@ -140,6 +159,7 @@ export function buildDigest(input: DigestInput): string {
   const failedRuns = input.runs.filter((r) => r.error).length;
   const leads = siteLeadsLine(input.siteLeads);
   const billing = billingLine(input.billing, base);
+  const hot = input.hot ?? [];
   const quiet =
     created === 0 &&
     input.toContact.length === 0 &&
@@ -148,6 +168,7 @@ export function buildDigest(input: DigestInput): string {
     input.contacted.email === 0 &&
     input.contacted.whatsapp === 0 &&
     input.registered === 0 &&
+    hot.length === 0 &&
     !leads;
 
   if (quiet) {
@@ -170,9 +191,14 @@ export function buildDigest(input: DigestInput): string {
   out.push(...list('Ответили', input.replied, base));
   out.push(...list('Готовы к отправке', input.toContact, base));
   out.push(...list('Напомнить сегодня', input.callbacks, base));
+  out.push(...list('Горячие (открыли превью)', hot, base, DIGEST_HOT_LIMIT));
   if (input.registered > 0) out.push(`Зарегистрировались по ссылке: ${input.registered}`);
   if (leads) out.push(leads);
   if (billing) out.push(billing);
+  if (input.bestAngle && input.bestAngle.sent > 0) {
+    const b = input.bestAngle;
+    out.push(`Лучший заход: ${b.title} (ответили ${b.replied} из ${b.sent})`);
+  }
   out.push(`Открыть офис: ${base}/admin/office`);
   return out.join('\n');
 }
@@ -232,6 +258,8 @@ export interface DigestDb {
       take: number;
     }): Promise<LiteRow[]>;
     count(args: { where: Record<string, unknown> }): Promise<number>;
+    /** Статистика заходов (learning.ts); без неё строки «Лучший заход» нет. */
+    groupBy?: LearningDb['prospect']['groupBy'];
   };
   appSetting: {
     findMany(args: {
@@ -340,6 +368,25 @@ export async function collectDigest(
     db.prospect.count({ where: { ...clients, paidUntil: { gt: now, lte: expiringBy } } }),
     db.prospect.count({ where: { ...clients, paidUntil: { lte: now } } }),
   ]);
+  // Горячие и лучший заход (U3). Статистика заходов не обязательна: её сбой сводку не ломает.
+  const weekAgo = new Date(now.getTime() - HOT_DAYS * DAY_MS);
+  const groupBy = db.prospect.groupBy;
+  const [hot, stats] = await Promise.all([
+    db.prospect.findMany({
+      where: {
+        status: { in: [...HOT_STATUSES] },
+        repliedAt: null,
+        previewLastViewedAt: { gte: weekAgo },
+      },
+      select: LITE_SELECT,
+      orderBy: { previewLastViewedAt: 'desc' },
+      take: DIGEST_HOT_LIMIT,
+    }),
+    groupBy
+      ? collectAngleStats({ prospect: { groupBy: groupBy.bind(db.prospect) } }).catch(() => null)
+      : Promise.resolve(null),
+  ]);
+  const leader = stats ? angleLeader(learningTable(stats)) : null;
   const plan = resolvePlan(settings);
   const { step } = nextStep(plan.steps, plan.cursor);
   const outreachPaused =
@@ -358,5 +405,9 @@ export async function collectDigest(
     nextStep: step ? formatPlan([step]) : null,
     siteLeads: { total: leadsTotal, undelivered: leadsUndelivered },
     billing: { expiring, overdue },
+    hot: lite(hot),
+    bestAngle: leader
+      ? { title: ANGLE_TITLES[leader.angle], replied: leader.replied, sent: leader.sent }
+      : null,
   });
 }

@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('@specai/database', () => ({ prisma: {} }));
 
+import { parseDossier } from './dossier';
 import { OFFICE_SETTINGS, defaultPlan } from './plan';
 import {
   SEARCH_LIMIT,
@@ -52,6 +53,7 @@ function fakeDb(seed: { prospects?: Partial<ProspectRow>[]; companies?: string[]
     source: 'osm',
     sourceRef: `osm:node/${i}`,
     runId: null,
+    dossierJson: null,
     ...p,
   }));
   const companies = (seed.companies ?? []).map((phone, i) => ({ id: `c${i}`, phone }));
@@ -210,6 +212,56 @@ describe('runStep', () => {
     expect(prospects.map((p) => p.sourceRef)).toContain('osm:node/4');
   });
 
+  it('пишет досье: конкуренты посчитаны по всему ответу источника, фирмы с сайтом кандидатами не стали', async () => {
+    const { db, prospects } = fakeDb();
+    const result = await runStep(
+      { agent: 'sites', niche: 'dentist', city: 'Казань', trigger: 'cron' },
+      {
+        db,
+        source: source(
+          ok([
+            candidate({ sourceRef: 'osm:node/1', phone: '+78432000001' }),
+            // рядом, с сайтом — только сосед
+            candidate({
+              sourceRef: 'osm:node/2',
+              phone: '+78432000002',
+              lat: 55.791,
+              lon: 49.101,
+              website: 'https://dent.ru',
+            }),
+            // рядом, без сайта — и сосед, и кандидат
+            candidate({ sourceRef: 'osm:node/3', phone: '+78432000003', lat: 55.792, lon: 49.1 }),
+            // далеко (больше 2 км), с сайтом — не конкурент «рядом»
+            candidate({
+              sourceRef: 'osm:node/4',
+              phone: '+78432000004',
+              lat: 55.9,
+              lon: 49.3,
+              website: 'https://far.ru',
+            }),
+          ]),
+        ),
+      },
+    );
+    expect(result).toMatchObject({ found: 4, created: 2, skipped: 2, error: null });
+    expect(prospects.map((p) => p.sourceRef)).toEqual(['osm:node/1', 'osm:node/3']);
+    const dossier = parseDossier(prospects[0]!.dossierJson);
+    expect(dossier).toMatchObject({
+      niche: 'dentist',
+      nicheTitle: 'Стоматология',
+      city: 'Казань',
+      competitors: { radiusKm: 2, sameNiche: 2, withSite: 1 },
+      channels: { email: true, whatsapp: false, telegram: true },
+    });
+    expect(dossier!.gaps[0]).toBe('нет своего сайта');
+    expect(dossier!.facts).toContain('адрес: ул. Баумана, 1, Казань');
+    expect(parseDossier(prospects[1]!.dossierJson)!.competitors).toEqual({
+      radiusKm: 2,
+      sameNiche: 2,
+      withSite: 1,
+    });
+  });
+
   it('дедуп идёт до обрезки: повтор шага по тому же городу находит новых, а не те же первые 10', async () => {
     const { db, prospects } = fakeDb({
       prospects: Array.from({ length: 10 }, (_, i) => ({
@@ -358,6 +410,14 @@ describe('createManualProspects', () => {
       source: 'manual',
       runId: null,
     });
+    // Досье без соседей: конкурентов не с чем сравнить — null, а не «ноль рядом».
+    const dossier = parseDossier(prospects.at(-1)!.dossierJson);
+    expect(dossier).toMatchObject({
+      niche: 'machinery',
+      city: 'Набережные Челны',
+      competitors: null,
+    });
+    expect(dossier!.facts).toContain('адрес: Набережные Челны, пр. Мира 1');
   });
 });
 

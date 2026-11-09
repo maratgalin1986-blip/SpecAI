@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
+import { isOffPlatformNow } from '@/components/usePlatformEffects';
 import type { MachineType } from '@/lib/machinePhotos';
 import {
   announcedMachines,
@@ -59,6 +60,8 @@ function setAudioSession(type: AudioSessionType) {
 
 export function SoundDirector() {
   useEffect(() => {
+    // Not on a client's site (its own domain shows «/» but carries the marker).
+    if (isOffPlatformNow(window.location.pathname)) return;
     const reduced = prefersReducedMotion();
     let ctx: AudioContext | null = null;
     let engine: SoundEngine | null = null;

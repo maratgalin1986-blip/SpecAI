@@ -122,6 +122,9 @@ export default async function ClientSitePage(props: { params: Promise<{ slug: st
   return (
     <>
       <style dangerouslySetInnerHTML={{ __html: HIDE_PLATFORM_CHROME }} />
+      {/* Marks a client's site for the platform's effects (lib/clientSiteMarker.ts): on the
+          client's own domain the path is «/», so BrandPresence and the cinema look for this. */}
+      <div data-client-site hidden />
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{

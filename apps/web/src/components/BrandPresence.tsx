@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react';
 import { usePathname } from 'next/navigation';
+import { isOffPlatformNow } from '@/components/usePlatformEffects';
 import { awayTitle, COPY_SOURCE_LINE, keepsTitle, withCopySource } from '@/lib/brandMoments';
 
 // Two quiet brand moments, nothing drawn on screen:
@@ -9,11 +10,13 @@ import { awayTitle, COPY_SOURCE_LINE, keepsTitle, withCopySource } from '@/lib/b
 //   СпецПласт16»; the page's own title comes back on return;
 // - long passages copied from the site (over 200 characters) get a short
 //   source line. Phones, prices, form fields and short text are left alone.
+// Neither runs on a client's site (/s/<slug>, /preview/<token>, the client's
+// own domain): its title and texts are the client's, not ours.
 export function BrandPresence() {
   const pathname = usePathname() ?? '/';
 
   useEffect(() => {
-    if (keepsTitle(pathname)) return;
+    if (keepsTitle(pathname) || isOffPlatformNow(pathname)) return;
     let saved: string | null = null;
     let shown: string | null = null;
     const restore = () => {
@@ -39,7 +42,7 @@ export function BrandPresence() {
 
   useEffect(() => {
     // Legal texts (consent, policy) are copied exactly as they are.
-    if (keepsTitle(pathname)) return;
+    if (keepsTitle(pathname) || isOffPlatformNow(pathname)) return;
     const onCopy = (event: ClipboardEvent) => {
       const target = event.target as Element | null;
       // The visitor's own text in a form field is theirs.

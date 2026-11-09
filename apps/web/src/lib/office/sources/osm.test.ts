@@ -224,17 +224,19 @@ describe('osmSource.search', () => {
       headers: { 'Content-Type': 'application/json' },
     });
 
-  it('делает POST на Overpass и возвращает кандидатов без сайта', async () => {
+  it('делает POST на Overpass и возвращает всех, и с сайтом (они нужны досье)', async () => {
     const fetchMock = vi.fn(async () => jsonResponse(fixture));
     const source = createOsmSource(fetchMock);
     const result = await source.search({ niche: dentist, city: kazan, radiusKm: 15, limit: 10 });
     expect(result.status).toBe('ok');
     if (result.status !== 'ok') return;
     expect(result.candidates.map((c) => c.sourceRef)).toEqual([
+      'osm:node/2',
       'osm:node/3',
       'osm:way/4',
       'osm:node/6',
     ]);
+    expect(result.candidates[0]!.website).toBe('https://denta.example');
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];

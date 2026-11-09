@@ -1169,6 +1169,8 @@ model Prospect {
   offerJson       String?
   previewViews    Int       @default(0)
   previewViewedAt DateTime?
+  // Последнее открытие превью — «горячие» в сводке считаются по нему.
+  previewLastViewedAt DateTime?
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
