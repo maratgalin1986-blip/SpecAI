@@ -172,3 +172,59 @@ layout, если есть) — только атрибут, без измене�
 
 `/admin/office`: воронка, ссылки «Клиенты» и «Редактировать сайт» у кандидатов, «Страница услуги»;
 REVIEW.md — новые публичные адреса; документы; ревью; приёмка.
+
+## Вторая волна (S13–S17) — после первой
+
+Готово координатором: `lib/office/dossier.ts` (`buildDossier`, `parseDossier`, `parseHours`),
+`lib/office/offer.ts` (`applicableAngles`, `buildOffer`, `OFFER_ANGLES`, `ANGLE_TITLES`, `NICHE_NEEDS`),
+`lib/office/learning.ts` (`chooseAngle`, `collectAngleStats`, `learningTable`); схема: `dossierJson`,
+`offerAngle`, `offerJson`, `previewViews` (default 0), `previewViewedAt`.
+
+### U1. Источники отдают всех, досье при создании
+
+Файлы: `lib/office/sources/osm.ts`, `lib/office/sources/dgis.ts` (+ их тесты), `lib/office/run.ts` (+ тест).
+
+- Источники больше не отбрасывают фирмы с сайтом (нужны для подсчёта конкурентов); лимит — как есть.
+- `runStep`: из полного ответа источника — кандидаты без сайта (как сейчас: дедуп, `STEP_LIMIT`), а для
+  каждого созданного — `buildDossier({ candidate, neighbors: все кандидаты ответа, niche, nicheTitle, city })`
+  → `dossierJson`. `createManualProspects` — досье без соседей. Тесты: досье записано, конкуренты
+  посчитаны по ответу источника, фирмы с сайтом кандидатами не стали.
+
+### U2. Письма из персонального предложения, ИИ-аналитик
+
+Файлы: `lib/office/outreach.ts`, `lib/office/outreachRun.ts` (+ тесты), `lib/office/aiOffer.ts` (+ тест),
+`lib/office/settings.ts`, `app/api/admin/office/settings/route.ts` (ключи `office.aiOffers` '1'/'0',
+`office.aiDailyCap` целое 0…500, по умолчанию 30).
+
+- `sendOutreach`: один раз за проход `collectAngleStats(db, kind)`; для каждой строки — досье
+  (`parseDossier`), заход `chooseAngle(applicableAngles(d), stats)`, `buildOffer`; если включён ИИ и не
+  исчерпан дневной лимит — `improveOffer(offer, dossier, …)` из `aiOffer.ts`; письмо и WhatsApp (kind site)
+  строятся из предложения: тема = `offer.subject`, вступление = `offer.opener`, пункты = `offer.bullets`,
+  рекомендованный пакет с ценой; дальше — как сейчас (ссылка превью, «кто мы и цены», «стоп» последней).
+  При успешной отправке (защищённый updateMany) записать `offerAngle` и `offerJson` (JSON предложения с
+  полем `ai: boolean`). Подрядчиков (kind provider) не менять.
+- `aiOffer.ts`: `improveOffer(offer, dossier, deps)` — только если `ANTHROPIC_API_KEY` есть; клиент и модель
+  — `getAnthropicClient`, `DEFAULT_MODEL` из `@specai/ai-service` (модель можно переопределить
+  `OFFICE_AI_MODEL`); короткий системный промпт (переписать вступление и 3 пункта живым русским языком,
+  только по фактам досье, без цифр, которых нет в досье, без «лучший/гарантируем», без имён моделей);
+  `max_tokens` 350, ответ — JSON `{ opener, bullets[3] }`; проверка: длина, нет новых цифр, нет
+  запрещённых слов; любой сбой → исходное предложение. Таймаут 8 с. Тесты с подменой клиента.
+
+### U3. Просмотры превью, админка, сводка, интеграция первой волны
+
+Файлы: `app/preview/[token]/page.tsx` (учёт просмотров), `app/admin/office/page.tsx`,
+`app/admin/office/[id]/page.tsx` (блок досье и предложения), `components/admin/OfficeLearning.tsx`,
+`components/admin/OfficeAiForm.tsx`, `lib/office/digest.ts` (+ тест).
+
+- Превью: если запрос не от админа (`isAdminRequest()`) и не от бота (User-Agent: bot|crawl|spider|preview|
+  facebookexternalhit|telegram|whatsapp|vkshare|yandex|google — превью ссылок в мессенджерах тоже боты),
+  `updateMany` по токену: `previewViews +1`, `previewViewedAt` — если пусто. Ошибка учёта не ломает страницу.
+- `/admin/office`: воронка (`OfficeFunnel` из первой волны), ссылки «Клиенты» (`/admin/office/clients`),
+  «Страница услуги» (`/sajt-pod-klyuch`), у кандидатов — «Досье и сайт» (`/admin/office/<id>`), значок
+  «открыл превью ×N»; блок «Чему научился офис» (`learningTable(await collectAngleStats(prisma))` —
+  заход, отправлено, открыли %, ответили %, согласились, «лидер»); блок «Горячие» — открыли превью за 7 дней
+  и не ответили; форма «ИИ-аналитик» (выключатель + лимит, состояние ключа «есть/нет» без значения).
+- `/admin/office/<id>`: блок «Досье» (факты, пробелы, конкуренты рядом), «Предложение» (как отправлено —
+  из `offerJson`, иначе как будет — `buildOffer` с первым подходящим заходом), просмотры превью.
+- Сводка: «Лучший заход: <название> (ответили N из M)», если есть данные; «Горячие (открыли превью): …» —
+  до 5 строк.
