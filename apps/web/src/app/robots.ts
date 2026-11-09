@@ -6,7 +6,8 @@ export default function robots(): MetadataRoute.Robots {
     rules: {
       userAgent: '*',
       allow: '/',
-      disallow: ['/admin', '/api/', '/dashboard', '/login'],
+      // /preview: private previews of the office agents' pages (R11).
+      disallow: ['/admin', '/api/', '/dashboard', '/login', '/preview'],
     },
     sitemap: `${siteUrl()}/sitemap.xml`,
   };

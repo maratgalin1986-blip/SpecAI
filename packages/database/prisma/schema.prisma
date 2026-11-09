@@ -1113,3 +1113,68 @@ model LegalEntity {
 
   @@index([userId])
 }
+
+// Офис агентов (tasks/autopilot/2026-11-09-office-agents): кандидаты двух агентов —
+// «Сайты под ключ» (kind "site") и «Подрядчики» (kind "provider"). Строки, не enum
+// (CLAUDE.md, правило 2). status: NEW → READY → CALLBACK | AGREED → PUBLISHED | DECLINED;
+// REGISTERED — подрядчик зарегистрировался по ссылке со своей страницы; CONTACTED — кандидату
+// отправлено письмо / сообщение WhatsApp (решение владельца, 2026-11-09).
+model Prospect {
+  id             String    @id @default(cuid())
+  kind           String // "site" | "provider"
+  status         String    @default("NEW")
+  slug           String    @unique // адрес опубликованной страницы
+  token          String    @unique // секрет превью
+  name           String
+  phone          String
+  address        String?
+  city           String?
+  lat            Float?
+  lon            Float?
+  niche          String // ключ ниши из lib/office/niches.ts
+  tags           String? // виды техники / услуги через запятую (из карточки)
+  hours          String?
+  email          String?
+  whatsapp       String?
+  telegram       String?
+  source         String    @default("osm") // "osm" | "manual"
+  sourceRef      String? // id объекта источника ("osm:node/123")
+  note           String?
+  callAt         DateTime?
+  calledAt       DateTime?
+  agreedAt       DateTime?
+  publishedAt    DateTime?
+  declinedAt     DateTime?
+  registeredAt   DateTime?
+  emailSentAt    DateTime?
+  whatsappSentAt DateTime?
+  contactedAt    DateTime?
+  repliedAt      DateTime?
+  outreachError  String?
+  runId          String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([status])
+  @@index([kind, city])
+  @@index([phone])
+  @@index([sourceRef])
+  @@index([contactedAt])
+}
+
+// Журнал прогонов офиса (R4).
+model OfficeRun {
+  id         String    @id @default(cuid())
+  agent      String // "sites" | "providers"
+  niche      String
+  city       String
+  trigger    String    @default("cron") // "cron" | "admin" | "telegram"
+  found      Int       @default(0)
+  created    Int       @default(0)
+  skipped    Int       @default(0)
+  error      String?
+  startedAt  DateTime  @default(now())
+  finishedAt DateTime?
+
+  @@index([startedAt])
+}

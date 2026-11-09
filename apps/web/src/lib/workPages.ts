@@ -15,5 +15,11 @@ export function isCabinetPage(pathname: string | null | undefined): boolean {
 /** The mobile contact bar is hidden here (MessengerButtons). */
 export function hidesContactBar(pathname: string | null | undefined): boolean {
   const path = pathname ?? '';
-  return isCabinetPage(path) || ACCOUNT.test(path) || /^\/stroyka(\/|$)/.test(path);
+  return (
+    isCabinetPage(path) ||
+    ACCOUNT.test(path) ||
+    /^\/stroyka(\/|$)/.test(path) ||
+    // A client's site made by the office and its preview carry their own buttons.
+    /^\/(s|preview)(\/|$)/.test(path)
+  );
 }

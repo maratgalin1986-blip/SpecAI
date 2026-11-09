@@ -1,5 +1,7 @@
 'use client';
 
+import { isStandalonePage } from '@/components/PublicOnly';
+
 import { useEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { reachGoal } from '@/lib/marketing';
@@ -39,7 +41,9 @@ export function TelegramChip() {
     return () => window.removeEventListener('scroll', check);
   }, []);
 
-  const hidden = ['/admin', '/stroyka', '/tg'].some((p) => pathname?.startsWith(p));
+  const hidden =
+    ['/admin', '/stroyka', '/tg'].some((p) => pathname?.startsWith(p)) ||
+    isStandalonePage(pathname);
   const open = shown && !hidden;
   // Lifts the chat button above the chip (globals.css).
   useEffect(() => {

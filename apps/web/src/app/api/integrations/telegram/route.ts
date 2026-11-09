@@ -61,6 +61,8 @@ import { collectSurveyReply } from '@/lib/groupPriceSurvey';
 import { tickDeferredOrderNotices } from '@/lib/deferredOrderNotices';
 import { checkRateLimit } from '@/lib/rateLimit';
 import { telegramApi } from '@/lib/telegramApi';
+import { parseOfficeCommand } from '@/lib/office/telegramCommand';
+import { runStep } from '@/lib/office/run';
 import {
   botChatState,
   handleGroupCommand,
@@ -72,6 +74,8 @@ import {
 } from '@/lib/groupBot';
 
 export const dynamic = 'force-dynamic';
+// Команда владельца /office ждёт ответа Overpass (до 25 с) внутри запроса.
+export const maxDuration = 60;
 
 interface TelegramMessage {
   message_id: number;
@@ -315,6 +319,22 @@ export async function POST(request: NextRequest) {
       message.chat.id,
       `ID этого чата: ${message.chat.id}\nУкажите его в TELEGRAM_CHAT_ID.`,
     );
+    return NextResponse.json({ ok: true });
+  }
+  // Офис агентов (spec §9): «/office <ниша> <город>» — только владелец, только в личке.
+  const office =
+    isPrivate && String(message.chat.id) === process.env.TELEGRAM_CHAT_ID
+      ? parseOfficeCommand(text)
+      : null;
+  if (office) {
+    const step = office.ok
+      ? await runStep({ ...office, trigger: 'telegram' }).catch(() => null)
+      : null;
+    const summary = step
+      ? `Офис: найдено ${step.found}, создано ${step.created}, пропущено ${step.skipped}.` +
+        `${step.error ? ` Ошибка: ${step.error}.` : ''} Превью — ${siteUrl()}/admin/office`
+      : 'Офис: шаг не выполнен. Подробности — в журнале.';
+    await reply(message.chat.id, office.ok ? summary : office.help);
     return NextResponse.json({ ok: true });
   }
   // Notifications: "/start <token>" from the deep link in the cabinet links

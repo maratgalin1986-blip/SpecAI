@@ -107,6 +107,14 @@ export function priceFaqAnswer(): string {
 }
 
 /**
+ * Сайт под ключ для компаний без сайта (офис агентов,
+ * tasks/autopilot/2026-11-09-office-agents): разовая цена и поддержка в месяц, ₽.
+ * PLACEHOLDER — уточнить у владельца; владелец меняет в /admin/office
+ * (AppSetting office.sitePrice / office.siteMonthly), см. lib/office/prices.ts.
+ */
+export const SITE_PRICES = { setup: 15000, monthly: 1500 } as const;
+
+/**
  * «Поддержать площадку»: amount chips that only help choose a sum, ₽. The
  * transfer itself happens in the person's bank app, and any sum is fine.
  */

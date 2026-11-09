@@ -23,3 +23,8 @@ jobs:
         run: |
           if [ -z "$CRON_SECRET" ]; then echo "::error::CRON_SECRET repository secret is not set"; exit 1; fi
           curl -fsS -H "Authorization: Bearer $CRON_SECRET" https://spec-ai-web.vercel.app/api/cron/bot-reminders
+      - name: Office step
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          curl -fsS -H "Authorization: Bearer $CRON_SECRET" https://spec-ai-web.vercel.app/api/cron/office || true

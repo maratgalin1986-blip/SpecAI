@@ -8,12 +8,24 @@ import { CinemaBackdrop } from '@/components/CinemaHero';
 import { BasePicker, type BaseValue } from '@/components/BasePicker';
 import { ConsentText } from '@/components/ConsentText';
 import { Hint } from '@/components/Hint';
-import { QuickProviderForm } from '@/components/QuickProviderForm';
+import { QuickProviderForm, type QuickProviderInitial } from '@/components/QuickProviderForm';
 import { noteInstallMoment } from '@/lib/installHint';
 import { NEWS_CONSENT_LABEL } from '@/lib/newsConsent';
 import { normalizeReferralCode } from '@/lib/referral';
 import { useHydrated } from '@/lib/useHydrated';
 import { accountTypeFromQuery, WELCOME_PATHS, type AccountType } from '@/lib/welcome';
+
+function quickInitialFromQuery(params: URLSearchParams): QuickProviderInitial | undefined {
+  const cut = (key: string, max: number) => params.get(key)?.trim().slice(0, max) || undefined;
+  const slug = params.get('prospect')?.trim() ?? '';
+  const initial: QuickProviderInitial = {
+    name: cut('name', 60),
+    phone: cut('phone', 30),
+    city: cut('city', 100),
+    prospect: /^[a-z0-9-]{3,80}$/.test(slug) ? slug : undefined,
+  };
+  return Object.values(initial).some(Boolean) ? initial : undefined;
+}
 
 export default function RegisterPage() {
   // /register?role=provider|customer (the welcome cards, /login) and the
@@ -22,11 +34,15 @@ export default function RegisterPage() {
   const [accountType, setAccountType] = useState<AccountType>('CUSTOMER');
   // «Пригласи коллегу»: the inviter's code from /r/<code> or ?ref=.
   const [referralCode, setReferralCode] = useState<string | null>(null);
+  // Офис агентов: ссылка со страницы кандидата /p/<slug> приносит имя, телефон,
+  // город и slug — только начальные значения лёгкой формы исполнителя.
+  const [quickInitial, setQuickInitial] = useState<QuickProviderInitial | undefined>();
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const preset = accountTypeFromQuery(params);
     if (preset) setAccountType(preset);
     setReferralCode(normalizeReferralCode(params.get('ref')));
+    setQuickInitial(quickInitialFromQuery(params));
   }, []);
   // «Встать на линию — попробовать бесплатно» first; the full form on request.
   const [fullProvider, setFullProvider] = useState(false);
@@ -155,7 +171,7 @@ export default function RegisterPage() {
         )}
 
         {accountType === 'PROVIDER' && !fullProvider ? (
-          <QuickProviderForm onFullForm={() => setFullProvider(true)} />
+          <QuickProviderForm onFullForm={() => setFullProvider(true)} initial={quickInitial} />
         ) : (
           <form
             method="post"

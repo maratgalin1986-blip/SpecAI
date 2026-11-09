@@ -64,6 +64,11 @@ export const quickSignupSchema = z.object({
   lon: z.number().min(19).max(191).optional(),
   city: z.string().trim().max(120).optional(),
   timeZone: z.string().max(60).optional(),
+  /** Slug кандидата офиса агентов (пришёл по ссылке со страницы /p/<slug>). */
+  prospect: z
+    .string()
+    .regex(/^[a-z0-9-]{3,80}$/)
+    .optional(),
 });
 
 export type QuickSignup = z.infer<typeof quickSignupSchema>;

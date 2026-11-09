@@ -4,6 +4,7 @@ import { directMessageLead, needsLead } from '@/lib/botDirectMessage';
 import { ingestMessage, type IngestResult } from '@/lib/ingest';
 import { acceptLead } from '@/lib/leadIntake';
 import { notifyTelegram } from '@/lib/notify';
+import { markReplied } from '@/lib/office/outreachRun';
 import { SITE } from '@/lib/site';
 import { bearerToken, safeEqual, whatsappWebhookToken } from '@/lib/integrations';
 
@@ -57,6 +58,9 @@ export async function POST(request: NextRequest) {
     const result = await ingestMessage(incoming);
     return NextResponse.json({ ok: true, result: result.status });
   }
+  // A private reply from an office prospect (lib/office/outreachRun.ts): «стоп» declines it.
+  // The lead below is still created, so the owner sees the reply in Telegram either way.
+  if (senderDigits) await markReplied(senderDigits, text, new Date()).catch(() => null);
 
   // Private message: never lost — if it is not an equipment request or the
   // database is down, it becomes a "call me back" lead with a Telegram alert.
