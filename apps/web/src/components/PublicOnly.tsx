@@ -8,8 +8,17 @@ export function isAdminArea(pathname: string | null | undefined): boolean {
   return /^\/admin(\/|$)/.test(pathname ?? '');
 }
 
+/**
+ * Pages made by the office for other companies (/s/<slug> — a client's own
+ * site, /preview/<token> — its preview): they carry their own header and
+ * footer, so the platform's chrome and widgets stay off them.
+ */
+export function isStandalonePage(pathname: string | null | undefined): boolean {
+  return /^\/(s|preview)(\/|$)/.test(pathname ?? '');
+}
+
 export function PublicOnly({ children }: { children: ReactNode }) {
   const pathname = usePathname();
-  if (isAdminArea(pathname)) return null;
+  if (isAdminArea(pathname) || isStandalonePage(pathname)) return null;
   return <>{children}</>;
 }

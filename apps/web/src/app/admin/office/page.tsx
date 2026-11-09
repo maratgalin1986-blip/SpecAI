@@ -4,12 +4,14 @@ import { Card } from '@specai/ui';
 import { adminGate } from '@/components/admin/AdminGate';
 import { AdminPageHeader, AdminTag, StatTile } from '@/components/admin/AdminUi';
 import { OfficeManualForm } from '@/components/admin/OfficeManualForm';
+import { OfficeOutreachCard } from '@/components/admin/OfficeOutreachCard';
 import { OfficePlanForm } from '@/components/admin/OfficePlanForm';
 import { OfficePricesForm } from '@/components/admin/OfficePricesForm';
 import { OfficeProspectControls } from '@/components/admin/OfficeProspectControls';
 import { OfficeRunForm } from '@/components/admin/OfficeRunForm';
 import { PhoneLink } from '@/components/admin/PhoneLink';
 import { mskDayBounds } from '@/lib/adminCrm';
+import { serverChannels } from '@/lib/notifications/adapters';
 import { AGENTS, AGENT_IDS } from '@/lib/office/agents';
 import { nicheTitle, nichesOf } from '@/lib/office/niches';
 import type { PageProspect } from '@/lib/office/pageTypes';
@@ -77,7 +79,7 @@ export default async function AdminOfficePage() {
   const gate = adminGate();
   if (gate) return gate;
   const now = new Date();
-  const { end: todayEnd } = mskDayBounds(now);
+  const { start: todayStart, end: todayEnd } = mskDayBounds(now);
   const weekAgo = new Date(now.getTime() - 7 * 86_400_000);
   const base = siteUrl();
 
@@ -94,6 +96,8 @@ export default async function AdminOfficePage() {
     published,
     declined,
     runs,
+    emailToday,
+    whatsappToday,
   ] = await Promise.all([
     readOfficeSettings(),
     officePrices(),
@@ -140,6 +144,8 @@ export default async function AdminOfficePage() {
       },
     }),
     prisma.officeRun.findMany({ orderBy: { startedAt: 'desc' }, take: RUNS_SHOWN }),
+    prisma.prospect.count({ where: { emailSentAt: { gte: todayStart, lt: todayEnd } } }),
+    prisma.prospect.count({ where: { whatsappSentAt: { gte: todayStart, lt: todayEnd } } }),
   ]);
 
   // Overdue reminders first (the oldest first), then the newest candidates.
@@ -415,7 +421,11 @@ export default async function AdminOfficePage() {
           </p>
           <OfficePlanForm plan={settings.plan} paused={settings.paused} />
         </Card>
-        {/* Карточка «Рассылка» — T9 */}
+        <OfficeOutreachCard
+          settings={settings}
+          today={{ email: emailToday, whatsapp: whatsappToday }}
+          channels={serverChannels()}
+        />
       </div>
 
       <section className="flex flex-col gap-3">

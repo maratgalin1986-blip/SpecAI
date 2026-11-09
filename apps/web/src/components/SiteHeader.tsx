@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { JOURNEY_SELECTOR } from '@/components/useJourneyInView';
 import { SoundToggle } from '@/components/SoundToggle';
-import { isAdminArea } from '@/components/PublicOnly';
+import { isAdminArea, isStandalonePage } from '@/components/PublicOnly';
 import { SITE } from '@/lib/site';
 
 import { AuthStatus } from '@/components/AuthStatus';
@@ -125,6 +125,9 @@ export function SiteHeader() {
       observer?.disconnect();
     };
   }, []);
+
+  // A client's site or its preview has its own header (lib/office).
+  if (isStandalonePage(pathname)) return null;
 
   return (
     <header

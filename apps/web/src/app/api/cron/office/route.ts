@@ -3,6 +3,7 @@ import { cronAllowed } from '@/lib/cronAuth';
 import { onceADay } from '@/lib/cronOnce';
 import { notifyTelegram } from '@/lib/notify';
 import { DIGEST_HOURS, collectDigest, moscowHour } from '@/lib/office/digest';
+import { sendOutreach } from '@/lib/office/outreachRun';
 import { runScheduledStep } from '@/lib/office/run';
 
 export const dynamic = 'force-dynamic';
@@ -24,7 +25,12 @@ export async function GET(request: NextRequest) {
     console.error('[cron/office] step failed', error);
     return { skipped: 'error' as const, step: null, result: null };
   });
-  // Рассылка кандидатам (T9, lib/office/outreachRun.ts) подключается здесь.
+  // Рассылка кандидатам по e-mail и WhatsApp (lib/office/outreachRun.ts): одно
+  // сообщение на компанию и канал, дневной лимит, пауза из /admin/office.
+  const outreach = await sendOutreach(now).catch((error: unknown) => {
+    console.error('[cron/office] outreach failed', error);
+    return { email: 0, whatsapp: 0, skipped: 'error', errors: 0 };
+  });
   let digest = false;
   const hour = moscowHour(now);
   if (hour >= DIGEST_HOURS.from && hour <= DIGEST_HOURS.to) {
@@ -39,6 +45,7 @@ export async function GET(request: NextRequest) {
     digest = sent === true;
   }
   return NextResponse.json({
+    outreach,
     step: step.skipped
       ? { skipped: step.skipped }
       : {

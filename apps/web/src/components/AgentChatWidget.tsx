@@ -1,5 +1,7 @@
 'use client';
 
+import { isStandalonePage } from '@/components/PublicOnly';
+
 import { useEffect, useRef, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { AgentChat } from '@/components/AgentChat';
@@ -41,7 +43,7 @@ export function AgentChatWidget() {
     return () => document.removeEventListener('keydown', onKey);
   }, [isOpen]);
 
-  if (pathname === '/agents') {
+  if (pathname === '/agents' || isStandalonePage(pathname)) {
     return null;
   }
 
