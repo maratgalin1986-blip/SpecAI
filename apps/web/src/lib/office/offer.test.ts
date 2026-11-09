@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildDossier, parseDossier, parseHours, type Dossier } from './dossier';
+import { buildDossier, parseDossier, parseHours } from './dossier';
 import { applicableAngles, buildOffer, OFFER_ANGLES } from './offer';
 import { chooseAngle, angleScore, learningTable, MIN_TRIALS, type AngleStat } from './learning';
 import type { Candidate } from './sources/types';
