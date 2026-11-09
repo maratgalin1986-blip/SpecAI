@@ -4,7 +4,7 @@ vi.mock('@specai/database', () => ({ prisma: {} }));
 
 import { OFFICE_SETTINGS, defaultPlan } from './plan';
 import {
-  STEP_LIMIT,
+  SEARCH_LIMIT,
   createManualProspects,
   phoneTail,
   resolvePlan,
@@ -82,6 +82,9 @@ function fakeDb(seed: { prospects?: Partial<ProspectRow>[]; companies?: string[]
       async findFirst({ where }) {
         const hit = companies.find((c) => c.phone.endsWith(where.phone.endsWith));
         return hit ? { id: hit.id } : null;
+      },
+      async findMany({ take }) {
+        return companies.slice(0, take).map((c) => ({ phone: c.phone }));
       },
     },
     officeRun: {
@@ -162,7 +165,7 @@ describe('runStep', () => {
       { db, source: source(ok([candidate()]), calls) },
     );
     expect(result).toMatchObject({ found: 1, created: 1, skipped: 0, error: null });
-    expect(calls[0]).toMatchObject({ radiusKm: 15, limit: STEP_LIMIT, city: { name: 'Казань' } });
+    expect(calls[0]).toMatchObject({ radiusKm: 15, limit: SEARCH_LIMIT, city: { name: 'Казань' } });
     expect(prospects).toHaveLength(1);
     const p = prospects[0] as ProspectRow;
     expect(p).toMatchObject({
@@ -205,6 +208,37 @@ describe('runStep', () => {
     );
     expect(result).toMatchObject({ found: 4, created: 1, skipped: 3, error: null });
     expect(prospects.map((p) => p.sourceRef)).toContain('osm:node/4');
+  });
+
+  it('дедуп идёт до обрезки: повтор шага по тому же городу находит новых, а не те же первые 10', async () => {
+    const { db, prospects } = fakeDb({
+      prospects: Array.from({ length: 10 }, (_, i) => ({
+        sourceRef: `osm:node/${i}`,
+        phone: `+7843200${String(i).padStart(4, '0')}`,
+      })),
+    });
+    const list = Array.from({ length: 14 }, (_, i) =>
+      candidate({ sourceRef: `osm:node/${i}`, phone: `+7843200${String(i).padStart(4, '0')}` }),
+    );
+    const result = await runStep(
+      { agent: 'sites', niche: 'dentist', city: 'Казань', trigger: 'cron' },
+      { db, source: source(ok(list)) },
+    );
+    expect(result).toMatchObject({ found: 14, created: 4, skipped: 10 });
+    expect(prospects).toHaveLength(14);
+  });
+
+  it('телефон компании в любом формате («+7 917 000-11-22») узнаётся по последним 10 цифрам', async () => {
+    const { db, prospects } = fakeDb({ companies: ['+7 917 000-11-22'] });
+    const result = await runStep(
+      { agent: 'providers', niche: 'machinery', city: 'Казань', trigger: 'cron' },
+      {
+        db,
+        source: source(ok([candidate({ name: 'Аренда экскаваторов', phone: '+79170001122' })])),
+      },
+    );
+    expect(result).toMatchObject({ created: 0, skipped: 1 });
+    expect(prospects).toHaveLength(0);
   });
 
   it('для «Подрядчиков» пропускает компании, которые уже на площадке; для «Сайтов» — нет', async () => {

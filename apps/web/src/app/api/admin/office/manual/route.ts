@@ -1,12 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { findCityInText } from '@specai/shared';
 import { z } from 'zod';
 import { isAdminRequest } from '@/lib/admin';
 import { INVALID_JSON_MESSAGE, readJson, zodErrorMessage } from '@/lib/apiInput';
 import { agentById } from '@/lib/office/agents';
 import { createManualProspects } from '@/lib/office/run';
 import { parseManualLines } from '@/lib/office/sources/manual';
-import type { SourceCity } from '@/lib/office/sources/types';
 
 export const dynamic = 'force-dynamic';
 
@@ -20,11 +18,6 @@ const schema = z.object({
     .max(20_000, 'Слишком много строк за раз — добавьте частями'),
 });
 
-function findCity(text: string): SourceCity | null {
-  const found = findCityInText(text, { address: true });
-  return found ? { name: found.city.name, lat: found.city.lat, lon: found.city.lon } : null;
-}
-
 export async function POST(request: NextRequest) {
   if (!isAdminRequest()) return NextResponse.json({ error: 'Нет доступа' }, { status: 401 });
   const json = await readJson(request);
@@ -35,7 +28,7 @@ export async function POST(request: NextRequest) {
   }
   const agent = agentById(parsed.data.agent.toLowerCase());
   if (!agent) return NextResponse.json({ error: 'Неизвестный агент' }, { status: 400 });
-  const lines = parseManualLines(parsed.data.text, findCity);
+  const lines = parseManualLines(parsed.data.text);
   if (lines.candidates.length === 0) {
     return NextResponse.json({ created: 0, skipped: 0, errors: lines.errors });
   }

@@ -11,10 +11,13 @@ export const OVERPASS_UNAVAILABLE = 'Источник карт не ответи
 
 export function buildOverpassQuery(niche: SourceNiche, city: SourceCity, radiusKm: number): string {
   const radius = Math.round(radiusKm * 1000);
+  // Фильтр по названию выполняет сам сервер (регистронезависимо), иначе
+  // office=company в Москве — десятки тысяч объектов и таймаут.
+  const byName = niche.osmNameFilter ? `["name"~"${niche.osmNameFilter.replace(/"/g, '')}",i]` : '';
   const parts = niche.osm.map(
     // «*» в значении тега — любой объект с этим ключом (industrial=*, craft=*).
     ([k, v]) =>
-      `nwr[${v === '*' ? `"${k}"` : `"${k}"="${v}"`}](around:${radius},${city.lat},${city.lon});`,
+      `nwr[${v === '*' ? `"${k}"` : `"${k}"="${v}"`}]${byName}(around:${radius},${city.lat},${city.lon});`,
   );
   return `[out:json][timeout:25];(${parts.join('')});out center tags;`;
 }

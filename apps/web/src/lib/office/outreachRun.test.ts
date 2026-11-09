@@ -87,6 +87,13 @@ function fakeDb(rows: OutreachRow[]) {
         if (target) Object.assign(target, data);
         return target;
       },
+      async updateMany({ where, data }) {
+        const target = rows.find((r) => r.id === where.id && where.status.in.includes(r.status));
+        if (!target) return { count: 0 };
+        updates.push({ id: where.id, data });
+        Object.assign(target, data);
+        return { count: 1 };
+      },
     },
   };
   return { db, updates };
@@ -293,6 +300,43 @@ describe('sendOutreach', () => {
     };
     const result = await sendOutreach(NOW, deps(db, { clock }));
     expect(result.email).toBe(1);
+  });
+
+  it('with no time left nothing is sent at all', async () => {
+    const { db, updates } = fakeDb([row({ id: 'a' })]);
+    const result = await sendOutreach(NOW, deps(db, { budgetMs: 500 }));
+    expect(result).toMatchObject({ email: 0, whatsapp: 0, skipped: 'no-time' });
+    expect(updates).toHaveLength(0);
+  });
+
+  it('a prospect the owner published or declined during the pass is not written back to CONTACTED', async () => {
+    const rows = [row({ id: 'a' }), row({ id: 'b' })];
+    const { db, updates } = fakeDb(rows);
+    const email = vi.fn(async (input: SendEmailInput) => {
+      // «Согласился» arrives while the first letter is in flight.
+      if (input.to === rows[0]!.email) rows[1]!.status = 'PUBLISHED';
+      return { ok: true as const, skipped: false as const };
+    });
+    const result = await sendOutreach(NOW, deps(db, { email }));
+    // The second row is re-checked before its send: nothing goes out and nothing is overwritten.
+    expect(result.email).toBe(1);
+    expect(rows[1]!.status).toBe('PUBLISHED');
+    expect(updates.filter((u) => u.id === 'b')).toHaveLength(0);
+  });
+
+  it('asks the database for rows that have not failed today first', async () => {
+    const seen: unknown[] = [];
+    const { db } = fakeDb([row({ id: 'a' })]);
+    const findMany = db.prospect.findMany.bind(db.prospect);
+    db.prospect.findMany = async (args) => {
+      seen.push(args);
+      return findMany(args);
+    };
+    await sendOutreach(NOW, deps(db));
+    expect(seen[0]).toMatchObject({
+      where: { NOT: { outreachError: { not: null }, updatedAt: { gte: mskDayBounds(NOW).start } } },
+      orderBy: [{ outreachError: { sort: 'asc', nulls: 'first' } }, { createdAt: 'asc' }],
+    });
   });
 });
 

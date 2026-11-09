@@ -9,6 +9,8 @@ export interface SourceNiche {
   osm: [string, string][];
   /** Для широких тегов (техника): оставлять только объекты, чьё название совпало. */
   nameRegex?: RegExp;
+  /** Фильтр по названию для самого Overpass (POSIX-регулярка без lookbehind): иначе широкие теги в большом городе не влезают в 25 с. */
+  osmNameFilter?: string;
   /** Виды техники по названию и тегам объекта — slug'и из `packages/shared`. */
   machineryTags?: (name: string, tags: Record<string, string>) => string[];
 }

@@ -18,6 +18,10 @@ import type { AgentId, PlanStep } from './types';
 export const STEP_RADIUS_KM = 15;
 /** Сколько кандидатов берёт один шаг. */
 export const STEP_LIMIT = 10;
+/** Сколько объектов просить у источника: дедуп идёт до обрезки, иначе повтор шага по тому же городу вернул бы те же первые 10. */
+export const SEARCH_LIMIT = 200;
+/** Сколько компаний площадки сравнивать по цифрам телефона за один шаг. */
+export const COMPANY_SCAN_LIMIT = 5000;
 
 export type RunTrigger = 'cron' | 'admin' | 'telegram';
 
@@ -87,6 +91,11 @@ export interface OfficeDb {
     create(args: { data: ProspectCreateData }): Promise<{ id: string }>;
   };
   company: {
+    findMany(args: {
+      where: { phone: { not: null } };
+      select: { phone: true };
+      take: number;
+    }): Promise<{ phone: string | null }[]>;
     findFirst(args: {
       where: { phone: { endsWith: string } };
       select: { id: true };
@@ -123,6 +132,7 @@ function sourceNiche(niche: Niche): SourceNiche {
     key: niche.key,
     osm: niche.osm.tags.map(([k, v]) => [k, v] as [string, string]),
     nameRegex: niche.osm.nameRegex,
+    osmNameFilter: niche.osm.osmNameFilter,
     machineryTags: niche.key === 'machinery' ? machineryTags : undefined,
   };
 }
@@ -159,6 +169,40 @@ export interface CreateResult {
  * `sourceRef` или телефоном (любой статус) — skipped; для «Подрядчиков» — ещё `Company`
  * с тем же номером на площадке. Возвращает счётчики и причины пропусков.
  */
+/** Кандидаты, которых ещё нет в базе (по идентификатору источника и телефону). */
+async function dropKnown(candidates: readonly Candidate[], db: OfficeDb): Promise<Candidate[]> {
+  if (candidates.length === 0) return [];
+  const known = await db.prospect.findMany({
+    where: {
+      OR: [
+        { sourceRef: { in: candidates.map((c) => c.sourceRef) } },
+        { phone: { in: candidates.map((c) => c.phone) } },
+      ],
+    },
+    select: { sourceRef: true, phone: true },
+    take: candidates.length * 2,
+  });
+  const refs = new Set(known.map((p) => p.sourceRef));
+  const phones = new Set(known.map((p) => phoneTail(p.phone)));
+  return candidates.filter((c) => !refs.has(c.sourceRef) && !phones.has(phoneTail(c.phone)));
+}
+
+/** Есть ли на площадке компания с этим номером (последние 10 цифр). */
+async function companyWithPhone(db: OfficeDb, tail: string): Promise<boolean> {
+  if (tail.length !== 10) return false;
+  const direct = await db.company.findFirst({
+    where: { phone: { endsWith: tail } },
+    select: { id: true },
+  });
+  if (direct) return true;
+  const companies = await db.company.findMany({
+    where: { phone: { not: null } },
+    select: { phone: true },
+    take: COMPANY_SCAN_LIMIT,
+  });
+  return companies.some((c) => phoneTail(c.phone ?? '') === tail);
+}
+
 async function createProspects(
   candidates: readonly Candidate[],
   ctx: CreateContext,
@@ -195,11 +239,9 @@ async function createProspects(
       continue;
     }
     if (ctx.agent === 'providers') {
-      const company = await ctx.db.company.findFirst({
-        where: { phone: { endsWith: tail } },
-        select: { id: true },
-      });
-      if (company) {
+      // Телефоны компаний хранятся как есть («+7 917 000-00-00», «89170000000»):
+      // сравниваем по последним 10 цифрам в коде, а не в запросе.
+      if (await companyWithPhone(ctx.db, tail)) {
         skipped += 1;
         errors.push(`${c.name}: компания с таким телефоном уже на площадке`);
         continue;
@@ -297,14 +339,17 @@ export async function runStep(input: RunStepInput, deps: RunDeps = {}): Promise<
       niche: sourceNiche(niche),
       city: { name: city.name, lat: city.lat, lon: city.lon },
       radiusKm: STEP_RADIUS_KM,
-      limit: STEP_LIMIT,
+      limit: SEARCH_LIMIT,
     });
     if (search.status !== 'ok') {
       result.error = search.error;
       return finish();
     }
-    const candidates = search.candidates.slice(0, STEP_LIMIT);
-    result.found = candidates.length;
+    // Сначала убираем уже известных, потом берём первые STEP_LIMIT новых.
+    const unknown = await dropKnown(search.candidates, db);
+    const alreadyKnown = search.candidates.length - unknown.length;
+    const candidates = unknown.slice(0, STEP_LIMIT);
+    result.found = search.candidates.length;
     const counts = await createProspects(candidates, {
       agent: input.agent,
       niche: niche.key,
@@ -314,7 +359,7 @@ export async function runStep(input: RunStepInput, deps: RunDeps = {}): Promise<
       db,
     });
     result.created = counts.created;
-    result.skipped = counts.skipped;
+    result.skipped = counts.skipped + alreadyKnown;
   } catch (error) {
     console.error('[office/run] step failed', error);
     result.error = 'Шаг не выполнен: ошибка при сохранении кандидатов';

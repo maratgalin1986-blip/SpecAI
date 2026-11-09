@@ -74,6 +74,8 @@ import {
 } from '@/lib/groupBot';
 
 export const dynamic = 'force-dynamic';
+// Команда владельца /office ждёт ответа Overpass (до 25 с) внутри запроса.
+export const maxDuration = 60;
 
 interface TelegramMessage {
   message_id: number;

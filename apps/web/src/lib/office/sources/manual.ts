@@ -2,9 +2,7 @@
 // строки «Название; телефон; адрес или город; почта; whatsapp» (почта и WhatsApp — необязательны).
 
 import { candidateEmail, candidatePhone } from './phone';
-import type { Candidate, SourceCity } from './types';
-
-export type FindCity = (text: string) => SourceCity | null;
+import type { Candidate } from './types';
 
 export interface ManualParseResult {
   candidates: Candidate[];
@@ -13,7 +11,9 @@ export interface ManualParseResult {
 
 const SEPARATOR = /[;|\t]/;
 
-export function parseManualLines(text: string, findCity: FindCity): ManualParseResult {
+// Город кандидата определяет создание (`lib/office/run.ts`, по адресу); координаты
+// центра города сюда не кладутся — это не адрес компании, карта пойдёт по адресу.
+export function parseManualLines(text: string): ManualParseResult {
   const candidates: Candidate[] = [];
   const errors: string[] = [];
   const seen = new Set<string>();
@@ -50,13 +50,12 @@ export function parseManualLines(text: string, findCity: FindCity): ManualParseR
       return;
     }
     const addressText = addressPart;
-    const city = addressText ? findCity(addressText) : null;
     candidates.push({
       name,
       phone,
       address: addressText || null,
-      lat: city?.lat ?? null,
-      lon: city?.lon ?? null,
+      lat: null,
+      lon: null,
       hours: null,
       website: null,
       email,

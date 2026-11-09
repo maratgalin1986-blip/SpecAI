@@ -1,21 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { parseManualLines } from './manual';
-import type { SourceCity } from './types';
-
-const cities: SourceCity[] = [
-  { name: 'Казань', lat: 55.7963, lon: 49.1088 },
-  { name: 'Набережные Челны', lat: 55.7436, lon: 52.3958 },
-];
-
-const findCity = (text: string): SourceCity | null => {
-  const lower = text.toLowerCase();
-  if (/казан/.test(lower)) return cities[0] ?? null;
-  if (/челн/.test(lower)) return cities[1] ?? null;
-  return null;
-};
 
 describe('parseManualLines', () => {
-  it('разбирает строки с разными разделителями и находит город', () => {
+  it('разбирает строки с разными разделителями', () => {
     const text = [
       'Стоматология «Улыбка»; 8 (843) 123-45-67; ул. Баумана, 10, Казань',
       '',
@@ -24,7 +11,7 @@ describe('parseManualLines', () => {
       'Салон красоты «Ева»; 8 917 000 00 03',
       'Ветклиника «Айболит»; 8 843 222-33-44; Казань; Vet@Aibolit.Example; 8 917 000 00 04',
     ].join('\n');
-    const { candidates, errors } = parseManualLines(text, findCity);
+    const { candidates, errors } = parseManualLines(text);
     expect(errors).toEqual([]);
     expect(candidates).toHaveLength(5);
 
@@ -32,8 +19,8 @@ describe('parseManualLines', () => {
       name: 'Стоматология «Улыбка»',
       phone: '+78431234567',
       address: 'ул. Баумана, 10, Казань',
-      lat: 55.7963,
-      lon: 49.1088,
+      lat: null,
+      lon: null,
       hours: null,
       website: null,
       email: null,
@@ -43,7 +30,7 @@ describe('parseManualLines', () => {
       sourceRef: 'manual:+78431234567',
     });
     expect(candidates[1]!.name).toBe('Автосервис у Марата');
-    expect(candidates[1]!.lat).toBe(55.7436);
+    expect(candidates[1]!.lat).toBeNull(); // центр города — не адрес компании: карта пойдёт по адресу
     expect(candidates[2]!.phone).toBe('+79170000002');
     expect(candidates[2]!.address).toBe('в Казани');
     expect(candidates[3]!.address).toBeNull();
@@ -51,7 +38,7 @@ describe('parseManualLines', () => {
     expect(candidates[4]).toMatchObject({
       name: 'Ветклиника «Айболит»',
       phone: '+78432223344',
-      lat: 55.7963,
+      lat: null,
       email: 'vet@aibolit.example',
       whatsapp: '+79170000004',
       telegram: null,
@@ -68,7 +55,7 @@ describe('parseManualLines', () => {
       'Плохая почта; 8 917 000 00 06; Казань; не-почта',
       'Плохой WhatsApp; 8 917 000 00 07; Казань; ok@mail.ru; abc',
     ].join('\n');
-    const { candidates, errors } = parseManualLines(text, findCity);
+    const { candidates, errors } = parseManualLines(text);
     expect(candidates.map((c) => c.name)).toEqual(['Дубль']);
     expect(errors).toEqual([
       'Строка 1: нет телефона',
@@ -81,6 +68,6 @@ describe('parseManualLines', () => {
   });
 
   it('пустой текст — пусто', () => {
-    expect(parseManualLines('\n  \n', findCity)).toEqual({ candidates: [], errors: [] });
+    expect(parseManualLines('\n  \n')).toEqual({ candidates: [], errors: [] });
   });
 });

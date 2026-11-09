@@ -142,6 +142,17 @@ describe('buildOverpassQuery', () => {
     expect(q).toContain('nwr["healthcare"="dentist"](around:15000,55.7963,49.1088);');
     expect(q.endsWith(');out center tags;')).toBe(true);
   });
+
+  it('фильтр по названию уходит в сам запрос — сервер не отдаёт весь office=company города', () => {
+    const machinery = {
+      key: 'machinery',
+      osm: [['office', 'company'] as [string, string], ['industrial', '*'] as [string, string]],
+      osmNameFilter: 'экскават|автокран',
+    };
+    const q = buildOverpassQuery(machinery, kazan, 15);
+    expect(q).toContain('nwr["office"="company"]["name"~"экскават|автокран",i](around:15000,');
+    expect(q).toContain('nwr["industrial"]["name"~"экскават|автокран",i](around:15000,');
+  });
 });
 
 describe('parseOverpass', () => {

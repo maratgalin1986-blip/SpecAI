@@ -154,7 +154,7 @@ export async function POST(request: NextRequest) {
     signMobileToken({ userId: user.id, role: user.role }),
   ]);
   // Офис агентов (R17): кандидат с /p/<slug> зарегистрировался; ошибка не ломает ответ.
-  if (data.prospect) await markProspectRegistered(data.prospect, now);
+  if (data.prospect) await markProspectRegistered(data.prospect, data.phone, now);
   return NextResponse.json(
     { quickToken, token, standingUntil: standing.standingUntil },
     { status: 201 },

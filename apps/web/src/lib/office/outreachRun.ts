@@ -16,6 +16,7 @@ import {
   whatsappTarget,
   type OutreachChannels,
   type OutreachProspect,
+  OUTREACH_STATUSES,
 } from './outreach';
 import { officePrices } from './prices';
 import { readOfficeSettings } from '@/lib/office/settings';
@@ -63,10 +64,19 @@ export interface OutreachDb {
       where: {
         status: { in: string[] };
         OR?: { whatsapp?: { endsWith: string }; phone?: { endsWith: string } }[];
+        NOT?: { outreachError: { not: null }; updatedAt: { gte: Date } };
       };
-      orderBy: { createdAt: 'asc' } | { contactedAt: 'desc' };
+      orderBy:
+        | { createdAt: 'asc' }
+        | { contactedAt: 'desc' }
+        | ({ outreachError: { sort: 'asc'; nulls: 'first' } } | { createdAt: 'asc' })[];
       take: number;
     }): Promise<OutreachRow[]>;
+    /** Запись меняется только пока она ещё в рассылке: «Согласился»/«стоп» за время прохода не перетираются. */
+    updateMany(args: {
+      where: { id: string; status: { in: string[] } };
+      data: Record<string, unknown>;
+    }): Promise<{ count: number }>;
     update(args: {
       where: { id: string };
       data: {
@@ -94,6 +104,8 @@ export interface OutreachDeps {
   baseUrl?: () => string;
   /** Часы для бюджета времени (по умолчанию Date.now). */
   clock?: () => number;
+  /** Сколько миллисекунд есть у этого прохода (крон делит своё время между шагами). */
+  budgetMs?: number;
 }
 
 export interface OutreachResult {
@@ -108,6 +120,27 @@ export interface OutreachResult {
 export const OUTREACH_BATCH = 50;
 /** Бюджет времени прохода, мс — укладываемся в maxDuration крона. */
 export const OUTREACH_BUDGET_MS = 40_000;
+/** Одна отправка (Resend / Green API) не длиннее этого — иначе функция крона не успеет записать отметку. */
+export const SEND_TIMEOUT_MS = 8_000;
+
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(
+      () => reject(new Error(`${label}: нет ответа за ${Math.round(ms / 1000)} с`)),
+      ms,
+    );
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error: unknown) => {
+        clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
+}
 /** Пауза между сообщениями WhatsApp, мс (1–2 с, как у живого человека). */
 export const WHATSAPP_PAUSE_MS: readonly [number, number] = [1000, 2000];
 
@@ -152,6 +185,8 @@ function toProspect(row: OutreachRow): OutreachProspect {
  * и `skipped: 'paused'`, если владелец поставил рассылку на паузу.
  */
 export async function sendOutreach(now: Date, deps: OutreachDeps = {}): Promise<OutreachResult> {
+  const budgetMs = Math.max(0, deps.budgetMs ?? OUTREACH_BUDGET_MS);
+  if (budgetMs < 2_000) return { email: 0, whatsapp: 0, skipped: 'no-time', errors: 0 };
   const db: OutreachDb = deps.db ?? prisma;
   const settings = await (deps.settings ?? readOfficeSettings)();
   const result: OutreachResult = { email: 0, whatsapp: 0, skipped: null, errors: 0 };
@@ -173,9 +208,14 @@ export async function sendOutreach(now: Date, deps: OutreachDeps = {}): Promise<
   };
   if (!active.email && !active.whatsapp) return result;
 
+  // Сначала те, у кого отправка ещё не падала; упавшие сегодня ждут до завтра —
+  // одна повторная попытка в день, чтобы вечно битые адреса не съедали проход.
   const rows = await db.prospect.findMany({
-    where: { status: { in: ['READY', 'CONTACTED'] } },
-    orderBy: { createdAt: 'asc' },
+    where: {
+      status: { in: ['READY', 'CONTACTED'] },
+      NOT: { outreachError: { not: null }, updatedAt: { gte: bounds.start } },
+    },
+    orderBy: [{ outreachError: { sort: 'asc', nulls: 'first' } }, { createdAt: 'asc' }],
     take: OUTREACH_BATCH,
   });
   if (rows.length === 0) return result;
@@ -191,7 +231,7 @@ export async function sendOutreach(now: Date, deps: OutreachDeps = {}): Promise<
   let whatsappSent = false;
 
   for (const row of rows) {
-    if (clock() - startedAt > OUTREACH_BUDGET_MS) break;
+    if (clock() - startedAt > budgetMs) break;
     if (emailLeft <= 0) active.email = false;
     if (whatsappLeft <= 0) active.whatsapp = false;
     if (!active.email && !active.whatsapp) break;
@@ -214,13 +254,17 @@ export async function sendOutreach(now: Date, deps: OutreachDeps = {}): Promise<
 
     if (wanted.includes('email') && row.email) {
       const letter = buildEmail(prospect, input);
-      const sent = await email({
-        to: row.email,
-        subject: letter.subject,
-        html: letter.html,
-        text: letter.text,
-        ...(settings.replyTo.trim() ? { headers: { 'Reply-To': settings.replyTo.trim() } } : {}),
-      }).catch((error: unknown) => ({
+      const sent = await withTimeout(
+        email({
+          to: row.email,
+          subject: letter.subject,
+          html: letter.html,
+          text: letter.text,
+          ...(settings.replyTo.trim() ? { headers: { 'Reply-To': settings.replyTo.trim() } } : {}),
+        }),
+        SEND_TIMEOUT_MS,
+        'Почта',
+      ).catch((error: unknown) => ({
         skipped: false as const,
         ok: false as const,
         error: error instanceof Error ? error.message : String(error),
@@ -228,15 +272,15 @@ export async function sendOutreach(now: Date, deps: OutreachDeps = {}): Promise<
       if (!sent.skipped && sent.ok) {
         emailLeft -= 1;
         result.email += 1;
-        await db.prospect.update({
-          where: { id: row.id },
+        await db.prospect.updateMany({
+          where: { id: row.id, status: { in: [...OUTREACH_STATUSES] } },
           data: { ...success, emailSentAt: sentAt },
         });
       } else {
         result.errors += 1;
         const reason = sent.skipped ? sent.reason : sent.error;
-        await db.prospect.update({
-          where: { id: row.id },
+        await db.prospect.updateMany({
+          where: { id: row.id, status: { in: [...OUTREACH_STATUSES] } },
           data: { outreachError: outreachErrorText('email', reason) },
         });
       }
@@ -247,23 +291,25 @@ export async function sendOutreach(now: Date, deps: OutreachDeps = {}): Promise<
       if (target) {
         if (whatsappSent) await sleep(pauseMs());
         whatsappSent = true;
-        const sent = await whatsapp(target, buildWhatsAppText(prospect, input)).catch(
-          (error: unknown) => ({
-            ok: false as const,
-            error: error instanceof Error ? error.message : String(error),
-          }),
-        );
+        const sent = await withTimeout(
+          whatsapp(target, buildWhatsAppText(prospect, input)),
+          SEND_TIMEOUT_MS,
+          'WhatsApp',
+        ).catch((error: unknown) => ({
+          ok: false as const,
+          error: error instanceof Error ? error.message : String(error),
+        }));
         if (sent.ok) {
           whatsappLeft -= 1;
           result.whatsapp += 1;
-          await db.prospect.update({
-            where: { id: row.id },
+          await db.prospect.updateMany({
+            where: { id: row.id, status: { in: [...OUTREACH_STATUSES] } },
             data: { ...success, whatsappSentAt: new Date() },
           });
         } else {
           result.errors += 1;
-          await db.prospect.update({
-            where: { id: row.id },
+          await db.prospect.updateMany({
+            where: { id: row.id, status: { in: [...OUTREACH_STATUSES] } },
             data: { outreachError: outreachErrorText('whatsapp', sent.error) },
           });
         }

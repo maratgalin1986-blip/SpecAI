@@ -20,6 +20,8 @@ export interface Niche {
     tags: readonly (readonly [string, string])[];
     /** Дополнительный отбор по названию объекта (ниша «Подрядчики»). */
     nameRegex?: RegExp;
+    /** Та же выборка слов для запроса к Overpass (без lookbehind, POSIX). */
+    osmNameFilter?: string;
   };
   /** 5–8 услуг ниши для страницы-визитки, без цен. */
   services: readonly string[];
@@ -35,6 +37,10 @@ export interface Niche {
  */
 export const MACHINERY_NAME_REGEX =
   /спецтехник|аренда (техники|экскаватор|автокран|манипулятор)|экскават|автокран|манипулятор|самосвал|эвакуатор|погрузчик|автовышк|бульдозер|ямобур|бетононасос/i;
+
+/** Слова для серверного фильтра Overpass по названию (регистр — флагом `i` в запросе). */
+export const MACHINERY_OSM_FILTER =
+  'спецтехник|аренда техники|экскават|автокран|манипулятор|самосвал|эвакуатор|погрузчик|автовышк|бульдозер|ямобур|бетононасос';
 
 export const NICHES: Record<NicheKey, Niche> = {
   dentist: {
@@ -147,6 +153,7 @@ export const NICHES: Record<NicheKey, Niche> = {
         ['shop', 'truck'],
       ],
       nameRegex: MACHINERY_NAME_REGEX,
+      osmNameFilter: MACHINERY_OSM_FILTER,
     },
     services: [
       'Аренда спецтехники с машинистом',

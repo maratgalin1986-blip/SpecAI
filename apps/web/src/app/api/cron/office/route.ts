@@ -11,6 +11,8 @@ export const dynamic = 'force-dynamic';
 export const fetchCache = 'force-no-store';
 // Overpass answers in up to 25 s; the digest queries come after it.
 export const maxDuration = 60;
+/** Время на шаг и рассылку вместе, с запасом до maxDuration для сводки и записи отметок. */
+const CRON_BUDGET_MS = 45_000;
 
 /**
  * Hourly cron of the office agents (.github/workflows/bot-reminders.yml, spec §7):
@@ -27,7 +29,9 @@ export async function GET(request: NextRequest) {
   });
   // Рассылка кандидатам по e-mail и WhatsApp (lib/office/outreachRun.ts): одно
   // сообщение на компанию и канал, дневной лимит, пауза из /admin/office.
-  const outreach = await sendOutreach(now).catch((error: unknown) => {
+  // Остаток времени функции после шага поиска — рассылке, с запасом на сводку.
+  const budgetMs = CRON_BUDGET_MS - (Date.now() - now.getTime());
+  const outreach = await sendOutreach(now, { budgetMs }).catch((error: unknown) => {
     console.error('[cron/office] outreach failed', error);
     return { email: 0, whatsapp: 0, skipped: 'error', errors: 0 };
   });

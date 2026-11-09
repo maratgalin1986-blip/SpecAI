@@ -47,8 +47,8 @@ model User {
   // «Пригласи коллегу»: the user's own code (/r/<code>) and who invited them.
   // No @unique: adding a unique constraint makes the build-time `db push`
   // stop for confirmation; codes are random and checked in lib/referralStore.ts.
-  referralCode  String?
-  referredById  String?
+  referralCode String?
+  referredById String?
   // Акция «Пригласи друга» (owner, 2026-10-17): until this moment the user's
   // company hears of new orders 5 minutes before the other providers
   // (lib/referralPriority.ts). Each friend signed up with the user's code adds
@@ -322,7 +322,7 @@ model Booking {
   // снимок { legalForm, name, inn, kpp, address } из LegalEntity, чтобы правки
   // реквизитов не меняли прошлые документы. Null — «как частное лицо».
   // Исполнитель видит его только с CONFIRMED (lib/buyerRequisites.ts).
-  buyer       Json?
+  buyer Json?
 
   equipment   Equipment @relation(fields: [equipmentId], references: [id])
   equipmentId String
@@ -936,43 +936,44 @@ model AdminFeedRead {
 // toggle is remembered. Customers see the fresh online rows on the home map
 // with a bubble «Я на линии · машина · цена · имя» (api/line/nearby).
 model LinePresence {
-  id              String     @id @default(cuid())
-  user            User       @relation(fields: [userId], references: [id])
-  userId          String     @unique
-  company         Company    @relation(fields: [companyId], references: [id])
-  companyId       String
-  equipment       Equipment? @relation(fields: [equipmentId], references: [id])
-  equipmentId     String?
-  online          Boolean    @default(true)
-  lat             Float
-  lon             Float
+  id          String     @id @default(cuid())
+  user        User       @relation(fields: [userId], references: [id])
+  userId      String     @unique
+  company     Company    @relation(fields: [companyId], references: [id])
+  companyId   String
+  equipment   Equipment? @relation(fields: [equipmentId], references: [id])
+  equipmentId String?
+  online      Boolean    @default(true)
+  lat         Float
+  lon         Float
   // A short line the machinist writes for customers («Могу выехать сразу»).
-  note            String?
+  note        String?
   // When this machine last went online (offline → online or another machine),
   // for «Машина вышла на линию» in the activity strip. Null on older rows.
-  onlineSince     DateTime?
+  onlineSince DateTime?
   // The phone's IANA time zone («Asia/Novosibirsk»), sent with every report:
   // the line switches itself off at 21:00 in the provider's own time
   // (lib/lineDay.ts). Null on older rows — Moscow then.
-  timeZone        String?
+  timeZone    String?
   // «На линии на 5 рабочих дней» (owner, 2026-10-28): a standing availability,
   // not a ping. Customers see the machine until `standingUntil` (or always with
   // `standingForever`) even without fresh GPS — at its base then
   // (lib/lineStanding.ts). `online` stays the live GPS session of the app.
   standingUntil   DateTime?
-  standingForever Boolean    @default(false)
+  standingForever Boolean   @default(false)
   standingSince   DateTime?
   // When «Продлить на 5 рабочих дней?» went out for the current period.
   renewOfferAt    DateTime?
   // The last real GPS report from the phone; null on older rows (updatedAt then).
   gpsAt           DateTime?
-  updatedAt       DateTime   @updatedAt
-  createdAt       DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  createdAt   DateTime   @default(now())
 
   @@index([companyId])
   @@index([online, updatedAt])
   @@index([standingUntil])
 }
+
 
 // Uploaded files kept in the database when Vercel Blob is not connected
 // (BLOB_READ_WRITE_TOKEN unset): machine photos, shift photos, documents.
