@@ -13,6 +13,7 @@ import { AdminLogout } from '@/components/AdminLogin';
 const SECTIONS: { href: string; label: string; exact?: boolean }[] = [
   { href: '/admin', label: 'Панель', exact: true },
   { href: '/admin/leads', label: 'Звонки' },
+  { href: '/admin/office', label: 'Офис' },
   { href: '/admin/search', label: 'Поиск' },
   { href: '/admin/providers', label: 'Исполнители' },
   { href: '/admin/funnel', label: 'Воронка' },
