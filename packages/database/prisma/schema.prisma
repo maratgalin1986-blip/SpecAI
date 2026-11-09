@@ -1156,7 +1156,7 @@ model Prospect {
   // админки (JSON, lib/office/siteContent.ts), свой домен клиента, цены клиента и оплата,
   // напоминание по почте. Все поля необязательные — старые строки работают как раньше.
   siteJson       String?
-  domain         String?   @unique
+  domain         String?
   setupPrice     Int?
   monthlyPrice   Int?
   setupPaidAt    DateTime?
@@ -1178,6 +1178,9 @@ model Prospect {
   @@index([sourceRef])
   @@index([contactedAt])
   @@index([paidUntil])
+  // Не @unique: `db push` на проде останавливается на новом уникальном ограничении (просит
+  // --accept-data-loss), и деплой падает. Один домен — один сайт проверяет код редактора.
+  @@index([domain])
 }
 
 // Заявка посетителя с клиентского сайта /s/<slug> (S4): уходит письмом на почту компании,
