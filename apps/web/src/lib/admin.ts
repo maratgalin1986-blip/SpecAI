@@ -72,12 +72,14 @@ function sameSession(actual: string | null | undefined, expected: string) {
 }
 
 /** Signed in to the admin area: the site's cookie or the app's header. */
-export function isAdminRequest() {
+export async function isAdminRequest() {
   const expected = adminSessionValue();
   if (!expected) return false;
-  if (sameSession(cookies().get(ADMIN_COOKIE)?.value, expected)) return true;
+  const cookieStore = await cookies();
+  if (sameSession(cookieStore.get(ADMIN_COOKIE)?.value, expected)) return true;
   try {
-    return isValidAdminAppToken(headers().get(ADMIN_HEADER));
+    const h = await headers();
+    return isValidAdminAppToken(h.get(ADMIN_HEADER));
   } catch {
     return false;
   }

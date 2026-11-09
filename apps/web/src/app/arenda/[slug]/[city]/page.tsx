@@ -50,7 +50,8 @@ function resolve(params: Params) {
   return landing && city ? { landing, city } : null;
 }
 
-export async function generateMetadata({ params }: { params: Params }): Promise<Metadata> {
+export async function generateMetadata(props: { params: Promise<Params> }): Promise<Metadata> {
+  const params = await props.params;
   const page = resolve(params);
   if (!page) return { title: 'Страница не найдена' };
   const offer = await loadCityOffer(page.landing, page.city);
@@ -68,7 +69,8 @@ export async function generateMetadata({ params }: { params: Params }): Promise<
   };
 }
 
-export default async function CityLandingPage({ params }: { params: Params }) {
+export default async function CityLandingPage(props: { params: Promise<Params> }) {
+  const params = await props.params;
   const page = resolve(params);
   if (!page) notFound();
   const { landing, city } = page;

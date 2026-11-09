@@ -14,7 +14,7 @@ const schema = z.object({
 // fleet, so prices and availability can be edited in the provider cabinet.
 // Two steps: a preview of the account, then {confirm: true} (lib/linkOwner.ts).
 export async function POST(request: NextRequest) {
-  if (!isAdminRequest()) {
+  if (!(await isAdminRequest())) {
     return NextResponse.json({ error: 'Нет доступа' }, { status: 401 });
   }
   const parsed = schema.safeParse(await request.json().catch(() => null));

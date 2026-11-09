@@ -11,7 +11,8 @@ export const metadata: Metadata = {
   robots: { index: false },
 };
 
-export default function PhotoPage({ searchParams }: { searchParams: { kto?: string } }) {
+export default async function PhotoPage(props: { searchParams: Promise<{ kto?: string }> }) {
+  const searchParams = await props.searchParams;
   const executor = searchParams.kto === 'ispolnitel';
   return (
     <div className="mx-auto flex max-w-xl flex-col gap-6 py-6">

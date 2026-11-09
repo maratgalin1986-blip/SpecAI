@@ -10,8 +10,9 @@ export const metadata: Metadata = { title: 'Уведомления · CRM', robo
 
 type Query = Record<string, string | string[] | undefined>;
 
-export default async function AdminFeedPage({ searchParams }: { searchParams: Query }) {
-  const gate = adminGate();
+export default async function AdminFeedPage(props: { searchParams: Promise<Query> }) {
+  const searchParams = await props.searchParams;
+  const gate = await adminGate();
   if (gate) return gate;
 
   const now = new Date();

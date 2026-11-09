@@ -17,8 +17,10 @@ const schema = z.object({ status: z.enum(['OPEN', 'CANCELLED']) });
 // The admin also overrides the AI moderator here («Решения ИИ»): an order the
 // AI rejected may be published, and every change is marked as the admin's.
 // A published order whose bid window is over gets a fresh one.
-export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
-  if (!isAdminRequest()) return NextResponse.json({ error: 'Нет доступа' }, { status: 401 });
+export async function PATCH(request: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
+  if (!(await isAdminRequest()))
+    return NextResponse.json({ error: 'Нет доступа' }, { status: 401 });
   const parsed = schema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: 'Некорректный статус' }, { status: 400 });
   const status = parsed.data.status;

@@ -23,7 +23,8 @@ export const dynamic = 'force-dynamic';
  * видит все предложения, исполнитель — только свои и «Заказчик А.» без id
  * аккаунта. `isOwner` подсказывает клиенту, можно ли принимать предложение.
  */
-export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(request: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const currentUser = await getRequestUser(request);
   if (!currentUser) {
     return NextResponse.json({ error: 'Необходимо войти в аккаунт' }, { status: 401 });
@@ -170,7 +171,8 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
  * предложения отклоняются, их авторы получают уведомление. Заявку с выбранным
  * исполнителем отменяют через бронь.
  */
-export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
+export async function PATCH(request: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const currentUser = await getRequestUser(request);
   if (!currentUser) {
     return NextResponse.json({ error: 'Необходимо войти в аккаунт' }, { status: 401 });

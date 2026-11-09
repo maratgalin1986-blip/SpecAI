@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { fileURLToPath } from 'node:url';
 import withSerwistInit from '@serwist/next';
 import { PrismaPlugin } from '@prisma/nextjs-monorepo-workaround-plugin';
 
@@ -68,14 +69,16 @@ const nextConfig = {
     ];
   },
   transpilePackages: ['@specai/ui', '@specai/shared', '@specai/ai-service', '@specai/database'],
-  experimental: {
-    // Belt and braces for the Prisma engine: ship it in every server function
-    // at its own path, where packages/database/src/connection.ts
-    // (locateQueryEngine) finds it even if the plugin below did not copy it —
-    // which happened on a Vercel build that reused the build cache.
-    outputFileTracingIncludes: {
-      '/**': ['../../packages/database/generated/client/libquery_engine-*'],
-    },
+  // The monorepo root, so file tracing never guesses from a neighbouring
+  // lockfile (Next 15 warns when it has to infer the workspace root).
+  outputFileTracingRoot: fileURLToPath(new URL('../..', import.meta.url)),
+  // Belt and braces for the Prisma engine: ship it in every server function
+  // at its own path, where packages/database/src/connection.ts
+  // (locateQueryEngine) finds it even if the plugin below did not copy it —
+  // which happened on a Vercel build that reused the build cache. Top-level
+  // since Next 15 (was experimental.outputFileTracingIncludes).
+  outputFileTracingIncludes: {
+    '/**': ['../../packages/database/generated/client/libquery_engine-*'],
   },
   webpack(config, { isServer }) {
     // The Prisma client lives in packages/database and is bundled into the

@@ -12,7 +12,8 @@ export const dynamic = 'force-dynamic';
  * «Закрыть». Booked (MATCHED) orders are never touched.
  */
 export async function POST() {
-  if (!isAdminRequest()) return NextResponse.json({ error: 'Нет доступа' }, { status: 401 });
+  if (!(await isAdminRequest()))
+    return NextResponse.json({ error: 'Нет доступа' }, { status: 401 });
   const where = staleOrdersWhere(todayStartMsk());
   const closed = await prisma
     .$transaction(async (tx) => {

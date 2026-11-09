@@ -13,7 +13,8 @@ const ADMIN_COMPANIES_TAKE = 100;
  * first, then the newest. The mark is changed by PATCH /api/admin/companies/[id].
  */
 export async function GET() {
-  if (!isAdminRequest()) return NextResponse.json({ error: 'Нет доступа' }, { status: 401 });
+  if (!(await isAdminRequest()))
+    return NextResponse.json({ error: 'Нет доступа' }, { status: 401 });
   // СпецПласт16's own company is always in the list and first (REVIEW.md §3),
   // however many providers sign up; then the newest.
   const select = {

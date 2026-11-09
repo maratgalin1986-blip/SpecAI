@@ -42,7 +42,8 @@ function idParam(value: string | null): string | null {
  * before that message (older), `?after=<messageId>` only what came after it
  * (polling). `nextCursor` is set when older messages remain.
  */
-export async function GET(request: NextRequest, { params }: { params: { threadId: string } }) {
+export async function GET(request: NextRequest, props: { params: Promise<{ threadId: string }> }) {
+  const params = await props.params;
   const viewer = await chatViewer(request);
   const access = await threadContext(params.threadId, viewer);
   if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
@@ -90,7 +91,8 @@ export async function GET(request: NextRequest, { params }: { params: { threadId
  * contacts and links are masked and stored that way; `masked: true` with
  * `notice` tells the sender why.
  */
-export async function POST(request: NextRequest, { params }: { params: { threadId: string } }) {
+export async function POST(request: NextRequest, props: { params: Promise<{ threadId: string }> }) {
+  const params = await props.params;
   const viewer = await chatViewer(request);
   const access = await threadContext(params.threadId, viewer);
   if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });

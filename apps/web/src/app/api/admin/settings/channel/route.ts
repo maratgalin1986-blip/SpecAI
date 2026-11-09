@@ -6,7 +6,8 @@ export const dynamic = 'force-dynamic';
 
 /** «Сводка заявок сюда» in /admin → «Чаты с ботом»: `{ chatId }`, or `{ chatId: null }` to stop. */
 export async function PUT(request: NextRequest) {
-  if (!isAdminRequest()) return NextResponse.json({ error: 'Нет доступа' }, { status: 401 });
+  if (!(await isAdminRequest()))
+    return NextResponse.json({ error: 'Нет доступа' }, { status: 401 });
   // Previews share production's database: the pick is made on the live site only.
   if (process.env.VERCEL_ENV === 'preview') {
     return NextResponse.json({ error: 'Выбор чата — только на основном сайте' }, { status: 409 });

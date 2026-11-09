@@ -48,7 +48,7 @@ let call = 0;
 async function post() {
   call += 1;
   const response = await POST(new NextRequest(`http://localhost/api/orders/o${call}/phone`), {
-    params: { id: `o${call}` },
+    params: Promise.resolve({ id: `o${call}` }),
   });
   return { status: response.status, body: await response.json() };
 }

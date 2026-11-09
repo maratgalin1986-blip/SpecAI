@@ -10,7 +10,8 @@ export const runtime = 'nodejs';
 
 const PAYMENTS_DISABLED_MESSAGE = `Онлайн-оплата пока не подключена, оплата по счёту — позвоните ${SITE.phone}`;
 
-export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(request: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const currentUser = await getRequestUser(request);
   if (!currentUser) {
     return NextResponse.json({ error: 'Необходимо войти в аккаунт' }, { status: 401 });

@@ -7,7 +7,8 @@ export const dynamic = 'force-dynamic';
 
 // «Предложения и партнёрство»: new ones by default (`?status=READ|ARCHIVED` for the others).
 export async function GET(request: NextRequest) {
-  if (!isAdminRequest()) return NextResponse.json({ error: 'Нет доступа' }, { status: 401 });
+  if (!(await isAdminRequest()))
+    return NextResponse.json({ error: 'Нет доступа' }, { status: 401 });
   const requested = request.nextUrl.searchParams.get('status');
   const status: ProposalStatus = PROPOSAL_STATUSES.includes(requested as ProposalStatus)
     ? (requested as ProposalStatus)

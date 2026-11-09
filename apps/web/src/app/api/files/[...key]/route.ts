@@ -13,7 +13,8 @@ const CACHE = 'public, max-age=31536000, immutable';
 // `sandbox` keeps a crafted PDF from acting as the site, and a PDF downloads
 // rather than opening on our domain. The CDN keeps a copy, so a photo seen by
 // many is read from the database once.
-export async function GET(_request: Request, { params }: { params: { key: string[] } }) {
+export async function GET(_request: Request, props: { params: Promise<{ key: string[] }> }) {
+  const params = await props.params;
   let key: string;
   try {
     key = params.key.map((part) => decodeURIComponent(part)).join('/');

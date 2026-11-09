@@ -1,6 +1,7 @@
 // Line weather icons in the site's icon style (24×24, stroke), chosen from a
 // MET Norway symbol code.
 
+import type { ReactElement } from 'react';
 function kindOf(symbol: string) {
   if (symbol.includes('thunder')) return 'thunder';
   if (symbol.includes('snow')) return 'snow';
@@ -15,7 +16,7 @@ function kindOf(symbol: string) {
 
 const CLOUD = <path d="M7 18h10a4 4 0 0 0 .5-7.97A6 6 0 0 0 6.1 11 3.5 3.5 0 0 0 7 18z" />;
 
-const SHAPES: Record<string, JSX.Element> = {
+const SHAPES: Record<string, ReactElement> = {
   sun: (
     <>
       <circle cx="12" cy="12" r="4" />

@@ -14,7 +14,7 @@ interface ViewerUser {
  * providers, the only role it matters for.
  */
 export async function orderViewerFor(user: ViewerUser | null | undefined): Promise<OrderViewer> {
-  const isAdmin = isAdminRequest();
+  const isAdmin = await isAdminRequest();
   if (!user) return { isAdmin };
   let emailVerified = false;
   if (user.role === 'PROVIDER_ADMIN') {
