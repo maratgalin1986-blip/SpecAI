@@ -78,17 +78,17 @@ model OfficeRun {
 ## 2. Ниши и агенты — `lib/office/niches.ts`, `lib/office/agents.ts` (R2, R5, R9, R10)
 
 - `NICHES: Record<NicheKey, Niche>`: `{ key, title (ед. ч., «Стоматология»), agent, osm: {tags:
-  [['amenity','dentist'], ...], nameRegex?: RegExp}, services: string[] (5–8 услуг для страницы),
-  heroLine: string («Лечение зубов без боли в …» — шаблон с {city}), accent: 'teal'|'amber'|… }`.
+[['amenity','dentist'], ...], nameRegex?: RegExp}, services: string[] (5–8 услуг для страницы),
+heroLine: string («Лечение зубов без боли в …» — шаблон с {city}), accent: 'teal'|'amber'|… }`.
   Ниши агента «Сайты»: `dentist` (amenity=dentist|healthcare=dentist), `car_repair`
   (shop=car_repair), `tyres` (shop=tyres), `beauty` (shop=beauty|shop=hairdresser), `vet`
   (amenity=veterinary). Ниша агента «Подрядчики»: `machinery` — объекты с тегами
   `shop=rental`/`office=company`/`industrial=*`/`craft=*`/`shop=car`… **и** названием по регулярке
   `/спецтехник|аренда (техники|экскаватор|автокран|манипулятор)|экскават|автокран|манипулятор|
-  самосвал|эвакуатор|погрузчик|автовышк|бульдозер|ямобур|бетононасос/i`; виды техники для `tags`
+самосвал|эвакуатор|погрузчик|автовышк|бульдозер|ямобур|бетононасос/i`; виды техники для `tags`
   — по совпадениям той же регулярки с `packages/shared/src/categories.ts` (slug вида).
 - `AGENTS: Record<AgentId, {id, name ('Сайты под ключ' | 'Подрядчики'), kind: 'site'|'provider',
-  description, defaultNiches}>`.
+description, defaultNiches}>`.
 - План по умолчанию (`lib/office/plan.ts`): `defaultPlan()` → строки `providers; machinery; <город>`
   для первых 30 городов `RUSSIAN_CITIES` (shared) и `sites; <ниша>; <город>` для ниш P2 × городов
   [Набережные Челны, Казань, Нижнекамск, Альметьевск, Уфа, Самара, Пермь, Екатеринбург] —
@@ -99,11 +99,11 @@ model OfficeRun {
 ## 3. Поиск — `lib/office/sources/osm.ts`, `lib/office/sources/manual.ts`, `lib/office/sources/types.ts` (R5–R8)
 
 - `interface ProspectSource { id: string; search(input: {niche: Niche; city: RussianCity;
-  radiusKm: number; limit: number}): Promise<Candidate[]> }`;
+radiusKm: number; limit: number}): Promise<Candidate[]> }`;
   `Candidate = { name, phone, address?, lat?, lon?, hours?, website?: string|null, tags?: string[],
-  sourceRef }`.
+sourceRef }`.
 - OSM: `buildOverpassQuery(niche, city, radiusKm)` (чистая) — `[out:json][timeout:25]; (
-  nwr[amenity=dentist](around:R,lat,lon); …); out center tags;` ; `parseOverpass(json, niche)`
+nwr[amenity=dentist](around:R,lat,lon); …); out center tags;` ; `parseOverpass(json, niche)`
   (чистая) — оставляет объекты с `name` и телефоном (`phone`|`contact:phone`), нормализует телефон
   через `extractPhone` из shared (приводит к `+7…`), собирает адрес из `addr:street`, `addr:housenumber`,
   `addr:city`; `website = tags.website ?? tags['contact:website'] ?? tags.url ?? null`;
@@ -114,7 +114,7 @@ model OfficeRun {
   Радиус: 15 км (крупный город), лимит кандидатов на шаг — 10 (`STEP_LIMIT`).
 - Manual: `parseManualLines(text)` — строки «Название; телефон; адрес или город», телефон через
   `extractPhone`, город — `findCityInText` из shared; без телефона — ошибка строки; `sourceRef =
-  'manual:<нормализованный телефон>'`.
+'manual:<нормализованный телефон>'`.
 
 ## 4. Прогон шага — `lib/office/run.ts` (R1, R4, R6)
 
@@ -137,13 +137,13 @@ model OfficeRun {
 ## 5. Страницы — `lib/office/pages.ts`, компоненты, маршруты (R9–R13)
 
 - `buildSitePage(p: ProspectView): SitePage` — `{ title: name, eyebrow: niche.title, hero:
-  niche.heroLine с городом, services: niche.services, address, hours, phone, whatsapp:
-  'https://wa.me/<цифры>', mapHref: 'https://yandex.ru/maps/?pt=lon,lat&z=16' (если есть
-  координаты, иначе поиск по адресу), accent }`. Никаких отзывов/цен/фото/цифр (R9).
+niche.heroLine с городом, services: niche.services, address, hours, phone, whatsapp:
+'https://wa.me/<цифры>', mapHref: 'https://yandex.ru/maps/?pt=lon,lat&z=16' (если есть
+координаты, иначе поиск по адресу), accent }`. Никаких отзывов/цен/фото/цифр (R9).
 - `buildProviderPage(p): ProviderPage` — `{ title: name, city, machines: tags → названия видов из
-  categories.ts (пусто → ['Спецтехника']), orderHref: '/orders?city=<город>' (+ `&category=<slug>`
-  при одном виде), joinHref: '/register?role=provider&name=&phone=&city=&prospect=<slug>',
-  phone (только когда published) }`.
+categories.ts (пусто → ['Спецтехника']), orderHref: '/orders?city=<город>' (+ `&category=<slug>`
+при одном виде), joinHref: '/register?role=provider&name=&phone=&city=&prospect=<slug>',
+phone (только когда published) }`.
 - `buildCallScript(p, prices): string[]` (абзацы) — `lib/office/scripts.ts`: для `site`:
   приветствие с именем компании и городом, «мы сделали вам страницу-визитку, откройте ссылку …»,
   предложение (цена `prices.sitePrice` и `prices.siteMonthly`), ответы на «дорого/зачем/подумаю»
@@ -160,7 +160,7 @@ model OfficeRun {
 - Маршруты:
   - `GET /preview/[token]` — любой статус кроме `DECLINED`; баннер «Предпросмотр: страница сделана
     для «<name>». Будет опубликована после согласия владельца компании»; `metadata.robots =
-    { index: false, follow: false }`; телефон показывается (R13).
+{ index: false, follow: false }`; телефон показывается (R13).
   - `GET /s/[slug]` — только `kind='site' && status='PUBLISHED'`, иначе `notFound()`; индексируется.
   - `GET /p/[slug]` — только `kind='provider' && (status='PUBLISHED' || 'REGISTERED')`, иначе 404.
   - `robots.ts`: добавить `/preview` в `disallow`. В `sitemap.ts` не добавлять (владелец не просил).
@@ -204,7 +204,7 @@ model OfficeRun {
   Не больше 10 строк кандидатов, остальное — «и ещё N в админке». Когда нечего — «Офис: за ночь
   новых кандидатов нет, план на паузе/шаг такой-то».
 - `.github/workflows/bot-reminders.yml` — один дополнительный шаг `curl -fsS -H "Authorization:
-  Bearer $CRON_SECRET" https://spec-ai-web.vercel.app/api/cron/office || true` (маленький хунк,
+Bearer $CRON_SECRET" https://spec-ai-web.vercel.app/api/cron/office || true` (маленький хунк,
   общая зона).
 - Текст сводки — чистая функция `buildDigest(...)` в `lib/office/digest.ts` с тестом.
 
@@ -214,8 +214,8 @@ model OfficeRun {
   если формы это не умеют, добавить чтение `useSearchParams` только для начальных значений
   (маленький хунк). `POST /api/auth/quick-provider` принимает необязательный `prospect` (slug,
   `/^[a-z0-9-]{3,80}$/`); после успешного создания — `prisma.prospect.updateMany({ where: { slug,
-  kind: 'provider', status: { in: ['PUBLISHED','AGREED'] } }, data: { status: 'REGISTERED',
-  registeredAt } })` — не блокирует регистрацию при ошибке. Ответ не меняется.
+kind: 'provider', status: { in: ['PUBLISHED','AGREED'] } }, data: { status: 'REGISTERED',
+registeredAt } })` — не блокирует регистрацию при ошибке. Ответ не меняется.
 
 ## 9. Telegram (необязательно, если остаётся бюджет)
 
