@@ -29,6 +29,12 @@
       `api/auth/quick-provider` (`prospect`), `lib/office/telegramCommand.ts`, хунк в telegram route.
       R17, п. 9. Тесты: `telegramCommand.test.ts`, `quickProvider` схема принимает `prospect`.
 
+- [ ] **T9. Рассылка.** `lib/office/{outreach,outreachRun}.ts`, хунк в `api/cron/office` (после T4),
+      хунк в `api/integrations/whatsapp/route.ts` (`markReplied`), карточка «Рассылка» в админке (после T6).
+      R18. Тесты: `outreach.test.ts` (тексты по агентам, строка «стоп», pickChannels: без адреса — нет
+      e-mail; WhatsApp только по тегу, если флажок выкл.; второй раз не шлёт), `outreachRun.test.ts`
+      (мок prisma: дневной лимит, пауза, ошибки в outreachError).
+
 Волна 3 (я сам):
 
 - [ ] **T8. Проверки, ревью, приёмка, документы.** `/site-check`, `/code-review`, grep по реквизитам;

@@ -236,3 +236,34 @@ model OfficeRun {
   `/preview/[token]` — по токену 32 hex; `/s`, `/p` — публичные только для опубликованных.
 - Телефон компании на `/p/<slug>` показывается (компания согласилась; с 2026-11-08 телефоны
   исполнителей и так на карте), на превью — тоже; маска не нужна — это не заказчик и не свободный текст.
+
+## 12. Рассылка кандидатам (R18, решение владельца 2026-11-09)
+
+- Схема: колонки `Prospect.email`, `whatsapp`, `telegram`, `emailSentAt`, `whatsappSentAt`,
+  `contactedAt`, `repliedAt`, `outreachError`; статус `CONTACTED` (после хотя бы одной отправки).
+  Источник OSM собирает `email|contact:email`, `contact:whatsapp`, `contact:telegram`.
+- `lib/office/outreach.ts`: чистые `buildEmail(p, niche, {previewUrl, prices, replyTo}) → {subject, text, html}`
+  и `buildWhatsAppText(p, …) → string` — по агенту (сайт / подрядчик): кто мы (`SITE.company`,
+  `SITE.platform`), что сделали, ссылка на превью, предложение (цены для сайта; «бесплатно и без
+  посредников» для подрядчика), как ответить («ответьте на это письмо / сообщение»), строка «Если не
+  нужно — ответьте «стоп», больше не напишем». Без выдуманных цифр, без «лучшая цена/гарантируем».
+  `pickChannels(p, settings) → ('email'|'whatsapp')[]`: e-mail — если есть адрес и `emailSentAt` null;
+  WhatsApp — если `whatsapp` указан или (`settings.whatsappToPhone` и телефон мобильный `+79…`) и
+  `whatsappSentAt` null и канал настроен (`serverChannels().whatsapp`).
+- `sendOutreach(limitPerChannel, now)` в `lib/office/outreachRun.ts`: берёт `Prospect` со статусом READY
+  (и CONTACTED с неотправленным вторым каналом), `orderBy createdAt asc`, `take` по лимиту, отправляет
+  через `sendEmail` (`@/lib/email`, `replyTo` из настроек `office.replyTo`, по умолчанию `SITE.email`)
+  и `sendWhatsApp` (`@/lib/notifications/adapters`); пишет `*SentAt`, `contactedAt`, статус CONTACTED,
+  ошибки — в `outreachError`; дневной лимит на канал — `office.dailyCap` (по умолчанию 20), считается по
+  `*SentAt` за московские сутки. Пауза — `office.outreachPaused`.
+- Крон `/api/cron/office`: после шага поиска — `sendOutreach`, если не пауза. Сводка владельцу:
+  «отправлено писем N, WhatsApp M, ответили K».
+- Ответы: WhatsApp — уже существующий вебхук `/api/integrations/whatsapp` создаёт заявку и шлёт
+  владельцу в Telegram; дополнительно `markReplied(phoneDigits)` помечает `repliedAt` у кандидата с
+  таким `whatsapp`/`phone`, текст «стоп» → статус DECLINED. E-mail — ответы приходят на `replyTo`
+  (почта владельца); отметка «ответил» — вручную в админке.
+- Админка: карточка «Рассылка» — пауза, лимит в день, адрес для ответов, флажок «WhatsApp на обычный
+  мобильный из карточки» (по умолчанию выкл.), счётчики за сегодня; у кандидата — значки «✉ отправлено
+  дд.мм», «WA отправлено», «ответил», Telegram-контакт ссылкой `https://t.me/<name>` для ручного письма.
+- Статусы: READY → CONTACTED → (AGREED→PUBLISHED | CALLBACK | DECLINED); владелец по ответу жмёт
+  «Согласился». «Перезвонить» переименовать в «Напомнить» (дата) — офис в сводке напомнит.
