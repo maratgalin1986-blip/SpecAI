@@ -120,6 +120,13 @@ type PendingMatch =
   | { whatsappSentAt: null; whatsapp: { startsWith: string } }
   | { whatsappSentAt: null; phone: { startsWith: string } };
 
+/**
+ * Упавшие сегодня ждут до завтра (outreachErrorAt — время ошибки, не updatedAt). Явно через
+ * `null`: `NOT { outreachErrorAt: { gte } }` в SQL даёт NULL для пустой колонки и отбросил бы
+ * все строки, которые ни разу не падали.
+ */
+type NotFailedToday = [{ outreachErrorAt: null }, { outreachErrorAt: { lt: Date } }];
+
 /** Начало российского мобильного номера, как его хранит Prospect (+79…, sources/phone.ts). */
 const RU_MOBILE_PREFIX = '+79';
 
@@ -138,9 +145,12 @@ export interface OutreachDb {
     findMany(args: {
       where: {
         status: { in: string[] };
-        OR?: (ReplyMatch | PendingMatch)[];
-        /** Упавшие сегодня ждут до завтра (outreachErrorAt — время ошибки, не updatedAt). */
-        NOT?: { outreachErrorAt: { gte: Date } };
+        OR?: ReplyMatch[];
+        /**
+         * Первый проход: есть что отправить (PendingMatch) и не падал сегодня (NotFailedToday).
+         * Напоминания — только второе.
+         */
+        AND?: ({ OR: PendingMatch[] } | { OR: NotFailedToday })[];
         /** Напоминание (S8): первое письмо ушло в этом окне, напоминания и ответа ещё не было. */
         emailSentAt?: { gte: Date; lte: Date };
         email?: { not: null };
@@ -536,7 +546,10 @@ async function runOutreach(
 
   // Сначала те, у кого отправка ещё не падала; упавшие сегодня ждут до завтра —
   // одна повторная попытка в день, чтобы вечно битые адреса не съедали проход.
-  const notFailedToday = { outreachErrorAt: { gte: bounds.start } };
+  const notFailedToday: NotFailedToday = [
+    { outreachErrorAt: null },
+    { outreachErrorAt: { lt: bounds.start } },
+  ];
   // Только строки, которым ещё есть что отправить по включённым каналам: иначе пачку заняли бы
   // кандидаты без контактов и те, кому уже написали, и до новых очередь не дошла бы.
   const pending: PendingMatch[] = [];
@@ -549,7 +562,10 @@ async function runOutreach(
   }
   const rows = await dropOptedOut(
     await db.prospect.findMany({
-      where: { status: { in: ['READY', 'CONTACTED'] }, NOT: notFailedToday, OR: pending },
+      where: {
+        status: { in: ['READY', 'CONTACTED'] },
+        AND: [{ OR: pending }, { OR: notFailedToday }],
+      },
       orderBy: [{ outreachError: { sort: 'asc', nulls: 'first' } }, { createdAt: 'asc' }],
       take: OUTREACH_BATCH,
     }),
@@ -706,7 +722,7 @@ async function runOutreach(
         email: { not: null },
         followUpSentAt: null,
         repliedAt: null,
-        NOT: notFailedToday,
+        AND: [{ OR: notFailedToday }],
       },
       orderBy: { emailSentAt: 'asc' },
       take: OUTREACH_BATCH,

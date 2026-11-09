@@ -85,18 +85,20 @@ type Row = OutreachRow & {
 
 /**
  * A fake Prospect table: counts by the day, lists by the filters the runner uses, records
- * updates. Every write in a test happens «today», so the «failed today» filter (NOT) is
- * «outreachErrorAt since the start of the Moscow day».
+ * updates. Every write in a test happens «today», so the «not failed today» filter is
+ * «outreachErrorAt empty or before the start of the Moscow day».
  */
 function fakeDb(rows: Row[]) {
   const updates: Update[] = [];
-  // One OR condition: every field matches (null, { not: null }, startsWith, endsWith).
+  // One OR condition, with SQL null semantics: every field matches (null, { not: null },
+  // { lt: Date }, startsWith, endsWith); a comparison with a NULL column is never true.
   const matches = (r: Row, condition: object) =>
     Object.entries(condition).every(([key, cond]) => {
       const value = (r as unknown as Record<string, unknown>)[key];
       if (cond === null) return value === null || value === undefined;
-      const c = cond as { not?: null; startsWith?: string; endsWith?: string };
+      const c = cond as { not?: null; lt?: Date; startsWith?: string; endsWith?: string };
       if ('not' in c) return value !== null && value !== undefined;
+      if (c.lt !== undefined) return value instanceof Date && value.getTime() < c.lt.getTime();
       if (typeof value !== 'string') return false;
       if (c.startsWith !== undefined) return value.startsWith(c.startsWith);
       if (c.endsWith !== undefined) return value.endsWith(c.endsWith);
@@ -153,12 +155,7 @@ function fakeDb(rows: Row[]) {
         const found = rows
           .filter((r) => where.status.in.includes(r.status))
           .filter((r) => (where.OR ? where.OR.some((c) => matches(r, c)) : true))
-          .filter(
-            (r) =>
-              !where.NOT ||
-              !r.outreachErrorAt ||
-              r.outreachErrorAt.getTime() < where.NOT.outreachErrorAt.gte.getTime(),
-          )
+          .filter((r) => (where.AND ?? []).every((part) => part.OR.some((c) => matches(r, c))))
           .filter(
             (r) =>
               !sent ||
@@ -462,11 +459,18 @@ describe('sendOutreach', () => {
     await sendOutreach(NOW, deps(db));
     expect(seen[0]).toMatchObject({
       where: {
-        NOT: { outreachErrorAt: { gte: mskDayBounds(NOW).start } },
-        // Only rows with something left to send: no crowding of the batch by finished ones.
-        OR: [
-          { emailSentAt: null, email: { not: null } },
-          { whatsappSentAt: null, whatsapp: { startsWith: '+79' } },
+        AND: [
+          // Only rows with something left to send: no crowding of the batch by finished ones.
+          {
+            OR: [
+              { emailSentAt: null, email: { not: null } },
+              { whatsappSentAt: null, whatsapp: { startsWith: '+79' } },
+            ],
+          },
+          // Not «NOT { gte }»: in SQL that is NULL for an empty column and drops every clean row.
+          {
+            OR: [{ outreachErrorAt: null }, { outreachErrorAt: { lt: mskDayBounds(NOW).start } }],
+          },
         ],
       },
       orderBy: [{ outreachError: { sort: 'asc', nulls: 'first' } }, { createdAt: 'asc' }],
@@ -619,7 +623,11 @@ describe('sendOutreach — reminders (S8)', () => {
         email: { not: null },
         followUpSentAt: null,
         repliedAt: null,
-        NOT: { outreachErrorAt: { gte: mskDayBounds(NOW).start } },
+        AND: [
+          {
+            OR: [{ outreachErrorAt: null }, { outreachErrorAt: { lt: mskDayBounds(NOW).start } }],
+          },
+        ],
       },
       orderBy: { emailSentAt: 'asc' },
       take: 50,

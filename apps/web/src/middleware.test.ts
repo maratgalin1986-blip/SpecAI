@@ -36,9 +36,8 @@ describe('middleware: свой домен клиента (S7)', () => {
       'https://www.ulybka-kazan.ru/s/ulybka-kazan',
     );
     expect(res?.headers.get('x-middleware-request-x-client-domain')).toBe('www.ulybka-kazan.ru');
-    expect(String(fetchMock.mock.calls[0]![0])).toBe(
-      'https://www.ulybka-kazan.ru/api/office/domains',
-    );
+    // Карта — только с адреса площадки, не с хоста, который прислал посетитель.
+    expect(String(fetchMock.mock.calls[0]![0])).toBe(`https://${MAIN_HOST}/api/office/domains`);
     // /dashboard на домене клиента — тоже его сайт, без входа на площадку.
     expect(authMiddleware).not.toHaveBeenCalled();
   });
