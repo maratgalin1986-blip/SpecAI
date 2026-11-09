@@ -46,7 +46,8 @@ const STATUS_NOTE: Record<string, string> = {
   RETIRED: 'Машина больше не сдаётся — оставьте телефон, подберём замену.',
 };
 
-export async function generateMetadata({ params }: { params: { id: string } }): Promise<Metadata> {
+export async function generateMetadata(props: { params: Promise<{ id: string }> }): Promise<Metadata> {
+  const params = await props.params;
   const item = await prisma.equipment.findFirst({
     where: { id: params.id, ...PUBLIC_FLEET },
     select: {
@@ -97,7 +98,8 @@ export async function generateMetadata({ params }: { params: { id: string } }): 
   };
 }
 
-export default async function EquipmentDetailPage({ params }: { params: { id: string } }) {
+export default async function EquipmentDetailPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const item = await prisma.equipment.findUnique({
     where: { id: params.id },
     include: {

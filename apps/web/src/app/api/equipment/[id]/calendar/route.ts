@@ -13,7 +13,8 @@ export const dynamic = 'force-dynamic';
  * bookings and blocks behind the days; anyone else only sees which days are
  * free (a published machine).
  */
-export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(request: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const currentUser = await getRequestUser(request);
   const period = parseMonth(request.nextUrl.searchParams.get('month'));
   if (!period) {

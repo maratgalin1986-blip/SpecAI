@@ -13,7 +13,8 @@ const NOT_FOUND = { error: 'Файл не найден' };
  * Закрытые документы проверки (СТС): только админ своей компании и админ
  * площадки. Чужим — 404, а не 403: не подтверждаем, что файл есть. Не кэшируется.
  */
-export async function GET(request: NextRequest, { params }: { params: { key: string[] } }) {
+export async function GET(request: NextRequest, props: { params: Promise<{ key: string[] }> }) {
+  const params = await props.params;
   let key: string;
   try {
     key = params.key.map((part) => decodeURIComponent(part)).join('/');

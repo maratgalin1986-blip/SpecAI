@@ -18,7 +18,8 @@ export const dynamic = 'force-dynamic';
  * company (with its name), a provider sees only its own. `companies` lists
  * the providers the customer may still start a chat with.
  */
-export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(request: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const viewer = await chatViewer(request);
   if (!viewer) {
     return NextResponse.json({ error: 'Необходимо войти в аккаунт' }, { status: 401 });
@@ -87,7 +88,8 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
  * `{ companyId }`, a provider gets its own. Returns `{ thread }` with the
  * thread id to use with /api/threads/[threadId]/messages.
  */
-export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(request: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const viewer = await chatViewer(request);
   if (!viewer) {
     return NextResponse.json({ error: 'Необходимо войти в аккаунт' }, { status: 401 });

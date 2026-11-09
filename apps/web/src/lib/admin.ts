@@ -1,5 +1,5 @@
 import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
-import { cookies, headers } from 'next/headers';
+import { cookies, headers, type UnsafeUnwrappedCookies, type UnsafeUnwrappedHeaders } from 'next/headers';
 
 // The admin area (callback requests) is protected by a single password set in
 // the ADMIN_PASSWORD environment variable. Without it the admin area is off.
@@ -75,9 +75,11 @@ function sameSession(actual: string | null | undefined, expected: string) {
 export function isAdminRequest() {
   const expected = adminSessionValue();
   if (!expected) return false;
-  if (sameSession(cookies().get(ADMIN_COOKIE)?.value, expected)) return true;
+  if (sameSession((/* @next-codemod-error Await this API and update its callers; remove the temporary UnsafeUnwrappedCookies cast after repairing the migration. */
+  cookies() as unknown as UnsafeUnwrappedCookies).get(ADMIN_COOKIE)?.value, expected)) return true;
   try {
-    return isValidAdminAppToken(headers().get(ADMIN_HEADER));
+    return isValidAdminAppToken((/* @next-codemod-error Await this API and update its callers; remove the temporary UnsafeUnwrappedHeaders cast after repairing the migration. */
+    headers() as unknown as UnsafeUnwrappedHeaders).get(ADMIN_HEADER));
   } catch {
     return false;
   }

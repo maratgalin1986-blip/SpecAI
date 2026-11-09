@@ -18,7 +18,8 @@ import { notifyCompany } from '@/lib/notifications/notifyUser';
 /** Thrown inside the transaction to roll it back when the order was taken meanwhile. */
 class AlreadyClosedError extends Error {}
 
-export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(request: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const currentUser = await getRequestUser(request);
   if (!currentUser) {
     return NextResponse.json({ error: 'Необходимо войти в аккаунт' }, { status: 401 });

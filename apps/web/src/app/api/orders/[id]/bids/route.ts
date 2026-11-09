@@ -49,7 +49,8 @@ function breakdownData(data: BidBreakdownInput) {
   };
 }
 
-export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(request: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const currentUser = await getRequestUser(request);
   if (!isProvider(currentUser)) {
     return NextResponse.json({ error: 'Требуется аккаунт исполнителя' }, { status: 403 });

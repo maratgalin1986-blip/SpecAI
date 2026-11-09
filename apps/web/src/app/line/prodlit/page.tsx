@@ -16,11 +16,12 @@ export const metadata: Metadata = {
  * it changes nothing (mail scanners and link previews open links first): the
  * provider taps the one button. No sign-in needed; nothing personal shown.
  */
-export default function LineRenewPage({
-  searchParams = {},
-}: {
-  searchParams?: { t?: string | string[] };
-}) {
+export default async function LineRenewPage(
+  props: {
+    searchParams?: Promise<{ t?: string | string[] }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const token = typeof searchParams.t === 'string' ? searchParams.t : '';
   const valid = verifyLineRenewToken(token) !== null;
   return (

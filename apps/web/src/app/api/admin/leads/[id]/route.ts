@@ -9,7 +9,8 @@ import { isAdminRequest } from '@/lib/admin';
  * call-back time on a new lead moves it to «В работе» so it is never lost
  * among the new ones (requirement R2 of tasks/autopilot/2026-10-22-crm).
  */
-export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
+export async function PATCH(request: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   if (!isAdminRequest()) {
     return NextResponse.json({ error: 'Нет доступа' }, { status: 401 });
   }

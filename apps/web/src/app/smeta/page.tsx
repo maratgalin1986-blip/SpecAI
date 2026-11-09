@@ -9,18 +9,19 @@ export const metadata: Metadata = {
   description: `Примерная смета на работу спецтехники ${SITE.name} в Набережных Челнах: проект целиком по этапам с 3D-схемой, траншея, котлован, планировка, вывоз грунта, кран, автовышка. Смета для снабженца: материалы с запасом и доставка.`,
 };
 
-export default function SmetaPage({
-  searchParams,
-}: {
-  searchParams: {
-    job?: string;
-    mode?: string;
-    object?: string;
-    length?: string;
-    width?: string;
-    floors?: string;
-  };
-}) {
+export default async function SmetaPage(
+  props: {
+    searchParams: Promise<{
+      job?: string;
+      mode?: string;
+      object?: string;
+      length?: string;
+      width?: string;
+      floors?: string;
+    }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const snab = searchParams.mode === 'snab';
   // Sizes from the design project (/dizain): ?object=house&length=10&width=8&floors=2.
   const num = (v?: string) => (v && Number.isFinite(Number(v)) ? Number(v) : undefined);

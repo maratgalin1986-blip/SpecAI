@@ -64,11 +64,12 @@ function landingFromRate(
   return Math.min(rateOf(machine), ...others);
 }
 
-export async function generateMetadata({
-  params,
-}: {
-  params: { slug: string };
-}): Promise<Metadata> {
+export async function generateMetadata(
+  props: {
+    params: Promise<{ slug: string }>;
+  }
+): Promise<Metadata> {
+  const params = await props.params;
   const landing = landingBySlug(params.slug);
   if (!landing) return { title: 'Страница не найдена' };
   const items = await loadEquipment(landing.categorySlug);
@@ -83,7 +84,8 @@ export async function generateMetadata({
   };
 }
 
-export default async function LandingPage({ params }: { params: { slug: string } }) {
+export default async function LandingPage(props: { params: Promise<{ slug: string }> }) {
+  const params = await props.params;
   const landing = landingBySlug(params.slug);
   if (!landing) notFound();
   const items = await loadEquipment(landing.categorySlug);

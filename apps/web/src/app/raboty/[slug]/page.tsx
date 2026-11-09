@@ -31,7 +31,8 @@ function jobDescription(job: Job) {
   return `${job.short} Техника СпецПласт16 ${fromPerHour(jobRate(job))}, пример смены: ${shiftExample(jobRate(job))}. ${DELIVERY_NOTE}`;
 }
 
-export function generateMetadata({ params }: { params: { slug: string } }): Metadata {
+export async function generateMetadata(props: { params: Promise<{ slug: string }> }): Promise<Metadata> {
+  const params = await props.params;
   const job = jobBySlug(params.slug);
   if (!job) return { title: 'Страница не найдена' };
   const title = jobTitle(job);
@@ -44,7 +45,8 @@ export function generateMetadata({ params }: { params: { slug: string } }): Meta
   };
 }
 
-export default function JobPage({ params }: { params: { slug: string } }) {
+export default async function JobPage(props: { params: Promise<{ slug: string }> }) {
+  const params = await props.params;
   const job = jobBySlug(params.slug);
   if (!job) notFound();
   const landing = jobLanding(job);

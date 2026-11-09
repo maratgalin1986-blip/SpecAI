@@ -103,7 +103,8 @@ function seoInput(provider: NonNullable<Awaited<ReturnType<typeof loadProvider>>
   };
 }
 
-export async function generateMetadata({ params }: { params: { id: string } }): Promise<Metadata> {
+export async function generateMetadata(props: { params: Promise<{ id: string }> }): Promise<Metadata> {
+  const params = await props.params;
   const provider = await loadProvider(params.id).catch(() => null);
   if (!provider) return { title: 'Исполнитель не найден', robots: { index: false } };
   const description = providerMetaDescription(seoInput(provider));
@@ -134,7 +135,8 @@ export async function generateMetadata({ params }: { params: { id: string } }): 
   };
 }
 
-export default async function ProviderPublicPage({ params }: { params: { id: string } }) {
+export default async function ProviderPublicPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const provider = await loadProvider(params.id);
   if (!provider) notFound();
 

@@ -34,11 +34,12 @@ const PRINT_CSS = `
 }
 `;
 
-export default function DesignPage({
-  searchParams,
-}: {
-  searchParams: Record<string, string | undefined>;
-}) {
+export default async function DesignPage(
+  props: {
+    searchParams: Promise<Record<string, string | undefined>>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const initial = parseDesignQuery(searchParams);
   return (
     <div className="flex min-w-0 flex-col gap-6">

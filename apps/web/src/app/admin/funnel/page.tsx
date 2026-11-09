@@ -40,7 +40,8 @@ const STAGE_BAR: Record<FunnelStageId, string> = {
 
 const MAX_PERIOD = Math.max(...FUNNEL_PERIODS);
 
-export default async function AdminFunnelPage({ searchParams }: { searchParams: Query }) {
+export default async function AdminFunnelPage(props: { searchParams: Promise<Query> }) {
+  const searchParams = await props.searchParams;
   const gate = adminGate();
   if (gate) return gate;
 

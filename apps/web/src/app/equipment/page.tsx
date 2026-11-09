@@ -111,11 +111,12 @@ async function orEmpty<T>(label: string, query: Promise<T[]>): Promise<T[]> {
   }
 }
 
-export default async function EquipmentCatalogPage({
-  searchParams: rawSearchParams,
-}: {
-  searchParams: Record<string, string | string[] | undefined>;
-}) {
+export default async function EquipmentCatalogPage(
+  props: {
+    searchParams: Promise<Record<string, string | string[] | undefined>>;
+  }
+) {
+  const rawSearchParams = await props.searchParams;
   const searchParams = cleanSearchParams(rawSearchParams);
   const minPrice = priceParam(searchParams.minPrice);
   const maxPrice = priceParam(searchParams.maxPrice);

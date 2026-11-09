@@ -16,7 +16,8 @@ export const dynamic = 'force-dynamic';
  * опубликованный парк СпецПласт16 с ценами по прайсу; поставщик свою машину —
  * в любом статусе и с сохранёнными ценами (?mine=1, форма правки).
  */
-export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(request: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const currentUser = await getRequestUser(request);
   const mine = request.nextUrl.searchParams.get('mine') === '1';
   const owner = mine && isProvider(currentUser) ? currentUser.companyId : null;
@@ -76,7 +77,8 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
  * «Снять с публикации»: машина пропадает из каталога и с карты. Менять можно
  * только технику своей компании; компания у техники не меняется.
  */
-export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
+export async function PATCH(request: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const currentUser = await getRequestUser(request);
   if (!isProvider(currentUser)) {
     return NextResponse.json({ error: 'Требуется аккаунт исполнителя' }, { status: 403 });

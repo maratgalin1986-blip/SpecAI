@@ -19,7 +19,8 @@ export const dynamic = 'force-dynamic';
  * cannot drive shifts), and with `email` + `password` creates or resets the
  * sign-in.
  */
-export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
+export async function PATCH(request: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const currentUser = await getRequestUser(request);
   if (!isProvider(currentUser)) {
     return NextResponse.json(

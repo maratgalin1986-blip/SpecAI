@@ -73,18 +73,19 @@ function PaymentStatusLabel({ paid }: { paid: boolean }) {
   );
 }
 
-export default async function DashboardPage({
-  searchParams,
-}: {
-  searchParams?: { payment?: string; verified?: string; mode?: string };
-}) {
+export default async function DashboardPage(
+  props: {
+    searchParams?: Promise<{ payment?: string; verified?: string; mode?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const session = await getServerSession(authOptions);
   // One login, two modes: a provider works on /provider, and orders machinery
   // here in the customer mode (?mode=customer or the remembered choice).
   const goTo = dashboardRedirect(
     session?.user,
     searchParams?.mode,
-    cookies().get(MODE_COOKIE)?.value,
+    (await cookies()).get(MODE_COOKIE)?.value,
   );
   if (goTo) redirect(goTo);
   // A provider here is in the customer mode: its own orders and bookings.

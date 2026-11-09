@@ -14,7 +14,8 @@ export const metadata: Metadata = {
  * «Узнай цены в своём городе»: the open survey of the platform, asked as
  * itself. Give one price — get the colleagues' prices back (POST /api/ceny/opros).
  */
-export default function PriceSurveyPage({ searchParams }: { searchParams: { vid?: string } }) {
+export default async function PriceSurveyPage(props: { searchParams: Promise<{ vid?: string }> }) {
+  const searchParams = await props.searchParams;
   const defaultCategory = categoryBySlug(searchParams.vid)?.slug;
   return (
     <article className="mx-auto flex max-w-2xl flex-col gap-6 py-6 text-slate-700">

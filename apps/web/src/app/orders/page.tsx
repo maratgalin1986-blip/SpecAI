@@ -120,7 +120,8 @@ async function loadProvider(id: string | undefined) {
 const field =
   'w-full rounded-xl border border-graphite-200 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-signal-600 focus:ring-2 focus:ring-signal-200';
 
-export default async function OrdersPage({ searchParams }: { searchParams: OrdersSearchParams }) {
+export default async function OrdersPage(props: { searchParams: Promise<OrdersSearchParams> }) {
+  const searchParams = await props.searchParams;
   // Aggregator: the board of open orders is public; a provider bids, a
   // customer also sees «Мои заявки», a guest is sent to sign in to bid.
   const session = await getServerSession(authOptions);
@@ -128,7 +129,7 @@ export default async function OrdersPage({ searchParams }: { searchParams: Order
   // A provider in the customer mode places orders and sees «Мои заявки» here.
   const customerMode =
     accountIsProvider &&
-    cabinetMode(session?.user, searchParams.mode, cookies().get(MODE_COOKIE)?.value) === 'customer';
+    cabinetMode(session?.user, searchParams.mode, (await cookies()).get(MODE_COOKIE)?.value) === 'customer';
   const viewerIsProvider = accountIsProvider && !customerMode;
   const isAdmin = isAdminRequest();
   const viewerId = session?.user.id;

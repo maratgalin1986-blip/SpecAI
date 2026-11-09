@@ -108,11 +108,12 @@ function ProviderListCard({ card }: { card: ProviderCard }) {
 
 // All provider companies with a published fleet or a base, СпецПласт16 first,
 // then the checked ones; filters by the kind of machinery and the base city.
-export default async function ProvidersPage({
-  searchParams,
-}: {
-  searchParams: { group?: string; city?: string; sort?: string };
-}) {
+export default async function ProvidersPage(
+  props: {
+    searchParams: Promise<{ group?: string; city?: string; sort?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const query = parseProviderQuery(searchParams);
   const list = await loadProviderCards(query);
   const hasFilters = Boolean(query.group || query.city);

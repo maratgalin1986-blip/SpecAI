@@ -12,7 +12,7 @@ import { ReviewLinksForm } from '@/components/admin/ReviewLinksForm';
 import { CommentModerationButtons } from '@/components/Comments';
 import { EraseOrderButton } from '@/components/ChatOrderContact';
 import { ModerationButtons, CopyField, TelegramSetupButton } from '@/components/AdminIntegrations';
-import { headers } from 'next/headers';
+import { headers, type UnsafeUnwrappedHeaders } from 'next/headers';
 import { inboundApiToken, telegramWebhookSecret, whatsappWebhookToken } from '@/lib/integrations';
 import { isAdminConfigured, isAdminRequest } from '@/lib/admin';
 import { SITE } from '@/lib/site';
@@ -56,7 +56,8 @@ const SOURCE_LABELS: Record<string, string> = {
 const LEADS_LOADED = 200;
 
 function siteOrigin() {
-  const h = headers();
+  const h = (/* @next-codemod-error Await this API and update its callers; remove the temporary UnsafeUnwrappedHeaders cast after repairing the migration. */
+  headers() as unknown as UnsafeUnwrappedHeaders);
   const host = h.get('x-forwarded-host') ?? h.get('host') ?? 'localhost:3000';
   const proto = h.get('x-forwarded-proto') ?? (host.startsWith('localhost') ? 'http' : 'https');
   return `${proto}://${host}`;
@@ -64,7 +65,8 @@ function siteOrigin() {
 
 type Query = Record<string, string | string[] | undefined>;
 
-export default async function AdminPage({ searchParams = {} }: { searchParams?: Query }) {
+export default async function AdminPage(props: { searchParams?: Promise<Query> }) {
+  const searchParams = await props.searchParams;
   if (!isAdminConfigured()) {
     return (
       <Card className="mx-auto max-w-lg">
