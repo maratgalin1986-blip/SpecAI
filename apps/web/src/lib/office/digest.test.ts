@@ -107,7 +107,7 @@ describe('buildDigest', () => {
     expect(text).toContain('Готовы к отправке (2):');
     expect(text).toContain('Напомнить сегодня (1):');
     expect(text).toContain(
-      `1. Компания 1 · Казань · Стоматология · +78432000001 · превью: ${SITE}/preview/${lite(1).token}`,
+      `1. Компания 1 · Казань · Стоматология · +7 843 200-00-01 · превью: ${SITE}/preview/${lite(1).token}`,
     );
     expect(text).toContain('Уфа · Спецтехника');
     expect(text).toContain('Зарегистрировались по ссылке: 2');

@@ -2,6 +2,7 @@
 // `buildDigest` — чистый текст по собранным данным; `collectDigest` достаёт их из базы.
 // Сводку читает только владелец, поэтому телефоны и ссылки превью в ней уместны.
 
+import { phoneText } from './pages';
 import { prisma } from '@specai/database';
 import { MSK, mskDate, mskDayBounds } from '@/lib/adminCrm';
 import { siteUrl } from '@/lib/siteUrl';
@@ -79,7 +80,7 @@ function formatDay(date: Date): string {
 }
 
 function line(p: ProspectLite, base: string): string {
-  const parts = [p.name, p.city, nicheTitle(p.niche), p.phone].filter(
+  const parts = [p.name, p.city, nicheTitle(p.niche), phoneText(p.phone)].filter(
     (x): x is string => typeof x === 'string' && x.length > 0,
   );
   return `${parts.join(' · ')} · превью: ${base}/preview/${p.token}`;

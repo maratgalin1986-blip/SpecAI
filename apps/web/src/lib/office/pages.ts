@@ -54,6 +54,12 @@ function telHref(phone: string): string {
   return `tel:+${phoneDigits(phone)}`;
 }
 
+/** Название в «ёлочках», если компания сама не написала его в кавычках («Стоматология «Улыбка»» → без дубля). */
+export function quotedName(name: string): string {
+  const clean = name.trim();
+  return /[«»"“”]/.test(clean) ? clean : `«${clean}»`;
+}
+
 /** «+7 843 212-34-56» — как номер пишут люди; нестандартную длину оставляет как есть. */
 export function phoneText(phone: string): string {
   const d = phoneDigits(phone);
@@ -163,7 +169,7 @@ export function buildProviderPage(
 /** The banner over a preview page (R11). */
 export function previewBannerText(p: Pick<PageProspect, 'name'>): string {
   return (
-    `Предпросмотр: страница сделана для «${p.name.trim()}» агентом ИИСтройка24 ` +
+    `Предпросмотр: страница сделана для ${quotedName(p.name)} агентом ИИСтройка24 ` +
     'и будет опубликована после согласия владельца компании'
   );
 }

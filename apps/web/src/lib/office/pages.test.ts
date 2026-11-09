@@ -164,7 +164,7 @@ describe('buildProviderPage', () => {
 describe('previewBannerText', () => {
   it('names the company and says the page waits for consent', () => {
     expect(previewBannerText(prospect)).toBe(
-      'Предпросмотр: страница сделана для «Стоматология «Улыбка»» агентом ИИСтройка24 ' +
+      'Предпросмотр: страница сделана для Стоматология «Улыбка» агентом ИИСтройка24 ' +
         'и будет опубликована после согласия владельца компании',
     );
   });
