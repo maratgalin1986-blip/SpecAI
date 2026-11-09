@@ -19,7 +19,8 @@ const schema = z.object({ status: z.enum(['OPEN', 'CANCELLED']) });
 // A published order whose bid window is over gets a fresh one.
 export async function PATCH(request: NextRequest, props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
-  if (!isAdminRequest()) return NextResponse.json({ error: 'Нет доступа' }, { status: 401 });
+  if (!(await isAdminRequest()))
+    return NextResponse.json({ error: 'Нет доступа' }, { status: 401 });
   const parsed = schema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: 'Некорректный статус' }, { status: 400 });
   const status = parsed.data.status;

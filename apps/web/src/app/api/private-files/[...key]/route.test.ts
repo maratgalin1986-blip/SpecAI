@@ -15,7 +15,9 @@ const KEY = ['private', 'verification', 'comp1', 'rnd-sts.jpg'];
 const file = { contentType: 'image/jpeg', data: Buffer.from('jpg') };
 
 async function get(key = KEY) {
-  return GET(new NextRequest('http://localhost/api/private-files/x'), { params: { key } });
+  return GET(new NextRequest('http://localhost/api/private-files/x'), {
+    params: Promise.resolve({ key }),
+  });
 }
 
 describe('GET /api/private-files: фото СТС', () => {
@@ -53,7 +55,7 @@ describe('GET /api/private-files: фото СТС', () => {
 
   it('публичный /api/files закрытые ключи не отдаёт', async () => {
     const response = await publicFiles.GET(new Request('http://localhost/api/files/x'), {
-      params: { key: KEY },
+      params: Promise.resolve({ key: KEY }),
     });
     expect(response.status).toBe(404);
     expect(findUnique).not.toHaveBeenCalled();

@@ -22,7 +22,7 @@ export async function GET(request: NextRequest, props: { params: Promise<{ key: 
     return NextResponse.json(NOT_FOUND, { status: 404 });
   }
   const user = await getRequestUser(request);
-  if (!canReadPrivateFile(key, user, isAdminRequest())) {
+  if (!canReadPrivateFile(key, user, await isAdminRequest())) {
     return NextResponse.json(NOT_FOUND, { status: 404 });
   }
   const file = await prisma.storedFile.findUnique({ where: { key } }).catch(() => null);

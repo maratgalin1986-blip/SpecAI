@@ -12,11 +12,9 @@ export const metadata: Metadata = {
   alternates: { canonical: '/map' },
 };
 
-export default async function OrderMapPage(
-  props: {
-    searchParams: Promise<{ embed?: string; layer?: string }>;
-  }
-) {
+export default async function OrderMapPage(props: {
+  searchParams: Promise<{ embed?: string; layer?: string }>;
+}) {
   const searchParams = await props.searchParams;
   // ?embed=1 — the app's «Карта» screen shows the page without the intro.
   const embed = searchParams.embed === '1';

@@ -73,12 +73,10 @@ function PaymentStatusLabel({ paid }: { paid: boolean }) {
   );
 }
 
-export default async function DashboardPage(
-  props: {
-    searchParams?: Promise<{ payment?: string; verified?: string; mode?: string }>;
-  }
-) {
-  const searchParams = await props.searchParams;
+export default async function DashboardPage(props: {
+  searchParams?: Promise<{ payment?: string; verified?: string; mode?: string }>;
+}) {
+  const searchParams = (await props.searchParams) ?? {};
   const session = await getServerSession(authOptions);
   // One login, two modes: a provider works on /provider, and orders machinery
   // here in the customer mode (?mode=customer or the remembered choice).

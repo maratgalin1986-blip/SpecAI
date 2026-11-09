@@ -129,9 +129,10 @@ export default async function OrdersPage(props: { searchParams: Promise<OrdersSe
   // A provider in the customer mode places orders and sees «Мои заявки» here.
   const customerMode =
     accountIsProvider &&
-    cabinetMode(session?.user, searchParams.mode, (await cookies()).get(MODE_COOKIE)?.value) === 'customer';
+    cabinetMode(session?.user, searchParams.mode, (await cookies()).get(MODE_COOKIE)?.value) ===
+      'customer';
   const viewerIsProvider = accountIsProvider && !customerMode;
-  const isAdmin = isAdminRequest();
+  const isAdmin = await isAdminRequest();
   const viewerId = session?.user.id;
   const viewerIsCustomer = Boolean(viewerId) && !viewerIsProvider;
 

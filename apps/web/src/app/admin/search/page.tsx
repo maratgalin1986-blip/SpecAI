@@ -189,7 +189,7 @@ function Section({
 
 export default async function AdminSearchPage(props: { searchParams: Promise<Query> }) {
   const searchParams = await props.searchParams;
-  const gate = adminGate();
+  const gate = await adminGate();
   if (gate) return gate;
   const raw = Array.isArray(searchParams.q) ? searchParams.q[0] : searchParams.q;
   const q = (raw ?? '').trim().slice(0, 100);

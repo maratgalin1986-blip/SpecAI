@@ -12,7 +12,7 @@ import { ReviewLinksForm } from '@/components/admin/ReviewLinksForm';
 import { CommentModerationButtons } from '@/components/Comments';
 import { EraseOrderButton } from '@/components/ChatOrderContact';
 import { ModerationButtons, CopyField, TelegramSetupButton } from '@/components/AdminIntegrations';
-import { headers, type UnsafeUnwrappedHeaders } from 'next/headers';
+import { headers } from 'next/headers';
 import { inboundApiToken, telegramWebhookSecret, whatsappWebhookToken } from '@/lib/integrations';
 import { isAdminConfigured, isAdminRequest } from '@/lib/admin';
 import { SITE } from '@/lib/site';
@@ -55,9 +55,8 @@ const SOURCE_LABELS: Record<string, string> = {
 /** Callbacks loaded for the list and the 30-day marketing table. */
 const LEADS_LOADED = 200;
 
-function siteOrigin() {
-  const h = (/* @next-codemod-error Await this API and update its callers; remove the temporary UnsafeUnwrappedHeaders cast after repairing the migration. */
-  headers() as unknown as UnsafeUnwrappedHeaders);
+async function siteOrigin() {
+  const h = await headers();
   const host = h.get('x-forwarded-host') ?? h.get('host') ?? 'localhost:3000';
   const proto = h.get('x-forwarded-proto') ?? (host.startsWith('localhost') ? 'http' : 'https');
   return `${proto}://${host}`;
@@ -66,7 +65,7 @@ function siteOrigin() {
 type Query = Record<string, string | string[] | undefined>;
 
 export default async function AdminPage(props: { searchParams?: Promise<Query> }) {
-  const searchParams = await props.searchParams;
+  const searchParams = (await props.searchParams) ?? {};
   if (!isAdminConfigured()) {
     return (
       <Card className="mx-auto max-w-lg">
@@ -80,7 +79,7 @@ export default async function AdminPage(props: { searchParams?: Promise<Query> }
     );
   }
 
-  if (!isAdminRequest()) {
+  if (!(await isAdminRequest())) {
     return (
       <Card className="mx-auto max-w-sm">
         <h1 className="mb-4 text-xl font-bold">Вход для администратора</h1>
@@ -180,7 +179,7 @@ export default async function AdminPage(props: { searchParams?: Promise<Query> }
     select: { name: true, email: true },
     take: 20,
   });
-  const origin = siteOrigin();
+  const origin = await siteOrigin();
   const tgSecretReady = Boolean(telegramWebhookSecret());
   const whatsappToken = whatsappWebhookToken();
   const inboundToken = inboundApiToken();

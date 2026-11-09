@@ -19,7 +19,7 @@ export const dynamic = 'force-dynamic';
 export async function POST(request: NextRequest, props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
   const user = await getRequestUser(request).catch(() => null);
-  if (!isAdminRequest() && user?.role !== 'PLATFORM_ADMIN') {
+  if (!(await isAdminRequest()) && user?.role !== 'PLATFORM_ADMIN') {
     return NextResponse.json({ error: 'Нет доступа' }, { status: 401 });
   }
   const order = await prisma.order.findUnique({

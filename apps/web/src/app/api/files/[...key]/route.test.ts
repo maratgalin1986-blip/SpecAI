@@ -18,7 +18,8 @@ vi.mock('@specai/database', () => ({
 }));
 
 const { GET } = await import('./route');
-const get = (key: string[]) => GET(new Request('https://x.test'), { params: { key } });
+const get = (key: string[]) =>
+  GET(new Request('https://x.test'), { params: Promise.resolve({ key }) });
 
 describe('GET /api/files/[...key]', () => {
   it('serves a stored upload with its type and a long cache', async () => {

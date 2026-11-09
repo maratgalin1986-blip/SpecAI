@@ -21,7 +21,7 @@ const machine = {
 
 async function get(query = '') {
   const response = await GET(new NextRequest(`http://localhost/api/equipment/m1${query}`), {
-    params: { id: 'm1' },
+    params: Promise.resolve({ id: 'm1' }),
   });
   return { status: response.status, body: await response.json() };
 }

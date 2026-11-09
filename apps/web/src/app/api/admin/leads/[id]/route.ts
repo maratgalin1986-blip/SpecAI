@@ -11,7 +11,7 @@ import { isAdminRequest } from '@/lib/admin';
  */
 export async function PATCH(request: NextRequest, props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
-  if (!isAdminRequest()) {
+  if (!(await isAdminRequest())) {
     return NextResponse.json({ error: 'Нет доступа' }, { status: 401 });
   }
   const parsed = leadCrmPatchSchema.safeParse(await request.json().catch(() => null));

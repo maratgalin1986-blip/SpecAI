@@ -54,7 +54,7 @@ async function patch(status: string) {
       method: 'PATCH',
       body: JSON.stringify({ status }),
     }),
-    { params: { id: 'b1' } },
+    { params: Promise.resolve({ id: 'b1' }) },
   );
 }
 

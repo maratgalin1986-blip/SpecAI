@@ -12,7 +12,7 @@ type Query = Record<string, string | string[] | undefined>;
 
 export default async function AdminFeedPage(props: { searchParams: Promise<Query> }) {
   const searchParams = await props.searchParams;
-  const gate = adminGate();
+  const gate = await adminGate();
   if (gate) return gate;
 
   const now = new Date();

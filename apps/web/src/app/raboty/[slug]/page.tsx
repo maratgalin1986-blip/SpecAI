@@ -31,7 +31,9 @@ function jobDescription(job: Job) {
   return `${job.short} Техника СпецПласт16 ${fromPerHour(jobRate(job))}, пример смены: ${shiftExample(jobRate(job))}. ${DELIVERY_NOTE}`;
 }
 
-export async function generateMetadata(props: { params: Promise<{ slug: string }> }): Promise<Metadata> {
+export async function generateMetadata(props: {
+  params: Promise<{ slug: string }>;
+}): Promise<Metadata> {
   const params = await props.params;
   const job = jobBySlug(params.slug);
   if (!job) return { title: 'Страница не найдена' };

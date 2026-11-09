@@ -17,7 +17,14 @@
 // CSS transform/opacity (globals.css, «/stroyka film tour» section) and sits
 // under every text layer; nothing here filters or moves text.
 
-import { useCallback, useEffect, useRef, useState, type TouchEvent } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type ReactElement,
+  type TouchEvent,
+} from 'react';
 import { ZONES, type ZoneId } from '@/lib/stroyka';
 import { ZONE_FILMS, zoneFilmPoster, zoneFilmSrc } from '@/lib/stroyka/zoneFilms';
 import { ChannelBug } from './ChannelBug';
@@ -65,7 +72,7 @@ export function ZoneFilm({
   shade?: 'low' | 'high';
   /** Held still (no playback) while something opaque covers it, e.g. the opening film. */
   paused?: boolean;
-}): JSX.Element {
+}): ReactElement {
   const target: ZoneId = active ?? 'gate';
   const pausedRef = useRef(paused);
   pausedRef.current = paused;

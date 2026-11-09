@@ -103,7 +103,9 @@ function seoInput(provider: NonNullable<Awaited<ReturnType<typeof loadProvider>>
   };
 }
 
-export async function generateMetadata(props: { params: Promise<{ id: string }> }): Promise<Metadata> {
+export async function generateMetadata(props: {
+  params: Promise<{ id: string }>;
+}): Promise<Metadata> {
   const params = await props.params;
   const provider = await loadProvider(params.id).catch(() => null);
   if (!provider) return { title: 'Исполнитель не найден', robots: { index: false } };

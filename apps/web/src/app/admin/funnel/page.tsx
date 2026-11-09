@@ -42,7 +42,7 @@ const MAX_PERIOD = Math.max(...FUNNEL_PERIODS);
 
 export default async function AdminFunnelPage(props: { searchParams: Promise<Query> }) {
   const searchParams = await props.searchParams;
-  const gate = adminGate();
+  const gate = await adminGate();
   if (gate) return gate;
 
   const now = new Date();

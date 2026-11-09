@@ -11,7 +11,8 @@ const schema = z.union([
 // /admin/feed: «Прочитано» for one or several events, or «Отметить всё
 // прочитанным» for everything the feed shows right now.
 export async function POST(request: NextRequest) {
-  if (!isAdminRequest()) return NextResponse.json({ error: 'Нет доступа' }, { status: 401 });
+  if (!(await isAdminRequest()))
+    return NextResponse.json({ error: 'Нет доступа' }, { status: 401 });
   const parsed = schema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: 'Некорректный запрос' }, { status: 400 });
   const keys =

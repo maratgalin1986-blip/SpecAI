@@ -41,8 +41,8 @@ const when = (date: Date) =>
  * the date of the enquiry (tasks/autopilot/2026-10-22-crm).
  */
 export default async function AdminLeadsPage(props: { searchParams?: Promise<Query> }) {
-  const searchParams = await props.searchParams;
-  const gate = adminGate();
+  const searchParams = (await props.searchParams) ?? {};
+  const gate = await adminGate();
   if (gate) return gate;
   const now = new Date();
   const query = parseCrmQuery(searchParams);

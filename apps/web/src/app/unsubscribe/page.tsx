@@ -18,12 +18,10 @@ export const metadata: Metadata = {
  * scanners open links first): the person confirms with the button. The
  * address is shown masked only.
  */
-export default async function UnsubscribePage(
-  props: {
-    searchParams?: Promise<{ t?: string | string[] }>;
-  }
-) {
-  const searchParams = await props.searchParams;
+export default async function UnsubscribePage(props: {
+  searchParams?: Promise<{ t?: string | string[] }>;
+}) {
+  const searchParams = (await props.searchParams) ?? {};
   const token = typeof searchParams.t === 'string' ? searchParams.t : '';
   const userId = verifyUnsubscribeToken(token);
   let loadFailed = false;

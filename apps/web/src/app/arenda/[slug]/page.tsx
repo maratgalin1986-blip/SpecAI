@@ -64,11 +64,9 @@ function landingFromRate(
   return Math.min(rateOf(machine), ...others);
 }
 
-export async function generateMetadata(
-  props: {
-    params: Promise<{ slug: string }>;
-  }
-): Promise<Metadata> {
+export async function generateMetadata(props: {
+  params: Promise<{ slug: string }>;
+}): Promise<Metadata> {
   const params = await props.params;
   const landing = landingBySlug(params.slug);
   if (!landing) return { title: 'Страница не найдена' };

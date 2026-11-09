@@ -46,7 +46,9 @@ const STATUS_NOTE: Record<string, string> = {
   RETIRED: 'Машина больше не сдаётся — оставьте телефон, подберём замену.',
 };
 
-export async function generateMetadata(props: { params: Promise<{ id: string }> }): Promise<Metadata> {
+export async function generateMetadata(props: {
+  params: Promise<{ id: string }>;
+}): Promise<Metadata> {
   const params = await props.params;
   const item = await prisma.equipment.findFirst({
     where: { id: params.id, ...PUBLIC_FLEET },

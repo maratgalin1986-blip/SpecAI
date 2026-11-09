@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic';
 /** Frees the days of a manual block («Не сдаётся») of the provider's own machine. */
 export async function DELETE(
   request: NextRequest,
-  props: { params: Promise<{ id: string; blockId: string }> }
+  props: { params: Promise<{ id: string; blockId: string }> },
 ) {
   const params = await props.params;
   const currentUser = await getRequestUser(request);

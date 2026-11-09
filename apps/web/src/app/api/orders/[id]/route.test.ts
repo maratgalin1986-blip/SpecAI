@@ -47,7 +47,7 @@ function order(booking: { status: string; equipment: { companyId: string } } | n
 
 async function get() {
   const response = await GET(new NextRequest('http://localhost/api/orders/o1'), {
-    params: { id: 'o1' },
+    params: Promise.resolve({ id: 'o1' }),
   });
   return (await response.json()) as { order: { location: Record<string, unknown> } };
 }

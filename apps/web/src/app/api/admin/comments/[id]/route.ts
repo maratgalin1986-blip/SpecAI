@@ -10,7 +10,8 @@ const schema = z.object({ status: z.enum(['APPROVED', 'REJECTED']) });
 // Moderation: publish (APPROVED) or reject a comment.
 export async function PATCH(request: NextRequest, props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
-  if (!isAdminRequest()) return NextResponse.json({ error: 'Нет доступа' }, { status: 401 });
+  if (!(await isAdminRequest()))
+    return NextResponse.json({ error: 'Нет доступа' }, { status: 401 });
   const parsed = schema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: 'Некорректный статус' }, { status: 400 });
   const previous = await prisma.comment

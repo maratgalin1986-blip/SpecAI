@@ -34,11 +34,9 @@ const PRINT_CSS = `
 }
 `;
 
-export default async function DesignPage(
-  props: {
-    searchParams: Promise<Record<string, string | undefined>>;
-  }
-) {
+export default async function DesignPage(props: {
+  searchParams: Promise<Record<string, string | undefined>>;
+}) {
   const searchParams = await props.searchParams;
   const initial = parseDesignQuery(searchParams);
   return (
