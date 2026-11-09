@@ -26,14 +26,28 @@ function currentPosition(): Promise<{ lat: number; lon: number } | null> {
  * если её нет — одно поле «город». Реквизиты, СТС и ИНН — потом, после
  * первого заказа, в кабинете.
  */
-export function QuickProviderForm({ onFullForm }: { onFullForm: () => void }) {
+export interface QuickProviderInitial {
+  name?: string;
+  phone?: string;
+  city?: string;
+  /** Slug кандидата офиса агентов: пришёл по ссылке со своей страницы /p/<slug>. */
+  prospect?: string;
+}
+
+export function QuickProviderForm({
+  onFullForm,
+  initial,
+}: {
+  onFullForm: () => void;
+  initial?: QuickProviderInitial;
+}) {
   const hydrated = useHydrated();
   const [categories, setCategories] = useState<SelectableCategory[]>([]);
-  const [name, setName] = useState('');
-  const [phone, setPhone] = useState('');
+  const [name, setName] = useState(initial?.name ?? '');
+  const [phone, setPhone] = useState(initial?.phone ?? '');
   const [categoryId, setCategoryId] = useState('');
-  const [city, setCity] = useState('');
-  const [needCity, setNeedCity] = useState(false);
+  const [city, setCity] = useState(initial?.city ?? '');
+  const [needCity, setNeedCity] = useState(Boolean(initial?.city));
   const [consent, setConsent] = useState(false);
   const [publicConsent, setPublicConsent] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -84,6 +98,7 @@ export function QuickProviderForm({ onFullForm }: { onFullForm: () => void }) {
         publicConsent,
         ...(point ? { lat: point.lat, lon: point.lon } : { city: city.trim() }),
         ...(timeZone ? { timeZone } : {}),
+        ...(initial?.prospect ? { prospect: initial.prospect } : {}),
       }),
     }).catch(() => null);
     const body = (await response?.json().catch(() => null)) as {

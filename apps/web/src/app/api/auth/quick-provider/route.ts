@@ -8,6 +8,7 @@ import { validTimeZone } from '@/lib/lineDay';
 import { standingData } from '@/lib/lineStanding';
 import { signMobileToken } from '@/lib/mobileAuth';
 import { freeReferralCode } from '@/lib/referralStore';
+import { markProspectRegistered } from '@/lib/office/registered';
 import {
   QUICK_LIMIT_PER_IP,
   QUICK_LIMIT_PER_PHONE,
@@ -152,6 +153,8 @@ export async function POST(request: NextRequest) {
     signQuickLoginToken(user.id),
     signMobileToken({ userId: user.id, role: user.role }),
   ]);
+  // Офис агентов (R17): кандидат с /p/<slug> зарегистрировался; ошибка не ломает ответ.
+  if (data.prospect) await markProspectRegistered(data.prospect, now);
   return NextResponse.json(
     { quickToken, token, standingUntil: standing.standingUntil },
     { status: 201 },
