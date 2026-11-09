@@ -73,7 +73,7 @@ describe('buildSitePage', () => {
   });
 
   it('links phone, WhatsApp (digits only) and the map', () => {
-    expect(page.phone).toBe(PHONE);
+    expect(page.phone).toBe('+7 927 123-45-67');
     expect(page.phoneHref).toBe(`tel:+${DIGITS}`);
     expect(page.whatsappHref).toBe(`https://wa.me/${DIGITS}`);
     expect(page.whatsappHref).toMatch(/^https:\/\/wa\.me\/\d+$/);
@@ -117,7 +117,7 @@ describe('buildProviderPage', () => {
 
   it('shows the phone once published and prefills it in the sign-up link', () => {
     const page = buildProviderPage(provider, machines, { published: true });
-    expect(page.phone).toBe(PHONE);
+    expect(page.phone).toBe('+7 927 123-45-67');
     expect(page.phoneHref).toBe(`tel:+${DIGITS}`);
     const join = new URL(page.joinHref, 'https://example.test');
     expect(join.pathname).toBe('/register');
@@ -166,5 +166,14 @@ describe('previewBannerText', () => {
       'Предпросмотр: страница сделана для «Стоматология «Улыбка»» агентом ИИСтройка24 ' +
         'и будет опубликована после согласия владельца компании',
     );
+  });
+});
+
+describe('phoneText', () => {
+  it('пишет номер как люди: +7 843 212-34-56', async () => {
+    const { phoneText } = await import('./pages');
+    expect(phoneText('+78432123456')).toBe('+7 843 212-34-56');
+    expect(phoneText('89170001122')).toBe('+7 917 000-11-22');
+    expect(phoneText('12345')).toBe('12345');
   });
 });
