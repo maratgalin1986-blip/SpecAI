@@ -95,3 +95,22 @@ describe('previewViewsLabel', () => {
     expect(previewViewsLabel(null)).toBeNull();
   });
 });
+
+describe('isBotAgent: служебные клиенты и проверки ссылок в почте — не люди', () => {
+  it('curl, python, headless-браузер, сканеры ссылок', () => {
+    for (const ua of [
+      'curl/8.5.0',
+      'python-requests/2.31',
+      'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/120.0 Safari/537.36',
+      'Mozilla/5.0 (compatible; Mail.RU_Bot/2.0)',
+      'UptimeRobot/2.0',
+    ]) {
+      expect(isBotAgent(ua)).toBe(true);
+    }
+    expect(
+      isBotAgent(
+        'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 Version/17.0 Mobile/15E148 Safari/604.1',
+      ),
+    ).toBe(false);
+  });
+});

@@ -6,7 +6,7 @@
 
 /** Боты и сборщики превью ссылок (Telegram, WhatsApp, VK, поисковики, почтовые сканеры). */
 export const PREVIEW_BOT_RE =
-  /bot|crawl|spider|preview|facebookexternalhit|telegram|whatsapp|vkshare|yandex|google/i;
+  /bot|crawl|spider|preview|facebookexternalhit|telegram|whatsapp|vkshare|yandex|google|curl|wget|python|httpclient|go-http|java\/|okhttp|headless|lighthouse|uptime|monitor|scanner|axios|node-fetch|undici|mail\.ru|safelink|proofpoint|mimecast/i;
 
 /** Пустой User-Agent — тоже не человек с браузером. */
 export function isBotAgent(userAgent: string | null | undefined): boolean {

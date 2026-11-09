@@ -401,7 +401,9 @@ async function runOutreach(
   let emailLeft = Math.max(0, cap - emailToday - followUpsToday);
   let whatsappLeft = Math.max(0, cap - whatsappToday);
   const active: OutreachChannels = {
-    email: channels.email && emailLeft > 0,
+    // Письма дня видны владельцу и без настроенного ящика: он сразу видит персональные
+    // предложения; отправка без ящика всё равно невозможна (mail: 'no-smtp').
+    email: (channels.email || mode === 'plan') && emailLeft > 0,
     whatsapp: channels.whatsapp && whatsappLeft > 0,
   };
   if (!active.email && !active.whatsapp) return done();
@@ -618,7 +620,11 @@ async function runOutreach(
 
   // Напоминания (S8): одно письмо тем, кому писали 4–14 дней назад и кто не ответил;
   // в остатке дневного лимита писем и бюджета времени.
-  if (!channels.email || result.mail === 'no-smtp' || emailLeft <= 0 || outOfTime()) {
+  if (
+    (mode === 'send' && (!channels.email || result.mail === 'no-smtp')) ||
+    emailLeft <= 0 ||
+    outOfTime()
+  ) {
     return done();
   }
   const due = await dropOptedOut(

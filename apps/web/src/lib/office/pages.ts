@@ -2,6 +2,7 @@
 // network: a prospect and a dictionary go in, the fields a component renders
 // come out. Nothing here is invented — no reviews, prices, photos, ratings or
 // numbers of any kind (R9); the texts come from the source card and the niche.
+import { hoursForText } from './dossier';
 import type { MachineName, PageNiche, PageProspect } from './pageTypes';
 
 export interface SitePage {
@@ -125,7 +126,8 @@ export function buildSitePage(p: PageProspect, niche: PageNiche): SitePage {
     hero: heroWithCity(niche.heroLine, city),
     services: [...niche.services],
     address: p.address?.trim() || null,
-    hours: p.hours?.trim() || null,
+    // «Mo-Fr 09:00-21:00» из OpenStreetMap — по-русски: «пн-пт 09:00-21:00».
+    hours: p.hours?.trim() ? hoursForText(p.hours.trim()) : null,
     phone: phoneText(p.phone),
     phoneHref: telHref(p.phone),
     whatsappHref: whatsappHrefFor(p.whatsapp),
