@@ -1152,6 +1152,23 @@ model Prospect {
   repliedAt      DateTime?
   outreachError  String?
   runId          String?
+  // «Сайты под ключ» как бизнес (tasks/autopilot/2026-11-09-sites-business): правки сайта из
+  // админки (JSON, lib/office/siteContent.ts), свой домен клиента, цены клиента и оплата,
+  // напоминание по почте. Все поля необязательные — старые строки работают как раньше.
+  siteJson       String?
+  domain         String?   @unique
+  setupPrice     Int?
+  monthlyPrice   Int?
+  setupPaidAt    DateTime?
+  paidUntil      DateTime?
+  followUpSentAt DateTime?
+  // Досье фирмы и персональное предложение (S13–S17): факты карточки и окружения, выбранный
+  // заход письма (по нему офис учится), текст предложения как отправлен, просмотры превью.
+  dossierJson     String?
+  offerAngle      String?
+  offerJson       String?
+  previewViews    Int       @default(0)
+  previewViewedAt DateTime?
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
@@ -1160,6 +1177,23 @@ model Prospect {
   @@index([phone])
   @@index([sourceRef])
   @@index([contactedAt])
+  @@index([paidUntil])
+}
+
+// Заявка посетителя с клиентского сайта /s/<slug> (S4): уходит письмом на почту компании,
+// владельцу — в сводку. prospectId — строка, без внешнего ключа (кандидата можно удалить вручную).
+model SiteLead {
+  id           String    @id @default(cuid())
+  prospectId   String
+  name         String
+  phone        String
+  message      String?
+  forwardedAt  DateTime?
+  forwardError String?
+  createdAt    DateTime  @default(now())
+
+  @@index([prospectId, createdAt])
+  @@index([createdAt])
 }
 
 // Журнал прогонов офиса (R4).

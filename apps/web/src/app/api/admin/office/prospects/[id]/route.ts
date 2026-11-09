@@ -29,7 +29,8 @@ function parseCallAt(value: string | null | undefined): Date | null | undefined 
 
 export async function PATCH(request: NextRequest, props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
-  if (!isAdminRequest()) return NextResponse.json({ error: 'Нет доступа' }, { status: 401 });
+  if (!(await isAdminRequest()))
+    return NextResponse.json({ error: 'Нет доступа' }, { status: 401 });
   if (!ID.test(params.id))
     return NextResponse.json({ error: 'Кандидат не найден' }, { status: 404 });
   const json = await readJson(request);

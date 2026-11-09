@@ -76,7 +76,7 @@ function toPageProspect(p: {
  * who was written to, who answered, what is published; the plan, the prices, the log of runs.
  */
 export default async function AdminOfficePage() {
-  const gate = adminGate();
+  const gate = await adminGate();
   if (gate) return gate;
   const now = new Date();
   const { start: todayStart, end: todayEnd } = mskDayBounds(now);

@@ -19,7 +19,8 @@ const schema = z.object({
 });
 
 export async function POST(request: NextRequest) {
-  if (!isAdminRequest()) return NextResponse.json({ error: 'Нет доступа' }, { status: 401 });
+  if (!(await isAdminRequest()))
+    return NextResponse.json({ error: 'Нет доступа' }, { status: 401 });
   const json = await readJson(request);
   if (json === null) return NextResponse.json({ error: INVALID_JSON_MESSAGE }, { status: 400 });
   const parsed = schema.safeParse(json);
