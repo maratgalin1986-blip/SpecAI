@@ -19,7 +19,8 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false, nocache: true },
 };
 
-export default async function PreviewPage({ params }: { params: { token: string } }) {
+export default async function PreviewPage(props: { params: Promise<{ token: string }> }) {
+  const params = await props.params;
   const prospect = await loadProspectByToken(params.token);
   if (!prospect || !visibleFor(prospect, 'preview')) notFound();
 

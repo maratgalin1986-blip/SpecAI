@@ -27,7 +27,8 @@ function parseCallAt(value: string | null | undefined): Date | null | undefined 
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
-export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
+export async function PATCH(request: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   if (!isAdminRequest()) return NextResponse.json({ error: 'Нет доступа' }, { status: 401 });
   if (!ID.test(params.id))
     return NextResponse.json({ error: 'Кандидат не найден' }, { status: 404 });

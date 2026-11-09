@@ -18,11 +18,10 @@ async function loadProviderPage(slug: string) {
   return buildProviderPage(prospect, [...CATEGORIES], { published: true });
 }
 
-export async function generateMetadata({
-  params,
-}: {
-  params: { slug: string };
+export async function generateMetadata(props: {
+  params: Promise<{ slug: string }>;
 }): Promise<Metadata> {
+  const params = await props.params;
   const page = await loadProviderPage(params.slug).catch(() => null);
   if (!page) return { title: 'Исполнитель не найден', robots: { index: false } };
   const title = `${page.title} — аренда спецтехники${page.city ? `, ${page.city}` : ''}`;
@@ -36,7 +35,10 @@ export async function generateMetadata({
   };
 }
 
-export default async function OfficeProviderPublicPage({ params }: { params: { slug: string } }) {
+export default async function OfficeProviderPublicPage(props: {
+  params: Promise<{ slug: string }>;
+}) {
+  const params = await props.params;
   const page = await loadProviderPage(params.slug);
   if (!page) notFound();
   return <OfficeProviderPage page={page} />;
