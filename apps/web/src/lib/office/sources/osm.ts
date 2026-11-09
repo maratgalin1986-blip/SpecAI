@@ -12,7 +12,9 @@ export const OVERPASS_UNAVAILABLE = 'Источник карт не ответи
 export function buildOverpassQuery(niche: SourceNiche, city: SourceCity, radiusKm: number): string {
   const radius = Math.round(radiusKm * 1000);
   const parts = niche.osm.map(
-    ([k, v]) => `nwr["${k}"="${v}"](around:${radius},${city.lat},${city.lon});`,
+    // «*» в значении тега — любой объект с этим ключом (industrial=*, craft=*).
+    ([k, v]) =>
+      `nwr[${v === '*' ? `"${k}"` : `"${k}"="${v}"`}](around:${radius},${city.lat},${city.lon});`,
   );
   return `[out:json][timeout:25];(${parts.join('')});out center tags;`;
 }
