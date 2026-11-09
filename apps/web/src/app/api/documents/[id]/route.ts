@@ -23,7 +23,8 @@ async function ownDocument(request: NextRequest, id: string) {
 }
 
 /** PATCH /api/documents/[id] — change the fields sent (a new expiry resets the reminders). */
-export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
+export async function PATCH(request: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const own = await ownDocument(request, params.id);
   if ('error' in own) return own.error;
   const body = await readJson(request);
@@ -64,7 +65,8 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
 }
 
 /** DELETE /api/documents/[id] */
-export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(request: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const own = await ownDocument(request, params.id);
   if ('error' in own) return own.error;
   await prisma.providerDocument.delete({ where: { id: params.id } });

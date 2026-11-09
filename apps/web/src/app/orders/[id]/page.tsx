@@ -54,7 +54,10 @@ const msk = (date: Date) => date.toLocaleDateString('ru-RU', { timeZone: 'Europe
  * link gets a preview: «Нужен автокран · Елабуга · 20 октября» and the card
  * from opengraph-image.tsx — the kind of machine, the city and the day only.
  */
-export async function generateMetadata({ params }: { params: { id: string } }): Promise<Metadata> {
+export async function generateMetadata(props: {
+  params: Promise<{ id: string }>;
+}): Promise<Metadata> {
+  const params = await props.params;
   const order = await prisma.order
     .findUnique({
       where: { id: params.id },
@@ -87,7 +90,8 @@ export async function generateMetadata({ params }: { params: { id: string } }): 
   };
 }
 
-export default async function OrderDetailPage({ params }: { params: { id: string } }) {
+export default async function OrderDetailPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const session = await getServerSession(authOptions);
 
   const order = await prisma.order.findUnique({
@@ -116,7 +120,7 @@ export default async function OrderDetailPage({ params }: { params: { id: string
   // Aggregator: an order is seen by its author, every provider and the admin.
   // Chat contacts are for СпецПласт16 and the admin; a provider sees only its
   // own bids and not the customer's name (competitors' prices stay private).
-  const isAdmin = isAdminRequest();
+  const isAdmin = await isAdminRequest();
   const canSeeContact = isHouseManager(session?.user) || isAdmin;
   const seesAllBids = isOwner || isAdmin;
   // A visitor without an account (a shared link, the channel) sees the public

@@ -16,7 +16,7 @@ export async function chatViewer(request: Request): Promise<ChatViewer | null> {
   const user = await getRequestUser(request);
   let isAdmin = false;
   try {
-    isAdmin = isAdminRequest();
+    isAdmin = await isAdminRequest();
   } catch {
     isAdmin = false;
   }

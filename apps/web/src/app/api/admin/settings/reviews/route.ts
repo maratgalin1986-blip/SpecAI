@@ -17,12 +17,14 @@ function view(links: ReviewLinks) {
 
 /** «Отзывы о площадке» in the admin menu: links to the 2ГИС and Яндекс Карты cards. */
 export async function GET() {
-  if (!isAdminRequest()) return NextResponse.json({ error: 'Нет доступа' }, { status: 401 });
+  if (!(await isAdminRequest()))
+    return NextResponse.json({ error: 'Нет доступа' }, { status: 401 });
   return NextResponse.json(view(await loadReviewLinks()), { headers: NO_STORE });
 }
 
 export async function PUT(request: NextRequest) {
-  if (!isAdminRequest()) return NextResponse.json({ error: 'Нет доступа' }, { status: 401 });
+  if (!(await isAdminRequest()))
+    return NextResponse.json({ error: 'Нет доступа' }, { status: 401 });
   const parsed = parseReviewLinksUpdate(
     await request.json().catch(() => null),
     await loadReviewLinks(),

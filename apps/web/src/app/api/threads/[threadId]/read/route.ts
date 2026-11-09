@@ -8,7 +8,8 @@ export const dynamic = 'force-dynamic';
  * Marks the other side's messages in the thread as read by the viewer. An
  * admin reading a thread changes nothing.
  */
-export async function POST(request: NextRequest, { params }: { params: { threadId: string } }) {
+export async function POST(request: NextRequest, props: { params: Promise<{ threadId: string }> }) {
+  const params = await props.params;
   const viewer = await chatViewer(request);
   const access = await threadContext(params.threadId, viewer);
   if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });

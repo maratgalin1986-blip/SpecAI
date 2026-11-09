@@ -10,7 +10,8 @@ export const dynamic = 'force-dynamic';
  * PATCH /api/admin/reviews/[id] and /api/admin/comments/[id].
  */
 export async function GET() {
-  if (!isAdminRequest()) return NextResponse.json({ error: 'Нет доступа' }, { status: 401 });
+  if (!(await isAdminRequest()))
+    return NextResponse.json({ error: 'Нет доступа' }, { status: 401 });
   const [reviews, comments] = await Promise.all([
     prisma.review.findMany({
       where: { textStatus: 'PENDING' },

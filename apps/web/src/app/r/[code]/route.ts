@@ -14,7 +14,8 @@ export const dynamic = 'force-dynamic';
  * the sign-up (the provider form when a provider invites). An unknown code
  * still lands on the sign-up, just without the cookie.
  */
-export async function GET(request: NextRequest, { params }: { params: { code: string } }) {
+export async function GET(request: NextRequest, props: { params: Promise<{ code: string }> }) {
+  const params = await props.params;
   const code = normalizeReferralCode(params.code);
   const referrer = code ? await findReferrer(code).catch(() => null) : null;
   const target =

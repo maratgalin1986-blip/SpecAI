@@ -6,7 +6,8 @@ export const dynamic = 'force-dynamic';
 
 // Comments waiting for moderation (`?status=APPROVED|REJECTED` for the others).
 export async function GET(request: NextRequest) {
-  if (!isAdminRequest()) return NextResponse.json({ error: 'Нет доступа' }, { status: 401 });
+  if (!(await isAdminRequest()))
+    return NextResponse.json({ error: 'Нет доступа' }, { status: 401 });
   const requested = request.nextUrl.searchParams.get('status');
   const status = requested === 'APPROVED' || requested === 'REJECTED' ? requested : 'PENDING';
   const comments = await prisma.comment.findMany({

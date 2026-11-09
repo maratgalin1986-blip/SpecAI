@@ -11,7 +11,8 @@ export const dynamic = 'force-dynamic';
  * database).
  */
 export async function PUT(request: NextRequest) {
-  if (!isAdminRequest()) return NextResponse.json({ error: 'Нет доступа' }, { status: 401 });
+  if (!(await isAdminRequest()))
+    return NextResponse.json({ error: 'Нет доступа' }, { status: 401 });
   if (process.env.VERCEL_ENV === 'preview') {
     return NextResponse.json(
       { error: 'Режим чата меняется только на основном сайте' },

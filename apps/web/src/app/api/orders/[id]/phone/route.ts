@@ -23,7 +23,8 @@ export const dynamic = 'force-dynamic';
  * CHAT_PHONE_REVEALS_PER_USER_PER_DAY на сотрудника; больше
  * REVEAL_ALERT_PER_HOUR показов за час — тревога владельцу в Telegram.
  */
-export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(request: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const user = await getRequestUser(request);
   // Bursts from one account (a script) are cut before any database work.
   if (user) {

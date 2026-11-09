@@ -7,8 +7,10 @@ const schema = z.object({ status: z.enum(['APPROVED', 'REJECTED']) });
 
 // Moderation of a review: publish it (APPROVED: stars and text count and are
 // shown) or hide it (REJECTED). Nothing is public before the owner decides.
-export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
-  if (!isAdminRequest()) return NextResponse.json({ error: 'Нет доступа' }, { status: 401 });
+export async function PATCH(request: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
+  if (!(await isAdminRequest()))
+    return NextResponse.json({ error: 'Нет доступа' }, { status: 401 });
   const parsed = schema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: 'Некорректный статус' }, { status: 400 });
   const review = await prisma.review

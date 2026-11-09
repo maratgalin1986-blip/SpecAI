@@ -28,7 +28,8 @@ async function ownMachine(request: NextRequest, id: string) {
 }
 
 /** Manual blocks («Не сдаётся») of the provider's own machine, upcoming first. */
-export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(request: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const machine = await ownMachine(request, params.id);
   if (!machine) return NextResponse.json({ error: 'Техника не найдена' }, { status: 404 });
   const blocks = await prisma.equipmentBlock.findMany({
@@ -45,7 +46,8 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
  * confirmed or active booking holds one; pending requests are left to the
  * provider to decline.
  */
-export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(request: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const machine = await ownMachine(request, params.id);
   if (!machine) return NextResponse.json({ error: 'Техника не найдена' }, { status: 404 });
   const body = await readJson(request);

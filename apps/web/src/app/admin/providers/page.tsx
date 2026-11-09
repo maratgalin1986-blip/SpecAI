@@ -158,8 +158,9 @@ async function loadRows(now: Date): Promise<ProviderRow[]> {
   });
 }
 
-export default async function AdminProvidersPage({ searchParams }: { searchParams: Query }) {
-  const gate = adminGate();
+export default async function AdminProvidersPage(props: { searchParams: Promise<Query> }) {
+  const searchParams = await props.searchParams;
+  const gate = await adminGate();
   if (gate) return gate;
 
   const now = new Date();

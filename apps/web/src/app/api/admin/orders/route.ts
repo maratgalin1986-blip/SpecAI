@@ -14,7 +14,8 @@ const ADMIN_ORDERS_TAKE = 50;
  * go through PATCH /api/admin/orders/[id].
  */
 export async function GET(request: NextRequest) {
-  if (!isAdminRequest()) return NextResponse.json({ error: 'Нет доступа' }, { status: 401 });
+  if (!(await isAdminRequest()))
+    return NextResponse.json({ error: 'Нет доступа' }, { status: 401 });
   const status = request.nextUrl.searchParams.get('status') === 'OPEN' ? 'OPEN' : 'PENDING_REVIEW';
   const orders = await prisma.order.findMany({
     where: { status },

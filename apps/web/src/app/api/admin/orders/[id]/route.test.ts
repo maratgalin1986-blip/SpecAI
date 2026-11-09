@@ -32,7 +32,7 @@ async function patch(status: string) {
       method: 'PATCH',
       body: JSON.stringify({ status }),
     }),
-    { params: { id: 'o1' } },
+    { params: Promise.resolve({ id: 'o1' }) },
   );
   return { status: response.status, body: await response.json() };
 }

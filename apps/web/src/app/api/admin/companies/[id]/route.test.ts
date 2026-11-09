@@ -15,7 +15,7 @@ async function patch(body: unknown) {
       method: 'PATCH',
       body: JSON.stringify(body),
     }),
-    { params: { id: 'c1' } },
+    { params: Promise.resolve({ id: 'c1' }) },
   );
   return response.status;
 }

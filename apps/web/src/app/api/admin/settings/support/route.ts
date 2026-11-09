@@ -26,12 +26,14 @@ const NO_STORE = { 'Cache-Control': 'no-store' };
 
 /** «Поддержка приложения (донаты)» in the admin menu: the card, the name, on/off. */
 export async function GET() {
-  if (!isAdminRequest()) return NextResponse.json({ error: 'Нет доступа' }, { status: 401 });
+  if (!(await isAdminRequest()))
+    return NextResponse.json({ error: 'Нет доступа' }, { status: 401 });
   return NextResponse.json(view(await loadSupportSettings()), { headers: NO_STORE });
 }
 
 export async function PUT(request: NextRequest) {
-  if (!isAdminRequest()) return NextResponse.json({ error: 'Нет доступа' }, { status: 401 });
+  if (!(await isAdminRequest()))
+    return NextResponse.json({ error: 'Нет доступа' }, { status: 401 });
   // Fields not sent keep their stored values: a partial save never wipes the card.
   const parsed = parseSupportUpdate(
     await request.json().catch(() => null),

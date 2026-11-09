@@ -9,7 +9,8 @@ export const metadata: Metadata = {
   alternates: { canonical: '/agents' },
 };
 
-export default function AgentsPage({ searchParams }: { searchParams: { agent?: string } }) {
+export default async function AgentsPage(props: { searchParams: Promise<{ agent?: string }> }) {
+  const searchParams = await props.searchParams;
   const parsed = agentIdSchema.safeParse(searchParams.agent);
   const initialAgent = parsed.success ? parsed.data : 'auto';
 

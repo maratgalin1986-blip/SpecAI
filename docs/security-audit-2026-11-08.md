@@ -143,3 +143,43 @@ poisoning) — все исправлены в 15.5.16–15.5.28. Текущая 
   Actions — одинаковое значение; без него кроны отвечают 403.**
 - №6 — при сбое базы лид не пишется в лог целиком.
 - №1 — см. раздел выше; решение за владельцем.
+
+## Обновление Next.js — сделано (2026-11-09, ветка обновления)
+
+- `next` 14.2.35 → **15.5.29**, `react`/`react-dom` 18.3.1 → **19.2.9**,
+  `@types/react` 18.3 → 19.2, `@types/react-dom` 18.3 → 19.2 (`apps/web`,
+  `packages/ui`; peer `@specai/ui` — `react ^18 || ^19`). React выровнен с
+  приложением (Expo SDK 57 живёт на React 19.2.x, у него своя копия 19.2.3).
+  `next-auth` 4.24.15, `@serwist/next` 9.5.12, `vitest` 4 — без изменений.
+- `pnpm audit --prod`: advisories пакета `next` — **0** (GHSA-2xp9-vwfh-vxw4,
+  GHSA-2464-fhr4-w9xw, GHSA-p293-qw3h-jr36 и 30 high закрыты). Осталось в
+  `apps/web`: `postcss` 8.4.31 (зависимость самого `next`, патча в 15.5 нет),
+  `undici` через `@vercel/blob`, `zod` 3.25 (GHSA-mrhx-c7xc-m3w5, исправлено
+  только в zod 4 — отдельная задача). Остальные 30+ — `apps/mobile` → `expo`
+  (`node-forge`, `shell-quote`, `brace-expansion`, dev-инструменты Expo CLI),
+  в продакшен-функции сайта не попадают.
+- Кодмод `npx @next/codemod@canary next-async-request-api src`: 54 файла
+  изменены, 820 без изменений, 0 ошибок (`params`/`searchParams` стали
+  `Promise`, `cookies()`/`headers()` ждутся). Руками: `isAdminRequest()` стала
+  async и ждётся во всех 31 вызове (route handlers, `adminGate`, `orderViewerFor`,
+  `chatViewer`), страницы с необязательным `searchParams` снова получают `{}`,
+  тесты route handlers передают `params: Promise.resolve(...)`, `JSX.Element` →
+  `ReactElement` (глобального `JSX` в `@types/react` 19 нет).
+- `next.config.mjs`: `outputFileTracingIncludes` переехал из `experimental` в
+  корень, добавлен `outputFileTracingRoot` (корень монорепы); плагин Prisma
+  остаётся. В `.nft.json` маршрутов движок `libquery_engine-rhel-openssl-3.0.x`
+  присутствует.
+- Кэширование: в Next 15 `fetch` и GET route handlers по умолчанию не кэшируются,
+  что равно нашим `force-dynamic`; все внешние `fetch` уже задают `next.revalidate`
+  или `cache: 'no-store'`, `export const revalidate` (главная, /arenda, /ceny,
+  sitemap, /api/world, тайлы) сохранены. Middleware не менялся.
+- Проверки: `pnpm lint`, `pnpm typecheck`, `pnpm format:check` — чисто; `pnpm test`
+  — 2192 теста зелёные (web 1866, mobile 189, shared 100, ai-service 28, database 9);
+  `next build` — 123 страницы; Playwright smoke — 42 passed, 4 skipped (по проекту);
+  `expo export --platform android` — ок.
+- **Владелец, после деплоя:** Vercel → Settings → General → Node.js Version должен
+  быть **20.x или 22.x** (Next 15 требует Node ≥ 18.18; 22 предпочтительно);
+  если сборка упадёт на типах React/JSX — Redeploy без Build Cache (CLAUDE.md п. 9);
+  затем `https://иистройка24.рф/api/categories` и
+  `https://spec-ai-web.vercel.app/api/categories` → 200, проверить вход, /admin,
+  подачу заявки на /orders.

@@ -11,8 +11,9 @@ import { checkRateLimit } from '@/lib/rateLimit';
 
 export async function GET(
   request: Request,
-  { params }: { params: { z: string; x: string; y: string } },
+  props: { params: Promise<{ z: string; x: string; y: string }> },
 ) {
+  const params = await props.params;
   const z = Number(params.z);
   const x = Number(params.x);
   const y = Number(params.y.replace(/\.png$/, ''));

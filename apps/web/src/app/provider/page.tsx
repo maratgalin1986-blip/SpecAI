@@ -116,11 +116,8 @@ interface ProviderSearchParams {
   welcome?: string;
 }
 
-export default async function ProviderPage({
-  searchParams,
-}: {
-  searchParams: ProviderSearchParams;
-}) {
+export default async function ProviderPage(props: { searchParams: Promise<ProviderSearchParams> }) {
+  const searchParams = await props.searchParams;
   const session = await getServerSession(authOptions);
 
   // Aggregator: every provider (and СпецПласт16's own fleet) manages its

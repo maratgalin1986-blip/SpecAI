@@ -14,7 +14,8 @@ export const dynamic = 'force-dynamic';
  * confirms it (or disputes the operator's figures). Final only when both
  * confirmations are set. The other side is told of every step.
  */
-export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
+export async function PATCH(request: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const currentUser = await getRequestUser(request);
   if (!currentUser) {
     return NextResponse.json({ error: 'Необходимо войти в аккаунт' }, { status: 401 });

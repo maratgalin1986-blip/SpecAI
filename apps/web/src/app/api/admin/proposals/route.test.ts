@@ -17,7 +17,7 @@ function patch(id: string, body: unknown) {
       method: 'PATCH',
       body: JSON.stringify(body),
     }),
-    { params: { id } },
+    { params: Promise.resolve({ id }) },
   );
 }
 

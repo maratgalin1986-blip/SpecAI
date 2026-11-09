@@ -1,10 +1,11 @@
+import type { ReactElement } from 'react';
 import { Card } from '@specai/ui';
 import { AdminLogin } from '@/components/AdminLogin';
 import { isAdminConfigured, isAdminRequest } from '@/lib/admin';
 
 // What an /admin/* page shows instead of its content when the admin is not
 // signed in: the same cards as /admin itself. Server-only (reads cookies).
-export function adminGate(): JSX.Element | null {
+export async function adminGate(): Promise<ReactElement | null> {
   if (!isAdminConfigured()) {
     return (
       <Card className="mx-auto max-w-lg">
@@ -17,7 +18,7 @@ export function adminGate(): JSX.Element | null {
       </Card>
     );
   }
-  if (!isAdminRequest()) {
+  if (!(await isAdminRequest())) {
     return (
       <Card className="mx-auto max-w-sm">
         <h1 className="mb-4 text-xl font-bold">Вход для администратора</h1>

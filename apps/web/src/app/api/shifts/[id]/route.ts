@@ -14,7 +14,8 @@ async function loadShift(id: string) {
 }
 
 /** One shift with its event log, timer and timesheet (the customer polls this). */
-export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(request: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const currentUser = await getRequestUser(request);
   const shift = await loadShift(params.id);
   const access = shift ? await loadBookingAccess(currentUser, shift.bookingId) : null;
@@ -28,7 +29,8 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
  * is the start photo, with «Смена завершена» the end photo; «Простой» needs
  * a reason. Every move is logged as a ShiftEvent and the customer is told.
  */
-export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
+export async function PATCH(request: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const currentUser = await getRequestUser(request);
   if (!currentUser) {
     return NextResponse.json({ error: 'Необходимо войти в аккаунт' }, { status: 401 });
