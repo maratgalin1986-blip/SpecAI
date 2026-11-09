@@ -141,6 +141,6 @@ describe('moscowHour', () => {
   it('переводит в московское время', () => {
     expect(moscowHour(new Date('2026-11-09T06:30:00Z'))).toBe(9);
     expect(moscowHour(new Date('2026-11-09T21:05:00Z'))).toBe(0);
-    expect(DIGEST_HOURS).toEqual({ from: 8, to: 10 });
+    expect(DIGEST_HOURS).toEqual({ from: 8, to: 23 });
   });
 });

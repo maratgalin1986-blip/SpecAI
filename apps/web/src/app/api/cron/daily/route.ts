@@ -12,6 +12,7 @@ import { FLUSH_BATCH, tickDeferredOrderNotices } from '@/lib/deferredOrderNotice
 import { runGroupPriceSurvey } from '@/lib/groupPriceSurvey';
 import { callbackReminderText } from '@/lib/adminCrm';
 import { sendLineRenewOffers } from '@/lib/lineRenewData';
+import { officeTick } from '@/lib/office/tick';
 
 export const dynamic = 'force-dynamic';
 // A GET handler: without this Next keeps outgoing sends (Telegram, push,
@@ -87,6 +88,17 @@ export async function GET(request: NextRequest) {
   // «Заявки за сутки» in the platform's own Telegram channel (off without TELEGRAM_CHANNEL_ID);
   // before the AI sweep, which may use the rest of the function's time.
   const channel = await postChannelDigest().catch((error: unknown) => ({ error: String(error) }));
+  // Офис агентов — страховка на день, когда расписание GitHub молчало: один
+  // шаг плана, рассылка и сводка владельцу, если её сегодня ещё не было
+  // (lib/office/tick.ts). Бюджет небольшой: дальше ещё опрос и модерация.
+  const office = await officeTick(new Date(), {
+    budgetMs: 20_000,
+    maxSteps: 1,
+    digest: 'any',
+  }).catch((error: unknown) => {
+    console.error('[cron/daily] office tick failed', error);
+    return { error: String(error) };
+  });
   // «Опрос цен в группе»: posted once in the owner's group, closed after 7
   // days with the results to the owner (lib/groupPriceSurvey.ts).
   const priceSurvey = await runGroupPriceSurvey().catch((error: unknown) => {
@@ -112,6 +124,7 @@ export async function GET(request: NextRequest) {
     digest,
     channel,
     priceSurvey,
+    office,
     notices,
     callbacks,
     lineRenew,

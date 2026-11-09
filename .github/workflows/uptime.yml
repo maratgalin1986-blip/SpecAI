@@ -22,6 +22,15 @@ jobs:
       # иистройка24.рф (punycode) since 2026-10-24; the old address sends pages here.
       SITE: https://xn--24-6kc5aagh4arjl.xn--p1ai
     steps:
+      # Office tick (apps/web/src/app/api/cron/office): GitHub starts scheduled
+      # runs rarely, so every scheduled workflow pokes the office; the endpoint
+      # is idempotent and needs CRON_SECRET (repository secret, as in Vercel).
+      - name: Office tick
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          if [ -z "$CRON_SECRET" ]; then echo "::warning::CRON_SECRET repository secret is not set — office tick skipped"; exit 0; fi
+          curl -fsS -H "Authorization: Bearer $CRON_SECRET" https://spec-ai-web.vercel.app/api/cron/office || true
       - name: Pages and API answer 200
         run: |
           failed=0

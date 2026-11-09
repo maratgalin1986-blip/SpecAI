@@ -15,7 +15,12 @@ import type { AgentId, ProspectKind } from './types';
 export const DIGEST_LIST_LIMIT = 10;
 
 /** Окно отправки сводки — московские часы, включительно. */
-export const DIGEST_HOURS = { from: 8, to: 10 } as const;
+/**
+ * Сводка уходит при первом вызове после 08:00 по Москве и до конца дня (раз в
+ * день — onceADay): расписание GitHub срабатывает редко и окно 08–10 можно
+ * просто проспать.
+ */
+export const DIGEST_HOURS = { from: 8, to: 23 } as const;
 
 /** Час по Москве, 0–23. */
 export function moscowHour(now: Date): number {
