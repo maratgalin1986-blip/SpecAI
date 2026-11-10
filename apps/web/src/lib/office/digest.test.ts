@@ -71,6 +71,19 @@ describe('buildDigest', () => {
     expect(text).toContain('источник карт не отвечал (1)');
   });
 
+  it('все шаги за сутки упали (как 9–10.11.2026) → первая строка сводки, а не хвост', () => {
+    const failed = { agent: 'sites', niche: 'beauty', city: 'Казань', found: 0, created: 0 };
+    const runs = [1, 2, 3, 4].map(() => ({ ...failed, error: 'Источник карт не ответил' }));
+    const quiet = buildDigest(input({ runs }));
+    expect(quiet.startsWith('Поиск фирм не работает: все шаги за сутки (4)')).toBe(true);
+    expect(quiet).not.toContain('новых кандидатов нет,');
+    // Не «тихая» сводка (есть кому написать) — тревога всё равно первой строкой.
+    const busy = buildDigest(input({ runs, outboxWaiting: 3 }));
+    expect(busy.split('\n')[0]).toContain('Поиск фирм не работает');
+    // Два упавших шага из двух — ещё не тревога.
+    expect(buildDigest(input({ runs: runs.slice(0, 2) }))).not.toContain('Поиск фирм не работает');
+  });
+
   it('полная сводка: итоги агентов, списки со ссылками превью, дата по Москве', () => {
     const text = buildDigest(
       input({

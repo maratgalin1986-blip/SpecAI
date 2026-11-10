@@ -6,6 +6,7 @@
 // Вторая волна (U3): лучший заход персональных предложений и «горячие» — открыли превью за
 // 7 дней и ещё не ответили (им пора позвонить).
 
+import { FAILING_RUNS } from './searchHealth';
 import { phoneText } from './pages';
 import { prisma } from '@specai/database';
 import { MSK, mskDate, mskDayBounds } from '@/lib/adminCrm';
@@ -186,6 +187,16 @@ export function buildDigest(input: DigestInput): string {
     hot.length === 0 &&
     !leads;
 
+  // Все шаги за сутки упали — это первая строка сводки, а не хвост «тихой» (урок 9–10.11.2026).
+  const searchDown =
+    input.runs.length >= FAILING_RUNS && failedRuns === input.runs.length
+      ? `Поиск фирм не работает: все шаги за сутки (${failedRuns}) закончились ошибкой источника карт. Новых кандидатов не будет, пока его не починить.`
+      : null;
+
+  if (quiet && searchDown) {
+    const text = `${searchDown} Открыть офис: ${base}/admin/office`;
+    return billing ? `${text}\n${billing}` : text;
+  }
   if (quiet) {
     const tail = input.paused
       ? 'план на паузе'
@@ -198,6 +209,7 @@ export function buildDigest(input: DigestInput): string {
   }
 
   const out: string[] = [`Офис за сутки (${formatDay(input.date)}):`, agentSummary(input.runs)];
+  if (searchDown) out.unshift(searchDown);
   if (input.paused) out.push('Поиск на паузе.');
   if (input.contacted.email || input.contacted.whatsapp) {
     out.push(`Отправлено: писем ${input.contacted.email}, WhatsApp ${input.contacted.whatsapp}.`);

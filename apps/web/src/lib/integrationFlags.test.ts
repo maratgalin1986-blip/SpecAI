@@ -17,6 +17,9 @@ describe('integrationFlags', () => {
       telegram: true,
       cronSecret: false,
       blob: false,
+      officeMail: false,
+      dgis: false,
+      whatsappApi: false,
     });
     expect(JSON.stringify(result)).not.toMatch(/secret|abc|42/);
   });

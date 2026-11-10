@@ -14,7 +14,8 @@ import { machineryTags, nicheByKey, type Niche } from './niches';
 import { OFFICE_SETTINGS, defaultPlan, nextStep, parsePlan } from './plan';
 import { prospectSlug, newToken } from './slug';
 import { createDgisSource } from './sources/dgis';
-import { withFallback } from './sources/fallback';
+import { firstAvailable, withFallback } from './sources/fallback';
+import { nominatimSource } from './sources/nominatim';
 import { osmSource } from './sources/osm';
 import type { Candidate, ProspectSource, SourceNiche } from './sources/types';
 import type { AgentId, PlanStep } from './types';
@@ -147,10 +148,14 @@ function sourceNiche(niche: Niche): SourceNiche {
   };
 }
 
-/** 2ГИС первым, когда есть `DGIS_API_KEY`, иначе только OSM. */
+/**
+ * 2ГИС первым, когда есть `DGIS_API_KEY`; затем Nominatim — он отвечает облачным серверам; Overpass
+ * последним: с Vercel он сбрасывает соединение («Источник карт не ответил», продакшен 9–10.11.2026).
+ */
 export function defaultSource(): ProspectSource {
   const dgis = createDgisSource();
-  return dgis ? withFallback([dgis, osmSource]) : osmSource;
+  // OpenStreetMap — один набор данных: Overpass спрашивается, только если Nominatim не ответил.
+  return withFallback([...(dgis ? [dgis] : []), firstAvailable([nominatimSource, osmSource])]);
 }
 
 /** Последние 10 цифр телефона — так сравниваются `+7…`, `8…` и городские номера. */
