@@ -75,6 +75,11 @@ function flag(value: string | undefined): boolean {
   return value?.trim() === '1';
 }
 
+/** Флажок со значением по умолчанию, пока владелец его не сохранял («1» / «0» в базе). */
+function flagOr(value: string | undefined, fallback: boolean): boolean {
+  return value === undefined || value.trim() === '' ? fallback : flag(value);
+}
+
 function int(value: string | undefined, fallback: number): number {
   if (value === undefined) return fallback;
   const n = Number(value.trim());
@@ -95,7 +100,10 @@ export function parseOfficeSettings(
     outreachPaused: flag(byKey.get(OFFICE_SETTINGS.outreachPaused)),
     dailyCap: int(byKey.get(OFFICE_SETTINGS.dailyCap), DEFAULT_DAILY_CAP),
     replyTo: replyTo || SITE.email,
-    whatsappToPhone: flag(byKey.get(OFFICE_EXTRA_SETTINGS.whatsappToPhone)),
+    // Владелец, 2026-11-09: «если в карте оставили номера для связи — значит, нужно связаться».
+    // Поэтому мобильный из карточки по умолчанию годится для WhatsApp; флажок в админке это
+    // выключает. Каждое сообщение всё равно уходит только после «Отправить» владельца.
+    whatsappToPhone: flagOr(byKey.get(OFFICE_EXTRA_SETTINGS.whatsappToPhone), true),
     payDetails: (byKey.get(OFFICE_EXTRA_SETTINGS.payDetails) ?? '')
       .trim()
       .slice(0, PAY_DETAILS_MAX),

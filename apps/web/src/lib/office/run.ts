@@ -48,6 +48,8 @@ export interface RunStepInput {
   trigger: RunTrigger;
   source?: ProspectSource;
   now?: Date;
+  /** Сколько новых кандидатов создать за шаг (по умолчанию STEP_LIMIT). */
+  stepLimit?: number;
 }
 
 export interface RunStepResult {
@@ -416,7 +418,7 @@ export async function runStep(input: RunStepInput, deps: RunDeps = {}): Promise<
     // Сначала убираем уже известных, потом берём первые STEP_LIMIT новых.
     const unknown = await dropKnown(companies, db);
     const alreadyKnown = companies.length - unknown.length;
-    const candidates = unknown.slice(0, STEP_LIMIT);
+    const candidates = unknown.slice(0, Math.max(1, input.stepLimit ?? STEP_LIMIT));
     result.found = search.candidates.length;
     const counts = await createProspects(candidates, {
       agent: input.agent,
@@ -465,6 +467,37 @@ export type ScheduledStepResult =
   | { skipped: 'paused' | 'empty'; step: null; result: null }
   | { skipped: null; step: PlanStep; result: RunStepResult };
 
+/**
+ * Эпоха плана: при её смене обход начинается с первого шага. 2026-11-10: источник карт сутки не
+ * отвечал и «съел» первые шаги (Казань, Набережные Челны), порядок плана изменился (три шага
+ * «Сайтов» на один «Подрядчиков»), а поиск переехал на раннер GitHub с полным ответом Overpass.
+ */
+export const PLAN_EPOCH = '2026-11-10-relay';
+
+/** Через раннер приходит весь ответ Overpass (сотни фирм на город) — за шаг берём больше. */
+export const RELAY_STEP_LIMIT = 30;
+
+const PLAN_KEYS = [
+  OFFICE_SETTINGS.paused,
+  OFFICE_SETTINGS.plan,
+  OFFICE_SETTINGS.cursor,
+  OFFICE_SETTINGS.planEpoch,
+] as const;
+
+/** Курсор плана вместе с эпохой, в которой он записан. */
+async function writeCursor(db: OfficeDb, cursor: number): Promise<void> {
+  await db.appSetting.upsert({
+    where: { key: OFFICE_SETTINGS.cursor },
+    create: { key: OFFICE_SETTINGS.cursor, value: String(cursor) },
+    update: { value: String(cursor) },
+  });
+  await db.appSetting.upsert({
+    where: { key: OFFICE_SETTINGS.planEpoch },
+    create: { key: OFFICE_SETTINGS.planEpoch, value: PLAN_EPOCH },
+    update: { value: PLAN_EPOCH },
+  });
+}
+
 /** План и курсор из `AppSetting`; пустой или сломанный план → план по умолчанию. */
 export function resolvePlan(rows: readonly { key: string; value: string }[]): {
   paused: boolean;
@@ -476,7 +509,9 @@ export function resolvePlan(rows: readonly { key: string; value: string }[]): {
   const planText = byKey.get(OFFICE_SETTINGS.plan) ?? '';
   const parsed = planText.trim() ? parsePlan(planText).steps : [];
   const steps = parsed.length ? parsed : defaultPlan();
-  const cursorRaw = Number.parseInt(byKey.get(OFFICE_SETTINGS.cursor) ?? '0', 10);
+  // Курсор прежней эпохи плана не действует: обход начинается сначала (PLAN_EPOCH).
+  const sameEpoch = byKey.get(OFFICE_SETTINGS.planEpoch) === PLAN_EPOCH;
+  const cursorRaw = sameEpoch ? Number.parseInt(byKey.get(OFFICE_SETTINGS.cursor) ?? '0', 10) : 0;
   const cursor = Number.isFinite(cursorRaw) && cursorRaw >= 0 ? cursorRaw : 0;
   return { paused, steps, cursor };
 }
@@ -491,18 +526,14 @@ export async function runScheduledStep(
 ): Promise<ScheduledStepResult> {
   const db = deps.db ?? defaultDb();
   const rows = await db.appSetting.findMany({
-    where: { key: { in: [OFFICE_SETTINGS.paused, OFFICE_SETTINGS.plan, OFFICE_SETTINGS.cursor] } },
+    where: { key: { in: [...PLAN_KEYS] } },
     select: { key: true, value: true },
   });
   const { paused, steps, cursor } = resolvePlan(rows);
   if (paused) return { skipped: 'paused', step: null, result: null };
   const { step, nextCursor } = nextStep(steps, cursor);
   if (!step) return { skipped: 'empty', step: null, result: null };
-  await db.appSetting.upsert({
-    where: { key: OFFICE_SETTINGS.cursor },
-    create: { key: OFFICE_SETTINGS.cursor, value: String(nextCursor) },
-    update: { value: String(nextCursor) },
-  });
+  await writeCursor(db, nextCursor);
   const result = await runStep(
     { ...step, trigger: 'cron', now },
     { db, source: deps.source, budgetMs: deps.budgetMs },
@@ -523,7 +554,7 @@ export function stepKey(index: number, step: PlanStep): string {
 
 async function readPlan(db: OfficeDb) {
   const rows = await db.appSetting.findMany({
-    where: { key: { in: [OFFICE_SETTINGS.paused, OFFICE_SETTINGS.plan, OFFICE_SETTINGS.cursor] } },
+    where: { key: { in: [...PLAN_KEYS] } },
     select: { key: true, value: true },
   });
   return resolvePlan(rows);
@@ -612,7 +643,15 @@ export type IngestResult = { status: 'stale' } | { status: 'done'; result: RunSt
  * `error` — в журнал как отказ источника, `overpass` — разбор и создание кандидатов.
  */
 export async function ingestScheduledStep(
-  input: { index: number; key: string; overpass?: unknown; error?: string; now?: Date },
+  input: {
+    index: number;
+    key: string;
+    overpass?: unknown;
+    error?: string;
+    /** С `error`: не двигать курсор — источник был недоступен, шаг повторить. */
+    retry?: boolean;
+    now?: Date;
+  },
   deps: RunDeps = {},
 ): Promise<IngestResult> {
   const db = deps.db ?? defaultDb();
@@ -620,13 +659,18 @@ export async function ingestScheduledStep(
   if ('skipped' in peeked || peeked.index !== input.index || peeked.key !== input.key) {
     return { status: 'stale' };
   }
-  await db.appSetting.upsert({
-    where: { key: OFFICE_SETTINGS.cursor },
-    create: { key: OFFICE_SETTINGS.cursor, value: String(peeked.nextCursor) },
-    update: { value: String(peeked.nextCursor) },
-  });
+  // Сеть раннера не достучалась ни до одного зеркала (`retry`): шаг записывается ошибкой, но
+  // курсор стоит — тот же шаг повторится в следующий запуск. Иначе сбой сети съел бы города и
+  // ниши до следующего круга плана (так 9–10.11.2026 пропали первые шаги по Казани).
+  if (!(input.error !== undefined && input.retry)) await writeCursor(db, peeked.nextCursor);
   const result = await runStep(
-    { ...peeked.step, trigger: 'cron', source: relayedSource(input), now: input.now },
+    {
+      ...peeked.step,
+      trigger: 'cron',
+      source: relayedSource(input),
+      now: input.now,
+      stepLimit: RELAY_STEP_LIMIT,
+    },
     { db },
   );
   return { status: 'done', result };

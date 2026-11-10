@@ -14,10 +14,15 @@ name: Office tick
 # second call within ten minutes; everything needs CRON_SECRET (repository
 # secret, equal to the one in Vercel). The log holds counts only.
 # Scheduled at :37 so that it never coincides with bot-reminders.yml (:17).
+# On demand: the office session cannot press «Run workflow» (its token gets 403), so a commit
+# that changes .github/office-relay-run.txt on its branch starts one run from that branch.
 on:
   schedule:
     - cron: '37 * * * *'
   workflow_dispatch:
+  push:
+    branches: ['claude/pensive-feynman-bila02']
+    paths: ['.github/office-relay-run.txt']
 
 jobs:
   tick:

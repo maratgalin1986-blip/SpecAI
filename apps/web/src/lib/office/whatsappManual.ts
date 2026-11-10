@@ -7,7 +7,7 @@
 import { prisma } from '@specai/database';
 import { mskDayBounds } from '@/lib/adminCrm';
 import { siteUrl } from '@/lib/siteUrl';
-import { parseSentOffer, type SentOffer } from './aiOffer';
+import { storedOfferOf, type SentOffer } from './aiOffer';
 import { parseDossier } from './dossier';
 import { kpUrl } from './kp';
 import { collectAngleStats, chooseAngle, type AngleStat } from './learning';
@@ -106,6 +106,7 @@ const ROW_SELECT = {
   hours: true,
   dossierJson: true,
   offerJson: true,
+  source: true,
 } as const;
 
 /** Строка Prospect в том объёме, который нужен очереди. */
@@ -128,6 +129,7 @@ export interface ManualRow {
   hours: string | null;
   dossierJson: string | null;
   offerJson: string | null;
+  source?: string | null;
 }
 
 type MobileMatch = { whatsapp: { startsWith: string } } | { phone: { startsWith: string } };
@@ -250,8 +252,8 @@ export async function manualWhatsAppQueue(
     let offer: SentOffer | undefined;
     let link = `${baseUrl.replace(/\/+$/, '')}/preview/${row.token}`;
     if (kind === 'site') {
-      const dossier = parseDossier(row.dossierJson);
-      offer = parseSentOffer(row.offerJson) ?? {
+      const dossier = parseDossier(row.dossierJson, row.source);
+      offer = storedOfferOf(row) ?? {
         ...buildOffer({
           dossier,
           angle: chooseAngle(applicableAngles(dossier), stats),
@@ -261,7 +263,7 @@ export async function manualWhatsAppQueue(
         ai: false,
       };
       // Что владелец видит в очереди, то и уйдёт: предложение записывается сразу.
-      if (!parseSentOffer(row.offerJson)) {
+      if (!storedOfferOf(row)) {
         await db.prospect.updateMany({
           where: { id: row.id, status: { in: [...OUTREACH_STATUSES] } },
           data: { offerAngle: offer.angle, offerJson: JSON.stringify(offer) },

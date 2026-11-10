@@ -232,6 +232,9 @@ export function createDgisSource(
         status: 'ok',
         // Все с сайтом (соседи для досье) и не больше `limit` без сайта — кандидатов отбирает прогон.
         candidates: capWithoutSite(found, limit),
+        // Список неполный (только карточки с телефоном, не больше DGIS_MAX_PAGES страниц):
+        // числа «сколько конкурентов рядом» по нему не считаются.
+        sample: true,
       };
     },
   };

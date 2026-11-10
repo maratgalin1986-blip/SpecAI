@@ -191,9 +191,10 @@ export function buildDigest(input: DigestInput): string {
   const searchDown =
     input.runs.length >= FAILING_RUNS && failedRuns === input.runs.length
       ? `Поиск фирм не работает: все шаги за сутки (${failedRuns}) закончились ошибкой источника карт. Новых кандидатов не будет, пока его не починить.`
-      : // Ошибок нет, но и ни одной новой фирмы за все шаги суток — поиск крутится вхолостую.
-        input.runs.length >= EMPTY_RUNS && failedRuns === 0 && created === 0
-        ? `Поиск за сутки не дал новых фирм (шагов: ${input.runs.length}).`
+      : // Ни одной новой фирмы за сутки при достаточном числе шагов без ошибки — поиск идёт
+        // вхолостую; часть шагов могла и упасть (как 10.11.2026: 8 ошибок, потом пустые шаги).
+        created === 0 && input.runs.length - failedRuns >= EMPTY_RUNS
+        ? `Поиск за сутки не дал новых фирм (шагов: ${input.runs.length}${failedRuns ? `, из них с ошибкой: ${failedRuns}` : ''}).`
         : null;
 
   if (quiet && searchDown) {

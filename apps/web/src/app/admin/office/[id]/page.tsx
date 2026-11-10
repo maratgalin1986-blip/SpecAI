@@ -91,6 +91,8 @@ export default async function AdminOfficeProspectPage(props: { params: Promise<{
       publishedAt: true,
       dossierJson: true,
       offerJson: true,
+      emailSentAt: true,
+      whatsappSentAt: true,
       previewViews: true,
       previewViewedAt: true,
     },

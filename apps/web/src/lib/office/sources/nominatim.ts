@@ -24,6 +24,7 @@ export const OFFICE_USER_AGENT =
 export const NOMINATIM_TIMEOUT_MS = 8_000;
 /** Пауза между запросами: правило сервиса — не чаще раза в секунду. */
 export const NOMINATIM_PAUSE_MS = 1_100;
+export const NOMINATIM_UNSUPPORTED = 'Эта ниша ищется только по расписанию, через Overpass';
 export const NOMINATIM_UNAVAILABLE = 'Источник карт не ответил';
 
 /** Рамка поиска вокруг центра города: «запад,север,восток,юг», как ждёт Nominatim. */
@@ -94,7 +95,9 @@ export function createNominatimSource(
     id: 'nominatim',
     async search({ niche, city, radiusKm, limit, budgetMs }) {
       const queries = nominatimQueries(niche);
-      if (queries.length === 0) return { status: 'ok', candidates: [], sample: true };
+      // Нишу с фильтром по названию (техника) Nominatim искать не умеет: честный отказ, а не
+      // «найдено 0» — иначе шаг, в котором ничего не искали, записался бы успешным.
+      if (queries.length === 0) return { status: 'unavailable', error: NOMINATIM_UNSUPPORTED };
       const doFetch: FetchLike = fetchImpl ?? ((input, init) => fetch(input, init));
       const startedAt = clock();
       const left = () => (budgetMs === undefined ? Infinity : budgetMs - (clock() - startedAt));

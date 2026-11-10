@@ -45,6 +45,9 @@ export default async function KpPage(props: { params: Promise<{ token: string }>
       city: true,
       dossierJson: true,
       offerJson: true,
+      source: true,
+      emailSentAt: true,
+      whatsappSentAt: true,
     },
   });
   if (!row || row.kind !== 'site' || !visibleFor(row, 'preview')) notFound();

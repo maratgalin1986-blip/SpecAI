@@ -58,7 +58,10 @@ describe('источник Nominatim', () => {
         radiusKm: 15,
         limit: 10,
       }),
-    ).toEqual({ status: 'ok', candidates: [], sample: true });
+    ).toEqual({
+      status: 'unavailable',
+      error: 'Эта ниша ищется только по расписанию, через Overpass',
+    });
     expect(fetchImpl).not.toHaveBeenCalled();
     expect(nominatimQueries({ key: 'x', osm: [['craft', '*']] })).toEqual([]);
   });

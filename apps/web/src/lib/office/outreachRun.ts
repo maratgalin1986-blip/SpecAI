@@ -40,7 +40,7 @@ import {
   OUTREACH_STATUSES,
 } from './outreach';
 import { officePrices } from './prices';
-import { AI_OFFER_TIMEOUT_MS, improveOffer, parseSentOffer, type SentOffer } from './aiOffer';
+import { AI_OFFER_TIMEOUT_MS, improveOffer, storedOfferOf, type SentOffer } from './aiOffer';
 import { parseDossier } from './dossier';
 import { collectAngleStats, chooseAngle, type AngleStat, type LearningDb } from './learning';
 import { applicableAngles, buildOffer, type OfferAngle } from './offer';
@@ -107,6 +107,8 @@ export interface OutreachRow {
   dossierJson: string | null;
   /** Предложение, с которым уже писали (второй канал берёт его же). */
   offerJson: string | null;
+  /** Источник карточки («osm», «nominatim+osm», «manual»): по неполным спискам числа соседей не считаются. */
+  source?: string | null;
 }
 
 type DateRange = { gte: Date; lt: Date };
@@ -486,9 +488,9 @@ async function runOutreach(
   const aiCap = Math.max(0, Math.floor(settings.aiDailyCap ?? DEFAULT_AI_DAILY_CAP));
   const improve = deps.improve ?? ((offer, dossier) => improveOffer(offer, dossier));
   const offerFor = async (row: OutreachRow): Promise<SentOffer> => {
-    const stored = parseSentOffer(row.offerJson);
+    const stored = storedOfferOf(row);
     if (stored) return stored;
-    const dossier = parseDossier(row.dossierJson);
+    const dossier = parseDossier(row.dossierJson, row.source);
     const angleStats = await (stats ??= collectAngleStats(db, 'site').catch(
       () => new Map<OfferAngle, AngleStat>(),
     ));
@@ -587,7 +589,7 @@ async function runOutreach(
     if (wanted.length === 0) continue;
     const prospect = toProspect(row);
     // Утверждённое письмо о сайте уходит только с тем предложением, что видел владелец.
-    if (only && prospect.kind === 'site' && !parseSentOffer(row.offerJson)) continue;
+    if (only && prospect.kind === 'site' && !storedOfferOf(row)) continue;
     // Подрядчикам (provider) — прежнее письмо, без персонального предложения.
     const offer = prospect.kind === 'site' ? await offerFor(row) : undefined;
     const offerData = offer ? { offerAngle: offer.angle, offerJson: JSON.stringify(offer) } : {};
@@ -618,7 +620,7 @@ async function runOutreach(
       if (mailTo) emailLeft -= 1;
       if (toWhatsApp) whatsappLeft -= 1;
       // Что владелец утвердит, то и уйдёт: предложение записывается сразу, статус не меняется.
-      if (offer && !parseSentOffer(row.offerJson)) {
+      if (offer && !storedOfferOf(row)) {
         await db.prospect.updateMany({
           where: { id: row.id, status: { in: [...OUTREACH_STATUSES] } },
           data: offerData,

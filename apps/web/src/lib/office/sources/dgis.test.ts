@@ -104,7 +104,8 @@ describe('createDgisSource', () => {
     const input = { niche: dentist, city: kazan, radiusKm: 15, limit: 10 };
     expect(await denied.search(input)).toEqual({ status: 'unavailable', error: '2ГИС: код 403' });
     const nothing = createDgisSource(ON, async () => json({ meta: { code: 404 } }))!;
-    expect(await nothing.search(input)).toEqual({ status: 'ok', candidates: [] });
+    // Список 2ГИС неполный — числа соседей по нему не считаются (sample).
+    expect(await nothing.search(input)).toEqual({ status: 'ok', candidates: [], sample: true });
   });
 
   it('карточки без contact_groups — у ключа нет доступа к контактам', async () => {

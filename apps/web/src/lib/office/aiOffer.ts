@@ -4,6 +4,7 @@
 // «гарантируем» — ФЗ «О рекламе», ст. 5) отбрасывается. Любой сбой (нет ключа, таймаут,
 // не JSON, проверка не прошла) — письмо уходит с исходным предложением, без ИИ.
 
+import { isSampleSource } from './dossier';
 import { DEFAULT_MODEL, getAnthropicClient } from '@specai/ai-service';
 import type { Dossier } from './dossier';
 import { OFFER_ANGLES, type Offer } from './offer';
@@ -202,4 +203,26 @@ export function parseSentOffer(raw: string | null | undefined): SentOffer | null
   } catch {
     return null;
   }
+}
+
+/** Заходы, в тексте которых стоят числа соседей («у 1 из 3 уже есть сайт», «ни у одной нет»). */
+const NEIGHBOUR_ANGLES: readonly string[] = ['competitors_have_sites', 'first_in_area'];
+
+/**
+ * Записанное предложение, которое можно показать и отправить. Если фирме ещё не писали, её
+ * досье собрано по неполному списку (isSampleSource), а заход — про соседей, записанный текст
+ * не годится: его числа могут быть неверны. Тогда null — предложение строится заново, уже без
+ * чисел соседей. Отправленное предложение остаётся как было: это история.
+ */
+export function storedOfferOf(row: {
+  offerJson: string | null;
+  source?: string | null;
+  emailSentAt?: Date | null;
+  whatsappSentAt?: Date | null;
+}): SentOffer | null {
+  const offer = parseSentOffer(row.offerJson);
+  if (!offer) return null;
+  const unsent = !row.emailSentAt && !row.whatsappSentAt;
+  if (unsent && isSampleSource(row.source) && NEIGHBOUR_ANGLES.includes(offer.angle)) return null;
+  return offer;
 }

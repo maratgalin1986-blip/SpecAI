@@ -142,8 +142,26 @@ export function buildDossier(input: {
   };
 }
 
+/**
+ * Источник, который отдаёт только часть фирм города (Nominatim — не больше сотни объектов на
+ * тег, 2ГИС — только карточки с телефоном): числа «сколько конкурентов рядом» по такому списку
+ * неверны. Кандидаты, созданные до 2026-11-10, записаны с источником «nominatim+osm».
+ */
+export function isSampleSource(source: string | null | undefined): boolean {
+  return /nominatim|2gis|dgis/i.test(source ?? '');
+}
+
 /** Досье из базы; битое или старой версии — null (письмо уйдёт с общим заходом). */
-export function parseDossier(raw: string | null | undefined): Dossier | null {
+export function parseDossier(
+  raw: string | null | undefined,
+  source?: string | null,
+): Dossier | null {
+  const dossier = parseDossierJson(raw);
+  // Числа соседей из неполного списка не показываем и в заходах не используем.
+  return dossier && isSampleSource(source) ? { ...dossier, competitors: null } : dossier;
+}
+
+function parseDossierJson(raw: string | null | undefined): Dossier | null {
   if (!raw) return null;
   try {
     const d = JSON.parse(raw) as Partial<Dossier>;

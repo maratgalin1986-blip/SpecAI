@@ -40,3 +40,16 @@ describe('parseOfficeSettings — режим рассылки (К2)', () => {
     expect(read('1')).toBe('approve');
   });
 });
+
+describe('parseOfficeSettings — WhatsApp на мобильный из карточки', () => {
+  it('по умолчанию включено (владелец, 2026-11-09: «оставили номера для связи — нужно связаться»)', () => {
+    expect(parseOfficeSettings([]).whatsappToPhone).toBe(true);
+  });
+
+  it('владелец выключил флажок — выключено; включил — включено', () => {
+    const at = (value: string) =>
+      parseOfficeSettings([{ key: OFFICE_EXTRA_SETTINGS.whatsappToPhone, value }]).whatsappToPhone;
+    expect(at('0')).toBe(false);
+    expect(at('1')).toBe(true);
+  });
+});

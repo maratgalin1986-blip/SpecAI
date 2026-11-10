@@ -18,6 +18,9 @@ import {
   runStep,
   type OfficeDb,
   type ProspectCreateData,
+  PLAN_EPOCH,
+  RELAY_STEP_LIMIT,
+  STEP_LIMIT,
 } from './run';
 import type { Candidate, ProspectSource, SearchResult } from './sources/types';
 
@@ -700,6 +703,57 @@ describe('поиск через раннер: peekScheduledStep / ingestSchedule
     );
     expect(bad.status === 'done' && bad.result.error).toBeTruthy();
     expect(prospects).toHaveLength(0);
+  });
+
+  it('retry: сеть раннера не достучалась до зеркал — отказ в журнале, курсор стоит, шаг повторится', async () => {
+    const { db, settings, runs } = fakeDb();
+    settings.set(OFFICE_SETTINGS.plan, PLAN);
+    const first = await peekScheduledStep(db);
+    if ('skipped' in first) throw new Error('шаг ожидался');
+    await ingestScheduledStep(
+      {
+        index: first.index,
+        key: first.key,
+        error: 'Overpass не ответил с раннера GitHub',
+        retry: true,
+      },
+      { db },
+    );
+    expect(runs[0]!.error).toBe('Overpass не ответил с раннера GitHub');
+    expect(settings.has(OFFICE_SETTINGS.cursor)).toBe(false);
+    // Тот же шаг с тем же ключом — следующий запуск раннера попробует его снова.
+    expect(await peekScheduledStep(db)).toEqual(first);
+  });
+
+  it('эпоха плана: курсор прежней эпохи не действует, обход с первого шага; запись ставит эпоху', async () => {
+    const { db, settings } = fakeDb();
+    settings.set(OFFICE_SETTINGS.plan, PLAN);
+    settings.set(OFFICE_SETTINGS.cursor, '1');
+    // Курсор «1» записан до смены эпохи (без office.planEpoch) — начинаем с шага 0.
+    const first = await peekScheduledStep(db);
+    expect(first).toMatchObject({ index: 0, step: { city: 'Казань' } });
+    if ('skipped' in first) throw new Error('шаг ожидался');
+    await ingestScheduledStep({ index: 0, key: first.key, overpass }, { db });
+    expect(settings.get(OFFICE_SETTINGS.planEpoch)).toBe(PLAN_EPOCH);
+    expect(settings.get(OFFICE_SETTINGS.cursor)).toBe('1');
+    // В той же эпохе курсор действует как записан.
+    expect(await peekScheduledStep(db)).toMatchObject({ index: 1, step: { city: 'Уфа' } });
+  });
+
+  it('через раннер за шаг создаётся до RELAY_STEP_LIMIT кандидатов, а не десять', async () => {
+    const { db, settings, prospects } = fakeDb();
+    settings.set(OFFICE_SETTINGS.plan, PLAN);
+    const many = {
+      elements: Array.from({ length: 45 }, (_, i) =>
+        el(100 + i, { name: `Клиника ${i}`, phone: `+7 843 300-${String(i).padStart(2, '0')}-00` }),
+      ),
+    };
+    const first = await peekScheduledStep(db);
+    if ('skipped' in first) throw new Error('шаг ожидался');
+    const done = await ingestScheduledStep({ index: 0, key: first.key, overpass: many }, { db });
+    expect(done.status === 'done' && done.result.created).toBe(RELAY_STEP_LIMIT);
+    expect(prospects).toHaveLength(RELAY_STEP_LIMIT);
+    expect(RELAY_STEP_LIMIT).toBeGreaterThan(STEP_LIMIT);
   });
 
   it('запрос для раннера: Overpass по нише и городу шага; неизвестный город — без запроса', () => {

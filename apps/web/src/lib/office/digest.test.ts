@@ -97,8 +97,19 @@ describe('buildDigest', () => {
     expect(buildDigest(input({ runs: runs.slice(0, 5) }))).not.toContain('не дал новых фирм');
     const one = [{ ...empty, created: 1, error: null }, ...runs];
     expect(buildDigest(input({ runs: one }))).not.toContain('не дал новых фирм');
-    const withError = [{ ...empty, error: 'нет' }, ...runs];
-    expect(buildDigest(input({ runs: withError }))).not.toContain('не дал новых фирм');
+    // Как 10.11.2026: восемь шагов упали, потом шесть прошли впустую — об этом первая строка.
+    const failed = Array.from({ length: 8 }, () => ({
+      ...empty,
+      error: 'Источник карт не ответил',
+    }));
+    const mixed = buildDigest(input({ runs: [...runs.slice(0, 6), ...failed] }));
+    expect(mixed.split('\n')[0]).toContain(
+      'Поиск за сутки не дал новых фирм (шагов: 14, из них с ошибкой: 8).',
+    );
+    // Пять пустых шагов и ошибки — ещё не «вхолостую».
+    expect(
+      buildDigest(input({ runs: [...runs.slice(0, 5), ...failed.slice(0, 2)] })),
+    ).not.toContain('не дал новых фирм');
   });
 
   it('полная сводка: итоги агентов, списки со ссылками превью, дата по Москве', () => {

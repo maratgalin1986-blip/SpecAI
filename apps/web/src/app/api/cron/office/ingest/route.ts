@@ -40,7 +40,10 @@ export async function POST(request: NextRequest) {
   const outcome = await ingestScheduledStep({
     index: Number(indexRaw),
     key,
-    ...(isFailure ? { error: failure } : { overpass: body }),
+    // `retry: true` — раннер не достучался ни до одного зеркала: курсор плана не двигается.
+    ...(isFailure
+      ? { error: failure, retry: (body as { retry?: unknown }).retry === true }
+      : { overpass: body }),
   });
   if (outcome.status === 'stale') return NextResponse.json({ error: 'stale' }, { status: 409 });
   const { found, created, skipped, error } = outcome.result;

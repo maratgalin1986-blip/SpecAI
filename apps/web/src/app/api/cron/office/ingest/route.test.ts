@@ -64,6 +64,17 @@ describe('POST /api/cron/office/ingest', () => {
       index: 3,
       key: KEY,
       error: 'Overpass не ответил с раннера GitHub',
+      retry: false,
+    });
+  });
+
+  it('retry: true — сеть раннера не достучалась до зеркал, курсор двигать нельзя', async () => {
+    await call('{"error":"Overpass не ответил с раннера GitHub","retry":true}');
+    expect(ingestScheduledStep).toHaveBeenCalledWith({
+      index: 3,
+      key: KEY,
+      error: 'Overpass не ответил с раннера GitHub',
+      retry: true,
     });
   });
 
