@@ -11,5 +11,10 @@ export function integrationFlags(env: NodeJS.ProcessEnv = process.env) {
     cronSecret: set('CRON_SECRET'),
     // Without Vercel Blob uploads are kept in the database (lib/fileStore.ts).
     blob: set('BLOB_READ_WRITE_TOKEN'),
+    // The office of agents: its own SMTP mailbox for letters to companies (never Resend),
+    // the 2GIS key for the search, the WhatsApp gateway.
+    officeMail: set('OUTREACH_SMTP_USER') && set('OUTREACH_SMTP_PASS'),
+    dgis: set('DGIS_API_KEY'),
+    whatsappApi: set('GREEN_API_INSTANCE_ID') && set('GREEN_API_TOKEN'),
   };
 }

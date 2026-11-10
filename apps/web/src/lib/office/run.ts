@@ -14,7 +14,7 @@ import { machineryTags, nicheByKey, type Niche } from './niches';
 import { OFFICE_SETTINGS, defaultPlan, nextStep, parsePlan } from './plan';
 import { prospectSlug, newToken } from './slug';
 import { createDgisSource } from './sources/dgis';
-import { withFallback } from './sources/fallback';
+import { firstAvailable, withFallback } from './sources/fallback';
 import { nominatimSource } from './sources/nominatim';
 import { osmSource } from './sources/osm';
 import type { Candidate, ProspectSource, SourceNiche } from './sources/types';
@@ -154,7 +154,8 @@ function sourceNiche(niche: Niche): SourceNiche {
  */
 export function defaultSource(): ProspectSource {
   const dgis = createDgisSource();
-  return withFallback([...(dgis ? [dgis] : []), nominatimSource, osmSource]);
+  // OpenStreetMap — один набор данных: Overpass спрашивается, только если Nominatim не ответил.
+  return withFallback([...(dgis ? [dgis] : []), firstAvailable([nominatimSource, osmSource])]);
 }
 
 /** Последние 10 цифр телефона — так сравниваются `+7…`, `8…` и городские номера. */

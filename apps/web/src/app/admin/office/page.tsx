@@ -17,6 +17,7 @@ import { PhoneLink } from '@/components/admin/PhoneLink';
 import { mskDayBounds } from '@/lib/adminCrm';
 import { integrationFlags } from '@/lib/integrationFlags';
 import { serverChannels } from '@/lib/notifications/adapters';
+import { searchAlertText, searchHealth } from '@/lib/office/searchHealth';
 import { officeMailConfigured } from '@/lib/office/smtp';
 import { unsubscribeConfigured } from '@/lib/office/unsubscribe';
 import { AGENTS, AGENT_IDS } from '@/lib/office/agents';
@@ -200,6 +201,10 @@ export default async function AdminOfficePage() {
     AGENT_IDS.map((id) => [id, runs.find((run) => run.agent === id) ?? null]),
   );
 
+  // Поиск упал несколько шагов подряд — владелец видит это сразу, а не в журнале внизу.
+  const failedRun = runs.find((r) => r.finishedAt !== null && r.error);
+  const searchAlert = searchAlertText(searchHealth(runs), failedRun?.error ?? null);
+
   return (
     <div className="flex flex-col gap-5">
       <AdminPageHeader
@@ -234,6 +239,12 @@ export default async function AdminOfficePage() {
           Страница услуги
         </Link>
       </AdminPageHeader>
+
+      {searchAlert && (
+        <Card className="border-red-300 text-sm text-red-800" role="alert">
+          {searchAlert} Подробности — в «Журнале прогонов» внизу страницы.
+        </Card>
+      )}
 
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
         <StatTile label="Готово к отправке" value={readyCount} />

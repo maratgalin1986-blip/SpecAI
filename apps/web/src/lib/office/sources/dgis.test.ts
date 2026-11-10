@@ -7,7 +7,7 @@ import {
   dgisUrl,
   parseDgis,
 } from './dgis';
-import { withFallback } from './fallback';
+import { firstAvailable, withFallback } from './fallback';
 import type { ProspectSource, SourceCity, SourceNiche } from './types';
 
 const kazan: SourceCity = { name: 'Казань', lat: 55.7963, lon: 49.1088 };
@@ -252,5 +252,44 @@ describe('withFallback', () => {
     expect(r).toEqual({ status: 'unavailable', error: 'b молчит' });
     const only = ok('osm', 1);
     expect(withFallback([only])).toBe(only);
+  });
+
+  it('живой источник без новых фирм не превращается в ошибку из-за молчащего следующего', async () => {
+    const empty = ok('2gis', 0);
+    const r = await withFallback([empty, down('osm')]).search({
+      niche: dentist,
+      city: kazan,
+      radiusKm: 15,
+      limit: 10,
+    });
+    expect(r).toEqual({ status: 'ok', candidates: [] });
+  });
+});
+
+describe('firstAvailable: один набор данных через разные сервисы', () => {
+  const ok = (id: string): ProspectSource => ({
+    id,
+    search: vi.fn(async () => ({ status: 'ok' as const, candidates: [] })),
+  });
+  const down = (id: string): ProspectSource => ({
+    id,
+    search: vi.fn(async () => ({ status: 'unavailable' as const, error: `${id} молчит` })),
+  });
+  const input = { niche: dentist, city: kazan, radiusKm: 15, limit: 10 };
+
+  it('первый ответил (даже пусто) — второй не спрашивается', async () => {
+    const overpass = down('osm');
+    const source = firstAvailable([ok('nominatim'), overpass]);
+    expect(source.id).toBe('nominatim+osm');
+    expect(await source.search(input)).toEqual({ status: 'ok', candidates: [] });
+    expect(overpass.search).not.toHaveBeenCalled();
+  });
+
+  it('первый молчит — отвечает второй; молчат оба — последняя ошибка', async () => {
+    expect((await firstAvailable([down('nominatim'), ok('osm')]).search(input)).status).toBe('ok');
+    expect(await firstAvailable([down('a'), down('b')]).search(input)).toEqual({
+      status: 'unavailable',
+      error: 'b молчит',
+    });
   });
 });
