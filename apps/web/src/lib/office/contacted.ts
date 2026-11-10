@@ -11,6 +11,17 @@ export function phoneKey(phone: string | null | undefined): string {
   return phone ? phoneDigits(phone) : '';
 }
 
+/**
+ * Отметка «канал закрыт без отправки: этому адресу или номеру уже писали в другой строке».
+ * Дата заведомо вне любых окон («сегодня», «вчера», «4–14 дней назад»): такая строка не
+ * считается в дневном лимите и в сводке «отправлено» и не получает напоминания.
+ */
+export const DUPLICATE_CLOSED_AT = new Date('2000-01-01T00:00:00.000Z');
+
+export function isDuplicateMark(at: Date | null | undefined): boolean {
+  return !!at && at.getTime() === DUPLICATE_CLOSED_AT.getTime();
+}
+
 /** Адреса (emailKey) и номера (phoneKey), которым первое сообщение уже ушло, и когда. */
 export interface ContactedContacts {
   emails: Map<string, Date>;

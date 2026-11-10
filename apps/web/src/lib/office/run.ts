@@ -518,19 +518,23 @@ async function justSucceeded(db: OfficeDb, now: Date): Promise<boolean> {
 }
 
 /**
- * Отложенный шаг: «<номер шага>:<сколько раз уже повторяли>»; пусто — отложенного нет. Место
- * одно: пока оно занято, следующий несработавший шаг просто уходит в журнал ошибкой.
+ * Отложенный шаг: «<номер шага>:<сколько раз уже повторяли>:<ключ шага>»; пусто — отложенного
+ * нет. Место одно: пока оно занято, следующий несработавший шаг просто уходит в журнал ошибкой.
+ * Ключ (stepKey) привязывает запись к содержимому шага: после правки плана или смены эпохи тот
+ * же номер — уже другой шаг, и запись считается устаревшей.
  */
-async function readStepRetry(db: OfficeDb): Promise<{ raw: string; index: number; count: number }> {
+async function readStepRetry(
+  db: OfficeDb,
+): Promise<{ raw: string; index: number; count: number; key: string | null }> {
   const rows = await db.appSetting.findMany({
     where: { key: { in: [OFFICE_SETTINGS.stepRetry] } },
     select: { key: true, value: true },
   });
   const raw = rows[0]?.value?.trim() ?? '';
-  const match = /^(\d+):(\d+)$/.exec(raw);
+  const match = /^(\d+):(\d+)(?::([0-9a-f]{16}))?$/.exec(raw);
   return match
-    ? { raw, index: Number(match[1]), count: Number(match[2]) }
-    : { raw, index: -1, count: 0 };
+    ? { raw, index: Number(match[1]), count: Number(match[2]), key: match[3] ?? null }
+    : { raw, index: -1, count: 0, key: null };
 }
 
 async function writeStepRetry(db: OfficeDb, value: string): Promise<void> {
@@ -609,6 +613,18 @@ export function stepKey(index: number, step: PlanStep): string {
     .slice(0, 16);
 }
 
+/**
+ * Ключ повторной выдачи отложенного шага — другой, чем у того же шага под курсором: запоздавший
+ * второй ответ по первой выдаче (раннер повторил POST, второй раннер получил тот же шаг) не
+ * примется за повтор и не сожжёт его.
+ */
+export function retryKey(index: number, step: PlanStep, count: number): string {
+  return createHash('sha256')
+    .update(`${stepKey(index, step)}|retry:${count}`)
+    .digest('hex')
+    .slice(0, 16);
+}
+
 async function readPlan(db: OfficeDb) {
   const rows = await db.appSetting.findMany({
     where: { key: { in: [...PLAN_KEYS] } },
@@ -637,7 +653,8 @@ type DeferredStep = { index: number; key: string; step: PlanStep; count: number 
 /**
  * Отложенный шаг, если он ещё есть в плане и это не тот же шаг, что под курсором. `raw` —
  * что записано в настройке: непустое при `deferred: null` значит запись устарела (план
- * сократили, курсор сам дошёл до этого шага) и место можно занять.
+ * изменили, курсор сам дошёл до этого шага) и место можно занять. `key` отложенного шага —
+ * ключ его повторной выдачи (retryKey).
  */
 async function deferredStep(
   db: OfficeDb,
@@ -647,10 +664,16 @@ async function deferredStep(
   if (retry.index < 0 || retry.index === cursorIndex) return { raw: retry.raw, deferred: null };
   const { steps } = await readPlan(db);
   const step = steps[retry.index];
-  if (!step) return { raw: retry.raw, deferred: null };
+  // Записи без ключа — от версии до 10.11.2026 вечера: к содержимому шага не привязаны.
+  if (!step || retry.key !== stepKey(retry.index, step)) return { raw: retry.raw, deferred: null };
   return {
     raw: retry.raw,
-    deferred: { index: retry.index, key: stepKey(retry.index, step), step, count: retry.count },
+    deferred: {
+      index: retry.index,
+      key: retryKey(retry.index, step, retry.count),
+      step,
+      count: retry.count,
+    },
   };
 }
 
@@ -682,12 +705,26 @@ export function relayRequest(step: PlanStep): { query: string | null; mirrors: r
   const query =
     niche && city
       ? buildOverpassQuery(
-          sourceNiche(niche),
+          relayNiche(sourceNiche(niche), city.name),
           { name: city.name, lat: city.lat, lon: city.lon },
           STEP_RADIUS_KM,
         )
       : null;
   return { query, mirrors: OVERPASS_RELAY_MIRRORS };
+}
+
+/**
+ * В двух крупнейших городах широкие теги ниши с отбором по названию (office=company, craft=*)
+ * не укладываются в ответ Overpass: проба с раннера 10.11.2026 — Казань 912 объектов за 12–15 с,
+ * Москва — отказ через 47 с. Там запрос идёт только по узким тегам (прокат, грузовая техника).
+ */
+const BROAD_TAG_CITIES: ReadonlySet<string> = new Set(['Москва', 'Санкт-Петербург']);
+const BROAD_TAGS: ReadonlySet<string> = new Set(['office=company', 'craft=*']);
+
+export function relayNiche(niche: SourceNiche, cityName: string): SourceNiche {
+  if (!niche.nameRegex || !BROAD_TAG_CITIES.has(cityName)) return niche;
+  const narrow = niche.osm.filter(([key, value]) => !BROAD_TAGS.has(`${key}=${value}`));
+  return narrow.length > 0 ? { ...niche, osm: narrow } : niche;
 }
 
 export const RELAY_BAD_ANSWER = 'Overpass прислал не тот ответ';
@@ -760,14 +797,19 @@ export async function ingestScheduledStep(
   if (deferred && matches(deferred)) {
     // Повтор отложенного шага: удался или исчерпал повторы — место освобождается.
     const count = deferred.count + 1;
-    await writeStepRetry(db, failed && count < RELAY_RETRIES ? `${deferred.index}:${count}` : '');
+    await writeStepRetry(
+      db,
+      failed && count < RELAY_RETRIES
+        ? `${deferred.index}:${count}:${stepKey(deferred.index, deferred.step)}`
+        : '',
+    );
     peeked = deferred;
   } else if (matches(cursor)) {
     await writeCursor(db, cursor.nextCursor);
     // Место для отложенного шага одно: занято другим шагом — этот отказ остаётся только в
     // журнале. Устаревшая запись (шага больше нет в плане, или это он же) места не занимает.
     if (failed && !deferred && RELAY_RETRIES > 0) {
-      await writeStepRetry(db, `${cursor.index}:0`);
+      await writeStepRetry(db, `${cursor.index}:0:${cursor.key}`);
     } else if (!deferred && slot) {
       await writeStepRetry(db, '');
     }

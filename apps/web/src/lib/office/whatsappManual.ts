@@ -8,7 +8,7 @@ import { prisma } from '@specai/database';
 import { mskDayBounds } from '@/lib/adminCrm';
 import { siteUrl } from '@/lib/siteUrl';
 import { storedOfferOf, type SentOffer } from './aiOffer';
-import { contactedContacts, type ContactedContacts } from './contacted';
+import { DUPLICATE_CLOSED_AT, contactedContacts, type ContactedContacts } from './contacted';
 import { parseDossier } from './dossier';
 import { kpUrl } from './kp';
 import { collectAngleStats, chooseAngle, type AngleStat } from './learning';
@@ -258,13 +258,12 @@ export async function manualWhatsAppQueue(
     }
     const digits = whatsappTarget(row, pick);
     if (!digits) continue;
-    const writtenAt = contacted.phones.get(digits);
-    if (writtenAt) {
-      // На номер уже писали: канал этой строки закрывается той же датой, иначе дубли копились
-      // бы в начале очереди.
+    if (contacted.phones.has(digits)) {
+      // На номер уже писали: канал этой строки закрывается отметкой дубля (вне дневного лимита
+      // и счётчиков «отправлено»), иначе дубли копились бы в начале очереди.
       await db.prospect.updateMany({
         where: { id: row.id, status: { in: [...OUTREACH_STATUSES] }, whatsappSentAt: null },
-        data: { whatsappSentAt: writtenAt },
+        data: { whatsappSentAt: DUPLICATE_CLOSED_AT },
       });
       continue;
     }

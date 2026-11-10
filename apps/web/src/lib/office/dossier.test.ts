@@ -67,39 +67,91 @@ describe('buildDossier: соседи', () => {
   });
 });
 
-describe('parseHours: выходные только когда они названы рабочими', () => {
-  const cases: [string, boolean, boolean][] = [
-    ['Mo-Fr 09:00-18:00; Sa,Su off', false, false],
-    ['Пн–Пт 09:00–20:00; Сб, Вс — выходной', false, false],
-    ['пн-пт 09:00-18:00, сб-вс выходной', false, false],
-    ['Mo-Fr 09:00-18:00; Sa-Su closed', false, false],
-    ['Mo-Fr 09:00-18:00; Sa 10:00-14:00', true, false],
-    ['Mo-Fr 09:00-18:00, Sa 10:00-14:00, Su off', true, false],
-    ['Mo-Fr 08:00-12:00,13:00-17:30; Sa 08:00-12:00', true, false],
-    ['пн-сб 09:00-19:00; вс выходной', true, false],
-    ['Mo-Su 09:00-18:00; Su off', true, false],
-    ['Sa,Su 10:00-16:00', true, false],
-    ['Fr-Mo 10:00-18:00', true, false],
-    ['Mo-Su 09:00-21:00', true, true],
-    ['пн-пт 09:00-18:00; сб 10:00-15:00; вс 10:00-15:00', true, true],
-    ['ежедневно 10:00-22:00', true, true],
-    ['без выходных 09:00-21:00', true, true],
-    ['Пн-Вс круглосуточно', true, true],
-    ['ежедневно, кроме воскресенья, 10:00-20:00', true, false],
-    ['ежедневно 10:00-20:00 кроме вс', true, false],
-    // Дни не названы — ничего не утверждаем.
-    ['09:00-18:00', false, false],
-    ['24/7', false, false],
-    ['Mo,We,Fr 10:00-12:00', false, false],
+describe('parseHours: факты только из строки, разобранной целиком', () => {
+  // [строка, выходные, все семь дней, круглосуточно]
+  const cases: [string, boolean, boolean, boolean][] = [
+    // Суббота и воскресенье закрыты.
+    ['Mo-Fr 09:00-18:00; Sa,Su off', false, false, false],
+    ['Пн–Пт 09:00–20:00; Сб, Вс — выходной', false, false, false],
+    ['пн-пт 09:00-18:00, сб-вс выходной', false, false, false],
+    ['Mo-Fr 09:00-18:00; Sa-Su closed', false, false, false],
+    ['Mo-Fr 09:00-18:00 Sa,Su off', false, false, false],
+    ['Пн-Пт 9:00-18:00 Сб, Вс — выходной', false, false, false],
+    ['Пн-Пт: 9:00-18:00, Сб: выходной, Вс: выходной', false, false, false],
+    // Выходной день назван рабочим.
+    ['Mo-Fr 09:00-18:00; Sa 10:00-14:00', true, false, false],
+    ['Mo-Fr 09:00-18:00, Sa 10:00-14:00, Su off', true, false, false],
+    ['Mo-Fr 08:00-12:00,13:00-17:30; Sa 08:00-12:00', true, false, false],
+    ['пн-сб 09:00-19:00; вс выходной', true, false, false],
+    ['Mo-Sa 09:00-18:00; Su off', true, false, false],
+    ['Mo-Su 09:00-18:00; Su off', true, false, false],
+    ['Пн-Пт: 9:00-18:00, Сб: 10:00-15:00, Вс: выходной', true, false, false],
+    ['Sa,Su 10:00-16:00', true, false, false],
+    ['Fr-Mo 10:00-18:00', true, false, false],
+    ['Tu-Su 10:00-19:00', true, false, false],
+    ['Su-Fr 09:00-18:00', true, false, false],
+    ['сб.-вс. 10:00-16:00', true, false, false],
+    // Все семь дней.
+    ['Mo-Su 09:00-21:00', true, true, false],
+    ['пн-вс 9-21', true, true, false],
+    ['пн-пт 09:00-18:00; сб 10:00-15:00; вс 10:00-15:00', true, true, false],
+    ['ежедневно 10:00-22:00', true, true, false],
+    ['без выходных 09:00-21:00', true, true, false],
+    // Круглосуточно — только все семь дней.
+    ['24/7', true, true, true],
+    ['круглосуточно', true, true, true],
+    ['Пн-Вс круглосуточно', true, true, true],
+    ['Mo-Su 00:00-24:00', true, true, true],
+    ['24/7; Su off', true, false, false],
+    ['Mo-Fr 00:00-24:00; Sa,Su off', false, false, false],
+    // Дни не названы — о днях ничего не утверждаем.
+    ['09:00-18:00', false, false, false],
+    ['Mo,We,Fr 10:00-12:00', false, false, false],
+    // Незнакомое слово — строка не разобрана, фактов нет вовсе.
+    ['Mo-Fr 09:00-18:00; May-Sep Sa,Su 10:00-16:00', false, false, false],
+    ['May-Sep Mo-Su 10:00-20:00', false, false, false],
+    ['Mo-Su 09:00-18:00; Oct-Apr off', false, false, false],
+    ['Mo-Su 09:00-18:00; PH off', false, false, false],
+    ['Mo-Fr 09:00-18:00; Sa,Su by appointment', false, false, false],
+    ['Mo-Su 09:00-18:00; Su "по записи"', false, false, false],
+    ['Пн-Вс 9:00-18:00, Вс вых.', false, false, false],
+    ['Mo-Su 09:00-18:00; Su - нерабочий день', false, false, false],
+    ['Пн-Пт 9:00-18:00 (Сб, Вс — выходные)', false, false, false],
+    ['пн-пт 9:00-18:00 / сб, вс - выходной', false, false, false],
+    ['выходные: сб, вс, пн-пт 9:00-18:00', false, false, false],
+    ['ежедневно, кроме воскресенья, 10:00-20:00', false, false, false],
+    ['ежедневно 10:00-20:00 кроме вс', false, false, false],
+    ['Sa 10:00-14:00 off', false, false, false],
+    ['Mo-Su 09:00-18:00; Su', false, false, false],
+    ['24/7 кроме праздников', false, false, false],
     // «вс» во «все» и «sa» в «sale» — не дни недели.
-    ['Все дни 09:00-18:00', false, false],
-    ['Sale Mo-Fr 09:00-18:00', false, false],
+    ['Все дни 09:00-18:00', false, false, false],
+    ['Sale Mo-Fr 09:00-18:00', false, false, false],
+    ['Пон.-Пятн. 9:00-18:00, Суб., Воскр. — выходной', false, false, false],
   ];
-  it.each(cases)('%s', (raw, weekends, everyDay) => {
+  it.each(cases)('%s', (raw, weekends, everyDay, roundTheClock) => {
     const hours = parseHours(raw);
-    expect({ weekends: hours?.weekends, everyDay: hours?.everyDay }).toEqual({
-      weekends,
-      everyDay,
+    expect({
+      weekends: hours?.weekends,
+      everyDay: hours?.everyDay,
+      roundTheClock: hours?.roundTheClock,
+    }).toEqual({ weekends, everyDay, roundTheClock });
+  });
+
+  it('позднее закрытие — только из разобранной строки; сезонные часы его не дают', () => {
+    expect(parseHours('Mo-Fr 09:00-21:00; Sa,Su off')?.lateClose).toBe('21:00');
+    expect(parseHours('09:00-22:00')?.lateClose).toBe('22:00');
+    expect(parseHours('пн-вс 9-21')?.lateClose).toBe('21:00');
+    expect(
+      parseHours('May-Sep Mo-Su 10:00-22:00; Oct-Apr Mo-Su 10:00-18:00')?.lateClose,
+    ).toBeNull();
+    expect(parseHours('Mo-Fr 20:00-02:00')?.lateClose).toBeNull();
+    expect(parseHours('Mo-Su 00:00-24:00')?.lateClose).toBeNull();
+    expect(parseHours('Mo-Fr 09:00-25:00')).toEqual({
+      lateClose: null,
+      weekends: false,
+      everyDay: false,
+      roundTheClock: false,
     });
   });
 });

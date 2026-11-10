@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 vi.mock('@specai/database', () => ({ prisma: {} }));
 
 const { emptyQueueNotes, manualWhatsAppQueue, TO_PHONE_LABEL } = await import('./whatsappManual');
+const { DUPLICATE_CLOSED_AT } = await import('./contacted');
 type ManualDb = import('./whatsappManual').ManualDb;
 type ManualDeps = import('./whatsappManual').ManualDeps;
 type ManualRow = import('./whatsappManual').ManualRow;
@@ -144,10 +145,10 @@ describe('manualWhatsAppQueue', () => {
       }),
     );
     expect(written.items.map((i) => i.id)).toEqual(['p3']);
-    // Канал дубля закрыт датой первого сообщения на этот номер.
+    // Канал дубля закрыт отметкой дубля — вне дневного лимита и счётчика «отправлено сегодня».
     expect(second.db.prospect.updateMany).toHaveBeenCalledWith({
       where: { id: 'p1', status: { in: expect.any(Array) }, whatsappSentAt: null },
-      data: { whatsappSentAt: before },
+      data: { whatsappSentAt: DUPLICATE_CLOSED_AT },
     });
   });
 

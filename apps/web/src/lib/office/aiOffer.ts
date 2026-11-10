@@ -209,11 +209,13 @@ export function parseSentOffer(raw: string | null | undefined): SentOffer | null
 const NEIGHBOUR_ANGLES: readonly string[] = ['competitors_have_sites', 'first_in_area'];
 
 /**
- * Записанное предложение, которое можно показать и отправить. Пока фирме не писали, записанный
- * текст годится, только если его заход всё ещё следует из досье, прочитанного сегодняшними
- * правилами: досье по неполному списку (isSampleSource) больше не даёт чисел соседей, а часы
- * «Sa,Su off» — захода «работаете в выходные». Иначе null — предложение строится заново, без
- * устаревшего утверждения. Отправленное предложение остаётся как было: это история.
+ * Записанное предложение, которое можно показать и отправить. Пока хоть один канал строки ещё
+ * не отправлен, записанный текст годится, только если его заход всё ещё следует из досье,
+ * прочитанного сегодняшними правилами: досье по неполному списку (isSampleSource) больше не
+ * даёт чисел соседей, а часы «Sa,Su off» — захода «работаете в выходные». Иначе null —
+ * предложение строится заново, без устаревшего утверждения: второй канал и страница /kp не
+ * повторят то, что уже ушло первым. Когда отправлены оба канала, предложение — история и
+ * остаётся как было.
  */
 export function storedOfferOf(row: {
   offerJson: string | null;
@@ -225,8 +227,7 @@ export function storedOfferOf(row: {
 }): SentOffer | null {
   const offer = parseSentOffer(row.offerJson);
   if (!offer) return null;
-  const unsent = !row.emailSentAt && !row.whatsappSentAt;
-  if (!unsent) return offer;
+  if (row.emailSentAt && row.whatsappSentAt) return offer;
   if (isSampleSource(row.source) && NEIGHBOUR_ANGLES.includes(offer.angle)) return null;
   if (row.dossierJson !== undefined) {
     const angles: readonly string[] = applicableAngles(parseDossier(row.dossierJson, row.source));

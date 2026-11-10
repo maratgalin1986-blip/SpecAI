@@ -41,7 +41,12 @@ import {
 } from './outreach';
 import { officePrices } from './prices';
 import { AI_OFFER_TIMEOUT_MS, improveOffer, storedOfferOf, type SentOffer } from './aiOffer';
-import { contactedContacts, phoneKey, type ContactedContacts } from './contacted';
+import {
+  DUPLICATE_CLOSED_AT,
+  contactedContacts,
+  phoneKey,
+  type ContactedContacts,
+} from './contacted';
 import { parseDossier } from './dossier';
 import { collectAngleStats, chooseAngle, type AngleStat, type LearningDb } from './learning';
 import { applicableAngles, buildOffer, type OfferAngle } from './offer';
@@ -617,13 +622,17 @@ async function runOutreach(
   );
   const usedEmails = new Map<string, Date | null>(contacted.emails);
   const usedPhones = new Map<string, Date | null>(contacted.phones);
-  // Канал строки закрывается без отправки той же датой, что у первого сообщения на этот адрес:
-  // иначе дубли каждый проход занимали бы место в пачке, и до новых фирм очередь не дошла бы.
-  const closeDuplicate = async (row: OutreachRow, channel: OutreachChannel, at: Date) => {
+  // Канал строки закрывается без отправки особой отметкой (DUPLICATE_CLOSED_AT): иначе дубли
+  // каждый проход занимали бы место в пачке, и до новых фирм очередь не дошла бы. Отметка вне
+  // любых окон дат — дубль не съедает дневной лимит, не попадает в «отправлено» и в напоминания.
+  const closeDuplicate = async (row: OutreachRow, channel: OutreachChannel) => {
     const open = channel === 'email' ? { emailSentAt: null } : { whatsappSentAt: null };
     const { count } = await db.prospect.updateMany({
       where: { id: row.id, status: { in: [...OUTREACH_STATUSES] }, ...open },
-      data: channel === 'email' ? { emailSentAt: at } : { whatsappSentAt: at },
+      data:
+        channel === 'email'
+          ? { emailSentAt: DUPLICATE_CLOSED_AT }
+          : { whatsappSentAt: DUPLICATE_CLOSED_AT },
     });
     result.duplicates = (result.duplicates ?? 0) + count;
   };
@@ -648,14 +657,13 @@ async function runOutreach(
     let toWhatsApp = wanted.includes('whatsapp') ? whatsappTarget(row, pick) : null;
     const mailKey = emailKey(mailTo);
     if (mailTo && usedEmails.has(mailKey)) {
-      const at = usedEmails.get(mailKey);
-      if (at) await closeDuplicate(row, 'email', at);
+      // Дата — адресу действительно писали; null — письмо ему только показано в этом списке.
+      if (usedEmails.get(mailKey)) await closeDuplicate(row, 'email');
       mailTo = null;
     }
     const waKey = phoneKey(toWhatsApp);
     if (toWhatsApp && usedPhones.has(waKey)) {
-      const at = usedPhones.get(waKey);
-      if (at) await closeDuplicate(row, 'whatsapp', at);
+      if (usedPhones.get(waKey)) await closeDuplicate(row, 'whatsapp');
       toWhatsApp = null;
     }
     if (!mailTo && !toWhatsApp) continue;
@@ -716,6 +724,8 @@ async function runOutreach(
       ...(row.contactedAt ? {} : { contactedAt: sentAt }),
       ...offerData,
     };
+    // Пометка «письмо могло уйти» остаётся у строки, даже если следом ушёл WhatsApp.
+    let unconfirmed: { outreachError: string; outreachErrorAt: Date } | null = null;
 
     if (mailTo && links) {
       // Захват до отправки: второй одновременный проход (кнопку нажали ещё раз, пока первый
@@ -745,14 +755,13 @@ async function runOutreach(
           // видит пометку у фирмы.
           emailLeft -= 1;
           result.errors += 1;
+          unconfirmed = {
+            outreachError: outreachErrorText('email', DELIVERY_UNKNOWN),
+            outreachErrorAt: new Date(),
+          };
           await db.prospect.updateMany({
             where: guard,
-            data: {
-              ...success,
-              emailSentAt: sentAt,
-              outreachError: outreachErrorText('email', DELIVERY_UNKNOWN),
-              outreachErrorAt: new Date(),
-            },
+            data: { ...success, emailSentAt: sentAt, ...unconfirmed },
           });
         } else {
           // Письмо точно не ушло: захват снимается.
@@ -810,7 +819,7 @@ async function runOutreach(
           usedPhones.set(waKey, stamp);
           await db.prospect.updateMany({
             where: guard,
-            data: { ...success, whatsappSentAt: stamp },
+            data: { ...success, whatsappSentAt: stamp, ...(unconfirmed ?? {}) },
           });
         } else if (sent.unknown) {
           whatsappLeft -= 1;

@@ -750,15 +750,19 @@ describe('поиск через раннер: peekScheduledStep / ingestSchedule
     expect(runs[0]!.error).toBe(NO_ANSWER);
     // Курсор ушёл дальше: один шаг не заклинит обход; шаг 0 записан как отложенный.
     expect(settings.get(OFFICE_SETTINGS.cursor)).toBe('1');
-    expect(settings.get(OFFICE_SETTINGS.stepRetry)).toBe('0:0');
+    expect(settings.get(OFFICE_SETTINGS.stepRetry)).toBe(`0:0:${first.key}`);
     // Сразу после отказа повтор не отдаётся: нет свежего успеха.
     const second = await peek(db, at());
     expect(second.index).toBe(1);
     await ok(db, second);
     expect(settings.get(OFFICE_SETTINGS.cursor)).toBe('2');
-    // Соседний шаг только что прошёл — Overpass отвечает: теперь отдаётся отложенный шаг 0.
+    // Соседний шаг только что прошёл — Overpass отвечает: теперь отдаётся отложенный шаг 0,
+    // но с другим ключом: запоздавший ответ по первой выдаче за повтор не примется.
     const again = await peek(db, at());
-    expect(again).toEqual(first);
+    expect(again).toMatchObject({ index: first.index, step: first.step });
+    expect(again.key).not.toBe(first.key);
+    expect(await fail(db, first, at())).toEqual({ status: 'stale' });
+    expect(settings.get(OFFICE_SETTINGS.stepRetry)).toBe(`0:0:${first.key}`);
     await ok(db, again);
     expect(runs[2]).toMatchObject({ niche: 'dentist', error: null });
     // Повтор курсор не трогает, место освободилось, обход продолжается с шага 2.
@@ -792,7 +796,7 @@ describe('поиск через раннер: peekScheduledStep / ingestSchedule
     await fail(db, first, at());
     const second = await peek(db, at());
     await fail(db, second, at());
-    expect(settings.get(OFFICE_SETTINGS.stepRetry)).toBe('0:0');
+    expect(settings.get(OFFICE_SETTINGS.stepRetry)).toBe(`0:0:${first.key}`);
     expect(settings.get(OFFICE_SETTINGS.cursor)).toBe('2');
     const third = await peek(db, at());
     await ok(db, third);
@@ -822,7 +826,7 @@ describe('поиск через раннер: peekScheduledStep / ingestSchedule
     const { db, settings } = fakeDb();
     settings.set(OFFICE_SETTINGS.plan, PLAN);
     // Запись о шаге, которого в плане уже нет (план сократили).
-    settings.set(OFFICE_SETTINGS.stepRetry, '57:0');
+    settings.set(OFFICE_SETTINGS.stepRetry, '57:0:0123456789abcdef');
     const first = await peek(db);
     expect(first.index).toBe(0);
     const outcome = await ingestScheduledStep(
@@ -832,6 +836,45 @@ describe('поиск через раннер: peekScheduledStep / ingestSchedule
     expect(outcome).toMatchObject({ status: 'done' });
     expect(settings.get(OFFICE_SETTINGS.cursor)).toBe('1');
     expect(settings.get(OFFICE_SETTINGS.stepRetry)).toBe('');
+  });
+
+  it('отложенная запись привязана к шагу: после правки плана тот же номер — другой шаг, запись не действует', async () => {
+    const { db, settings, clock } = fakeDb();
+    settings.set(OFFICE_SETTINGS.plan, PLAN3);
+    const at = () => new Date(clock.now);
+    const first = await peek(db, at());
+    await fail(db, first, at());
+    // Владелец поменял план: под номером 0 теперь другой город.
+    settings.set(
+      OFFICE_SETTINGS.plan,
+      'sites; dentist; Уфа\nproviders; machinery; Уфа\nsites; beauty; Казань',
+    );
+    await ok(db, await peek(db, at()));
+    // Свежий успех есть, но отложенная запись — о прежнем шаге 0: отдаётся шаг под курсором.
+    const next = await peek(db, at());
+    expect(next.index).toBe(2);
+    await ok(db, next);
+    expect(settings.get(OFFICE_SETTINGS.stepRetry)).toBe('');
+  });
+
+  it('спецтехника: запрос без фильтра по названию; в Москве и Петербурге — только узкие теги', () => {
+    const kazan = relayRequest({ agent: 'providers', niche: 'machinery', city: 'Казань' }).query!;
+    expect(kazan).toContain('nwr["office"="company"](around:15000,');
+    expect(kazan).toContain('nwr["craft"](around:15000,');
+    expect(kazan).toContain('nwr["shop"="rental"](around:15000,');
+    // Зеркала Overpass на фильтре по названию не успевают никогда — названия отбирает приложение.
+    expect(kazan).not.toContain('"name"');
+    for (const city of ['Москва', 'Санкт-Петербург']) {
+      const big = relayRequest({ agent: 'providers', niche: 'machinery', city }).query!;
+      expect(big).toContain('nwr["shop"="rental"](around:15000,');
+      expect(big).toContain('nwr["shop"="truck"](around:15000,');
+      expect(big).not.toContain('office');
+      expect(big).not.toContain('craft');
+    }
+    // Ниши без отбора по названию в крупных городах не урезаются.
+    const beauty = relayRequest({ agent: 'sites', niche: 'beauty', city: 'Москва' }).query!;
+    expect(beauty).toContain('(around:15000,');
+    expect(beauty.split('nwr[').length).toBeGreaterThan(1);
   });
 
   it('эпоха плана: курсор прежней эпохи не действует, обход с первого шага; запись ставит эпоху', async () => {

@@ -58,9 +58,13 @@ describe('неполный список источника: числа сосе�
     );
     // Полный список (Overpass через раннер) — предложение как записано.
     expect(storedOfferOf(row({ source: 'osm' }))?.angle).toBe('first_in_area');
-    // Уже отправленное не переписывается: это история.
-    expect(storedOfferOf(row({ emailSentAt: new Date() }))?.angle).toBe('first_in_area');
-    expect(storedOfferOf(row({ whatsappSentAt: new Date() }))?.angle).toBe('first_in_area');
+    // Отправлены оба канала — это история, не переписывается.
+    expect(storedOfferOf(row({ emailSentAt: new Date(), whatsappSentAt: new Date() }))?.angle).toBe(
+      'first_in_area',
+    );
+    // Ушёл только один канал: второй и страница /kp неверные числа уже не повторят.
+    expect(storedOfferOf(row({ emailSentAt: new Date() }))).toBeNull();
+    expect(storedOfferOf(row({ whatsappSentAt: new Date() }))).toBeNull();
     expect(storedOfferOf({ offerJson: null })).toBeNull();
   });
 
@@ -79,10 +83,17 @@ describe('неполный список источника: числа сосе�
     // «Sa,Su off» — не работа в выходные: письмо с таким заходом не годится.
     expect(storedOfferOf({ ...stored, dossierJson: closed })).toBeNull();
     expect(storedOfferOf({ ...stored, dossierJson: open })?.angle).toBe('weekends');
-    // Отправленное — история, не переписывается.
-    expect(storedOfferOf({ ...stored, dossierJson: closed, emailSentAt: new Date() })?.angle).toBe(
-      'weekends',
-    );
+    // Письмо с ложным заходом уже ушло, WhatsApp ещё нет: второй канал его не повторит.
+    expect(storedOfferOf({ ...stored, dossierJson: closed, emailSentAt: new Date() })).toBeNull();
+    // Отправлены оба канала — история, не переписывается.
+    expect(
+      storedOfferOf({
+        ...stored,
+        dossierJson: closed,
+        emailSentAt: new Date(),
+        whatsappSentAt: new Date(),
+      })?.angle,
+    ).toBe('weekends');
     // Досье нет вовсе — годятся только общие заходы.
     expect(storedOfferOf({ ...stored, dossierJson: null })).toBeNull();
     expect(

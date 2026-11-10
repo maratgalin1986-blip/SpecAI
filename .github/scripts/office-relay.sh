@@ -25,8 +25,9 @@ trap 'rm -rf "$TMP"' EXIT
 
 # One request to one mirror. Succeeds on HTTP 200 with an `elements` array that is either
 # non-empty or carries no error remark: Overpass reports its own timeout as 200 with an empty
-# list and «remark: runtime error…» — then the next mirror is asked. Such an answer is kept
-# in $TMP/remark.json, so that if no mirror does better it is posted and journaled as is.
+# list and «remark: runtime error…» — then the next mirror is asked. Such an answer leaves
+# $TMP/remark.json behind, so that if no mirror does better the step is reported as «did not
+# finish in time» (and kept aside for a retry) rather than «no mirror could be reached».
 ANSWERED=0
 # 1 — a mirror took the request but did not finish in time (only the wording of the journal
 # line). A mirror that cannot be connected to gives up in 10 s and is not a timeout.
@@ -146,16 +147,16 @@ while [ "$i" -lt "$RELAY_STEPS" ] && [ "$SECONDS" -lt "$RELAY_BUDGET_S" ]; do
   elif fetch_overpass "$query"; then
     FAILS=0
     ingest "$index" "$key" "$TMP/overpass.json"
-  elif [ -f "$TMP/remark.json" ]; then
-    # A mirror answered, but with its own timeout: journaled as is, the plan moves on.
-    FAILS=0
-    ingest "$index" "$key" "$TMP/remark.json"
   else
     # No mirror gave an answer (the mirrors are often too slow: on 2026-11-10 every second
     # step was lost this way). The office journals the step as failed, moves the plan on and
     # keeps this step aside («retry»): it is offered again right after another step succeeds.
     FAILS=$((FAILS + 1))
-    if [ "$TIMED_OUT" -eq 1 ]; then
+    if [ -f "$TMP/remark.json" ]; then
+      # A mirror answered HTTP 200 with its own «runtime error: Query timed out» — the same
+      # «too slow right now» as a curl timeout, so the step is kept aside in the same way.
+      reason='Overpass не успел выполнить запрос'
+    elif [ "$TIMED_OUT" -eq 1 ]; then
       reason='Overpass не успел ответить на запрос шага'
     else
       reason='Overpass не ответил с раннера GitHub'
