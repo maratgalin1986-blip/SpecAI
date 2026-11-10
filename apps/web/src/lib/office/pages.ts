@@ -203,7 +203,10 @@ export function previewBannerText(): string {
 
 /** The data credit under the banner when the card came from OpenStreetMap (ODbL), else null. */
 export function previewSourceCredit(p: Pick<PageProspect, 'source'>): string | null {
-  return p.source === 'osm' ? 'Данные карточки: © участники OpenStreetMap' : null;
+  // Источник шага — «osm», «nominatim» или цепочка «nominatim+osm»: всё это данные OpenStreetMap.
+  return /(^|\+)(osm|nominatim)(\+|$)/.test(p.source ?? '')
+    ? 'Данные карточки: © участники OpenStreetMap'
+    : null;
 }
 
 /**
