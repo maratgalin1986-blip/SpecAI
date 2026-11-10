@@ -4,6 +4,9 @@
 // числа прогона, без имён и телефонов), в шапке /admin/office и в утренней сводке.
 
 export interface SearchRun {
+  agent?: string;
+  niche?: string;
+  city?: string;
   startedAt: Date;
   finishedAt: Date | null;
   error: string | null;
@@ -25,7 +28,20 @@ export interface SearchHealth {
   /** Сколько фирм нашёл и сколько кандидатов создал последний шаг без ошибки. */
   lastFound: number | null;
   lastCreated: number | null;
+  /** Последние законченные шаги, новые первыми: что искали и сколько нашли (без текста ошибки). */
+  recent: {
+    at: string;
+    agent: string;
+    niche: string;
+    city: string;
+    found: number;
+    created: number;
+    ok: boolean;
+  }[];
 }
+
+/** Сколько последних шагов показывать в `recent`. */
+export const RECENT_RUNS = 6;
 
 /** Столько ошибок подряд — уже не случайность: источник не работает. */
 export const FAILING_RUNS = 3;
@@ -37,7 +53,14 @@ export function searchHealth(runs: readonly SearchRun[]): SearchHealth {
   const done = runs.filter((r) => r.finishedAt !== null);
   const last = done[0];
   if (!last) {
-    return { search: 'idle', lastRunAt: null, failedInRow: 0, lastFound: null, lastCreated: null };
+    return {
+      search: 'idle',
+      lastRunAt: null,
+      failedInRow: 0,
+      lastFound: null,
+      lastCreated: null,
+      recent: [],
+    };
   }
   let failedInRow = 0;
   for (const run of done) {
@@ -51,6 +74,15 @@ export function searchHealth(runs: readonly SearchRun[]): SearchHealth {
     failedInRow,
     lastFound: good ? good.found : null,
     lastCreated: good ? good.created : null,
+    recent: done.slice(0, RECENT_RUNS).map((r) => ({
+      at: r.startedAt.toISOString(),
+      agent: r.agent ?? '',
+      niche: r.niche ?? '',
+      city: r.city ?? '',
+      found: r.found,
+      created: r.created,
+      ok: !r.error,
+    })),
   };
 }
 

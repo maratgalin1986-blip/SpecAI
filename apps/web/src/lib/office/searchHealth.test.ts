@@ -20,18 +20,24 @@ describe('searchHealth: жив ли поиск фирм', () => {
       failedInRow: 0,
       lastFound: null,
       lastCreated: null,
+      recent: [],
     });
   });
 
   it('последний шаг без ошибки — ok, с его числами; пустой шаг — тоже ok', () => {
     const health = searchHealth([run(12, { found: 72, created: 10 }), failed(9), failed(6)]);
-    expect(health).toEqual({
+    expect(health).toMatchObject({
       search: 'ok',
       lastRunAt: at(12).toISOString(),
       failedInRow: 0,
       lastFound: 72,
       lastCreated: 10,
     });
+    expect(health.recent.map((r) => [r.found, r.created, r.ok])).toEqual([
+      [72, 10, true],
+      [0, 0, false],
+      [0, 0, false],
+    ]);
     expect(searchHealth([run(12)]).search).toBe('ok');
   });
 
@@ -62,6 +68,7 @@ describe('searchHealth: жив ли поиск фирм', () => {
       'lastCreated',
       'lastFound',
       'lastRunAt',
+      'recent',
       'search',
     ]);
   });

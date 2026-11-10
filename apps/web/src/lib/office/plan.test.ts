@@ -58,11 +58,15 @@ describe('office plan: defaultPlan', () => {
   const plan = defaultPlan();
   const home = homeRegionCities();
 
-  it('alternates the agents: providers, sites, providers, …', () => {
-    expect(plan.slice(0, 4).map((s) => s.agent)).toEqual([
+  it('one providers step, then three sites steps: sites are what the owner wants first', () => {
+    expect(plan.slice(0, 8).map((s) => s.agent)).toEqual([
       'providers',
       'sites',
+      'sites',
+      'sites',
       'providers',
+      'sites',
+      'sites',
       'sites',
     ]);
   });

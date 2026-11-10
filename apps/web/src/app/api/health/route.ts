@@ -10,14 +10,31 @@ export const dynamic = 'force-dynamic';
 // `office` says whether the agents' search for companies works (lib/office/searchHealth.ts):
 // a word, a time and the run's counts — no names, phones or ids. A cloud session without the
 // admin password reads it to see that the search really runs in production.
-async function officeHealth(): Promise<SearchHealth | null> {
+async function officeHealth(): Promise<(SearchHealth & { queue: Record<string, number> }) | null> {
   try {
     const runs = await prisma.officeRun.findMany({
       orderBy: { startedAt: 'desc' },
       take: SEARCH_HEALTH_RUNS,
-      select: { startedAt: true, finishedAt: true, error: true, found: true, created: true },
+      select: {
+        agent: true,
+        niche: true,
+        city: true,
+        startedAt: true,
+        finishedAt: true,
+        error: true,
+        found: true,
+        created: true,
+      },
     });
-    return searchHealth(runs);
+    // Очередь — только числа компаний: сколько ждут первого сообщения и по каким каналам.
+    const waiting = { status: 'READY', optOutAt: null };
+    const [ready, withEmail, withWhatsapp, withMobile] = await Promise.all([
+      prisma.prospect.count({ where: waiting }),
+      prisma.prospect.count({ where: { ...waiting, email: { not: null } } }),
+      prisma.prospect.count({ where: { ...waiting, whatsapp: { startsWith: '+79' } } }),
+      prisma.prospect.count({ where: { ...waiting, phone: { startsWith: '+79' } } }),
+    ]);
+    return { ...searchHealth(runs), queue: { ready, withEmail, withWhatsapp, withMobile } };
   } catch {
     return null;
   }
