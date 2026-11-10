@@ -16,11 +16,16 @@ lock = threading.Lock()
 def run(job):
     out = f"assets/images/{job['cat']}/{job['id']}.jpg"
     if os.path.exists(out): print("skip", job["id"]); return
-    src = base64.b64encode(open(f"assets/reference/src/{job.get('src','ref')}.png", "rb").read()).decode()
     body = {"prompt": BASE + job["prompt"] + NEG, "models": ["Juggernaut XL"], "nsfw": False, "censor_nsfw": True,
-            "r2": True, "source_image": src, "source_processing": "img2img",
-            "params": {"width": 640, "height": 832, "steps": 25, "cfg_scale": 6, "sampler_name": "k_euler_a",
-                       "denoising_strength": job.get("den", 0.6), "n": 1}}
+            "r2": True,
+            "params": {"width": job.get("w", 640), "height": job.get("h", 832), "steps": 25, "cfg_scale": 6,
+                       "sampler_name": "k_euler_a", "n": 1}}
+    if "seed" in job: body["params"]["seed"] = str(job["seed"])
+    if job.get("src", "ref") != "none":   # img2img от эталона; "src": "none" -> txt2img (свободная композиция)
+        sp = job.get("src", "ref"); sp = sp if "/" in sp else f"assets/reference/src/{sp}.png"
+        buf = io.BytesIO(); Image.open(sp).convert("RGB").resize((body["params"]["width"], body["params"]["height"])).save(buf, "PNG")
+        body.update(source_image=base64.b64encode(buf.getvalue()).decode(), source_processing="img2img")
+        body["params"]["denoising_strength"] = job.get("den", 0.6)
     for attempt in range(2):
         try:
             i = req("https://aihorde.net/api/v2/generate/async", body)["id"]
