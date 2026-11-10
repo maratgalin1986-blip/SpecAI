@@ -32,18 +32,12 @@ jobs:
             echo "$label: HTTP $code, $((SECONDS - started)) s, elements $count ${remark:+(remark: $remark)}"
             sleep 3
           }
-          part() { echo "$1[\"name\"~\"$N\",i]$2;"; }
-          TAGS=('"shop"="rental"' '"office"="company"' '"industrial"' '"craft"' '"shop"="car"' '"shop"="truck"')
-          FULL=''; FULL_NW=''; FULL_BBOX=''
-          for t in "${TAGS[@]}"; do
-            FULL+="$(part "nwr[$t]" "$A")"
-            FULL_NW+="$(part "nw[$t]" "$A")"
-            FULL_BBOX+="$(part "nw[$t]" '')"
-          done
-          ask 'full nwr around' "[out:json][timeout:25];($FULL);out center tags;"
-          for t in "${TAGS[@]}"; do
-            ask "part nwr $t" "[out:json][timeout:25];($(part "nwr[$t]" "$A"));out center tags;"
-          done
-          ask 'full nw around' "[out:json][timeout:25];($FULL_NW);out center tags;"
-          ask 'full nw bbox' "[out:json][timeout:25][bbox:$BBOX];($FULL_BBOX);out center tags;"
-          ask 'name first, nw bbox' "[out:json][timeout:25][bbox:$BBOX];(nw[\"name\"~\"$N\",i];);out center tags;"
+          # Probe 1 (2026-11-10): every shape with the case-insensitive name filter timed out,
+          # even for one rare tag. Probe 2: the same tags without the name filter — the names
+          # are filtered in the app anyway (parseOverpass, niche.nameRegex).
+          ask 'shop=rental + shop=truck' "[out:json][timeout:25];(nwr[\"shop\"=\"rental\"]$A;nwr[\"shop\"=\"truck\"]$A;);out center tags;"
+          ask 'office=company' "[out:json][timeout:25];(nwr[\"office\"=\"company\"]$A;);out center tags;"
+          ask 'craft' "[out:json][timeout:25];(nwr[\"craft\"]$A;);out center tags;"
+          ask 'industrial' "[out:json][timeout:25];(nwr[\"industrial\"]$A;);out center tags;"
+          ask 'shop=car' "[out:json][timeout:25];(nwr[\"shop\"=\"car\"]$A;);out center tags;"
+          ask 'name filter, case-sensitive, shop=rental' "[out:json][timeout:25];(nwr[\"shop\"=\"rental\"][\"name\"~\"[Сс]пецтехник|[Ээ]кскават|[Аа]втокран|[Мм]анипулятор\"]$A;);out center tags;"
