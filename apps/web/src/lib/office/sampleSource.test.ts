@@ -63,4 +63,32 @@ describe('неполный список источника: числа сосе�
     expect(storedOfferOf(row({ whatsappSentAt: new Date() }))?.angle).toBe('first_in_area');
     expect(storedOfferOf({ offerJson: null })).toBeNull();
   });
+
+  it('неотправленное предложение, чей заход больше не следует из досье, строится заново', () => {
+    const withHours = (hoursFact: string) =>
+      JSON.stringify({
+        ...dossier,
+        competitors: null,
+        facts: [hoursFact],
+        // Так записал старый разбор: «выходные» по одному упоминанию «сб/вс».
+        hours: { lateClose: null, weekends: true, roundTheClock: false },
+      });
+    const closed = withHours('часы: пн-пт 09:00-18:00; сб,вс off');
+    const open = withHours('часы: пн-пт 09:00-18:00; сб 10:00-15:00');
+    const stored = { offerJson: JSON.stringify(offer('weekends')), source: 'osm' };
+    // «Sa,Su off» — не работа в выходные: письмо с таким заходом не годится.
+    expect(storedOfferOf({ ...stored, dossierJson: closed })).toBeNull();
+    expect(storedOfferOf({ ...stored, dossierJson: open })?.angle).toBe('weekends');
+    // Отправленное — история, не переписывается.
+    expect(storedOfferOf({ ...stored, dossierJson: closed, emailSentAt: new Date() })?.angle).toBe(
+      'weekends',
+    );
+    // Досье нет вовсе — годятся только общие заходы.
+    expect(storedOfferOf({ ...stored, dossierJson: null })).toBeNull();
+    expect(
+      storedOfferOf({ offerJson: JSON.stringify(offer('search')), dossierJson: null })?.angle,
+    ).toBe('search');
+    // Строка без поля досье (старые вызовы) — заход с досье не сверяется.
+    expect(storedOfferOf(stored)?.angle).toBe('weekends');
+  });
 });

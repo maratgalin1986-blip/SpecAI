@@ -11,8 +11,6 @@ export interface SourceNiche {
   nameRegex?: RegExp;
   /** Поисковая фраза для 2ГИС («стоматология», «аренда спецтехники»); без неё 2ГИС не спрашивается. */
   dgisQuery?: string;
-  /** Фильтр по названию для самого Overpass (POSIX-регулярка без lookbehind): иначе широкие теги в большом городе не влезают в 25 с. */
-  osmNameFilter?: string;
   /** Виды техники по названию и тегам объекта — slug'и из `packages/shared`. */
   machineryTags?: (name: string, tags: Record<string, string>) => string[];
 }

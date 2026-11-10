@@ -32,6 +32,18 @@ describe('коммерческое предложение /kp/<token>', () => {
     expect(kpStats({ ...dossier, competitors: null, hours: null })).toEqual([]);
   });
 
+  it('«7 дней в неделю» — только когда все семь дней названы рабочими', () => {
+    const hours = { lateClose: null, roundTheClock: false };
+    const withHours = (h: { weekends: boolean; everyDay?: boolean }) =>
+      kpStats({ ...dossier, competitors: null, hours: { ...hours, ...h } });
+    expect(withHours({ weekends: true, everyDay: true })).toEqual([
+      { value: '7', label: 'дней в неделю вы принимаете клиентов' },
+    ]);
+    // Суббота рабочая, воскресенье — нет (или досье записано до появления поля): цифры нет.
+    expect(withHours({ weekends: true, everyDay: false })).toEqual([]);
+    expect(withHours({ weekends: true })).toEqual([]);
+  });
+
   it('ни у кого рядом нет сайта — «можете быть первыми», без выдуманных чисел', () => {
     const stats = kpStats({
       ...dossier,

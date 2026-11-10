@@ -124,6 +124,15 @@ export interface OfficeDb {
   officeRun: {
     create(args: { data: OfficeRunCreateData }): Promise<{ id: string }>;
     update(args: { where: { id: string }; data: OfficeRunUpdateData }): Promise<unknown>;
+    /** Последний шаг по расписанию — по нему видно, отвечает ли Overpass сейчас (justSucceeded). */
+    findMany(args: {
+      where: { trigger: 'cron' };
+      orderBy: { startedAt: 'desc' };
+      take: number;
+      select: { agent: true; niche: true; city: true; error: true; startedAt: true };
+    }): Promise<
+      { agent: string; niche: string; city: string; error: string | null; startedAt: Date }[]
+    >;
   };
   appSetting: {
     findMany(args: {
@@ -154,7 +163,6 @@ export function sourceNiche(niche: Niche): SourceNiche {
     key: niche.key,
     osm: niche.osm.tags.map(([k, v]) => [k, v] as [string, string]),
     nameRegex: niche.osm.nameRegex,
-    osmNameFilter: niche.osm.osmNameFilter,
     dgisQuery: niche.osm.dgisQuery,
     machineryTags: niche.key === 'machinery' ? machineryTags : undefined,
   };
@@ -484,10 +492,35 @@ const PLAN_KEYS = [
   OFFICE_SETTINGS.planEpoch,
 ] as const;
 
-/** Сколько раз подряд один шаг повторяется после сбоя сети раннера, прежде чем план пойдёт дальше. */
+/**
+ * Сколько отложенных повторов получает шаг, по которому Overpass не дал ответа (зеркала часто
+ * не успевают: 10.11.2026 так терялся каждый второй шаг). Повтор — не тот же запрос через три
+ * секунды, а позже, сразу после чужого успешного шага (см. `retryDue`).
+ */
 export const RELAY_RETRIES = 1;
+/**
+ * Отложенный шаг повторяется, только если последний шаг по расписанию прошёл без ошибки не
+ * раньше этого: значит, Overpass отвечает прямо сейчас, и повтор имеет смысл.
+ */
+export const RETRY_AFTER_SUCCESS_MS = 15 * 60 * 1000;
 
-/** Счётчик повторов шага: «<номер шага>:<сколько раз уже повторяли>»; пусто — повторов нет. */
+/** Прошёл ли только что (RETRY_AFTER_SUCCESS_MS) шаг по расписанию без ошибки. */
+async function justSucceeded(db: OfficeDb, now: Date): Promise<boolean> {
+  const [last] = await db.officeRun.findMany({
+    where: { trigger: 'cron' },
+    orderBy: { startedAt: 'desc' },
+    take: 1,
+    select: { agent: true, niche: true, city: true, error: true, startedAt: true },
+  });
+  return (
+    !!last && !last.error && now.getTime() - last.startedAt.getTime() <= RETRY_AFTER_SUCCESS_MS
+  );
+}
+
+/**
+ * Отложенный шаг: «<номер шага>:<сколько раз уже повторяли>»; пусто — отложенного нет. Место
+ * одно: пока оно занято, следующий несработавший шаг просто уходит в журнал ошибкой.
+ */
 async function readStepRetry(db: OfficeDb): Promise<{ raw: string; index: number; count: number }> {
   const rows = await db.appSetting.findMany({
     where: { key: { in: [OFFICE_SETTINGS.stepRetry] } },
@@ -599,10 +632,43 @@ async function peekPlan(
   return { index, key: stepKey(index, step), step, nextCursor };
 }
 
-/** Следующий шаг плана без запуска: читает паузу, план и курсор, курсор НЕ двигает. */
-export async function peekScheduledStep(db: OfficeDb = defaultDb()): Promise<PeekedStep> {
+type DeferredStep = { index: number; key: string; step: PlanStep; count: number };
+
+/**
+ * Отложенный шаг, если он ещё есть в плане и это не тот же шаг, что под курсором. `raw` —
+ * что записано в настройке: непустое при `deferred: null` значит запись устарела (план
+ * сократили, курсор сам дошёл до этого шага) и место можно занять.
+ */
+async function deferredStep(
+  db: OfficeDb,
+  cursorIndex: number,
+): Promise<{ raw: string; deferred: DeferredStep | null }> {
+  const retry = await readStepRetry(db);
+  if (retry.index < 0 || retry.index === cursorIndex) return { raw: retry.raw, deferred: null };
+  const { steps } = await readPlan(db);
+  const step = steps[retry.index];
+  if (!step) return { raw: retry.raw, deferred: null };
+  return {
+    raw: retry.raw,
+    deferred: { index: retry.index, key: stepKey(retry.index, step), step, count: retry.count },
+  };
+}
+
+/**
+ * Следующий шаг для раннера без запуска: курсор НЕ двигает. Обычно это шаг под курсором; если
+ * есть отложенный шаг (Overpass по нему не ответил) и только что прошёл другой шаг — сначала
+ * отдаётся отложенный: сервис отвечает, самое время повторить.
+ */
+export async function peekScheduledStep(
+  db: OfficeDb = defaultDb(),
+  now: Date = new Date(),
+): Promise<PeekedStep> {
   const peeked = await peekPlan(db);
   if ('skipped' in peeked) return peeked;
+  const { deferred } = await deferredStep(db, peeked.index);
+  if (deferred && (await justSucceeded(db, now))) {
+    return { index: deferred.index, key: deferred.key, step: deferred.step };
+  }
   return { index: peeked.index, key: peeked.key, step: peeked.step };
 }
 
@@ -661,10 +727,15 @@ function relayedSource(input: { overpass?: unknown; error?: string }): ProspectS
 export type IngestResult = { status: 'stale' } | { status: 'done'; result: RunStepResult };
 
 /**
- * Ответ раннера по шагу, который он получил из `peekScheduledStep`. Шаг под курсором уже
- * другой (план изменили, шаг сделал другой запуск, пауза) → 'stale', ничего не меняется.
- * Иначе курсор сдвигается ДО прогона, как в `runScheduledStep`, и шаг идёт с `trigger: 'cron'`:
- * `error` — в журнал как отказ источника, `overpass` — разбор и создание кандидатов.
+ * Ответ раннера по шагу, который он получил из `peekScheduledStep`: это шаг под курсором или
+ * отложенный шаг. Ни тот, ни другой (план изменили, шаг сделал другой запуск, пауза) → 'stale',
+ * ничего не меняется. Шаг идёт с `trigger: 'cron'`: `error` — в журнал как отказ источника,
+ * `overpass` — разбор и создание кандидатов.
+ *
+ * Курсор сдвигается ДО прогона, как в `runScheduledStep`, и всегда: один шаг, на который
+ * Overpass не отвечает, не должен заклинить обход (10.11.2026 первый боевой прогон встал на
+ * спецтехнике Казани). Но шаг с `retry` (Overpass не дал ответа) не теряется до следующего
+ * круга плана: он откладывается и повторяется RELAY_RETRIES раз после чужого успешного шага.
  */
 export async function ingestScheduledStep(
   input: {
@@ -672,30 +743,37 @@ export async function ingestScheduledStep(
     key: string;
     overpass?: unknown;
     error?: string;
-    /** С `error`: не двигать курсор — источник был недоступен, шаг повторить. */
+    /** С `error`: Overpass не дал ответа (не достучались или не успел) — шаг стоит повторить. */
     retry?: boolean;
     now?: Date;
   },
   deps: RunDeps = {},
 ): Promise<IngestResult> {
   const db = deps.db ?? defaultDb();
-  const peeked = await peekPlan(db);
-  if ('skipped' in peeked || peeked.index !== input.index || peeked.key !== input.key) {
-    return { status: 'stale' };
-  }
-  // Сеть раннера не достучалась ни до одного зеркала (`retry`): шаг записывается ошибкой, но
-  // курсор стоит — тот же шаг повторится. Иначе сбой сети съел бы города и ниши до следующего
-  // круга плана (так 9–10.11.2026 пропали первые шаги по Казани). Но не бесконечно: после
-  // RELAY_RETRIES повторов того же шага план идёт дальше — один «тяжёлый» запрос не должен
-  // заклинить весь обход (первый боевой прогон 10.11.2026 встал на спецтехнике Казани).
-  const retry = input.error !== undefined && input.retry === true;
-  const retried = await readStepRetry(db);
-  const again = retried.index === peeked.index ? retried.count : 0;
-  if (retry && again < RELAY_RETRIES) {
-    await writeStepRetry(db, `${peeked.index}:${again + 1}`);
+  const cursor = await peekPlan(db);
+  if ('skipped' in cursor) return { status: 'stale' };
+  const { raw: slot, deferred } = await deferredStep(db, cursor.index);
+  const matches = (c: { index: number; key: string }) =>
+    c.index === input.index && c.key === input.key;
+  const failed = input.error !== undefined && input.retry === true;
+  let peeked: { step: PlanStep };
+  if (deferred && matches(deferred)) {
+    // Повтор отложенного шага: удался или исчерпал повторы — место освобождается.
+    const count = deferred.count + 1;
+    await writeStepRetry(db, failed && count < RELAY_RETRIES ? `${deferred.index}:${count}` : '');
+    peeked = deferred;
+  } else if (matches(cursor)) {
+    await writeCursor(db, cursor.nextCursor);
+    // Место для отложенного шага одно: занято другим шагом — этот отказ остаётся только в
+    // журнале. Устаревшая запись (шага больше нет в плане, или это он же) места не занимает.
+    if (failed && !deferred && RELAY_RETRIES > 0) {
+      await writeStepRetry(db, `${cursor.index}:0`);
+    } else if (!deferred && slot) {
+      await writeStepRetry(db, '');
+    }
+    peeked = cursor;
   } else {
-    await writeCursor(db, peeked.nextCursor);
-    if (retried.raw) await writeStepRetry(db, '');
+    return { status: 'stale' };
   }
   const result = await runStep(
     {

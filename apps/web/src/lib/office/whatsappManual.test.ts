@@ -73,6 +73,7 @@ function deps(db: ManualDb, over: Partial<ManualDeps> = {}): ManualDeps {
     prices: async () => ({ setup: 1, monthly: 1 }) as never,
     baseUrl: () => 'https://example.ru',
     optedOut: async () => ({ emails: new Set<string>(), phones: new Set<string>() }),
+    contacted: async () => ({ emails: new Map<string, Date>(), phones: new Map<string, Date>() }),
     angleStats: async () => new Map(),
     ...over,
   };
@@ -123,6 +124,31 @@ describe('manualWhatsAppQueue', () => {
     );
     expect(queue.items.map((i) => i.id)).toEqual(['p2']);
     expect(JSON.stringify(queue.items)).not.toContain('79110000001');
+  });
+
+  it('один номер у двух карточек — в очереди одна; номер, на который уже писали, не предлагается', async () => {
+    const same = { ...row(2), whatsapp: row(1).whatsapp };
+    const { db } = fakeDb([row(1), same, row(3)]);
+    const queue = await manualWhatsAppQueue(NOW, deps(db));
+    expect(queue.items.map((i) => i.id)).toEqual(['p1', 'p3']);
+
+    const before = new Date('2026-11-08T10:00:00+03:00');
+    const second = fakeDb([row(1), row(3)]);
+    const written = await manualWhatsAppQueue(
+      NOW,
+      deps(second.db, {
+        contacted: async () => ({
+          emails: new Map<string, Date>(),
+          phones: new Map([['79110000001', before]]),
+        }),
+      }),
+    );
+    expect(written.items.map((i) => i.id)).toEqual(['p3']);
+    // Канал дубля закрыт датой первого сообщения на этот номер.
+    expect(second.db.prospect.updateMany).toHaveBeenCalledWith({
+      where: { id: 'p1', status: { in: expect.any(Array) }, whatsappSentAt: null },
+      data: { whatsappSentAt: before },
+    });
   });
 
   it('дневной лимит режет очередь', async () => {

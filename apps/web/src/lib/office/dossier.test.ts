@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildDossier, neighborsOf } from './dossier';
+import { buildDossier, neighborsOf, parseDossier, parseHours } from './dossier';
 import type { Candidate, Neighbor } from './sources/types';
 
 const candidate: Candidate = {
@@ -64,5 +64,73 @@ describe('buildDossier: соседи', () => {
         { ...candidate, sourceRef: 'osm:node/9', lat: null },
       ]),
     ).toEqual([{ ref: 'osm:node/1', lat: 55.79, lon: 49.11, hasSite: true }]);
+  });
+});
+
+describe('parseHours: выходные только когда они названы рабочими', () => {
+  const cases: [string, boolean, boolean][] = [
+    ['Mo-Fr 09:00-18:00; Sa,Su off', false, false],
+    ['Пн–Пт 09:00–20:00; Сб, Вс — выходной', false, false],
+    ['пн-пт 09:00-18:00, сб-вс выходной', false, false],
+    ['Mo-Fr 09:00-18:00; Sa-Su closed', false, false],
+    ['Mo-Fr 09:00-18:00; Sa 10:00-14:00', true, false],
+    ['Mo-Fr 09:00-18:00, Sa 10:00-14:00, Su off', true, false],
+    ['Mo-Fr 08:00-12:00,13:00-17:30; Sa 08:00-12:00', true, false],
+    ['пн-сб 09:00-19:00; вс выходной', true, false],
+    ['Mo-Su 09:00-18:00; Su off', true, false],
+    ['Sa,Su 10:00-16:00', true, false],
+    ['Fr-Mo 10:00-18:00', true, false],
+    ['Mo-Su 09:00-21:00', true, true],
+    ['пн-пт 09:00-18:00; сб 10:00-15:00; вс 10:00-15:00', true, true],
+    ['ежедневно 10:00-22:00', true, true],
+    ['без выходных 09:00-21:00', true, true],
+    ['Пн-Вс круглосуточно', true, true],
+    ['ежедневно, кроме воскресенья, 10:00-20:00', true, false],
+    ['ежедневно 10:00-20:00 кроме вс', true, false],
+    // Дни не названы — ничего не утверждаем.
+    ['09:00-18:00', false, false],
+    ['24/7', false, false],
+    ['Mo,We,Fr 10:00-12:00', false, false],
+    // «вс» во «все» и «sa» в «sale» — не дни недели.
+    ['Все дни 09:00-18:00', false, false],
+    ['Sale Mo-Fr 09:00-18:00', false, false],
+  ];
+  it.each(cases)('%s', (raw, weekends, everyDay) => {
+    const hours = parseHours(raw);
+    expect({ weekends: hours?.weekends, everyDay: hours?.everyDay }).toEqual({
+      weekends,
+      everyDay,
+    });
+  });
+});
+
+describe('parseDossier: часы читаются заново из факта карточки', () => {
+  it('досье, записанное со старой ошибкой «выходные», исправляется при чтении', () => {
+    const stored = JSON.stringify({
+      v: 1,
+      niche: 'beauty',
+      nicheTitle: 'Салон красоты',
+      city: 'Казань',
+      facts: ['адрес: ул. Баумана, 1', 'часы: пн-пт 09:00-18:00; сб,вс off'],
+      hours: { lateClose: null, weekends: true, roundTheClock: false },
+      competitors: null,
+      channels: { email: false, whatsapp: false, telegram: false },
+      gaps: ['нет своего сайта'],
+    });
+    expect(parseDossier(stored)?.hours).toMatchObject({ weekends: false, everyDay: false });
+  });
+
+  it('новое досье: «Sa,Su off» не даёт выходных, «Mo-Su» — даёт все семь дней', () => {
+    const build = (hours: string) =>
+      buildDossier({
+        candidate: { ...candidate, hours },
+        neighbors: [],
+        niche: 'beauty',
+        nicheTitle: 'Салон красоты',
+        city: 'Казань',
+      });
+    expect(build('Mo-Fr 09:00-18:00; Sa,Su off').hours?.weekends).toBe(false);
+    const daily = parseDossier(JSON.stringify(build('Mo-Su 10:00-20:00')));
+    expect(daily?.hours).toMatchObject({ weekends: true, everyDay: true });
   });
 });

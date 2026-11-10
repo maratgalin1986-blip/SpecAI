@@ -21,6 +21,7 @@ import {
   PLAN_EPOCH,
   RELAY_STEP_LIMIT,
   STEP_LIMIT,
+  RETRY_AFTER_SUCCESS_MS,
   RELAY_RETRIES,
 } from './run';
 import type { Candidate, ProspectSource, SearchResult } from './sources/types';
@@ -37,6 +38,7 @@ type RunRow = {
   skipped: number;
   error: string | null;
   finishedAt: Date | null;
+  startedAt: Date;
 };
 
 /** База в памяти с теми же методами, что нужны прогону. */
@@ -67,6 +69,8 @@ function fakeDb(seed: { prospects?: Partial<ProspectRow>[]; companies?: string[]
   }));
   const companies = (seed.companies ?? []).map((phone, i) => ({ id: `c${i}`, phone }));
   const runs: RunRow[] = [];
+  /** «Сейчас» для отметки начала шага в журнале: тесты двигают его, чтобы состарить журнал. */
+  const clock = { now: Date.parse('2026-11-10T12:00:00Z') };
   const settings = new Map<string, string>();
   let seq = 100;
 
@@ -111,9 +115,24 @@ function fakeDb(seed: { prospects?: Partial<ProspectRow>[]; companies?: string[]
           skipped: 0,
           error: null,
           finishedAt: null,
+          startedAt: new Date(clock.now),
         };
         runs.push(row);
         return { id: row.id };
+      },
+      async findMany({ where, take }) {
+        return runs
+          .filter((r) => r.trigger === where.trigger)
+          .slice()
+          .reverse()
+          .slice(0, take)
+          .map((r) => ({
+            agent: r.agent,
+            niche: r.niche,
+            city: r.city,
+            error: r.error,
+            startedAt: r.startedAt,
+          }));
       },
       async update({ where, data }) {
         const row = runs.find((r) => r.id === where.id);
@@ -134,7 +153,7 @@ function fakeDb(seed: { prospects?: Partial<ProspectRow>[]; companies?: string[]
       },
     },
   };
-  return { db, prospects, runs, settings };
+  return { db, prospects, runs, settings, clock };
 }
 
 function candidate(over: Partial<Candidate> = {}): Candidate {
@@ -706,46 +725,113 @@ describe('поиск через раннер: peekScheduledStep / ingestSchedule
     expect(prospects).toHaveLength(0);
   });
 
-  it('retry: сеть раннера не достучалась до зеркал — отказ в журнале, курсор стоит, шаг повторится', async () => {
-    const { db, settings, runs } = fakeDb();
+  const NO_ANSWER = 'Overpass не ответил с раннера GitHub';
+  const PLAN3 = `${PLAN}\nsites; beauty; Казань`;
+  const fail = (db: OfficeDb, step: { index: number; key: string }, now?: Date) =>
+    ingestScheduledStep(
+      { index: step.index, key: step.key, error: NO_ANSWER, retry: true, now },
+      { db },
+    );
+  const ok = (db: OfficeDb, step: { index: number; key: string }) =>
+    ingestScheduledStep({ index: step.index, key: step.key, overpass }, { db });
+  const peek = async (db: OfficeDb, now?: Date) => {
+    const step = await peekScheduledStep(db, now);
+    if ('skipped' in step) throw new Error('шаг ожидался');
+    return step;
+  };
+
+  it('retry: Overpass не ответил — отказ в журнале, план идёт дальше, шаг отложен и повторяется после чужого успеха', async () => {
+    const { db, settings, runs, clock } = fakeDb();
+    settings.set(OFFICE_SETTINGS.plan, PLAN3);
+    const at = () => new Date(clock.now);
+    const first = await peek(db, at());
+    expect(first.index).toBe(0);
+    await fail(db, first, at());
+    expect(runs[0]!.error).toBe(NO_ANSWER);
+    // Курсор ушёл дальше: один шаг не заклинит обход; шаг 0 записан как отложенный.
+    expect(settings.get(OFFICE_SETTINGS.cursor)).toBe('1');
+    expect(settings.get(OFFICE_SETTINGS.stepRetry)).toBe('0:0');
+    // Сразу после отказа повтор не отдаётся: нет свежего успеха.
+    const second = await peek(db, at());
+    expect(second.index).toBe(1);
+    await ok(db, second);
+    expect(settings.get(OFFICE_SETTINGS.cursor)).toBe('2');
+    // Соседний шаг только что прошёл — Overpass отвечает: теперь отдаётся отложенный шаг 0.
+    const again = await peek(db, at());
+    expect(again).toEqual(first);
+    await ok(db, again);
+    expect(runs[2]).toMatchObject({ niche: 'dentist', error: null });
+    // Повтор курсор не трогает, место освободилось, обход продолжается с шага 2.
+    expect(settings.get(OFFICE_SETTINGS.cursor)).toBe('2');
+    expect(settings.get(OFFICE_SETTINGS.stepRetry)).toBe('');
+    expect((await peek(db, at())).index).toBe(2);
+  });
+
+  it('retry: повтор тоже не удался — после RELAY_RETRIES повторов шаг снят, обход не блокируется', async () => {
+    const { db, settings, runs, clock } = fakeDb();
+    settings.set(OFFICE_SETTINGS.plan, PLAN3);
+    const at = () => new Date(clock.now);
+    expect(RELAY_RETRIES).toBe(1);
+    const first = await peek(db, at());
+    await fail(db, first, at());
+    await ok(db, await peek(db, at()));
+    const again = await peek(db, at());
+    expect(again.index).toBe(first.index);
+    await fail(db, again, at());
+    expect(settings.get(OFFICE_SETTINGS.stepRetry)).toBe('');
+    expect(settings.get(OFFICE_SETTINGS.cursor)).toBe('2');
+    expect(runs.filter((r) => r.error === NO_ANSWER)).toHaveLength(2);
+    expect((await peek(db, at())).index).toBe(2);
+  });
+
+  it('retry: место одно — второй отказ подряд остаётся только в журнале; старый успех повтора не запускает', async () => {
+    const { db, settings, clock } = fakeDb();
+    settings.set(OFFICE_SETTINGS.plan, PLAN3);
+    const at = () => new Date(clock.now);
+    const first = await peek(db, at());
+    await fail(db, first, at());
+    const second = await peek(db, at());
+    await fail(db, second, at());
+    expect(settings.get(OFFICE_SETTINGS.stepRetry)).toBe('0:0');
+    expect(settings.get(OFFICE_SETTINGS.cursor)).toBe('2');
+    const third = await peek(db, at());
+    await ok(db, third);
+    // Успех был, но давно (следующий запуск раннера через часы): сначала шаг под курсором.
+    clock.now += RETRY_AFTER_SUCCESS_MS + 60_000;
+    expect((await peek(db, at())).index).toBe(0);
+    expect(settings.get(OFFICE_SETTINGS.cursor)).toBe('0');
+  });
+
+  it('ответ по отложенному шагу принимается и тогда, когда свежесть успеха уже истекла', async () => {
+    const { db, settings, clock } = fakeDb();
+    settings.set(OFFICE_SETTINGS.plan, PLAN3);
+    const at = () => new Date(clock.now);
+    const first = await peek(db, at());
+    await fail(db, first, at());
+    await ok(db, await peek(db, at()));
+    const again = await peek(db, at());
+    expect(again.index).toBe(0);
+    // Раннер качал Overpass дольше окна свежести — ответ всё равно относится к отложенному шагу.
+    clock.now += RETRY_AFTER_SUCCESS_MS + 60_000;
+    expect(await ok(db, again)).toMatchObject({ status: 'done' });
+    expect(settings.get(OFFICE_SETTINGS.stepRetry)).toBe('');
+    expect(settings.get(OFFICE_SETTINGS.cursor)).toBe('2');
+  });
+
+  it('ошибка без retry (нет запроса, ответ не принят) шаг не откладывает; устаревшая запись места не держит', async () => {
+    const { db, settings } = fakeDb();
     settings.set(OFFICE_SETTINGS.plan, PLAN);
-    const first = await peekScheduledStep(db);
-    if ('skipped' in first) throw new Error('шаг ожидался');
-    await ingestScheduledStep(
-      {
-        index: first.index,
-        key: first.key,
-        error: 'Overpass не ответил с раннера GitHub',
-        retry: true,
-      },
+    // Запись о шаге, которого в плане уже нет (план сократили).
+    settings.set(OFFICE_SETTINGS.stepRetry, '57:0');
+    const first = await peek(db);
+    expect(first.index).toBe(0);
+    const outcome = await ingestScheduledStep(
+      { index: first.index, key: first.key, error: 'Для шага плана нет запроса Overpass' },
       { db },
     );
-    expect(runs[0]!.error).toBe('Overpass не ответил с раннера GitHub');
-    expect(settings.has(OFFICE_SETTINGS.cursor)).toBe(false);
-    // Тот же шаг с тем же ключом — следующий запуск раннера попробует его снова.
-    expect(await peekScheduledStep(db)).toEqual(first);
-    // Второй сбой подряд на том же шаге — план идёт дальше: один запрос не заклинит обход.
-    await ingestScheduledStep(
-      {
-        index: first.index,
-        key: first.key,
-        error: 'Overpass не ответил с раннера GitHub',
-        retry: true,
-      },
-      { db },
-    );
+    expect(outcome).toMatchObject({ status: 'done' });
     expect(settings.get(OFFICE_SETTINGS.cursor)).toBe('1');
     expect(settings.get(OFFICE_SETTINGS.stepRetry)).toBe('');
-    expect(runs).toHaveLength(2);
-    // У следующего шага свой счёт повторов.
-    const second = await peekScheduledStep(db);
-    if ('skipped' in second) throw new Error('шаг ожидался');
-    await ingestScheduledStep(
-      { index: second.index, key: second.key, error: 'сеть', retry: true },
-      { db },
-    );
-    expect(settings.get(OFFICE_SETTINGS.cursor)).toBe('1');
-    expect(RELAY_RETRIES).toBe(1);
   });
 
   it('эпоха плана: курсор прежней эпохи не действует, обход с первого шага; запись ставит эпоху', async () => {

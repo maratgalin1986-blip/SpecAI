@@ -7,14 +7,19 @@
 import { distanceKm } from '@/lib/geo';
 import type { Candidate, Neighbor } from './sources/types';
 
+/** Начало факта «часы работы» в досье — по нему часы читаются заново (parseDossier). */
+const HOURS_FACT = 'часы: ';
+
 /** Конкуренты считаются в этом радиусе от фирмы. */
 export const DOSSIER_RADIUS_KM = 2;
 
 export interface DossierHours {
   /** Позднее закрытие в будни — «21:00», если позже 20:00; иначе null. */
   lateClose: string | null;
-  /** Работает в субботу или воскресенье. */
+  /** Суббота или воскресенье прямо названы рабочими («Sa,Su off» — это не работа в выходные). */
   weekends: boolean;
+  /** Все семь дней прямо названы рабочими. В досье, записанных до 2026-11-10, поля нет. */
+  everyDay?: boolean;
   roundTheClock: boolean;
 }
 
@@ -43,18 +48,107 @@ const DAY_RU: Record<string, string> = {
   Su: 'вс',
 };
 
+/** Дни недели в часах работы: 0 — понедельник … 6 — воскресенье. */
+const DAY_TOKENS: readonly (readonly [RegExp, number])[] = [
+  [/^(mo(n(day)?)?|пн|понедельник\S*)$/i, 0],
+  [/^(tu(e(s(day)?)?)?|вт|вторник\S*)$/i, 1],
+  [/^(we(d(nesday)?)?|ср|сред[аыу])$/i, 2],
+  [/^(th(u(r(s(day)?)?)?)?|чт|четверг\S*)$/i, 3],
+  [/^(fr(i(day)?)?|пт|пятниц\S*)$/i, 4],
+  [/^(sa(t(urday)?)?|сб|суб|суббот\S*)$/i, 5],
+  [/^(su(n(day)?)?|вс|вск|воскр|воскресень\S*)$/i, 6],
+];
+const DAY_WORD =
+  '(?:mo(?:n(?:day)?)?|tu(?:e(?:s(?:day)?)?)?|we(?:d(?:nesday)?)?|th(?:u(?:r(?:s(?:day)?)?)?)?|fr(?:i(?:day)?)?|sa(?:t(?:urday)?)?|su(?:n(?:day)?)?|пн|вт|ср|чт|пт|сб|вс|вск|суб|воскр|понедельник[а-яё]*|вторник[а-яё]*|сред[аыу]|четверг[а-яё]*|пятниц[а-яё]*|суббот[а-яё]*|воскресень[а-яё]*)';
+/** Слово-день целиком: «вс» не находится во «все», «sa» — в «sale». */
+const DAY_RE = new RegExp(`(?<![a-zа-яё])${DAY_WORD}(?![a-zа-яё])`, 'gi');
+const DAY_RANGE_RE = new RegExp(
+  `(?<![a-zа-яё])(${DAY_WORD})\\s*[-–—]\\s*(${DAY_WORD})(?![a-zа-яё])`,
+  'gi',
+);
+const NO_DAYS_OFF_RE = /без\s+выходных/gi;
+const EXCEPT_RE = /^\s*(кроме|except)/i;
+const EVERY_DAY_RE = /ежедневно|без\s+выходных|каждый\s+день|daily|every\s*day/i;
+const CLOSED_RE = /(?<![a-zа-яё])(off|closed)(?![a-zа-яё])|выходн|закрыт|не\s+работа/i;
+const ALL_DAY_RE = /24\s*\/\s*7|круглосуточно/i;
+const TIME_RANGE_RE = /\d{1,2}[:.]\d{2}\s*[-–—]\s*\d{1,2}[:.]\d{2}/;
+
+function dayIndex(word: string): number {
+  for (const [re, index] of DAY_TOKENS) if (re.test(word)) return index;
+  return -1;
+}
+
+/** Дни, названные в куске правила: «Mo-Fr» — диапазон (и через выходные: «Fr-Mo»), «Sa,Su» — список. */
+function daysOf(piece: string): number[] {
+  const days = new Set<number>();
+  if (EVERY_DAY_RE.test(piece)) for (let d = 0; d < 7; d += 1) days.add(d);
+  const rest = piece.replace(DAY_RANGE_RE, (_m, a: string, b: string) => {
+    const from = dayIndex(a);
+    const to = dayIndex(b);
+    if (from >= 0 && to >= 0) {
+      for (let d = from; ; d = (d + 1) % 7) {
+        days.add(d);
+        if (d === to) break;
+      }
+    }
+    return ' ';
+  });
+  for (const m of rest.matchAll(DAY_RE)) {
+    const d = dayIndex(m[0]);
+    if (d >= 0) days.add(d);
+  }
+  return [...days];
+}
+
+/**
+ * По каким дням фирма открыта — только то, что сказано прямо: день с интервалом времени открыт,
+ * день с «off»/«выходной» закрыт, позднее правило отменяет раннее («Mo-Su 09:00-18:00; Su off»).
+ * Правило без дней («09:00-18:00») дней не называет — по нему ничего не утверждаем.
+ */
+function openDays(text: string): (boolean | undefined)[] {
+  const open: (boolean | undefined)[] = Array.from({ length: 7 }, () => undefined);
+  for (const rule of text.split(/[;\n]/)) {
+    // «Sa,Su off» и «Сб, Вс — выходной»: дни без времени относятся к следующему куску.
+    let carried: number[] = [];
+    // «ежедневно, кроме воскресенья»: названные после «кроме» дни закрыты.
+    const except: number[] = [];
+    for (const piece of rule.split(/,|(?=кроме)|(?=except)/i)) {
+      if (EXCEPT_RE.test(piece)) {
+        except.push(...daysOf(piece));
+        if (!TIME_RANGE_RE.test(piece)) continue;
+        for (const d of carried) open[d] = true;
+        carried = [];
+        continue;
+      }
+      const days = [...carried, ...daysOf(piece)];
+      const closed = CLOSED_RE.test(piece.replace(NO_DAYS_OFF_RE, ' '));
+      const works = TIME_RANGE_RE.test(piece) || ALL_DAY_RE.test(piece);
+      if (!closed && !works) {
+        carried = days;
+        continue;
+      }
+      carried = [];
+      for (const d of days) open[d] = !closed;
+    }
+    for (const d of except) open[d] = false;
+  }
+  return open;
+}
+
 /**
  * Часы из карточки: формат OSM («Mo-Fr 09:00-21:00; Sa 10:00-16:00», «24/7») и 2ГИС
  * («Пн–Пт 09:00–20:00»). Позднее закрытие — самое позднее время «до» после 20:00
  * (24:00 и ночные интервалы не считаем «поздним» — это круглосуточно или ночная смена).
+ * «Работает в выходные» — только если суббота или воскресенье названы открытыми:
+ * «Mo-Fr 09:00-18:00; Sa,Su off» — это не работа в выходные.
  */
 export function parseHours(raw: string | null | undefined): DossierHours | null {
   const text = (raw ?? '').trim();
   if (!text) return null;
   const roundTheClock = /24\s*\/\s*7|круглосуточно|00:00\s*[-–]\s*24:00/i.test(text);
-  const weekends =
-    /(^|[^a-zа-яё])(sa|su|сб|вс|суб|воскр)/i.test(text) ||
-    /mo\s*[-–]\s*su|пн\s*[-–]\s*вс/i.test(text);
+  const open = openDays(text);
+  const weekends = open[5] === true || open[6] === true;
+  const everyDay = open.every((d) => d === true);
   let latest = -1;
   for (const m of text.matchAll(/(\d{1,2}):(\d{2})\s*[-–]\s*(\d{1,2}):(\d{2})/g)) {
     const from = Number(m[1]) * 60 + Number(m[2]);
@@ -66,7 +160,7 @@ export function parseHours(raw: string | null | undefined): DossierHours | null 
     latest > 20 * 60
       ? `${String(Math.floor(latest / 60)).padStart(2, '0')}:${String(latest % 60).padStart(2, '0')}`
       : null;
-  return { lateClose, weekends, roundTheClock };
+  return { lateClose, weekends, everyDay, roundTheClock };
 }
 
 /** «Mo-Fr 09:00-21:00» → «пн-пт 09:00-21:00» для текста письма. */
@@ -100,7 +194,7 @@ export function buildDossier(input: {
   const hours = parseHours(c.hours);
   const facts: string[] = [];
   if (c.address) facts.push(`адрес: ${c.address}`);
-  if (c.hours) facts.push(`часы: ${hoursForText(c.hours)}`);
+  if (c.hours) facts.push(`${HOURS_FACT}${hoursForText(c.hours)}`);
   if (c.whatsapp) facts.push('в карточке указан WhatsApp');
   if (c.email) facts.push('в карточке есть почта');
   if (c.tags.length) facts.push(`в карточке: ${c.tags.slice(0, 5).join(', ')}`);
@@ -173,7 +267,13 @@ function parseDossierJson(raw: string | null | undefined): Dossier | null {
     ) {
       return null;
     }
-    return d as Dossier;
+    // Часы пересчитываются из записанного факта карточки: в досье до 2026-11-10 «выходные»
+    // ставились по одному упоминанию «сб/вс», даже в «Sa,Su off».
+    const hoursFact = d.facts.find(
+      (fact): fact is string => typeof fact === 'string' && fact.startsWith(HOURS_FACT),
+    );
+    const hours = hoursFact ? parseHours(hoursFact.slice(HOURS_FACT.length)) : (d.hours ?? null);
+    return { ...(d as Dossier), hours };
   } catch {
     return null;
   }

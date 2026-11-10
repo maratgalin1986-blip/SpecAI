@@ -1,8 +1,9 @@
 name: Office tick
 
-# Every hour (GitHub starts scheduled runs late and rarely, so one run does up
-# to four plan steps): the office agents search for companies without a site,
-# build their pages, send the outreach and, from 08:00 Moscow once a day, the
+# Scheduled every hour, but GitHub starts the scheduled runs of this repository
+# only every 4–9 hours (Actions history of 2026-11-07…10), so one run does up to
+# six plan steps: the office agents search for companies without a site, build
+# their pages, prepare the outreach and, from 08:00 Moscow once a day, the
 # owner's digest (apps/web/src/app/api/cron/office, lib/office/tick.ts).
 # The runner is a network relay for the search: the Overpass API resets
 # connections from Vercel but answers from here (probe of 2026-11-10), so
@@ -10,9 +11,13 @@ name: Office tick
 # Overpass query (/api/cron/office/next), fetches Overpass and posts the raw
 # answer back (/api/cron/office/ingest); parsing and candidate creation stay in
 # the app. Then it calls /api/cron/office?steps=0 for the outreach and the
-# digest. A step is accepted once (a stale answer gets 409), the tick refuses a
-# second call within ten minutes; everything needs CRON_SECRET (repository
-# secret, equal to the one in Vercel). The log holds counts only.
+# digest. A step Overpass did not answer is journaled, the plan moves on and the
+# step is offered once more right after another step succeeds; two failed steps
+# in a row stop the run (an outage must not eat the plan). The run is red when
+# no step brought a usable Overpass answer. A step is accepted once (a stale
+# answer gets 409), the tick refuses a second call within ten minutes;
+# everything needs CRON_SECRET (repository secret, equal to the one in Vercel).
+# The log holds counts only.
 # Scheduled at :37 so that it never coincides with bot-reminders.yml (:17).
 # On demand: the office session cannot press «Run workflow» (its token gets 403), so a commit
 # that changes .github/office-relay-run.txt on its branch starts one run from that branch.
@@ -27,7 +32,7 @@ on:
 jobs:
   tick:
     runs-on: ubuntu-latest
-    timeout-minutes: 8
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
         with:

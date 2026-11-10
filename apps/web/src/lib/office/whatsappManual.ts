@@ -8,6 +8,7 @@ import { prisma } from '@specai/database';
 import { mskDayBounds } from '@/lib/adminCrm';
 import { siteUrl } from '@/lib/siteUrl';
 import { storedOfferOf, type SentOffer } from './aiOffer';
+import { contactedContacts, type ContactedContacts } from './contacted';
 import { parseDossier } from './dossier';
 import { kpUrl } from './kp';
 import { collectAngleStats, chooseAngle, type AngleStat } from './learning';
@@ -157,8 +158,9 @@ export interface ManualDb {
       select: typeof ROW_SELECT;
     }): Promise<ManualRow[]>;
     updateMany(args: {
-      where: { id: string; status: { in: string[] } };
-      data: { offerAngle: string; offerJson: string };
+      /** `whatsappSentAt: null` — закрыть канал дублю: на этот номер уже писали в другой строке. */
+      where: { id: string; status: { in: string[] }; whatsappSentAt?: null };
+      data: { offerAngle: string; offerJson: string } | { whatsappSentAt: Date };
     }): Promise<{ count: number }>;
   };
 }
@@ -173,6 +175,8 @@ export interface ManualDeps {
   baseUrl?: () => string;
   /** Какие из адресов и номеров отписаны (по умолчанию optedOutContacts по базе). */
   optedOut?: (emails: (string | null)[], phones: (string | null)[]) => Promise<OptedOutContacts>;
+  /** На какие из номеров уже писали в другой строке (по умолчанию contactedContacts по базе). */
+  contacted?: (phones: (string | null)[]) => Promise<ContactedContacts>;
   /** Статистика заходов для выбора предложения (по умолчанию collectAngleStats по базе). */
   angleStats?: () => Promise<ReadonlyMap<OfferAngle, AngleStat>>;
 }
@@ -231,6 +235,12 @@ export async function manualWhatsAppQueue(
     rows.map((r) => r.email),
     rows.flatMap((r) => [r.phone, r.whatsapp]),
   );
+  // Один номер — одно сообщение: у двух карточек бывает общий WhatsApp (кандидаты сверяются
+  // при создании только по телефону и ссылке источника).
+  const contacted = await (
+    deps.contacted ?? ((phones: (string | null)[]) => contactedContacts([], phones, prisma))
+  )(rows.flatMap((r) => [r.phone, r.whatsapp]));
+  const usedNumbers = new Set<string>();
   const baseUrl = (deps.baseUrl ?? siteUrl)();
   const prices = await (deps.prices ?? officePrices)();
   const stats = await (deps.angleStats ?? (() => collectAngleStats(prisma, 'site')))().catch(
@@ -248,6 +258,18 @@ export async function manualWhatsAppQueue(
     }
     const digits = whatsappTarget(row, pick);
     if (!digits) continue;
+    const writtenAt = contacted.phones.get(digits);
+    if (writtenAt) {
+      // На номер уже писали: канал этой строки закрывается той же датой, иначе дубли копились
+      // бы в начале очереди.
+      await db.prospect.updateMany({
+        where: { id: row.id, status: { in: [...OUTREACH_STATUSES] }, whatsappSentAt: null },
+        data: { whatsappSentAt: writtenAt },
+      });
+      continue;
+    }
+    if (usedNumbers.has(digits)) continue;
+    usedNumbers.add(digits);
     const kind = row.kind === 'provider' ? 'provider' : 'site';
     let offer: SentOffer | undefined;
     let link = `${baseUrl.replace(/\/+$/, '')}/preview/${row.token}`;

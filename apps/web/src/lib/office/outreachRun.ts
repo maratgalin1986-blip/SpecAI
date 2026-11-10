@@ -41,6 +41,7 @@ import {
 } from './outreach';
 import { officePrices } from './prices';
 import { AI_OFFER_TIMEOUT_MS, improveOffer, storedOfferOf, type SentOffer } from './aiOffer';
+import { contactedContacts, phoneKey, type ContactedContacts } from './contacted';
 import { parseDossier } from './dossier';
 import { collectAngleStats, chooseAngle, type AngleStat, type LearningDb } from './learning';
 import { applicableAngles, buildOffer, type OfferAngle } from './offer';
@@ -168,7 +169,17 @@ export interface OutreachDb {
     }): Promise<OutreachRow[]>;
     /** Запись меняется только пока она ещё в рассылке: «Согласился»/«стоп» за время прохода не перетираются. */
     updateMany(args: {
-      where: { id: string; status: { in: string[] } };
+      /**
+       * `…SentAt: null` — захват канала строки перед отправкой: из двух одновременных проходов
+       * (повторное нажатие «Отправить») строку получает один.
+       */
+      where: {
+        id: string;
+        status: { in: string[] };
+        emailSentAt?: null;
+        whatsappSentAt?: null;
+        followUpSentAt?: null;
+      };
       data: Record<string, unknown>;
     }): Promise<{ count: number }>;
     update(args: {
@@ -214,6 +225,8 @@ export interface OutreachDeps {
   unsubscribe?: (baseUrl: string, token: string) => UnsubscribeLinks | null;
   /** Какие из адресов и номеров отписаны (по умолчанию optedOutContacts по базе). */
   optedOut?: (emails: string[], phones: string[]) => Promise<OptedOutContacts>;
+  /** Каким из адресов и номеров первое сообщение уже ушло в другой строке (contactedContacts). */
+  contacted?: (emails: string[], phones: string[]) => Promise<ContactedContacts>;
   /**
    * Что владелец утвердил на /admin/office/pisma (К2) — ключи approvalKey(строка, канал, тип):
    * проход отправляет только их, в любом режиме, и только с уже записанным предложением — что
@@ -242,6 +255,8 @@ export interface OutreachResult {
   mail?: 'no-smtp';
   /** Строк снято с рассылки: их адрес отписан (К3). */
   optedOut?: number;
+  /** Каналов закрыто без отправки: на этот адрес или номер уже писали в другой строке. */
+  duplicates?: number;
 }
 
 /** Одно письмо (или сообщение) дня, как его видит владелец перед отправкой (К2). */
@@ -295,10 +310,13 @@ export const FOLLOW_UP_STATUSES: readonly string[] = ['CONTACTED'];
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
+/** Отправка не ответила за отведённое время: ушло сообщение или нет — неизвестно. */
+class SendTimeoutError extends Error {}
+
 function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     const timer = setTimeout(
-      () => reject(new Error(`${label}: нет ответа за ${Math.round(ms / 1000)} с`)),
+      () => reject(new SendTimeoutError(`${label}: нет ответа за ${Math.round(ms / 1000)} с`)),
       ms,
     );
     promise.then(
@@ -344,7 +362,16 @@ export function followUpWindow(now: Date): { gte: Date; lte: Date } {
   };
 }
 
-type Delivery = { ok: true } | { ok: false; reason: string };
+/**
+ * `unknown` — отправка не ответила за SEND_TIMEOUT_MS: письмо могло уйти. Такое сообщение второй
+ * раз не отправляется (строка остаётся с отметкой отправки и с текстом ошибки для владельца):
+ * одно потерянное письмо лучше двух одинаковых одному адресату.
+ */
+type Delivery = { ok: true } | { ok: false; reason: string; unknown?: boolean };
+
+/** Текст для владельца, когда не ясно, ушло ли сообщение. */
+export const DELIVERY_UNKNOWN =
+  'сервер не подтвердил отправку — сообщение могло уйти, повторно не отправляется';
 
 /** Одно письмо со своего ящика с таймаутом; Reply-To — адрес владельца, отписка в заголовках. */
 async function deliverEmail(
@@ -368,6 +395,7 @@ async function deliverEmail(
   ).catch((error: unknown) => ({
     ok: false as const,
     reason: error instanceof Error ? error.message : String(error),
+    unknown: error instanceof SendTimeoutError,
   }));
 }
 
@@ -576,6 +604,30 @@ async function runOutreach(
   const pick = { whatsappToPhone: settings.whatsappToPhone, channels: active };
   let whatsappSent = false;
 
+  // Один адрес — одно первое сообщение. Кандидаты сверяются при создании только по телефону и
+  // ссылке источника, поэтому у двух строк бывает общая почта (филиалы сети) или один номер
+  // WhatsApp. Дата — адресу уже писали (в базе или в этом проходе); null — письмо ему только
+  // показано владельцу в этом же списке.
+  const contactedOf =
+    deps.contacted ??
+    ((emails: string[], phones: string[]) => contactedContacts(emails, phones, prisma));
+  const contacted = await contactedOf(
+    rows.map((r) => r.email ?? '').filter((e) => e.trim().length > 0),
+    rows.flatMap((r) => [r.phone, r.whatsapp ?? '']).filter((p) => p.trim().length > 0),
+  );
+  const usedEmails = new Map<string, Date | null>(contacted.emails);
+  const usedPhones = new Map<string, Date | null>(contacted.phones);
+  // Канал строки закрывается без отправки той же датой, что у первого сообщения на этот адрес:
+  // иначе дубли каждый проход занимали бы место в пачке, и до новых фирм очередь не дошла бы.
+  const closeDuplicate = async (row: OutreachRow, channel: OutreachChannel, at: Date) => {
+    const open = channel === 'email' ? { emailSentAt: null } : { whatsappSentAt: null };
+    const { count } = await db.prospect.updateMany({
+      where: { id: row.id, status: { in: [...OUTREACH_STATUSES] }, ...open },
+      data: channel === 'email' ? { emailSentAt: at } : { whatsappSentAt: at },
+    });
+    result.duplicates = (result.duplicates ?? 0) + count;
+  };
+
   for (const row of rows) {
     if (outOfTime()) break;
     if (emailLeft <= 0) active.email = false;
@@ -590,14 +642,28 @@ async function runOutreach(
     const prospect = toProspect(row);
     // Утверждённое письмо о сайте уходит только с тем предложением, что видел владелец.
     if (only && prospect.kind === 'site' && !storedOfferOf(row)) continue;
+
+    const links = wanted.includes('email') && row.email ? linksFor(row) : null;
+    let mailTo = links && row.email ? row.email.trim() : null;
+    let toWhatsApp = wanted.includes('whatsapp') ? whatsappTarget(row, pick) : null;
+    const mailKey = emailKey(mailTo);
+    if (mailTo && usedEmails.has(mailKey)) {
+      const at = usedEmails.get(mailKey);
+      if (at) await closeDuplicate(row, 'email', at);
+      mailTo = null;
+    }
+    const waKey = phoneKey(toWhatsApp);
+    if (toWhatsApp && usedPhones.has(waKey)) {
+      const at = usedPhones.get(waKey);
+      if (at) await closeDuplicate(row, 'whatsapp', at);
+      toWhatsApp = null;
+    }
+    if (!mailTo && !toWhatsApp) continue;
+
     // Подрядчикам (provider) — прежнее письмо, без персонального предложения.
     const offer = prospect.kind === 'site' ? await offerFor(row) : undefined;
     const offerData = offer ? { offerAngle: offer.angle, offerJson: JSON.stringify(offer) } : {};
-    const links = wanted.includes('email') && row.email ? linksFor(row) : null;
-    const input = await inputFor(row, offer, links);
-    const mailTo = links && row.email ? row.email.trim() : null;
-    const toWhatsApp = wanted.includes('whatsapp') ? whatsappTarget(row, pick) : null;
-    if (!mailTo && !toWhatsApp) continue;
+    const input = await inputFor(row, offer, mailTo ? links : null);
 
     if (mode === 'plan') {
       const letter = buildEmail(prospect, input);
@@ -617,8 +683,14 @@ async function runOutreach(
           ...(toWhatsApp ? [approvalKey(row.id, 'whatsapp', 'first')] : []),
         ],
       });
-      if (mailTo) emailLeft -= 1;
-      if (toWhatsApp) whatsappLeft -= 1;
+      if (mailTo) {
+        emailLeft -= 1;
+        usedEmails.set(mailKey, null);
+      }
+      if (toWhatsApp) {
+        whatsappLeft -= 1;
+        usedPhones.set(waKey, null);
+      }
       // Что владелец утвердит, то и уйдёт: предложение записывается сразу, статус не меняется.
       if (offer && !storedOfferOf(row)) {
         await db.prospect.updateMany({
@@ -630,12 +702,13 @@ async function runOutreach(
     }
 
     // Строка начинается, только если все её отправки успевают в остаток бюджета: иначе функцию
-    // могут остановить между отправкой и отметкой, и завтра письмо уйдёт ещё раз.
+    // могут остановить между отправкой и отметкой.
     const needed =
       (mailTo ? SEND_TIMEOUT_MS : 0) + (toWhatsApp ? SEND_TIMEOUT_MS + WHATSAPP_PAUSE_MS[1] : 0);
     if (timeLeft() < needed) break;
 
     const sentAt = new Date();
+    const guard = { id: row.id, status: { in: [...OUTREACH_STATUSES] } };
     const success = {
       status: 'CONTACTED',
       outreachError: null,
@@ -645,63 +718,124 @@ async function runOutreach(
     };
 
     if (mailTo && links) {
-      const sent = await deliverEmail(
-        email,
-        mailTo,
-        buildEmail(prospect, input),
-        settings.replyTo,
-        links,
-      );
-      if (sent.ok) {
-        emailLeft -= 1;
-        result.email += 1;
-        await db.prospect.updateMany({
-          where: { id: row.id, status: { in: [...OUTREACH_STATUSES] } },
-          data: { ...success, emailSentAt: sentAt },
-        });
-      } else if (sent.reason === 'no-smtp') {
-        // Ящик не настроен — это не ошибка кандидата: почта на этот проход выключается.
-        result.mail = 'no-smtp';
-        active.email = false;
-      } else {
-        result.errors += 1;
-        await db.prospect.updateMany({
-          where: { id: row.id, status: { in: [...OUTREACH_STATUSES] } },
-          data: {
-            outreachError: outreachErrorText('email', sent.reason),
-            outreachErrorAt: new Date(),
-          },
-        });
+      // Захват до отправки: второй одновременный проход (кнопку нажали ещё раз, пока первый
+      // запрос шёл) эту строку уже не получит — письмо уходит один раз.
+      const claim = await db.prospect.updateMany({
+        where: { ...guard, emailSentAt: null },
+        data: { emailSentAt: sentAt },
+      });
+      if (claim.count > 0) {
+        usedEmails.set(mailKey, sentAt);
+        const sent = await deliverEmail(
+          email,
+          mailTo,
+          buildEmail(prospect, input),
+          settings.replyTo,
+          links,
+        );
+        if (sent.ok) {
+          emailLeft -= 1;
+          result.email += 1;
+          await db.prospect.updateMany({
+            where: guard,
+            data: { ...success, emailSentAt: sentAt },
+          });
+        } else if (sent.unknown) {
+          // Не ясно, ушло ли письмо: считаем отправленным (второй раз не пишем), владелец
+          // видит пометку у фирмы.
+          emailLeft -= 1;
+          result.errors += 1;
+          await db.prospect.updateMany({
+            where: guard,
+            data: {
+              ...success,
+              emailSentAt: sentAt,
+              outreachError: outreachErrorText('email', DELIVERY_UNKNOWN),
+              outreachErrorAt: new Date(),
+            },
+          });
+        } else {
+          // Письмо точно не ушло: захват снимается.
+          usedEmails.delete(mailKey);
+          const noSmtp = sent.reason === 'no-smtp';
+          await db.prospect.updateMany({
+            where: guard,
+            data: {
+              emailSentAt: null,
+              ...(noSmtp
+                ? {}
+                : {
+                    outreachError: outreachErrorText('email', sent.reason),
+                    outreachErrorAt: new Date(),
+                  }),
+            },
+          });
+          if (noSmtp) {
+            // Ящик не настроен — это не ошибка кандидата: почта на этот проход выключается.
+            result.mail = 'no-smtp';
+            active.email = false;
+          } else {
+            result.errors += 1;
+          }
+        }
       }
     }
 
     if (toWhatsApp) {
-      if (whatsappSent) await sleep(pauseMs());
-      whatsappSent = true;
-      const sent = await withTimeout(
-        whatsapp(toWhatsApp, buildWhatsAppText(prospect, input)),
-        SEND_TIMEOUT_MS,
-        'WhatsApp',
-      ).catch((error: unknown) => ({
-        ok: false as const,
-        error: error instanceof Error ? error.message : String(error),
-      }));
-      if (sent.ok) {
-        whatsappLeft -= 1;
-        result.whatsapp += 1;
-        await db.prospect.updateMany({
-          where: { id: row.id, status: { in: [...OUTREACH_STATUSES] } },
-          data: { ...success, whatsappSentAt: new Date() },
-        });
-      } else {
-        result.errors += 1;
-        await db.prospect.updateMany({
-          where: { id: row.id, status: { in: [...OUTREACH_STATUSES] } },
-          data: {
-            outreachError: outreachErrorText('whatsapp', sent.error),
-            outreachErrorAt: new Date(),
-          },
-        });
+      const claim = await db.prospect.updateMany({
+        where: { ...guard, whatsappSentAt: null },
+        data: { whatsappSentAt: sentAt },
+      });
+      if (claim.count > 0) {
+        usedPhones.set(waKey, sentAt);
+        if (whatsappSent) await sleep(pauseMs());
+        whatsappSent = true;
+        const sent: Delivery = await withTimeout(
+          whatsapp(toWhatsApp, buildWhatsAppText(prospect, input)),
+          SEND_TIMEOUT_MS,
+          'WhatsApp',
+        ).then(
+          (answer) =>
+            answer.ok ? { ok: true as const } : { ok: false as const, reason: answer.error },
+          (error: unknown) => ({
+            ok: false as const,
+            reason: error instanceof Error ? error.message : String(error),
+            unknown: error instanceof SendTimeoutError,
+          }),
+        );
+        if (sent.ok) {
+          whatsappLeft -= 1;
+          result.whatsapp += 1;
+          const stamp = new Date();
+          usedPhones.set(waKey, stamp);
+          await db.prospect.updateMany({
+            where: guard,
+            data: { ...success, whatsappSentAt: stamp },
+          });
+        } else if (sent.unknown) {
+          whatsappLeft -= 1;
+          result.errors += 1;
+          await db.prospect.updateMany({
+            where: guard,
+            data: {
+              ...success,
+              whatsappSentAt: sentAt,
+              outreachError: outreachErrorText('whatsapp', DELIVERY_UNKNOWN),
+              outreachErrorAt: new Date(),
+            },
+          });
+        } else {
+          usedPhones.delete(waKey);
+          result.errors += 1;
+          await db.prospect.updateMany({
+            where: guard,
+            data: {
+              whatsappSentAt: null,
+              outreachError: outreachErrorText('whatsapp', sent.reason),
+              outreachErrorAt: new Date(),
+            },
+          });
+        }
       }
     }
   }
@@ -757,28 +891,52 @@ async function runOutreach(
       emailLeft -= 1;
       continue;
     }
-    const sent = await deliverEmail(email, to, letter, settings.replyTo, links);
-    // Запись — только пока кандидат ещё CONTACTED: «Согласился»/«стоп» за время прохода не перетираются.
+    // Запись — только пока кандидат ещё CONTACTED: «Согласился»/«стоп» за время прохода не
+    // перетираются. Захват до отправки — как у первого письма: напоминание уходит один раз.
     const guard = { id: row.id, status: { in: [...FOLLOW_UP_STATUSES] } };
+    const stamp = new Date();
+    const claim = await db.prospect.updateMany({
+      where: { ...guard, followUpSentAt: null },
+      data: { followUpSentAt: stamp },
+    });
+    if (claim.count === 0) continue;
+    const sent = await deliverEmail(email, to, letter, settings.replyTo, links);
     if (sent.ok) {
       emailLeft -= 1;
       result.followUps = (result.followUps ?? 0) + 1;
       await db.prospect.updateMany({
         where: guard,
-        data: { followUpSentAt: new Date(), outreachError: null, outreachErrorAt: null },
+        data: { followUpSentAt: stamp, outreachError: null, outreachErrorAt: null },
       });
-    } else if (sent.reason === 'no-smtp') {
-      result.mail = 'no-smtp';
-      break;
-    } else {
+    } else if (sent.unknown) {
+      emailLeft -= 1;
       result.errors += 1;
       await db.prospect.updateMany({
         where: guard,
         data: {
-          outreachError: outreachErrorText('followUp', sent.reason),
+          outreachError: outreachErrorText('followUp', DELIVERY_UNKNOWN),
           outreachErrorAt: new Date(),
         },
       });
+    } else {
+      const noSmtp = sent.reason === 'no-smtp';
+      await db.prospect.updateMany({
+        where: guard,
+        data: {
+          followUpSentAt: null,
+          ...(noSmtp
+            ? {}
+            : {
+                outreachError: outreachErrorText('followUp', sent.reason),
+                outreachErrorAt: new Date(),
+              }),
+        },
+      });
+      if (noSmtp) {
+        result.mail = 'no-smtp';
+        break;
+      }
+      result.errors += 1;
     }
   }
   return done();
