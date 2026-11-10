@@ -35,7 +35,7 @@ export function homeRegionCities(): string[] {
 /**
  * Сначала весь Татарстан (оба агента, каждый его город), затем остальная Россия:
  * providers × machinery по первым 30 городам и sites × ниши × 4 города; агенты
- * чередуются: providers, sites, providers, … Когда один список кончается, идёт
+ * идут так: один шаг providers, три шага sites. Когда один список кончается, идёт
  * остаток другого.
  */
 export function defaultPlan(): PlanStep[] {
@@ -60,14 +60,21 @@ export function defaultPlan(): PlanStep[] {
   return interleave(providers, sites);
 }
 
+/** Сколько шагов «Сайтов» идёт на один шаг «Подрядчиков» в плане по умолчанию. */
+export const SITES_PER_PROVIDER_STEP = 3;
+
+/**
+ * Один шаг `a`, затем SITES_PER_PROVIDER_STEP шагов `b`. Владельцу нужны прежде всего сайты
+ * (2026-11-09: «интересует направление: создание сайтов»), а открытые карты по спецтехнике почти
+ * ничего не дают — при чередовании один к одному половина шагов уходила впустую.
+ */
 function interleave(a: PlanStep[], b: PlanStep[]): PlanStep[] {
   const out: PlanStep[] = [];
-  const n = Math.max(a.length, b.length);
-  for (let i = 0; i < n; i++) {
-    const x = a[i];
-    const y = b[i];
-    if (x) out.push(x);
-    if (y) out.push(y);
+  let i = 0;
+  let j = 0;
+  while (i < a.length || j < b.length) {
+    if (i < a.length) out.push(a[i++]!);
+    for (let k = 0; k < SITES_PER_PROVIDER_STEP && j < b.length; k++) out.push(b[j++]!);
   }
   return out;
 }
