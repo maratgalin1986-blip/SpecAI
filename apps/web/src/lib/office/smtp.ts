@@ -138,3 +138,25 @@ export async function sendOfficeMail(
     return { ok: false, reason: error instanceof Error ? error.message : String(error) };
   }
 }
+
+export const OFFICE_TEST_SUBJECT = 'Проверка ящика офиса ИИСтройка24';
+const OFFICE_TEST_TEXT = 'Ящик офиса работает: письма компаниям будут уходить с этого адреса.';
+
+/**
+ * Проверочное письмо с ящика офиса самому себе (на пользователя SMTP): до первой рассылки
+ * видно, что сервер принимает пароль и письмо доходит. Те же настройки и тот же предел
+ * времени, что у sendOfficeMail; без настроек — причина 'no-smtp'.
+ */
+export async function sendOfficeTestMail(deps: OfficeMailDeps = {}): Promise<OfficeMailResult> {
+  const config = officeMailConfig(deps.env ?? process.env);
+  if (!config) return { ok: false, reason: 'no-smtp' };
+  return sendOfficeMail(
+    {
+      to: config.user,
+      subject: OFFICE_TEST_SUBJECT,
+      html: `<p>${OFFICE_TEST_TEXT}</p>`,
+      text: OFFICE_TEST_TEXT,
+    },
+    deps,
+  );
+}

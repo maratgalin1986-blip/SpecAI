@@ -9,6 +9,7 @@ import {
   buildDigest,
   collectDigest,
   moscowHour,
+  splitForTelegram,
   type DigestDb,
   type DigestInput,
   type ProspectLite,
@@ -82,6 +83,22 @@ describe('buildDigest', () => {
     expect(busy.split('\n')[0]).toContain('Поиск фирм не работает');
     // Два упавших шага из двух — ещё не тревога.
     expect(buildDigest(input({ runs: runs.slice(0, 2) }))).not.toContain('Поиск фирм не работает');
+  });
+
+  it('все шаги суток без ошибки и без новых фирм (от 6) → первая строка сводки', () => {
+    const empty = { agent: 'sites', niche: 'beauty', city: 'Казань', found: 40, created: 0 };
+    const runs = Array.from({ length: 7 }, () => ({ ...empty, error: null }));
+    const quiet = buildDigest(input({ runs }));
+    expect(quiet.startsWith('Поиск за сутки не дал новых фирм (шагов: 7).')).toBe(true);
+    expect(quiet).toContain('/admin/office');
+    const busy = buildDigest(input({ runs, outboxWaiting: 3 }));
+    expect(busy.split('\n')[0]).toBe('Поиск за сутки не дал новых фирм (шагов: 7).');
+    // Пять шагов — ещё мало; одна новая фирма или одна ошибка — уже другой случай.
+    expect(buildDigest(input({ runs: runs.slice(0, 5) }))).not.toContain('не дал новых фирм');
+    const one = [{ ...empty, created: 1, error: null }, ...runs];
+    expect(buildDigest(input({ runs: one }))).not.toContain('не дал новых фирм');
+    const withError = [{ ...empty, error: 'нет' }, ...runs];
+    expect(buildDigest(input({ runs: withError }))).not.toContain('не дал новых фирм');
   });
 
   it('полная сводка: итоги агентов, списки со ссылками превью, дата по Москве', () => {
@@ -372,5 +389,32 @@ describe('buildDigest — письма дня (К2)', () => {
 
   it('ноль писем — строки нет', () => {
     expect(buildDigest(input({ outboxWaiting: 0 }))).not.toContain('Письма дня');
+  });
+});
+
+describe('splitForTelegram', () => {
+  it('короткий текст — одна часть, пустой — ни одной', () => {
+    expect(splitForTelegram('Офис\nвсё тихо')).toEqual(['Офис\nвсё тихо']);
+    expect(splitForTelegram('')).toEqual([]);
+  });
+
+  it('сводка на 9 000 знаков → 3 части по строкам, каждая не длиннее 4000', () => {
+    const lines = Array.from(
+      { length: 90 },
+      (_, i) => `${String(i).padStart(2, '0')} ${'я'.repeat(96)}`,
+    );
+    const text = lines.join('\n');
+    expect(text.length).toBeGreaterThanOrEqual(8999);
+    const chunks = splitForTelegram(text);
+    expect(chunks).toHaveLength(3);
+    expect(chunks.every((c) => c.length <= 4000)).toBe(true);
+    // Ни одна строка не разорвана и ничего не потеряно.
+    expect(chunks.join('\n')).toBe(text);
+    expect(chunks.flatMap((c) => c.split('\n'))).toEqual(lines);
+  });
+
+  it('одна строка длиннее предела режется жёстко', () => {
+    const chunks = splitForTelegram(`начало\n${'x'.repeat(25)}\nкон`, 10);
+    expect(chunks).toEqual(['начало', 'x'.repeat(10), 'x'.repeat(10), 'xxxxx\nкон']);
   });
 });

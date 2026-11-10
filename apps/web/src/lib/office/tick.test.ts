@@ -8,6 +8,7 @@ import {
   TICK_LOCK_MS,
   TICK_RESERVE_MS,
   officeTick,
+  sendDigestChunks,
   tickLockKey,
   type TickDeps,
 } from './tick';
@@ -178,5 +179,36 @@ describe('officeTick — письма дня (К2)', () => {
     silent.mockRestore();
     expect(purgeLeads).toHaveBeenCalledWith(MORNING);
     expect(r).toMatchObject({ digest: true });
+  });
+});
+
+describe('sendDigestChunks: длинная сводка уходит частями', () => {
+  const long = Array.from({ length: 90 }, () => 'я'.repeat(99)).join('\n');
+
+  it('все части приняты — true, порядок сохранён', async () => {
+    const sent: string[] = [];
+    const ok = await sendDigestChunks(long, async (chunk) => {
+      sent.push(chunk);
+      return true;
+    });
+    expect(ok).toBe(true);
+    expect(sent).toHaveLength(3);
+    expect(sent.every((c) => c.length <= 4000)).toBe(true);
+    expect(sent.join('\n')).toBe(long);
+  });
+
+  it('одна часть не принята — false (onceADay повторит на следующем тике)', async () => {
+    const send = vi
+      .fn(async () => true)
+      .mockResolvedValueOnce(true)
+      .mockResolvedValueOnce(false);
+    expect(await sendDigestChunks(long, send)).toBe(false);
+    expect(send).toHaveBeenCalledTimes(2);
+  });
+
+  it('пустой текст — нечего слать, false', async () => {
+    const send = vi.fn(async () => true);
+    expect(await sendDigestChunks('', send)).toBe(false);
+    expect(send).not.toHaveBeenCalled();
   });
 });

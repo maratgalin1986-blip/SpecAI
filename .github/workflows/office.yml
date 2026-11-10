@@ -1,11 +1,18 @@
 name: Office tick
 
-# Every hour (GitHub starts scheduled runs late and rarely, so the endpoint does
-# up to three plan steps per call): the office agents search for companies
-# without a site, build their pages, send the outreach and, from 08:00 Moscow
-# once a day, the owner's digest (apps/web/src/app/api/cron/office,
-# lib/office/tick.ts). The endpoint is idempotent, refuses a second tick within
-# ten minutes and needs CRON_SECRET (repository secret, equal to the one in Vercel).
+# Every hour (GitHub starts scheduled runs late and rarely, so one run does up
+# to four plan steps): the office agents search for companies without a site,
+# build their pages, send the outreach and, from 08:00 Moscow once a day, the
+# owner's digest (apps/web/src/app/api/cron/office, lib/office/tick.ts).
+# The runner is a network relay for the search: the Overpass API resets
+# connections from Vercel but answers from here (probe of 2026-11-10), so
+# .github/scripts/office-relay.sh asks the app for the next plan step and its
+# Overpass query (/api/cron/office/next), fetches Overpass and posts the raw
+# answer back (/api/cron/office/ingest); parsing and candidate creation stay in
+# the app. Then it calls /api/cron/office?steps=0 for the outreach and the
+# digest. A step is accepted once (a stale answer gets 409), the tick refuses a
+# second call within ten minutes; everything needs CRON_SECRET (repository
+# secret, equal to the one in Vercel). The log holds counts only.
 # Scheduled at :37 so that it never coincides with bot-reminders.yml (:17).
 on:
   schedule:
@@ -15,11 +22,12 @@ on:
 jobs:
   tick:
     runs-on: ubuntu-latest
-    timeout-minutes: 3
+    timeout-minutes: 8
     steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: .github/scripts
       - name: Office tick
         env:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
-        run: |
-          if [ -z "$CRON_SECRET" ]; then echo "::error::CRON_SECRET repository secret is not set — add it in Settings → Secrets and variables → Actions"; exit 1; fi
-          curl -fsS --max-time 70 -H "Authorization: Bearer $CRON_SECRET" https://spec-ai-web.vercel.app/api/cron/office
+        run: bash .github/scripts/office-relay.sh

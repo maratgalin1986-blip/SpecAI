@@ -39,12 +39,11 @@ export async function POST(request: NextRequest) {
       { status: 400 },
     );
   }
-  const result = await runStep({
-    agent: agent.id,
-    niche: niche.key,
-    city: city.name,
-    trigger: 'admin',
-  });
+  // Бюджет меньше maxDuration: зависший источник не должен пережить функцию.
+  const result = await runStep(
+    { agent: agent.id, niche: niche.key, city: city.name, trigger: 'admin' },
+    { budgetMs: 45_000 },
+  );
   return NextResponse.json({
     found: result.found,
     created: result.created,

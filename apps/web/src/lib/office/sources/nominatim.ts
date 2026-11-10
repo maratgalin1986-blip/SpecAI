@@ -4,9 +4,11 @@
 // геокодер, lib/geo.ts) и по запросу «[ключ=значение]» в рамке города отдаёт объекты с тегами
 // карточки (extratags): телефон, сайт, часы, почта, WhatsApp.
 // Правила сервиса: не чаще одного запроса в секунду и свой User-Agent — между запросами пауза,
-// за шаг не больше NOMINATIM_MAX_REQUESTS запросов.
+// за шаг не больше NOMINATIM_MAX_REQUESTS запросов. Систематически выгружать объекты через
+// Nominatim правила OSMF запрещают, поэтому это запасной путь: основной поиск идёт через Overpass
+// с раннера GitHub (.github/scripts/office-relay.sh). Ответ — выборка (до 50–100 объектов на тег):
+// `sample: true`, конкурентов по ней досье не считает.
 
-import { GEO_USER_AGENT } from '@/lib/geo';
 import { capWithoutSite } from './limit';
 import { parseOverpass } from './osm';
 import type { ProspectSource, SourceCity, SourceNiche } from './types';
@@ -14,14 +16,15 @@ import type { ProspectSource, SourceCity, SourceNiche } from './types';
 export const NOMINATIM_URL = 'https://nominatim.openstreetmap.org/search';
 /** Больше 50 объектов за запрос сервис не отдаёт. */
 export const NOMINATIM_PAGE = 50;
-export const NOMINATIM_MAX_REQUESTS = 6;
+/** Повторная попытка тоже считается запросом. */
+export const NOMINATIM_MAX_REQUESTS = 3;
+/** Свой User-Agent офиса: если сервис заблокирует поиск, геокодер сайта (GEO_USER_AGENT) не пострадает. */
+export const OFFICE_USER_AGENT =
+  'SpecPlast16-office/1.0 (+https://xn--24-6kc5aagh4arjl.xn--p1ai; specplast16@mail.ru)';
 export const NOMINATIM_TIMEOUT_MS = 8_000;
 /** Пауза между запросами: правило сервиса — не чаще раза в секунду. */
 export const NOMINATIM_PAUSE_MS = 1_100;
 export const NOMINATIM_UNAVAILABLE = 'Источник карт не ответил';
-
-/** Слова для ниш с широкими тегами (техника): там ищем по названию, а не по тегу. */
-const MACHINERY_WORDS = ['спецтехника', 'автокран', 'экскаватор'];
 
 /** Рамка поиска вокруг центра города: «запад,север,восток,юг», как ждёт Nominatim. */
 export function viewbox(city: SourceCity, radiusKm: number): string {
@@ -31,11 +34,12 @@ export function viewbox(city: SourceCity, radiusKm: number): string {
   return [f(city.lon - dLon), f(city.lat + dLat), f(city.lon + dLon), f(city.lat - dLat)].join(',');
 }
 
-/** Что спрашивать: «[ключ=значение]» по тегам ниши; для ниш с фильтром по названию — слова. */
+/**
+ * Что спрашивать: «[ключ=значение]» по тегам ниши. Для ниш с фильтром по названию (техника)
+ * запросов нет: Nominatim ищет по названиям, а не по виду деятельности — замер дал ноль строк.
+ */
 export function nominatimQueries(niche: SourceNiche): string[] {
-  if (niche.nameRegex) {
-    return [...new Set([niche.dgisQuery, ...MACHINERY_WORDS].filter((q): q is string => !!q))];
-  }
+  if (niche.nameRegex) return [];
   return niche.osm.filter(([, v]) => v !== '*').map(([k, v]) => `[${k}=${v}]`);
 }
 
@@ -89,6 +93,8 @@ export function createNominatimSource(
   return {
     id: 'nominatim',
     async search({ niche, city, radiusKm, limit, budgetMs }) {
+      const queries = nominatimQueries(niche);
+      if (queries.length === 0) return { status: 'ok', candidates: [], sample: true };
       const doFetch: FetchLike = fetchImpl ?? ((input, init) => fetch(input, init));
       const startedAt = clock();
       const left = () => (budgetMs === undefined ? Infinity : budgetMs - (clock() - startedAt));
@@ -98,7 +104,7 @@ export function createNominatimSource(
       let requests = 0;
       let answered = false;
 
-      for (const q of nominatimQueries(niche)) {
+      for (const q of queries) {
         const exclude: string[] = [];
         // Вторая страница — только если первая пришла полной.
         for (let page = 0; page < 2; page++) {
@@ -126,7 +132,7 @@ export function createNominatimSource(
             }
             try {
               const response = await doFetch(`${NOMINATIM_URL}?${params.toString()}`, {
-                headers: { 'User-Agent': GEO_USER_AGENT, Accept: 'application/json' },
+                headers: { 'User-Agent': OFFICE_USER_AGENT, Accept: 'application/json' },
                 signal: AbortSignal.timeout(NOMINATIM_TIMEOUT_MS),
               });
               if (!response.ok) continue;
@@ -154,6 +160,7 @@ export function createNominatimSource(
       return {
         status: 'ok',
         candidates: capWithoutSite(parseOverpass({ elements }, niche), limit),
+        sample: true,
       };
     },
   };

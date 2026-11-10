@@ -1,11 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   OVERPASS_MIRRORS,
+  OVERPASS_RELAY_MIRRORS,
   OVERPASS_TOTAL_MS,
   OVERPASS_URL,
   buildOverpassQuery,
   createOsmSource,
   parseOverpass,
+  parseOverpassNeighbors,
   withoutWebsite,
 } from './osm';
 import { candidateEmail, candidatePhone, candidateTelegram } from './phone';
@@ -204,6 +206,54 @@ describe('parseOverpass', () => {
   });
 });
 
+describe('parseOverpassNeighbors', () => {
+  const json = {
+    elements: [
+      {
+        type: 'node',
+        id: 1,
+        lat: 55.79,
+        lon: 49.1,
+        tags: { name: 'С телефоном', phone: '+7 843 200-00-01' },
+      },
+      {
+        type: 'node',
+        id: 2,
+        lat: 55.79,
+        lon: 49.1,
+        tags: { name: 'Без телефона', website: 'https://a.example' },
+      },
+      { type: 'way', id: 3, center: { lat: 55.8, lon: 49.11 }, tags: { name: 'Здание' } },
+      { type: 'node', id: 4, lat: 55.79, lon: 49.1, tags: { amenity: 'dentist' } },
+      { type: 'node', id: 5, tags: { name: 'Без координат' } },
+      { type: 'node', id: 1, lat: 55.79, lon: 49.1, tags: { name: 'Повтор' } },
+    ],
+  };
+
+  it('все названные объекты с координатами — и без телефона; без названия и дубли мимо', () => {
+    expect(parseOverpassNeighbors(json, dentist)).toEqual([
+      { ref: 'osm:node/1', lat: 55.79, lon: 49.1, hasSite: false },
+      { ref: 'osm:node/2', lat: 55.79, lon: 49.1, hasSite: true },
+      { ref: 'osm:way/3', lat: 55.8, lon: 49.11, hasSite: false },
+    ]);
+    // Кандидат — только объект с телефоном.
+    expect(parseOverpass(json, dentist).map((c) => c.sourceRef)).toEqual(['osm:node/1']);
+  });
+
+  it('для ниши с фильтром по названию — только совпавшие; мусор не роняет', () => {
+    expect(parseOverpassNeighbors(json, machinery)).toEqual([]);
+    expect(parseOverpassNeighbors(null, dentist)).toEqual([]);
+    expect(parseOverpassNeighbors({ elements: [null, 5, {}] }, dentist)).toEqual([]);
+  });
+
+  it('зеркала для раннера: только те, что ответили на пробе', () => {
+    expect(OVERPASS_RELAY_MIRRORS).toEqual([
+      'https://overpass-api.de/api/interpreter',
+      'https://maps.mail.ru/osm/tools/overpass/api/interpreter',
+    ]);
+  });
+});
+
 describe('withoutWebsite', () => {
   it('убирает кандидатов с сайтом, пустая строка — тоже «нет сайта»', () => {
     const list = parseOverpass(fixture, dentist).map((c, i) =>
@@ -237,6 +287,9 @@ describe('osmSource.search', () => {
       'osm:node/6',
     ]);
     expect(result.candidates[0]!.website).toBe('https://denta.example');
+    // Соседи — все названные объекты ответа, их не меньше, чем кандидатов.
+    expect(result.neighbors!.length).toBeGreaterThanOrEqual(result.candidates.length);
+    expect(result.neighbors!.map((n) => n.ref)).toContain('osm:node/2');
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];

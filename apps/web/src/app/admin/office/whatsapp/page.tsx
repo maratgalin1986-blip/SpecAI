@@ -4,7 +4,11 @@ import { Card } from '@specai/ui';
 import { adminGate } from '@/components/admin/AdminGate';
 import { AdminPageHeader, StatTile } from '@/components/admin/AdminUi';
 import { OfficeWhatsAppList } from '@/components/admin/OfficeWhatsAppList';
-import { manualWhatsAppQueue, type ManualWhatsAppQueue } from '@/lib/office/whatsappManual';
+import {
+  emptyQueueNotes,
+  manualWhatsAppQueue,
+  type ManualWhatsAppQueue,
+} from '@/lib/office/whatsappManual';
 
 export const dynamic = 'force-dynamic';
 export const metadata: Metadata = { title: 'WhatsApp вручную', robots: { index: false } };
@@ -23,9 +27,18 @@ export default async function AdminOfficeWhatsAppPage() {
     queue = await manualWhatsAppQueue(new Date());
   } catch (error) {
     console.error('[office] whatsapp queue failed', error);
-    queue = { items: [], sentToday: 0, dailyCap: 0, paused: false };
+    queue = {
+      items: [],
+      sentToday: 0,
+      dailyCap: 0,
+      paused: false,
+      coverage: { ready: 0, withWhatsappTag: 0, withMobile: 0, toPhone: false },
+    };
     failed = true;
   }
+
+  // Пустая очередь без причины выглядит как поломка: объясняем её счётчиками.
+  const emptyNotes = failed || queue.items.length > 0 ? [] : emptyQueueNotes(queue);
 
   return (
     <div className="flex flex-col gap-5">
@@ -54,9 +67,16 @@ export default async function AdminOfficeWhatsAppPage() {
         <StatTile label="Отправлено сегодня" value={queue.sentToday} />
         <StatTile label="Лимит в день" value={queue.dailyCap} />
       </div>
+      {!failed && (
+        <div className="grid grid-cols-3 gap-2">
+          <StatTile label="Ещё не писали" value={queue.coverage.ready} />
+          <StatTile label="С пометкой WhatsApp" value={queue.coverage.withWhatsappTag} />
+          <StatTile label="С мобильным номером" value={queue.coverage.withMobile} />
+        </div>
+      )}
 
       <Card>
-        <OfficeWhatsAppList items={queue.items} />
+        <OfficeWhatsAppList items={queue.items} emptyNotes={emptyNotes} />
       </Card>
     </div>
   );

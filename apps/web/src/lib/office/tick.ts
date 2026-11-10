@@ -13,7 +13,13 @@
 import { prisma } from '@specai/database';
 import { onceADay } from '@/lib/cronOnce';
 import { notifyTelegram } from '@/lib/notify';
-import { DIGEST_HOURS, collectDigest, moscowHour, type DigestExtra } from './digest';
+import {
+  DIGEST_HOURS,
+  collectDigest,
+  moscowHour,
+  splitForTelegram,
+  type DigestExtra,
+} from './digest';
 import { sendOutreach, type OutreachResult } from './outreachRun';
 import { runScheduledStep, type ScheduledStepResult } from './run';
 import { OVERPASS_TOTAL_MS } from './sources/osm';
@@ -101,10 +107,26 @@ export async function purgeOldSiteLeads(now: Date): Promise<number> {
   return count;
 }
 
+/**
+ * Шлёт сводку частями по порядку. true — только если Telegram принял все части: иначе onceADay
+ * не ставит отметку и следующий тик повторит отправку. После отказа остальные части не шлём.
+ */
+export async function sendDigestChunks(
+  text: string,
+  send: (chunk: string) => Promise<boolean> = notifyTelegram,
+): Promise<boolean> {
+  const chunks = splitForTelegram(text);
+  if (chunks.length === 0) return false;
+  for (const chunk of chunks) {
+    if (!(await send(chunk))) return false;
+  }
+  return true;
+}
+
 async function defaultDigest(now: Date, extra: DigestExtra): Promise<boolean | null> {
   return onceADay(
     'office-digest',
-    async () => notifyTelegram(await collectDigest(now, undefined, extra)),
+    async () => sendDigestChunks(await collectDigest(now, undefined, extra)),
     now,
   );
 }

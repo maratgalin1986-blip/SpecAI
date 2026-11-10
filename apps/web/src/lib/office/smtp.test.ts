@@ -3,7 +3,9 @@ import {
   DEFAULT_SMTP_HOST,
   officeMailConfig,
   officeMailConfigured,
+  OFFICE_TEST_SUBJECT,
   sendOfficeMail,
+  sendOfficeTestMail,
   type OfficeMailTransport,
 } from './smtp';
 
@@ -105,5 +107,43 @@ describe('sendOfficeMail', () => {
     );
     expect(result.ok).toBe(false);
     expect(sendMail).not.toHaveBeenCalled();
+  });
+});
+
+describe('sendOfficeTestMail', () => {
+  it('шлёт одно письмо с ящика на него же', async () => {
+    const sendMail = vi.fn<OfficeMailTransport['sendMail']>(async () => ({}));
+    const result = await sendOfficeTestMail({
+      env: { ...ENV, OUTREACH_FROM: 'ИИСтройка24 <office@example.ru>' },
+      transport: () => ({ sendMail }),
+    });
+    expect(result).toEqual({ ok: true });
+    expect(sendMail).toHaveBeenCalledTimes(1);
+    const sent = sendMail.mock.calls[0]![0];
+    expect(sent.to).toBe('office@example.ru');
+    expect(sent.from).toBe('ИИСтройка24 <office@example.ru>');
+    expect(sent.subject).toBe(OFFICE_TEST_SUBJECT);
+    expect(sent.text).toContain('Ящик офиса работает');
+  });
+
+  it('без SMTP — no-smtp, транспорт не создаётся', async () => {
+    const transport = vi.fn();
+    expect(await sendOfficeTestMail({ env: {}, transport })).toEqual({
+      ok: false,
+      reason: 'no-smtp',
+    });
+    expect(transport).not.toHaveBeenCalled();
+  });
+
+  it('ошибка сервера возвращается причиной', async () => {
+    const result = await sendOfficeTestMail({
+      env: ENV,
+      transport: () => ({
+        sendMail: async () => {
+          throw new Error('Invalid login: 535 5.7.8');
+        },
+      }),
+    });
+    expect(result).toEqual({ ok: false, reason: 'Invalid login: 535 5.7.8' });
   });
 });

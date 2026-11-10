@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
+import { GEO_USER_AGENT } from '@/lib/geo';
 import {
   NOMINATIM_MAX_REQUESTS,
   NOMINATIM_PAGE,
+  OFFICE_USER_AGENT,
   createNominatimSource,
   nominatimQueries,
   toOverpassElements,
@@ -35,7 +37,7 @@ describe('источник Nominatim', () => {
     expect(s).toBeLessThan(kazan.lat);
   });
 
-  it('запросы: «[ключ=значение]» по тегам; ниша с фильтром по названию — слова, без «*»', () => {
+  it('запросы: «[ключ=значение]» по тегам, без «*»; ниша с фильтром по названию — без запросов', async () => {
     expect(nominatimQueries(tyres)).toEqual(['[shop=tyres]']);
     const machinery: SourceNiche = {
       key: 'machinery',
@@ -46,12 +48,18 @@ describe('источник Nominatim', () => {
       nameRegex: /кран/i,
       dgisQuery: 'аренда спецтехники',
     };
-    expect(nominatimQueries(machinery)).toEqual([
-      'аренда спецтехники',
-      'спецтехника',
-      'автокран',
-      'экскаватор',
-    ]);
+    expect(nominatimQueries(machinery)).toEqual([]);
+    // Nominatim ищет по названиям, а не по виду деятельности: техника — ни одного запроса.
+    const fetchImpl = vi.fn(async () => Response.json([row(1)]));
+    expect(
+      await createNominatimSource(fetchImpl, noSleep).search({
+        niche: machinery,
+        city: kazan,
+        radiusKm: 15,
+        limit: 10,
+      }),
+    ).toEqual({ status: 'ok', candidates: [], sample: true });
+    expect(fetchImpl).not.toHaveBeenCalled();
     expect(nominatimQueries({ key: 'x', osm: [['craft', '*']] })).toEqual([]);
   });
 
@@ -98,7 +106,12 @@ describe('источник Nominatim', () => {
     const [url, init] = fetchImpl.mock.calls[0]!;
     expect(url).toContain('bounded=1');
     expect(decodeURIComponent(url)).toContain('q=[shop=tyres]');
-    expect((init!.headers as Record<string, string>)['User-Agent']).toMatch(/SpecPlast16/);
+    // Свой User-Agent офиса, не геокодера сайта.
+    expect((init!.headers as Record<string, string>)['User-Agent']).toBe(OFFICE_USER_AGENT);
+    expect(OFFICE_USER_AGENT).not.toBe(GEO_USER_AGENT);
+    // Ответ — выборка: соседей для подсчёта конкурентов нет.
+    expect(result.sample).toBe(true);
+    expect(result.neighbors).toBeUndefined();
   });
 
   it('полная страница — вторая с exclude_place_ids и паузой; запросов не больше лимита', async () => {
@@ -118,7 +131,7 @@ describe('источник Nominatim', () => {
     expect(fetchImpl.mock.calls[1]![0]).toContain('exclude_place_ids=1001');
     expect(sleep).toHaveBeenCalledTimes(1);
     expect(result.status === 'ok' && result.candidates.length).toBe(NOMINATIM_PAGE + 1);
-    expect(NOMINATIM_MAX_REQUESTS).toBeLessThanOrEqual(6);
+    expect(NOMINATIM_MAX_REQUESTS).toBe(3);
   });
 
   it('разовый сбой — одна повторная попытка', async () => {
@@ -134,6 +147,29 @@ describe('источник Nominatim', () => {
     });
     expect(fetchImpl).toHaveBeenCalledTimes(2);
     expect(result.status === 'ok' && result.candidates.length).toBe(1);
+  });
+
+  it('за шаг не больше трёх запросов, повторная попытка считается', async () => {
+    const full = Array.from({ length: NOMINATIM_PAGE }, (_, i) => row(i + 1));
+    const fetchImpl = vi
+      .fn<(url: string) => Promise<Response>>()
+      .mockResolvedValueOnce(Response.json(full))
+      .mockRejectedValueOnce(new Error('сеть'))
+      .mockResolvedValue(Response.json(full));
+    const twoTags: SourceNiche = {
+      key: 'beauty',
+      osm: [
+        ['shop', 'beauty'],
+        ['shop', 'hairdresser'],
+      ],
+    };
+    await createNominatimSource(fetchImpl, noSleep).search({
+      niche: twoTags,
+      city: kazan,
+      radiusKm: 15,
+      limit: 200,
+    });
+    expect(fetchImpl).toHaveBeenCalledTimes(NOMINATIM_MAX_REQUESTS);
   });
 
   it('сервис не ответил — unavailable; нет времени — запросов нет', async () => {

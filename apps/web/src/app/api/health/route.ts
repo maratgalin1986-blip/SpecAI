@@ -34,7 +34,10 @@ async function officeHealth(): Promise<(SearchHealth & { queue: Record<string, n
       prisma.prospect.count({ where: { ...waiting, whatsapp: { startsWith: '+79' } } }),
       prisma.prospect.count({ where: { ...waiting, phone: { startsWith: '+79' } } }),
     ]);
-    return { ...searchHealth(runs), queue: { ready, withEmail, withWhatsapp, withMobile } };
+    return {
+      ...searchHealth(runs, new Date()),
+      queue: { ready, withEmail, withWhatsapp, withMobile },
+    };
   } catch {
     return null;
   }

@@ -1,23 +1,33 @@
 // Офис агентов: прогон одного шага плана (spec §4, R1, R4, R6). Создаёт запись журнала
-// `OfficeRun`, ищет кандидатов в источнике (по умолчанию — карты OpenStreetMap), отбрасывает
+// `OfficeRun`, ищет кандидатов в источнике (на сервере — 2ГИС и Nominatim; Overpass спрашивает
+// раннер GitHub и присылает ответ: peekScheduledStep / ingestScheduledStep), отбрасывает
 // компании с сайтом, ИП и людей (К5, `candidateFilter.ts`) и уже известные (тот же объект
 // источника или телефон; для агента «Подрядчики» — ещё компании, которые уже на площадке), создаёт `Prospect` со статусом READY
-// и досье (`dossier.ts`): соседи для подсчёта конкурентов — весь ответ источника, и с сайтом.
+// и досье (`dossier.ts`): соседи для подсчёта конкурентов — все названные объекты ниши из ответа;
+// источник-выборка (Nominatim) конкурентов не даёт — чисел в досье нет.
 // База и источник передаются зависимостями, чтобы логика проверялась без Postgres.
 
+import { createHash } from 'node:crypto';
 import { prisma } from '@specai/database';
 import { cityByName, findCityInText } from '@specai/shared';
 import { AGENTS, agentById } from './agents';
 import { candidateSkipText } from './candidateFilter';
-import { buildDossier } from './dossier';
+import { buildDossier, neighborsOf } from './dossier';
 import { machineryTags, nicheByKey, type Niche } from './niches';
 import { OFFICE_SETTINGS, defaultPlan, nextStep, parsePlan } from './plan';
 import { prospectSlug, newToken } from './slug';
 import { createDgisSource } from './sources/dgis';
-import { firstAvailable, withFallback } from './sources/fallback';
+import { withFallback } from './sources/fallback';
+import { capWithoutSite } from './sources/limit';
 import { nominatimSource } from './sources/nominatim';
-import { osmSource } from './sources/osm';
-import type { Candidate, ProspectSource, SourceNiche } from './sources/types';
+import {
+  OVERPASS_RELAY_MIRRORS,
+  buildOverpassQuery,
+  osmSource,
+  parseOverpass,
+  parseOverpassNeighbors,
+} from './sources/osm';
+import type { Candidate, Neighbor, ProspectSource, SourceNiche } from './sources/types';
 import type { AgentId, PlanStep } from './types';
 
 /** Радиус поиска вокруг центра города, км. */
@@ -137,7 +147,7 @@ function defaultDb(): OfficeDb {
   return prisma;
 }
 
-function sourceNiche(niche: Niche): SourceNiche {
+export function sourceNiche(niche: Niche): SourceNiche {
   return {
     key: niche.key,
     osm: niche.osm.tags.map(([k, v]) => [k, v] as [string, string]),
@@ -149,14 +159,17 @@ function sourceNiche(niche: Niche): SourceNiche {
 }
 
 /**
- * 2ГИС первым, когда есть `DGIS_API_KEY`; затем Nominatim — он отвечает облачным серверам; Overpass
- * последним: с Vercel он сбрасывает соединение («Источник карт не ответил», продакшен 9–10.11.2026).
+ * Источник на сервере: 2ГИС первым, когда есть `DGIS_API_KEY`, затем Nominatim — он отвечает
+ * облачным серверам. Overpass с Vercel не спрашивается: он сбрасывает соединение и только съедал
+ * 25 с шага (продакшен 9–10.11.2026); его запрашивает раннер GitHub (`ingestScheduledStep`).
  */
 export function defaultSource(): ProspectSource {
   const dgis = createDgisSource();
-  // OpenStreetMap — один набор данных: Overpass спрашивается, только если Nominatim не ответил.
-  return withFallback([...(dgis ? [dgis] : []), firstAvailable([nominatimSource, osmSource])]);
+  return withFallback([...(dgis ? [dgis] : []), nominatimSource]);
 }
+
+/** Прямой Overpass — для ручных проверок и тестов; в серверной цепочке его нет. */
+export { osmSource };
 
 /** Последние 10 цифр телефона — так сравниваются `+7…`, `8…` и городские номера. */
 export function phoneTail(phone: string): string {
@@ -174,10 +187,11 @@ interface CreateContext {
   niche: string;
   nicheTitle: string;
   /**
-   * Весь ответ источника (и фирмы с сайтом) — соседи для подсчёта конкурентов в досье.
-   * null — сравнивать не с чем (ручное добавление): конкурентов в досье нет, а не «ноль».
+   * Все названные объекты ниши из ответа источника — соседи для подсчёта конкурентов в досье.
+   * null — сравнивать не с чем (ручное добавление, источник-выборка): конкурентов в досье
+   * нет, а не «ноль».
    */
-  neighbors: readonly Candidate[] | null;
+  neighbors: readonly Neighbor[] | null;
   city: string | null;
   source: string;
   runId: string | null;
@@ -408,7 +422,7 @@ export async function runStep(input: RunStepInput, deps: RunDeps = {}): Promise<
       agent: input.agent,
       niche: niche.key,
       nicheTitle: niche.title,
-      neighbors: search.candidates,
+      neighbors: search.sample ? null : (search.neighbors ?? neighborsOf(search.candidates)),
       city: city.name,
       source: source.id,
       runId: run.id,
@@ -494,4 +508,126 @@ export async function runScheduledStep(
     { db, source: deps.source, budgetMs: deps.budgetMs },
   );
   return { skipped: null, step, result };
+}
+
+/** Шаг плана под курсором и его отпечаток — чтобы ответ раннера приняли только для этого шага. */
+export type PeekedStep =
+  { skipped: 'paused' | 'empty' } | { index: number; key: string; step: PlanStep };
+
+export function stepKey(index: number, step: PlanStep): string {
+  return createHash('sha256')
+    .update(`${index}|${step.agent};${step.niche};${step.city}`)
+    .digest('hex')
+    .slice(0, 16);
+}
+
+async function readPlan(db: OfficeDb) {
+  const rows = await db.appSetting.findMany({
+    where: { key: { in: [OFFICE_SETTINGS.paused, OFFICE_SETTINGS.plan, OFFICE_SETTINGS.cursor] } },
+    select: { key: true, value: true },
+  });
+  return resolvePlan(rows);
+}
+
+async function peekPlan(
+  db: OfficeDb,
+): Promise<
+  | { skipped: 'paused' | 'empty' }
+  | { index: number; key: string; step: PlanStep; nextCursor: number }
+> {
+  const { paused, steps, cursor } = await readPlan(db);
+  if (paused) return { skipped: 'paused' };
+  const { step, nextCursor } = nextStep(steps, cursor);
+  if (!step) return { skipped: 'empty' };
+  // nextStep отдаёт курсор следующего шага; номер текущего — на один назад по кругу.
+  const index = (nextCursor - 1 + steps.length) % steps.length;
+  return { index, key: stepKey(index, step), step, nextCursor };
+}
+
+/** Следующий шаг плана без запуска: читает паузу, план и курсор, курсор НЕ двигает. */
+export async function peekScheduledStep(db: OfficeDb = defaultDb()): Promise<PeekedStep> {
+  const peeked = await peekPlan(db);
+  if ('skipped' in peeked) return peeked;
+  return { index: peeked.index, key: peeked.key, step: peeked.step };
+}
+
+/**
+ * Запрос Overpass для шага и зеркала для раннера. `query: null` — ниша или город шага не
+ * найдены: раннер присылает ошибку, и шаг записывается в журнал с причиной (`runStep`).
+ */
+export function relayRequest(step: PlanStep): { query: string | null; mirrors: readonly string[] } {
+  const niche = nicheByKey(step.niche);
+  const city = cityByName(step.city);
+  const query =
+    niche && city
+      ? buildOverpassQuery(
+          sourceNiche(niche),
+          { name: city.name, lat: city.lat, lon: city.lon },
+          STEP_RADIUS_KM,
+        )
+      : null;
+  return { query, mirrors: OVERPASS_RELAY_MIRRORS };
+}
+
+export const RELAY_BAD_ANSWER = 'Overpass прислал не тот ответ';
+/** Сколько знаков текста ошибки раннера попадает в журнал. */
+const RELAY_ERROR_MAX = 200;
+
+/** Источник из готового ответа Overpass, который прислал раннер. */
+function relayedSource(input: { overpass?: unknown; error?: string }): ProspectSource {
+  return {
+    id: 'osm',
+    async search({ niche }) {
+      if (input.error !== undefined) {
+        const error = input.error.replace(/\s+/g, ' ').trim().slice(0, RELAY_ERROR_MAX);
+        return { status: 'unavailable', error: error || RELAY_BAD_ANSWER };
+      }
+      const json = input.overpass as { elements?: unknown; remark?: unknown } | null | undefined;
+      if (!json || typeof json !== 'object' || !Array.isArray(json.elements)) {
+        return { status: 'unavailable', error: RELAY_BAD_ANSWER };
+      }
+      // Overpass отвечает 200 и на свой таймаут: пустой список и «remark: runtime error…».
+      if (
+        json.elements.length === 0 &&
+        typeof json.remark === 'string' &&
+        /error/i.test(json.remark)
+      ) {
+        return { status: 'unavailable', error: 'Overpass не успел выполнить запрос' };
+      }
+      return {
+        status: 'ok',
+        candidates: capWithoutSite(parseOverpass(json, niche), SEARCH_LIMIT),
+        neighbors: parseOverpassNeighbors(json, niche),
+      };
+    },
+  };
+}
+
+export type IngestResult = { status: 'stale' } | { status: 'done'; result: RunStepResult };
+
+/**
+ * Ответ раннера по шагу, который он получил из `peekScheduledStep`. Шаг под курсором уже
+ * другой (план изменили, шаг сделал другой запуск, пауза) → 'stale', ничего не меняется.
+ * Иначе курсор сдвигается ДО прогона, как в `runScheduledStep`, и шаг идёт с `trigger: 'cron'`:
+ * `error` — в журнал как отказ источника, `overpass` — разбор и создание кандидатов.
+ */
+export async function ingestScheduledStep(
+  input: { index: number; key: string; overpass?: unknown; error?: string; now?: Date },
+  deps: RunDeps = {},
+): Promise<IngestResult> {
+  const db = deps.db ?? defaultDb();
+  const peeked = await peekPlan(db);
+  if ('skipped' in peeked || peeked.index !== input.index || peeked.key !== input.key) {
+    return { status: 'stale' };
+  }
+  await db.appSetting.upsert({
+    where: { key: OFFICE_SETTINGS.cursor },
+    create: { key: OFFICE_SETTINGS.cursor, value: String(peeked.nextCursor) },
+    update: { value: String(peeked.nextCursor) },
+  });
+  const result = await runStep(
+    { ...peeked.step, trigger: 'cron', source: relayedSource(input), now: input.now },
+    { db },
+  );
+  return { status: 'done', result };
 }

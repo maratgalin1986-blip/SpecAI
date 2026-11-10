@@ -6,7 +6,7 @@
 // Вторая волна (U3): лучший заход персональных предложений и «горячие» — открыли превью за
 // 7 дней и ещё не ответили (им пора позвонить).
 
-import { FAILING_RUNS } from './searchHealth';
+import { EMPTY_RUNS, FAILING_RUNS } from './searchHealth';
 import { phoneText } from './pages';
 import { prisma } from '@specai/database';
 import { MSK, mskDate, mskDayBounds } from '@/lib/adminCrm';
@@ -191,7 +191,10 @@ export function buildDigest(input: DigestInput): string {
   const searchDown =
     input.runs.length >= FAILING_RUNS && failedRuns === input.runs.length
       ? `Поиск фирм не работает: все шаги за сутки (${failedRuns}) закончились ошибкой источника карт. Новых кандидатов не будет, пока его не починить.`
-      : null;
+      : // Ошибок нет, но и ни одной новой фирмы за все шаги суток — поиск крутится вхолостую.
+        input.runs.length >= EMPTY_RUNS && failedRuns === 0 && created === 0
+        ? `Поиск за сутки не дал новых фирм (шагов: ${input.runs.length}).`
+        : null;
 
   if (quiet && searchDown) {
     const text = `${searchDown} Открыть офис: ${base}/admin/office`;
@@ -229,6 +232,35 @@ export function buildDigest(input: DigestInput): string {
   if (outbox) out.push(outbox);
   out.push(`Открыть офис: ${base}/admin/office`);
   return out.join('\n');
+}
+
+/** Telegram принимает сообщение до 4096 знаков; режем с запасом. */
+export const TELEGRAM_CHUNK = 4000;
+
+/**
+ * Делит длинный текст на части не длиннее `max` по переводам строк (урок 10.11.2026: длинную
+ * сводку Telegram отклонял целиком, и её молча не было). Строку длиннее `max` режет жёстко.
+ */
+export function splitForTelegram(text: string, max: number = TELEGRAM_CHUNK): string[] {
+  const chunks: string[] = [];
+  let current: string | null = null;
+  for (const raw of text.split('\n')) {
+    let piece = raw;
+    while (piece.length > max) {
+      if (current !== null) chunks.push(current);
+      current = null;
+      chunks.push(piece.slice(0, max));
+      piece = piece.slice(max);
+    }
+    if (current === null) current = piece;
+    else if (current.length + 1 + piece.length <= max) current += `\n${piece}`;
+    else {
+      chunks.push(current);
+      current = piece;
+    }
+  }
+  if (current !== null) chunks.push(current);
+  return chunks.filter((c) => c.length > 0);
 }
 
 const LITE_SELECT = {

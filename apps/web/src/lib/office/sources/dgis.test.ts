@@ -55,6 +55,8 @@ const fixture = {
   },
 };
 
+const ON = { DGIS_API_KEY: 'KEY', DGIS_STORAGE_ALLOWED: '1' };
+
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
 
@@ -84,13 +86,77 @@ describe('parseDgis', () => {
 
 describe('createDgisSource', () => {
   it('без ключа источника нет', () => {
-    expect(createDgisSource('')).toBeNull();
-    expect(createDgisSource(undefined)).toBeNull();
+    expect(createDgisSource({})).toBeNull();
+    expect(createDgisSource({ DGIS_API_KEY: '', DGIS_STORAGE_ALLOWED: '1' })).toBeNull();
+  });
+
+  it('ключ без разрешения на хранение — источника нет', () => {
+    expect(createDgisSource({ DGIS_API_KEY: 'KEY' })).toBeNull();
+    expect(createDgisSource({ DGIS_API_KEY: 'KEY', DGIS_STORAGE_ALLOWED: 'true' })).toBeNull();
+    expect(createDgisSource({ DGIS_API_KEY: 'KEY', DGIS_STORAGE_ALLOWED: '0' })).toBeNull();
+    expect(createDgisSource(ON)).not.toBeNull();
+  });
+
+  it('meta.code 403 при HTTP 200 — unavailable с кодом; 404 — пустой ответ', async () => {
+    const denied = createDgisSource(ON, async () =>
+      json({ meta: { code: 403, error: { message: 'Authorization error' } } }),
+    )!;
+    const input = { niche: dentist, city: kazan, radiusKm: 15, limit: 10 };
+    expect(await denied.search(input)).toEqual({ status: 'unavailable', error: '2ГИС: код 403' });
+    const nothing = createDgisSource(ON, async () => json({ meta: { code: 404 } }))!;
+    expect(await nothing.search(input)).toEqual({ status: 'ok', candidates: [] });
+  });
+
+  it('карточки без contact_groups — у ключа нет доступа к контактам', async () => {
+    const items = [1, 2, 3].map((i) => ({ id: `n${i}`, name: `Фирма ${i}`, address_name: 'А, 1' }));
+    const source = createDgisSource(ON, async () =>
+      json({ meta: { code: 200 }, result: { items } }),
+    )!;
+    expect(await source.search({ niche: dentist, city: kazan, radiusKm: 15, limit: 10 })).toEqual({
+      status: 'unavailable',
+      error: '2ГИС: у ключа нет доступа к контактам',
+    });
+  });
+
+  it('полная страница, где телефон лишь у трёх, всё равно ведёт на вторую', async () => {
+    const full = Array.from({ length: DGIS_PAGE_SIZE }, (_, i) =>
+      item(`r${i}`, `Фирма ${i}`, i < 3 ? [{ type: 'phone', value: `+784320000${10 + i}` }] : []),
+    );
+    const fetchMock = vi.fn(async (url: string) =>
+      json({ meta: { code: 200 }, result: { items: url.includes('page=1&') ? full : [] } }),
+    );
+    const source = createDgisSource(ON, fetchMock)!;
+    const result = await source.search({ niche: dentist, city: kazan, radiusKm: 15, limit: 10 });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls[1]![0]).toContain('page=2&');
+    expect(result.status === 'ok' && result.candidates).toHaveLength(3);
+  });
+
+  it('размер страницы можно уменьшить, но не увеличить; в запросе type=branch', async () => {
+    const fetchMock = vi.fn(async (_url: string) => json(fixture));
+    await createDgisSource(ON, fetchMock, Date.now, 10)!.search({
+      niche: dentist,
+      city: kazan,
+      radiusKm: 15,
+      limit: 10,
+    });
+    expect(fetchMock.mock.calls[0]![0]).toContain('page_size=10&');
+    expect(fetchMock.mock.calls[0]![0]).toContain('type=branch');
+    expect(dgisUrl('KEY', 'x', kazan, 15, 1)).toContain(`page_size=${DGIS_PAGE_SIZE}&`);
+    // Больше 50 не просим: аргумент только уменьшает размер.
+    const more = vi.fn(async (_url: string) => json(fixture));
+    await createDgisSource(ON, more, Date.now, 500)!.search({
+      niche: dentist,
+      city: kazan,
+      radiusKm: 15,
+      limit: 10,
+    });
+    expect(more.mock.calls[0]![0]).toContain(`page_size=${DGIS_PAGE_SIZE}&`);
   });
 
   it('спрашивает 2ГИС с ключом, фразой ниши и точкой города; отдаёт всех, и с сайтом', async () => {
     const fetchMock = vi.fn(async () => json(fixture));
-    const source = createDgisSource('KEY', fetchMock)!;
+    const source = createDgisSource(ON, fetchMock)!;
     const result = await source.search({ niche: dentist, city: kazan, radiusKm: 15, limit: 10 });
     expect(result.status).toBe('ok');
     if (result.status !== 'ok') return;
@@ -119,7 +185,7 @@ describe('createDgisSource', () => {
       },
     };
     const fetchMock = vi.fn(async () => json(full));
-    const source = createDgisSource('KEY', fetchMock)!;
+    const source = createDgisSource(ON, fetchMock)!;
     const result = await source.search({ niche: dentist, city: kazan, radiusKm: 15, limit: 200 });
     expect(fetchMock).toHaveBeenCalledTimes(DGIS_MAX_PAGES);
     expect(result.status === 'ok' && result.candidates.length).toBe(
@@ -139,7 +205,7 @@ describe('createDgisSource', () => {
       );
       return json({ result: { items } });
     });
-    const source = createDgisSource('KEY', fetchMock)!;
+    const source = createDgisSource(ON, fetchMock)!;
     const result = await source.search({ niche: dentist, city: kazan, radiusKm: 15, limit: 3 });
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(result.status).toBe('ok');
@@ -150,7 +216,7 @@ describe('createDgisSource', () => {
 
   it('ниша без фразы — пустой ответ без запроса; ошибка сети — unavailable', async () => {
     const fetchMock = vi.fn(async () => json(fixture));
-    const source = createDgisSource('KEY', fetchMock)!;
+    const source = createDgisSource(ON, fetchMock)!;
     const empty = await source.search({
       niche: { key: 'x', osm: [] },
       city: kazan,
@@ -159,7 +225,7 @@ describe('createDgisSource', () => {
     });
     expect(empty).toEqual({ status: 'ok', candidates: [] });
     expect(fetchMock).not.toHaveBeenCalled();
-    const failing = createDgisSource('KEY', async () => {
+    const failing = createDgisSource(ON, async () => {
       throw new Error('ECONNRESET');
     })!;
     expect(await failing.search({ niche: dentist, city: kazan, radiusKm: 15, limit: 10 })).toEqual({
@@ -184,7 +250,7 @@ describe('createDgisSource', () => {
         ],
       },
     };
-    const source = createDgisSource('KEY', async () => json(body))!;
+    const source = createDgisSource(ON, async () => json(body))!;
     const result = await source.search({ niche: machinery, city: kazan, radiusKm: 15, limit: 10 });
     expect(result.status === 'ok' && result.candidates.map((c) => [c.name, c.tags])).toEqual([
       ['Аренда экскаваторов', ['excavators']],

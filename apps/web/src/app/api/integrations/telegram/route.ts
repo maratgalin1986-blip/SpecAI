@@ -328,7 +328,7 @@ export async function POST(request: NextRequest) {
       : null;
   if (office) {
     const step = office.ok
-      ? await runStep({ ...office, trigger: 'telegram' }).catch(() => null)
+      ? await runStep({ ...office, trigger: 'telegram' }, { budgetMs: 45_000 }).catch(() => null)
       : null;
     const summary = step
       ? `Офис: найдено ${step.found}, создано ${step.created}, пропущено ${step.skipped}.` +
