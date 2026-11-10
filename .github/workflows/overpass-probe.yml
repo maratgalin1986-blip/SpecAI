@@ -32,12 +32,12 @@ jobs:
             echo "$label: HTTP $code, $((SECONDS - started)) s, elements $count ${remark:+(remark: $remark)}"
             sleep 3
           }
-          # Probe 1 (2026-11-10): every shape with the case-insensitive name filter timed out,
-          # even for one rare tag. Probe 2: the same tags without the name filter — the names
-          # are filtered in the app anyway (parseOverpass, niche.nameRegex).
-          ask 'shop=rental + shop=truck' "[out:json][timeout:25];(nwr[\"shop\"=\"rental\"]$A;nwr[\"shop\"=\"truck\"]$A;);out center tags;"
-          ask 'office=company' "[out:json][timeout:25];(nwr[\"office\"=\"company\"]$A;);out center tags;"
-          ask 'craft' "[out:json][timeout:25];(nwr[\"craft\"]$A;);out center tags;"
-          ask 'industrial' "[out:json][timeout:25];(nwr[\"industrial\"]$A;);out center tags;"
-          ask 'shop=car' "[out:json][timeout:25];(nwr[\"shop\"=\"car\"]$A;);out center tags;"
-          ask 'name filter, case-sensitive, shop=rental' "[out:json][timeout:25];(nwr[\"shop\"=\"rental\"][\"name\"~\"[Сс]пецтехник|[Ээ]кскават|[Аа]втокран|[Мм]анипулятор\"]$A;);out center tags;"
+          # Probe 3: the query the app now builds for «спецтехника» (tags only, names are
+          # filtered in the app) — Казань and, as the worst case, Москва.
+          Q='nwr["shop"="rental"]@;nwr["shop"="truck"]@;nwr["office"="company"]@;nwr["craft"]@;'
+          KAZAN='(around:15000,55.7963,49.1088)'
+          MOSCOW='(around:15000,55.7558,37.6173)'
+          ask 'machinery, Казань' "[out:json][timeout:25];(${Q//@/$KAZAN});out center tags;"
+          ask 'machinery, Москва' "[out:json][timeout:25];(${Q//@/$MOSCOW});out center tags;"
+          echo "Москва, bytes: $(wc -c < out.json)"
+          ask 'machinery, Казань, again' "[out:json][timeout:25];(${Q//@/$KAZAN});out center tags;"
