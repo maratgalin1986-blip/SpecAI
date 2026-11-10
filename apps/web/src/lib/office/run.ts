@@ -484,6 +484,30 @@ const PLAN_KEYS = [
   OFFICE_SETTINGS.planEpoch,
 ] as const;
 
+/** Сколько раз подряд один шаг повторяется после сбоя сети раннера, прежде чем план пойдёт дальше. */
+export const RELAY_RETRIES = 1;
+
+/** Счётчик повторов шага: «<номер шага>:<сколько раз уже повторяли>»; пусто — повторов нет. */
+async function readStepRetry(db: OfficeDb): Promise<{ raw: string; index: number; count: number }> {
+  const rows = await db.appSetting.findMany({
+    where: { key: { in: [OFFICE_SETTINGS.stepRetry] } },
+    select: { key: true, value: true },
+  });
+  const raw = rows[0]?.value?.trim() ?? '';
+  const match = /^(\d+):(\d+)$/.exec(raw);
+  return match
+    ? { raw, index: Number(match[1]), count: Number(match[2]) }
+    : { raw, index: -1, count: 0 };
+}
+
+async function writeStepRetry(db: OfficeDb, value: string): Promise<void> {
+  await db.appSetting.upsert({
+    where: { key: OFFICE_SETTINGS.stepRetry },
+    create: { key: OFFICE_SETTINGS.stepRetry, value },
+    update: { value },
+  });
+}
+
 /** Курсор плана вместе с эпохой, в которой он записан. */
 async function writeCursor(db: OfficeDb, cursor: number): Promise<void> {
   await db.appSetting.upsert({
@@ -660,9 +684,19 @@ export async function ingestScheduledStep(
     return { status: 'stale' };
   }
   // Сеть раннера не достучалась ни до одного зеркала (`retry`): шаг записывается ошибкой, но
-  // курсор стоит — тот же шаг повторится в следующий запуск. Иначе сбой сети съел бы города и
-  // ниши до следующего круга плана (так 9–10.11.2026 пропали первые шаги по Казани).
-  if (!(input.error !== undefined && input.retry)) await writeCursor(db, peeked.nextCursor);
+  // курсор стоит — тот же шаг повторится. Иначе сбой сети съел бы города и ниши до следующего
+  // круга плана (так 9–10.11.2026 пропали первые шаги по Казани). Но не бесконечно: после
+  // RELAY_RETRIES повторов того же шага план идёт дальше — один «тяжёлый» запрос не должен
+  // заклинить весь обход (первый боевой прогон 10.11.2026 встал на спецтехнике Казани).
+  const retry = input.error !== undefined && input.retry === true;
+  const retried = await readStepRetry(db);
+  const again = retried.index === peeked.index ? retried.count : 0;
+  if (retry && again < RELAY_RETRIES) {
+    await writeStepRetry(db, `${peeked.index}:${again + 1}`);
+  } else {
+    await writeCursor(db, peeked.nextCursor);
+    if (retried.raw) await writeStepRetry(db, '');
+  }
   const result = await runStep(
     {
       ...peeked.step,

@@ -21,6 +21,7 @@ import {
   PLAN_EPOCH,
   RELAY_STEP_LIMIT,
   STEP_LIMIT,
+  RELAY_RETRIES,
 } from './run';
 import type { Candidate, ProspectSource, SearchResult } from './sources/types';
 
@@ -723,6 +724,28 @@ describe('поиск через раннер: peekScheduledStep / ingestSchedule
     expect(settings.has(OFFICE_SETTINGS.cursor)).toBe(false);
     // Тот же шаг с тем же ключом — следующий запуск раннера попробует его снова.
     expect(await peekScheduledStep(db)).toEqual(first);
+    // Второй сбой подряд на том же шаге — план идёт дальше: один запрос не заклинит обход.
+    await ingestScheduledStep(
+      {
+        index: first.index,
+        key: first.key,
+        error: 'Overpass не ответил с раннера GitHub',
+        retry: true,
+      },
+      { db },
+    );
+    expect(settings.get(OFFICE_SETTINGS.cursor)).toBe('1');
+    expect(settings.get(OFFICE_SETTINGS.stepRetry)).toBe('');
+    expect(runs).toHaveLength(2);
+    // У следующего шага свой счёт повторов.
+    const second = await peekScheduledStep(db);
+    if ('skipped' in second) throw new Error('шаг ожидался');
+    await ingestScheduledStep(
+      { index: second.index, key: second.key, error: 'сеть', retry: true },
+      { db },
+    );
+    expect(settings.get(OFFICE_SETTINGS.cursor)).toBe('1');
+    expect(RELAY_RETRIES).toBe(1);
   });
 
   it('эпоха плана: курсор прежней эпохи не действует, обход с первого шага; запись ставит эпоху', async () => {

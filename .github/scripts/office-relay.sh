@@ -28,10 +28,14 @@ trap 'rm -rf "$TMP"' EXIT
 # list and «remark: runtime error…» — then the next mirror is asked. Such an answer is kept
 # in $TMP/remark.json, so that if no mirror does better it is posted and journaled as is.
 ANSWERED=0
+# 1 — a mirror was reachable but did not finish in time: the query is too heavy for now.
+TIMED_OUT=0
 ask_mirror() {
+  local started="$SECONDS"
   rm -f "$TMP/overpass.json"
   MIRROR_CODE="$(curl -sS -o "$TMP/overpass.json" -w '%{http_code}' --max-time 40 -A "$UA" \
     --data-urlencode "data=$2" "$1" 2>/dev/null)" || true
+  if [ "$MIRROR_CODE" != "200" ] && [ $((SECONDS - started)) -ge 35 ]; then TIMED_OUT=1; fi
   [ "$MIRROR_CODE" = "200" ] || return 1
   jq -e '.elements | type == "array"' "$TMP/overpass.json" >/dev/null 2>&1 || return 1
   ANSWERED=1
@@ -60,6 +64,7 @@ fetch_overpass() {
 
 ATTEMPTED=0
 ACCEPTED=0
+FAILS=0
 
 post_ingest() {
   INGEST_CODE="$(curl -sS -o "$TMP/ingest.json" -w '%{http_code}' --max-time 70 -H "$AUTH" \
@@ -114,22 +119,37 @@ while [ "$i" -lt "$RELAY_STEPS" ] && [ "$SECONDS" -lt "$RELAY_BUDGET_S" ]; do
   fi
 
   ANSWERED=0
+  TIMED_OUT=0
   rm -f "$TMP/remark.json"
   if [ -z "$query" ]; then
     # The plan names a niche or a city the app does not know: journaled, the plan moves on.
     printf '%s' '{"error":"Для шага плана нет запроса Overpass"}' >"$TMP/error.json"
     ingest "$index" "$key" "$TMP/error.json"
   elif fetch_overpass "$query"; then
+    FAILS=0
     ingest "$index" "$key" "$TMP/overpass.json"
   elif [ -f "$TMP/remark.json" ]; then
     # A mirror answered, but with its own timeout: journaled as is, the plan moves on.
+    FAILS=0
     ingest "$index" "$key" "$TMP/remark.json"
+  elif [ "$TIMED_OUT" -eq 1 ]; then
+    # A mirror was reachable but did not finish in 40 s: this query is too heavy right now.
+    # Journaled as failed and the plan moves on — one heavy step must not block the rest.
+    FAILS=$((FAILS + 1))
+    printf '%s' '{"error":"Overpass не успел ответить на запрос шага"}' >"$TMP/error.json"
+    ingest "$index" "$key" "$TMP/error.json"
+    echo "overpass: step $index timed out on the mirrors"
   else
-    # No mirror could be reached: journaled as failed, the cursor stays (retry), and the
-    # loop stops — the same step is tried again on the next run instead of losing the city.
+    # No mirror could be reached at all: journaled as failed, the cursor stays (retry) —
+    # the app lets the same step be retried once and then moves on.
+    FAILS=$((FAILS + 1))
     printf '%s' '{"error":"Overpass не ответил с раннера GitHub","retry":true}' >"$TMP/error.json"
     ingest "$index" "$key" "$TMP/error.json"
-    echo "overpass: no mirror answered, stopping"
+    echo "overpass: no mirror answered"
+  fi
+  # Three failed steps in a row is an outage, not a heavy query: stop and keep the plan.
+  if [ "$FAILS" -ge 3 ]; then
+    echo "overpass: three failures in a row, stopping"
     break
   fi
 

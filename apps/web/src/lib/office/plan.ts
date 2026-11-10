@@ -11,6 +11,7 @@ export const OFFICE_SETTINGS = {
   plan: 'office.plan',
   cursor: 'office.cursor',
   planEpoch: 'office.planEpoch',
+  stepRetry: 'office.stepRetry',
   paused: 'office.paused',
   sitePrice: 'office.sitePrice',
   siteMonthly: 'office.siteMonthly',
