@@ -4,7 +4,7 @@
 import { GEO_USER_AGENT } from '@/lib/geo';
 import { capWithoutSite } from './limit';
 import { candidateEmail, candidatePhone, candidateTelegram } from './phone';
-import type { Candidate, ProspectSource, SourceCity, SourceNiche } from './types';
+import type { Candidate, Neighbor, ProspectSource, SourceCity, SourceNiche } from './types';
 
 export const OVERPASS_URL = 'https://overpass-api.de/api/interpreter';
 /**
@@ -17,6 +17,16 @@ export const OVERPASS_MIRRORS: readonly string[] = [
   OVERPASS_URL,
   'https://maps.mail.ru/osm/tools/overpass/api/interpreter',
   'https://overpass.kumi.systems/api/interpreter',
+];
+/**
+ * Зеркала для раннера GitHub Actions (.github/scripts/office-relay.sh), по порядку. Проба
+ * 10.11.2026 с раннера: overpass-api.de ответил сразу 502 «at capacity» (доступен, нужна повторная
+ * попытка), maps.mail.ru — HTTP 200 за 19 с (1045 объектов, 336 КБ); overpass.kumi.systems и
+ * overpass.private.coffee молчали 45 с — их здесь нет.
+ */
+export const OVERPASS_RELAY_MIRRORS: readonly string[] = [
+  'https://overpass-api.de/api/interpreter',
+  'https://maps.mail.ru/osm/tools/overpass/api/interpreter',
 ];
 export const OVERPASS_TOTAL_MS = 40_000;
 export const OVERPASS_TIMEOUT_MS = 25_000;
@@ -66,11 +76,49 @@ function buildAddress(tags: Record<string, string>): string | null {
   return parts.length ? parts.join(', ') : null;
 }
 
+function overpassElements(json: unknown): OverpassElement[] {
+  return json &&
+    typeof json === 'object' &&
+    Array.isArray((json as { elements?: unknown }).elements)
+    ? ((json as { elements: unknown[] }).elements as OverpassElement[])
+    : [];
+}
+
+function elementRef(el: OverpassElement): string | null {
+  const id = typeof el.id === 'number' || typeof el.id === 'string' ? String(el.id) : null;
+  return id ? `osm:${str(el.type) ?? 'node'}/${id}` : null;
+}
+
+/**
+ * Все названные объекты ниши с координатами — и без телефона: по ним досье считает
+ * конкурентов рядом. Кандидатами становятся только объекты с телефоном (`parseOverpass`).
+ */
+export function parseOverpassNeighbors(json: unknown, niche: SourceNiche): Neighbor[] {
+  const seen = new Set<string>();
+  const result: Neighbor[] = [];
+  for (const el of overpassElements(json)) {
+    if (!el || typeof el !== 'object' || !el.tags || typeof el.tags !== 'object') continue;
+    const tags = stringTags(el.tags);
+    const name = str(tags.name);
+    if (!name) continue;
+    if (niche.nameRegex && !niche.nameRegex.test(name)) continue;
+    const ref = elementRef(el);
+    const lat = num(el.lat) ?? num(el.center?.lat);
+    const lon = num(el.lon) ?? num(el.center?.lon);
+    if (!ref || lat === null || lon === null || seen.has(ref)) continue;
+    seen.add(ref);
+    result.push({
+      ref,
+      lat,
+      lon,
+      hasSite: Boolean(str(tags.website) ?? str(tags['contact:website']) ?? str(tags.url)),
+    });
+  }
+  return result;
+}
+
 export function parseOverpass(json: unknown, niche: SourceNiche): Candidate[] {
-  const elements =
-    json && typeof json === 'object' && Array.isArray((json as { elements?: unknown }).elements)
-      ? ((json as { elements: unknown[] }).elements as OverpassElement[])
-      : [];
+  const elements = overpassElements(json);
   const seenPhones = new Set<string>();
   const result: Candidate[] = [];
 
@@ -88,9 +136,8 @@ export function parseOverpass(json: unknown, niche: SourceNiche): Candidate[] {
     if (!phone || seenPhones.has(phone)) continue;
     seenPhones.add(phone);
 
-    const type = str(el.type) ?? 'node';
-    const id = typeof el.id === 'number' || typeof el.id === 'string' ? String(el.id) : null;
-    if (!id) continue;
+    const sourceRef = elementRef(el);
+    if (!sourceRef) continue;
 
     result.push({
       name,
@@ -104,7 +151,7 @@ export function parseOverpass(json: unknown, niche: SourceNiche): Candidate[] {
       whatsapp: candidatePhone(tags['contact:whatsapp']),
       telegram: candidateTelegram(tags['contact:telegram']),
       tags: niche.machineryTags?.(name, tags) ?? [],
-      sourceRef: `osm:${type}/${id}`,
+      sourceRef,
     });
   }
   return result;
@@ -159,6 +206,7 @@ export function createOsmSource(
             status: 'ok',
             // `limit` — только фирмы без сайта; с сайтом все остаются соседями для досье.
             candidates: capWithoutSite(parseOverpass(json, niche), limit),
+            neighbors: parseOverpassNeighbors(json, niche),
           };
         } catch {
           // сеть, таймаут, не JSON — следующее зеркало

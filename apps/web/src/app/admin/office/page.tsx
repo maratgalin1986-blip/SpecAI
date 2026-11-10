@@ -201,9 +201,14 @@ export default async function AdminOfficePage() {
     AGENT_IDS.map((id) => [id, runs.find((run) => run.agent === id) ?? null]),
   );
 
-  // Поиск упал несколько шагов подряд — владелец видит это сразу, а не в журнале внизу.
+  // Поиск упал, крутится вхолостую или давно не запускался — владелец видит это сразу, а не в
+  // журнале внизу.
   const failedRun = runs.find((r) => r.finishedAt !== null && r.error);
-  const searchAlert = searchAlertText(searchHealth(runs), failedRun?.error ?? null);
+  const searchAlert = searchAlertText(
+    searchHealth(runs, new Date()),
+    failedRun?.error ?? null,
+    settings.paused,
+  );
 
   return (
     <div className="flex flex-col gap-5">

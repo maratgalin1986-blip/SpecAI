@@ -7,12 +7,20 @@ import { OFFICE_SETTINGS, defaultPlan } from './plan';
 import {
   SEARCH_LIMIT,
   createManualProspects,
+  defaultSource,
+  ingestScheduledStep,
+  peekScheduledStep,
+  relayRequest,
+  stepKey,
   phoneTail,
   resolvePlan,
   runScheduledStep,
   runStep,
   type OfficeDb,
   type ProspectCreateData,
+  PLAN_EPOCH,
+  RELAY_STEP_LIMIT,
+  STEP_LIMIT,
 } from './run';
 import type { Candidate, ProspectSource, SearchResult } from './sources/types';
 
@@ -537,6 +545,227 @@ describe('runScheduledStep', () => {
       defaultPlan(),
     );
     expect(resolvePlan([{ key: OFFICE_SETTINGS.cursor, value: '-5' }]).cursor).toBe(0);
+  });
+});
+
+describe('соседи для досье', () => {
+  it('источник-выборка: конкурентов в досье нет — чисел не показываем', async () => {
+    const { db, prospects } = fakeDb();
+    await runStep(
+      { agent: 'sites', niche: 'dentist', city: 'Казань', trigger: 'cron' },
+      {
+        db,
+        source: source({
+          status: 'ok',
+          sample: true,
+          candidates: [
+            candidate({ sourceRef: 'osm:node/1', phone: '+78432000001' }),
+            candidate({ sourceRef: 'osm:node/2', phone: '+78432000002', website: 'https://d.ru' }),
+          ],
+        }),
+      },
+    );
+    expect(prospects).toHaveLength(1);
+    const dossier = parseDossier(prospects[0]!.dossierJson);
+    expect(dossier!.competitors).toBeNull();
+    expect(dossier!.gaps[0]).toBe('нет своего сайта');
+  });
+
+  it('список соседей от источника главнее кандидатов: считаются и объекты без телефона', async () => {
+    const { db, prospects } = fakeDb();
+    await runStep(
+      { agent: 'sites', niche: 'dentist', city: 'Казань', trigger: 'cron' },
+      {
+        db,
+        source: source({
+          status: 'ok',
+          candidates: [candidate({ sourceRef: 'osm:node/1' })],
+          neighbors: [
+            { ref: 'osm:node/1', lat: 55.79, lon: 49.1, hasSite: false },
+            { ref: 'osm:node/7', lat: 55.791, lon: 49.1, hasSite: true },
+            { ref: 'osm:node/8', lat: 55.792, lon: 49.1, hasSite: false },
+          ],
+        }),
+      },
+    );
+    expect(parseDossier(prospects[0]!.dossierJson)!.competitors).toEqual({
+      radiusKm: 2,
+      sameNiche: 2,
+      withSite: 1,
+    });
+  });
+});
+
+describe('поиск через раннер: peekScheduledStep / ingestScheduledStep', () => {
+  const PLAN = 'sites; dentist; Казань\nproviders; machinery; Уфа';
+  const el = (id: number, tags: Record<string, string>) => ({
+    type: 'node',
+    id,
+    lat: 55.79 + id / 10_000,
+    lon: 49.1,
+    tags,
+  });
+  const overpass = {
+    elements: [
+      el(1, { name: 'Дента', phone: '+7 843 200-00-01' }),
+      el(2, { name: 'Улыбка', phone: '+7 843 200-00-02', website: 'https://u.example' }),
+      el(3, { name: 'Без телефона' }),
+      el(4, { name: 'Без телефона с сайтом', 'contact:website': 'https://b.example' }),
+    ],
+  };
+
+  it('peek не двигает курсор и не пишет журнал; ключ зависит от номера и шага', async () => {
+    const { db, settings, runs } = fakeDb();
+    settings.set(OFFICE_SETTINGS.plan, PLAN);
+    const first = await peekScheduledStep(db);
+    expect(first).toEqual({
+      index: 0,
+      key: stepKey(0, { agent: 'sites', niche: 'dentist', city: 'Казань' }),
+      step: { agent: 'sites', niche: 'dentist', city: 'Казань' },
+    });
+    expect(await peekScheduledStep(db)).toEqual(first);
+    expect(settings.has(OFFICE_SETTINGS.cursor)).toBe(false);
+    expect(runs).toHaveLength(0);
+    expect('key' in first && first.key).toMatch(/^[0-9a-f]{16}$/);
+    expect(stepKey(1, { agent: 'sites', niche: 'dentist', city: 'Казань' })).not.toBe(
+      'key' in first && first.key,
+    );
+    settings.set(OFFICE_SETTINGS.paused, '1');
+    expect(await peekScheduledStep(db)).toEqual({ skipped: 'paused' });
+  });
+
+  it('ответ Overpass: курсор вперёд, кандидат создан, соседи — все названные объекты', async () => {
+    const { db, settings, runs, prospects } = fakeDb();
+    settings.set(OFFICE_SETTINGS.plan, PLAN);
+    const peeked = await peekScheduledStep(db);
+    if ('skipped' in peeked) throw new Error('шаг ожидался');
+    const done = await ingestScheduledStep(
+      { index: peeked.index, key: peeked.key, overpass },
+      { db },
+    );
+    expect(done).toMatchObject({
+      status: 'done',
+      result: { found: 2, created: 1, skipped: 1, error: null },
+    });
+    expect(settings.get(OFFICE_SETTINGS.cursor)).toBe('1');
+    expect(runs).toHaveLength(1);
+    expect(runs[0]).toMatchObject({ trigger: 'cron', niche: 'dentist', city: 'Казань' });
+    expect(prospects[0]).toMatchObject({ source: 'osm', sourceRef: 'osm:node/1' });
+    // Три соседа рядом (2, 3, 4), у двух — сайт: объекты без телефона тоже посчитаны.
+    expect(parseDossier(prospects[0]!.dossierJson)!.competitors).toEqual({
+      radiusKm: 2,
+      sameNiche: 3,
+      withSite: 2,
+    });
+  });
+
+  it('чужой ключ или уже сделанный шаг → stale: ни курсора, ни журнала', async () => {
+    const { db, settings, runs } = fakeDb();
+    settings.set(OFFICE_SETTINGS.plan, PLAN);
+    const peeked = await peekScheduledStep(db);
+    if ('skipped' in peeked) throw new Error('шаг ожидался');
+    expect(
+      await ingestScheduledStep({ index: 0, key: '0000000000000000', overpass }, { db }),
+    ).toEqual({ status: 'stale' });
+    expect(await ingestScheduledStep({ index: 1, key: peeked.key, overpass }, { db })).toEqual({
+      status: 'stale',
+    });
+    expect(settings.has(OFFICE_SETTINGS.cursor)).toBe(false);
+    expect(runs).toHaveLength(0);
+    // Тот же ответ второй раз не принимается: курсор уже на следующем шаге.
+    await ingestScheduledStep({ index: 0, key: peeked.key, overpass }, { db });
+    expect(await ingestScheduledStep({ index: 0, key: peeked.key, overpass }, { db })).toEqual({
+      status: 'stale',
+    });
+    expect(runs).toHaveLength(1);
+  });
+
+  it('ошибка раннера и не тот ответ записываются в журнал отказом, курсор идёт дальше', async () => {
+    const { db, settings, runs, prospects } = fakeDb();
+    settings.set(OFFICE_SETTINGS.plan, PLAN);
+    const first = await peekScheduledStep(db);
+    if ('skipped' in first) throw new Error('шаг ожидался');
+    const failed = await ingestScheduledStep(
+      { index: first.index, key: first.key, error: 'Overpass не ответил с раннера GitHub' },
+      { db },
+    );
+    expect(failed).toMatchObject({
+      status: 'done',
+      result: { found: 0, created: 0, error: 'Overpass не ответил с раннера GitHub' },
+    });
+    expect(runs[0]!.error).toBe('Overpass не ответил с раннера GitHub');
+    expect(settings.get(OFFICE_SETTINGS.cursor)).toBe('1');
+    const second = await peekScheduledStep(db);
+    if ('skipped' in second) throw new Error('шаг ожидался');
+    const bad = await ingestScheduledStep(
+      { index: second.index, key: second.key, overpass: { remark: 'runtime error', elements: [] } },
+      { db },
+    );
+    expect(bad.status === 'done' && bad.result.error).toBeTruthy();
+    expect(prospects).toHaveLength(0);
+  });
+
+  it('retry: сеть раннера не достучалась до зеркал — отказ в журнале, курсор стоит, шаг повторится', async () => {
+    const { db, settings, runs } = fakeDb();
+    settings.set(OFFICE_SETTINGS.plan, PLAN);
+    const first = await peekScheduledStep(db);
+    if ('skipped' in first) throw new Error('шаг ожидался');
+    await ingestScheduledStep(
+      {
+        index: first.index,
+        key: first.key,
+        error: 'Overpass не ответил с раннера GitHub',
+        retry: true,
+      },
+      { db },
+    );
+    expect(runs[0]!.error).toBe('Overpass не ответил с раннера GitHub');
+    expect(settings.has(OFFICE_SETTINGS.cursor)).toBe(false);
+    // Тот же шаг с тем же ключом — следующий запуск раннера попробует его снова.
+    expect(await peekScheduledStep(db)).toEqual(first);
+  });
+
+  it('эпоха плана: курсор прежней эпохи не действует, обход с первого шага; запись ставит эпоху', async () => {
+    const { db, settings } = fakeDb();
+    settings.set(OFFICE_SETTINGS.plan, PLAN);
+    settings.set(OFFICE_SETTINGS.cursor, '1');
+    // Курсор «1» записан до смены эпохи (без office.planEpoch) — начинаем с шага 0.
+    const first = await peekScheduledStep(db);
+    expect(first).toMatchObject({ index: 0, step: { city: 'Казань' } });
+    if ('skipped' in first) throw new Error('шаг ожидался');
+    await ingestScheduledStep({ index: 0, key: first.key, overpass }, { db });
+    expect(settings.get(OFFICE_SETTINGS.planEpoch)).toBe(PLAN_EPOCH);
+    expect(settings.get(OFFICE_SETTINGS.cursor)).toBe('1');
+    // В той же эпохе курсор действует как записан.
+    expect(await peekScheduledStep(db)).toMatchObject({ index: 1, step: { city: 'Уфа' } });
+  });
+
+  it('через раннер за шаг создаётся до RELAY_STEP_LIMIT кандидатов, а не десять', async () => {
+    const { db, settings, prospects } = fakeDb();
+    settings.set(OFFICE_SETTINGS.plan, PLAN);
+    const many = {
+      elements: Array.from({ length: 45 }, (_, i) =>
+        el(100 + i, { name: `Клиника ${i}`, phone: `+7 843 300-${String(i).padStart(2, '0')}-00` }),
+      ),
+    };
+    const first = await peekScheduledStep(db);
+    if ('skipped' in first) throw new Error('шаг ожидался');
+    const done = await ingestScheduledStep({ index: 0, key: first.key, overpass: many }, { db });
+    expect(done.status === 'done' && done.result.created).toBe(RELAY_STEP_LIMIT);
+    expect(prospects).toHaveLength(RELAY_STEP_LIMIT);
+    expect(RELAY_STEP_LIMIT).toBeGreaterThan(STEP_LIMIT);
+  });
+
+  it('запрос для раннера: Overpass по нише и городу шага; неизвестный город — без запроса', () => {
+    const { query, mirrors } = relayRequest({ agent: 'sites', niche: 'dentist', city: 'Казань' });
+    expect(query).toContain('"amenity"="dentist"');
+    expect(query).toContain('around:15000');
+    expect(mirrors).toHaveLength(2);
+    expect(relayRequest({ agent: 'sites', niche: 'dentist', city: 'Нигде' }).query).toBeNull();
+  });
+
+  it('на сервере Overpass не спрашивается', () => {
+    expect(defaultSource().id).not.toContain('osm');
   });
 });
 

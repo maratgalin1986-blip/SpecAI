@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { Card } from '@specai/ui';
 import { adminGate } from '@/components/admin/AdminGate';
 import { AdminPageHeader, StatTile } from '@/components/admin/AdminUi';
+import { OfficeMailTest } from '@/components/admin/OfficeMailTest';
 import { OfficeOutboxControls } from '@/components/admin/OfficeOutboxControls';
 import { planOutreach, type OutreachPlan } from '@/lib/office/outreachRun';
 import { readOfficeSettings } from '@/lib/office/settings';
@@ -64,6 +65,9 @@ export default async function AdminOfficePismaPage() {
           нет, письма не уходят; через Resend офис не пишет.
         </Card>
       )}
+      <Card>
+        <OfficeMailTest />
+      </Card>
       {failed && (
         <Card className="text-sm text-red-700">
           Не удалось собрать письма дня — обновите страницу через минуту.

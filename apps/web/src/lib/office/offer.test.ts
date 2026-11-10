@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildDossier, parseDossier, parseHours } from './dossier';
+import { buildDossier, neighborsOf, parseDossier, parseHours } from './dossier';
 import { applicableAngles, buildOffer, OFFER_ANGLES } from './offer';
 import { chooseAngle, angleScore, learningTable, MIN_TRIALS, type AngleStat } from './learning';
 import type { Candidate } from './sources/types';
@@ -51,7 +51,13 @@ describe('parseHours', () => {
 
 describe('buildDossier', () => {
   it('считает соседей той же ниши в 2 км и у скольких есть сайт; без дублей и дальних', () => {
-    const neighbors = [near(1, true), near(2, true), near(3, false), near(4, true, 0.1), cand()];
+    const neighbors = neighborsOf([
+      near(1, true),
+      near(2, true),
+      near(3, false),
+      near(4, true, 0.1),
+      cand(),
+    ]);
     const d = buildDossier({
       candidate: cand(),
       neighbors,
@@ -84,7 +90,7 @@ describe('buildDossier', () => {
 describe('offer', () => {
   const d = buildDossier({
     candidate: cand(),
-    neighbors: [near(1, true), near(2, true), near(3, false)],
+    neighbors: neighborsOf([near(1, true), near(2, true), near(3, false)]),
     niche: 'dentist',
     nicheTitle: 'Стоматология',
     city: 'Казань',
@@ -102,7 +108,7 @@ describe('offer', () => {
     expect(applicableAngles(null)).toEqual(['leads_to_email', 'search']);
     const lonely = buildDossier({
       candidate: cand({ hours: null, whatsapp: null }),
-      neighbors: [near(1, false), near(2, false)],
+      neighbors: neighborsOf([near(1, false), near(2, false)]),
       niche: 'dentist',
       nicheTitle: 'Стоматология',
       city: 'Казань',

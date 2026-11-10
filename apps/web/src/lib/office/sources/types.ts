@@ -43,8 +43,25 @@ export interface Candidate {
   sourceRef: string;
 }
 
+/** Объект ниши рядом с фирмой — для подсчёта конкурентов в досье; телефон не нужен. */
+export interface Neighbor {
+  /** `osm:<type>/<id>` — тот же вид, что `Candidate.sourceRef`. */
+  ref: string;
+  lat: number;
+  lon: number;
+  hasSite: boolean;
+}
+
 export type SearchResult =
-  { status: 'ok'; candidates: Candidate[] } | { status: 'unavailable'; error: string };
+  | {
+      status: 'ok';
+      candidates: Candidate[];
+      /** ВСЕ названные объекты ниши из ответа, с телефоном и без; нет поля — соседи считаются по `candidates`. */
+      neighbors?: Neighbor[];
+      /** Источник отдал только часть объектов района: считать по ней конкурентов нельзя. */
+      sample?: boolean;
+    }
+  | { status: 'unavailable'; error: string };
 
 export interface ProspectSource {
   id: string;

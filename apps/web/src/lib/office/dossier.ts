@@ -5,7 +5,7 @@
 // заход персонального предложения (offer.ts), по заходам офис учится (learning.ts).
 
 import { distanceKm } from '@/lib/geo';
-import type { Candidate } from './sources/types';
+import type { Candidate, Neighbor } from './sources/types';
 
 /** Конкуренты считаются в этом радиусе от фирмы. */
 export const DOSSIER_RADIUS_KM = 2;
@@ -74,13 +74,24 @@ export function hoursForText(raw: string): string {
   return raw.replace(/\b(Mo|Tu|We|Th|Fr|Sa|Su)\b/g, (d) => DAY_RU[d] ?? d).replace(/;\s*/g, '; ');
 }
 
+/** Соседи из списка кандидатов — когда источник не отдал отдельный список объектов ниши. */
+export function neighborsOf(candidates: readonly Candidate[]): Neighbor[] {
+  const out: Neighbor[] = [];
+  for (const c of candidates) {
+    if (c.lat === null || c.lon === null) continue;
+    out.push({ ref: c.sourceRef, lat: c.lat, lon: c.lon, hasSite: Boolean(c.website) });
+  }
+  return out;
+}
+
 /**
- * Досье по карточке и соседям из того же поиска. `neighbors` — все найденные объекты этой
- * ниши (и с сайтом, и без), кроме самой фирмы; дубли по телефону и ссылке источника не считаются.
+ * Досье по карточке и соседям из того же поиска. `neighbors` — все названные объекты этой
+ * ниши (с сайтом и без, с телефоном и без); сама фирма и дубли по ссылке источника не считаются.
+ * Список должен быть полным по району: по выборке числа «рядом» выходят заниженными.
  */
 export function buildDossier(input: {
   candidate: Candidate;
-  neighbors: readonly Candidate[];
+  neighbors: readonly Neighbor[];
   niche: string;
   nicheTitle: string;
   city: string | null;
@@ -96,18 +107,16 @@ export function buildDossier(input: {
 
   let competitors: Dossier['competitors'] = null;
   if (c.lat !== null && c.lon !== null) {
-    const seen = new Set<string>([c.sourceRef, c.phone]);
+    const seen = new Set<string>([c.sourceRef]);
     let sameNiche = 0;
     let withSite = 0;
     for (const n of input.neighbors) {
-      if (n.lat === null || n.lon === null) continue;
-      if (seen.has(n.sourceRef) || seen.has(n.phone)) continue;
-      seen.add(n.sourceRef);
-      seen.add(n.phone);
+      if (seen.has(n.ref)) continue;
+      seen.add(n.ref);
       if (distanceKm({ lat: c.lat, lon: c.lon }, { lat: n.lat, lon: n.lon }) > DOSSIER_RADIUS_KM)
         continue;
       sameNiche += 1;
-      if (n.website) withSite += 1;
+      if (n.hasSite) withSite += 1;
     }
     competitors = { radiusKm: DOSSIER_RADIUS_KM, sameNiche, withSite };
   }
@@ -133,8 +142,26 @@ export function buildDossier(input: {
   };
 }
 
+/**
+ * Источник, который отдаёт только часть фирм города (Nominatim — не больше сотни объектов на
+ * тег, 2ГИС — только карточки с телефоном): числа «сколько конкурентов рядом» по такому списку
+ * неверны. Кандидаты, созданные до 2026-11-10, записаны с источником «nominatim+osm».
+ */
+export function isSampleSource(source: string | null | undefined): boolean {
+  return /nominatim|2gis|dgis/i.test(source ?? '');
+}
+
 /** Досье из базы; битое или старой версии — null (письмо уйдёт с общим заходом). */
-export function parseDossier(raw: string | null | undefined): Dossier | null {
+export function parseDossier(
+  raw: string | null | undefined,
+  source?: string | null,
+): Dossier | null {
+  const dossier = parseDossierJson(raw);
+  // Числа соседей из неполного списка не показываем и в заходах не используем.
+  return dossier && isSampleSource(source) ? { ...dossier, competitors: null } : dossier;
+}
+
+function parseDossierJson(raw: string | null | undefined): Dossier | null {
   if (!raw) return null;
   try {
     const d = JSON.parse(raw) as Partial<Dossier>;

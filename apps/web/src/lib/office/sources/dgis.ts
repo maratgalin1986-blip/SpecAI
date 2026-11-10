@@ -1,7 +1,17 @@
-// Источник кандидатов — 2ГИС (Places API, catalog.api.2gis.com). Карточки в
-// 2ГИС полнее OSM: у большинства компаний есть телефон, часто — почта и
-// WhatsApp. Нужен ключ `DGIS_API_KEY` (dev.2gis.ru, есть бесплатный тариф);
-// без ключа источник не создаётся и офис ищет только в OSM (`run.ts`).
+// Источник кандидатов — 2ГИС (Places API, catalog.api.2gis.com). По умолчанию
+// ВЫКЛЮЧЕН. Факты сверены с документами 2ГИС 10.11.2026:
+// - постоянного тарифа без оплаты нет: есть только разовый демо-ключ — 1 месяц,
+//   1 000 запросов, `page_size` не больше 10;
+// - поле `items.contact_groups` (телефоны, почта, WhatsApp) — платное разрешение
+//   по запросу; без него поле в ответе просто отсутствует;
+// - ошибки приходят с HTTP 200 и кодом в `meta.code` (400/403/404/408/503);
+// - лицензия на API (law.2gis.ru, п. 3.1) запрещает извлекать и ХРАНИТЬ данные,
+//   а офис именно сохраняет карточки (строки Prospect); для платных подписчиков
+//   за это предусмотрен фиксированный штраф.
+// Поэтому источник создаётся, только когда заданы и `DGIS_API_KEY`, и
+// `DGIS_STORAGE_ALLOWED=1`; флаг ставят лишь при договоре с 2ГИС, который
+// разрешает хранить данные API. Законный путь собрать базу клиентов из 2ГИС —
+// платная выгрузка «Дата.2ГИС». Без источника офис ищет только в OSM (`run.ts`).
 // Ответ разбирается без доверия к полям: всё необязательное.
 
 import { GEO_USER_AGENT } from '@/lib/geo';
@@ -10,12 +20,17 @@ import { candidateEmail, candidatePhone, candidateTelegram } from './phone';
 import type { Candidate, ProspectSource, SourceNiche } from './types';
 
 export const DGIS_URL = 'https://catalog.api.2gis.com/3.0/items';
-/** Больше 2ГИС на страницу не отдаёт. */
+/** Размер страницы по умолчанию; у демо-ключа предел — 10 (аргумент `pageSize`). */
 export const DGIS_PAGE_SIZE = 50;
 /** Страниц за один шаг — больше не нужно: шаг берёт первые десять новых. */
 export const DGIS_MAX_PAGES = 4;
 export const DGIS_TIMEOUT_MS = 12_000;
 export const DGIS_UNAVAILABLE = '2ГИС не ответил';
+export const DGIS_NO_CONTACTS = '2ГИС: у ключа нет доступа к контактам';
+/** «Ничего не найдено» — не ошибка, а пустой ответ. */
+const DGIS_NOT_FOUND = 404;
+
+type Env = Record<string, string | undefined>;
 
 /** Поисковая фраза для ниши; без неё 2ГИС для этой ниши не спрашивается. */
 export function dgisQuery(niche: Pick<SourceNiche, 'key' | 'dgisQuery'>): string | null {
@@ -79,13 +94,23 @@ export function dgisHours(schedule: unknown): string | null {
   return `Пн–Пт ${first}`;
 }
 
+/** Сырые карточки страницы — по их числу решаем, есть ли следующая страница. */
+function rawItems(json: unknown): DgisItem[] {
+  const items = (json as { result?: { items?: unknown } } | null)?.result?.items;
+  return Array.isArray(items) ? (items as DgisItem[]) : [];
+}
+
+/** Код ответа из `meta.code`; ошибки 2ГИС отдаёт с HTTP 200. Нет поля — считаем 200. */
+export function dgisMetaCode(json: unknown): number {
+  const code = (json as { meta?: { code?: unknown } } | null)?.meta?.code;
+  return typeof code === 'number' && Number.isFinite(code) ? code : 200;
+}
+
 /** Карточки 2ГИС → кандидаты: с названием и телефоном, без дублей по телефону. */
 export function parseDgis(json: unknown): Candidate[] {
-  const items = (json as { result?: { items?: unknown } } | null)?.result?.items;
-  if (!Array.isArray(items)) return [];
   const seen = new Set<string>();
   const out: Candidate[] = [];
-  for (const raw of items as DgisItem[]) {
+  for (const raw of rawItems(json)) {
     const name = str(raw?.name);
     const id = str(raw?.id);
     if (!name || !id) continue;
@@ -119,27 +144,34 @@ export function dgisUrl(
   city: { lat: number; lon: number },
   radiusKm: number,
   page: number,
+  pageSize: number = DGIS_PAGE_SIZE,
 ): string {
   const params = new URLSearchParams({
     q: query,
+    type: 'branch',
     point: `${city.lon},${city.lat}`,
     radius: String(Math.min(40_000, Math.round(radiusKm * 1000))),
     fields: 'items.point,items.contact_groups,items.address_name,items.schedule',
-    page_size: String(DGIS_PAGE_SIZE),
+    page_size: String(pageSize),
     page: String(page),
     key,
   });
   return `${DGIS_URL}?${params.toString()}`;
 }
 
-/** Источник 2ГИС; `null`, когда ключа нет. */
+/**
+ * Источник 2ГИС; `null`, пока нет ключа ИЛИ нет `DGIS_STORAGE_ALLOWED=1`
+ * (договор, разрешающий хранить данные API). `pageSize` можно только уменьшить.
+ */
 export function createDgisSource(
-  key: string | undefined = process.env.DGIS_API_KEY,
+  env: Env = process.env,
   fetchImpl?: FetchLike,
   clock: () => number = Date.now,
+  pageSize: number = DGIS_PAGE_SIZE,
 ): ProspectSource | null {
-  const apiKey = key?.trim();
-  if (!apiKey) return null;
+  const apiKey = env.DGIS_API_KEY?.trim();
+  if (!apiKey || env.DGIS_STORAGE_ALLOWED?.trim() !== '1') return null;
+  const size = Math.max(1, Math.min(DGIS_PAGE_SIZE, Math.floor(pageSize) || DGIS_PAGE_SIZE));
   return {
     id: '2gis',
     async search({ niche, city, radiusKm, limit, budgetMs }) {
@@ -150,18 +182,34 @@ export function createDgisSource(
       const total = Math.max(0, budgetMs ?? DGIS_TIMEOUT_MS * DGIS_MAX_PAGES);
       const found: Candidate[] = [];
       let answered = false;
+      let failure: string | null = null;
       for (let page = 1; page <= DGIS_MAX_PAGES; page++) {
         const left = total - (clock() - startedAt);
         if (left < 2_000) break;
         const controller = new AbortController();
         const timer = setTimeout(() => controller.abort(), Math.min(DGIS_TIMEOUT_MS, left));
         try {
-          const response = await doFetch(dgisUrl(apiKey, query, city, radiusKm, page), {
+          const response = await doFetch(dgisUrl(apiKey, query, city, radiusKm, page, size), {
             headers: { 'User-Agent': GEO_USER_AGENT },
             signal: controller.signal,
           });
           if (!response.ok) break;
           const json: unknown = await response.json();
+          const code = dgisMetaCode(json);
+          if (code === DGIS_NOT_FOUND) {
+            answered = true;
+            break;
+          }
+          if (code !== 200) {
+            failure = `2ГИС: код ${code}`;
+            break;
+          }
+          const raw = rawItems(json);
+          // Без платного разрешения поля контактов нет ни у одной карточки.
+          if (raw.length > 0 && !raw.some((it) => Array.isArray(it?.contact_groups))) {
+            failure = DGIS_NO_CONTACTS;
+            break;
+          }
           answered = true;
           const batch = parseDgis(json);
           // Для техники — как в OSM: только совпавшие по названию.
@@ -170,18 +218,23 @@ export function createDgisSource(
             if (niche.machineryTags) c.tags = niche.machineryTags(c.name, {});
             found.push(c);
           }
-          if (batch.length < DGIS_PAGE_SIZE || countWithoutSite(found) >= limit) break;
+          // Полнота страницы — по сырым карточкам: без телефона отсеивается много.
+          if (raw.length < size || countWithoutSite(found) >= limit) break;
         } catch {
           break;
         } finally {
           clearTimeout(timer);
         }
       }
-      if (!answered) return { status: 'unavailable', error: DGIS_UNAVAILABLE };
+      // Ошибка на первой же странице — источник недоступен; на следующих — отдаём найденное.
+      if (!answered) return { status: 'unavailable', error: failure ?? DGIS_UNAVAILABLE };
       return {
         status: 'ok',
         // Все с сайтом (соседи для досье) и не больше `limit` без сайта — кандидатов отбирает прогон.
         candidates: capWithoutSite(found, limit),
+        // Список неполный (только карточки с телефоном, не больше DGIS_MAX_PAGES страниц):
+        // числа «сколько конкурентов рядом» по нему не считаются.
+        sample: true,
       };
     },
   };

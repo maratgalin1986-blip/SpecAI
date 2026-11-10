@@ -19,7 +19,14 @@ export interface WhatsAppItemView {
   link: string;
 }
 
-export function OfficeWhatsAppList({ items }: { items: WhatsAppItemView[] }) {
+export function OfficeWhatsAppList({
+  items,
+  emptyNotes = [],
+}: {
+  items: WhatsAppItemView[];
+  /** Почему очередь пуста (считает сервер); нет — общий текст. */
+  emptyNotes?: string[];
+}) {
   const router = useRouter();
   const [opened, setOpened] = useState<Set<string>>(() => new Set());
   const [done, setDone] = useState<Set<string>>(() => new Set());
@@ -48,6 +55,15 @@ export function OfficeWhatsAppList({ items }: { items: WhatsAppItemView[] }) {
 
   const visible = items.filter((item) => !done.has(item.id));
   if (visible.length === 0) {
+    if (emptyNotes.length > 0) {
+      return (
+        <div className="flex flex-col gap-2 text-sm text-graphite-600">
+          {emptyNotes.map((note) => (
+            <p key={note}>{note}</p>
+          ))}
+        </div>
+      );
+    }
     return (
       <p className="text-sm text-graphite-600">
         На сегодня очередь пуста: всем, у кого в карточке есть WhatsApp, уже написали, или дневной

@@ -10,6 +10,7 @@ import type { AgentId, PlanStep } from './types';
 export const OFFICE_SETTINGS = {
   plan: 'office.plan',
   cursor: 'office.cursor',
+  planEpoch: 'office.planEpoch',
   paused: 'office.paused',
   sitePrice: 'office.sitePrice',
   siteMonthly: 'office.siteMonthly',
