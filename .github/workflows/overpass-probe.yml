@@ -1,0 +1,49 @@
+name: Overpass probe
+
+# Temporary measurement for the office session (2026-11-10): the «спецтехника» step in
+# Казань times out on both Overpass mirrors. The run times each part of that query and two
+# lighter shapes from a GitHub runner; the log holds HTTP codes, seconds and counts only.
+# Starts from a commit that changes .github/overpass-probe.txt on the office branch.
+# Delete this file once the query is fixed.
+on:
+  push:
+    branches: ['claude/pensive-feynman-bila02']
+    paths: ['.github/overpass-probe.txt']
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Time the query shapes
+        run: |
+          set -uo pipefail
+          MIRROR='https://maps.mail.ru/osm/tools/overpass/api/interpreter'
+          UA='IIStroyka24-office-probe/1.0 (+https://github.com/maratgalin1986-blip/SpecAI)'
+          N='спецтехник|аренда техники|экскават|автокран|манипулятор|самосвал|эвакуатор|погрузчик|автовышк|бульдозер|ямобур|бетононасос'
+          A='(around:15000,55.7963,49.1088)'
+          BBOX='55.6615,48.8690,55.9311,49.3486'
+          ask() {
+            local label="$1" query="$2" started=$SECONDS code count remark
+            code="$(curl -sS -o out.json -w '%{http_code}' --max-time 60 -A "$UA" \
+              --data-urlencode "data=$query" "$MIRROR" 2>/dev/null)" || code="${code:-000}"
+            count="$(jq -r '.elements | length' out.json 2>/dev/null || echo '-')"
+            remark="$(jq -r '.remark // "" | .[0:60]' out.json 2>/dev/null || echo '')"
+            echo "$label: HTTP $code, $((SECONDS - started)) s, elements $count ${remark:+(remark: $remark)}"
+            sleep 3
+          }
+          part() { echo "$1[\"name\"~\"$N\",i]$2;"; }
+          TAGS=('"shop"="rental"' '"office"="company"' '"industrial"' '"craft"' '"shop"="car"' '"shop"="truck"')
+          FULL=''; FULL_NW=''; FULL_BBOX=''
+          for t in "${TAGS[@]}"; do
+            FULL+="$(part "nwr[$t]" "$A")"
+            FULL_NW+="$(part "nw[$t]" "$A")"
+            FULL_BBOX+="$(part "nw[$t]" '')"
+          done
+          ask 'full nwr around' "[out:json][timeout:25];($FULL);out center tags;"
+          for t in "${TAGS[@]}"; do
+            ask "part nwr $t" "[out:json][timeout:25];($(part "nwr[$t]" "$A"));out center tags;"
+          done
+          ask 'full nw around' "[out:json][timeout:25];($FULL_NW);out center tags;"
+          ask 'full nw bbox' "[out:json][timeout:25][bbox:$BBOX];($FULL_BBOX);out center tags;"
+          ask 'name first, nw bbox' "[out:json][timeout:25][bbox:$BBOX];(nw[\"name\"~\"$N\",i];);out center tags;"
