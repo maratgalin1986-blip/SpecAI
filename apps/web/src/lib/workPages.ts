@@ -20,6 +20,6 @@ export function hidesContactBar(pathname: string | null | undefined): boolean {
     ACCOUNT.test(path) ||
     /^\/stroyka(\/|$)/.test(path) ||
     // A client's site made by the office and its preview carry their own buttons.
-    /^\/(s|preview)(\/|$)/.test(path)
+    /^\/(s|preview|kp)(\/|$)/.test(path)
   );
 }

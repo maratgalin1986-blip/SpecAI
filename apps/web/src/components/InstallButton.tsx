@@ -1,5 +1,6 @@
 'use client';
 
+import { isStandalonePage } from '@/components/PublicOnly';
 import { useEffect, useRef, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { INSTALL_BUTTON_TEXTS, installButtonMode, type InstallButtonMode } from '@/lib/installHint';
@@ -63,7 +64,8 @@ export function InstallButton() {
     };
   }, [pathname]);
 
-  if (!mode) return null;
+  // Страницы офиса для других компаний (/s, /preview, /kp) — без кнопки установки площадки.
+  if (!mode || isStandalonePage(pathname)) return null;
 
   const onClick = async () => {
     const event = deferred.current ?? (window as InstallWindow).__installPrompt ?? null;

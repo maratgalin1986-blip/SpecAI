@@ -10,11 +10,11 @@ export function isAdminArea(pathname: string | null | undefined): boolean {
 
 /**
  * Pages made by the office for other companies (/s/<slug> — a client's own
- * site, /preview/<token> — its preview): they carry their own header and
+ * site, /preview/<token> — its preview, /kp/<token> — the offer made for it): they carry their own header and
  * footer, so the platform's chrome and widgets stay off them.
  */
 export function isStandalonePage(pathname: string | null | undefined): boolean {
-  return /^\/(s|preview)(\/|$)/.test(pathname ?? '');
+  return /^\/(s|preview|kp)(\/|$)/.test(pathname ?? '');
 }
 
 export function PublicOnly({ children }: { children: ReactNode }) {

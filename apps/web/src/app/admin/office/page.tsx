@@ -209,6 +209,18 @@ export default async function AdminOfficePage() {
         {settings.paused && <AdminTag tone="warn">Поиск на паузе</AdminTag>}
         {settings.outreachPaused && <AdminTag tone="warn">Рассылка на паузе</AdminTag>}
         <Link
+          href="/admin/office/whatsapp"
+          className="text-sm font-semibold text-signal-700 hover:underline"
+        >
+          WhatsApp вручную
+        </Link>
+        <Link
+          href="/admin/office/pisma"
+          className="text-sm font-semibold text-signal-700 hover:underline"
+        >
+          Письма дня
+        </Link>
+        <Link
           href="/admin/office/clients"
           className="text-sm font-semibold text-signal-700 hover:underline"
         >
