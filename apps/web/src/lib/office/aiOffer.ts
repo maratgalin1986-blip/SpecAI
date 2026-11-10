@@ -4,10 +4,10 @@
 // «гарантируем» — ФЗ «О рекламе», ст. 5) отбрасывается. Любой сбой (нет ключа, таймаут,
 // не JSON, проверка не прошла) — письмо уходит с исходным предложением, без ИИ.
 
-import { isSampleSource } from './dossier';
+import { isSampleSource, parseDossier } from './dossier';
 import { DEFAULT_MODEL, getAnthropicClient } from '@specai/ai-service';
 import type { Dossier } from './dossier';
-import { OFFER_ANGLES, type Offer } from './offer';
+import { OFFER_ANGLES, applicableAngles, type Offer } from './offer';
 
 /** Предложение, как оно ушло: `ai` — вступление и пункты переписал ИИ-аналитик. */
 export type SentOffer = Offer & { ai: boolean };
@@ -209,20 +209,29 @@ export function parseSentOffer(raw: string | null | undefined): SentOffer | null
 const NEIGHBOUR_ANGLES: readonly string[] = ['competitors_have_sites', 'first_in_area'];
 
 /**
- * Записанное предложение, которое можно показать и отправить. Если фирме ещё не писали, её
- * досье собрано по неполному списку (isSampleSource), а заход — про соседей, записанный текст
- * не годится: его числа могут быть неверны. Тогда null — предложение строится заново, уже без
- * чисел соседей. Отправленное предложение остаётся как было: это история.
+ * Записанное предложение, которое можно показать и отправить. Пока хоть один канал строки ещё
+ * не отправлен, записанный текст годится, только если его заход всё ещё следует из досье,
+ * прочитанного сегодняшними правилами: досье по неполному списку (isSampleSource) больше не
+ * даёт чисел соседей, а часы «Sa,Su off» — захода «работаете в выходные». Иначе null —
+ * предложение строится заново, без устаревшего утверждения: второй канал и страница /kp не
+ * повторят то, что уже ушло первым. Когда отправлены оба канала, предложение — история и
+ * остаётся как было.
  */
 export function storedOfferOf(row: {
   offerJson: string | null;
+  /** Досье строки; без него (undefined) заход с досье не сверяется. */
+  dossierJson?: string | null;
   source?: string | null;
   emailSentAt?: Date | null;
   whatsappSentAt?: Date | null;
 }): SentOffer | null {
   const offer = parseSentOffer(row.offerJson);
   if (!offer) return null;
-  const unsent = !row.emailSentAt && !row.whatsappSentAt;
-  if (unsent && isSampleSource(row.source) && NEIGHBOUR_ANGLES.includes(offer.angle)) return null;
+  if (row.emailSentAt && row.whatsappSentAt) return offer;
+  if (isSampleSource(row.source) && NEIGHBOUR_ANGLES.includes(offer.angle)) return null;
+  if (row.dossierJson !== undefined) {
+    const angles: readonly string[] = applicableAngles(parseDossier(row.dossierJson, row.source));
+    if (!angles.includes(offer.angle)) return null;
+  }
   return offer;
 }

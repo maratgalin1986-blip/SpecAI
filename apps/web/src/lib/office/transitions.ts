@@ -104,7 +104,12 @@ export function applyAction(
 
   if (site && status === 'AGREED') {
     if (action === 'decline') {
-      return { ok: true, status: 'DECLINED', data: { declinedAt: now, callAt: null } };
+      // Как и отказ из открытых статусов: адрес и номер попадают в список «больше не писать».
+      return {
+        ok: true,
+        status: 'DECLINED',
+        data: { declinedAt: now, optOutAt: now, callAt: null },
+      };
     }
     return cannot(status, action, 'Сайт можно опубликовать («Опубликовать») или снять («Отказ»).');
   }
@@ -144,7 +149,7 @@ export function applyAction(
 
   if (PUBLIC.includes(status)) {
     if (action === 'decline') {
-      return { ok: true, status: 'DECLINED', data: { declinedAt: now } };
+      return { ok: true, status: 'DECLINED', data: { declinedAt: now, optOutAt: now } };
     }
     return cannot(status, action, 'Опубликованную страницу можно только снять («Отказ»).');
   }

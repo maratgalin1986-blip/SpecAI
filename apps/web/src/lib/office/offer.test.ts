@@ -35,11 +35,13 @@ describe('parseHours', () => {
     expect(parseHours('Mo-Fr 09:00-21:00; Sa 10:00-16:00')).toEqual({
       lateClose: '21:00',
       weekends: true,
+      everyDay: false,
       roundTheClock: false,
     });
     expect(parseHours('Пн–Пт 09:00–18:00')).toEqual({
       lateClose: null,
       weekends: false,
+      everyDay: false,
       roundTheClock: false,
     });
     expect(parseHours('24/7')).toMatchObject({ roundTheClock: true });

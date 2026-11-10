@@ -74,10 +74,11 @@ describe('applyAction', () => {
   it.each<ProspectStatus>(['PUBLISHED', 'REGISTERED'])(
     'из %s можно только снять с публикации',
     (status) => {
+      // Снятая страница — тоже «больше не писать»: адрес и номер идут в список отписанных.
       expect(applyAction(status, 'decline', now)).toEqual({
         ok: true,
         status: 'DECLINED',
-        data: { declinedAt: now },
+        data: { declinedAt: now, optOutAt: now },
       });
       for (const action of ['agree', 'callback', 'replied'] as const) {
         const result = applyAction(status, action, now, tomorrow);
@@ -164,7 +165,7 @@ describe('applyAction — клиентский сайт (К10)', () => {
     expect(applyAction('AGREED', 'decline', now, undefined, 'site')).toEqual({
       ok: true,
       status: 'DECLINED',
-      data: { declinedAt: now, callAt: null },
+      data: { declinedAt: now, optOutAt: now, callAt: null },
     });
     for (const action of ['agree', 'callback', 'replied'] as const) {
       const result = applyAction('AGREED', action, now, tomorrow, 'site');

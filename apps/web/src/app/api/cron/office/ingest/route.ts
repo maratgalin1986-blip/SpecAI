@@ -10,7 +10,7 @@ const MAX_BODY_BYTES = 4 * 1024 * 1024;
 /**
  * Ответ Overpass от раннера GitHub по шагу из /api/cron/office/next: `?index=N&key=K`, тело —
  * сырой JSON Overpass или `{"error":"…"}`, когда ни одно зеркало не ответило (шаг уходит в
- * журнал отказом). Разбор и создание кандидатов — здесь, на сервере. В ответе только числа и
+ * журнал отказом; с `"retry":true` шаг откладывается на один повтор). Разбор и создание кандидатов — здесь, на сервере. В ответе только числа и
  * текст ошибки из журнала: ни названий, ни телефонов, ни идентификаторов.
  */
 export async function POST(request: NextRequest) {
@@ -40,7 +40,7 @@ export async function POST(request: NextRequest) {
   const outcome = await ingestScheduledStep({
     index: Number(indexRaw),
     key,
-    // `retry: true` — раннер не достучался ни до одного зеркала: курсор плана не двигается.
+    // `retry: true` — Overpass не дал ответа: шаг откладывается и повторится после чужого успеха.
     ...(isFailure
       ? { error: failure, retry: (body as { retry?: unknown }).retry === true }
       : { overpass: body }),

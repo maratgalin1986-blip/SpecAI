@@ -33,10 +33,12 @@ export interface Niche {
   osm: {
     /** Пары [ключ, значение] тегов OSM; несколько пар — «или». */
     tags: readonly (readonly [string, string])[];
-    /** Дополнительный отбор по названию объекта (ниша «Подрядчики»). */
+    /**
+     * Дополнительный отбор по названию объекта (ниша «Подрядчики») — в приложении, после ответа
+     * Overpass. В сам запрос фильтр по названию не ставится: зеркала на нём не успевают никогда
+     * (пробы 10.11.2026: даже по одному редкому тегу — таймаут, без фильтра — 15–23 с).
+     */
     nameRegex?: RegExp;
-    /** Та же выборка слов для запроса к Overpass (без lookbehind, POSIX). */
-    osmNameFilter?: string;
     /** Поисковая фраза для 2ГИС. */
     dgisQuery?: string;
   };
@@ -54,10 +56,6 @@ export interface Niche {
  */
 export const MACHINERY_NAME_REGEX =
   /спецтехник|аренда (техники|экскаватор|автокран|манипулятор)|экскават|автокран|манипулятор|самосвал|эвакуатор|погрузчик|автовышк|бульдозер|ямобур|бетононасос/i;
-
-/** Слова для серверного фильтра Overpass по названию (регистр — флагом `i` в запросе). */
-export const MACHINERY_OSM_FILTER =
-  'спецтехник|аренда техники|экскават|автокран|манипулятор|самосвал|эвакуатор|погрузчик|автовышк|бульдозер|ямобур|бетононасос';
 
 export const NICHES: Record<NicheKey, Niche> = {
   dentist: {
@@ -348,16 +346,16 @@ export const NICHES: Record<NicheKey, Niche> = {
     agent: 'providers',
     osm: {
       dgisQuery: 'аренда спецтехники',
+      // Теги, по которым Overpass отвечает с раннера без фильтра названий (проба 10.11.2026,
+      // Казань, 15 км: прокат и грузовики — 24 объекта, office=company — 529, craft — 360).
+      // industrial=* и shop=car убраны: это участки промзон и автосалоны, а не аренда техники.
       tags: [
         ['shop', 'rental'],
-        ['office', 'company'],
-        ['industrial', '*'],
-        ['craft', '*'],
-        ['shop', 'car'],
         ['shop', 'truck'],
+        ['office', 'company'],
+        ['craft', '*'],
       ],
       nameRegex: MACHINERY_NAME_REGEX,
-      osmNameFilter: MACHINERY_OSM_FILTER,
     },
     services: [
       'Аренда спецтехники с машинистом',

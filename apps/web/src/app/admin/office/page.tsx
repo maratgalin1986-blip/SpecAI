@@ -27,6 +27,7 @@ import { collectAngleStats, learningTable } from '@/lib/office/learning';
 import { nicheTitle, nichesOf } from '@/lib/office/niches';
 import type { PageProspect } from '@/lib/office/pageTypes';
 import { nextStep, parsePlan } from '@/lib/office/plan';
+import { isDuplicateMark } from '@/lib/office/contacted';
 import { previewViewsLabel } from '@/lib/office/previewViews';
 import { officePrices } from '@/lib/office/prices';
 import { buildCallScript } from '@/lib/office/scripts';
@@ -387,9 +388,21 @@ export default async function AdminOfficePage() {
                     {p.address && p.address !== p.city ? ` · ${p.address}` : ''}
                   </p>
                   <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-xs">
-                    {p.emailSentAt && <AdminTag tone="quiet">✉ {dayMonth(p.emailSentAt)}</AdminTag>}
+                    {p.emailSentAt && (
+                      <AdminTag tone="quiet">
+                        ✉{' '}
+                        {isDuplicateMark(p.emailSentAt)
+                          ? 'адресу уже писали'
+                          : dayMonth(p.emailSentAt)}
+                      </AdminTag>
+                    )}
                     {p.whatsappSentAt && (
-                      <AdminTag tone="quiet">WA {dayMonth(p.whatsappSentAt)}</AdminTag>
+                      <AdminTag tone="quiet">
+                        WA{' '}
+                        {isDuplicateMark(p.whatsappSentAt)
+                          ? 'на номер уже писали'
+                          : dayMonth(p.whatsappSentAt)}
+                      </AdminTag>
                     )}
                     {p.repliedAt && (
                       <AdminTag tone="green">ответил {dayMonth(p.repliedAt)}</AdminTag>

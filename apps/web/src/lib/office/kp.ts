@@ -64,7 +64,8 @@ export function kpStats(dossier: Dossier | null): KpStat[] {
   const h = dossier?.hours;
   if (h?.roundTheClock) out.push({ value: '24/7', label: 'вы работаете круглосуточно' });
   else if (h?.lateClose) out.push({ value: h.lateClose, label: 'до этого часа вы работаете' });
-  else if (h?.weekends) out.push({ value: '7', label: 'дней в неделю вы принимаете клиентов' });
+  // «7 дней» — только если все семь дней названы рабочими в карточке (не «сб — да, вс — нет»).
+  else if (h?.everyDay) out.push({ value: '7', label: 'дней в неделю вы принимаете клиентов' });
   return out.slice(0, 3);
 }
 
