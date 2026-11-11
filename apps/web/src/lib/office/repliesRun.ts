@@ -118,7 +118,14 @@ function parseCursor(value: string | undefined): { validity: string; uid: number
 }
 
 function safeError(error: unknown): string {
-  const text = error instanceof Error ? error.message : String(error);
+  // imapflow на отказ входа даёт «Command failed»; настоящий ответ сервера — в responseText.
+  const e = error as { authenticationFailed?: boolean; responseText?: string };
+  const base = error instanceof Error ? error.message : String(error);
+  const text = e?.authenticationFailed
+    ? `Вход в ящик отклонён: ${e.responseText ?? base}`
+    : e?.responseText
+      ? `${base}: ${e.responseText}`
+      : base;
   return text
     .replace(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+/g, '<адрес>')
     .replace(/\s+/g, ' ')
