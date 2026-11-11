@@ -24,6 +24,7 @@ import './globals.css';
 import './motion.css';
 import './show.css';
 import { SHOW_INLINE } from '@/lib/showInline';
+import './install.css';
 import { fromPrice, MIN_RATE } from '@/lib/prices';
 
 // Cyrillic-capable fonts: Manrope for text and headings, a mono for labels and figures.

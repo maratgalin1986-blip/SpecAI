@@ -5,7 +5,12 @@ import dynamic from 'next/dynamic';
 import { Icon } from '@/components/Icon';
 import { WhatsAppIcon } from '@/components/MessengerButtons';
 import { PhotoShare } from '@/components/PhotoShare';
-import { noteInstallMoment } from '@/lib/installHint';
+import {
+  INSTALL_OFFER_ATTR,
+  INSTALL_OPEN_EVENT,
+  installLeadLine,
+  noteInstallMoment,
+} from '@/lib/installHint';
 import { isOnShift, nextShiftText, SITE } from '@/lib/site';
 import { TelegramButton } from '@/components/TelegramButton';
 
@@ -20,11 +25,16 @@ export function LeadSuccess({ dark = false, summary }: { dark?: boolean; summary
   const ref = useRef<HTMLDivElement>(null);
   const [onShift, setOnShift] = useState<boolean | null>(null);
   const [nextShift, setNextShift] = useState('');
+  // The install button is on the page (InstallButton sets the attribute): offer it here too.
+  const [installLabel, setInstallLabel] = useState<string | null>(null);
   useEffect(() => {
     setOnShift(isOnShift());
     setNextShift(nextShiftText());
     // A good moment to offer «Установить на экран» (InstallPrompt).
     noteInstallMoment();
+    if (document.documentElement.hasAttribute(INSTALL_OFFER_ATTR)) {
+      setInstallLabel(installLeadLine(navigator.userAgent, navigator.maxTouchPoints ?? 0));
+    }
     // Focus without the browser's jump, then centre it: «Принято» never
     // ends up under the sticky header.
     const node = ref.current;
@@ -79,6 +89,16 @@ export function LeadSuccess({ dark = false, summary }: { dark?: boolean; summary
           Политика конфиденциальности
         </a>
       </p>
+      {installLabel && (
+        <button
+          type="button"
+          data-testid="lead-install"
+          onClick={() => window.dispatchEvent(new Event(INSTALL_OPEN_EVENT))}
+          className="install-line mt-4"
+        >
+          {installLabel}
+        </button>
+      )}
       <div className="mt-5 border-t border-white/10 pt-4">
         <PhotoShare role="client" dark />
       </div>

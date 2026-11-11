@@ -1,0 +1,305 @@
+/* «На экран телефона / На рабочий стол» (components/InstallButton.tsx).
+   Position and hiding rules stay in globals.css (.install-fab). Here: the look
+   and the effects. Only transform and opacity move; with «reduce motion» nothing
+   moves, but the button keeps its dark body and the amber ring. */
+
+.install-btn {
+  position: relative;
+  display: flex;
+  min-height: 3rem;
+  align-items: center;
+  gap: 0.6rem;
+  overflow: hidden;
+  border-radius: 9999px;
+  border: 2px solid #fbbf24;
+  background: #020617;
+  padding: 0.25rem 1.1rem 0.25rem 0.3rem;
+  font-size: 0.9375rem;
+  font-weight: 700;
+  line-height: 1.1;
+  color: #fff;
+  box-shadow:
+    0 6px 18px rgba(2, 6, 23, 0.35),
+    0 0 0 3px rgba(251, 191, 36, 0.35);
+  -webkit-tap-highlight-color: transparent;
+  animation: install-in 0.7s cubic-bezier(0.2, 1.2, 0.3, 1) 0.4s backwards;
+}
+.install-btn:hover {
+  background: #0f172a;
+}
+.install-btn:active {
+  transform: scale(0.95);
+}
+.install-btn__icon {
+  display: grid;
+  width: 2.25rem;
+  height: 2.25rem;
+  flex: none;
+  place-items: center;
+  border-radius: 9999px;
+  background: #f59e0b;
+  color: #020617;
+}
+.install-btn__icon svg {
+  width: 1.3rem;
+  height: 1.3rem;
+}
+
+/* Light sweep: a bright band crosses the button during an attention pass. */
+.install-btn__sweep {
+  pointer-events: none;
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 40%;
+  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.45), transparent);
+  opacity: 0;
+  transform: translateX(-120%) skewX(-18deg);
+}
+/* Glow ring: a copy of the pill outline grows and fades. */
+.install-glow {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  border: 2px solid #fbbf24;
+  opacity: 0;
+}
+
+.install-fab[data-attn] .install-btn {
+  animation: install-bounce 1.8s ease-in-out 1;
+}
+.install-fab[data-attn] .install-btn__sweep {
+  animation: install-sweep 1.4s ease-in-out 0.1s 1;
+}
+.install-fab[data-attn] .install-glow {
+  animation: install-glow 1.8s ease-out 1;
+}
+
+@keyframes install-in {
+  from {
+    opacity: 0;
+    transform: translateY(1.5rem) scale(0.85);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes install-bounce {
+  0%,
+  100% {
+    transform: none;
+  }
+  15% {
+    transform: translateY(-8px);
+  }
+  30% {
+    transform: translateY(0);
+  }
+  42% {
+    transform: translateY(-4px);
+  }
+  54% {
+    transform: none;
+  }
+}
+@keyframes install-sweep {
+  0% {
+    opacity: 1;
+    transform: translateX(-120%) skewX(-18deg);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(380%) skewX(-18deg);
+  }
+}
+@keyframes install-glow {
+  0% {
+    opacity: 0.9;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.2, 1.45);
+  }
+}
+
+/* Press: sparks fly out of the button. */
+.install-sparks {
+  pointer-events: none;
+  position: absolute;
+  left: 1.6rem;
+  top: 50%;
+  width: 0;
+  height: 0;
+}
+.install-spark {
+  position: absolute;
+  left: -4px;
+  top: -4px;
+  width: 8px;
+  height: 8px;
+  border-radius: 9999px;
+  background: #fbbf24;
+  opacity: 0;
+  animation: install-spark 0.7s ease-out 1 both;
+}
+.install-spark:nth-child(even) {
+  background: #fff;
+  width: 6px;
+  height: 6px;
+}
+@keyframes install-spark {
+  0% {
+    opacity: 1;
+    transform: translate(0, 0) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(var(--dx), var(--dy)) scale(0.3);
+  }
+}
+
+/* Installed: a green check pops in, the pill says «Установлено». */
+.install-btn[data-done] {
+  border-color: #34d399;
+  box-shadow:
+    0 6px 18px rgba(2, 6, 23, 0.35),
+    0 0 0 3px rgba(52, 211, 153, 0.4);
+}
+.install-btn[data-done] .install-btn__icon {
+  background: #10b981;
+  animation: install-pop 0.5s cubic-bezier(0.2, 1.6, 0.4, 1) 1 both;
+}
+.install-check {
+  stroke-dasharray: 24;
+  stroke-dashoffset: 24;
+  animation: install-draw 0.45s ease-out 0.15s 1 forwards;
+}
+@keyframes install-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.3);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes install-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* The steps for Safari on iPhone. */
+.install-steps {
+  margin: 0.5rem 0 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 0.5rem;
+}
+.install-step {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  animation: install-step-in 0.4s ease-out both;
+  animation-delay: calc(var(--i) * 0.12s);
+}
+.install-step__icon {
+  position: relative;
+  display: grid;
+  width: 2.5rem;
+  height: 2.5rem;
+  flex: none;
+  place-items: center;
+  border-radius: 0.75rem;
+  background: #fef3c7;
+  color: #0f172a;
+}
+.install-step__icon svg {
+  width: 1.4rem;
+  height: 1.4rem;
+}
+.install-step__n {
+  position: absolute;
+  left: -0.35rem;
+  top: -0.35rem;
+  display: grid;
+  width: 1.15rem;
+  height: 1.15rem;
+  place-items: center;
+  border-radius: 9999px;
+  background: #020617;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: #fff;
+}
+.install-arrow {
+  display: block;
+  margin: 0.25rem auto 0;
+  width: 1.5rem;
+  height: 1.5rem;
+  color: #b45309;
+  animation: install-arrow 1.2s ease-in-out infinite;
+}
+@keyframes install-step-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+@keyframes install-arrow {
+  50% {
+    transform: translateY(4px);
+  }
+}
+
+/* The line on the lead screen. */
+.install-line {
+  display: flex;
+  min-height: 2.75rem;
+  width: 100%;
+  align-items: center;
+  gap: 0.5rem;
+  border-radius: 0.75rem;
+  border: 1px solid rgba(251, 191, 36, 0.5);
+  background: rgba(251, 191, 36, 0.1);
+  padding: 0.5rem 0.75rem;
+  text-align: left;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #fff;
+}
+.install-line:hover {
+  background: rgba(251, 191, 36, 0.2);
+}
+html[data-install-hint] .install-line {
+  display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .install-btn,
+  .install-btn__sweep,
+  .install-glow,
+  .install-spark,
+  .install-check,
+  .install-btn[data-done] .install-btn__icon,
+  .install-step,
+  .install-arrow,
+  .install-fab[data-attn] .install-btn,
+  .install-fab[data-attn] .install-btn__sweep,
+  .install-fab[data-attn] .install-glow {
+    animation: none;
+  }
+  .install-check {
+    stroke-dashoffset: 0;
+  }
+  .install-sparks {
+    display: none;
+  }
+  .install-btn:active {
+    transform: none;
+  }
+}
