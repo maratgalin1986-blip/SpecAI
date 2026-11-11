@@ -11,12 +11,10 @@ export interface Processor {
 
 export const PROCESSORS: Processor[] = [
   {
-    // Production database since 2026-10-28: Neon Postgres created through Vercel Storage,
-    // region iad1 (packages/database/src/connection.ts, docs/sessions/handoff.md).
-    name: 'Neon (база данных, подключена через Vercel)',
+    name: 'Yandex Cloud',
     purpose:
       'база данных сайта: аккаунты, заявки, предложения, брони, переписка, отзывы, журнал показов телефона',
-    country: 'США',
+    country: 'Россия',
   },
   {
     name: 'Vercel Inc.',
