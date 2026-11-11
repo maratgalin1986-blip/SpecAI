@@ -1482,10 +1482,13 @@ html[data-tg-chip] .chat-fab {
 .install-fab {
   bottom: calc(4.75rem + env(safe-area-inset-bottom));
 }
-/* The cookie strip wraps to two lines on a phone (about 54px): the button sits above it. */
-html[data-cookie-strip] .install-fab {
-  /* above the contact bar (4.5rem) and the strip's measured height (CookieNotice) */
-  bottom: calc(5rem + var(--cookie-strip-h, 3.5rem) + env(safe-area-inset-bottom));
+/* The cookie strip wraps to two lines on a phone (about 54px): the pill sits above it.
+   Phones only: on wider screens the strip is at the right, the button at the left. */
+@media (max-width: 639px) {
+  html[data-cookie-strip] .install-fab {
+    /* above the contact bar (4.5rem) and the strip's measured height (CookieNotice) */
+    bottom: calc(5rem + var(--cookie-strip-h, 3.5rem) + env(safe-area-inset-bottom));
+  }
 }
 html[data-tg-chip] .install-fab {
   bottom: calc(8.75rem + env(safe-area-inset-bottom));
@@ -1496,6 +1499,35 @@ html[data-storozh] .install-fab {
 }
 html[data-no-contact-bar] .install-fab {
   bottom: calc(1rem + env(safe-area-inset-bottom));
+}
+/* Phones: once folded, the round icon stands in the contact bar's own row, at
+   its right end (the bar makes room), so it covers nothing of the page. */
+@media (max-width: 639px) {
+  html[data-install-dock] .install-fab[data-shape='icon'] {
+    left: auto;
+    right: 0.5rem;
+    bottom: max(0.5rem, env(safe-area-inset-bottom));
+  }
+  html[data-install-dock] .install-fab[data-shape='icon'] .install-help {
+    left: auto;
+    right: 0;
+  }
+  html[data-install-dock]:not([data-install-hint], [data-storozh], [data-lead-install])
+    .contact-bar {
+    padding-right: 3.875rem;
+  }
+}
+/* The «Принято» screen offers the installation in its own line (LeadSuccess):
+   the floating button steps aside while that line is on screen. */
+html[data-lead-install] .install-fab:not([data-help]) {
+  opacity: 0;
+  pointer-events: none;
+}
+/* The cookie strip found the phone, an order button or a field under it
+   (CookieNotice, lib/overlayClear.ts): it waits out of the way. */
+[data-testid='cookie-strip'][data-away] {
+  opacity: 0;
+  pointer-events: none;
 }
 @media (min-width: 640px) {
   .install-fab,

@@ -70,7 +70,7 @@ export function MessengerButtons() {
         aria-label="Быстрая связь"
         data-bottom-bar
         data-platform-chrome
-        className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-3 gap-1.5 border-t border-slate-200 bg-white/95 p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] backdrop-blur sm:hidden"
+        className="contact-bar fixed inset-x-0 bottom-0 z-40 grid grid-cols-3 gap-1.5 border-t border-slate-200 bg-white/95 p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] backdrop-blur sm:hidden"
       >
         <a
           href={SITE.phoneHref}

@@ -725,6 +725,8 @@ export default async function HomePage() {
             </div>
             <div
               id="callback"
+              // The cookie strip and the install button never lie on this card (lib/overlayClear.ts).
+              data-fab-avoid
               className="order-first min-w-0 scroll-mt-28 rounded-3xl bg-slate-950/50 p-4 ring-1 ring-white/10 backdrop-blur sm:p-6 lg:order-none"
             >
               {/* The link is there only when the block above has machines to show. */}

@@ -10,6 +10,7 @@ import {
   snoozeValue,
   startMetrika,
 } from '@/lib/marketing';
+import { coversContent, KEY_ACTIONS, watchOverlay } from '@/lib/overlayClear';
 
 // A small strip at the bottom on arrival: consent to the processing of
 // personal data and cookies (owner's request, 2026-10-03). Yandex.Metrika
@@ -20,6 +21,8 @@ import {
 // server, and the strip is fixed, so it cannot shift the page. Both buttons
 // are 44 px tap targets; while the strip is open on a phone the page gets
 // extra bottom padding and scroll padding (globals.css, data-cookie-strip).
+// It never lies on the phone number, an order or submit button or a field:
+// while one of them is under it, it is hidden (lib/overlayClear.ts).
 export function CookieNotice() {
   const pathname = usePathname();
   const [visible, setVisible] = useState(false);
@@ -98,7 +101,20 @@ export function CookieNotice() {
     measure();
     const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measure);
     if (el) observer?.observe(el);
+    // The strip is fixed over the page: while the phone number, an order or
+    // submit button or a field is under it, it waits out of the way (globals.css,
+    // data-away) and comes back as soon as the visitor scrolls on.
+    const stopWatch = watchOverlay(() => {
+      if (!el || getComputedStyle(el).position !== 'fixed') return;
+      const rect = el.getBoundingClientRect();
+      const away = coversContent(
+        { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom },
+        (hit) => hit.matches(KEY_ACTIONS),
+      );
+      el.toggleAttribute('data-away', away);
+    });
     return () => {
+      stopWatch();
       observer?.disconnect();
       root.removeAttribute('data-cookie-strip');
       root.style.removeProperty('--cookie-strip-h');
