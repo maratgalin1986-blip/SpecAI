@@ -577,6 +577,7 @@ export default async function AdminOfficePage() {
             email: officeMailConfigured() && unsubscribeConfigured(),
             whatsapp: serverChannels().whatsapp,
           }}
+          mode={settings.outreachMode}
         />
         <Card className="flex flex-col gap-3">
           <h2 className="text-lg font-bold text-graphite-950">ИИ-аналитик</h2>
