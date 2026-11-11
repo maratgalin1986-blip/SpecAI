@@ -1504,9 +1504,12 @@ describe('режим «сам по расписанию»: защиты перв
       ok: false as const,
       reason: 'Invalid login: 535 5.7.8 Error: authentication failed',
     }));
-    const result = await sendOutreach(day, deps(db, { settings: auto(), verifyMail }));
+    const mailHint = () => 'host=smtp.yandex.ru login=@yandex.ru from=login pass=other';
+    const result = await sendOutreach(day, deps(db, { settings: auto(), verifyMail, mailHint }));
     expect(result).toMatchObject({ email: 0, errors: 0, mail: 'broken' });
     expect(result.mailError).toContain('535');
+    // Признаки настроек — без значений: по ним видно, что чинить, не заходя в Vercel.
+    expect(result.mailHint).toBe('host=smtp.yandex.ru login=@yandex.ru from=login pass=other');
     expect(verifyMail).toHaveBeenCalledTimes(1);
     expect(okEmail).not.toHaveBeenCalled();
     expect(updates).toEqual([]);

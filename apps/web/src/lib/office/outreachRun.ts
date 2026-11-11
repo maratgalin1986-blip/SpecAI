@@ -54,6 +54,7 @@ import { applicableAngles, buildOffer, type OfferAngle } from './offer';
 import { readOfficeSettings, type OutreachMode } from '@/lib/office/settings';
 import {
   officeMailConfigured,
+  officeMailHint,
   sendOfficeMail,
   verifyOfficeMail,
   type OfficeMail,
@@ -244,6 +245,8 @@ export interface OutreachDeps {
   contacted?: (emails: string[], phones: string[]) => Promise<ContactedContacts>;
   /** Проверка ящика без письма перед первым письмом прохода (по умолчанию verifyOfficeMail). */
   verifyMail?: () => Promise<OfficeMailResult>;
+  /** Признаки настроек ящика для сводки об отказе (подменяется в тестах). */
+  mailHint?: () => string;
   /**
    * Замок на отправку: один проход за раз. Возвращает функцию снятия или null, если другой
    * проход ещё идёт (по умолчанию — строка в AdminFeedRead).
@@ -281,6 +284,8 @@ export interface OutreachResult {
   mail?: 'no-smtp' | 'broken';
   /** Что ответил ящик, когда почта остановлена ('broken'), — для владельца. */
   mailError?: string;
+  /** Признаки настроек ящика без значений (smtp.ts → officeMailHint), когда почта 'broken'. */
+  mailHint?: string;
   /** Напоминаний ждут кнопки владельца (режим 'auto' сам их не отправляет). */
   followUpsWaiting?: number;
   /** Строк снято перед отправкой: человек, а не компания, или почта на своём домене. */
@@ -526,6 +531,7 @@ async function runOutreach(
     active.email = false;
     result.mail = 'broken';
     result.mailError = reason.replace(/\s+/g, ' ').trim().slice(0, 200);
+    result.mailHint = (deps.mailHint ?? (() => officeMailHint()))();
   };
   const mailReady = async (): Promise<boolean> => {
     if (mailOk !== null) return mailOk;

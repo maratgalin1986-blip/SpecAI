@@ -184,6 +184,9 @@ if curl -fsS --max-time 70 -H "$AUTH" -o "$TMP/tick.json" "$BASE_URL/api/cron/of
   # The mail server's own refusal text (it carries no password; addresses are masked): without it
   # «mail=broken» cannot be told apart — wrong password, wrong login or a blocked sign-in.
   jq -r '(.outreach.mailError // "") | select(length > 0) | gsub("[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+"; "<address>") | "tick: mail error: \(.[0:180])"' "$TMP/tick.json" 2>/dev/null || true
+  # Signs of the mailbox settings without their values (which server, the login's domain, whether
+  # the sender equals the login, whether the password looks like an app password).
+  jq -r '(.outreach.mailHint // "") | select(length > 0) | "tick: mail settings: \(.[0:160])"' "$TMP/tick.json" 2>/dev/null || true
 else
   TICK_OK=0
   echo "tick: no answer"
