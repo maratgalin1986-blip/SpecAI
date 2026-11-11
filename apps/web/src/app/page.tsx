@@ -741,8 +741,8 @@ export default async function HomePage() {
                 </div>
                 <p className="text-sm leading-snug text-slate-200">
                   Вам ответит <span className="font-bold text-white">Иван</span>, начальник отдела
-                  логистики {SITE.name}. Подберёт технику и назовёт цену за 15 минут, Пн–Сб{' '}
-                  {SHIFT.from}:00–{SHIFT.to}:00.
+                  логистики {SITE.name}. Подберёт технику и перезвонит за 15 минут в рабочее время,
+                  Пн–Сб {SHIFT.from}:00–{SHIFT.to}:00.
                 </p>
               </div>
               <p className="mt-3 text-xs text-slate-400">

@@ -102,7 +102,7 @@ const TASKS: {
     landing: 'traktor',
     photo: 'tractor',
   },
-  { id: 'other', icon: 'helmet', label: 'Другое — опишу сам', machine: 'Подберёт менеджер' },
+  { id: 'other', icon: 'helmet', label: 'Другое — опишу сам', machine: 'Подберёт диспетчер' },
 ];
 
 const WHEN = ['Сегодня', 'Завтра', 'На этой неделе', 'Позже'];

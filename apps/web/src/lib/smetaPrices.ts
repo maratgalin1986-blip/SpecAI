@@ -89,7 +89,7 @@ export const MATERIAL_PRICES: PriceTable = {
 };
 
 export const PRICES_NOTE =
-  'Предварительная цена, окончательную подтвердит менеджер СпецПласт16 после проверки наличия.';
+  'Предварительная цена, окончательную подтвердит диспетчер СпецПласт16 после проверки наличия.';
 
 /** СпецПласт16 markup on the market reference, by the order's reference subtotal. */
 export const MARKUP_SMALL = 0.3;

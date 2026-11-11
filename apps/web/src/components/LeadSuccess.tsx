@@ -62,8 +62,8 @@ export function LeadSuccess({ dark = false, summary }: { dark?: boolean; summary
       <h2 className="mt-4 text-lg font-semibold">Заявка у диспетчера {SITE.name}</h2>
       <p className="mt-1 text-sm text-white/70">
         {onShift === false
-          ? `Сейчас нерабочее время — Иван перезвонит ${nextShift}.`
-          : 'Иван перезвонит в течение 15 минут и назовёт цену.'}{' '}
+          ? `Сейчас нерабочее время — диспетчер Иван перезвонит ${nextShift}.`
+          : 'Диспетчер Иван перезвонит в течение 15 минут.'}{' '}
         Не хотите ждать — позвоните или напишите сами.
       </p>
       <div className="mt-4 flex flex-wrap gap-2">
