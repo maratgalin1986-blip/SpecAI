@@ -17,7 +17,7 @@ vi.mock('@specai/database', () => ({ prisma: {} }));
 const resendSpy = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/email', () => ({ sendEmail: resendSpy, isEmailConfigured: () => true }));
 
-import { STOP_LINE, WHATSAPP_MAX_LENGTH } from './outreach';
+import { LEGAL_SIGNATURE, NOT_OFFER_LINE, STOP_LINE, WHATSAPP_MAX_LENGTH } from './outreach';
 import type { SentOffer } from './aiOffer';
 import type { Dossier } from './dossier';
 import { buildOffer } from './offer';
@@ -287,12 +287,17 @@ describe('sendOutreach', () => {
     expect(sent.text).toContain(
       'Кто мы и цены: https://example.test/sajt-pod-klyuch?utm_source=email&utm_campaign=slug-a',
     );
+    // No dossier: the personal offer with a general angle (U2) — a fact about the card,
+    // no prices, not an offer, a draft, the legal signature.
+    expect(sent.text).toContain('В открытой карточке компании Компания a на карте не указан сайт.');
+    expect(sent.text).toContain('Что на странице:');
     expect(sent.text).toContain(
-      'После подключения добавим форму заявки: заявки с сайта будут приходить вам на почту',
+      'После подключения клиент сможет оставить заявку на странице — она придёт вам на почту.',
     );
-    expect(sent.text).toContain('15 000 ₽');
-    // No dossier: the personal offer with a general angle (U2).
-    expect(sent.text).toContain('Что даст страница именно вам:');
+    expect(sent.text).not.toContain('₽');
+    expect(sent.text).toContain(NOT_OFFER_LINE);
+    expect(sent.text).toContain('Это черновик, а не официальный сайт');
+    expect(sent.text).toContain(`— ${LEGAL_SIGNATURE}`);
     expect(updates).toHaveLength(1);
     expect(updates[0]!.id).toBe('a');
     expect(updates[0]!.data).toMatchObject({ status: 'CONTACTED', outreachError: null });
@@ -847,8 +852,10 @@ describe('sendOutreach — personal offer (U2)', () => {
     expect(letter.subject).toBe(expected.subject);
     expect(letter.text).toContain(expected.opener);
     for (const bullet of expected.bullets) expect(letter.text).toContain(`• ${bullet}`);
-    // Three or more neighbours with a site: the own-domain package with its price.
-    expect(letter.text).toContain('«Сайт на своём домене» — 17\u00a0000\u00a0₽ один раз');
+    // The package and its price stay on the service page: the first letter has no prices.
+    expect(letter.text).not.toContain('₽');
+    expect(letter.text).toContain(NOT_OFFER_LINE);
+    expect(letter.text).toContain(`— ${LEGAL_SIGNATURE}`);
     expect(letter.text).toContain('https://example.test/preview/tok-a');
     expect(letter.text).toContain('Кто мы и цены: ');
     const lines = letter.text!.trim().split('\n').filter(Boolean);
@@ -858,7 +865,8 @@ describe('sendOutreach — personal offer (U2)', () => {
     const wa = okWhatsApp.mock.calls[0]![1];
     expect(wa).toContain(expected.opener);
     expect(wa).toContain('https://example.test/preview/tok-a');
-    expect(wa).toContain('17\u00a0000\u00a0₽');
+    expect(wa).not.toContain('₽');
+    expect(wa).toContain('сообщение не является офертой');
     expect(wa.length).toBeLessThanOrEqual(WHATSAPP_MAX_LENGTH);
     expect(wa.split('\n\n').pop()!.startsWith(STOP_LINE)).toBe(true);
     for (const u of updates) {
@@ -1272,8 +1280,8 @@ describe('один адрес — одно первое сообщение (ре
 
   it('письма дня: у двух фирм одна почта — владелец видит одно письмо, в базе ничего не помечается', async () => {
     const rows = [
-      row({ id: 'a', email: 'info@set.example' }),
-      row({ id: 'b', email: ' Info@Set.example ', phone: '+78432001133' }),
+      row({ id: 'a', email: 'info@mail.ru' }),
+      row({ id: 'b', email: ' Info@Mail.ru ', phone: '+78432001133' }),
       row({ id: 'c' }),
     ];
     const { db, claims } = fakeDb(rows);
@@ -1285,14 +1293,14 @@ describe('один адрес — одно первое сообщение (ре
 
   it('отправка: второй строке с той же почтой письмо не уходит, её канал закрыт датой первого', async () => {
     const rows = [
-      row({ id: 'a', email: 'info@set.example' }),
-      row({ id: 'b', email: 'INFO@set.example', phone: '+78432001133' }),
+      row({ id: 'a', email: 'info@mail.ru' }),
+      row({ id: 'b', email: 'INFO@mail.ru', phone: '+78432001133' }),
     ];
     const { db } = fakeDb(rows);
     const result = await sendOutreach(NOW, deps(db));
     expect(result).toMatchObject({ email: 1, errors: 0, duplicates: 1 });
     expect(okEmail).toHaveBeenCalledTimes(1);
-    expect(okEmail.mock.calls[0]![0].to).toBe('info@set.example');
+    expect(okEmail.mock.calls[0]![0].to).toBe('info@mail.ru');
     expect(rows[0]).toMatchObject({ status: 'CONTACTED' });
     // Дубль не «написан»: статус и contactedAt прежние, закрыт только канал почты — особой
     // отметкой вне любых окон дат: дневной лимит и «отправлено сегодня» он не трогает.
@@ -1309,13 +1317,13 @@ describe('один адрес — одно первое сообщение (ре
   it('адресу писали раньше в другой строке (в базе) — не пишем ни в «письмах дня», ни при отправке', async () => {
     const before = new Date('2026-11-08T10:00:00+03:00');
     const contactedBefore = vi.fn(async (_emails: string[], _phones: string[]) => ({
-      emails: new Map([['info@set.example', before]]),
+      emails: new Map([['info@mail.ru', before]]),
       phones: new Map<string, Date>(),
     }));
-    const rows = [row({ id: 'b', email: 'info@set.example' }), row({ id: 'c' })];
+    const rows = [row({ id: 'b', email: 'info@mail.ru' }), row({ id: 'c' })];
     const { db } = fakeDb(rows);
     const plan = await planOutreach(NOW, deps(db, { contacted: contactedBefore }));
-    expect(contactedBefore.mock.calls[0]![0]).toContain('info@set.example');
+    expect(contactedBefore.mock.calls[0]![0]).toContain('info@mail.ru');
     expect(plan.items.map((i) => i.id)).toEqual(['c']);
     // Канал дубля закрыт отметкой дубля — в очередь он больше не попадёт.
     expect(rows[0]!.emailSentAt).toEqual(DUPLICATE_CLOSED_AT);
@@ -1341,16 +1349,16 @@ describe('один адрес — одно первое сообщение (ре
 
   it('дубли не съедают дневной лимит и не получают напоминаний', async () => {
     const rows = [
-      row({ id: 'a', email: 'info@set.example' }),
-      row({ id: 'b', email: 'info@set.example', phone: '+78432001133' }),
-      row({ id: 'c', email: 'info@set.example', phone: '+78432001144' }),
+      row({ id: 'a', email: 'info@mail.ru' }),
+      row({ id: 'b', email: 'info@mail.ru', phone: '+78432001133' }),
+      row({ id: 'c', email: 'info@mail.ru', phone: '+78432001144' }),
       row({ id: 'd' }),
     ];
     const { db } = fakeDb(rows);
     // Лимит 2 в день: письмо «a», два закрытых дубля и ещё одно письмо — «d».
     const result = await sendOutreach(NOW, deps(db, { settings: settings({ dailyCap: 2 }) }));
     expect(result).toMatchObject({ email: 2, duplicates: 2 });
-    expect(okEmail.mock.calls.map((c) => c[0].to)).toEqual(['info@set.example', 'd@example.com']);
+    expect(okEmail.mock.calls.map((c) => c[0].to)).toEqual(['info@mail.ru', 'd@example.com']);
     // Дубль позже отметили «написали в WhatsApp» (CONTACTED): напоминание ему не уходит —
     // его отметка почты вне окна «4–14 дней назад».
     rows[1]!.status = 'CONTACTED';

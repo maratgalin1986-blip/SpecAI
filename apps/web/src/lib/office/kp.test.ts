@@ -25,7 +25,7 @@ describe('коммерческое предложение /kp/<token>', () => {
   it('цифры — только посчитанные по досье, не больше трёх', () => {
     expect(kpStats(dossier)).toEqual([
       { value: '7', label: 'компаний вашей сферы в 2 км от вас' },
-      { value: '3', label: 'из них уже со своим сайтом' },
+      { value: '3', label: 'из них с сайтом в карточке на карте' },
       { value: '21:00', label: 'до этого часа вы работаете' },
     ]);
     expect(kpStats(null)).toEqual([]);
@@ -51,7 +51,9 @@ describe('коммерческое предложение /kp/<token>', () => {
       competitors: { radiusKm: 2, sameNiche: 1, withSite: 0 },
     });
     expect(stats[0]).toEqual({ value: '1', label: 'компания вашей сферы в 2 км от вас' });
-    expect(stats[1]!.label).toContain('первыми');
+    // Без абсолютных утверждений: только то, что указано в карточках.
+    expect(stats[1]!.label).toBe('из них с сайтом в карточке на карте');
+    expect(stats[1]!.label).not.toContain('первыми');
   });
 
   it('пакеты с ценами из настроек, рекомендованный отмечен; название в кавычках один раз', () => {

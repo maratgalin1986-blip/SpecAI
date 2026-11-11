@@ -57,8 +57,8 @@ export function kpStats(dossier: Dossier | null): KpStat[] {
       value: String(c.withSite),
       label:
         c.withSite === 0
-          ? 'из них со своим сайтом — вы можете быть первыми'
-          : `из них уже со своим сайтом`,
+          ? 'из них с сайтом в карточке на карте'
+          : 'из них с сайтом в карточке на карте',
     });
   }
   const h = dossier?.hours;

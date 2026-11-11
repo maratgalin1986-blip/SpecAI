@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { storedOfferOf, type SentOffer } from './aiOffer';
 import { isSampleSource, parseDossier, type Dossier } from './dossier';
+import { OFFER_TEXT_VERSION } from './offer';
 
 const dossier: Dossier = {
   v: 1,
@@ -14,6 +15,7 @@ const dossier: Dossier = {
   gaps: ['нет своего сайта'],
 };
 const offer = (angle: SentOffer['angle']): SentOffer => ({
+  v: OFFER_TEXT_VERSION,
   angle,
   subject: 'Тема',
   opener: 'Вступление',
@@ -101,5 +103,19 @@ describe('неполный список источника: числа сосе�
     ).toBe('search');
     // Строка без поля досье (старые вызовы) — заход с досье не сверяется.
     expect(storedOfferOf(stored)?.angle).toBe('weekends');
+  });
+
+  it('предложение с текстами прежней версии (цена, «сайта нет») не отправляется — строится заново', () => {
+    const old = { ...offer('search'), v: undefined };
+    expect(storedOfferOf({ offerJson: JSON.stringify(old), dossierJson: null })).toBeNull();
+    // Отправленное по обоим каналам остаётся историей.
+    expect(
+      storedOfferOf({
+        offerJson: JSON.stringify(old),
+        dossierJson: null,
+        emailSentAt: new Date(),
+        whatsappSentAt: new Date(),
+      })?.angle,
+    ).toBe('search');
   });
 });

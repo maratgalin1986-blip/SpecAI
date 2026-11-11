@@ -47,6 +47,7 @@ import {
   phoneKey,
   type ContactedContacts,
 } from './contacted';
+import { candidateSkipText, hasOwnDomainEmail } from './candidateFilter';
 import { parseDossier } from './dossier';
 import { collectAngleStats, chooseAngle, type AngleStat, type LearningDb } from './learning';
 import { applicableAngles, buildOffer, type OfferAngle } from './offer';
@@ -282,6 +283,8 @@ export interface OutreachResult {
   mailError?: string;
   /** Напоминаний ждут кнопки владельца (режим 'auto' сам их не отправляет). */
   followUpsWaiting?: number;
+  /** Строк снято перед отправкой: человек, а не компания, или почта на своём домене. */
+  filtered?: number;
   /** Строк снято с рассылки: их адрес отписан (К3). */
   optedOut?: number;
   /** Каналов закрыто без отправки: на этот адрес или номер уже писали в другой строке. */
@@ -711,6 +714,22 @@ async function runOutreach(
     );
     if (wanted.length === 0) continue;
     const prospect = toProspect(row);
+    // Отбор перед отправкой — и для фирм, попавших в очередь до ужесточения правил (ревью
+    // 2026-11-11): человеку («Адвокат Иванов И. И.») не пишем вовсе; фирме с почтой на своём
+    // домене не пишем «у вас не указан сайт» — он у неё, скорее всего, есть. Строка снимается.
+    const unfit = candidateSkipText(row.name)
+      ? 'Не писали: похоже на имя человека, а не на компанию'
+      : prospect.kind === 'site' && hasOwnDomainEmail(row.email)
+        ? 'Не писали: почта на своём домене — у фирмы, вероятно, уже есть сайт'
+        : null;
+    if (unfit) {
+      const { count } = await db.prospect.updateMany({
+        where: { id: row.id, status: { in: [...OUTREACH_STATUSES] } },
+        data: { status: 'DECLINED', declinedAt: new Date(), outreachError: unfit },
+      });
+      result.filtered = (result.filtered ?? 0) + count;
+      continue;
+    }
     // Утверждённое письмо о сайте уходит только с тем предложением, что видел владелец.
     if (only && prospect.kind === 'site' && !storedOfferOf(row)) continue;
 
