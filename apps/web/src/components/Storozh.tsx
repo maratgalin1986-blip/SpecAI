@@ -23,6 +23,10 @@ import { leadErrorText, submitLead } from '@/lib/submitLead';
 // logistics asks one short question in a card at the bottom (never a modal,
 // nothing blocks the page) and takes a phone number. The rules of WHEN live
 // in lib/storozh.ts; this file only listens and draws.
+
+/** Where the card stands on a computer (the classes below): 5.5rem from the right, 22rem wide. */
+const STOROZH_CORNER = { right: 88, width: 352, height: 340 };
+
 export function Storozh() {
   const pathname = usePathname();
   const [trigger, setTrigger] = useState<StorozhTrigger | null>(null);
@@ -38,28 +42,46 @@ export function Storozh() {
     if (storozhBlockedReason(storage)) return;
     const state = createStorozhState();
     const mobile = window.matchMedia('(max-width: 639px)').matches;
-    // The cookie strip takes the same corner: Сторож waits for the answer.
-    const free = () => !document.documentElement.hasAttribute('data-cookie-strip');
+    // The cookie strip no longer silences Сторож (most visitors never answer
+    // the strip, so they never saw him): the card stands above it (globals.css,
+    // .storozh-card). On a computer the card's corner is where the callback
+    // form has its consent box and «Жду звонка»: while the visitor is typing
+    // there, or the form lies under that corner, Сторож keeps quiet and may
+    // ask later.
+    const formBusy = () => {
+      if (mobile) return false;
+      const forms = Array.from(document.querySelectorAll('[data-callback-form]'));
+      if (forms.some((form) => form.contains(document.activeElement))) return true;
+      const corner = {
+        left: window.innerWidth - STOROZH_CORNER.right - STOROZH_CORNER.width,
+        right: window.innerWidth - STOROZH_CORNER.right,
+        top: window.innerHeight - STOROZH_CORNER.height,
+        bottom: window.innerHeight,
+      };
+      return forms.some((form) => {
+        const rect = form.getBoundingClientRect();
+        return (
+          rect.width > 0 &&
+          rect.left < corner.right &&
+          rect.right > corner.left &&
+          rect.top < corner.bottom &&
+          rect.bottom > corner.top
+        );
+      });
+    };
     const show = (next: StorozhTrigger | null) => {
       if (next) setTrigger(next);
     };
     const onLeave = (event: MouseEvent) => {
-      if (free()) show(onMouseLeave(state, event.clientY));
+      if (!formBusy()) show(onMouseLeave(state, event.clientY));
     };
     const onScrolled = () => {
-      const next = onScroll(
-        state,
-        window.scrollY,
-        document.documentElement.scrollHeight,
-        window.innerHeight,
+      show(
+        onScroll(state, window.scrollY, document.documentElement.scrollHeight, window.innerHeight),
       );
-      if (next && !free()) state.fired = false;
-      else show(next);
     };
     const onVisibility = () => {
-      const next = onVisibilityChange(state, document.visibilityState === 'hidden');
-      if (next && !free()) state.fired = false;
-      else show(next);
+      show(onVisibilityChange(state, document.visibilityState === 'hidden'));
     };
     if (mobile) {
       window.addEventListener('scroll', onScrolled, { passive: true });
@@ -142,7 +164,7 @@ function StorozhCard({ trigger, onClose }: { trigger: StorozhTrigger; onClose: (
       aria-labelledby="storozh-title"
       data-testid="storozh"
       data-platform-chrome
-      className={`fixed inset-x-2 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-[46] rounded-2xl bg-slate-950 p-4 text-white shadow-2xl ring-1 ring-white/10 sm:inset-x-auto sm:bottom-6 sm:right-[5.5rem] sm:w-[22rem] sm:p-5 motion-safe:transition motion-safe:duration-300 motion-safe:ease-out ${
+      className={`storozh-card fixed inset-x-2 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-[46] rounded-2xl bg-slate-950 p-4 text-white shadow-2xl ring-1 ring-white/10 sm:inset-x-auto sm:bottom-6 sm:right-[5.5rem] sm:w-[22rem] sm:p-5 motion-safe:transition motion-safe:duration-300 motion-safe:ease-out ${
         entered ? 'translate-y-0 opacity-100' : 'translate-y-4 opacity-0'
       }`}
     >
