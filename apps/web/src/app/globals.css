@@ -1673,7 +1673,28 @@ html[data-install-hint] .chat-fab {
   transform: scale(1.12);
 }
 
-/* Short laptop screens: both hero buttons must fit at 1280x720. */
+/* The hero's paragraph by screen height: the long one only where the order
+   button and the phone still fit on the first screen with it (a tall window);
+   phones and ordinary laptops (1280x720, 1366x768, 1440x900) get the short
+   line. The words of both are in app/page.tsx. */
+.hero-long {
+  display: none;
+}
+@media (min-width: 640px) and (min-height: 941px) {
+  .hero-long {
+    display: block;
+  }
+  .hero-brief {
+    display: none;
+  }
+}
+@media (min-width: 640px) and (max-height: 940px) {
+  .hero-brief {
+    margin-top: 1rem;
+    font-size: 1.0625rem;
+  }
+}
+/* Short laptop screens: the order button, «Встать на линию» and the phone fit at 1280x720. */
 @media (min-width: 1024px) and (max-height: 760px) {
   .hero-short h1 {
     font-size: clamp(2.2rem, 7.2vh, 3.4rem);
