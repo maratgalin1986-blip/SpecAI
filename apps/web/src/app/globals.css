@@ -1493,7 +1493,10 @@ html[data-tg-chip] .chat-fab {
   bottom: calc(4.75rem + env(safe-area-inset-bottom));
 }
 /* The cookie strip wraps to two lines on a phone (about 54px): the button sits above it. */
-html[data-cookie-strip] .install-fab,
+html[data-cookie-strip] .install-fab {
+  /* above the contact bar (4.5rem) and the strip's measured height (CookieNotice) */
+  bottom: calc(5rem + var(--cookie-strip-h, 3.5rem) + env(safe-area-inset-bottom));
+}
 html[data-tg-chip] .install-fab {
   bottom: calc(8.75rem + env(safe-area-inset-bottom));
 }
