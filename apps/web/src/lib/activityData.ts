@@ -11,6 +11,8 @@ import {
   onlineCount,
   type Activity,
 } from './activity';
+import { houseFreeNow } from './houseLine';
+import { loadHouseLine } from './houseLineData';
 import { NEARBY_MAX_ROWS, PRESENCE_FRESH_MS } from './linePresence';
 
 /**
@@ -23,13 +25,18 @@ export async function loadActivityUncached(now: Date = new Date()): Promise<Acti
   const since = new Date(now.getTime() - ACTIVITY_WINDOW_MS);
   const orderStatus = { in: [...COUNTED_ORDER_STATUSES] };
   const bookingStatus = { in: [...COUNTED_BOOKING_STATUSES] };
-  const [ordersToday, confirmedToday, line, orders, bookings] = await Promise.all([
+  const [ordersToday, confirmedToday, line, orders, bookings, house] = await Promise.all([
     prisma.order.count({ where: { status: orderStatus, createdAt: { gte: dayStart } } }),
     prisma.booking.count({ where: { status: bookingStatus, confirmedAt: { gte: dayStart } } }),
     prisma.linePresence.findMany({
       where: {
-        online: true,
-        updatedAt: { gte: new Date(now.getTime() - PRESENCE_FRESH_MS) },
+        // Live GPS or a standing line (lib/lineStanding.ts): the same «на
+        // линии» as the map shows, for every provider.
+        OR: [
+          { online: true, updatedAt: { gte: new Date(now.getTime() - PRESENCE_FRESH_MS) } },
+          { standingForever: true },
+          { standingUntil: { gt: now } },
+        ],
         equipment: { is: { status: 'AVAILABLE' } },
       },
       select: {
@@ -40,6 +47,9 @@ export async function loadActivityUncached(now: Date = new Date()): Promise<Acti
         lat: true,
         lon: true,
         companyId: true,
+        standingUntil: true,
+        standingForever: true,
+        gpsAt: true,
         equipment: { select: { id: true, status: true, category: { select: { name: true } } } },
       },
       orderBy: { updatedAt: 'desc' },
@@ -67,9 +77,12 @@ export async function loadActivityUncached(now: Date = new Date()): Promise<Acti
       orderBy: { confirmedAt: 'desc' },
       take: ACTIVITY_EVENTS_MAX,
     }),
+    // СпецПласт16's fleet is always on the line (owner, 2026-11-11).
+    loadHouseLine(prisma, now),
   ]);
+  const houseIds = houseFreeNow(house).map((machine) => machine.id);
   return buildActivity(
-    { orders: ordersToday, online: onlineCount(line, now), confirmed: confirmedToday },
+    { orders: ordersToday, online: onlineCount(line, now, houseIds), confirmed: confirmedToday },
     { orders, line, bookings },
     now,
   );

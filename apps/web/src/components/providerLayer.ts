@@ -27,7 +27,14 @@ import {
 } from '@/components/leaflet';
 import { clearOf, type IntakePoint } from '@/lib/intakePoints';
 import type { CustomerMapPin } from '@/lib/mapCustomers';
-import { customerLabel, liveLabel, providerLabel, type MapLabel } from '@/lib/mapLabels';
+import {
+  customerLabel,
+  groupLive,
+  liveGroupLabel,
+  liveLabel,
+  providerLabel,
+  type MapLabel,
+} from '@/lib/mapLabels';
 import {
   nearbyAround,
   nearbyKey,
@@ -36,6 +43,7 @@ import {
   type NearbyPoint,
 } from '@/lib/mapNearby';
 import { MAP_PINS_LIMIT, type ProviderMapPin } from '@/lib/providerMap';
+import { SITE } from '@/lib/site';
 
 interface LiveRow {
   id: string;
@@ -43,6 +51,9 @@ interface LiveRow {
   lon: number;
   bubble: string;
   note: string | null;
+  /** Fresh GPS: the pin is where the machine is now; else it stands at its base. */
+  live?: boolean;
+  busyToday?: boolean;
   company: { isHouse: boolean };
   equipment: { id: string; category: string | null; name: string } | null;
 }
@@ -318,13 +329,33 @@ export async function drawProviderLayer(
   live = line?.machines ?? [];
   drawPins();
 
-  for (const machine of live) {
+  for (const group of groupLive(live)) {
+    const machine = group[0]!;
     const marker = L.marker([machine.lat, machine.lon], {
       icon: liveIcon(L, machine.company.isHouse),
       zIndexOffset: 1200,
     });
-    const label = liveLabel(machine);
-    if (machine.equipment) {
+    const label = group.length > 1 ? liveGroupLabel(group) : liveLabel(machine);
+    if (group.length > 1) {
+      // A fleet on the line at its base: one pin, every machine a link to its
+      // page (the order form for that machine); СпецПласт16's with the site phone.
+      marker.bindPopup(
+        labelHtml(label) +
+          group
+            .filter((item) => item.equipment)
+            .map((item) => {
+              const line = liveLabel(item);
+              return `<p style="margin:6px 0 0"><a href="/equipment/${encodeURIComponent(item.equipment!.id)}">${escapeHtml(line.title)} →</a>${
+                item.busyToday ? ' <small style="color:#64748b">занята сегодня</small>' : ''
+              }</p>`;
+            })
+            .join('') +
+          (machine.company.isHouse
+            ? `<p style="margin:8px 0 0"><a href="${escapeHtml(SITE.phoneHref)}">${escapeHtml(SITE.phone)}</a></p>`
+            : ''),
+        { ...POPUP, maxHeight: 260 },
+      );
+    } else if (machine.equipment) {
       marker.bindPopup(
         labelHtml(label) +
           (machine.note ? `<p style="margin:4px 0 0">${escapeHtml(machine.note)}</p>` : '') +
