@@ -4,7 +4,9 @@ import { AgentChat } from '@/components/AgentChat';
 import { CinemaHero } from '@/components/CinemaHero';
 
 export const metadata: Metadata = {
-  title: 'ИИ-агенты',
+  title: 'Помощник на сайте',
+  description:
+    'Помощник подскажет технику и цены из каталога и примет заявку в любое время — диспетчер перезвонит в рабочие часы.',
   // ?agent=<id> preselects an agent: one canonical for every variant.
   alternates: { canonical: '/agents' },
 };
@@ -17,14 +19,15 @@ export default async function AgentsPage(props: { searchParams: Promise<{ agent?
   return (
     <div className="flex flex-col gap-6">
       <CinemaHero
-        eyebrow="Диспетчерская · круглосуточно"
-        title="ИИ-агенты"
+        eyebrow="Заявки · в любое время"
+        title="Помощник на сайте"
         clips={['city-cranes', 'steel-frame']}
         camera={3}
         compact
       >
         <p>
-          Выберите специалиста или оставьте «Авто» — ассистент сам передаст вопрос нужному агенту.
+          Помощник подскажет технику и цены из каталога и примет заявку в любое время — диспетчер
+          перезвонит в рабочие часы. Выберите тему или оставьте «Авто».
         </p>
       </CinemaHero>
 
