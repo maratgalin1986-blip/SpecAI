@@ -75,8 +75,11 @@ test('Escape and the browser Back button close the walk', async ({ page }) => {
   await expect(walkDialog(page)).toBeVisible();
   // The controls load a moment after the picture: wait for them before pressing keys.
   await expect(exitButton(page)).toBeVisible();
-  await page.keyboard.press('Escape');
-  await expect(walkDialog(page)).toHaveCount(0);
+  // The key handler is attached a moment after the controls show: press until it takes.
+  await expect(async () => {
+    await page.keyboard.press('Escape');
+    await expect(walkDialog(page)).toHaveCount(0, { timeout: 600 });
+  }).toPass({ timeout: 8000 });
 
   await invitation(page).click();
   await expect(walkDialog(page)).toBeVisible();

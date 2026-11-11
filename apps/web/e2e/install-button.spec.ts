@@ -16,8 +16,14 @@ async function open(page: Page, path = '/?intro=0') {
     return route.continue();
   });
   await page.goto(path, { waitUntil: 'load' });
-  // The entrance animation lasts about a second.
+  // The entrance animation lasts about a second; the cookie strip comes in at about 1.5 s and
+  // slides for 300 ms: measure only after both have settled (the boxes move meanwhile).
   await page.waitForTimeout(1500);
+  await page
+    .getByTestId('cookie-strip')
+    .waitFor({ state: 'visible', timeout: 4000 })
+    .catch(() => undefined);
+  await page.waitForTimeout(900);
 }
 
 type Box = { x: number; y: number; width: number; height: number };
