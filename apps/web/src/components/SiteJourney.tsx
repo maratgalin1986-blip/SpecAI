@@ -518,9 +518,9 @@ export function SiteJourney() {
               <div className="mt-1 text-sm font-semibold text-white/90">{object.name}</div>
             </div>
             <div className="flex items-center gap-3 font-mono text-xs tabular-nums text-white/80 sm:text-sm">
-              <span className="flex items-center gap-1.5 rounded bg-red-600/90 px-2 py-0.5 text-[0.65rem] font-bold uppercase tracking-widest text-white">
-                <span className="journey-rec h-1.5 w-1.5 rounded-full bg-white" />
-                Онлайн
+              {/* Staged footage, not a live camera: the badge says so. */}
+              <span className="rounded bg-white/15 px-2 py-0.5 text-[0.65rem] font-bold uppercase tracking-widest text-white ring-1 ring-white/25">
+                Видео для примера
               </span>
               <span className="hidden sm:inline">Камера {String(index + 1).padStart(2, '0')}</span>
               <LiveClock />
@@ -528,7 +528,7 @@ export function SiteJourney() {
           </div>
           {/* Second HUD row: the note and (on phones) Skip, clear of the clock. */}
           <div className="mt-2 flex items-center justify-between gap-3 text-[0.6rem] text-white/50 sm:hidden">
-            <span>Видео и фото для примера</span>
+            <span>Фото для примера</span>
             <button
               type="button"
               onClick={skip}
