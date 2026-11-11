@@ -119,8 +119,8 @@ export function BecomeProviderForm() {
               Где стоит техника <span className="text-red-600">*</span>
             </span>
             <span className="text-xs text-slate-500">
-              Адрес базы или стоянки — по нему заказчики увидят вас на карте. Телефон и e-mail на
-              карте не показываются.
+              Адрес базы или стоянки — по нему заказчики увидят вас на карте. E-mail на карте не
+              показывается.
             </span>
             <BasePicker value={base} onChange={setBase} />
           </div>
@@ -136,7 +136,9 @@ export function BecomeProviderForm() {
               className="rounded-md border border-slate-300 px-3 py-2"
             />
             <span className="text-xs text-slate-500">
-              Заказчик увидит его только после того, как вы подтвердите бронь.
+              Телефон компании виден на карте и в каталоге, пока включено «Показывать телефон на
+              карте» (выключается в кабинете → «Моя точка на карте»). Телефон заказчика вы увидите
+              только после подтверждения брони.
             </span>
           </label>
           <label className="flex items-start gap-2 text-xs text-slate-600">
@@ -148,8 +150,8 @@ export function BecomeProviderForm() {
               className="mt-0.5"
             />
             <span>
-              Согласен(на), что название, город, адрес базы и её точка на карте, техника, цены и
-              фото будут видны всем посетителям (
+              Согласен(на), что название, город, адрес базы и её точка на карте, контактный телефон
+              компании, техника, цены и фото будут видны всем посетителям (
               <a href="/soglasie-rasprostranenie" className="underline" target="_blank">
                 согласие на распространение
               </a>

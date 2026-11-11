@@ -16,6 +16,7 @@ import {
   parseBbox,
   pinPhotoChoices,
   providerMapPhone,
+  providerPagePhone,
   sanitizePinNote,
   siteMachinePhotos,
   spreadOverlapping,
@@ -247,6 +248,21 @@ describe('toMapPins', () => {
         providerMapPhone({ id: 'p1', phone: 'Telegram @ivan', showPhoneOnMap: true }),
       ).toBeNull();
       expect(providerMapPhone({ id: 'p1', phone: null, showPhoneOnMap: null })).toBeNull();
+    });
+
+    it('the provider page shows the phone by the same switch as the map', () => {
+      const row = { id: 'p1', phone: '8 (927) 000-00-00', showPhoneOnMap: null, showOnMap: null };
+      expect(providerPagePhone(row)).toEqual({
+        phone: providerMapPhone(row)!.phone,
+        phoneHref: 'tel:+79270000000',
+      });
+      expect(providerPagePhone({ ...row, showPhoneOnMap: true })?.phoneHref).toBe(
+        'tel:+79270000000',
+      );
+      // «Показывать телефон на карте» off, or the company left the map: no phone on the page.
+      expect(providerPagePhone({ ...row, showPhoneOnMap: false })).toBeNull();
+      expect(providerPagePhone({ ...row, showOnMap: false })).toBeNull();
+      expect(providerPagePhone({ ...row, phone: 'пишите в Telegram' })).toBeNull();
     });
 
     it('the house fleet shows the site phone', () => {
