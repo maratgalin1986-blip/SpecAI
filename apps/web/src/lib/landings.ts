@@ -1,5 +1,12 @@
 import type { MachineType } from '@/lib/machinePhotos';
-import { CRANE_HEAVY_RATE, fromPerHour, fromPrice, HAMMER_RATE, SHIFT_HOURS } from '@/lib/prices';
+import {
+  CRANE_HEAVY_RATE,
+  fromPerHour,
+  fromPrice,
+  HAMMER_RATE,
+  rateOf,
+  SHIFT_HOURS,
+} from '@/lib/prices';
 
 // SEO landing pages "аренда <техники> в Набережных Челнах" (/arenda/<slug>).
 // Each maps to a catalog category; prices in the FAQ come from lib/prices.ts.
@@ -74,7 +81,7 @@ export const LANDINGS: Landing[] = [
       },
       {
         q: 'Нужен ли стропальщик?',
-        a: 'Уточните при заказе — менеджер подскажет, что нужно для вашего подъёма.',
+        a: 'Уточните при заказе — диспетчер подскажет, что нужно для вашего подъёма.',
       },
       {
         q: 'Работаете с НДС?',
@@ -363,6 +370,15 @@ export const LANDINGS: Landing[] = [
     ],
   },
 ];
+
+/**
+ * The house list price a landing is named with in lists («… — от 4 500 ₽/ч»):
+ * a kind sold «с гидромолотом» costs HAMMER_RATE, not the bare machine's rate.
+ */
+export function landingListRate(landing: Pick<Landing, 'machine' | 'short'>): number {
+  const rate = rateOf(landing.machine);
+  return /гидромолот/i.test(landing.short) ? Math.max(HAMMER_RATE, rate) : rate;
+}
 
 export function landingBySlug(slug: string) {
   return LANDINGS.find((landing) => landing.slug === slug);

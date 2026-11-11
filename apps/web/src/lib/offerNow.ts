@@ -30,7 +30,7 @@ export const OFFER_LINE_POOL = 60;
 export const HOUSE_SERVES_KM = 300;
 
 export const NOBODY_ON_LINE =
-  'Сейчас на линии никого — оставьте заявку, исполнители рядом пришлют цены';
+  'Оставьте заявку — исполнители рядом пришлют цены, первым отвечает парк СпецПласт16';
 
 export interface OfferCard {
   /** The machine's id: «Подробнее» goes to its public page. */

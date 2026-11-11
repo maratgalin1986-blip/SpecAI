@@ -7,7 +7,7 @@ import { ShareButtons } from '@/components/ShareButtons';
 import { CommentList } from '@/components/Comments';
 import { approvedComments } from '@/lib/commentAccess';
 import { companyReliability } from '@/lib/companyStats';
-import { isDisplayableImage } from '@/lib/providerMap';
+import { isDisplayableImage, providerPagePhone } from '@/lib/providerMap';
 import { maskContactsAndLinks } from '@/lib/privacy';
 import { shortAuthorName } from '@/lib/comments';
 import {
@@ -26,8 +26,9 @@ export const dynamic = 'force-dynamic';
 
 // The public page of a provider company: fleet, base, trust signals, approved
 // reviews and comments, share buttons and a LocalBusiness card for search
-// engines. Contacts are not here on purpose: they open after a confirmed
-// booking (CLAUDE.md), the page leads to an order instead.
+// engines. The company's contact phone is shown by the same rule as on the map
+// (owner, 2026-11-08: lib/providerMap.ts providerPagePhone); a customer's
+// contacts never are.
 
 async function loadProvider(id: string) {
   if (!/^[\w-]{1,64}$/.test(id)) return null;
@@ -42,6 +43,9 @@ async function loadProvider(id: string) {
       baseLon: true,
       pinImageUrl: true,
       pinNote: true,
+      phone: true,
+      showOnMap: true,
+      showPhoneOnMap: true,
       createdAt: true,
       location: { select: { city: true, region: true } },
       equipment: {
@@ -153,6 +157,7 @@ export default async function ProviderPublicPage(props: { params: Promise<{ id: 
   );
   const categories = [...new Set(provider.equipment.map((item) => item.category.name))];
   const house = provider.id === HOUSE_COMPANY_ID;
+  const contact = providerPagePhone(provider);
 
   return (
     <div className="flex flex-col gap-8">
@@ -206,6 +211,15 @@ export default async function ProviderPublicPage(props: { params: Promise<{ id: 
           <a href={`/orders?provider=${encodeURIComponent(provider.id)}`} className="cab-action">
             Оставить заявку исполнителю
           </a>
+          {contact && (
+            <a
+              href={contact.phoneHref}
+              data-provider-phone
+              className="cab-ghost border-graphite-600 bg-transparent font-mono tabular-nums text-white hover:border-white"
+            >
+              {contact.phone}
+            </a>
+          )}
           <a
             href="/map"
             className="cab-ghost border-graphite-600 bg-transparent text-white hover:border-white"
@@ -214,8 +228,10 @@ export default async function ProviderPublicPage(props: { params: Promise<{ id: 
           </a>
         </div>
         <p className="text-xs text-graphite-300">
-          Телефон исполнителя откроется после подтверждения брони — так ваш номер не попадёт в чужие
-          базы. Сервис бесплатный.
+          {contact
+            ? 'Позвоните или оставьте заявку.'
+            : 'Исполнитель не показывает телефон — оставьте заявку, он ответит ценой.'}{' '}
+          Ваш телефон исполнитель увидит только после подтверждения брони. Сервис бесплатный.
         </p>
       </header>
 

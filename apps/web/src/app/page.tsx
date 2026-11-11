@@ -68,7 +68,8 @@ const SERVICES: {
     title: 'Колёсный экскаватор с гидромолотом',
     photo: 'wheeled-excavator',
     text: 'Дробление бетона и асфальта в городе — своим ходом, без трала.',
-    price: fromPerHour('wheeled-excavator'),
+    // «С гидромолотом» is the hammer rate, not the bare machine's.
+    price: fromPerHour(HAMMER_RATE),
   },
   {
     icon: 'crane',
@@ -138,20 +139,23 @@ const ADVANTAGES = [
   },
   {
     title: 'Цена видна сразу',
-    text: `Почасовая ставка на каждой карточке, смена — ${SHIFT_HOURS} часов. Подачу техники назовут заранее.`,
+    text: `Почасовая ставка на каждой карточке, смена — ${SHIFT_HOURS} часов. Стоимость подачи назовём до заказа.`,
   },
   {
     title: 'Несколько предложений',
     text: `Заявку видят исполнители со своей техникой, включая парк ${SITE.name}: каждый называет цену, вы выбираете. Сервис бесплатный.`,
   },
-  { title: 'Круглосуточно', text: 'ИИ-агенты подберут технику и примут заявку даже ночью.' },
+  {
+    title: 'Заявка в любое время',
+    text: 'Помощник на сайте примет заявку в любое время — диспетчер перезвонит в рабочие часы.',
+  },
 ];
 
 const STEPS = [
-  { title: 'Опишите задачу', text: 'Своими словами — в чате ИИ-агенту или в форме заявки.' },
+  { title: 'Опишите задачу', text: 'Своими словами — помощнику в чате или в форме заявки.' },
   {
     title: 'Получите варианты',
-    text: 'Исполнители, включая парк СпецПласт16, пришлют цены, агент подберёт технику из каталога.',
+    text: 'Исполнители, включая парк СпецПласт16, пришлют цены; помощник покажет технику из каталога.',
   },
   {
     title: 'Забронируйте',
@@ -224,14 +228,17 @@ const SERVICE_LANDING: Record<string, string> = {
   Виброкаток: 'vibrokatok',
 };
 
+/** After «Парк СпецПласт16:» the list goes on in lower case. */
+const lowerFirst = (text: string) => text.charAt(0).toLowerCase() + text.slice(1);
+
 const HOME_FAQ = [
   {
     q: 'Сколько стоит аренда спецтехники?',
-    a: `Парк ${SITE.name}: ${priceFaqAnswer()} У других исполнителей — свои цены на карточках.`,
+    a: `Парк ${SITE.name}: ${lowerFirst(priceFaqAnswer())} У других исполнителей — свои цены на карточках.`,
   },
   {
     q: 'Как быстро приедет техника?',
-    a: 'Зависит от загрузки техники и адреса. Оставьте заявку или позвоните — время подачи назовут заранее.',
+    a: `Парк ${SITE.name} по Набережным Челнам — обычно за ${HOUSE_DELIVERY}, если машина свободна. У других исполнителей и в других городах — зависит от загрузки техники и адреса: оставьте заявку или позвоните, время подачи назовём заранее.`,
   },
   {
     q: 'Кто выполняет работы?',
@@ -250,8 +257,8 @@ const HOME_FAQ = [
     a: `По всей России: заявку видят исполнители рядом с вашим объектом. Парк ${SITE.name} — в Набережных Челнах и окрестностях. Там, где исполнители ещё подключаются, оставьте заявку — мы найдём технику. Стоимость подачи зависит от расстояния до объекта.`,
   },
   {
-    q: 'Можно заказать технику через ИИ-агента?',
-    a: 'Да, агенты на сайте подберут технику, посчитают стоимость и оформят заявку круглосуточно.',
+    q: 'Можно оставить заявку ночью или в выходной?',
+    a: 'Да. Помощник на сайте примет заявку в любое время — диспетчер перезвонит в рабочие часы. Он же подскажет технику под задачу и цены из каталога.',
   },
 ];
 
@@ -465,7 +472,7 @@ export default async function HomePage() {
           <div className="eyebrow text-amber-700">Техника и цены</div>
           <div className="mt-3 flex flex-wrap items-end justify-between gap-4">
             <h2 className="max-w-2xl text-4xl font-extrabold tracking-[-0.03em] sm:text-5xl">
-              Цена видна сразу. Подачу техники назовут заранее
+              Цена видна сразу. Стоимость подачи назовём до заказа
             </h2>
             <a
               href="/equipment"
@@ -611,19 +618,18 @@ export default async function HomePage() {
         <div className="hero-grid opacity-40" aria-hidden />
         <div className="relative flex flex-col items-start gap-8 lg:flex-row lg:items-center">
           <Reveal className="flex-1">
-            <div className="eyebrow text-amber-400">Искусственный интеллект</div>
+            <div className="eyebrow text-amber-400">Чат на сайте</div>
             <h2 className="mt-3 text-4xl font-extrabold tracking-[-0.03em] sm:text-5xl">
-              Команда ИИ-агентов
+              Помощник на сайте
             </h2>
             <p className="mt-4 max-w-xl text-slate-300">
-              Каждый агент работает с живыми данными сайта: каталогом, заявками и вашими
-              бронированиями. Не знаете, к кому обратиться? Режим «Авто» сам передаст вопрос нужному
-              специалисту.
+              Подскажет технику под задачу, покажет цены из каталога и статус ваших заявок и броней.
+              Примет заявку в любое время — диспетчер перезвонит в рабочие часы.
             </p>
           </Reveal>
           <div className="cube-scene mx-auto shrink-0 lg:mx-12" aria-hidden>
             <div className="cube">
-              {[...PUBLIC_AGENT_PROFILES.map((a) => a.name), 'ИИ', SITE.name].map((label) => (
+              {[...PUBLIC_AGENT_PROFILES.map((a) => a.name), 'Заявка', SITE.name].map((label) => (
                 <div key={label} className="cube-face">
                   {label}
                 </div>
@@ -667,8 +673,12 @@ export default async function HomePage() {
       <CinemaBand
         machine="crane"
         clip="crane-dusk"
-        eyebrow="Подача сегодня"
-        phrase="Техника уже едет. Осталось сказать куда"
+        eyebrow={offer.house.length > 0 ? 'Свободная техника есть' : 'Подача по заявке'}
+        phrase={
+          offer.house.length > 0
+            ? 'Свободная техника есть — скажите, куда подать'
+            : 'Скажите, куда подать технику'
+        }
       />
 
       <ObjectPhotos />
@@ -717,14 +727,17 @@ export default async function HomePage() {
               id="callback"
               className="order-first min-w-0 scroll-mt-28 rounded-3xl bg-slate-950/50 p-4 ring-1 ring-white/10 backdrop-blur sm:p-6 lg:order-none"
             >
-              <a
-                href="#offer-now"
-                className="mb-3 inline-flex min-h-[44px] items-center text-sm font-semibold text-amber-400 underline-offset-4 hover:underline"
-              >
-                {offer.house.length > 0
-                  ? `↑ Свободная техника ${SITE.name} и кто сейчас на линии`
-                  : '↑ Кто сейчас на линии'}
-              </a>
+              {/* The link is there only when the block above has machines to show. */}
+              {(offer.house.length > 0 || offer.line.length > 0) && (
+                <a
+                  href="#offer-now"
+                  className="mb-3 inline-flex min-h-[44px] items-center text-sm font-semibold text-amber-400 underline-offset-4 hover:underline"
+                >
+                  {offer.house.length > 0
+                    ? `↑ Свободная техника ${SITE.name}`
+                    : '↑ Кто сейчас на линии'}
+                </a>
+              )}
               <CallbackForm source="home" dark />
               {/* Owner, 2026-11-02: the person who answers is «Иван, начальник
                   отдела логистики»; nothing about the owner himself. A machine
@@ -735,8 +748,8 @@ export default async function HomePage() {
                 </div>
                 <p className="text-sm leading-snug text-slate-200">
                   Вам ответит <span className="font-bold text-white">Иван</span>, начальник отдела
-                  логистики {SITE.name}. Подберёт технику и назовёт цену за 15 минут, Пн–Сб{' '}
-                  {SHIFT.from}:00–{SHIFT.to}:00.
+                  логистики {SITE.name}. Подберёт технику и перезвонит за 15 минут в рабочее время,
+                  Пн–Сб {SHIFT.from}:00–{SHIFT.to}:00.
                 </p>
               </div>
               <p className="mt-3 text-xs text-slate-400">
@@ -757,8 +770,9 @@ export default async function HomePage() {
             <p className="mt-3 text-slate-700">
               Войдите или зарегистрируйтесь и опишите задачу — её увидят исполнители со своей
               техникой и машинистами, включая парк {SITE.name}. Сравните цены и выберите
-              предложение: телефон исполнителя откроется, когда он подтвердит бронь. Без регистрации
-              — оставьте телефон, перезвонит диспетчер. Сервис бесплатный, без комиссий.
+              предложение. Телефон компании виден на карте и в каталоге, пока исполнитель сам его не
+              скрыл; ваш телефон исполнитель увидит только после подтверждения брони. Без
+              регистрации — оставьте телефон, перезвонит диспетчер. Сервис бесплатный, без комиссий.
             </p>
             <a
               href="/orders"

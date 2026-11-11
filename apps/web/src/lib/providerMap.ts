@@ -275,6 +275,18 @@ export function providerMapPhone(
   return digits ? { phone: formatPhoneDigits(digits), phoneHref: `tel:+${digits}` } : null;
 }
 
+/**
+ * The phone on a provider's public page (/providers/<id>): the same rule as
+ * the pin, and nothing for a company that took itself off the map
+ * («Показывать меня на карте» off) — it did not ask to be found by phone.
+ */
+export function providerPagePhone(
+  row: Pick<ProviderMapRow, 'id' | 'phone' | 'showPhoneOnMap' | 'showOnMap'>,
+): { phone: string; phoneHref: string } | null {
+  if (row.showOnMap === false) return null;
+  return providerMapPhone(row);
+}
+
 /** Distinct machinery types in the company's order: the first PIN_TYPES_MAX and how many more. */
 export function pinMachineTypes(machines: readonly MapMachineRow[] | undefined): {
   machines: string[];

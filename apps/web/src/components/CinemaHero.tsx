@@ -6,7 +6,7 @@ import { LiveClock } from '@/components/LiveClock';
 
 // The film-style header of an inner page: a looping clip of real footage
 // (poster frame first, see CinemaVideo), a slow push-in, scanlines and grain,
-// a camera HUD (● ОНЛАЙН, camera number, Moscow time) and a title that is
+// a camera HUD («Видео для примера», camera number, Moscow time) and a title that is
 // revealed like opening credits. `clips` are names in public/video; one is
 // picked per visit.
 
@@ -58,16 +58,22 @@ export function CinemaHero({
       <div className="journey-scanlines pointer-events-none absolute inset-0 -z-10 opacity-50" />
       <div className="cine-letterbox pointer-events-none absolute inset-0" aria-hidden />
 
-      <div className="flex items-center justify-between gap-3 px-6 pt-5 font-mono text-[0.65rem] uppercase tracking-[0.2em] text-white/70 sm:px-10">
-        <span className="flex items-center gap-2">
-          <span className="flex items-center gap-1.5 rounded bg-red-600/90 px-2 py-0.5 font-bold text-white">
-            <span className="journey-rec h-1.5 w-1.5 rounded-full bg-white" />
-            Онлайн
+      {/* Staged footage, not a live camera: the badge says so. A still page
+          (documents, reference) has no footage and no badge at all. */}
+      {!still && (
+        <div className="flex items-center justify-between gap-3 px-6 pt-5 font-mono text-[0.65rem] uppercase tracking-[0.2em] text-white/70 sm:px-10">
+          <span className="flex items-center gap-2">
+            <span
+              data-testid="cine-badge"
+              className="rounded bg-white/15 px-2 py-0.5 font-bold text-white ring-1 ring-white/25"
+            >
+              Видео для примера
+            </span>
+            <span className="hidden sm:inline">Камера {String(camera).padStart(2, '0')}</span>
           </span>
-          <span className="hidden sm:inline">Камера {String(camera).padStart(2, '0')}</span>
-        </span>
-        <LiveClock className="tabular-nums" />
-      </div>
+          <LiveClock className="tabular-nums" />
+        </div>
+      )}
 
       <div className={`mt-auto px-6 sm:px-10 ${compact ? 'pb-8 pt-10' : 'pb-10 pt-14 sm:pt-20'}`}>
         <div className="cine-eyebrow eyebrow text-amber-400">{eyebrow}</div>

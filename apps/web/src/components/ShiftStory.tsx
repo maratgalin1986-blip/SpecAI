@@ -21,7 +21,7 @@ const CHAPTERS = [
     id: 'order',
     label: 'Заявка',
     from: 0,
-    text: 'Вы описываете задачу — ИИ-агент подбирает машину.',
+    text: 'Вы описываете задачу — помощник подсказывает машину.',
   },
   { id: 'arrive', label: 'Подача', from: 0.18, text: 'Машина с машинистом приезжает на объект.' },
   {
@@ -199,7 +199,7 @@ export function ShiftStory() {
             }}
             aria-hidden
           >
-            <div className="eyebrow text-[0.6rem] text-slate-400">Заявка · ИИ-агент</div>
+            <div className="eyebrow text-[0.6rem] text-slate-400">Заявка · помощник</div>
             <p className="mt-2 text-sm text-slate-200">
               «Нужна траншея под водопровод, 20 м, завтра, Набережные Челны»
             </p>

@@ -135,7 +135,8 @@ describe('the honest city page model', () => {
     expect(text.description).toContain(
       'исполнители в Новосибирске подключаются — оставьте заявку, мы найдём технику.',
     );
-    expect(text.intro).toContain('Новосибирск (Новосибирская область)');
+    expect(text.intro).toContain('в Новосибирске, Новосибирская область');
+    expect(text.intro).not.toContain('((');
     expect(text.intro).not.toContain('подключаются');
     expect(joiningText(city('kazan'))).toBe(
       'Исполнители в Казани подключаются — оставьте заявку, мы найдём технику.',

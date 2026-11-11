@@ -50,7 +50,7 @@ export function CabinetLayout({
   );
 }
 
-/** Блок «Ваш менеджер»: кто на связи у площадки, без личных данных людей. */
+/** Блок «Ваш диспетчер»: кто на связи у площадки, без личных данных людей. */
 export function ManagerCard({
   phone,
   phoneHref,
@@ -64,7 +64,7 @@ export function ManagerCard({
     <section id="manager" className="cab-card flex scroll-mt-24 flex-col gap-1">
       <h2 className="text-lg font-semibold">Связь с площадкой</h2>
       <p className="text-sm text-graphite-600">
-        Вопросы по заказу, документам и проверке — менеджер ответит в рабочее время.
+        Вопросы по заказу, документам и проверке — диспетчер ответит в рабочее время.
       </p>
       <div className="mt-1 flex flex-wrap gap-2">
         <a href={phoneHref} className="cab-action">
