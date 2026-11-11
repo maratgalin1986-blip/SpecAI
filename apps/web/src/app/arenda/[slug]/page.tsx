@@ -248,7 +248,7 @@ export default async function LandingPage(props: { params: Promise<{ slug: strin
         machine={machine}
         clip={landingLoop(landing.slug)}
         eyebrow={`Аренда ${landing.title}`}
-        phrase="Скажите задачу — приедет машина и машинист"
+        phrase="Опишите задачу — приедет машина с машинистом"
       />
 
       <section>
@@ -290,8 +290,8 @@ export default async function LandingPage(props: { params: Promise<{ slug: strin
 
       <CinemaBand
         machine={machine}
-        eyebrow="Подача сегодня"
-        phrase="Позвоните — назовём цену за пять минут"
+        eyebrow="Подача по заявке"
+        phrase="Позвоните — подберём машину под задачу"
         className="sm:min-h-[340px]"
       />
 

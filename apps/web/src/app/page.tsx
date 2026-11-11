@@ -139,7 +139,7 @@ const ADVANTAGES = [
   },
   {
     title: 'Цена видна сразу',
-    text: `Почасовая ставка на каждой карточке, смена — ${SHIFT_HOURS} часов. Подачу техники назовут заранее.`,
+    text: `Почасовая ставка на каждой карточке, смена — ${SHIFT_HOURS} часов. Стоимость подачи назовём до заказа.`,
   },
   {
     title: 'Несколько предложений',
@@ -228,14 +228,17 @@ const SERVICE_LANDING: Record<string, string> = {
   Виброкаток: 'vibrokatok',
 };
 
+/** After «Парк СпецПласт16:» the list goes on in lower case. */
+const lowerFirst = (text: string) => text.charAt(0).toLowerCase() + text.slice(1);
+
 const HOME_FAQ = [
   {
     q: 'Сколько стоит аренда спецтехники?',
-    a: `Парк ${SITE.name}: ${priceFaqAnswer()} У других исполнителей — свои цены на карточках.`,
+    a: `Парк ${SITE.name}: ${lowerFirst(priceFaqAnswer())} У других исполнителей — свои цены на карточках.`,
   },
   {
     q: 'Как быстро приедет техника?',
-    a: 'Зависит от загрузки техники и адреса. Оставьте заявку или позвоните — время подачи назовут заранее.',
+    a: `Парк ${SITE.name} по Набережным Челнам — обычно за ${HOUSE_DELIVERY}, если машина свободна. У других исполнителей и в других городах — зависит от загрузки техники и адреса: оставьте заявку или позвоните, время подачи назовём заранее.`,
   },
   {
     q: 'Кто выполняет работы?',
@@ -469,7 +472,7 @@ export default async function HomePage() {
           <div className="eyebrow text-amber-700">Техника и цены</div>
           <div className="mt-3 flex flex-wrap items-end justify-between gap-4">
             <h2 className="max-w-2xl text-4xl font-extrabold tracking-[-0.03em] sm:text-5xl">
-              Цена видна сразу. Подачу техники назовут заранее
+              Цена видна сразу. Стоимость подачи назовём до заказа
             </h2>
             <a
               href="/equipment"
@@ -670,8 +673,12 @@ export default async function HomePage() {
       <CinemaBand
         machine="crane"
         clip="crane-dusk"
-        eyebrow="Подача сегодня"
-        phrase="Техника уже едет. Осталось сказать куда"
+        eyebrow={offer.house.length > 0 ? 'Свободная техника есть' : 'Подача по заявке'}
+        phrase={
+          offer.house.length > 0
+            ? 'Свободная техника есть — скажите, куда подать'
+            : 'Скажите, куда подать технику'
+        }
       />
 
       <ObjectPhotos />

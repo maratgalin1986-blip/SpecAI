@@ -480,8 +480,9 @@ export function cityPageText(landing: Landing, city: City, offer: CityOffer): Ci
         `${SITE.platform} — заказ спецтехники по всей России, для заказчика бесплатно.`,
       intro:
         // The joining sentence itself is the page's highlighted line (joiningText).
+        // No brackets around «Казань (Республика Татарстан)»: «((…))» read as a typo.
         `Опишите задачу — например: ${tasks} — и адрес объекта ` +
-        `(${cityWithRegion(city)}): заявку увидят диспетчер площадки и исполнители со своей ` +
+        `${city.inCity}${city.region === city.name ? '' : `, ${city.region}`}: заявку увидят диспетчер площадки и исполнители со своей ` +
         `техникой, которые выезжают к вам, и пришлют цены. Машину и цену выбираете вы.`,
     };
   }
@@ -529,8 +530,8 @@ export function cityFaq(
       ? `Сейчас на площадке ${city.inCity} — ${fromPerHour(offer.fromRate)}, ` +
         `смена ${SHIFT_HOURS} ч — от ${rub(offer.fromRate * SHIFT_HOURS)} ₽. ` +
         `Цену назначает исполнитель, оплата — по отработанным часам. ${DELIVERY_NOTE}`
-      : `Цену назначает исполнитель: оставьте заявку, и исполнители, которые выезжают ` +
-        `${city.inCity}, пришлют свои предложения. Сравните и выберите — для заказчика это бесплатно.`;
+      : `Цену назначает исполнитель: оставьте заявку, и исполнители, которые работают ` +
+        `${city.inCity} и рядом, пришлют свои предложения. Сравните и выберите — для заказчика это бесплатно.`;
   const who =
     offer.kind === 'available'
       ? offer.houseServes
