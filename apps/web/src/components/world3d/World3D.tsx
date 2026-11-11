@@ -1,20 +1,18 @@
 'use client';
 
-// «3D-город ИИСтройка24» on the home page (owner, 2026-10-28). The poster
-// image paints first; three.js loads only when the block comes near the
-// screen, runs only while it is on screen and the tab is visible, and falls
-// back to the poster without WebGL, on data saver, on weak phones or when the
-// frame rate is too low. prefers-reduced-motion gets one still frame.
-import { useEffect, useRef, useState } from 'react';
-import {
-  kindInfo,
-  WORLD_KINDS,
-  WORLD_PROVIDER_HREF,
-  worldMode,
-  worldOrderHref,
-  type WorldKind,
-} from './kinds';
+// «3D-город ИИСтройка24» on the home page (owner, 2026-10-28; 2026-11-10: better
+// graphics, a show, and an invitation to walk through it). The poster image
+// paints first; three.js loads only when the block comes near the screen (or
+// when the visitor asks for the walk), runs only while it is on screen and the
+// tab is visible, and falls back to the poster without WebGL, on data saver, on
+// weak phones or when the frame rate is too low. prefers-reduced-motion gets
+// one still frame and a walk that waits for the visitor. The walk itself
+// (WalkController) loads only when it is opened.
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import './world3d.css';
+import { WORLD_KINDS, worldMode, type WorldKind } from './kinds';
 import type { WorldHandle } from './scene';
+import type { WalkBridge } from './WalkController';
 
 export const WORLD_POSTER = '/images/world3d-poster.jpg';
 
@@ -29,10 +27,19 @@ function hasWebGL() {
 
 export function World3D({ categoryIds }: { categoryIds: Partial<Record<WorldKind, string>> }) {
   const boxRef = useRef<HTMLDivElement>(null);
+  const slotRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const handleRef = useRef<WorldHandle | null>(null);
+  const startRef = useRef<(() => void) | null>(null);
+  const inviteRef = useRef<HTMLButtonElement>(null);
+  const posterRef = useRef<HTMLImageElement>(null);
+  const bridgeRef = useRef<WalkBridge | null>(null);
   const [state, setState] = useState<'poster' | 'loading' | 'ready'>('poster');
   const [picked, setPicked] = useState<WorldKind | null>(null);
+  const [walkOpen, setWalkOpen] = useState(false);
+  const [fromUrl, setFromUrl] = useState(false);
+  const [Picked, setPicked2] = useState<(typeof import('./PickedCard'))['default'] | null>(null);
+  const [Walk, setWalk] = useState<(typeof import('./WalkController'))['default'] | null>(null);
 
   useEffect(() => {
     const box = boxRef.current;
@@ -55,7 +62,11 @@ export function World3D({ categoryIds }: { categoryIds: Partial<Record<WorldKind
     let onScreen = false;
     const sync = () => handleRef.current?.setActive(onScreen && !document.hidden);
 
+    let started = false;
     const start = async () => {
+      if (started) return;
+      started = true;
+      near.disconnect();
       setState('loading');
       try {
         const { createWorld } = await import('./scene');
@@ -64,7 +75,14 @@ export function World3D({ categoryIds }: { categoryIds: Partial<Record<WorldKind
           canvas,
           phone,
           still: mode === 'still',
-          onPick: setPicked,
+          onPick: (kind) => {
+            const bridge = bridgeRef.current;
+            if (bridge) bridge.goto(WORLD_KINDS.findIndex((k) => k.kind === kind));
+            else setPicked(kind);
+          },
+          onArrive: (index) => {
+            bridgeRef.current?.arrived(index);
+          },
           onSlow: () => {
             handleRef.current?.dispose();
             handleRef.current = null;
@@ -72,21 +90,18 @@ export function World3D({ categoryIds }: { categoryIds: Partial<Record<WorldKind
           },
         });
         setState('ready');
+        void import('./PickedCard').then((m) => setPicked2(() => m.default));
         sync();
       } catch (error) {
         console.error('3D city failed to start', error);
         setState('poster');
       }
     };
+    startRef.current = () => void start();
 
-    let started = false;
     const near = new IntersectionObserver(
       (entries) => {
-        if (!started && entries.some((e) => e.isIntersecting)) {
-          started = true;
-          near.disconnect();
-          void start();
-        }
+        if (entries.some((e) => e.isIntersecting)) void start();
       },
       { rootMargin: '300px 0px' },
     );
@@ -99,6 +114,7 @@ export function World3D({ categoryIds }: { categoryIds: Partial<Record<WorldKind
     document.addEventListener('visibilitychange', sync);
     return () => {
       disposed = true;
+      startRef.current = null;
       near.disconnect();
       visible.disconnect();
       document.removeEventListener('visibilitychange', sync);
@@ -107,10 +123,45 @@ export function World3D({ categoryIds }: { categoryIds: Partial<Record<WorldKind
     };
   }, []);
 
-  const info = picked ? kindInfo(picked) : null;
+  // The open walk fills the screen. Scroll effects of the page (depth, dolly) put a
+  // transform on the ancestors of this block, and a transform turns `fixed` into
+  // «fixed inside that ancestor»: so while the walk is open the box lives in <body>.
+  useLayoutEffect(() => {
+    const box = boxRef.current;
+    const slot = slotRef.current;
+    if (!box || !slot) return;
+    if (walkOpen) document.body.appendChild(box);
+    else if (box.parentElement !== slot) slot.appendChild(box);
+    return () => {
+      if (box.parentElement !== slot) box.remove();
+    };
+  }, [walkOpen]);
+
+  // Focus goes back to the invitation when the walk closes.
+  const wasOpen = useRef(false);
+  useEffect(() => {
+    if (wasOpen.current && !walkOpen) inviteRef.current?.focus({ preventScroll: true });
+    wasOpen.current = walkOpen;
+  }, [walkOpen]);
+
+  const openWalk = useCallback((direct = false) => {
+    setFromUrl(direct);
+    setWalkOpen(true);
+    startRef.current?.();
+    void import('./WalkController').then((m) => setWalk(() => m.default));
+  }, []);
+  const closeWalk = useCallback(() => setWalkOpen(false), []);
+
+  // /?walk=1 opens the walk straight away.
+  useEffect(() => {
+    if (new URLSearchParams(location.search).get('walk') !== '1') return;
+    const id = window.setTimeout(() => openWalk(true), 0);
+    return () => window.clearTimeout(id);
+  }, [openWalk]);
 
   function choose(kind: WorldKind) {
     setPicked(kind);
+    void import('./PickedCard').then((m) => setPicked2(() => m.default));
     handleRef.current?.focus(kind);
   }
 
@@ -126,73 +177,89 @@ export function World3D({ categoryIds }: { categoryIds: Partial<Record<WorldKind
           линию со своей техникой и ценой. Картинка — иллюстрация, настоящие машины рядом с вами —
           на карте в приложении.
         </p>
-      </div>
-      <div
-        ref={boxRef}
-        className="relative aspect-square overflow-hidden rounded-[2rem] bg-sky-200 shadow-xl sm:aspect-[16/9]"
-      >
-        <img
-          src={WORLD_POSTER}
-          alt="Иллюстрация: стройка в городе, экскаватор, автокран, автовышка и самосвалы на линии"
-          loading="lazy"
-          decoding="async"
-          className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-700 ${
-            state === 'ready' ? 'opacity-0' : 'opacity-100'
-          }`}
-        />
-        <canvas
-          ref={canvasRef}
-          aria-hidden
-          className={`absolute inset-0 h-full w-full cursor-pointer transition-opacity duration-700 ${
-            state === 'ready' ? 'opacity-100' : 'opacity-0'
-          }`}
-          style={{ touchAction: 'pan-y' }}
-        />
-        {state === 'loading' && (
-          <p className="absolute left-4 top-4 rounded-full bg-slate-900/70 px-3 py-1 text-sm text-white">
-            Загружаем 3D-город…
-          </p>
-        )}
-        {info && (
-          <div
-            role="dialog"
-            aria-label={info.title}
-            className="absolute inset-x-3 bottom-3 rounded-2xl bg-white/95 p-4 shadow-2xl backdrop-blur sm:inset-x-auto sm:right-4 sm:bottom-4 sm:w-80"
+        <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2">
+          <button
+            ref={inviteRef}
+            type="button"
+            onClick={() => openWalk()}
+            className="w3d-invite inline-flex min-h-[3.25rem] items-center gap-3 rounded-full px-6 py-3 text-base font-bold text-slate-950 transition-transform hover:scale-[1.03] active:scale-95"
           >
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="flex items-center gap-2 text-sm text-emerald-700">
-                  <span className="inline-block h-2 w-2 rounded-full bg-emerald-500" />
-                  на линии
-                </p>
-                <p className="text-lg font-bold text-slate-900">{info.title}</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setPicked(null)}
-                aria-label="Закрыть"
-                className="rounded-full px-2 text-2xl leading-none text-slate-500 hover:text-slate-900"
-              >
-                ×
-              </button>
-            </div>
-            <p className="mt-1 text-sm text-slate-600">{info.text}</p>
-            <div className="mt-3 flex flex-wrap gap-2">
-              <a
-                href={worldOrderHref(categoryIds[info.kind])}
-                className="rounded-full bg-amber-500 px-4 py-2 font-semibold text-slate-950 hover:bg-amber-400"
-              >
-                Заказать
-              </a>
-              <a
-                href={WORLD_PROVIDER_HREF}
-                className="rounded-full border border-slate-300 px-4 py-2 font-semibold text-slate-800 hover:border-slate-500"
-              >
-                Встать на линию
-              </a>
-            </div>
-          </div>
-        )}
+            <span aria-hidden className="text-xl">
+              🚶
+            </span>
+            Прогуляться по городу
+            <span aria-hidden className="w3d-invite-arrow text-xl">
+              →
+            </span>
+          </button>
+          <span className="text-sm text-slate-500">
+            {WORLD_KINDS.length} остановки: покажем технику, цену и как заказать
+          </span>
+        </div>
+      </div>
+      <div ref={slotRef} className="relative aspect-square sm:aspect-[16/9]">
+        <div
+          ref={boxRef}
+          role={walkOpen ? 'dialog' : undefined}
+          aria-modal={walkOpen ? true : undefined}
+          aria-label={walkOpen ? 'Прогулка по 3D-городу' : undefined}
+          data-w3d={walkOpen ? 'walk' : 'block'}
+          className={
+            walkOpen
+              ? 'w3d-bars fixed inset-0 z-[100] overflow-hidden bg-slate-950'
+              : 'absolute inset-0 overflow-hidden rounded-[2rem] bg-sky-200 shadow-xl'
+          }
+        >
+          <img
+            ref={posterRef}
+            src={WORLD_POSTER}
+            alt="Иллюстрация: вечерняя стройка в городе, экскаватор, автокран, автовышка и самосвалы на линии"
+            loading="lazy"
+            decoding="async"
+            className={`w3d-poster-pan absolute inset-0 h-full w-full object-cover transition-opacity duration-700 ${
+              state === 'ready' ? 'opacity-0' : 'opacity-100'
+            }`}
+          />
+          <canvas
+            ref={canvasRef}
+            aria-hidden
+            className={`absolute inset-0 h-full w-full cursor-pointer transition-opacity duration-700 ${
+              state === 'ready' ? 'opacity-100' : 'opacity-0'
+            }`}
+            style={{ touchAction: walkOpen ? 'none' : 'pan-y' }}
+          />
+          <div className="w3d-vignette" aria-hidden />
+          {!walkOpen && state === 'loading' && (
+            <p className="absolute left-4 top-4 rounded-full bg-slate-900/70 px-3 py-1 text-sm text-white">
+              Загружаем 3D-город…
+            </p>
+          )}
+          {!walkOpen && (
+            <button
+              type="button"
+              onClick={() => openWalk()}
+              className="w3d-float absolute right-3 top-3 inline-flex min-h-11 items-center gap-2 rounded-full bg-slate-950/80 px-4 text-sm font-bold text-amber-300 shadow-lg ring-1 ring-amber-300/60 backdrop-blur hover:bg-slate-950"
+            >
+              <span aria-hidden>▶</span>
+              Прогуляться
+            </button>
+          )}
+          {!walkOpen && picked && Picked && (
+            <Picked kind={picked} categoryIds={categoryIds} onClose={() => setPicked(null)} />
+          )}
+          {walkOpen && Walk && (
+            <Walk
+              categoryIds={categoryIds}
+              state={state}
+              handleRef={handleRef}
+              boxRef={boxRef}
+              posterRef={posterRef}
+              bridgeRef={bridgeRef}
+              fromUrl={fromUrl}
+              onClose={closeWalk}
+            />
+          )}
+        </div>
       </div>
       <div className="flex flex-wrap gap-2" role="group" aria-label="Выберите технику">
         {WORLD_KINDS.map((k) => (
