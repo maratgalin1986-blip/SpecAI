@@ -81,3 +81,15 @@ describe('parseOfficeSettings — ставка НДС в счёте (К8)', () =
     expect(parseVatRate(undefined)).toBe(22);
   });
 });
+
+describe('parseOfficeSettings — адрес для ответов', () => {
+  it('по умолчанию пусто: ответы приходят в ящик, с которого ушло письмо', () => {
+    expect(parseOfficeSettings([]).replyTo).toBe('');
+  });
+
+  it('сохранённый владельцем адрес остаётся', () => {
+    expect(
+      parseOfficeSettings([{ key: 'office.replyTo', value: ' owner@example.ru ' }]).replyTo,
+    ).toBe('owner@example.ru');
+  });
+});

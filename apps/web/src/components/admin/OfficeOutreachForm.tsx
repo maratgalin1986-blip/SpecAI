@@ -99,7 +99,9 @@ export function OfficeOutreachForm({ settings }: { settings: OfficeOutreachSetti
         />
       </label>
       <label className="flex flex-col gap-1 text-sm">
-        <span className="text-slate-600">Адрес для ответов на письма (Reply-To)</span>
+        <span className="text-slate-600">
+          Адрес для ответов на письма (пусто — ответы придут в ящик, с которого ушло письмо)
+        </span>
         <input
           type="email"
           autoComplete="off"

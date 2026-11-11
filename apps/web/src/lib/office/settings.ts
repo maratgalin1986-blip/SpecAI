@@ -2,7 +2,6 @@
 // OFFICE_SETTINGS в plan.ts; сюда добавлены только ключи, которых там нет.
 
 import { prisma } from '@specai/database';
-import { SITE } from '@/lib/site';
 import { OFFICE_SETTINGS, defaultPlan, formatPlan } from './plan';
 
 export const OFFICE_EXTRA_SETTINGS = {
@@ -89,7 +88,11 @@ export interface OfficeSettings {
   outreachPaused: boolean;
   /** Писем / сообщений WhatsApp в день, на канал. */
   dailyCap: number;
-  /** Адрес для ответов на письма кандидатам. */
+  /**
+   * Адрес для ответов на письма кандидатам (Reply-To). Пусто (по умолчанию) — заголовка нет,
+   * ответы приходят в ящик, с которого ушло письмо: туда смотрит владелец и туда же придёт
+   * чтение ответов. Раньше по умолчанию стоял адрес с сайта — это другой ящик.
+   */
   replyTo: string;
   /** WhatsApp на обычный мобильный из карточки. */
   whatsappToPhone: boolean;
@@ -133,7 +136,7 @@ export function parseOfficeSettings(
     paused: flag(byKey.get(OFFICE_SETTINGS.paused)),
     outreachPaused: flag(byKey.get(OFFICE_SETTINGS.outreachPaused)),
     dailyCap: int(byKey.get(OFFICE_SETTINGS.dailyCap), DEFAULT_DAILY_CAP),
-    replyTo: replyTo || SITE.email,
+    replyTo: replyTo ?? '',
     // Владелец, 2026-11-09: «если в карте оставили номера для связи — значит, нужно связаться».
     // Поэтому мобильный из карточки по умолчанию годится для WhatsApp; флажок в админке это
     // выключает. Каждое сообщение всё равно уходит только после «Отправить» владельца.
