@@ -719,14 +719,17 @@ export default async function HomePage() {
               id="callback"
               className="order-first min-w-0 scroll-mt-28 rounded-3xl bg-slate-950/50 p-4 ring-1 ring-white/10 backdrop-blur sm:p-6 lg:order-none"
             >
-              <a
-                href="#offer-now"
-                className="mb-3 inline-flex min-h-[44px] items-center text-sm font-semibold text-amber-400 underline-offset-4 hover:underline"
-              >
-                {offer.house.length > 0
-                  ? `↑ Свободная техника ${SITE.name} и кто сейчас на линии`
-                  : '↑ Кто сейчас на линии'}
-              </a>
+              {/* The link is there only when the block above has machines to show. */}
+              {(offer.house.length > 0 || offer.line.length > 0) && (
+                <a
+                  href="#offer-now"
+                  className="mb-3 inline-flex min-h-[44px] items-center text-sm font-semibold text-amber-400 underline-offset-4 hover:underline"
+                >
+                  {offer.house.length > 0
+                    ? `↑ Свободная техника ${SITE.name}`
+                    : '↑ Кто сейчас на линии'}
+                </a>
+              )}
               <CallbackForm source="home" dark />
               {/* Owner, 2026-11-02: the person who answers is «Иван, начальник
                   отдела логистики»; nothing about the owner himself. A machine

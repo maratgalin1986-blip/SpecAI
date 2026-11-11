@@ -114,16 +114,17 @@ export function OfferNow({
           <ul className="-mx-1 flex snap-x gap-3 overflow-x-auto px-1 pb-1">{house.map(card)}</ul>
         </div>
       )}
-      <div className="flex flex-col gap-2">
-        <h3 className={heading}>Сейчас на линии</h3>
-        {shownLine.length > 0 ? (
+      {/* No «Сейчас на линии: никого»: an empty heading reads as an empty platform. */}
+      {shownLine.length > 0 ? (
+        <div className="flex flex-col gap-2">
+          <h3 className={heading}>Сейчас на линии</h3>
           <ul className="-mx-1 flex snap-x gap-3 overflow-x-auto px-1 pb-1">
             {shownLine.map(card)}
           </ul>
-        ) : (
-          <p className={`text-sm ${muted}`}>{NOBODY_ON_LINE}</p>
-        )}
-      </div>
+        </div>
+      ) : (
+        house.length === 0 && <p className={`text-sm ${muted}`}>{NOBODY_ON_LINE}</p>
+      )}
     </div>
   );
 }

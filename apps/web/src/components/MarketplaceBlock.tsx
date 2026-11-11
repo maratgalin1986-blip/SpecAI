@@ -27,9 +27,12 @@ export async function MarketplaceBlock() {
       text: `Опишите задачу — исполнители со своей техникой и машинистами, включая парк ${SITE.name}, пришлют цены. Вы выбираете, сервис бесплатный.`,
       href: '/orders#new',
       action: 'Разместить заявку',
-      counter: counters
-        ? `${pluralizeRu(counters.providers, ['исполнитель', 'исполнителя', 'исполнителей'])} · ${pluralizeRu(counters.machines, ['машина', 'машины', 'машин'])}`
-        : null,
+      // Zero and one are not numbers to show: they read as an empty platform.
+      counter: !counters
+        ? null
+        : counters.providers > 1
+          ? `${pluralizeRu(counters.providers, ['исполнитель', 'исполнителя', 'исполнителей'])} · ${pluralizeRu(counters.machines, ['машина', 'машины', 'машин'])}`
+          : `Первым отвечает парк ${SITE.name}`,
       emoji: '🧾',
       dark: false,
     },
@@ -39,9 +42,11 @@ export async function MarketplaceBlock() {
       text: 'Своя техника? Подключитесь, опубликуйте парк со своими ценами и предлагайте цену на заявки заказчиков. Конкуренты ваших цен не видят.',
       href: '/register?type=provider',
       action: 'Встать на линию',
-      counter: counters
-        ? `${pluralizeRu(counters.openOrders, ['открытая заявка', 'открытые заявки', 'открытых заявок'])} ждут цены`
-        : null,
+      counter: !counters
+        ? null
+        : counters.openOrders > 1
+          ? `${pluralizeRu(counters.openOrders, ['открытая заявка', 'открытые заявки', 'открытых заявок'])} ждут цены`
+          : 'Заявки рядом приходят сами',
       emoji: '🚛',
       dark: true,
     },
