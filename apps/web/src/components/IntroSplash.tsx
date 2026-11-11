@@ -9,19 +9,24 @@ import { SITE } from '@/lib/site';
 import { reachGoal } from '@/lib/marketing';
 import { setSoundEnabled, soundEnabled, startedByPress, subscribeSound } from '@/lib/sound';
 
-// Opening titles of the home page, about 6 seconds, cut like a TV channel
-// ident: light beams over a drone shot, «ООО «СпецПласт 16» представляет»,
-// a brass hit with a flash and the gold «ИИСтройка24» logo, then the bright
-// partner card under a spotlight for about three seconds, and the camera
-// dives into the site. Shown once per browser session; «Пропустить» or Esc
-// skips it (a tap only switches the sound on); off with reduced motion.
+// Opening titles of the home page, 2.8 seconds with the fade (the owner asked
+// for «заставка ~3 с»), cut like a TV channel ident: light beams over a drone
+// shot, «ООО «СпецПласт 16» представляет», a flash and the gold «ИИСтройка24»
+// logo, the bright partner card under a spotlight, and the camera dives into
+// the site. Shown once: not again in this session and not to a returning
+// visitor. Any tap, scroll or key skips it. It lies under the header and the
+// phone contact bar, so «Позвонить» and «Заказать» work while it plays. Off
+// with reduced motion.
 //
 // It is plain CSS (globals.css, .intro-*), so it runs and ends on time even
 // before hydration. The inline script hides it before the first paint for
 // visitors who have already seen it.
 
+/** In sessionStorage and in localStorage: a returning visitor goes straight to the page. */
 const SEEN_KEY = 'sp16_intro_seen';
-const DURATION_MS = 7800;
+const DURATION_MS = 2800;
+/** Set on <html> while the titles play: the floating buttons wait (globals.css). */
+const PLAYING_ATTR = 'data-intro';
 
 /** What the site offers, under the card (owner, 2026-10-03: «чтобы привлечь больше людей»). */
 const OFFERS = [
@@ -30,12 +35,12 @@ const OFFERS = [
   { href: '/providers', icon: '🚛', label: 'Исполнители рядом' },
 ];
 
-// `?intro=0` in the address skips the titles too (ad landings, QA, links
-// sent to someone who has already seen them), and so does a deep link to the
-// order form or the wizard (`/#callback`, `?m=<machine>#podbor`): the visitor
-// asked for the form, not the titles. Hiding also marks them seen, so the
-// next home page visit in this session does not play them either.
-const HIDE_IF_SEEN = `(function(){${AB_INLINE};try{if(ab==='calm'||sessionStorage.getItem('${SEEN_KEY}')||/[?&](intro=0|m=|yclid|gclid|utm_medium=cpc)/.test(location.search)||/^#(callback|podbor)/.test(location.hash)||matchMedia('(prefers-reduced-motion: reduce)').matches){document.getElementById('intro').hidden=true;sessionStorage.setItem('${SEEN_KEY}','1')}}catch(e){}})()`;
+// `?intro=0` in the address skips the titles too (QA, links sent to someone
+// who has already seen them), and so does any advertising or deep link: a
+// click id or a UTM tag (`yclid`, `gclid`, `utm_*`), a machine or the 3D city
+// (`?m=`, `?walk=1`) and any `#anchor` (`/#callback`, `#podbor`): the visitor
+// asked for something, not for the titles. Hiding also marks them seen.
+const HIDE_IF_SEEN = `(function(){${AB_INLINE};var d=document.documentElement,s=function(){try{sessionStorage.setItem('${SEEN_KEY}','1');localStorage.setItem('${SEEN_KEY}','1')}catch(e){}};try{if(ab==='calm'||sessionStorage.getItem('${SEEN_KEY}')||localStorage.getItem('${SEEN_KEY}')||/[?&](intro=0|m=|walk=|yclid|gclid|utm_[a-z]+=)/.test(location.search)||location.hash.length>1||matchMedia('(prefers-reduced-motion: reduce)').matches){document.getElementById('intro').hidden=true;s()}else{d.setAttribute('${PLAYING_ATTR}','');setTimeout(function(){d.removeAttribute('${PLAYING_ATTR}')},${DURATION_MS})}}catch(e){}})()`;
 
 /** The address asks for the order form or the wizard. */
 const FORM_HASH = /^#(callback|podbor)/;
@@ -72,6 +77,7 @@ function keepFormAnchored(): () => void {
 function markSeen() {
   try {
     sessionStorage.setItem(SEEN_KEY, '1');
+    localStorage.setItem(SEEN_KEY, '1');
   } catch {
     // Storage blocked: the titles just play on every visit.
   }
@@ -95,6 +101,7 @@ export function IntroSplash() {
     if (finishing.current) return;
     finishing.current = true;
     const root = document.documentElement;
+    root.removeAttribute(PLAYING_ATTR);
     const canMorph =
       typeof document.startViewTransition === 'function' &&
       !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -125,7 +132,7 @@ export function IntroSplash() {
     // The inline script has already hidden it for a repeat visit; the flag
     // is read there only, so an effect that runs twice still plays it.
     const intro = document.getElementById('intro');
-    if (!intro || intro.hidden || FORM_HASH.test(window.location.hash)) {
+    if (!intro || intro.hidden || window.location.hash.length > 1) {
       markSeen();
       setDone(true);
       return keepFormAnchored();
@@ -140,19 +147,21 @@ export function IntroSplash() {
       if (FORM_HASH.test(window.location.hash)) finish();
     };
     window.addEventListener('hashchange', onHash);
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape' && event.key !== 'Enter') return;
+    // Any key, tap or scroll ends the titles: nobody has to look for «Пропустить».
+    // The sound button stops its own click, so it only switches the sound.
+    const onSkip = () => {
       reachGoal('intro_skip');
       finish();
     };
+    const skips = ['keydown', 'click', 'wheel', 'touchmove', 'scroll'] as const;
     const timer = window.setTimeout(() => {
       reachGoal('intro_full');
       finish();
     }, DURATION_MS);
-    window.addEventListener('keydown', onKey);
+    skips.forEach((name) => window.addEventListener(name, onSkip, { passive: true }));
     return () => {
       window.clearTimeout(timer);
-      window.removeEventListener('keydown', onKey);
+      skips.forEach((name) => window.removeEventListener(name, onSkip));
       window.removeEventListener('hashchange', onHash);
       offSound();
     };
@@ -164,7 +173,7 @@ export function IntroSplash() {
     <>
       <div
         id="intro"
-        className="intro fixed inset-0 z-[100] overflow-hidden bg-black text-white"
+        className="intro fixed inset-0 z-[35] overflow-hidden bg-black text-white"
         role="presentation"
         suppressHydrationWarning
       >
@@ -180,7 +189,7 @@ export function IntroSplash() {
         <div className="intro-flash pointer-events-none absolute inset-0" aria-hidden />
 
         {/* Drone HUD */}
-        <div className="absolute left-4 top-4 font-mono text-[0.6rem] uppercase tracking-[0.25em] text-white/60 sm:left-8 sm:top-8">
+        <div className="absolute left-4 top-20 font-mono text-[0.6rem] uppercase tracking-[0.25em] text-white/60 sm:left-8 sm:top-24">
           <span className="intro-rec mr-2 inline-block h-1.5 w-1.5 rounded-full bg-red-500" />
           Аэросъёмка · {SITE.city}
         </div>
@@ -251,7 +260,7 @@ export function IntroSplash() {
                 href={offer.href}
                 onClick={() => reachGoal('intro_offer')}
                 className="intro-offer flex min-h-12 flex-1 items-center justify-center gap-2 rounded-2xl bg-slate-950/90 px-4 py-3 text-center text-base font-bold text-white shadow-xl ring-2 ring-amber-400/80 transition hover:bg-amber-400 hover:text-slate-950 sm:text-sm"
-                style={{ animationDelay: `${3.4 + i * 0.35}s` }}
+                style={{ animationDelay: `${1.45 + i * 0.1}s` }}
               >
                 <span aria-hidden>{offer.icon}</span>
                 {offer.label}
@@ -275,13 +284,13 @@ export function IntroSplash() {
           // first (SoundDirector skips gestures on [data-sound-toggle]).
           data-sound-toggle={soundOff || soundLive ? '' : undefined}
           aria-pressed={!soundOff && soundLive}
-          className="intro-sound-hint absolute bottom-6 left-4 flex min-h-11 items-center gap-2 rounded-full bg-white px-4 py-2.5 text-sm font-bold text-slate-950 shadow-lg ring-1 ring-white/40 hover:bg-amber-300 sm:left-6"
+          className="intro-sound-hint absolute bottom-24 left-4 flex min-h-11 items-center gap-2 rounded-full bg-white px-4 py-2.5 text-sm font-bold text-slate-950 shadow-lg ring-1 ring-white/40 hover:bg-amber-300 sm:bottom-6 sm:left-6"
         >
           {soundOff || !soundLive ? '🔊 Включить звук' : '🔇 Выключить звук'}
         </button>
         <button
           type="button"
-          className="absolute bottom-6 right-6 rounded-full bg-white px-5 py-2.5 text-sm font-bold text-slate-950 shadow-lg ring-1 ring-white/40 hover:bg-amber-300"
+          className="absolute bottom-24 right-4 min-h-11 rounded-full bg-white px-5 py-2.5 text-sm font-bold text-slate-950 shadow-lg ring-1 ring-white/40 hover:bg-amber-300 sm:bottom-6 sm:right-6"
           onClick={skip}
         >
           Пропустить →
