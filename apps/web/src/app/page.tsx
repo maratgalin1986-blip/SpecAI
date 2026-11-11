@@ -12,6 +12,7 @@ import { ObjectPhotos } from '@/components/ObjectPhotos';
 import { HeroPhotos } from '@/components/HeroPhotos';
 import { HowItWorks } from '@/components/HowItWorks';
 import { Icon, type IconName } from '@/components/Icon';
+import { ShowOrbs } from '@/components/ShowOrbs';
 import { IntroSplash } from '@/components/IntroSplash';
 import { MachinePhoto } from '@/components/MachinePhoto';
 import { MarketplaceBlock } from '@/components/MarketplaceBlock';
@@ -317,6 +318,7 @@ export default async function HomePage() {
             >
               <a
                 href="#callback"
+                data-magnet
                 className="group relative inline-flex w-full items-center justify-center gap-2 overflow-hidden whitespace-nowrap rounded-2xl bg-gradient-to-r from-amber-400 via-amber-500 to-orange-500 px-4 py-4 text-lg font-extrabold sm:gap-3 sm:px-7 sm:py-5 text-slate-950 shadow-2xl shadow-amber-500/40 ring-2 ring-amber-200/70 transition hover:brightness-110 sm:text-2xl"
               >
                 <span className="cta-shine pointer-events-none absolute inset-0" aria-hidden />
@@ -332,7 +334,7 @@ export default async function HomePage() {
                   same size and shape, graphite instead of amber. */}
               <a
                 href="/register?type=provider"
-                className="group relative inline-flex w-full items-center justify-center gap-2 overflow-hidden rounded-2xl bg-slate-900 px-4 py-3 text-white shadow-2xl shadow-black/40 ring-2 ring-emerald-400/70 transition hover:bg-slate-800 sm:gap-3 sm:px-7 sm:py-4"
+                className="show-cta group relative inline-flex w-full items-center justify-center gap-2 overflow-hidden rounded-2xl bg-slate-900 px-4 py-3 text-white shadow-2xl shadow-black/40 ring-2 ring-emerald-400/70 transition hover:bg-slate-800 sm:gap-3 sm:px-7 sm:py-4"
               >
                 <span aria-hidden className="text-xl sm:text-3xl">
                   🚛
@@ -352,7 +354,7 @@ export default async function HomePage() {
               <div className="flex flex-wrap gap-3">
                 <a
                   href={SITE.phoneHref}
-                  className="inline-flex flex-1 items-center justify-center gap-2.5 rounded-full bg-white px-5 py-3 font-mono text-base font-bold tabular-nums text-slate-950 shadow-lg transition hover:bg-amber-100 sm:flex-none"
+                  className="show-cta inline-flex flex-1 items-center justify-center gap-2.5 rounded-full bg-white px-5 py-3 font-mono text-base font-bold tabular-nums text-slate-950 shadow-lg transition hover:bg-amber-100 sm:flex-none"
                 >
                   <Icon name="phone" className="h-5 w-5" />
                   {SITE.phone}
@@ -448,7 +450,8 @@ export default async function HomePage() {
         <TaskWizard />
       </div>
 
-      <section className="depth">
+      <section className="depth show-stage">
+        <ShowOrbs />
         <Reveal>
           <div className="eyebrow text-amber-700">Техника и цены</div>
           <div className="mt-3 flex flex-wrap items-end justify-between gap-4">
@@ -505,11 +508,11 @@ export default async function HomePage() {
                       />
                       <div className="absolute inset-0 bg-gradient-to-t from-slate-950/50 to-transparent" />
                       <span className="absolute bottom-4 left-5 flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-950/80 text-amber-400 ring-1 ring-white/10 backdrop-blur transition group-hover:bg-amber-500 group-hover:text-slate-950">
-                        <Icon name={service.icon} className="h-6 w-6" />
+                        <Icon name={service.icon} className="h-6 w-6" live />
                       </span>
                       {category && category.available > 0 && (
                         <span className="absolute right-4 top-4 inline-flex items-center gap-1.5 rounded-full bg-white/90 px-2.5 py-1 text-xs font-semibold text-emerald-700 backdrop-blur">
-                          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                          <span className="live-dot h-1.5 w-1.5 rounded-full bg-emerald-500" />
                           {pluralizeRu(category.available, ['единица', 'единицы', 'единиц'])}{' '}
                           свободно
                         </span>

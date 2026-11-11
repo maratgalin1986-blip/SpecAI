@@ -43,7 +43,7 @@ export function ActivityBlock({ initial }: { initial: Activity | null }) {
     >
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h2 id="activity-title" className="cab-eyebrow">
-          <span className="mr-2 inline-flex h-2 w-2 rounded-full bg-emerald-500" aria-hidden />
+          <span className="live-dot mr-2 h-2 w-2 rounded-full bg-emerald-500" aria-hidden />
           Сейчас на площадке
         </h2>
         <p className="text-xs text-graphite-600">

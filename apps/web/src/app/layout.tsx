@@ -22,6 +22,8 @@ import { SITE } from '@/lib/site';
 import { siteUrl } from '@/lib/siteUrl';
 import './globals.css';
 import './motion.css';
+import './show.css';
+import { SHOW_INLINE } from '@/lib/showInline';
 import { fromPrice, MIN_RATE } from '@/lib/prices';
 
 // Cyrillic-capable fonts: Manrope for text and headings, a mono for labels and figures.
@@ -139,6 +141,9 @@ export default function RootLayout({ children }: { children: ReactNode }) {
               "try{var k='cine-curtain-at',t=+sessionStorage.getItem(k)||0,n=Date.now();if(n-t<30000)document.documentElement.setAttribute('data-curtain','fast');sessionStorage.setItem(k,String(n))}catch(e){}",
           }}
         />
+        {/* The «show» level (full / calm / off) is known before the first paint,
+            so entrance animations start at the right strength (lib/showGate.ts). */}
+        <script dangerouslySetInnerHTML={{ __html: SHOW_INLINE }} />
         {/* Chrome may offer installation before React is up: keep the event for
             the «Установить» card (components/InstallPrompt.tsx, keys in
             lib/installHint.ts) instead of the browser's own mini-infobar; once
