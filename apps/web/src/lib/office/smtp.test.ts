@@ -3,6 +3,7 @@ import {
   DEFAULT_SMTP_HOST,
   officeMailConfig,
   officeMailConfigured,
+  officeMailHint,
   OFFICE_TEST_SUBJECT,
   sendOfficeMail,
   sendOfficeTestMail,
@@ -45,6 +46,74 @@ describe('officeMailConfig', () => {
       from: 'ИИСтройка24 <office@example.ru>',
     });
     expect(officeMailConfig({ ...ENV, OUTREACH_SMTP_PORT: 'abc' })?.port).toBe(465);
+  });
+});
+
+describe('пароль и сервер по логину', () => {
+  it('пробелы и перевод строки в пароле убираются: так его вставляют в Vercel', () => {
+    const env = { ...ENV, OUTREACH_SMTP_PASS: ' abcd efgh ijkl mnop\n' };
+    expect(officeMailConfig(env)?.pass).toBe('abcdefghijklmnop');
+    expect(officeMailConfig({ ...ENV, OUTREACH_SMTP_PASS: ' \n ' })).toBeNull();
+  });
+
+  it('сервер берётся по домену логина, явный сервер важнее', () => {
+    const host = (user: string, extra: Record<string, string> = {}) =>
+      officeMailConfig({ ...ENV, OUTREACH_SMTP_USER: user, ...extra })?.host;
+    expect(host('firm@yandex.ru')).toBe('smtp.yandex.ru');
+    expect(host('firm@Mail.ru')).toBe('smtp.mail.ru');
+    expect(host('firm@bk.ru')).toBe('smtp.mail.ru');
+    expect(host('firm@gmail.com')).toBe('smtp.gmail.com');
+    expect(host('office@firma.example')).toBe(DEFAULT_SMTP_HOST);
+    expect(host('firm@mail.ru', { OUTREACH_SMTP_HOST: 'smtp.own.example' })).toBe(
+      'smtp.own.example',
+    );
+  });
+});
+
+describe('отправитель и кавычки', () => {
+  it('адрес отправителя — всегда логин, имя берётся из OUTREACH_FROM', () => {
+    const from = (value: string) => officeMailConfig({ ...ENV, OUTREACH_FROM: value })?.from;
+    expect(from('ИИСтройка24 <other@mail.ru>')).toBe('ИИСтройка24 <office@example.ru>');
+    expect(from('«ИИСтройка24 <office@example.ru>»')).toBe('ИИСтройка24 <office@example.ru>');
+    expect(from('ИИСтройка24')).toBe('ИИСтройка24 <office@example.ru>');
+    expect(from('other@mail.ru')).toBe('office@example.ru');
+  });
+
+  it('кавычки и невидимые знаки вокруг логина и пароля убираются', () => {
+    const config = officeMailConfig({
+      OUTREACH_SMTP_USER: '"office@example.ru"',
+      OUTREACH_SMTP_PASS: '\u200b«abcdefghijklmnop»',
+    });
+    expect(config).toMatchObject({ user: 'office@example.ru', pass: 'abcdefghijklmnop' });
+  });
+});
+
+describe('officeMailHint', () => {
+  it('без ящика — no-smtp', () => {
+    expect(officeMailHint({})).toBe('no-smtp');
+  });
+
+  it('признаки без значений: сервер, домен логина, отправитель, вид пароля', () => {
+    const hint = officeMailHint({
+      OUTREACH_SMTP_USER: 'Firma@Yandex.ru',
+      OUTREACH_SMTP_PASS: 'abcdefghijklmnop',
+      OUTREACH_FROM: 'ИИСтройка24 <firma@yandex.ru>',
+    });
+    expect(hint).toBe('host=smtp.yandex.ru login=@yandex.ru from=login pass=app-password');
+    expect(hint).not.toContain('Firma');
+    expect(hint).not.toContain('abcdefgh');
+  });
+
+  it('логин без домена, чужой адрес отправителя, пароль не как у приложения, пробелы', () => {
+    expect(
+      officeMailHint({
+        OUTREACH_SMTP_USER: 'firma',
+        OUTREACH_SMTP_PASS: 'Qwerty 12345',
+        OUTREACH_FROM: 'other@mail.ru',
+      }),
+    ).toBe(
+      'host=smtp.yandex.ru login=not-an-address from=replaced-by-login pass=other pass-had-spaces',
+    );
   });
 });
 
