@@ -12,7 +12,7 @@ BASE_URL="${BASE_URL:-https://spec-ai-web.vercel.app}"
 RELAY_STEPS="${RELAY_STEPS:-6}"
 # New steps start only within this many seconds, so the final tick still fits the job timeout.
 RELAY_BUDGET_S="${RELAY_BUDGET_S:-300}"
-UA='SpecPlast16-office/1.0 (+https://xn--24-6kc5aagh4arjl.xn--p1ai; specplast16@mail.ru)'
+UA='SpecPlast16-office/1.0 (+https://xn--24-6kc5aagh4arjl.xn--p1ai; specplast16@yandex.ru)'
 
 if [ -z "${CRON_SECRET:-}" ]; then
   echo "::error::CRON_SECRET repository secret is not set — add it in Settings → Secrets and variables → Actions"

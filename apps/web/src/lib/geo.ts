@@ -8,7 +8,7 @@
 export type GeoPoint = { lat: number; lon: number; label: string; city?: string };
 
 export const GEO_USER_AGENT =
-  'SpecPlast16/1.0 (+https://spec-ai-web.vercel.app; specplast16@mail.ru)';
+  'SpecPlast16/1.0 (+https://spec-ai-web.vercel.app; specplast16@yandex.ru)';
 
 /**
  * An address lookup that tells «not found» from «the service did not answer»

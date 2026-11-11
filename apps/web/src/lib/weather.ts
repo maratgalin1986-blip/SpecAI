@@ -48,7 +48,7 @@ const MSK_OFFSET_HOURS = 3;
 export const SHIFT_START = 8;
 export const SHIFT_END = 17;
 export const WEATHER_USER_AGENT =
-  'SpecPlast16/1.0 (+https://spec-ai-web.vercel.app; specplast16@mail.ru)';
+  'SpecPlast16/1.0 (+https://spec-ai-web.vercel.app; specplast16@yandex.ru)';
 
 type MetStep = {
   time: string;
