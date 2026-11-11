@@ -169,7 +169,11 @@ export type Goal =
   // «Сторож» (2026-11-08): the exit question from Иван, its lead and its «Нет, спасибо».
   | 'storozh_shown'
   | 'storozh_lead'
-  | 'storozh_close';
+  | 'storozh_close'
+  // «На экран телефона / На рабочий стол» (2026-11-11): the button seen, pressed, the app installed.
+  | 'install_shown'
+  | 'install_click'
+  | 'install_done';
 
 /**
  * The cookie choice in localStorage: 'yes' («Согласен», Metrika on), 'no'

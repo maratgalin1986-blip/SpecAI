@@ -10,8 +10,13 @@ import {
   MOMENT_TTL_MS,
   INSTALL_TEXTS,
   INSTALL_VISITS_KEY,
+  attentionDelay,
+  INSTALL_IOS_STEPS,
   installButtonMode,
+  installButtonText,
   installHintMode,
+  installLeadLine,
+  sparkOffsets,
   isAndroidWebView,
   isAppInviteSearch,
   isBot,
@@ -331,5 +336,39 @@ describe('installButtonMode (always-on button)', () => {
     expect(installButtonMode({ ...base, ua: UA.ipadOs, maxTouchPoints: 5 })).toBe('ios');
     expect(installButtonMode({ ...base, ua: UA.iphoneChrome })).toBe('ios-other');
     expect(installButtonMode({ ...base, ua: UA.iphoneTelegram })).toBe('ios-other');
+  });
+});
+
+describe('install button: texts, attention and sparks', () => {
+  it('says «На экран телефона» on phones and «На рабочий стол» on computers', () => {
+    expect(installButtonText(UA.iphoneSafari)).toBe('На экран телефона');
+    expect(installButtonText(UA.androidChrome)).toBe('На экран телефона');
+    expect(installButtonText(UA.ipadOs, 5)).toBe('На экран телефона');
+    expect(installButtonText(UA.desktopChrome)).toBe('На рабочий стол');
+    expect(installLeadLine(UA.androidChrome)).toMatch(/экран телефона/);
+    expect(installLeadLine(UA.desktopChrome)).toMatch(/рабочий стол/);
+  });
+
+  it('has three steps for Safari, each with its own picture', () => {
+    expect(INSTALL_IOS_STEPS.map((step) => step.icon)).toEqual(['share', 'plus', 'check']);
+    expect(INSTALL_IOS_STEPS[0]!.text).toContain('Поделиться');
+  });
+
+  it('plays the attention effect a few times, then stays calm', () => {
+    expect([0, 1, 2, 3, 4].map(attentionDelay)).toEqual([4000, 14000, 14000, null, null]);
+    expect(attentionDelay(-1)).toBeNull();
+    expect(attentionDelay(1.5)).toBeNull();
+  });
+
+  it('spreads sparks evenly around the button', () => {
+    const sparks = sparkOffsets(4, 10);
+    expect(sparks.map((s) => [Math.abs(s.dx), Math.abs(s.dy)])).toEqual([
+      [0, 10],
+      [10, 0],
+      [0, 10],
+      [10, 0],
+    ]);
+    expect(sparkOffsets(0, 10)).toEqual([]);
+    expect(sparkOffsets(-3, 10)).toEqual([]);
   });
 });

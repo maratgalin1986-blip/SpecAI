@@ -215,6 +215,10 @@ export function installHintMode(input: InstallHintInput): InstallHintMode | null
 
 export const INSTALL_BUTTON_TEXTS = {
   button: 'На рабочий стол',
+  buttonPhone: 'На экран телефона',
+  done: 'Установлено',
+  leadLinePhone: 'Добавьте на экран телефона — следующая заявка в один тап',
+  leadLineDesktop: 'Добавьте на рабочий стол — следующая заявка в один клик',
   label: 'Установить приложение на рабочий стол',
   title: `Установить ${SITE.platform}`,
   ios: 'Нажмите «Поделиться» ⬆︎ внизу экрана → «На экран „Домой“» → «Добавить».',
@@ -247,3 +251,58 @@ export function installButtonMode(input: InstallButtonInput): InstallButtonMode 
   }
   return 'manual';
 }
+
+/** Phones and tablets say «На экран телефона», computers «На рабочий стол». */
+export function installButtonText(ua: string, maxTouchPoints = 0): string {
+  return isMobileUa(ua, maxTouchPoints)
+    ? INSTALL_BUTTON_TEXTS.buttonPhone
+    : INSTALL_BUTTON_TEXTS.button;
+}
+
+/** The line on the lead-success screen. */
+export function installLeadLine(ua: string, maxTouchPoints = 0): string {
+  return isMobileUa(ua, maxTouchPoints)
+    ? INSTALL_BUTTON_TEXTS.leadLinePhone
+    : INSTALL_BUTTON_TEXTS.leadLineDesktop;
+}
+
+/** Safari on iPhone has no install dialog: three steps, each with its own picture. */
+export const INSTALL_IOS_STEPS = [
+  { icon: 'share', text: 'Нажмите «Поделиться» внизу экрана' },
+  { icon: 'plus', text: 'Выберите «На экран „Домой“»' },
+  { icon: 'check', text: 'Нажмите «Добавить» вверху справа' },
+] as const;
+
+export type InstallIosStepIcon = (typeof INSTALL_IOS_STEPS)[number]['icon'];
+
+/**
+ * The attention effect (glow, light sweep, a light bounce): first after
+ * `firstMs`, then every `everyMs`, `times` times in all per page load, then the
+ * button stays calm. `activeMs` is how long one pass lasts.
+ */
+export const INSTALL_ATTENTION = {
+  firstMs: 4000,
+  everyMs: 14000,
+  times: 3,
+  activeMs: 1800,
+} as const;
+
+/** Delay before pass number `n` (0-based) counted from the previous one, or null when done. */
+export function attentionDelay(n: number): number | null {
+  if (!Number.isInteger(n) || n < 0 || n >= INSTALL_ATTENTION.times) return null;
+  return n === 0 ? INSTALL_ATTENTION.firstMs : INSTALL_ATTENTION.everyMs;
+}
+
+/** Sparks for the press effect: `count` offsets spread evenly around a circle. */
+export function sparkOffsets(count: number, radius: number): { dx: number; dy: number }[] {
+  const n = Math.max(0, Math.floor(count));
+  return Array.from({ length: n }, (_, i) => {
+    const angle = (i / n) * Math.PI * 2 - Math.PI / 2;
+    return { dx: Math.round(Math.cos(angle) * radius), dy: Math.round(Math.sin(angle) * radius) };
+  });
+}
+
+/** The lead screen and other places ask the button to open (the dialog or the steps). */
+export const INSTALL_OPEN_EVENT = 'specai:install-open';
+/** Set on <html> while the button is on the page: other entry points show only then. */
+export const INSTALL_OFFER_ATTR = 'data-install-offer';
