@@ -2,7 +2,13 @@ import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('@specai/database', () => ({ prisma: {} }));
 
-import { DEFAULT_AI_DAILY_CAP, OFFICE_EXTRA_SETTINGS, parseOfficeSettings } from './settings';
+import {
+  DEFAULT_AI_DAILY_CAP,
+  DEFAULT_VAT_RATE,
+  OFFICE_EXTRA_SETTINGS,
+  parseOfficeSettings,
+  parseVatRate,
+} from './settings';
 
 describe('parseOfficeSettings — ИИ-аналитик (U2)', () => {
   it('off with the default cap of 30 when nothing is saved', () => {
@@ -51,5 +57,20 @@ describe('parseOfficeSettings — WhatsApp на мобильный из карт
       parseOfficeSettings([{ key: OFFICE_EXTRA_SETTINGS.whatsappToPhone, value }]).whatsappToPhone;
     expect(at('0')).toBe(false);
     expect(at('1')).toBe(true);
+  });
+});
+
+describe('parseOfficeSettings — ставка НДС в счёте (К8)', () => {
+  it('по умолчанию 22 %; сохранённая — только из списка, 0 — «НДС не облагается»', () => {
+    expect(DEFAULT_VAT_RATE).toBe(22);
+    expect(parseOfficeSettings([]).vatRate).toBe(22);
+    const at = (value: string) =>
+      parseOfficeSettings([{ key: OFFICE_EXTRA_SETTINGS.vatRate, value }]).vatRate;
+    expect(at('0')).toBe(0);
+    expect(at('5')).toBe(5);
+    expect(at(' 20 ')).toBe(20);
+    // Мусор и ставка не из списка — по умолчанию, а не «без НДС».
+    for (const bad of ['', 'abc', '18', '-1']) expect(at(bad)).toBe(22);
+    expect(parseVatRate(undefined)).toBe(22);
   });
 });

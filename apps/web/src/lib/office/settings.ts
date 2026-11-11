@@ -19,6 +19,8 @@ export const OFFICE_EXTRA_SETTINGS = {
    * уходят они по кнопке владельца на /admin/office/pisma; 'auto' — крон отправляет сам.
    */
   outreachMode: 'office.outreachMode',
+  /** Ставка НДС в счёте-оферте, % (К8): 0 — «НДС не облагается»; по умолчанию DEFAULT_VAT_RATE. */
+  vatRate: 'office.vatRate',
 } as const;
 
 /** Режим рассылки: с утверждением владельцем или сама по крону. */
@@ -37,6 +39,22 @@ export const AI_DAILY_CAP_MAX = 500;
 
 /** Реквизиты для оплаты — не длиннее, знаков. */
 export const PAY_DETAILS_MAX = 2000;
+
+/**
+ * Ставки НДС, которые можно выбрать для счёта: 0 — «НДС не облагается» (УСН без НДС), 5 и 7 —
+ * УСН с НДС, 10, 20 и 22 — общая система. Какая верна для ООО, подтверждает бухгалтер.
+ */
+export const VAT_RATES: readonly number[] = [0, 5, 7, 10, 20, 22];
+/** ООО работает с НДС (владелец, 2026-11-02); бизнес-план считает общую систему, 22 %. */
+export const DEFAULT_VAT_RATE = 22;
+
+/** Ставка из строки настройки: только из VAT_RATES, иначе по умолчанию. */
+export function parseVatRate(value: string | undefined): number {
+  const rate = Number((value ?? '').trim());
+  return value !== undefined && value.trim() !== '' && VAT_RATES.includes(rate)
+    ? rate
+    : DEFAULT_VAT_RATE;
+}
 
 export const OFFICE_SETTING_KEYS: readonly string[] = [
   ...Object.values(OFFICE_SETTINGS),
@@ -69,6 +87,8 @@ export interface OfficeSettings {
   aiDailyCap: number;
   /** Режим рассылки (К2), по умолчанию 'approve'. */
   outreachMode: OutreachMode;
+  /** Ставка НДС в счёте-оферте, %; 0 — без НДС. */
+  vatRate: number;
 }
 
 function flag(value: string | undefined): boolean {
@@ -113,6 +133,7 @@ export function parseOfficeSettings(
       int(byKey.get(OFFICE_EXTRA_SETTINGS.aiDailyCap), DEFAULT_AI_DAILY_CAP),
     ),
     outreachMode: parseOutreachMode(byKey.get(OFFICE_EXTRA_SETTINGS.outreachMode)),
+    vatRate: parseVatRate(byKey.get(OFFICE_EXTRA_SETTINGS.vatRate)),
   };
 }
 

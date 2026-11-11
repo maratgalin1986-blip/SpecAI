@@ -2,9 +2,10 @@ import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { prisma } from '@specai/database';
 import { MAP_LINK_GUIDE_TITLE, MapLinkGuide } from '@/components/office/MapLinkGuide';
+import { PrintButton } from '@/components/office/PrintButton';
 import { buildInvoice } from '@/lib/office/billing';
 import { officePrices } from '@/lib/office/prices';
-import { OFFICE_EXTRA_SETTINGS } from '@/lib/office/settings';
+import { readOfficeSettings } from '@/lib/office/settings';
 import { isValidToken } from '@/lib/office/visibility';
 import { rub } from '@/lib/prices';
 import { SITE } from '@/lib/site';
@@ -18,6 +19,10 @@ export const dynamic = 'force-dynamic';
 // Онлайн-оплаты нет: перевод по реквизитам, владелец отмечает оплату в админке. Без
 // индексации, без id и служебных полей (всё, что выводится, — buildInvoice). После оплаты
 // сайта — инструкция, как поставить ссылку на него в карточки Яндекс Карт и 2ГИС (К16).
+// Счёт-оферта (К8): номер и дата, исполнитель и покупатель, сумма с НДС, назначение платежа,
+// ссылка на оферту — оплата счёта означает согласие с ней. Страница без шапки площадки
+// (isStandalonePage) и печатается в PDF одной кнопкой: разделы «Что входит» и инструкция в
+// печать не идут.
 
 export const metadata: Metadata = {
   title: 'Счёт за сайт',
@@ -30,7 +35,7 @@ const money = (value: number) => `${rub(value)}\u00a0₽`;
 
 async function loadInvoice(token: string) {
   if (!isValidToken(token)) return null;
-  const [row, prices, payDetails] = await Promise.all([
+  const [row, prices, settings] = await Promise.all([
     prisma.prospect.findUnique({
       where: { token },
       select: {
@@ -45,19 +50,19 @@ async function loadInvoice(token: string) {
         monthlyPrice: true,
         setupPaidAt: true,
         paidUntil: true,
+        agreedAt: true,
+        createdAt: true,
+        buyerDetails: true,
       },
     }),
     officePrices(),
-    prisma.appSetting.findUnique({
-      where: { key: OFFICE_EXTRA_SETTINGS.payDetails },
-      select: { value: true },
-    }),
+    readOfficeSettings(),
   ]);
   if (!row) return null;
   return buildInvoice(
     row,
     prices,
-    { payDetails: payDetails?.value, baseUrl: siteUrl() },
+    { payDetails: settings.payDetails, baseUrl: siteUrl(), vatRate: settings.vatRate },
     new Date(),
   );
 }
@@ -68,20 +73,58 @@ export default async function InvoicePage(props: { params: Promise<{ token: stri
   if (!invoice) notFound();
 
   return (
-    <article className="mx-auto flex w-full max-w-3xl flex-col gap-6 pb-8 text-slate-700">
+    <article className="mx-auto flex w-full max-w-3xl flex-col gap-6 pb-8 text-slate-700 print:gap-3 print:pb-0">
       <header className="flex flex-col gap-2">
         <p className="eyebrow text-amber-700">
           {SITE.platform} от {SITE.name} · Сайты под ключ
         </p>
-        <h1 className="text-2xl font-extrabold leading-tight tracking-[-0.02em] text-slate-900 sm:text-4xl">
+        <h1 className="text-2xl font-extrabold leading-tight tracking-[-0.02em] text-slate-900 sm:text-4xl print:text-2xl">
           {invoice.heading}
         </h1>
+        {invoice.number && (
+          <p className="text-base font-semibold text-slate-900">
+            Счёт-оферта № {invoice.number} от {invoice.issuedOn}
+          </p>
+        )}
         {invoice.city && <p className="text-sm text-slate-600">{invoice.city}</p>}
+        <PrintButton label="Сохранить в PDF или распечатать" />
       </header>
 
       <section
+        aria-labelledby="storony"
+        className="grid gap-4 rounded-3xl border border-slate-200 bg-white p-5 text-sm sm:grid-cols-2 sm:p-7 print:grid-cols-2 print:p-4"
+      >
+        <h2 id="storony" className="sr-only">
+          Стороны
+        </h2>
+        <div className="flex flex-col gap-1">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Исполнитель
+          </p>
+          <p className="font-semibold text-slate-900">{SITE.legalName}</p>
+          <p>
+            ИНН {SITE.inn}, КПП {SITE.kpp}, ОГРН {SITE.ogrn}
+          </p>
+          <p>{SITE.legalAddress}</p>
+        </div>
+        <div className="flex flex-col gap-1">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Покупатель</p>
+          {invoice.buyer ? (
+            <p className="whitespace-pre-wrap break-words text-slate-900">{invoice.buyer}</p>
+          ) : (
+            <>
+              <p className="font-semibold text-slate-900">{invoice.company}</p>
+              <p className="text-slate-600 print:hidden">
+                Пришлите реквизиты вашей компании (название, ИНН, адрес) — впишем их в счёт.
+              </p>
+            </>
+          )}
+        </div>
+      </section>
+
+      <section
         aria-labelledby="summa"
-        className="flex flex-col gap-4 rounded-3xl border border-slate-200 bg-white p-5 sm:p-7"
+        className="flex flex-col gap-4 rounded-3xl border border-slate-200 bg-white p-5 sm:p-7 print:gap-2 print:p-4"
       >
         <h2 id="summa" className="text-lg font-bold text-slate-900">
           {invoice.packageTitle}
@@ -117,13 +160,14 @@ export default async function InvoicePage(props: { params: Promise<{ token: stri
               {money(invoice.due.amount)}
             </p>
             <p className="text-sm text-slate-600">{invoice.due.title}</p>
+            {invoice.vatLine && <p className="text-sm text-slate-700">{invoice.vatLine}</p>}
           </div>
         ) : (
           <p className="text-sm text-slate-600">Сейчас платить ничего не нужно.</p>
         )}
       </section>
 
-      <section aria-labelledby="vhodit" className="flex flex-col gap-3">
+      <section aria-labelledby="vhodit" className="flex flex-col gap-3 print:hidden">
         <h2 id="vhodit" className="text-lg font-bold text-slate-900">
           Что входит
         </h2>
@@ -150,7 +194,7 @@ export default async function InvoicePage(props: { params: Promise<{ token: stri
       {invoice.setupPaidOn && invoice.sitePublished && (
         <section
           aria-labelledby="ssylka-v-kartochke"
-          className="flex flex-col gap-3 rounded-3xl border border-emerald-200 bg-emerald-50/50 p-5 sm:p-7"
+          className="flex flex-col gap-3 rounded-3xl border border-emerald-200 bg-emerald-50/50 p-5 print:hidden sm:p-7"
         >
           <h2 id="ssylka-v-kartochke" className="text-lg font-bold text-slate-900">
             {MAP_LINK_GUIDE_TITLE}
@@ -161,7 +205,7 @@ export default async function InvoicePage(props: { params: Promise<{ token: stri
 
       <section
         aria-labelledby="kak-oplatit"
-        className="flex flex-col gap-3 rounded-3xl border border-slate-200 bg-white p-5 sm:p-7"
+        className="flex break-inside-avoid flex-col gap-3 rounded-3xl border border-slate-200 bg-white p-5 sm:p-7 print:gap-2 print:p-4"
       >
         <h2 id="kak-oplatit" className="text-lg font-bold text-slate-900">
           Как оплатить
@@ -184,9 +228,16 @@ export default async function InvoicePage(props: { params: Promise<{ token: stri
             .
           </p>
         )}
-        <p className="text-sm text-slate-600">
+        <p className="text-sm text-slate-600 print:hidden">
           Оплата банковским переводом, онлайн-оплаты нет. Как только платёж придёт, мы отметим его,
           и здесь появится дата, до которой сайт оплачен.
+        </p>
+        <p className="text-sm text-slate-700">
+          Оплата счёта означает согласие с{' '}
+          <a href={invoice.offerHref} className="font-semibold text-amber-700 hover:underline">
+            публичной офертой
+          </a>{' '}
+          (пункт 3 статьи 438 Гражданского кодекса РФ): {invoice.offerHref}
         </p>
       </section>
 

@@ -17,6 +17,7 @@ import {
   serviceJsonLd,
   type LandingPriceBase,
 } from '@/lib/office/landing';
+import { OFERTA_PATH } from '@/lib/office/oferta';
 import { officePrices, parseOfficePrices } from '@/lib/office/prices';
 import { sitePackages } from '@/lib/prices';
 import { jsonLdScript } from '@/lib/providerSeo';
@@ -239,6 +240,14 @@ export default async function SiteServicePage() {
           <SiteRequestForm />
         </div>
       </section>
+
+      <p className="text-sm text-slate-600">
+        Условия услуги —{' '}
+        <a href={OFERTA_PATH} className="font-semibold text-amber-700 hover:underline">
+          публичная оферта
+        </a>
+        . Исполнитель — {SITE.legalName}, ИНН {SITE.inn}.
+      </p>
     </article>
   );
 }
