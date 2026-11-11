@@ -116,6 +116,9 @@ export async function GET() {
       ok: true,
       database: 'ok',
       integrations: integrationFlags(),
+      // Хвост номера развёртывания: по нему видно, что сайт перезапущен (новые переменные среды
+      // вступают в силу только с новым развёртыванием). Не секрет.
+      deployment: (process.env.VERCEL_DEPLOYMENT_ID ?? '').slice(-6) || null,
       office: await officeHealth(),
     });
   } catch (error) {
