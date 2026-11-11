@@ -1539,6 +1539,11 @@ html[data-lead-install] .install-fab:not([data-help]) {
   opacity: 0;
   pointer-events: none;
 }
+/* Phones: the cookie strip stands under the header (CookieNotice): a jump to
+   an anchor lands below it. */
+html[data-cookie-top] {
+  scroll-padding-top: calc(5rem + var(--cookie-strip-h, 3.5rem));
+}
 /* The cookie strip found the phone, an order button or a field under it
    (CookieNotice, lib/overlayClear.ts): it waits out of the way. */
 [data-testid='cookie-strip'][data-away] {
