@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { ReliabilityBadges } from '@/components/ReliabilityBadges';
+import { ShowOrbs } from '@/components/ShowOrbs';
 import type { Reliability } from '@/lib/reliability';
 import {
   PROVIDER_SORT,
@@ -38,7 +39,7 @@ function ProviderListCard({ card }: { card: ProviderCard }) {
   return (
     <li>
       <article
-        className="cab-card flex h-full flex-col gap-3 transition hover:border-signal-400"
+        className="cab-card show-card flex h-full flex-col gap-3 transition hover:border-signal-400"
         data-provider-card={card.id}
       >
         <div className="flex items-start justify-between gap-3">
@@ -122,7 +123,8 @@ export default async function ProvidersPage(props: {
 
   return (
     <div className="flex flex-col gap-6">
-      <header className="cab-dark flex flex-col gap-3 sm:p-8">
+      <header className="cab-dark show-stage show-seq flex flex-col gap-3 overflow-hidden sm:p-8">
+        <ShowOrbs dark />
         <p className="cab-eyebrow text-signal-300">Исполнители · вся Россия</p>
         <h1 className="text-3xl font-extrabold tracking-tight sm:text-4xl">
           Компании со своей техникой

@@ -22,7 +22,7 @@ export function OrderBoardCard({
   const action = viewer === 'owner' ? 'Моя заявка' : 'Предложить цену';
   return (
     <article
-      className="cab-card flex h-full flex-col gap-3 transition hover:border-signal-400"
+      className="cab-card show-card flex h-full flex-col gap-3 transition hover:border-signal-400"
       data-order-card={card.id}
     >
       <div className="flex items-start gap-3">

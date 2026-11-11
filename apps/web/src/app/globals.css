@@ -1073,13 +1073,11 @@ html {
   from {
     opacity: 0;
     clip-path: inset(0 100% 0 0);
-    filter: blur(6px);
     transform: translateX(-12px);
   }
   to {
     opacity: 1;
     clip-path: inset(0 0 0 0);
-    filter: blur(0);
     transform: none;
   }
 }
@@ -1494,11 +1492,16 @@ html[data-tg-chip] .chat-fab {
 .install-fab {
   bottom: calc(4.75rem + env(safe-area-inset-bottom));
 }
-html[data-cookie-strip] .install-fab,
-html[data-tg-chip] .install-fab {
-  bottom: calc(7.25rem + env(safe-area-inset-bottom));
+/* The cookie strip wraps to two lines on a phone (about 54px): the button sits above it. */
+html[data-cookie-strip] .install-fab {
+  /* above the contact bar (4.5rem) and the strip's measured height (CookieNotice) */
+  bottom: calc(5rem + var(--cookie-strip-h, 3.5rem) + env(safe-area-inset-bottom));
 }
-html[data-install-hint] .install-fab {
+html[data-tg-chip] .install-fab {
+  bottom: calc(8.75rem + env(safe-area-inset-bottom));
+}
+html[data-install-hint] .install-fab,
+html[data-storozh] .install-fab {
   display: none;
 }
 html[data-no-contact-bar] .install-fab {

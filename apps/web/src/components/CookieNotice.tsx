@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
@@ -84,10 +84,25 @@ export function CookieNotice() {
 
   // Lets the chat button sit above the strip (see globals.css).
   const open = visible && !pathname?.startsWith('/admin');
+  const stripRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!open) return;
-    document.documentElement.setAttribute('data-cookie-strip', '');
-    return () => document.documentElement.removeAttribute('data-cookie-strip');
+    const root = document.documentElement;
+    root.setAttribute('data-cookie-strip', '');
+    // The strip wraps to two or three lines on a narrow phone: the buttons above it
+    // (globals.css, .install-fab) follow its real height instead of a guess.
+    const el = stripRef.current;
+    const measure = () => {
+      if (el) root.style.setProperty('--cookie-strip-h', `${Math.ceil(el.offsetHeight)}px`);
+    };
+    measure();
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measure);
+    if (el) observer?.observe(el);
+    return () => {
+      observer?.disconnect();
+      root.removeAttribute('data-cookie-strip');
+      root.style.removeProperty('--cookie-strip-h');
+    };
   }, [open]);
 
   function choose(value: 'yes' | 'later') {
@@ -117,6 +132,7 @@ export function CookieNotice() {
     <div
       role="region"
       aria-label="Согласие на обработку персональных данных"
+      ref={stripRef}
       data-testid="cookie-strip"
       data-platform-chrome
       data-bottom-bar={stroyka ? undefined : true}
