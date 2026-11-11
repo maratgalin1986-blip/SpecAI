@@ -23,6 +23,7 @@ import {
 import { sendOutreach, type OutreachResult } from './outreachRun';
 import { runScheduledStep, type ScheduledStepResult } from './run';
 import { OVERPASS_TOTAL_MS } from './sources/osm';
+import { OFERTA_LEADS_DELETE_DAYS } from './oferta';
 import { SITE_LEAD_RETENTION_MONTHS } from './sitePolicy';
 
 export interface TickOptions {
@@ -107,6 +108,63 @@ export async function purgeOldSiteLeads(now: Date): Promise<number> {
   return count;
 }
 
+/** Ровно те запросы, что нужны удалению заявок ушедших клиентов (prisma подходит структурно). */
+export interface LeadPurgeDb {
+  siteLead: {
+    findMany(args: {
+      distinct: ['prospectId'];
+      select: { prospectId: true };
+      take: number;
+    }): Promise<{ prospectId: string }[]>;
+    deleteMany(args: { where: { prospectId: { in: string[] } } }): Promise<{ count: number }>;
+  };
+  prospect: {
+    findMany(args: {
+      where: { id: { in: string[] }; status: 'DECLINED'; declinedAt: { lt: Date } };
+      select: { id: true };
+    }): Promise<{ id: string }[]>;
+  };
+}
+
+/** Сайтов с заявками немного; больше за один проход не читаем — остальные в следующий. */
+const LEAD_OWNERS_TAKE = 1000;
+
+/**
+ * Оферта (п. 7.2, OFERTA_LEADS_DELETE_DAYS) обещает клиенту удалить заявки посетителей его сайта
+ * после прекращения договора. Договор прекращён — сайт снят («Отказ», статус DECLINED); через
+ * обещанный срок заявки этого сайта удаляются. Клиент вернулся («Согласился») — заявки остаются.
+ */
+export async function purgeTerminatedSiteLeads(
+  now: Date,
+  db: LeadPurgeDb = prisma,
+): Promise<number> {
+  const owners = await db.siteLead.findMany({
+    distinct: ['prospectId'],
+    select: { prospectId: true },
+    take: LEAD_OWNERS_TAKE,
+  });
+  if (owners.length === 0) return 0;
+  const cutoff = new Date(now.getTime() - OFERTA_LEADS_DELETE_DAYS * 24 * 60 * 60 * 1000);
+  const gone = await db.prospect.findMany({
+    where: {
+      id: { in: owners.map((o) => o.prospectId) },
+      status: 'DECLINED',
+      declinedAt: { lt: cutoff },
+    },
+    select: { id: true },
+  });
+  if (gone.length === 0) return 0;
+  const { count } = await db.siteLead.deleteMany({
+    where: { prospectId: { in: gone.map((p) => p.id) } },
+  });
+  return count;
+}
+
+/** Оба срока хранения заявок посетителей: по политике сайта и по оферте. */
+export async function purgeSiteLeads(now: Date): Promise<number> {
+  return (await purgeOldSiteLeads(now)) + (await purgeTerminatedSiteLeads(now));
+}
+
 /**
  * Шлёт сводку частями по порядку. true — только если Telegram принял все части: иначе onceADay
  * не ставит отметку и следующий тик повторит отправку. После отказа остальные части не шлём.
@@ -178,8 +236,9 @@ export async function officeTick(
   });
 
   // Политика клиентских сайтов обещает хранить заявки посетителей не дольше
-  // SITE_LEAD_RETENTION_MONTHS (lib/office/sitePolicy.ts): старше — удаляем.
-  await (deps.purgeLeads ?? purgeOldSiteLeads)(now).catch((error: unknown) => {
+  // SITE_LEAD_RETENTION_MONTHS (lib/office/sitePolicy.ts), оферта — удалить их после
+  // прекращения договора (OFERTA_LEADS_DELETE_DAYS): и то и другое удаляем здесь.
+  await (deps.purgeLeads ?? purgeSiteLeads)(now).catch((error: unknown) => {
     console.error('[office] site lead purge failed', error);
   });
 

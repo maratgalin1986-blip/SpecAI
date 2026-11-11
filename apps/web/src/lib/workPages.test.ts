@@ -38,4 +38,14 @@ describe('work pages', () => {
       expect(hidesContactBar(path)).toBe(false);
     }
   });
+
+  it('hides the contact bar on the pages the office makes for other companies', () => {
+    // A client's site, its preview, the offer made for it and its invoice (a printed document).
+    for (const path of ['/s/denta', '/preview/abc', '/kp/abc', '/oplata/abc']) {
+      expect(hidesContactBar(path)).toBe(true);
+    }
+    // The service page itself keeps the platform's contacts.
+    expect(hidesContactBar('/sajt-pod-klyuch')).toBe(false);
+    expect(hidesContactBar('/sajt-pod-klyuch/oferta')).toBe(false);
+  });
 });

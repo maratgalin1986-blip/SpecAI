@@ -28,7 +28,7 @@ const DONE: Record<PaymentAction, string> = {
   month: 'Продлено на месяц',
   year: 'Продлено на 12 месяцев',
   undo: 'Отметки оплаты сняты',
-  prices: 'Цены сохранены',
+  prices: 'Сохранено',
 };
 
 export function OfficeClientControls({
@@ -41,6 +41,8 @@ export function OfficeClientControls({
   paidUntil,
   invoiceUrl,
   published = true,
+  buyerDetails,
+  buyerDetailsMax,
 }: {
   id: string;
   name: string;
@@ -56,11 +58,20 @@ export function OfficeClientControls({
   invoiceUrl: string;
   /** false — договорились, но сайт ещё не опубликован: показать «Опубликовать». */
   published?: boolean;
+  /** Реквизиты покупателя для счёта-оферты (К8); null — в счёте только название компании. */
+  buyerDetails: string | null;
+  /** BUYER_DETAILS_MAX из lib/office/billing.ts. */
+  buyerDetailsMax: number;
 }) {
   const router = useRouter();
   const [setupValue, setSetup] = useState(setupPrice === null ? '' : String(setupPrice));
   const [monthlyValue, setMonthly] = useState(monthlyPrice === null ? '' : String(monthlyPrice));
-  const [saved, setSaved] = useState({ setup: setupValue, monthly: monthlyValue });
+  const [buyerValue, setBuyer] = useState(buyerDetails ?? '');
+  const [saved, setSaved] = useState({
+    setup: setupValue,
+    monthly: monthlyValue,
+    buyer: buyerValue,
+  });
   const [busy, setBusy] = useState<PaymentAction | 'publish' | null>(null);
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
 
@@ -70,6 +81,7 @@ export function OfficeClientControls({
   const hasPaidPeriod = shownPaidUntil !== null;
 
   const pricesDirty = setupValue !== saved.setup || monthlyValue !== saved.monthly;
+  const buyerDirty = buyerValue !== saved.buyer;
 
   async function send(action: PaymentAction) {
     if (busy) return;
@@ -88,6 +100,7 @@ export function OfficeClientControls({
       body.setupPrice = setup;
       body.monthlyPrice = monthly;
     }
+    if (buyerDirty) body.buyerDetails = buyerValue;
     setBusy(action);
     setMessage(null);
     const response = await fetch(`/api/admin/office/prospects/${encodeURIComponent(id)}/payment`, {
@@ -108,7 +121,7 @@ export function OfficeClientControls({
       });
       return;
     }
-    if (pricesDirty) setSaved({ setup: setupValue, monthly: monthlyValue });
+    setSaved({ setup: setupValue, monthly: monthlyValue, buyer: buyerValue });
     if (data.paidUntil !== undefined) setShownPaidUntil(data.paidUntil);
     const until =
       action !== 'undo' && action !== 'prices' && data.paidUntil
@@ -224,12 +237,23 @@ export function OfficeClientControls({
         </label>
         <button
           type="submit"
-          disabled={busy !== null || !pricesDirty}
+          disabled={busy !== null || (!pricesDirty && !buyerDirty)}
           className="cab-action disabled:opacity-40"
         >
-          {busy === 'prices' ? 'Сохраняю…' : 'Сохранить цены'}
+          {busy === 'prices' ? 'Сохраняю…' : 'Сохранить'}
         </button>
         <span className="text-[11px] text-graphite-500">Пусто — базовая цена</span>
+        <label className="flex w-full flex-col gap-0.5 text-xs text-graphite-600">
+          Реквизиты покупателя для счёта
+          <textarea
+            value={buyerValue}
+            maxLength={buyerDetailsMax}
+            rows={2}
+            onChange={(event) => setBuyer(event.target.value)}
+            placeholder={'ООО «Ромашка», ИНН 1650000000, КПП 165001001, адрес'}
+            className="w-full rounded-md border border-slate-300 px-2 py-1 text-sm text-graphite-900"
+          />
+        </label>
       </form>
 
       <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">

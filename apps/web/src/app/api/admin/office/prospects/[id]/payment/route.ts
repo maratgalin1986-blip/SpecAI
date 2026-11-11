@@ -5,6 +5,7 @@ import { isAdminRequest } from '@/lib/admin';
 import { INVALID_JSON_MESSAGE, readJson, zodErrorMessage } from '@/lib/apiInput';
 import {
   BILLABLE_STATUSES,
+  BUYER_DETAILS_MAX,
   CLIENT_PRICE_MAX,
   PAYMENT_ACTIONS,
   paymentUpdate,
@@ -16,7 +17,9 @@ export const dynamic = 'force-dynamic';
 // Отметка оплаты клиента «Сайты под ключ» с /admin/office/clients (S6). Онлайн-оплаты нет:
 // клиент платит по счёту /oplata/<token>, владелец нажимает «Сайт оплачен», «+1 месяц»,
 // «+12 месяцев» или «Отменить оплату»; prices — только сохранить цены клиента. Цены клиента
-// (целые 0…CLIENT_PRICE_MAX ₽, null — по базе из настроек офиса) сохраняются с любым действием.
+// (целые 0…CLIENT_PRICE_MAX ₽, null — по базе из настроек офиса) и реквизиты покупателя для
+// счёта-оферты (buyerDetails, К8: текст до BUYER_DETAILS_MAX знаков, пусто — убрать)
+// сохраняются с любым действием.
 // Только сайты (kind site) в статусе AGREED / PUBLISHED. Клиент присылает «оплачено до», которое
 // видел владелец (expectedPaidUntil, ISO или null): продление считается от него и пишется только
 // если в базе то же значение. Вторая вкладка, двойное нажатие или повтор после таймаута — 409,
@@ -42,6 +45,10 @@ const schema = z.object({
   }),
   setupPrice: clientPrice,
   monthlyPrice: clientPrice,
+  buyerDetails: z
+    .string({ invalid_type_error: 'Реквизиты покупателя — обычный текст' })
+    .max(BUYER_DETAILS_MAX, `Реквизиты покупателя — не длиннее ${BUYER_DETAILS_MAX} знаков`)
+    .optional(),
   expectedPaidUntil: z
     .string({
       required_error: EXPECTED_MESSAGE,
@@ -65,7 +72,7 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
   if (!parsed.success) {
     return NextResponse.json({ error: zodErrorMessage(parsed.error) }, { status: 400 });
   }
-  const { action, setupPrice, monthlyPrice } = parsed.data;
+  const { action, setupPrice, monthlyPrice, buyerDetails } = parsed.data;
   const expectedPaidUntil =
     parsed.data.expectedPaidUntil === null ? null : new Date(parsed.data.expectedPaidUntil);
 
@@ -92,9 +99,11 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
     paidUntil?: Date | null;
     setupPrice?: number | null;
     monthlyPrice?: number | null;
+    buyerDetails?: string | null;
   } = paymentUpdate({ paidUntil: expectedPaidUntil }, action, new Date());
   if (setupPrice !== undefined) data.setupPrice = setupPrice;
   if (monthlyPrice !== undefined) data.monthlyPrice = monthlyPrice;
+  if (buyerDetails !== undefined) data.buyerDetails = buyerDetails.trim() || null;
   if (Object.keys(data).length === 0) {
     return NextResponse.json({ error: 'Нечего сохранять' }, { status: 400 });
   }

@@ -8,10 +8,13 @@ import {
   TICK_LOCK_MS,
   TICK_RESERVE_MS,
   officeTick,
+  purgeTerminatedSiteLeads,
   sendDigestChunks,
   tickLockKey,
+  type LeadPurgeDb,
   type TickDeps,
 } from './tick';
+import { OFERTA_LEADS_DELETE_DAYS } from './oferta';
 import type { ScheduledStepResult } from './run';
 
 const okStep = (city: string): ScheduledStepResult => ({
@@ -210,5 +213,76 @@ describe('sendDigestChunks: длинная сводка уходит частя�
     const send = vi.fn(async () => true);
     expect(await sendDigestChunks('', send)).toBe(false);
     expect(send).not.toHaveBeenCalled();
+  });
+});
+
+describe('purgeTerminatedSiteLeads — заявки посетителей после прекращения договора (оферта, п. 7.2)', () => {
+  const NOW = new Date('2026-11-11T09:00:00Z');
+  const daysAgo = (n: number) => new Date(NOW.getTime() - n * 24 * 60 * 60 * 1000);
+
+  function fakeDb(
+    prospects: { id: string; status: string; declinedAt: Date | null }[],
+    leads: { prospectId: string }[],
+  ) {
+    const db: LeadPurgeDb = {
+      siteLead: {
+        async findMany() {
+          return [...new Set(leads.map((l) => l.prospectId))].map((prospectId) => ({ prospectId }));
+        },
+        async deleteMany({ where }) {
+          const before = leads.length;
+          const keep = leads.filter((l) => !where.prospectId.in.includes(l.prospectId));
+          leads.splice(0, leads.length, ...keep);
+          return { count: before - leads.length };
+        },
+      },
+      prospect: {
+        async findMany({ where }) {
+          return prospects
+            .filter(
+              (p) =>
+                where.id.in.includes(p.id) &&
+                p.status === where.status &&
+                !!p.declinedAt &&
+                p.declinedAt.getTime() < where.declinedAt.lt.getTime(),
+            )
+            .map((p) => ({ id: p.id }));
+        },
+      },
+    };
+    return db;
+  }
+
+  it('удаляет заявки сайта, снятого больше OFERTA_LEADS_DELETE_DAYS назад; остальные не трогает', async () => {
+    expect(OFERTA_LEADS_DELETE_DAYS).toBe(30);
+    const leads = [
+      { prospectId: 'gone' },
+      { prospectId: 'gone' },
+      { prospectId: 'recent' },
+      { prospectId: 'active' },
+      { prospectId: 'returned' },
+    ];
+    const db = fakeDb(
+      [
+        { id: 'gone', status: 'DECLINED', declinedAt: daysAgo(31) },
+        // Снят недавно — срок ещё не вышел.
+        { id: 'recent', status: 'DECLINED', declinedAt: daysAgo(29) },
+        { id: 'active', status: 'PUBLISHED', declinedAt: null },
+        // Отказывался давно, но вернулся: договор действует, заявки остаются.
+        { id: 'returned', status: 'AGREED', declinedAt: daysAgo(90) },
+      ],
+      leads,
+    );
+    expect(await purgeTerminatedSiteLeads(NOW, db)).toBe(2);
+    expect(leads.map((l) => l.prospectId)).toEqual(['recent', 'active', 'returned']);
+    // Повторный проход ничего не находит.
+    expect(await purgeTerminatedSiteLeads(NOW, db)).toBe(0);
+  });
+
+  it('заявок нет — к кандидатам не обращается', async () => {
+    const db = fakeDb([{ id: 'gone', status: 'DECLINED', declinedAt: daysAgo(99) }], []);
+    const spy = vi.spyOn(db.prospect, 'findMany');
+    expect(await purgeTerminatedSiteLeads(NOW, db)).toBe(0);
+    expect(spy).not.toHaveBeenCalled();
   });
 });
