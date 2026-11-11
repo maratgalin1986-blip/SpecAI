@@ -223,3 +223,8 @@ iPhone 13 (390 px) кнопка меню в шапке вылезает за к�
 `globals.css` — правило `@media print { .grain::after { display: none } }`: с зерном PDF счёта весил 6 МБ.
 Новая публичная страница `/sajt-pod-klyuch/oferta` (в sitemap). Схема: `Prospect.buyerDetails` (текст,
 необязательное) — только добавление; настройка `office.vatRate`. API приложения не менялся.
+
+2026-11-11 (владелец: «Яндекс почту используем»; ветка `claude/pensive-feynman-bila02`, для сессии
+«Приложение»): адрес площадки на сайте заменён на ящик Яндекса (`apps/web/src/lib/site.ts` → `SITE.email`,
+User-Agent геокодера и поиска). В приложении (`apps/mobile/src/lib/site.ts`) и в `docs/rustore.md` остался
+прежний адрес на mail.ru — замените у себя при следующей публикации.

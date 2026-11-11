@@ -195,7 +195,7 @@ describe('chat order note and erasure', () => {
     expect(chatOrderNote(undefined)).toMatch(/^Заявка найдена в открытом чате\. Автор может/);
     // The board masks contacts in descriptions, so the note itself carries none.
     expect(maskContactsAndLinks(chatOrderNote('Чат'))).toBe(chatOrderNote('Чат'));
-    expect(CHAT_ORDER_REMOVAL).toContain('specplast16@mail.ru');
+    expect(CHAT_ORDER_REMOVAL).toContain('specplast16@yandex.ru');
   });
 
   it('erases every personal field', () => {

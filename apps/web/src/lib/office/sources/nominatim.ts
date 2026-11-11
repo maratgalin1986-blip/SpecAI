@@ -20,7 +20,7 @@ export const NOMINATIM_PAGE = 50;
 export const NOMINATIM_MAX_REQUESTS = 3;
 /** Свой User-Agent офиса: если сервис заблокирует поиск, геокодер сайта (GEO_USER_AGENT) не пострадает. */
 export const OFFICE_USER_AGENT =
-  'SpecPlast16-office/1.0 (+https://xn--24-6kc5aagh4arjl.xn--p1ai; specplast16@mail.ru)';
+  'SpecPlast16-office/1.0 (+https://xn--24-6kc5aagh4arjl.xn--p1ai; specplast16@yandex.ru)';
 export const NOMINATIM_TIMEOUT_MS = 8_000;
 /** Пауза между запросами: правило сервиса — не чаще раза в секунду. */
 export const NOMINATIM_PAUSE_MS = 1_100;
