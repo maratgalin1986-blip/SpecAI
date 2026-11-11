@@ -24,6 +24,7 @@ import {
   outreachNotes,
 } from './digest';
 import { sendOutreach, type OutreachResult } from './outreachRun';
+import { readReplies, type RepliesResult } from './repliesRun';
 import { runScheduledStep, type ScheduledStepResult } from './run';
 import { OVERPASS_TOTAL_MS } from './sources/osm';
 import { OFERTA_LEADS_DELETE_DAYS } from './oferta';
@@ -46,6 +47,12 @@ export interface TickDeps {
   purgeLeads?: (now: Date) => Promise<unknown>;
   step?: (now: Date, budgetMs: number) => Promise<ScheduledStepResult>;
   outreach?: (now: Date, budgetMs: number) => Promise<OutreachResult>;
+  /** Чтение ответов фирм из ящика офиса (lib/office/repliesRun.ts). */
+  replies?: (now: Date, budgetMs: number) => Promise<RepliesResult>;
+  /** Запись итога прохода рассылки для /api/health. */
+  savePass?: (now: Date, outreach: OutreachResult) => Promise<unknown>;
+  /** Срочное сообщение владельцу (не чаще раза в день на ключ). */
+  alert?: (key: string, now: Date, message: string) => Promise<unknown>;
   sendDigest?: (now: Date, extra: DigestExtra) => Promise<boolean | null>;
   /** Замок от одновременных тиков: true — замок взят, false — занято. */
   lock?: (now: Date) => Promise<boolean>;
@@ -65,7 +72,13 @@ export type TickStep =
     };
 
 export type TickResult =
-  { skipped: 'busy' } | { steps: TickStep[]; outreach: OutreachResult; digest: boolean };
+  | { skipped: 'busy' }
+  | { steps: TickStep[]; outreach: OutreachResult; digest: boolean; replies?: RepliesResult };
+
+/** Сколько времени тик отдаёт чтению ответов и сколько должно остаться рассылке после него. */
+export const REPLIES_BUDGET_MS = 12_000;
+export const REPLIES_MIN_LEFT_MS = 32_000;
+export const LAST_OUTREACH_KEY = 'office.lastOutreach';
 
 /** Сколько времени оставить рассылке и сводке после шагов поиска. */
 export const TICK_RESERVE_MS = 15_000;
@@ -229,6 +242,19 @@ export async function officeTick(
     if (result.skipped || result.result.error) break;
   }
 
+  // Сначала ответы фирм: «стоп» из ящика снимает фирму до того, как ей уйдёт что-то ещё. Только
+  // когда времени хватит и рассылке (после шагов поиска его может не остаться).
+  let replies: RepliesResult | undefined;
+  if (left() >= REPLIES_MIN_LEFT_MS) {
+    replies = await (deps.replies ?? ((at, budget) => readReplies(at, { budgetMs: budget })))(
+      now,
+      REPLIES_BUDGET_MS,
+    ).catch((error: unknown) => {
+      console.error('[office] replies failed', error);
+      return undefined;
+    });
+  }
+
   // Рассылке — остаток за вычетом времени на сводку и ответ; её собственный
   // порог «меньше 2 с — не начинать» внутри sendOutreach.
   const outreach = await (
@@ -237,6 +263,20 @@ export async function officeTick(
     console.error('[office] outreach failed', error);
     return { email: 0, whatsapp: 0, skipped: 'error', errors: 0 } as OutreachResult;
   });
+
+  // Итог прохода — в настройку: /api/health показывает его сессии без пароля. Сломанный ящик —
+  // владельцу сразу, а не в завтрашней сводке (сегодняшняя могла уже уйти).
+  await (deps.savePass ?? saveLastPass)(now, outreach).catch((error: unknown) => {
+    console.error('[office] last pass save failed', error);
+  });
+  if (outreach.mail === 'broken') {
+    const note = outreachNotes(outreach, siteUrl())[0];
+    if (note) {
+      await (deps.alert ?? defaultAlert)('office-mail-broken', now, `⚠️ Офис: ${note}`).catch(
+        (error: unknown) => console.error('[office] alert failed', error),
+      );
+    }
+  }
 
   // Политика клиентских сайтов обещает хранить заявки посетителей не дольше
   // SITE_LEAD_RETENTION_MONTHS (lib/office/sitePolicy.ts), оферта — удалить их после
@@ -260,5 +300,38 @@ export async function officeTick(
     });
     digest = sent === true;
   }
-  return { steps, outreach, digest };
+  return { steps, outreach, digest, ...(replies ? { replies } : {}) };
+}
+
+/** Итог прохода рассылки без названий и адресов: числа, слова состояния, код ответа сервера. */
+export function lastPassValue(now: Date, outreach: OutreachResult): string {
+  const code = /\b([245]\d\d)\b/.exec(outreach.mailError ?? '')?.[1];
+  return JSON.stringify({
+    at: now.toISOString(),
+    email: outreach.email,
+    errors: outreach.errors,
+    skipped: outreach.skipped,
+    mail: outreach.mail ?? 'ok',
+    ...(code ? { code } : {}),
+    ...(outreach.mailHint ? { hint: outreach.mailHint } : {}),
+  });
+}
+
+async function saveLastPass(now: Date, outreach: OutreachResult): Promise<void> {
+  const value = lastPassValue(now, outreach);
+  await prisma.appSetting.upsert({
+    where: { key: LAST_OUTREACH_KEY },
+    create: { key: LAST_OUTREACH_KEY, value },
+    update: { value },
+  });
+}
+
+async function defaultAlert(key: string, now: Date, message: string): Promise<void> {
+  await onceADay(
+    key,
+    async () => {
+      if (!(await notifyTelegram(message))) throw new Error('telegram refused');
+    },
+    now,
+  );
 }
