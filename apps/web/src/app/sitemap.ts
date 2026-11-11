@@ -1,3 +1,4 @@
+import { OFERTA_PATH } from '@/lib/office/oferta';
 import type { MetadataRoute } from 'next';
 import { prisma } from '@specai/database';
 import { LANDINGS } from '@/lib/landings';
@@ -54,8 +55,9 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     '/kak-polzovatsya',
     '/predlozheniya',
     '/bot',
-    // «Сайт под ключ» (S2): indexed, though not in the main menu.
+    // «Сайт под ключ» (S2): indexed, though not in the main menu; its public offer (К9).
     SERVICE_PAGE_PATH,
+    OFERTA_PATH,
   ];
   const equipment = await prisma.equipment
     .findMany({

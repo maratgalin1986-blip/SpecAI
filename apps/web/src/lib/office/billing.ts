@@ -3,7 +3,8 @@
 // /admin/office/clients. Сайты при просрочке не отключаются (решение владельца). Всё здесь —
 // чистые функции; маршрут и страницы только читают и пишут строки Prospect.
 
-import { siteYearlyPrice, sitePackages, type SitePackage } from '@/lib/prices';
+import { rub, siteYearlyPrice, sitePackages, type SitePackage } from '@/lib/prices';
+import { OFERTA_PATH } from './oferta';
 import { quotedName } from './quotedName';
 
 /** Базовые цены (настройки офиса, lib/office/prices.ts → officePrices), ₽. */
@@ -234,6 +235,8 @@ export interface InvoiceDue {
   amount: number;
   /** За что — одна строка для счёта. */
   title: string;
+  /** Разовая оплата сайта или очередной период поддержки — от этого зависят номер и дата счёта. */
+  kind: 'setup' | 'support';
 }
 
 /**
@@ -249,11 +252,106 @@ export function invoiceDue(
 ): InvoiceDue | null {
   if (!p.setupPaidAt) {
     return prices.setup > 0
-      ? { amount: prices.setup, title: 'Сайт — разово, первый месяц работы и поддержки входит' }
+      ? {
+          amount: prices.setup,
+          title: 'Сайт — разово, первый месяц работы и поддержки входит',
+          kind: 'setup',
+        }
       : null;
   }
   if (billingStatus(p, now) === 'active' || prices.monthly <= 0) return null;
-  return { amount: prices.monthly, title: 'Работа сайта и поддержка — следующий месяц' };
+  return {
+    amount: prices.monthly,
+    title: 'Работа сайта и поддержка — следующий месяц',
+    kind: 'support',
+  };
+}
+
+/** Реквизиты покупателя для счёта — не длиннее, знаков. */
+export const BUYER_DETAILS_MAX = 1000;
+
+/**
+ * НДС в сумме, которая его уже включает (цены офиса — с НДС): 3 900 ₽ при 22 % → 703,28 ₽.
+ * Ставка 0 — НДС нет.
+ */
+export function vatIncluded(amount: number, rate: number): number {
+  if (!(rate > 0) || !(amount > 0)) return 0;
+  return Math.round((amount * rate * 100) / (100 + rate)) / 100;
+}
+
+/** «703,28» — рубли с копейками. */
+export function rubKop(value: number): string {
+  const [whole = '0', kop = '00'] = value.toFixed(2).split('.');
+  return `${rub(Number(whole))},${kop}`;
+}
+
+/** «в т.ч. НДС 22 % — 703,28 ₽» или «НДС не облагается». */
+export function vatLine(amount: number, rate: number): string {
+  return rate > 0
+    ? `в т.ч. НДС ${rate}\u00a0% — ${rubKop(vatIncluded(amount, rate))}\u00a0₽`
+    : 'НДС не облагается';
+}
+
+/**
+ * Шесть цифр из токена: одни и те же при каждом открытии счёта, без счётчика в базе. Вместе с
+ * днём договорённости — номер счёта; совпадение у двух клиентов одного дня — один случай на
+ * миллион пар.
+ */
+function tokenCode(token: string): string {
+  let hash = 2166136261;
+  for (let i = 0; i < token.length; i += 1) {
+    hash ^= token.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return String((hash >>> 0) % 1_000_000).padStart(6, '0');
+}
+
+/**
+ * Текст для поля «Назначение платежа» в банке: там принимают не все знаки, поэтому без
+ * неразрывных пробелов, длинного тире и знака рубля — «в т.ч. НДС 22% - 703,28 руб.».
+ */
+export function bankVatClause(amount: number, rate: number): string {
+  return rate > 0
+    ? `в т.ч. НДС ${rate}% - ${rubKop(vatIncluded(amount, rate)).replace(/\s/g, ' ')} руб.`
+    : 'НДС не облагается';
+}
+
+/** «261109» — день по Москве для номера счёта. */
+function compactDayMsk(date: Date): string {
+  const msk = new Date(date.getTime() + MSK_OFFSET_MS);
+  const yy = String(msk.getUTCFullYear() % 100).padStart(2, '0');
+  const mm = String(msk.getUTCMonth() + 1).padStart(2, '0');
+  const dd = String(msk.getUTCDate()).padStart(2, '0');
+  return `${yy}${mm}${dd}`;
+}
+
+/**
+ * Номер и дата счёта (К8) — выводятся из строки клиента и не меняются, сколько бы раз счёт ни
+ * открывали, пока договорённость та же. Счёт за сайт: «САЙТ-<день договорённости>-<код
+ * клиента>», дата — день, когда договорились. Отказ и новое «Согласился» — новая договорённость
+ * и новый счёт (прежний относился к отменённой). Счёт за поддержку: тот же номер и «-П<год и месяц периода>», дата — день, с
+ * которого период стал к оплате (за EXPIRING_DAYS до конца оплаченного срока, но не раньше
+ * оплаты сайта). После отметки оплаты срок сдвигается, и следующий счёт получает новый номер.
+ */
+export function invoiceIdentity(
+  row: {
+    token: string;
+    agreedAt?: Date | null;
+    createdAt?: Date | null;
+    setupPaidAt: Date | null;
+    paidUntil: Date | null;
+  },
+  kind: InvoiceDue['kind'],
+  now: Date,
+): { number: string; issuedAt: Date } {
+  const agreed = row.agreedAt ?? row.createdAt ?? now;
+  const base = `САЙТ-${compactDayMsk(agreed)}-${tokenCode(row.token)}`;
+  if (kind === 'setup') return { number: base, issuedAt: agreed };
+  const paidFrom = row.setupPaidAt ?? agreed;
+  const periodStart = row.paidUntil ?? paidFrom;
+  const dueFrom = new Date(periodStart.getTime() - EXPIRING_DAYS * DAY_MS);
+  const issuedAt = dueFrom.getTime() > paidFrom.getTime() ? dueFrom : paidFrom;
+  return { number: `${base}-П${compactDayMsk(periodStart).slice(0, 4)}`, issuedAt };
 }
 
 /** Строка Prospect, из которой строится счёт. */
@@ -265,6 +363,11 @@ export interface InvoiceRow extends BillingProspect {
   slug: string;
   token: string;
   domain: string | null;
+  /** Когда договорились («Согласился») — дата счёта за сайт; нет — день создания строки. */
+  agreedAt?: Date | null;
+  createdAt?: Date | null;
+  /** Реквизиты покупателя (текст владельца); нет — в счёте только название компании. */
+  buyerDetails?: string | null;
 }
 
 /**
@@ -294,13 +397,29 @@ export interface InvoiceView {
   sitePublished: boolean;
   /** Реквизиты владельца; null — «пришлём в ответ на письмо». */
   payDetails: string | null;
+  /** Номер и дата счёта («09.11.2026») — только когда есть что платить (К8). */
+  number: string | null;
+  issuedOn: string | null;
+  /** Ставка НДС, %; 0 — не облагается. */
+  vatRate: number;
+  /** «в т.ч. НДС 22 % — 703,28 ₽» для суммы к оплате; null — платить нечего. */
+  vatLine: string | null;
+  /** Реквизиты покупателя или null — тогда покупатель назван только по компании. */
+  buyer: string | null;
+  /** Публичная оферта: оплата счёта — согласие с ней (п. 3 ст. 438 ГК РФ). */
+  offerHref: string;
 }
 
 /** Счёт для клиента; null — счёта нет (не сайт или статус не AGREED / PUBLISHED). */
 export function buildInvoice(
   row: InvoiceRow,
   base: BillingDefaults,
-  ctx: { payDetails: string | null | undefined; baseUrl: string },
+  ctx: {
+    payDetails: string | null | undefined;
+    baseUrl: string;
+    /** Ставка НДС из настроек офиса, %; 0 — не облагается. */
+    vatRate: number;
+  },
   now: Date,
 ): InvoiceView | null {
   if (row.kind !== 'site' || !BILLABLE_STATUSES.includes(row.status)) return null;
@@ -314,10 +433,22 @@ export function buildInvoice(
       : `${root}/s/${encodeURIComponent(row.slug)}`
     : `${root}/preview/${encodeURIComponent(row.token)}`;
   const payDetails = ctx.payDetails?.trim();
+  const due = invoiceDue(row, prices, now);
+  const identity = due ? invoiceIdentity(row, due.kind, now) : null;
+  const issuedOn = identity ? formatDayMsk(identity.issuedAt) : null;
+  const vat = due ? vatLine(due.amount, ctx.vatRate) : null;
+  const bankVat = due ? bankVatClause(due.amount, ctx.vatRate) : null;
+  const subject =
+    due?.kind === 'support'
+      ? `работу и поддержку сайта компании ${quotedName(row.name)}`
+      : `создание сайта для компании ${quotedName(row.name)}`;
   return {
     company: row.name,
     heading: `Счёт за сайт для компании ${quotedName(row.name)}`,
-    paymentPurpose: `Сайт для компании ${quotedName(row.name)}`,
+    paymentPurpose:
+      identity && bankVat
+        ? `Оплата по счёту № ${identity.number} от ${issuedOn} за ${subject}, ${bankVat}`
+        : `Сайт для компании ${quotedName(row.name)}`,
     city: row.city,
     packageTitle: pkg.title,
     includes: pkg.includes,
@@ -326,10 +457,16 @@ export function buildInvoice(
     yearly: clientYearly(row, pkg),
     setupPaidOn: row.setupPaidAt ? formatDayMsk(row.setupPaidAt) : null,
     paidUntil: row.paidUntil ? formatDayMsk(row.paidUntil) : null,
-    due: invoiceDue(row, prices, now),
+    due,
     siteHref,
     sitePublished: published,
     payDetails: payDetails || null,
+    number: identity?.number ?? null,
+    issuedOn,
+    vatRate: ctx.vatRate,
+    vatLine: vat,
+    buyer: row.buyerDetails?.trim() || null,
+    offerHref: `${root}${OFERTA_PATH}`,
   };
 }
 

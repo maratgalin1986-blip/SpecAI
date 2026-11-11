@@ -19,7 +19,7 @@ export function hidesContactBar(pathname: string | null | undefined): boolean {
     isCabinetPage(path) ||
     ACCOUNT.test(path) ||
     /^\/stroyka(\/|$)/.test(path) ||
-    // A client's site made by the office and its preview carry their own buttons.
-    /^\/(s|preview|kp)(\/|$)/.test(path)
+    // A client's site made by the office, its preview and its invoice carry their own buttons.
+    /^\/(s|preview|kp|oplata)(\/|$)/.test(path)
   );
 }

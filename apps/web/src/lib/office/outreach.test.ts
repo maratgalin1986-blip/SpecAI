@@ -8,6 +8,8 @@ import {
   isRuMobile,
   isStopReply,
   LEADS_TO_EMAIL_LINE,
+  LEGAL_SIGNATURE,
+  NOT_OFFER_LINE,
   pickChannels,
   SERVICE_LINK_LABEL,
   serviceUrl,
@@ -57,6 +59,25 @@ const input: OutreachInput = {
 
 const FORBIDDEN = /лучш|гарантир|самые|самый|самая/i;
 
+/** Строка о черновике: страница — не официальный сайт компании. */
+const DRAFT_LINE =
+  'Это черновик, а не официальный сайт: в поиске его нет, открывается только по ссылке.';
+
+/** Первое письмо и WhatsApp для сайта: без цен и без снятых обещаний и утверждений о фирме. */
+const REMOVED = [
+  '₽',
+  'руб',
+  'поправим за день',
+  'в тот же день',
+  'своего сайта нет',
+  'видят их первыми',
+  'к тому и пойдут',
+  'Люди ищут',
+];
+function noPricesOrPromises(text: string) {
+  for (const phrase of REMOVED) expect(text, phrase).not.toContain(phrase);
+}
+
 const SERVICE_EMAIL = `${BASE}/sajt-pod-klyuch?utm_source=email&utm_campaign=stomatologiya-ulybka-kazan`;
 const SERVICE_WHATSAPP = `${BASE}/sajt-pod-klyuch?utm_source=whatsapp&utm_campaign=stomatologiya-ulybka-kazan`;
 
@@ -79,16 +100,33 @@ describe('serviceUrl', () => {
 });
 
 describe('buildEmail', () => {
-  it('site letter: subject, who we are, link, prices, stop line last', () => {
+  it('site letter: subject, who we are, card fact, link, no prices, legal signature, stop line last', () => {
     const letter = buildEmail(site, input);
     expect(letter.subject).toBe('Сделали страницу для Стоматология «Улыбка» — посмотрите');
     expect(letter.text).toContain(SITE.name);
     expect(letter.text).toContain(SITE.platform);
-    expect(letter.text).toContain('в городе Казань');
+    // Факт — о карточке, с источником; не утверждение о самой фирме.
+    expect(letter.text).toContain(
+      'В открытой карточке компании Стоматология «Улыбка» на карте не указан сайт.',
+    );
     expect(letter.text).toContain('стоматология');
     expect(letter.text).toContain(input.previewUrl);
-    expect(letter.text).toContain('15 000 ₽');
-    expect(letter.text).toContain('1 500 ₽');
+    // Цен и обещаний сроков в первом письме нет: условия — на странице услуги.
+    noPricesOrPromises(letter.text);
+    noPricesOrPromises(letter.html);
+    expect(letter.text).toContain(NOT_OFFER_LINE);
+    expect(letter.text).toContain(DRAFT_LINE);
+    expect(letter.html).toContain(NOT_OFFER_LINE);
+    expect(letter.html).toContain(DRAFT_LINE);
+    // Подпись: кто пишет — юрлицо, ИНН, ОГРН, адрес.
+    expect(letter.text).toContain(`— ${LEGAL_SIGNATURE}`);
+    for (const part of [SITE.legalName, SITE.inn, SITE.ogrn, SITE.legalAddress]) {
+      expect(LEGAL_SIGNATURE).toContain(part);
+    }
+    expect(LEGAL_SIGNATURE).toContain(`ИНН ${SITE.inn}`);
+    expect(LEGAL_SIGNATURE).toContain(`ОГРН ${SITE.ogrn}`);
+    expect(letter.html).toContain(SITE.inn);
+    expect(letter.html).toContain(SITE.ogrn);
     expect(letter.text).toContain(`позвоните ${SITE.phone}`);
     expect(letter.text).toContain(
       `${STOP_LINE} Адрес — из открытой карточки компании; если не ответите, напомним один раз, не больше.`,
@@ -103,7 +141,7 @@ describe('buildEmail', () => {
     expect(letter.text).toContain(`${SERVICE_LINK_LABEL}: ${SERVICE_EMAIL}`);
     // The preview has no lead form yet (К10): the letter promises it after the site is connected.
     expect(letter.text).toContain('После подключения добавим форму заявки: заявки с сайта');
-    expect(letter.text).toContain('на почту — на этот адрес.');
+    expect(letter.text).toContain('заявки с сайта будут приходить вам на почту.');
     expect(letter.text).not.toContain('Написать в WhatsApp');
     // The service link comes after the preview link and before the closing lines.
     const text = letter.text;
@@ -149,7 +187,7 @@ describe('buildEmail', () => {
   it('without a city the «в городе» tail is dropped', () => {
     const letter = buildEmail({ ...site, city: null }, input);
     expect(letter.text).not.toContain('в городе');
-    expect(letter.text).toContain('на карте:');
+    expect(letter.text).toContain('на карте не указан сайт');
   });
 });
 
@@ -196,12 +234,14 @@ describe('buildFollowUpEmail', () => {
 });
 
 describe('buildWhatsAppText', () => {
-  it('is short, has the link, the prices (site) and the stop line', () => {
+  it('is short, has the link, the card fact, no prices (site) and the stop line', () => {
     const text = buildWhatsAppText(site, input);
     expect(text.length).toBeLessThanOrEqual(WHATSAPP_MAX_LENGTH);
     expect(text).toContain(SITE.name);
     expect(text).toContain(input.previewUrl);
-    expect(text).toContain('15 000 ₽');
+    expect(text).toContain('В открытой карточке Стоматология «Улыбка» на карте не указан сайт');
+    expect(text).toContain('Это не официальный сайт, в поиске его нет.');
+    noPricesOrPromises(text);
     expect(text).toContain(`${SERVICE_LINK_LABEL}: ${SERVICE_WHATSAPP}`);
     expect(text).toContain(`${LEADS_TO_EMAIL_LINE}.`);
     expect(text).not.toContain('utm_source=email');
@@ -369,15 +409,18 @@ describe('personal offer in the site letter and WhatsApp (U2)', () => {
   };
   const withOffer: OutreachInput = { ...input, offer };
 
-  it('letter: subject, opener, bullets, recommended package with its price, links, stop last', () => {
+  it('letter: subject, opener, bullets, no package price, not an offer, links, stop last', () => {
     const letter = buildEmail(site, withOffer);
     expect(letter.subject).toBe(offer.subject);
     expect(letter.text).toContain(offer.opener);
     for (const b of offer.bullets) expect(letter.text).toContain(`• ${b}`);
-    expect(letter.text).toContain('«Сайт на своём домене» — 17 000 ₽ один раз');
-    expect(letter.text).toContain('1 500 ₽ в месяц');
-    expect(letter.text).toContain(offer.packageReason);
-    expect(letter.text).toContain('После подключения добавим форму заявки: заявки с сайта');
+    // Пакет и цены — на странице услуги, в первом письме их нет.
+    noPricesOrPromises(letter.text);
+    noPricesOrPromises(letter.html);
+    expect(letter.text).toContain('Что на странице:');
+    expect(letter.text).toContain(DRAFT_LINE);
+    expect(letter.text).toContain(NOT_OFFER_LINE);
+    expect(letter.text).toContain(`— ${LEGAL_SIGNATURE}`);
     expect(letter.text).toContain(input.previewUrl);
     expect(letter.text).toContain(`${SERVICE_LINK_LABEL}: ${SERVICE_EMAIL}`);
     stopLineIsLast(letter.text);
@@ -386,9 +429,10 @@ describe('personal offer in the site letter and WhatsApp (U2)', () => {
     expect(letter.text).not.toMatch(FORBIDDEN);
   });
 
-  it('the starter package and its base price for «vizitka»', () => {
+  it('no package price for «vizitka» either', () => {
     const letter = buildEmail(site, { ...input, offer: { ...offer, packageKey: 'vizitka' } });
-    expect(letter.text).toContain('«Сайт-визитка» — 15 000 ₽ один раз');
+    noPricesOrPromises(letter.text);
+    expect(letter.text).toContain(NOT_OFFER_LINE);
   });
 
   it('html escapes the offer text', () => {
@@ -406,24 +450,27 @@ describe('personal offer in the site letter and WhatsApp (U2)', () => {
     expect(buildWhatsAppText(provider, withOffer)).not.toContain(offer.opener);
   });
 
-  it('WhatsApp: opener, link, bullets, price, stop line last, within the limit', () => {
+  it('WhatsApp: opener, link, bullets, no price, stop line last, within the limit', () => {
     const text = buildWhatsAppText(site, withOffer);
     expect(text.length).toBeLessThanOrEqual(WHATSAPP_MAX_LENGTH);
     expect(text).toContain(offer.opener);
     expect(text).toContain(input.previewUrl);
     expect(text).toContain(`• ${offer.bullets[1]}`);
-    expect(text).toContain('17 000 ₽');
+    noPricesOrPromises(text);
+    expect(text).toContain('Условия и цены — по ссылке ниже; сообщение не является офертой.');
+    expect(text).toContain('Это не официальный сайт, в поиске его нет.');
     expect(text).toContain(`${SERVICE_LINK_LABEL}: ${SERVICE_WHATSAPP}`);
     expect(text.trim().endsWith('из открытой карточки компании.')).toBe(true);
   });
 
-  it('WhatsApp: long bullets go before the link, the price or the stop line', () => {
+  it('WhatsApp: long bullets go before the link, the terms line or the stop line', () => {
     const long = { ...offer, bullets: [1, 2, 3].map((i) => `Пункт ${i} `.repeat(30)) };
     const text = buildWhatsAppText(site, { ...input, offer: long });
     expect(text.length).toBeLessThanOrEqual(WHATSAPP_MAX_LENGTH);
     expect(text).not.toContain('Пункт 1');
     expect(text).toContain(input.previewUrl);
-    expect(text).toContain('17 000 ₽');
+    noPricesOrPromises(text);
+    expect(text).toContain('Условия и цены — по ссылке ниже; сообщение не является офертой.');
     const parts = text.split('\n\n');
     expect(parts[parts.length - 1]!.startsWith(STOP_LINE)).toBe(true);
   });

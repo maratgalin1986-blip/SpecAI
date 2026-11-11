@@ -94,6 +94,29 @@ describe('POST /api/admin/office/prospects/[id]/payment', () => {
     expect(empty.status).toBe(400);
   });
 
+  it('saves the buyer details for the invoice trimmed; an empty text clears them (К8)', async () => {
+    const ok = await post({ action: 'prices', buyerDetails: '  ООО «Дента», ИНН 1650000000  ' });
+    expect(ok.status).toBe(200);
+    expect(updateMany.mock.calls[0]![0].data).toEqual({
+      buyerDetails: 'ООО «Дента», ИНН 1650000000',
+    });
+    updateMany.mockClear();
+    expect((await post({ action: 'prices', buyerDetails: '   ' })).status).toBe(200);
+    expect(updateMany.mock.calls[0]![0].data).toEqual({ buyerDetails: null });
+    // Вместе с отметкой оплаты — одним запросом.
+    updateMany.mockClear();
+    expect((await post({ action: 'setup', buyerDetails: 'ИП Иванов' })).status).toBe(200);
+    expect(updateMany.mock.calls[0]![0].data).toMatchObject({ buyerDetails: 'ИП Иванов' });
+    // Слишком длинный текст или не текст — отказ по-русски, ничего не записано.
+    updateMany.mockClear();
+    for (const buyerDetails of ['я'.repeat(1001), 42]) {
+      const response = await post({ action: 'prices', buyerDetails });
+      expect(response.status).toBe(400);
+      expect((await response.json()).error).toMatch(/Реквизиты покупателя/);
+    }
+    expect(updateMany).not.toHaveBeenCalled();
+  });
+
   it('rejects bad input in Russian', async () => {
     for (const body of [
       { action: 'refund' },

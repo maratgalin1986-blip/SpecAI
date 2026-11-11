@@ -62,7 +62,7 @@ describe('goalOfHref', () => {
     expect(goalOfHref('tel:+79272428088')).toBe('call');
     expect(goalOfHref('https://wa.me/79272428088')).toBe('whatsapp');
     expect(goalOfHref('https://t.me/specplast16_zayavki_bot')).toBe('telegram');
-    expect(goalOfHref('mailto:specplast16@mail.ru')).toBe('email');
+    expect(goalOfHref('mailto:specplast16@yandex.ru')).toBe('email');
     expect(goalOfHref('/equipment')).toBeNull();
   });
 });

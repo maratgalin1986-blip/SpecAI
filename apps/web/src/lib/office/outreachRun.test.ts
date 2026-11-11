@@ -17,7 +17,7 @@ vi.mock('@specai/database', () => ({ prisma: {} }));
 const resendSpy = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/email', () => ({ sendEmail: resendSpy, isEmailConfigured: () => true }));
 
-import { STOP_LINE, WHATSAPP_MAX_LENGTH } from './outreach';
+import { LEGAL_SIGNATURE, NOT_OFFER_LINE, STOP_LINE, WHATSAPP_MAX_LENGTH } from './outreach';
 import type { SentOffer } from './aiOffer';
 import type { Dossier } from './dossier';
 import { buildOffer } from './offer';
@@ -29,12 +29,16 @@ import {
   markReplied,
   OUTREACH_BUDGET_MS,
   outreachErrorText,
+  AUTO_SEND_HOURS,
   DELIVERY_UNKNOWN,
+  MAIL_FAILURES_STOP,
+  inAutoSendHours,
   SEND_TIMEOUT_MS,
   planOutreach,
   sendOutreach,
   type OutreachDb,
   type OutreachRow,
+  type OutreachResult,
   type OutreachRunSettings,
 } from './outreachRun';
 import { DUPLICATE_CLOSED_AT, isDuplicateMark } from './contacted';
@@ -212,6 +216,8 @@ function settings(over: Partial<OutreachRunSettings> = {}): () => Promise<Outrea
     replyTo: 'office@example.com',
     whatsappToPhone: false,
     outreachMode: 'auto',
+    // Тесты шлюза WhatsApp ниже описывают режим с явно включённым whatsappAuto.
+    whatsappAuto: true,
     ...over,
   });
 }
@@ -237,6 +243,8 @@ function deps(db: OutreachDb, over: Record<string, unknown> = {}) {
     }),
     optedOut: async () => ({ emails: new Set<string>(), phones: new Set<string>() }),
     contacted: async () => ({ emails: new Map<string, Date>(), phones: new Map<string, Date>() }),
+    verifyMail: async () => ({ ok: true as const }),
+    lock: async () => async () => {},
     ...over,
   };
 }
@@ -279,12 +287,17 @@ describe('sendOutreach', () => {
     expect(sent.text).toContain(
       'Кто мы и цены: https://example.test/sajt-pod-klyuch?utm_source=email&utm_campaign=slug-a',
     );
+    // No dossier: the personal offer with a general angle (U2) — a fact about the card,
+    // no prices, not an offer, a draft, the legal signature.
+    expect(sent.text).toContain('В открытой карточке компании Компания a на карте не указан сайт.');
+    expect(sent.text).toContain('Что на странице:');
     expect(sent.text).toContain(
-      'После подключения добавим форму заявки: заявки с сайта будут приходить вам на почту',
+      'После подключения клиент сможет оставить заявку на странице — она придёт вам на почту.',
     );
-    expect(sent.text).toContain('15 000 ₽');
-    // No dossier: the personal offer with a general angle (U2).
-    expect(sent.text).toContain('Что даст страница именно вам:');
+    expect(sent.text).not.toContain('₽');
+    expect(sent.text).toContain(NOT_OFFER_LINE);
+    expect(sent.text).toContain('Это черновик, а не официальный сайт');
+    expect(sent.text).toContain(`— ${LEGAL_SIGNATURE}`);
     expect(updates).toHaveLength(1);
     expect(updates[0]!.id).toBe('a');
     expect(updates[0]!.data).toMatchObject({ status: 'CONTACTED', outreachError: null });
@@ -524,13 +537,19 @@ describe('sendOutreach', () => {
 
   it('a row starts only if all its sends fit in the time left', async () => {
     const { db } = fakeDb([row({ id: 'a' })]);
-    // 9 s left is enough for one letter (8 s), not for a letter plus WhatsApp.
-    const result = await sendOutreach(NOW, deps(db, { budgetMs: 9_000 }));
+    // The first letter of a pass needs the mailbox check (8 s) and the send (8 s): 17 s is
+    // enough for one letter, not for a letter plus WhatsApp.
+    const result = await sendOutreach(NOW, deps(db, { budgetMs: 17_000 }));
     expect(result.email).toBe(1);
     const both = fakeDb([row({ id: 'b', whatsapp: '+79270000002' })]);
     okEmail.mockClear();
-    const none = await sendOutreach(NOW, deps(both.db, { budgetMs: 9_000 }));
+    const none = await sendOutreach(NOW, deps(both.db, { budgetMs: 17_000 }));
     expect(none).toMatchObject({ email: 0, whatsapp: 0 });
+    expect(okEmail).not.toHaveBeenCalled();
+    // Without time for the mailbox check the letter does not start either.
+    const short = fakeDb([row({ id: 'c' })]);
+    const late = await sendOutreach(NOW, deps(short.db, { budgetMs: 9_000 }));
+    expect(late.email).toBe(0);
     expect(okEmail).not.toHaveBeenCalled();
   });
 });
@@ -833,8 +852,10 @@ describe('sendOutreach — personal offer (U2)', () => {
     expect(letter.subject).toBe(expected.subject);
     expect(letter.text).toContain(expected.opener);
     for (const bullet of expected.bullets) expect(letter.text).toContain(`• ${bullet}`);
-    // Three or more neighbours with a site: the own-domain package with its price.
-    expect(letter.text).toContain('«Сайт на своём домене» — 17\u00a0000\u00a0₽ один раз');
+    // The package and its price stay on the service page: the first letter has no prices.
+    expect(letter.text).not.toContain('₽');
+    expect(letter.text).toContain(NOT_OFFER_LINE);
+    expect(letter.text).toContain(`— ${LEGAL_SIGNATURE}`);
     expect(letter.text).toContain('https://example.test/preview/tok-a');
     expect(letter.text).toContain('Кто мы и цены: ');
     const lines = letter.text!.trim().split('\n').filter(Boolean);
@@ -844,7 +865,8 @@ describe('sendOutreach — personal offer (U2)', () => {
     const wa = okWhatsApp.mock.calls[0]![1];
     expect(wa).toContain(expected.opener);
     expect(wa).toContain('https://example.test/preview/tok-a');
-    expect(wa).toContain('17\u00a0000\u00a0₽');
+    expect(wa).not.toContain('₽');
+    expect(wa).toContain('сообщение не является офертой');
     expect(wa.length).toBeLessThanOrEqual(WHATSAPP_MAX_LENGTH);
     expect(wa.split('\n\n').pop()!.startsWith(STOP_LINE)).toBe(true);
     for (const u of updates) {
@@ -1258,8 +1280,8 @@ describe('один адрес — одно первое сообщение (ре
 
   it('письма дня: у двух фирм одна почта — владелец видит одно письмо, в базе ничего не помечается', async () => {
     const rows = [
-      row({ id: 'a', email: 'info@set.example' }),
-      row({ id: 'b', email: ' Info@Set.example ', phone: '+78432001133' }),
+      row({ id: 'a', email: 'info@mail.ru' }),
+      row({ id: 'b', email: ' Info@Mail.ru ', phone: '+78432001133' }),
       row({ id: 'c' }),
     ];
     const { db, claims } = fakeDb(rows);
@@ -1271,14 +1293,14 @@ describe('один адрес — одно первое сообщение (ре
 
   it('отправка: второй строке с той же почтой письмо не уходит, её канал закрыт датой первого', async () => {
     const rows = [
-      row({ id: 'a', email: 'info@set.example' }),
-      row({ id: 'b', email: 'INFO@set.example', phone: '+78432001133' }),
+      row({ id: 'a', email: 'info@mail.ru' }),
+      row({ id: 'b', email: 'INFO@mail.ru', phone: '+78432001133' }),
     ];
     const { db } = fakeDb(rows);
     const result = await sendOutreach(NOW, deps(db));
     expect(result).toMatchObject({ email: 1, errors: 0, duplicates: 1 });
     expect(okEmail).toHaveBeenCalledTimes(1);
-    expect(okEmail.mock.calls[0]![0].to).toBe('info@set.example');
+    expect(okEmail.mock.calls[0]![0].to).toBe('info@mail.ru');
     expect(rows[0]).toMatchObject({ status: 'CONTACTED' });
     // Дубль не «написан»: статус и contactedAt прежние, закрыт только канал почты — особой
     // отметкой вне любых окон дат: дневной лимит и «отправлено сегодня» он не трогает.
@@ -1295,13 +1317,13 @@ describe('один адрес — одно первое сообщение (ре
   it('адресу писали раньше в другой строке (в базе) — не пишем ни в «письмах дня», ни при отправке', async () => {
     const before = new Date('2026-11-08T10:00:00+03:00');
     const contactedBefore = vi.fn(async (_emails: string[], _phones: string[]) => ({
-      emails: new Map([['info@set.example', before]]),
+      emails: new Map([['info@mail.ru', before]]),
       phones: new Map<string, Date>(),
     }));
-    const rows = [row({ id: 'b', email: 'info@set.example' }), row({ id: 'c' })];
+    const rows = [row({ id: 'b', email: 'info@mail.ru' }), row({ id: 'c' })];
     const { db } = fakeDb(rows);
     const plan = await planOutreach(NOW, deps(db, { contacted: contactedBefore }));
-    expect(contactedBefore.mock.calls[0]![0]).toContain('info@set.example');
+    expect(contactedBefore.mock.calls[0]![0]).toContain('info@mail.ru');
     expect(plan.items.map((i) => i.id)).toEqual(['c']);
     // Канал дубля закрыт отметкой дубля — в очередь он больше не попадёт.
     expect(rows[0]!.emailSentAt).toEqual(DUPLICATE_CLOSED_AT);
@@ -1327,16 +1349,16 @@ describe('один адрес — одно первое сообщение (ре
 
   it('дубли не съедают дневной лимит и не получают напоминаний', async () => {
     const rows = [
-      row({ id: 'a', email: 'info@set.example' }),
-      row({ id: 'b', email: 'info@set.example', phone: '+78432001133' }),
-      row({ id: 'c', email: 'info@set.example', phone: '+78432001144' }),
+      row({ id: 'a', email: 'info@mail.ru' }),
+      row({ id: 'b', email: 'info@mail.ru', phone: '+78432001133' }),
+      row({ id: 'c', email: 'info@mail.ru', phone: '+78432001144' }),
       row({ id: 'd' }),
     ];
     const { db } = fakeDb(rows);
     // Лимит 2 в день: письмо «a», два закрытых дубля и ещё одно письмо — «d».
     const result = await sendOutreach(NOW, deps(db, { settings: settings({ dailyCap: 2 }) }));
     expect(result).toMatchObject({ email: 2, duplicates: 2 });
-    expect(okEmail.mock.calls.map((c) => c[0].to)).toEqual(['info@set.example', 'd@example.com']);
+    expect(okEmail.mock.calls.map((c) => c[0].to)).toEqual(['info@mail.ru', 'd@example.com']);
     // Дубль позже отметили «написали в WhatsApp» (CONTACTED): напоминание ему не уходит —
     // его отметка почты вне окна «4–14 дней назад».
     rows[1]!.status = 'CONTACTED';
@@ -1404,5 +1426,211 @@ describe('один адрес — одно первое сообщение (ре
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+describe('режим «сам по расписанию»: офис пишет только днём по Москве (владелец, 2026-11-11)', () => {
+  const at = (msk: string) => new Date(`2026-11-11T${msk}:00+03:00`);
+
+  it('часы отправки: с 8:00 до 19:59 по Москве, в любой день', () => {
+    expect(AUTO_SEND_HOURS).toEqual({ from: 8, to: 20 });
+    expect(inAutoSendHours(at('07:59'))).toBe(false);
+    expect(inAutoSendHours(at('08:00'))).toBe(true);
+    expect(inAutoSendHours(at('13:30'))).toBe(true);
+    expect(inAutoSendHours(at('19:59'))).toBe(true);
+    expect(inAutoSendHours(at('20:00'))).toBe(false);
+    expect(inAutoSendHours(at('03:13'))).toBe(false);
+    // Час считается по Москве, а не по часам сервера: 05:13 UTC — это 08:13 в Москве.
+    expect(inAutoSendHours(new Date('2026-11-11T05:13:00Z'))).toBe(true);
+    expect(inAutoSendHours(new Date('2026-11-11T17:00:00Z'))).toBe(false);
+  });
+
+  it('ночью крон ничего не отправляет и строк не трогает; днём — отправляет', async () => {
+    const rows = [row({ id: 'a' }), row({ id: 'b' })];
+    const { db, updates, claims } = fakeDb(rows);
+    const night = await sendOutreach(at('05:13'), deps(db));
+    expect(night).toEqual({ email: 0, whatsapp: 0, followUps: 0, skipped: 'night', errors: 0 });
+    expect(okEmail).not.toHaveBeenCalled();
+    expect(updates).toEqual([]);
+    expect(claims).toEqual([]);
+    const day = await sendOutreach(at('10:39'), deps(db));
+    expect(day).toMatchObject({ email: 2, skipped: null });
+    expect(okEmail).toHaveBeenCalledTimes(2);
+  });
+
+  it('кнопка владельца работает и ночью: утверждённое уходит', async () => {
+    const rows = [row({ id: 'a' })];
+    const fake = fakeDb(rows);
+    // Письмо дня подготовлено (предложение записано), владелец нажал «Отправить» в 23:30.
+    await planOutreach(at('23:30'), deps(fake.db));
+    const result = await sendOutreach(
+      at('23:30'),
+      deps(fake.db, { onlyApproved: fake.approveAll() }),
+    );
+    expect(result).toMatchObject({ email: 1, skipped: null });
+  });
+
+  it('в режиме «с утверждением» время суток не важно: письма только готовятся', async () => {
+    const rows = [row({ id: 'a' })];
+    const { db } = fakeDb(rows);
+    const result = await sendOutreach(
+      at('03:00'),
+      deps(db, { settings: settings({ outreachMode: 'approve' }) }),
+    );
+    expect(result).toMatchObject({ email: 0, skipped: 'approve', waiting: 1 });
+    expect(okEmail).not.toHaveBeenCalled();
+  });
+
+  it('пауза важнее всего: на паузе не уходит ничего и днём', async () => {
+    const { db } = fakeDb([row({ id: 'a' })]);
+    const result = await sendOutreach(
+      at('12:00'),
+      deps(db, { settings: settings({ outreachPaused: true }) }),
+    );
+    expect(result).toMatchObject({ email: 0, skipped: 'paused' });
+    expect(okEmail).not.toHaveBeenCalled();
+  });
+});
+
+describe('режим «сам по расписанию»: защиты первого автоматического дня (ревью 2026-11-11)', () => {
+  const day = new Date('2026-11-11T10:00:00+03:00');
+  const auto = (over: Partial<OutreachRunSettings> = {}) =>
+    settings({ outreachMode: 'auto', whatsappAuto: false, ...over });
+
+  it('ящик не принимает пароль: проход останавливается до первого письма, фирмы не помечаются', async () => {
+    const rows = [row({ id: 'a' }), row({ id: 'b' }), row({ id: 'c' })];
+    const { db, updates, claims } = fakeDb(rows);
+    const verifyMail = vi.fn(async () => ({
+      ok: false as const,
+      reason: 'Invalid login: 535 5.7.8 Error: authentication failed',
+    }));
+    const result = await sendOutreach(day, deps(db, { settings: auto(), verifyMail }));
+    expect(result).toMatchObject({ email: 0, errors: 0, mail: 'broken' });
+    expect(result.mailError).toContain('535');
+    expect(verifyMail).toHaveBeenCalledTimes(1);
+    expect(okEmail).not.toHaveBeenCalled();
+    expect(updates).toEqual([]);
+    expect(claims).toEqual([]);
+    expect(rows.every((r) => r.status === 'READY' && r.emailSentAt === null)).toBe(true);
+  });
+
+  it('ящик не настроен вовсе — проверка отвечает «no-smtp», строк не трогаем', async () => {
+    const { db, updates } = fakeDb([row({ id: 'a' })]);
+    const result = await sendOutreach(
+      day,
+      deps(db, {
+        settings: auto(),
+        verifyMail: async () => ({ ok: false as const, reason: 'no-smtp' }),
+      }),
+    );
+    expect(result).toMatchObject({ email: 0, errors: 0, mail: 'no-smtp' });
+    expect(updates).toEqual([]);
+  });
+
+  it('три отказа сервера подряд — почта в проходе останавливается, остальная пачка не тронута', async () => {
+    const rows = ['a', 'b', 'c', 'd', 'e', 'f'].map((id) => row({ id }));
+    const { db } = fakeDb(rows);
+    const failing = vi.fn(async (_input: SendEmailInput) => ({
+      ok: false as const,
+      reason: '554 5.7.1 Message rejected under suspicion of SPAM',
+    }));
+    const result = await sendOutreach(day, deps(db, { settings: auto(), email: failing }));
+    expect(failing).toHaveBeenCalledTimes(MAIL_FAILURES_STOP);
+    expect(result).toMatchObject({ email: 0, errors: MAIL_FAILURES_STOP, mail: 'broken' });
+    expect(result.mailError).toContain('554');
+    // Четвёртая и следующие фирмы остались как были — без отметок и без ошибки.
+    for (const untouched of rows.slice(MAIL_FAILURES_STOP)) {
+      expect(untouched.emailSentAt).toBeNull();
+      expect((untouched as { outreachError?: string | null }).outreachError ?? null).toBeNull();
+    }
+  });
+
+  it('сервер замолчал на первом письме — одно «не подтверждено», дальше в проходе не пишем', async () => {
+    vi.useFakeTimers();
+    try {
+      const rows = [row({ id: 'a' }), row({ id: 'b' }), row({ id: 'c' })];
+      const { db } = fakeDb(rows);
+      const hanging = vi.fn((_input: SendEmailInput) => new Promise<never>(() => {}));
+      const pass = sendOutreach(
+        day,
+        deps(db, { settings: auto(), email: hanging, budgetMs: 60_000 }),
+      );
+      await vi.advanceTimersByTimeAsync(SEND_TIMEOUT_MS + 10);
+      const result = await pass;
+      expect(hanging).toHaveBeenCalledTimes(1);
+      expect(result).toMatchObject({ email: 0, errors: 1, mail: 'broken' });
+      expect(rows[1]!.emailSentAt).toBeNull();
+      expect(rows[2]!.emailSentAt).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('фирме, которая уже ответила, первое письмо не уходит', async () => {
+    const rows = [
+      row({
+        id: 'a',
+        status: 'CONTACTED',
+        whatsappSentAt: new Date('2026-11-10T10:00:00+03:00'),
+        contactedAt: new Date('2026-11-10T10:00:00+03:00'),
+        repliedAt: new Date('2026-11-10T15:00:00+03:00'),
+      }),
+      row({ id: 'b' }),
+    ];
+    const { db } = fakeDb(rows);
+    const result = await sendOutreach(day, deps(db, { settings: auto() }));
+    expect(result.email).toBe(1);
+    expect(okEmail.mock.calls.map((c) => c[0].to)).toEqual(['b@example.com']);
+    // И в «письмах дня» её нет.
+    const plan = await planOutreach(day, deps(db, { settings: auto() }));
+    expect(plan.items.map((i) => i.id)).not.toContain('a');
+  });
+
+  it('сам офис пишет только письма: WhatsApp через шлюз без кнопки не уходит', async () => {
+    const rows = [row({ id: 'a', whatsapp: '+79271112233' })];
+    const fake = fakeDb(rows);
+    const result = await sendOutreach(day, deps(fake.db, { settings: auto() }));
+    expect(result).toMatchObject({ email: 1, whatsapp: 0 });
+    expect(okWhatsApp).not.toHaveBeenCalled();
+    expect(rows[0]!.whatsappSentAt).toBeNull();
+    // По кнопке владельца — уходит.
+    const approved = await sendOutreach(
+      day,
+      deps(fake.db, { settings: auto(), onlyApproved: fake.approveAll() }),
+    );
+    expect(approved.whatsapp).toBe(1);
+  });
+
+  it('напоминания сам не отправляет, но считает, сколько их ждёт кнопки', async () => {
+    const rows = [contacted('r1', 5), contacted('r2', 6), row({ id: 'a' })];
+    const { db } = fakeDb(rows);
+    const result = await sendOutreach(day, deps(db, { settings: auto() }));
+    expect(result).toMatchObject({ email: 1, followUps: 0, followUpsWaiting: 2 });
+    expect(okEmail).toHaveBeenCalledTimes(1);
+  });
+
+  it('второй проход, пока идёт первый, ничего не отправляет: дневной лимит не удваивается', async () => {
+    const rows = [row({ id: 'a' }), row({ id: 'b' })];
+    const { db } = fakeDb(rows);
+    let held = false;
+    const lock = async () => {
+      if (held) return null;
+      held = true;
+      return async () => {
+        held = false;
+      };
+    };
+    let second: OutreachResult | null = null;
+    const email = vi.fn(async (_input: SendEmailInput) => {
+      // Пока первое письмо первого прохода в пути, приходит второй тик.
+      second ??= await sendOutreach(day, deps(db, { settings: auto(), lock }));
+      return { ok: true as const };
+    });
+    const first = await sendOutreach(day, deps(db, { settings: auto(), lock, email }));
+    expect(second).toEqual({ email: 0, whatsapp: 0, followUps: 0, skipped: 'busy', errors: 0 });
+    expect(first.email).toBe(2);
+    expect(email).toHaveBeenCalledTimes(2);
+    // Замок снят: следующий проход работает.
+    expect(held).toBe(false);
   });
 });

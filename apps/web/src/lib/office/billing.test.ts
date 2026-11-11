@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { SITE_DOMAIN_SETUP_EXTRA } from '@/lib/prices';
+import { SITE_DOMAIN_SETUP_EXTRA, rub } from '@/lib/prices';
 import {
   billingStatus,
   billingSummary,
@@ -11,6 +11,11 @@ import {
   extendPaidUntil,
   formatDayMsk,
   invoiceDue,
+  bankVatClause,
+  invoiceIdentity,
+  rubKop,
+  vatIncluded,
+  vatLine,
   mapLinkGuide,
   monthlyRevenue,
   paymentUpdate,
@@ -205,6 +210,7 @@ describe('billing: invoiceDue', () => {
     expect(invoiceDue(client(), prices, NOW)).toEqual({
       amount: 15000,
       title: expect.stringContaining('разово') as unknown as string,
+      kind: 'setup',
     });
   });
 
@@ -241,17 +247,22 @@ describe('billing: buildInvoice', () => {
     slug: 'ulybka-kazan',
     token: TOKEN,
     domain: null,
+    agreedAt: AGREED,
     ...client(),
     ...patch,
   });
-  const ctx = { payDetails: '  ООО «Пример», р/с …  ', baseUrl: 'https://example.ru/' };
+  const ctx = {
+    payDetails: '  ООО «Пример», р/с …  ',
+    baseUrl: 'https://example.ru/',
+    vatRate: 22,
+  };
+  const AGREED = new Date('2026-11-05T09:00:00Z'); // 12:00 по Москве
 
   it('shows the company, the package, the prices and the published site', () => {
     const view = buildInvoice(row(), DEFAULTS, ctx, NOW);
     expect(view).toMatchObject({
       company: 'Стоматология «Улыбка»',
       heading: 'Счёт за сайт для компании Стоматология «Улыбка»',
-      paymentPurpose: 'Сайт для компании Стоматология «Улыбка»',
       city: 'Казань',
       packageTitle: 'Сайт-визитка',
       setup: 15000,
@@ -269,14 +280,14 @@ describe('billing: buildInvoice', () => {
   it('puts a plain company name in «ёлочки» in the heading and the payment purpose', () => {
     const view = buildInvoice(row({ name: 'Дента' }), DEFAULTS, ctx, NOW);
     expect(view?.heading).toBe('Счёт за сайт для компании «Дента»');
-    expect(view?.paymentPurpose).toBe('Сайт для компании «Дента»');
+    expect(view?.paymentPurpose).toContain('за создание сайта для компании «Дента»');
   });
 
   it("uses the client's domain, the domain package and the client's own prices", () => {
     const view = buildInvoice(
       row({ domain: 'ulybka-kazan.ru', monthlyPrice: 1000, setupPaidAt: NOW, paidUntil: NOW }),
       DEFAULTS,
-      { payDetails: '   ', baseUrl: 'https://example.ru' },
+      { payDetails: '   ', baseUrl: 'https://example.ru', vatRate: 22 },
       NOW,
     );
     expect(view).toMatchObject({
@@ -354,7 +365,7 @@ describe('billing: the yearly price (К12)', () => {
       token: 'a'.repeat(32),
       domain: 'ulybka.ru',
     };
-    const ctx = { payDetails: null, baseUrl: 'https://example.ru' };
+    const ctx = { payDetails: null, vatRate: 22, baseUrl: 'https://example.ru' };
     expect(buildInvoice(row, PLAN, ctx, NOW)?.yearly).toBe(9900);
     expect(buildInvoice({ ...row, domain: null }, PLAN, ctx, NOW)?.yearly).toBe(9900);
   });
@@ -374,5 +385,139 @@ describe('billing: mapLinkGuide (К16)', () => {
       expect(section.steps.some((step) => step.includes('https://ulybka-kazan.ru/'))).toBe(true);
     }
     expect(JSON.stringify(guide)).not.toMatch(/кабинет|вкладк/i);
+  });
+});
+
+describe('billing: счёт-оферта (К8) — номер, дата, НДС, покупатель', () => {
+  const TOKEN = '0123456789abcdef0123456789abcdef';
+  const AGREED = new Date('2026-11-05T09:00:00Z'); // 12:00 по Москве, 05.11.2026
+  const row = (patch: Partial<InvoiceRow> = {}): InvoiceRow => ({
+    kind: 'site',
+    status: 'PUBLISHED',
+    name: 'Дента',
+    city: 'Казань',
+    slug: 'denta',
+    token: TOKEN,
+    domain: null,
+    agreedAt: AGREED,
+    ...client(),
+    ...patch,
+  });
+  const ctx = { payDetails: 'р/с …', baseUrl: 'https://example.ru', vatRate: 22 };
+  const PRICES = { setup: 3900, monthly: 990 };
+
+  it('НДС внутри суммы: 3 900 ₽ при 22 % — 703,28 ₽; ставка 0 — НДС не облагается', () => {
+    expect(vatIncluded(3900, 22)).toBe(703.28);
+    expect(vatIncluded(990, 22)).toBe(178.52);
+    expect(vatIncluded(3900, 5)).toBe(185.71);
+    expect(vatIncluded(3900, 0)).toBe(0);
+    expect(rubKop(703.28)).toBe('703,28');
+    expect(rubKop(1234567.5)).toBe(`${rub(1234567)},50`);
+    expect(vatLine(3900, 22)).toBe('в т.ч. НДС 22\u00a0% — 703,28\u00a0₽');
+    expect(vatLine(3900, 0)).toBe('НДС не облагается');
+    expect(bankVatClause(3900, 22)).toBe('в т.ч. НДС 22% - 703,28 руб.');
+    expect(bankVatClause(1_234_567, 20)).toBe('в т.ч. НДС 20% - 205 761,17 руб.');
+    expect(bankVatClause(3900, 0)).toBe('НДС не облагается');
+  });
+
+  it('счёт за сайт: номер из дня договорённости и кода клиента, дата — день договорённости', () => {
+    const view = buildInvoice(row(), PRICES, ctx, NOW);
+    expect(view?.number).toMatch(/^САЙТ-261105-\d{6}$/);
+    expect(view?.issuedOn).toBe('05.11.2026');
+    expect(view?.vatLine).toBe('в т.ч. НДС 22\u00a0% — 703,28\u00a0₽');
+    // Назначение платежа — для поля банка: без неразрывных пробелов, длинного тире и знака ₽.
+    expect(view?.paymentPurpose).toBe(
+      `Оплата по счёту № ${view?.number} от 05.11.2026 за создание сайта для компании «Дента», в т.ч. НДС 22% - 703,28 руб.`,
+    );
+    expect(view?.paymentPurpose).not.toMatch(/[\u00a0—₽]/);
+    expect(view?.offerHref).toBe('https://example.ru/sajt-pod-klyuch/oferta');
+    // Номер и дата не зависят от того, когда счёт открыли.
+    const later = buildInvoice(row(), PRICES, ctx, new Date(NOW.getTime() + 3 * DAY));
+    expect(later?.number).toBe(view?.number);
+    expect(later?.issuedOn).toBe('05.11.2026');
+    // У другого клиента в тот же день — другой номер.
+    const other = buildInvoice(
+      row({ token: 'fedcba9876543210fedcba9876543210' }),
+      PRICES,
+      ctx,
+      NOW,
+    );
+    expect(other?.number).not.toBe(view?.number);
+  });
+
+  it('счёт за поддержку: тот же номер с «-П<год и месяц>», дата — когда период стал к оплате', () => {
+    const paidAt = new Date('2026-11-06T09:00:00Z');
+    const paidUntil = new Date('2026-12-06T09:00:00Z');
+    const soon = new Date('2026-12-02T09:00:00Z'); // до конца оплаты 4 дня — пора платить
+    const setup = buildInvoice(row(), PRICES, ctx, NOW);
+    const view = buildInvoice(row({ setupPaidAt: paidAt, paidUntil }), PRICES, ctx, soon);
+    expect(view?.due).toMatchObject({ amount: 990, kind: 'support' });
+    expect(view?.number).toBe(`${setup?.number}-П2612`);
+    // За EXPIRING_DAYS (7) до конца оплаченного срока.
+    expect(view?.issuedOn).toBe('29.11.2026');
+    expect(view?.vatLine).toBe('в т.ч. НДС 22\u00a0% — 178,52\u00a0₽');
+    expect(view?.paymentPurpose).toMatch(/в т\.ч\. НДС 22% - 178,52 руб\.$/);
+    expect(view?.paymentPurpose).toContain('за работу и поддержку сайта компании «Дента»');
+    // Оплату отметили — срок сдвинулся, следующий счёт получит новый номер.
+    const next = invoiceIdentity(
+      {
+        token: TOKEN,
+        agreedAt: AGREED,
+        setupPaidAt: paidAt,
+        paidUntil: new Date('2027-01-06T09:00:00Z'),
+      },
+      'support',
+      soon,
+    );
+    expect(next.number).toBe(`${setup?.number}-П2701`);
+  });
+
+  it('платить нечего — нет ни номера, ни строки НДС; ставка 0 — «НДС не облагается»', () => {
+    const paid = buildInvoice(
+      row({ setupPaidAt: NOW, paidUntil: new Date(NOW.getTime() + 20 * DAY) }),
+      PRICES,
+      ctx,
+      NOW,
+    );
+    expect(paid).toMatchObject({ due: null, number: null, issuedOn: null, vatLine: null });
+    const noVat = buildInvoice(row(), PRICES, { ...ctx, vatRate: 0 }, NOW);
+    expect(noVat?.vatLine).toBe('НДС не облагается');
+    expect(noVat?.paymentPurpose).toMatch(/«Дента», НДС не облагается$/);
+  });
+
+  it('покупатель: реквизиты владельца, иначе только название компании', () => {
+    expect(buildInvoice(row(), PRICES, ctx, NOW)?.buyer).toBeNull();
+    expect(
+      buildInvoice(row({ buyerDetails: '  ООО «Дента», ИНН 1650000000  ' }), PRICES, ctx, NOW)
+        ?.buyer,
+    ).toBe('ООО «Дента», ИНН 1650000000');
+    expect(buildInvoice(row({ buyerDetails: '   ' }), PRICES, ctx, NOW)?.buyer).toBeNull();
+  });
+
+  it('отказ и новое «Согласился» — новая договорённость: у счёта новый номер и дата', () => {
+    const first = buildInvoice(row(), PRICES, ctx, NOW);
+    const again = buildInvoice(
+      row({ agreedAt: new Date('2026-11-12T09:00:00Z') }),
+      PRICES,
+      ctx,
+      NOW,
+    );
+    expect(first?.number).toMatch(/^САЙТ-261105-/);
+    expect(again?.number).toMatch(/^САЙТ-261112-/);
+    expect(again?.issuedOn).toBe('12.11.2026');
+    // Код клиента в номере тот же: счёт по-прежнему узнаётся.
+    expect(again?.number?.slice(-6)).toBe(first?.number?.slice(-6));
+  });
+
+  it('строка без дня договорённости (старые клиенты) берёт день создания', () => {
+    const view = buildInvoice(
+      row({ agreedAt: null, createdAt: new Date('2026-10-30T20:59:00Z') }),
+      PRICES,
+      ctx,
+      NOW,
+    );
+    // 23:59 по Москве — ещё 30 октября.
+    expect(view?.number).toMatch(/^САЙТ-261030-/);
+    expect(view?.issuedOn).toBe('30.10.2026');
   });
 });

@@ -9,6 +9,7 @@ import { OfficePayDetailsForm } from '@/components/admin/OfficePayDetailsForm';
 import { PhoneLink } from '@/components/admin/PhoneLink';
 import { MAP_LINK_GUIDE_TITLE, MapLinkGuide } from '@/components/office/MapLinkGuide';
 import {
+  BUYER_DETAILS_MAX,
   BILLING_STATUS_TITLES,
   EXPIRING_DAYS,
   billingStatus,
@@ -21,7 +22,7 @@ import {
 } from '@/lib/office/billing';
 import { nicheTitle } from '@/lib/office/niches';
 import { officePrices } from '@/lib/office/prices';
-import { PAY_DETAILS_MAX, readOfficeSettings } from '@/lib/office/settings';
+import { PAY_DETAILS_MAX, VAT_RATES, readOfficeSettings } from '@/lib/office/settings';
 import { rub } from '@/lib/prices';
 import { siteUrl } from '@/lib/siteUrl';
 
@@ -72,6 +73,7 @@ export default async function AdminOfficeClientsPage() {
         monthlyPrice: true,
         setupPaidAt: true,
         paidUntil: true,
+        buyerDetails: true,
       },
     }),
   ]);
@@ -225,6 +227,8 @@ export default async function AdminOfficeClientsPage() {
                     paidUntil={client.paidUntil ? client.paidUntil.toISOString() : null}
                     invoiceUrl={invoiceUrl}
                     published={published}
+                    buyerDetails={client.buyerDetails}
+                    buyerDetailsMax={BUYER_DETAILS_MAX}
                   />
                 </div>
               </Card>
@@ -238,10 +242,17 @@ export default async function AdminOfficeClientsPage() {
           <h2 className="text-lg font-bold text-graphite-950">Реквизиты для оплаты</h2>
           <p className="mt-1 text-xs text-graphite-600">
             Клиент видит их на странице счёта. Пусто — там написано «Реквизиты пришлём в ответ на
-            письмо» и телефон для связи.
+            письмо» и телефон для связи. Ставка НДС идёт в счёт строкой «в т.ч. НДС»; какая верна
+            для ООО — подтверждает бухгалтер. Меняйте её до того, как отправили счёт клиенту: уже
+            отправленный счёт покажет новую ставку под прежним номером.
           </p>
         </div>
-        <OfficePayDetailsForm value={settings.payDetails} max={PAY_DETAILS_MAX} />
+        <OfficePayDetailsForm
+          value={settings.payDetails}
+          max={PAY_DETAILS_MAX}
+          vatRate={settings.vatRate}
+          vatRates={VAT_RATES}
+        />
       </Card>
     </div>
   );

@@ -10,6 +10,7 @@ import {
   OFFICE_EXTRA_SETTINGS,
   OUTREACH_MODES,
   PAY_DETAILS_MAX,
+  VAT_RATES,
   type OutreachMode,
 } from '@/lib/office/settings';
 
@@ -19,7 +20,8 @@ export const dynamic = 'force-dynamic';
 // рассылка (пауза, лимит в день, адрес для ответов, WhatsApp на обычный мобильный),
 // реквизиты для оплаты сайта (страница счёта /oplata/<token>, S6; пусто — убрать),
 // ИИ-аналитик персональных предложений (U2: выключатель и лимит в сутки), режим рассылки
-// (К2: 'approve' — письма дня по кнопке владельца, 'auto' — по крону).
+// (К2: 'approve' — письма дня по кнопке владельца, 'auto' — по крону), ставка НДС в
+// счёте-оферте (К8: одна из VAT_RATES, 0 — «НДС не облагается»).
 // Каждое поле необязательно — сохраняются только присланные.
 const price = z
   .number({ invalid_type_error: 'Цена — целое число рублей' })
@@ -40,12 +42,16 @@ const schema = z
       .int('Лимит в день — целое число')
       .min(0, 'Лимит в день не может быть отрицательным')
       .max(1000, 'Лимит в день — не больше 1000'),
-    replyTo: z
-      .string()
-      .trim()
-      .toLowerCase()
-      .email('Адрес для ответов — обычная почта вида name@example.ru')
-      .max(200),
+    // Пусто — без Reply-To: ответы приходят в ящик, с которого ушло письмо.
+    replyTo: z.union([
+      z.literal(''),
+      z
+        .string()
+        .trim()
+        .toLowerCase()
+        .email('Адрес для ответов — обычная почта вида name@example.ru')
+        .max(200),
+    ]),
     whatsappToPhone: z.boolean().optional(),
     payDetails: z
       .string({ invalid_type_error: 'Реквизиты — обычный текст' })
@@ -59,6 +65,9 @@ const schema = z
     outreachMode: z.enum(OUTREACH_MODES as [OutreachMode, ...OutreachMode[]], {
       errorMap: () => ({ message: 'Режим рассылки — «с утверждением» или «сам по расписанию»' }),
     }),
+    vatRate: z
+      .number({ invalid_type_error: 'Ставка НДС — число' })
+      .refine((rate) => VAT_RATES.includes(rate), `Ставка НДС — одна из: ${VAT_RATES.join(', ')}`),
   })
   .partial();
 
@@ -120,6 +129,9 @@ export async function PUT(request: NextRequest) {
 
   if (input.outreachMode !== undefined) {
     values[OFFICE_EXTRA_SETTINGS.outreachMode] = input.outreachMode;
+  }
+  if (input.vatRate !== undefined) {
+    values[OFFICE_EXTRA_SETTINGS.vatRate] = String(input.vatRate);
   }
 
   const entries = Object.entries(values);

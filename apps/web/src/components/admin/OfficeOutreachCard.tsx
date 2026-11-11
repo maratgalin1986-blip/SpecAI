@@ -8,6 +8,8 @@ export interface OfficeOutreachCardProps {
   today: { email: number; whatsapp: number };
   /** Каналы: почта — свой ящик офиса по SMTP (lib/office/smtp.ts), WhatsApp — Green API. */
   channels: { email: boolean; whatsapp: boolean };
+  /** Режим рассылки: 'auto' — офис отправляет первые письма сам, 'approve' — по кнопке владельца. */
+  mode: 'auto' | 'approve';
 }
 
 function Counter({ label, value, cap }: { label: string; value: number; cap: number }) {
@@ -27,7 +29,7 @@ function Counter({ label, value, cap }: { label: string; value: number; cap: num
  * день, адрес для ответов, WhatsApp на обычный мобильный, состояние каналов и счётчики за
  * сегодня. Серверный компонент; форма внутри — клиентская (OfficeOutreachForm).
  */
-export function OfficeOutreachCard({ settings, today, channels }: OfficeOutreachCardProps) {
+export function OfficeOutreachCard({ settings, today, channels, mode }: OfficeOutreachCardProps) {
   return (
     <Card className="flex flex-col gap-4" id="outreach">
       <div className="flex flex-wrap items-start justify-between gap-2">
@@ -43,6 +45,12 @@ export function OfficeOutreachCard({ settings, today, channels }: OfficeOutreach
           {settings.outreachPaused ? 'На паузе' : 'Работает'}
         </AdminTag>
       </div>
+
+      <p className="rounded-xl bg-graphite-50 px-4 py-3 text-sm text-graphite-800">
+        {mode === 'auto'
+          ? 'Режим «сам по расписанию»: первые письма уходят без вашей кнопки, с 8 до 20 по Москве, в пределах дневного лимита. Остановить — пауза ниже; вернуть отправку по кнопке — на странице «Письма дня».'
+          : 'Режим «с утверждением»: письма только готовятся и уходят по вашей кнопке «Отправить» на странице «Письма дня».'}
+      </p>
 
       <div className="grid grid-cols-2 gap-3">
         <Counter label="Писем сегодня" value={today.email} cap={settings.dailyCap} />

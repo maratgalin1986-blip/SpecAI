@@ -81,6 +81,13 @@ export const STOP_LINE = 'Если не нужно — ответьте «сто
 /** Первое письмо: откуда адрес и что будет дальше — одно напоминание, если не ответят (S8). */
 const EMAIL_ONCE_LINE =
   'Адрес — из открытой карточки компании; если не ответите, напомним один раз, не больше.';
+/** Письмо и сообщение — не оферта: условия на странице услуги (бизнес-план, § 8.10, § 9.4). */
+export const NOT_OFFER_LINE = 'Письмо не является офертой: условия и цены — на странице услуги.';
+/** Что это за страница: черновик, не официальный сайт (§ 8.10). */
+const DRAFT_LINE =
+  'Это черновик, а не официальный сайт: в поиске его нет, открывается только по ссылке.';
+/** Подпись: кто пишет (§ 9.1, п. 4). */
+export const LEGAL_SIGNATURE = `${SITE.platform} от ${SITE.name} — ${SITE.legalName}, ИНН ${SITE.inn}, ОГРН ${SITE.ogrn}, ${SITE.legalAddress}. Телефон ${SITE.phone}.`;
 const WHATSAPP_ONCE_LINE = 'Сообщение отправлено один раз на номер из открытой карточки компании.';
 const FOLLOW_UP_ONCE_LINE = 'Это единственное напоминание.';
 
@@ -149,18 +156,14 @@ function siteLetter(p: OutreachProspect, input: OutreachInput): Letter {
     subject: `Сделали страницу для ${name} — посмотрите`,
     greeting: `Здравствуйте! Пишет ${SITE.name}, площадка ${SITE.platform}.`,
     paragraphs: [
-      `Мы увидели вашу компанию ${name} на карте${where(p)}: ${niche}, есть телефон и адрес, ` +
-        'а своей страницы в интернете нет. Поэтому мы уже сделали вам страницу-визитку по данным ' +
-        'открытой карточки — посмотреть можно по ссылке ниже, страница пока закрыта от поисковиков.',
-      // Превью показывает то, что есть в карточке; форма заявки включается только после
-      // подключения (К10), кнопка WhatsApp — только если номер есть в карточке.
-      'Что на странице: название, чем занимаетесь, услуги, адрес, часы работы, кнопка ' +
-        '«Позвонить» и ссылка на карту. Всё с вашей карточки, ничего не придумано; если что-то ' +
-        'не так — поправим за день. После подключения добавим форму заявки: ' +
-        `${LEADS_TO_EMAIL_LINE.charAt(0).toLowerCase()}${LEADS_TO_EMAIL_LINE.slice(1)} — на этот адрес.`,
-      `Предложение: страница под ключ — ${rubles(input.prices.setup)} один раз, дальше поддержка ` +
-        `${rubles(input.prices.monthly)} в месяц: правки, работа страницы, ответы на вопросы. ` +
-        'Как согласуем — страница откроется по своему адресу в тот же день.',
+      `В открытой карточке компании ${name} на карте не указан сайт. Мы собрали по данным ` +
+        `карточки черновик страницы (${niche}): посмотреть можно по ссылке ниже. ${DRAFT_LINE}`,
+      // Превью показывает то, что есть в карточке; услуги — типовой список сферы; форма заявки
+      // включается только после подключения (К10).
+      'Что на странице: название, адрес, часы работы и телефон из карточки, кнопка «Позвонить» ' +
+        'и ссылка на карту; список услуг — типовой для вашей сферы, поправим по вашим словам. ' +
+        `После подключения добавим форму заявки: ${LEADS_TO_EMAIL_LINE.charAt(0).toLowerCase()}${LEADS_TO_EMAIL_LINE.slice(1)}.`,
+      `Если пригодится — доведём черновик до сайта на нашем адресе или на вашем домене и будем вносить правки. ${NOT_OFFER_LINE}`,
     ],
     button: 'Открыть страницу',
     links: serviceLinks(p, input),
@@ -194,18 +197,13 @@ function offerLetter(
     subject: offer.subject,
     greeting: `Здравствуйте! Пишет ${SITE.name}, площадка ${SITE.platform}.`,
     paragraphs: [
-      `${offer.opener} Поэтому мы уже сделали вам страницу-визитку по данным открытой карточки — ` +
-        'посмотреть можно по ссылке ниже, страница пока закрыта от поисковиков.',
-      'Что даст страница именно вам:',
+      `${offer.opener} Мы собрали по данным карточки черновик страницы — посмотреть можно по ` +
+        `ссылке ниже. ${DRAFT_LINE}`,
+      'Что на странице:',
     ],
     bullets: offer.bullets,
     after: [
-      'Всё с вашей карточки, ничего не придумано; если что-то не так — поправим за день. ' +
-        'После подключения добавим форму заявки: ' +
-        `${LEADS_TO_EMAIL_LINE.charAt(0).toLowerCase()}${LEADS_TO_EMAIL_LINE.slice(1)} — на этот адрес.`,
-      `Советуем: ${packageLine(offer.packageKey, input.prices)} — правки, работа страницы, ` +
-        `ответы на вопросы. Почему он: ${offer.packageReason}. Как согласуем — страница ` +
-        'откроется по своему адресу в тот же день.',
+      `Если пригодится — доведём черновик до сайта на нашем адресе или на вашем домене и будем вносить правки. ${NOT_OFFER_LINE}`,
     ],
     button: 'Открыть страницу',
     links: serviceLinks(p, input),
@@ -300,7 +298,7 @@ ${(letter.after ?? []).map(paragraph).join('\n')}
 <p style="margin:0 0 12px;color:#6b7280;font-size:13px">Или откройте ссылку: <a href="${href}">${href}</a></p>
 ${letter.links.map((link) => `<p style="margin:0 0 12px"><a href="${escapeHtml(link.url)}">${escapeHtml(link.label)}</a></p>`).join('\n')}
 ${letter.closing.map(paragraph).join('\n')}
-<p style="margin:24px 0 0;color:#6b7280;font-size:13px">${escapeHtml(`${SITE.name} · ${SITE.platform} · ${SITE.phone}`)}</p>
+<p style="margin:24px 0 0;color:#6b7280;font-size:13px">${escapeHtml(LEGAL_SIGNATURE)}</p>
 ${unsubscribe}
 </div>
 </body>
@@ -319,7 +317,7 @@ function renderText(letter: Letter, previewUrl: string, unsubscribeUrl?: string)
     '',
     ...letter.closing,
     '',
-    `— ${SITE.name} · ${SITE.platform} · ${SITE.phone}`,
+    `— ${LEGAL_SIGNATURE}`,
     ...(unsubscribeUrl ? ['', `${UNSUBSCRIBE_LABEL}: ${unsubscribeUrl}`] : []),
   ].join('\n');
 }
@@ -368,9 +366,8 @@ export function buildWhatsAppText(p: OutreachProspect, input: OutreachInput): st
   }
   if (input.offer) return offerWhatsAppText(p, input, input.offer);
   const body =
-    `Увидели ${name} на карте${where(p)} без сайта и сделали вам ` +
-    `страницу-визитку по данным карточки: ${input.previewUrl} Страница под ключ — ` +
-    `${rubles(input.prices.setup)} один раз, поддержка ${rubles(input.prices.monthly)} в месяц.`;
+    `В открытой карточке ${name} на карте не указан сайт — собрали вам ` +
+    `черновик страницы по данным карточки: ${input.previewUrl} Это не официальный сайт, в поиске его нет.`;
   // Без адреса почты в карточке пересылать заявки некуда — просим его в ответ.
   const leads = p.email?.trim()
     ? `${LEADS_TO_EMAIL_LINE}.`
@@ -398,9 +395,9 @@ function offerWhatsAppText(
   offer: NonNullable<OutreachInput['offer']>,
 ): string {
   const intro = `Здравствуйте! Это ${SITE.name}, площадка ${SITE.platform}.`;
-  const body = `${offer.opener} Сделали вам страницу-визитку по данным карточки: ${input.previewUrl}`;
+  const body = `${offer.opener} Собрали по данным карточки черновик страницы: ${input.previewUrl} Это не официальный сайт, в поиске его нет.`;
   const bullets = offer.bullets.map((b) => `• ${b}`).join('\n');
-  const price = `Советуем: ${packageLine(offer.packageKey, input.prices)}.`;
+  const price = 'Условия и цены — по ссылке ниже; сообщение не является офертой.';
   const leads = p.email?.trim()
     ? `${LEADS_TO_EMAIL_LINE}.`
     : `${LEADS_TO_EMAIL_LINE} — пришлите адрес в ответ.`;
