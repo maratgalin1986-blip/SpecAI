@@ -21,6 +21,11 @@ export const OFFICE_EXTRA_SETTINGS = {
   outreachMode: 'office.outreachMode',
   /** Ставка НДС в счёте-оферте, % (К8): 0 — «НДС не облагается»; по умолчанию DEFAULT_VAT_RATE. */
   vatRate: 'office.vatRate',
+  /**
+   * «1» — режим «сам по расписанию» отправляет и WhatsApp через шлюз (Green API). По умолчанию
+   * нет и в админке переключателя нет: шлюза у офиса нет, сообщения WhatsApp отправляет владелец.
+   */
+  whatsappAuto: 'office.whatsappAuto',
 } as const;
 
 /** Режим рассылки: с утверждением владельцем или сама по крону. */
@@ -106,6 +111,8 @@ export interface OfficeSettings {
   outreachMode: OutreachMode;
   /** Ставка НДС в счёте-оферте, %; 0 — без НДС. */
   vatRate: number;
+  /** Режим «сам» отправляет и WhatsApp через шлюз (по умолчанию нет). */
+  whatsappAuto: boolean;
 }
 
 function flag(value: string | undefined): boolean {
@@ -151,6 +158,7 @@ export function parseOfficeSettings(
     ),
     outreachMode: parseOutreachMode(byKey.get(OFFICE_EXTRA_SETTINGS.outreachMode)),
     vatRate: parseVatRate(byKey.get(OFFICE_EXTRA_SETTINGS.vatRate)),
+    whatsappAuto: flag(byKey.get(OFFICE_EXTRA_SETTINGS.whatsappAuto)),
   };
 }
 

@@ -54,6 +54,7 @@ import { readOfficeSettings, type OutreachMode } from '@/lib/office/settings';
 import {
   officeMailConfigured,
   sendOfficeMail,
+  verifyOfficeMail,
   type OfficeMail,
   type OfficeMailResult,
 } from './smtp';
@@ -77,8 +78,16 @@ export interface OutreachRunSettings {
   aiOffers?: boolean;
   /** ИИ-предложений в московские сутки (по умолчанию DEFAULT_AI_DAILY_CAP). */
   aiDailyCap?: number;
-  /** Режим рассылки (К2); не задан — 'approve'. */
+  /**
+   * Режим рассылки (К2). В настройках офиса по умолчанию 'auto' (DEFAULT_OUTREACH_MODE); если
+   * поле сюда не передано вовсе — 'approve': без явного режима проход сам не отправляет.
+   */
   outreachMode?: OutreachMode;
+  /**
+   * Режим 'auto' отправляет и WhatsApp через шлюз (Green API). По умолчанию нет: сам офис
+   * пишет только письма, сообщения WhatsApp через шлюз уходят по кнопке владельца.
+   */
+  whatsappAuto?: boolean;
 }
 
 /** Лимит ИИ-предложений в сутки, если настройки его не дали (как в settings.ts). */
@@ -232,6 +241,13 @@ export interface OutreachDeps {
   optedOut?: (emails: string[], phones: string[]) => Promise<OptedOutContacts>;
   /** Каким из адресов и номеров первое сообщение уже ушло в другой строке (contactedContacts). */
   contacted?: (emails: string[], phones: string[]) => Promise<ContactedContacts>;
+  /** Проверка ящика без письма перед первым письмом прохода (по умолчанию verifyOfficeMail). */
+  verifyMail?: () => Promise<OfficeMailResult>;
+  /**
+   * Замок на отправку: один проход за раз. Возвращает функцию снятия или null, если другой
+   * проход ещё идёт (по умолчанию — строка в AdminFeedRead).
+   */
+  lock?: (now: Date) => Promise<(() => Promise<void>) | null>;
   /**
    * Что владелец утвердил на /admin/office/pisma (К2) — ключи approvalKey(строка, канал, тип):
    * проход отправляет только их, в любом режиме, и только с уже записанным предложением — что
@@ -256,8 +272,16 @@ export interface OutreachResult {
   errors: number;
   /** Писем дня ждут кнопки «Отправить» (режим 'approve', К2). */
   waiting?: number;
-  /** 'no-smtp' — ящик офиса не настроен, письма не уходят (К1). */
-  mail?: 'no-smtp';
+  /**
+   * 'no-smtp' — ящик офиса не настроен, письма не уходят (К1); 'broken' — ящик настроен, но
+   * не работает (не принимает пароль, не отвечает, подряд отказывает): почта в этом проходе
+   * остановлена, причина — в `mailError`.
+   */
+  mail?: 'no-smtp' | 'broken';
+  /** Что ответил ящик, когда почта остановлена ('broken'), — для владельца. */
+  mailError?: string;
+  /** Напоминаний ждут кнопки владельца (режим 'auto' сам их не отправляет). */
+  followUpsWaiting?: number;
   /** Строк снято с рассылки: их адрес отписан (К3). */
   optedOut?: number;
   /** Каналов закрыто без отправки: на этот адрес или номер уже писали в другой строке. */
@@ -306,6 +330,8 @@ export const OUTREACH_BATCH = 50;
 export const OUTREACH_BUDGET_MS = 40_000;
 /** Одна отправка (SMTP / Green API) не длиннее этого — иначе функция крона не успеет записать отметку. */
 export const SEND_TIMEOUT_MS = 8_000;
+/** Столько отказов сервера подряд — и почта в этом проходе останавливается: дело в ящике, а не в адресах. */
+export const MAIL_FAILURES_STOP = 3;
 /** Напоминание — не раньше, чем через столько дней после первого письма (S8). */
 export const FOLLOW_UP_AFTER_DAYS = 4;
 /** …и не позже: напоминание о письме месячной давности («недавно мы писали») уже не к месту. */
@@ -475,16 +501,50 @@ async function runOutreach(
   ]);
   let emailLeft = Math.max(0, cap - emailToday - followUpsToday);
   let whatsappLeft = Math.max(0, cap - whatsappToday);
+  // Проход без кнопки владельца (режим 'auto'): сам офис отправляет только письма. Напоминания
+  // и сообщения WhatsApp через шлюз уходят по кнопке (шлюз в 'auto' — только с whatsappAuto).
+  const auto = mode === 'send' && !only;
   const active: OutreachChannels = {
     // Письма дня видны владельцу и без настроенного ящика: он сразу видит персональные
     // предложения; отправка без ящика всё равно невозможна (mail: 'no-smtp').
     email: (channels.email || mode === 'plan') && emailLeft > 0,
-    whatsapp: channels.whatsapp && whatsappLeft > 0,
+    whatsapp: channels.whatsapp && whatsappLeft > 0 && !(auto && !settings.whatsappAuto),
   };
   if (!active.email && !active.whatsapp) return done();
 
   const email = deps.email ?? sendOfficeMail;
   const whatsapp = deps.whatsapp ?? sendWhatsApp;
+  // Ящик проверяется один раз за проход, перед первым письмом (соединение и вход без письма):
+  // неверный пароль или закрытый порт останавливают почту сразу, и ни одна фирма не получает
+  // отметку ошибки. Без этого первый же автоматический проход пометил бы всю пачку.
+  const verifyMail = deps.verifyMail ?? (() => verifyOfficeMail());
+  let mailOk: boolean | null = null;
+  const stopMail = (reason: string) => {
+    active.email = false;
+    result.mail = 'broken';
+    result.mailError = reason.replace(/\s+/g, ' ').trim().slice(0, 200);
+  };
+  const mailReady = async (): Promise<boolean> => {
+    if (mailOk !== null) return mailOk;
+    const check = await withTimeout(verifyMail(), SEND_TIMEOUT_MS, 'Почта').catch(
+      (error: unknown): OfficeMailResult => ({
+        ok: false,
+        reason: error instanceof Error ? error.message : String(error),
+      }),
+    );
+    mailOk = check.ok;
+    if (!check.ok) {
+      if (check.reason === 'no-smtp') {
+        result.mail = 'no-smtp';
+        active.email = false;
+      } else {
+        stopMail(check.reason);
+      }
+    }
+    return mailOk;
+  };
+  // Подряд идущие отказы сервера — уже не про одну фирму: почта в этом проходе останавливается.
+  let mailFailures = 0;
   const sleep = deps.sleep ?? defaultSleep;
   const clock = deps.clock ?? Date.now;
   const startedAt = clock();
@@ -599,6 +659,8 @@ async function runOutreach(
     await db.prospect.findMany({
       where: {
         status: { in: ['READY', 'CONTACTED'] },
+        // Фирма уже ответила (в любом канале) — первое «холодное» сообщение ей не пишем.
+        repliedAt: null,
         AND: [{ OR: pending }, { OR: notFailedToday }],
       },
       orderBy: [{ outreachError: { sort: 'asc', nulls: 'first' } }, { createdAt: 'asc' }],
@@ -712,7 +774,9 @@ async function runOutreach(
     // Строка начинается, только если все её отправки успевают в остаток бюджета: иначе функцию
     // могут остановить между отправкой и отметкой.
     const needed =
-      (mailTo ? SEND_TIMEOUT_MS : 0) + (toWhatsApp ? SEND_TIMEOUT_MS + WHATSAPP_PAUSE_MS[1] : 0);
+      (mailTo ? SEND_TIMEOUT_MS : 0) +
+      (mailTo && mailOk === null ? SEND_TIMEOUT_MS : 0) +
+      (toWhatsApp ? SEND_TIMEOUT_MS + WHATSAPP_PAUSE_MS[1] : 0);
     if (timeLeft() < needed) break;
 
     const sentAt = new Date();
@@ -727,7 +791,7 @@ async function runOutreach(
     // Пометка «письмо могло уйти» остаётся у строки, даже если следом ушёл WhatsApp.
     let unconfirmed: { outreachError: string; outreachErrorAt: Date } | null = null;
 
-    if (mailTo && links) {
+    if (mailTo && links && active.email && (await mailReady())) {
       // Захват до отправки: второй одновременный проход (кнопку нажали ещё раз, пока первый
       // запрос шёл) эту строку уже не получит — письмо уходит один раз.
       const claim = await db.prospect.updateMany({
@@ -746,6 +810,7 @@ async function runOutreach(
         if (sent.ok) {
           emailLeft -= 1;
           result.email += 1;
+          mailFailures = 0;
           await db.prospect.updateMany({
             where: guard,
             data: { ...success, emailSentAt: sentAt },
@@ -763,6 +828,9 @@ async function runOutreach(
             where: guard,
             data: { ...success, emailSentAt: sentAt, ...unconfirmed },
           });
+          // Сервер молчит: дальше в этом проходе не пишем, иначе «не подтверждено» получит вся
+          // пачка, а писем не уйдёт ни одного.
+          stopMail(DELIVERY_UNKNOWN);
         } else {
           // Письмо точно не ушло: захват снимается.
           usedEmails.delete(mailKey);
@@ -785,12 +853,14 @@ async function runOutreach(
             active.email = false;
           } else {
             result.errors += 1;
+            mailFailures += 1;
+            if (mailFailures >= MAIL_FAILURES_STOP) stopMail(sent.reason);
           }
         }
       }
     }
 
-    if (toWhatsApp) {
+    if (toWhatsApp && active.whatsapp) {
       const claim = await db.prospect.updateMany({
         where: { ...guard, whatsappSentAt: null },
         data: { whatsappSentAt: sentAt },
@@ -850,17 +920,10 @@ async function runOutreach(
   }
 
   // Напоминания (S8): одно письмо тем, кому писали 4–14 дней назад и кто не ответил;
-  // в остатке дневного лимита писем и бюджета времени. Только через «письма дня» (К4): ответы на
-  // почту офис не читает, и крон в режиме 'auto' не напомнит тому, кто уже ответил «стоп» письмом.
-  if (
-    (mode === 'send' && (!only || !channels.email || result.mail === 'no-smtp')) ||
-    emailLeft <= 0 ||
-    outOfTime()
-  ) {
-    return done();
-  }
-  const due = await dropOptedOut(
-    await db.prospect.findMany({
+  // в остатке дневного лимита писем и бюджета времени. Только по кнопке владельца (К4): ответы на
+  // почту офис не читает, и сам он не напомнит тому, кто уже ответил «стоп» письмом.
+  const followUpsDue = () =>
+    db.prospect.findMany({
       where: {
         status: { in: [...FOLLOW_UP_STATUSES] },
         emailSentAt: followUpWindow(now),
@@ -871,9 +934,18 @@ async function runOutreach(
       },
       orderBy: { emailSentAt: 'asc' },
       take: OUTREACH_BATCH,
-    }),
-    FOLLOW_UP_STATUSES,
-  );
+    });
+  if (auto) {
+    // Сколько напоминаний ждёт кнопки — в сводку владельцу: сам офис их не отправит.
+    if (channels.email) {
+      const waiting = await followUpsDue();
+      if (waiting.length > 0) result.followUpsWaiting = waiting.length;
+    }
+    return done();
+  }
+  if (mode === 'send' && (!channels.email || result.mail)) return done();
+  if (emailLeft <= 0 || outOfTime()) return done();
+  const due = await dropOptedOut(await followUpsDue(), FOLLOW_UP_STATUSES);
   for (const row of due) {
     if (emailLeft <= 0 || outOfTime()) break;
     if (mode === 'send' && timeLeft() < SEND_TIMEOUT_MS) break;
@@ -903,6 +975,8 @@ async function runOutreach(
     // Запись — только пока кандидат ещё CONTACTED: «Согласился»/«стоп» за время прохода не
     // перетираются. Захват до отправки — как у первого письма: напоминание уходит один раз.
     const guard = { id: row.id, status: { in: [...FOLLOW_UP_STATUSES] } };
+    if (!active.email && result.mail) break;
+    if (!(await mailReady())) break;
     const stamp = new Date();
     const claim = await db.prospect.updateMany({
       where: { ...guard, followUpSentAt: null },
@@ -912,6 +986,7 @@ async function runOutreach(
     const sent = await deliverEmail(email, to, letter, settings.replyTo, links);
     if (sent.ok) {
       emailLeft -= 1;
+      mailFailures = 0;
       result.followUps = (result.followUps ?? 0) + 1;
       await db.prospect.updateMany({
         where: guard,
@@ -927,6 +1002,8 @@ async function runOutreach(
           outreachErrorAt: new Date(),
         },
       });
+      stopMail(DELIVERY_UNKNOWN);
+      break;
     } else {
       const noSmtp = sent.reason === 'no-smtp';
       await db.prospect.updateMany({
@@ -946,6 +1023,11 @@ async function runOutreach(
         break;
       }
       result.errors += 1;
+      mailFailures += 1;
+      if (mailFailures >= MAIL_FAILURES_STOP) {
+        stopMail(sent.reason);
+        break;
+      }
     }
   }
   return done();
@@ -984,7 +1066,47 @@ export async function sendOutreach(now: Date, deps: OutreachDeps = {}): Promise<
     if (result.skipped) return result;
     return { ...result, skipped: 'approve', waiting: items.length };
   }
-  return (await runOutreach(now, deps, 'send', settings)).result;
+  // Один проход отправки за раз: два тика на стыке десятиминутного замка тика, дневной крон
+  // Vercel или кнопка «Отправить» во время тика иначе оба взяли бы одну пачку — вдвое больше
+  // дневного лимита и по письму двум строкам с одной почтой.
+  const release = await (deps.lock ?? defaultSendLock)(now);
+  if (!release) return { email: 0, whatsapp: 0, followUps: 0, skipped: 'busy', errors: 0 };
+  try {
+    return (await runOutreach(now, deps, 'send', settings)).result;
+  } finally {
+    await release().catch((error: unknown) => {
+      console.error('[office] send lock release failed', error);
+    });
+  }
+}
+
+const SEND_LOCK_KEY = 'lock:office-send';
+/** Замок старше этого остался от прохода, который убили (функция живёт не дольше 60 с). */
+export const SEND_LOCK_STALE_MS = 150_000;
+
+/** Замок отправки в AdminFeedRead (уникальный ключ): снятый сразу после прохода. */
+async function defaultSendLock(now: Date): Promise<(() => Promise<void>) | null> {
+  const release = async () => {
+    await prisma.adminFeedRead.deleteMany({ where: { key: SEND_LOCK_KEY } });
+  };
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      await prisma.adminFeedRead.create({ data: { key: SEND_LOCK_KEY } });
+      return release;
+    } catch (error) {
+      if ((error as { code?: string }).code !== 'P2002') throw error;
+      const row = await prisma.adminFeedRead.findUnique({
+        where: { key: SEND_LOCK_KEY },
+        select: { readAt: true },
+      });
+      if (row && now.getTime() - row.readAt.getTime() < SEND_LOCK_STALE_MS) return null;
+      // Замок остался от убитого прохода (или его только что сняли) — убираем и пробуем ещё раз.
+      await prisma.adminFeedRead.deleteMany({
+        where: { key: SEND_LOCK_KEY, ...(row ? { readAt: row.readAt } : {}) },
+      });
+    }
+  }
+  return null;
 }
 
 /**
@@ -1004,7 +1126,8 @@ export async function planOutreach(now: Date, deps: OutreachDeps = {}): Promise<
   return {
     items,
     skipped: result.skipped,
-    ...(result.mail ? { mail: result.mail } : {}),
+    // В режиме 'plan' ящик не проверяется: здесь бывает только «не настроен».
+    ...(result.mail === 'no-smtp' ? { mail: 'no-smtp' as const } : {}),
     ...(result.optedOut ? { optedOut: result.optedOut } : {}),
   };
 }
