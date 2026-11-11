@@ -1,0 +1,137 @@
+/* «3D-город» (owner, 2026-11-10): the film look and the show around the picture.
+   Own file, own class names (w3d-*): the global show effects live in motion.css. */
+
+/* Vignette and a warm glow at the bottom edge: the frame reads like film. */
+.w3d-vignette {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse at 50% 46%, rgba(0, 0, 0, 0) 55%, rgba(8, 10, 28, 0.42) 100%),
+    linear-gradient(to top, rgba(255, 140, 40, 0.1), rgba(255, 140, 40, 0) 28%);
+}
+
+/* Letterbox bars of the walk: top and bottom, never over the controls. */
+.w3d-bars::before,
+.w3d-bars::after {
+  content: '';
+  pointer-events: none;
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 7%;
+  background: linear-gradient(to bottom, rgba(5, 8, 20, 0.72), rgba(5, 8, 20, 0));
+  z-index: 1;
+}
+.w3d-bars::before {
+  top: 0;
+}
+.w3d-bars::after {
+  bottom: 0;
+  transform: scaleY(-1);
+}
+
+/* The invitation: a gradient that shimmers, a pulsing halo, a bobbing arrow. */
+.w3d-invite {
+  position: relative;
+  isolation: isolate;
+  background-image: linear-gradient(100deg, #f59e0b 0%, #fbbf24 35%, #f97316 70%, #f59e0b 100%);
+  background-size: 220% 100%;
+  box-shadow:
+    0 10px 30px -8px rgba(245, 158, 11, 0.7),
+    inset 0 1px 0 rgba(255, 255, 255, 0.55);
+}
+.w3d-invite::before {
+  content: '';
+  position: absolute;
+  inset: -6px;
+  z-index: -1;
+  border-radius: inherit;
+  border: 2px solid rgba(251, 191, 36, 0.75);
+  opacity: 0;
+}
+.w3d-invite-arrow {
+  display: inline-block;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .w3d-invite {
+    animation: w3d-shine 3.4s linear infinite;
+  }
+  .w3d-invite::before {
+    animation: w3d-halo 2s ease-out infinite;
+  }
+  .w3d-invite-arrow {
+    animation: w3d-nudge 1.2s ease-in-out infinite;
+  }
+  .w3d-float {
+    animation: w3d-float 3.2s ease-in-out infinite;
+  }
+  .w3d-hint {
+    animation: w3d-hint 6s ease-out forwards;
+  }
+  .w3d-card {
+    animation: w3d-card 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  }
+  .w3d-poster-pan {
+    transition:
+      transform 1.8s cubic-bezier(0.45, 0, 0.2, 1),
+      opacity 0.7s;
+  }
+}
+
+@keyframes w3d-shine {
+  from {
+    background-position: 0% 0;
+  }
+  to {
+    background-position: 220% 0;
+  }
+}
+@keyframes w3d-halo {
+  0% {
+    opacity: 0.9;
+    transform: scale(0.96);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.16, 1.5);
+  }
+}
+@keyframes w3d-nudge {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  50% {
+    transform: translateX(5px);
+  }
+}
+@keyframes w3d-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-4px);
+  }
+}
+@keyframes w3d-hint {
+  0%,
+  70% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+@keyframes w3d-card {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
