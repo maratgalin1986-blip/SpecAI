@@ -140,16 +140,35 @@ export function categoryPlural(name: string): string {
   return CATEGORY_PLURAL.find(([pattern]) => pattern.test(name))?.[1] ?? name.toLowerCase();
 }
 
-/** «12 машин: экскаваторы, краны, самосвалы» (up to three kinds). */
+/**
+ * «12 машин: экскаваторы, краны, самосвалы и ещё 2 вида». `categories` — one
+ * name per machine: the three kinds the company has most of are named (ties in
+ * the order given), the rest are counted, so the line does not look like a
+ * random pick.
+ */
 export function fleetSummary(count: number, categories: readonly string[]): string {
   if (count === 0) return 'Техника пока не добавлена';
-  const kinds = [...new Set(categories.map(categoryPlural))].slice(0, 3);
+  const perKind = new Map<string, number>();
+  for (const name of categories) {
+    const kind = categoryPlural(name);
+    perKind.set(kind, (perKind.get(kind) ?? 0) + 1);
+  }
+  // Array.prototype.sort is stable: equal counts keep the order given.
+  const kinds = [...perKind.entries()].sort((a, b) => b[1] - a[1]).map(([kind]) => kind);
   const head = pluralizeRu(count, ['машина', 'машины', 'машин']);
-  return kinds.length ? `${head}: ${kinds.join(', ')}` : head;
+  if (kinds.length === 0) return head;
+  const rest = kinds.length - 3;
+  const more = rest > 0 ? ` и ещё ${pluralizeRu(rest, ['вид', 'вида', 'видов'])}` : '';
+  return `${head}: ${kinds.slice(0, 3).join(', ')}${more}`;
 }
 
 export function radiusLabel(km: number): string {
   return km > 0 ? `Выезд до ${Math.round(km)} км` : 'Выезд по договорённости';
+}
+
+/** The same without the word «Выезд», for a cell already titled «Выезд»: «до 100 км». */
+export function radiusValue(km: number): string {
+  return km > 0 ? `до ${Math.round(km)} км` : 'по договорённости';
 }
 
 const MONTHS_GENITIVE = [
@@ -205,7 +224,10 @@ export function toProviderCard(
     badges: trust.badges,
     city: cityOf(row.baseAddress, row.location?.city, options.fallbackCity),
     fleetCount: row.equipment.length,
-    fleetSummary: fleetSummary(row.equipment.length, categories),
+    fleetSummary: fleetSummary(
+      row.equipment.length,
+      row.equipment.map((item) => item.category.name),
+    ),
     categories,
     groupIds,
     photos,
@@ -256,6 +278,25 @@ export function sortProviderCards(
       by[sort](a, b) ||
       a.name.localeCompare(b.name, 'ru'),
   );
+}
+
+/** The default order while nobody has a review: what the «rating» sort then really does. */
+export const PROVIDER_SORT_NO_RATINGS_LABEL = 'Сначала проверенные';
+
+/**
+ * The options of the «Сортировка» select. «По рейтингу» is offered only when
+ * at least one listed company has a rating; until then the same default order
+ * (house fleet, verified, by name) is called what it is.
+ */
+export function providerSortOptions(
+  cards: readonly Pick<ProviderCard, 'rating'>[],
+): { sort: ProviderSort; label: string }[] {
+  const rated = cards.some((card) => card.rating !== null);
+  return PROVIDER_SORT.map((sort) => ({
+    sort,
+    label:
+      sort === 'rating' && !rated ? PROVIDER_SORT_NO_RATINGS_LABEL : PROVIDER_SORT_LABELS[sort],
+  }));
 }
 
 /** The card of a company whose city is unknown (never shown as a city in the filter). */

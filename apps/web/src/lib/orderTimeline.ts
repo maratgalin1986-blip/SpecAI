@@ -91,7 +91,7 @@ export function orderTimeline(input: TimelineInput, orderId = ''): Timeline {
           };
   } else if (last === 1) {
     next = {
-      text: `Предложений: ${input.bidCount}. Сравните цену, рейтинг и надёжность — и выберите исполнителя.`,
+      text: `Предложений: ${input.bidCount}. Сравните цену, машину и отметки надёжности — и выберите исполнителя.`,
       action: { label: 'К предложениям', href: orderId ? `/orders/${orderId}#offers` : '#offers' },
     };
   } else if (input.orderStatus === 'PENDING_REVIEW') {
