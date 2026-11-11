@@ -5,6 +5,7 @@ import { CinemaClicks } from '@/components/CinemaClicks';
 import { CinemaDolly } from '@/components/CinemaDolly';
 import { CinemaFx } from '@/components/CinemaFx';
 import { CinemaParticles } from '@/components/CinemaParticles';
+import { ShowRuntime } from '@/components/ShowRuntime';
 import { SoundDirector } from '@/components/SoundDirector';
 import { usePlatformEffects } from '@/components/usePlatformEffects';
 
@@ -21,6 +22,7 @@ export function CinemaEffects({ sound = true }: { sound?: boolean }) {
       <CinemaDolly />
       <CinemaFx />
       <CinemaParticles />
+      <ShowRuntime />
       {sound && <SoundDirector />}
     </>
   );

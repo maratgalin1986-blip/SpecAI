@@ -34,7 +34,7 @@ main { max-width: none !important; padding: 0 0 16px !important; }`}</style>
       ) : (
         <>
           {!embed && (
-            <header className="flex flex-col gap-2">
+            <header className="show-seq flex flex-col gap-2">
               <p className="eyebrow text-amber-700">Карта · вся Россия</p>
               <h1 className="text-3xl font-extrabold tracking-tight sm:text-4xl">
                 Где нужна техника?

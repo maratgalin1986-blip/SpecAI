@@ -124,11 +124,25 @@ const PATHS = {
 
 export type IconName = keyof typeof PATHS;
 
-export function Icon({ name, className = 'h-6 w-6' }: { name: IconName; className?: string }) {
+const MACHINE_ICONS = ['excavator', 'crane', 'loader', 'tractor', 'lift', 'roller'] as const;
+
+// `live`: a machine icon that works when its card is revealed or hovered
+// (app/show.css, .icon-live-<kind>): the excavator digs, the crane swings, the
+// loader drives. Pure CSS on the whole icon, transform only.
+export function Icon({
+  name,
+  className = 'h-6 w-6',
+  live = false,
+}: {
+  name: IconName;
+  className?: string;
+  live?: boolean;
+}) {
+  const kind = (MACHINE_ICONS as readonly string[]).includes(name) ? name : 'other';
   return (
     <svg
       viewBox="0 0 24 24"
-      className={className}
+      className={live ? `${className} icon-live icon-live-${kind}` : className}
       fill="none"
       stroke="currentColor"
       strokeWidth={1.6}

@@ -1,12 +1,14 @@
-import { abVariant } from './ab';
+import { readShowSignals, showLevel } from './showGate';
 
 // Shared guards for the extra «cinema» effect layers (dolly, particles, titles).
 
-/** False for reduced motion and for the A/B group «calm». */
+/**
+ * False for reduced motion, the A/B group «calm», data saver, a slow network and
+ * a weak phone: they get the calm site (lib/showGate.ts, one decision for all).
+ */
 export function fxAllowed(): boolean {
   if (typeof window === 'undefined') return false;
-  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return false;
-  return abVariant() !== 'calm';
+  return showLevel(readShowSignals()) === 'full';
 }
 
 export function saveDataOn(): boolean {

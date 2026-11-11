@@ -19,7 +19,7 @@ function topLevelKeyframes(css: string): string[] {
 describe('globals.css', () => {
   it('has no two top-level keyframes with the same name', () => {
     // motion.css is loaded right after globals.css: one namespace.
-    const css = ['./globals.css', './motion.css']
+    const css = ['./globals.css', './motion.css', './show.css']
       .map((file) => readFileSync(fileURLToPath(new URL(file, import.meta.url)), 'utf8'))
       .join('\n');
     const names = topLevelKeyframes(css.replace(/\/\*[\s\S]*?\*\//g, ''));

@@ -10,6 +10,7 @@ import {
 } from '@/lib/priceIndex';
 import { loadPriceIndex } from '@/lib/priceIndexData';
 import { PRICE_SURVEY_PATH, PRICE_SURVEY_TITLE } from '@/lib/priceReports';
+import { ShowOrbs } from '@/components/ShowOrbs';
 import { SITE } from '@/lib/site';
 
 // As the city pages: a page built while the database was unreachable does not stay long.
@@ -55,7 +56,8 @@ export default async function PricesPage() {
 
   return (
     <article className="mx-auto flex max-w-4xl flex-col gap-8 py-6 text-slate-700">
-      <header className="flex flex-col gap-3">
+      <header className="show-stage show-seq flex flex-col gap-3">
+        <ShowOrbs />
         <p className="cab-eyebrow">Цены на рынке</p>
         <h1 className="text-2xl font-extrabold tracking-tight text-slate-900 sm:text-3xl">
           {TITLE}
@@ -118,7 +120,7 @@ export default async function PricesPage() {
               </h2>
               <ul className="grid gap-3 sm:grid-cols-2">
                 {level.places.map((place) => (
-                  <li key={place.place} className="cab-card flex flex-col gap-2">
+                  <li key={place.place} className="cab-card show-card flex flex-col gap-2">
                     <p className="font-semibold text-slate-900">{place.place}</p>
                     <ul className="flex flex-col gap-1 text-sm">
                       {place.cells.map(({ slug, cell }) => (

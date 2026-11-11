@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useRef, useState } from 'react';
 import { Button } from '@specai/ui';
+import dynamic from 'next/dynamic';
 import { AutoCategoryNote, useAutoCategory } from '@/components/AutoCategory';
 import { CategorySelect, type SelectableCategory } from '@/components/CategorySelect';
 import { ConsentText } from '@/components/ConsentText';
@@ -14,6 +15,11 @@ import { onOrderPrefill, withPrefillLine } from '@/lib/orderPrefillEvent';
 import { SITE } from '@/lib/site';
 import { PromiseNote } from '@/components/PromiseNote';
 import type { OrderPrefill } from '@/lib/quickOrder';
+
+// The celebration is only needed once the заявка is sent: its own small chunk.
+const Celebrate = dynamic(() => import('@/components/Celebrate').then((m) => m.Celebrate), {
+  ssr: false,
+});
 
 /** Today's date in Moscow as YYYY-MM-DD, the earliest allowed order date. */
 function todayInMoscow() {
@@ -143,8 +149,9 @@ export function GuestOrderForm({
         role="status"
         tabIndex={-1}
         data-guest-order-done
-        className="flex scroll-mt-24 flex-col gap-2 rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-900 outline-none"
+        className="show-glow flex scroll-mt-24 flex-col gap-2 rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-900 outline-none"
       >
+        <Celebrate />
         <p className="font-semibold">Заявка принята</p>
         <p>{done}</p>
         <p className="text-xs text-green-800">

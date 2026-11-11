@@ -1,0 +1,446 @@
+/* ---- The «show» layer ------------------------------------------------------
+   Owner, 2026-11-10: «Кругом должно быть шоу и эффекты». Reusable pieces on top
+   of motion.css, with the same durations and easings (--motion-*).
+
+   The level lives on <html data-show="full|calm|off"> (lib/showGate.ts, set by
+   the inline script before the first paint and kept by components/ShowRuntime):
+     full — everything below;
+     calm — entrances, press feedback, small confetti; no loops, no parallax;
+     off  — prefers-reduced-motion: nothing moves.
+   The attribute is absent on cabinets, the admin, legal pages and the office's
+   client pages, so none of these rules reach them.
+
+   Rules of the house: only transform and opacity move; nothing is hidden
+   without the attribute (no script, no hidden text); the phone, the order
+   buttons and the form fields are never delayed or hidden (they carry no
+   entrance classes); no blur and no 3D layer under text.
+
+   Classes:
+     .show-seq        a block whose children rise one after another at load
+                      (hero heading, eyebrow, lede). Not for buttons or fields.
+     .show-cta        a main button: light sweep on hover, sinks when pressed
+                      (also .cab-action); magnetic on desktop (ShowRuntime).
+     .show-card       a card that rises under the mouse, sinks under the finger.
+     .show-stage      a section with decor: keeps the decor under the text;
+                      put <ShowOrbs/> inside.
+     .show-orb        a soft glow; data-parallax="0.1" makes it drift on scroll.
+     .live-dot        a green dot with a ripple, only beside a REAL number; size
+                      and colour from Tailwind (h-2 w-2 rounded-full bg-emerald-500).
+     <Icon live>      the machine icon works when its card is revealed or hovered.
+     <Celebrate/>     confetti for a finished action (LeadSuccess).
+     .show-progress   the scroll line at the top (rendered by ShowRuntime). */
+
+:root {
+  --show-rise: 18px;
+  --show-amber: #f59e0b;
+  --show-orange: #ea580c;
+}
+html[data-show='calm'] {
+  --show-rise: 8px;
+  --motion-stagger: 0ms;
+}
+
+/* ---- Entrance choreography --------------------------------------------- */
+/* Buttons, links and fields are never part of the sequence: a child that holds
+   one (the row of buttons) stays put from the first frame. */
+html[data-show='full']
+  .show-seq
+  > :not(:has(a, button, input, select, textarea, form), a, button, form),
+html[data-show='calm']
+  .show-seq
+  > :not(:has(a, button, input, select, textarea, form), a, button, form) {
+  animation: show-rise var(--motion-slow) var(--motion-ease-out) both;
+  animation-delay: calc(150ms + var(--i, 0) * var(--motion-stagger));
+}
+html[data-show='calm']
+  .show-seq
+  > :not(:has(a, button, input, select, textarea, form), a, button, form) {
+  animation-duration: var(--motion-base);
+}
+.show-seq > :nth-child(1) {
+  --i: 0;
+}
+.show-seq > :nth-child(2) {
+  --i: 1;
+}
+.show-seq > :nth-child(3) {
+  --i: 2;
+}
+.show-seq > :nth-child(4) {
+  --i: 3;
+}
+.show-seq > :nth-child(5) {
+  --i: 4;
+}
+.show-seq > :nth-child(n + 6) {
+  --i: 5;
+}
+@keyframes show-rise {
+  from {
+    opacity: 0;
+    transform: translate3d(0, var(--show-rise), 0);
+  }
+}
+
+/* ---- Main buttons: light sweep, press ----------------------------------- */
+html[data-show='full'] :is(.show-cta, .cab-action) {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+html[data-show='full'] :is(.show-cta, .cab-action)::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: linear-gradient(
+    110deg,
+    transparent 35%,
+    rgba(255, 255, 255, 0.55) 50%,
+    transparent 65%
+  );
+  transform: translateX(-120%);
+  pointer-events: none;
+}
+html[data-show='full']
+  :is(.show-cta, .cab-action):not(:disabled):is(:hover, :focus-visible)::before {
+  animation: show-sweep 800ms var(--motion-ease-out) both;
+}
+@keyframes show-sweep {
+  to {
+    transform: translateX(120%);
+  }
+}
+html[data-show='full'] :is(.show-cta, .cab-action):active,
+html[data-show='calm'] :is(.show-cta, .cab-action):active {
+  transform: scale(0.97);
+}
+/* The magnetic pull (ShowRuntime) uses the separate `translate` property, so it
+   never fights the press or a card's own transform. */
+html[data-show='full'] [data-magnet='on'] {
+  will-change: translate;
+}
+
+/* ---- Cards -------------------------------------------------------------- */
+html[data-show='full'] .show-card,
+html[data-show='calm'] .show-card {
+  transition:
+    transform var(--motion-base) var(--motion-ease-out),
+    border-color var(--motion-base),
+    box-shadow var(--motion-base);
+}
+@media (hover: hover) and (pointer: fine) {
+  html[data-show='full'] .show-card:hover {
+    transform: translate3d(0, -4px, 0);
+    border-color: rgb(251 191 36);
+    box-shadow: 0 18px 40px -20px rgba(217, 119, 6, 0.4);
+  }
+}
+html[data-show='full'] .show-card:active,
+html[data-show='calm'] .show-card:active {
+  transform: scale(0.985);
+  transition-duration: var(--motion-fast);
+}
+
+/* ---- Depth: decor behind the text --------------------------------------- */
+.show-stage {
+  position: relative;
+  isolation: isolate;
+}
+.show-orb {
+  display: none;
+  position: absolute;
+  z-index: -1;
+  /* Wholly inside the section sideways, so no edge is ever cut; it drifts only
+     up and down. */
+  width: min(22rem, 78%);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(245, 158, 11, 0.28), rgba(245, 158, 11, 0));
+  pointer-events: none;
+}
+.show-orb-a {
+  top: -5rem;
+  left: 0;
+}
+.show-orb-b {
+  bottom: -6rem;
+  right: 0;
+}
+.show-orb-cool {
+  background: radial-gradient(closest-side, rgba(56, 189, 248, 0.18), rgba(56, 189, 248, 0));
+}
+html[data-show='full'] .show-orb,
+html[data-show='calm'] .show-orb {
+  display: block;
+}
+html[data-show='full'] .show-orb {
+  translate: 0 var(--py, 0px);
+  will-change: translate, transform, opacity;
+  animation: show-breathe 9s var(--motion-ease-in-out) infinite;
+}
+html[data-show='full'] .show-stage[data-live='0'] .show-orb {
+  animation-play-state: paused;
+}
+@keyframes show-breathe {
+  0%,
+  100% {
+    opacity: 0.75;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.08);
+  }
+}
+
+/* ---- A live number: a dot with a ripple --------------------------------- */
+.live-dot {
+  position: relative;
+  display: inline-block;
+  border-radius: 50%;
+  vertical-align: middle;
+}
+html[data-show='full'] .live-dot::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: #22c55e;
+  animation: show-ripple 2s var(--motion-ease-out) infinite;
+}
+html[data-show='full'] [data-offscreen] .live-dot::after {
+  animation-play-state: paused;
+}
+@keyframes show-ripple {
+  from {
+    opacity: 0.6;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(3.2);
+  }
+}
+
+/* ---- Machine icons that work when their card is revealed or hovered ----- */
+.icon-live {
+  transform-origin: 50% 85%;
+}
+html[data-show='full']
+  :is(.reveal-visible, .group:hover, .show-card:hover, a:hover, a:focus-visible)
+  .icon-live-excavator,
+html[data-show='calm'] .reveal-visible .icon-live-excavator {
+  animation: show-dig 1.6s var(--motion-ease-in-out) 0.3s 2 both;
+}
+html[data-show='full']
+  :is(.reveal-visible, .group:hover, .show-card:hover, a:hover, a:focus-visible)
+  .icon-live-crane,
+html[data-show='calm'] .reveal-visible .icon-live-crane {
+  transform-origin: 25% 90%;
+  animation: show-swing 2.2s var(--motion-ease-in-out) 0.3s 2 both;
+}
+html[data-show='full']
+  :is(.reveal-visible, .group:hover, .show-card:hover, a:hover, a:focus-visible)
+  .icon-live-loader,
+html[data-show='full']
+  :is(.reveal-visible, .group:hover, .show-card:hover, a:hover, a:focus-visible)
+  .icon-live-tractor,
+html[data-show='full']
+  :is(.reveal-visible, .group:hover, .show-card:hover, a:hover, a:focus-visible)
+  .icon-live-roller,
+html[data-show='calm']
+  .reveal-visible
+  :is(.icon-live-loader, .icon-live-tractor, .icon-live-roller) {
+  animation: show-drive 1.4s var(--motion-ease-in-out) 0.3s 2 both;
+}
+html[data-show='full']
+  :is(.reveal-visible, .group:hover, .show-card:hover, a:hover, a:focus-visible)
+  .icon-live-lift,
+html[data-show='calm'] .reveal-visible .icon-live-lift {
+  animation: show-rise-lift 1.6s var(--motion-ease-in-out) 0.3s 2 both;
+}
+html[data-show='full']
+  :is(.reveal-visible, .group:hover, .show-card:hover, a:hover, a:focus-visible)
+  .icon-live-other {
+  animation: show-pop 900ms var(--motion-ease-out) 0.3s 1 both;
+}
+@keyframes show-dig {
+  0%,
+  100% {
+    transform: rotate(0);
+  }
+  35% {
+    transform: rotate(-7deg);
+  }
+  70% {
+    transform: rotate(4deg);
+  }
+}
+@keyframes show-swing {
+  0%,
+  100% {
+    transform: rotate(0);
+  }
+  40% {
+    transform: rotate(-6deg);
+  }
+  75% {
+    transform: rotate(5deg);
+  }
+}
+@keyframes show-drive {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
+  30% {
+    transform: translate3d(3px, -1px, 0);
+  }
+  60% {
+    transform: translate3d(-2px, 0, 0);
+  }
+}
+@keyframes show-rise-lift {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
+  50% {
+    transform: translate3d(0, -3px, 0);
+  }
+}
+@keyframes show-pop {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(1.18);
+  }
+}
+
+/* ---- Scroll progress ----------------------------------------------------- */
+.show-progress {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  z-index: 80;
+  pointer-events: none;
+}
+.show-progress > i {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, var(--show-amber), var(--show-orange));
+  transform: scaleX(0);
+  transform-origin: left;
+}
+html:not([data-show]) .show-progress,
+html[data-show='off'] .show-progress {
+  display: none;
+}
+
+/* ---- Celebration (components/Celebrate.tsx) ------------------------------ */
+.show-confetti {
+  position: fixed;
+  left: 50%;
+  top: 38%;
+  width: 0;
+  height: 0;
+  z-index: 70;
+  pointer-events: none;
+}
+.show-confetti > i {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 0.55rem;
+  height: 0.9rem;
+  border-radius: 1px;
+  background: var(--c, var(--show-amber));
+  opacity: 0;
+  animation: show-confetti var(--t, 1800ms) cubic-bezier(0.2, 0.7, 0.3, 1) var(--d, 0ms) both;
+}
+.show-confetti > i:nth-child(4n + 1) {
+  --c: #f59e0b;
+}
+.show-confetti > i:nth-child(4n + 2) {
+  --c: #ea580c;
+}
+.show-confetti > i:nth-child(4n + 3) {
+  --c: #ffffff;
+}
+.show-confetti > i:nth-child(4n) {
+  --c: #34d399;
+}
+.show-confetti > i:nth-child(3n) {
+  width: 0.4rem;
+  height: 0.4rem;
+  border-radius: 50%;
+}
+@keyframes show-confetti {
+  0% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) rotate(0deg);
+  }
+  30% {
+    opacity: 1;
+    transform: translate3d(calc(var(--dx) * 0.75), var(--up), 0) rotate(calc(var(--r) * 0.4));
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(var(--dx), var(--fall), 0) rotate(var(--r));
+  }
+}
+/* «Принято»: the card itself gives one soft pulse of light. */
+.show-glow {
+  position: relative;
+}
+html[data-show='full'] .show-glow::after,
+html[data-show='calm'] .show-glow::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: inset 0 0 0 2px rgba(245, 158, 11, 0.7);
+  opacity: 0;
+  pointer-events: none;
+  animation: show-glow 1.4s var(--motion-ease-out) 0.2s 1 both;
+}
+@keyframes show-glow {
+  0% {
+    opacity: 0;
+  }
+  25% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .show-seq > *,
+  .show-cta::before,
+  .cab-action::before,
+  .show-orb,
+  .live-dot::after,
+  .icon-live,
+  .show-confetti > i,
+  .show-glow::after {
+    animation: none !important;
+  }
+  .show-confetti {
+    display: none;
+  }
+  .show-card,
+  .show-card:hover,
+  .show-card:active,
+  .show-cta:active,
+  .cab-action:active {
+    transform: none !important;
+    transition: none !important;
+  }
+}

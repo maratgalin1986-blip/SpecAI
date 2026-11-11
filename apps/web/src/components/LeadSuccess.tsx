@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import dynamic from 'next/dynamic';
 import { Icon } from '@/components/Icon';
 import { WhatsAppIcon } from '@/components/MessengerButtons';
 import { PhotoShare } from '@/components/PhotoShare';
@@ -12,6 +13,11 @@ import {
 } from '@/lib/installHint';
 import { isOnShift, nextShiftText, SITE } from '@/lib/site';
 import { TelegramButton } from '@/components/TelegramButton';
+
+// The celebration is only needed once the заявка is sent: its own small chunk.
+const Celebrate = dynamic(() => import('@/components/Celebrate').then((m) => m.Celebrate), {
+  ssr: false,
+});
 
 // «Принято»: the screen after a lead is sent. A stamp lands once, the text
 // says honestly when we call back, and the next step is right there.
@@ -44,10 +50,11 @@ export function LeadSuccess({ dark = false, summary }: { dark?: boolean; summary
       ref={ref}
       tabIndex={-1}
       role="status"
-      className={`relative scroll-mt-28 overflow-hidden rounded-2xl p-6 outline-none ${
+      className={`show-glow relative scroll-mt-28 overflow-hidden rounded-2xl p-6 outline-none ${
         dark ? 'bg-slate-900 text-white ring-1 ring-white/10' : 'bg-slate-950 text-white'
       }`}
     >
+      <Celebrate />
       <div className="hud-corners pointer-events-none absolute inset-3" aria-hidden />
       <div className="stamp w-fit" aria-hidden>
         Принято
@@ -55,8 +62,8 @@ export function LeadSuccess({ dark = false, summary }: { dark?: boolean; summary
       <h2 className="mt-4 text-lg font-semibold">Заявка у диспетчера {SITE.name}</h2>
       <p className="mt-1 text-sm text-white/70">
         {onShift === false
-          ? `Сейчас нерабочее время — перезвоним ${nextShift}.`
-          : 'Перезвоним в течение 15 минут и назовём цену.'}{' '}
+          ? `Сейчас нерабочее время — Иван перезвонит ${nextShift}.`
+          : 'Иван перезвонит в течение 15 минут и назовёт цену.'}{' '}
         Не хотите ждать — позвоните или напишите сами.
       </p>
       <div className="mt-4 flex flex-wrap gap-2">
