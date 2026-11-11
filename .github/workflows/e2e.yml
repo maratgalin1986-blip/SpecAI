@@ -36,7 +36,14 @@ jobs:
         run: |
           PW="$RUNNER_TEMP/pw"
           npm install --no-save --no-package-lock --prefix "$PW" playwright@1.56.1
-          "$PW/node_modules/.bin/playwright" install --with-deps chromium
+          "$PW/node_modules/.bin/playwright" install chromium
+          # The system libraries come from apt, and the runner's apt mirrors fail at times
+          # (2026-11-11: «Installation process exited with code: 100» on every branch).
+          # The ubuntu-24.04 image already carries what headless Chromium needs, so a failed
+          # apt step is retried once and then only warned about: the tests decide.
+          "$PW/node_modules/.bin/playwright" install-deps chromium \
+            || { sleep 30; "$PW/node_modules/.bin/playwright" install-deps chromium; } \
+            || echo "::warning::playwright install-deps failed twice, running with the image's libraries"
       - name: Smoke test
         working-directory: apps/web
         run: |
