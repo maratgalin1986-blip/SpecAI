@@ -99,11 +99,45 @@ export interface DigestInput {
   hot?: ProspectLite[];
   /** Писем дня ждут кнопки «Отправить» на /admin/office/pisma (К2). */
   outboxWaiting?: number;
+  /** Что с отправкой писем: строки от тика (ящик не подключён, ошибки, напоминания ждут). */
+  outreachNotes?: string[];
 }
 
 /** То, что тик знает сам и передаёт в сводку (К2: сколько писем дня ждут владельца). */
 export interface DigestExtra {
   outboxWaiting?: number;
+  outreachNotes?: string[];
+}
+
+/**
+ * Строки сводки об отправке писем (урок 40: звено само говорит, что стоит). `base` — адрес
+ * площадки для ссылки на «Письма дня».
+ */
+export function outreachNotes(
+  outreach: {
+    mail?: 'no-smtp' | 'broken';
+    mailError?: string;
+    errors: number;
+    followUpsWaiting?: number;
+  },
+  base: string,
+): string[] {
+  const notes: string[] = [];
+  if (outreach.mail === 'no-smtp') {
+    notes.push('Письма не уходят: почтовый ящик офиса не подключён (нет пароля ящика в Vercel).');
+  } else if (outreach.mail === 'broken') {
+    notes.push(
+      `Письма не уходят: ящик отвечает ошибкой${outreach.mailError ? ` «${outreach.mailError}»` : ''}. Проверьте пароль приложения.`,
+    );
+  }
+  if (outreach.errors > 0)
+    notes.push(`Не ушло писем: ${outreach.errors} — причина в карточке фирмы.`);
+  if (outreach.followUpsWaiting && outreach.followUpsWaiting > 0) {
+    notes.push(
+      `Напоминания ждут вашего «Отправить»: ${outreach.followUpsWaiting} — ${base.replace(/\/+$/, '')}/admin/office/pisma`,
+    );
+  }
+  return notes;
 }
 
 /** Строка сводки о письмах дня (К2). */
@@ -175,8 +209,10 @@ export function buildDigest(input: DigestInput): string {
   const billing = billingLine(input.billing, base);
   const hot = input.hot ?? [];
   const outbox = outboxLine(input.outboxWaiting, base);
+  const notes = input.outreachNotes ?? [];
   const quiet =
     !outbox &&
+    notes.length === 0 &&
     created === 0 &&
     input.toContact.length === 0 &&
     input.replied.length === 0 &&
@@ -231,6 +267,7 @@ export function buildDigest(input: DigestInput): string {
     out.push(`Лучший заход: ${b.title} (ответили ${b.replied} из ${b.sent})`);
   }
   if (outbox) out.push(outbox);
+  out.push(...notes);
   out.push(`Открыть офис: ${base}/admin/office`);
   return out.join('\n');
 }
@@ -469,6 +506,7 @@ export async function collectDigest(
     billing: { expiring, overdue },
     hot: lite(hot),
     ...(extra.outboxWaiting ? { outboxWaiting: extra.outboxWaiting } : {}),
+    ...(extra.outreachNotes?.length ? { outreachNotes: extra.outreachNotes } : {}),
     bestAngle: leader
       ? { title: ANGLE_TITLES[leader.angle], replied: leader.replied, sent: leader.sent }
       : null,

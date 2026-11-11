@@ -7,10 +7,12 @@
 // вызывает и ежедневный крон Vercel — страховка на случай, когда GitHub молчит
 // весь день. Два вызова подряд (два workflow, ручной перезапуск) не удваивают
 // работу: второй тик в течение TICK_LOCK_MS отвечает `skipped: 'busy'`.
-// В режиме рассылки 'approve' (К2, по умолчанию) тик писем не отправляет: sendOutreach готовит
-// «письма дня» и возвращает, сколько их ждёт кнопки владельца, — это число уходит в сводку.
+// В режиме рассылки 'auto' (по умолчанию с 2026-11-11, решение владельца) тик сам отправляет
+// первые письма днём по Москве. В режиме 'approve' (К2) тик писем не отправляет: sendOutreach
+// готовит «письма дня» и возвращает, сколько их ждёт кнопки владельца, — это число уходит в сводку.
 
 import { prisma } from '@specai/database';
+import { siteUrl } from '@/lib/siteUrl';
 import { onceADay } from '@/lib/cronOnce';
 import { notifyTelegram } from '@/lib/notify';
 import {
@@ -19,6 +21,7 @@ import {
   moscowHour,
   splitForTelegram,
   type DigestExtra,
+  outreachNotes,
 } from './digest';
 import { sendOutreach, type OutreachResult } from './outreachRun';
 import { runScheduledStep, type ScheduledStepResult } from './run';
@@ -246,7 +249,11 @@ export async function officeTick(
   const hour = moscowHour(now);
   const inWindow = hour >= DIGEST_HOURS.from && hour <= DIGEST_HOURS.to;
   if (options.digest === 'any' || inWindow) {
-    const extra: DigestExtra = outreach.waiting ? { outboxWaiting: outreach.waiting } : {};
+    const notes = outreachNotes(outreach, siteUrl());
+    const extra: DigestExtra = {
+      ...(outreach.waiting ? { outboxWaiting: outreach.waiting } : {}),
+      ...(notes.length ? { outreachNotes: notes } : {}),
+    };
     const sent = await (deps.sendDigest ?? defaultDigest)(now, extra).catch((error: unknown) => {
       console.error('[office] digest failed', error);
       return null;

@@ -20,6 +20,12 @@ export const DEFAULT_SMTP_HOST = 'smtp.yandex.ru';
 export const DEFAULT_SMTP_PORT = 465;
 /** Одно письмо не дольше этого — иначе функция крона не успеет записать отметку. */
 export const SMTP_TIMEOUT_MS = 8_000;
+/**
+ * Соединение и приветствие сервера — быстрее общего предела: если до сервера не достучались
+ * (не тот адрес или порт, порт закрыт), это видно как точный отказ «не отправлено», а не как
+ * «сервер не подтвердил» по общему таймеру отправки.
+ */
+export const SMTP_CONNECT_TIMEOUT_MS = 5_000;
 
 type Env = Record<string, string | undefined>;
 
@@ -76,6 +82,8 @@ export interface OfficeMailTransport {
     replyTo?: string;
     headers?: Record<string, string>;
   }): Promise<unknown>;
+  /** Соединение и вход без отправки письма (у nodemailer есть; у заглушек может не быть). */
+  verify?(): Promise<unknown>;
 }
 
 export interface OfficeMailDeps {
@@ -93,8 +101,8 @@ function defaultTransport(config: OfficeMailConfig): OfficeMailTransport {
     port: config.port,
     secure: config.secure,
     auth: { user: config.user, pass: config.pass },
-    connectionTimeout: SMTP_TIMEOUT_MS,
-    greetingTimeout: SMTP_TIMEOUT_MS,
+    connectionTimeout: SMTP_CONNECT_TIMEOUT_MS,
+    greetingTimeout: SMTP_CONNECT_TIMEOUT_MS,
     socketTimeout: SMTP_TIMEOUT_MS,
   });
   cached = { key, transport };
@@ -133,6 +141,23 @@ export async function sendOfficeMail(
       ...(replyTo ? { replyTo } : {}),
       ...(headers ? { headers } : {}),
     });
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, reason: error instanceof Error ? error.message : String(error) };
+  }
+}
+
+/**
+ * Проверка ящика без письма: соединение и вход по паролю (nodemailer `verify`). Перед каждым
+ * проходом рассылки — чтобы неверный пароль или закрытый порт остановили проход сразу, а не
+ * пометили ошибкой десятки фирм. Транспорт без `verify` (заглушки тестов) считается рабочим.
+ */
+export async function verifyOfficeMail(deps: OfficeMailDeps = {}): Promise<OfficeMailResult> {
+  const config = officeMailConfig(deps.env ?? process.env);
+  if (!config) return { ok: false, reason: 'no-smtp' };
+  try {
+    const transport = (deps.transport ?? defaultTransport)(config);
+    if (transport.verify) await transport.verify();
     return { ok: true };
   } catch (error) {
     return { ok: false, reason: error instanceof Error ? error.message : String(error) };

@@ -7,7 +7,7 @@
 import { isSampleSource, parseDossier } from './dossier';
 import { DEFAULT_MODEL, getAnthropicClient } from '@specai/ai-service';
 import type { Dossier } from './dossier';
-import { OFFER_ANGLES, applicableAngles, type Offer } from './offer';
+import { OFFER_ANGLES, OFFER_TEXT_VERSION, applicableAngles, type Offer } from './offer';
 
 /** Предложение, как оно ушло: `ai` — вступление и пункты переписал ИИ-аналитик. */
 export type SentOffer = Offer & { ai: boolean };
@@ -228,6 +228,8 @@ export function storedOfferOf(row: {
   const offer = parseSentOffer(row.offerJson);
   if (!offer) return null;
   if (row.emailSentAt && row.whatsappSentAt) return offer;
+  // Тексты прежней версии (с ценой, «сайта нет», обещаниями сроков) больше не отправляются.
+  if (offer.v !== OFFER_TEXT_VERSION) return null;
   if (isSampleSource(row.source) && NEIGHBOUR_ANGLES.includes(offer.angle)) return null;
   if (row.dossierJson !== undefined) {
     const angles: readonly string[] = applicableAngles(parseDossier(row.dossierJson, row.source));

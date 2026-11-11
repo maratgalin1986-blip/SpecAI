@@ -146,4 +146,26 @@ describe('PUT /api/admin/office/settings — режим рассылки (К2)',
     }
     expect(transaction).not.toHaveBeenCalled();
   });
+
+  it('accepts an empty reply address (replies go to the sending mailbox) and rejects a broken one', async () => {
+    upsert.mockClear();
+    expect((await put({ replyTo: '' })).status).toBe(200);
+    expect(upsert).toHaveBeenCalledWith({
+      where: { key: 'office.replyTo' },
+      update: { value: '' },
+      create: { key: 'office.replyTo', value: '' },
+    });
+    upsert.mockClear();
+    expect((await put({ replyTo: ' Owner@Example.RU ' })).status).toBe(200);
+    expect(upsert).toHaveBeenCalledWith({
+      where: { key: 'office.replyTo' },
+      update: { value: 'owner@example.ru' },
+      create: { key: 'office.replyTo', value: 'owner@example.ru' },
+    });
+    transaction.mockClear();
+    const bad = await put({ replyTo: 'не почта' });
+    expect(bad.status).toBe(400);
+    expect((await bad.json()).error).toMatch(/Адрес для ответов/);
+    expect(transaction).not.toHaveBeenCalled();
+  });
 });

@@ -118,29 +118,36 @@ describe('offer', () => {
     expect(applicableAngles(lonely)).toEqual(['first_in_area', 'leads_to_email', 'search']);
   });
 
-  it('каждый заход даёт свою тему и вступление; цифры — только посчитанные', () => {
-    const subjects = new Set<string>();
+  it('каждый заход даёт свою пару «тема + вступление» с фактом о карточке; цифры — только посчитанные', () => {
+    const pairs = new Set<string>();
     for (const angle of applicableAngles(d)) {
       const o = buildOffer({ dossier: d, angle, companyName: 'Стоматология «Улыбка»' });
-      subjects.add(o.subject);
+      pairs.add(`${o.subject} | ${o.opener}`);
+      // Вступление — факт о карточке с источником, а не утверждение о фирме.
+      expect(o.opener).toMatch(
+        /^(В открытой карточке компании .+ на карте не указан сайт\.|По данным открытой карты, |В вашей карточке на карте указан)/,
+      );
+      expect(`${o.subject} ${o.opener} ${o.bullets.join(' ')}`).not.toMatch(
+        /₽|руб|поправим за день|в тот же день|своего сайта нет|видят их первыми|к тому и пойдут|Люди ищут/,
+      );
       expect(o.bullets).toHaveLength(3);
       for (const digit of `${o.subject} ${o.opener} ${o.bullets.join(' ')}`.match(/\d+/g) ?? []) {
         expect(['2', '3', '21', '00', '10', '16', '09']).toContain(digit);
       }
       expect(`${o.subject} ${o.opener}`).not.toMatch(/лучш|гарантир|самы[ей] низк/i);
     }
-    expect(subjects.size).toBe(applicableAngles(d).length);
+    expect(pairs.size).toBe(applicableAngles(d).length);
     const comp = buildOffer({ dossier: d, angle: 'competitors_have_sites', companyName: 'Улыбка' });
-    expect(comp.opener).toContain(
-      'в 2 км ещё 3 компании той же сферы, и у 2 из них уже есть свой сайт',
+    expect(comp.opener).toBe(
+      'По данным открытой карты, в 2 км от вас ещё 3 компании той же сферы, и у 2 из них в карточке указан сайт; в вашей карточке сайта нет.',
     );
     expect(comp.packageKey).toBe('domen');
-    expect(buildOffer({ dossier: d, angle: 'open_late', companyName: 'Улыбка' }).subject).toContain(
-      'до 21:00',
+    expect(buildOffer({ dossier: d, angle: 'open_late', companyName: 'Улыбка' }).opener).toBe(
+      'В вашей карточке на карте указано, что вы работаете до 21:00, а сайт не указан.',
     );
-    expect(
-      buildOffer({ dossier: null, angle: 'leads_to_email', companyName: 'Улыбка' }).subject,
-    ).toBe('Улыбка: сделали вам страницу, заявки — вам на почту');
+    const general = buildOffer({ dossier: null, angle: 'leads_to_email', companyName: 'Улыбка' });
+    expect(general.subject).toBe('Улыбка: черновик страницы, заявки — вам на почту');
+    expect(general.opener).toBe('В открытой карточке компании Улыбка на карте не указан сайт.');
   });
 });
 

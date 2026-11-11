@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  hasOwnDomainEmail,
   CANDIDATE_SKIP_REASONS,
   candidateSkipReason,
   candidateSkipText,
@@ -61,7 +62,8 @@ describe('candidateFilter: похоже на ФИО (К5)', () => {
     'Кран-Сервис',
     'ООО Иванович',
     'Иванов и партнёры',
-    'Иванов Иван',
+    'Адвокатское бюро Гарипова',
+    'Мастер Плюс',
     'Мастерская Ивановича',
     'Вкусно и точка',
   ])('«%s» — не человек', (name) => {
@@ -79,5 +81,31 @@ describe('candidateSkipText', () => {
       `Ольга Петровна: ${CANDIDATE_SKIP_REASONS.person}`,
     );
     expect(candidateSkipText('Автомойка Блеск')).toBeNull();
+  });
+});
+
+describe('candidateFilter: люди с профессией и без отчества (ревью 2026-11-11)', () => {
+  it.each([
+    'Адвокат Гарипов Ильдар Ринатович',
+    'Адвокат Петров А.В.',
+    'Нотариус Хабибуллина Г. Р.',
+    'Иванова Ольга',
+    'Иванов Иван',
+    'Бухгалтер Наталья Сергеевна',
+    'Парикмахер Ольга',
+  ])('«%s» — человек, ему не пишем', (name) => {
+    expect(looksLikePersonName(name)).toBe(true);
+  });
+});
+
+describe('hasOwnDomainEmail: почта на своём домене — сайт, скорее всего, есть', () => {
+  it('свой домен — да; бесплатная почта и пусто — нет', () => {
+    expect(hasOwnDomainEmail('info@denta-plus-vp.ru')).toBe(true);
+    expect(hasOwnDomainEmail(' Office@Firma-Kazan.RU ')).toBe(true);
+    for (const free of ['a@mail.ru', 'b@yandex.ru', 'c@gmail.com', 'd@bk.ru', 'e@ya.ru']) {
+      expect(hasOwnDomainEmail(free)).toBe(false);
+    }
+    expect(hasOwnDomainEmail(null)).toBe(false);
+    expect(hasOwnDomainEmail('не почта')).toBe(false);
   });
 });

@@ -42,12 +42,16 @@ const schema = z
       .int('Лимит в день — целое число')
       .min(0, 'Лимит в день не может быть отрицательным')
       .max(1000, 'Лимит в день — не больше 1000'),
-    replyTo: z
-      .string()
-      .trim()
-      .toLowerCase()
-      .email('Адрес для ответов — обычная почта вида name@example.ru')
-      .max(200),
+    // Пусто — без Reply-To: ответы приходят в ящик, с которого ушло письмо.
+    replyTo: z.union([
+      z.literal(''),
+      z
+        .string()
+        .trim()
+        .toLowerCase()
+        .email('Адрес для ответов — обычная почта вида name@example.ru')
+        .max(200),
+    ]),
     whatsappToPhone: z.boolean().optional(),
     payDetails: z
       .string({ invalid_type_error: 'Реквизиты — обычный текст' })

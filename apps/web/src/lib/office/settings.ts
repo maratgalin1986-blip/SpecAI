@@ -2,7 +2,6 @@
 // OFFICE_SETTINGS в plan.ts; сюда добавлены только ключи, которых там нет.
 
 import { prisma } from '@specai/database';
-import { SITE } from '@/lib/site';
 import { OFFICE_SETTINGS, defaultPlan, formatPlan } from './plan';
 
 export const OFFICE_EXTRA_SETTINGS = {
@@ -15,21 +14,40 @@ export const OFFICE_EXTRA_SETTINGS = {
   /** Сколько предложений в московские сутки ИИ может переписать (целое 0…500). */
   aiDailyCap: 'office.aiDailyCap',
   /**
-   * Как уходят письма офиса (К2): 'approve' (по умолчанию) — крон только готовит «письма дня»,
-   * уходят они по кнопке владельца на /admin/office/pisma; 'auto' — крон отправляет сам.
+   * Как уходят письма офиса (К2): 'auto' (по умолчанию с 2026-11-11, решение владельца) — офис
+   * сам отправляет первые письма днём по Москве; 'approve' — крон только готовит «письма дня»,
+   * уходят они по кнопке владельца на /admin/office/pisma.
    */
   outreachMode: 'office.outreachMode',
   /** Ставка НДС в счёте-оферте, % (К8): 0 — «НДС не облагается»; по умолчанию DEFAULT_VAT_RATE. */
   vatRate: 'office.vatRate',
+  /**
+   * «1» — режим «сам по расписанию» отправляет и WhatsApp через шлюз (Green API). По умолчанию
+   * нет и в админке переключателя нет: шлюза у офиса нет, сообщения WhatsApp отправляет владелец.
+   */
+  whatsappAuto: 'office.whatsappAuto',
 } as const;
 
 /** Режим рассылки: с утверждением владельцем или сама по крону. */
 export type OutreachMode = 'approve' | 'auto';
 export const OUTREACH_MODES: readonly OutreachMode[] = ['approve', 'auto'];
 
-/** Режим из строки настройки: всё, кроме «auto», — утверждение владельцем. */
+/**
+ * Режим, пока владелец не выбрал свой на странице «Письма дня». Владелец, 2026-11-11: «Начинай
+ * отправку сам уже» (до этого по умолчанию было 'approve' — каждое письмо дня по его кнопке).
+ * Риск записан в docs/owner-requests.md: закон «О рекламе» (ч. 2 ст. 18) запрещает рассылку
+ * без участия человека; решение и ответственность — владельца, вернуть 'approve' — одна кнопка.
+ */
+export const DEFAULT_OUTREACH_MODE: OutreachMode = 'auto';
+
+/**
+ * Режим из строки настройки: пусто — по умолчанию; «auto» и «approve» — как выбрал владелец;
+ * любое другое значение — утверждение владельцем (непонятное не должно отправлять само).
+ */
 export function parseOutreachMode(value: string | undefined): OutreachMode {
-  return value?.trim() === 'auto' ? 'auto' : 'approve';
+  const text = value?.trim() ?? '';
+  if (text === '') return DEFAULT_OUTREACH_MODE;
+  return text === 'auto' ? 'auto' : 'approve';
 }
 
 /** Лимит ИИ-предложений в сутки, если владелец не задал свой. */
@@ -75,7 +93,11 @@ export interface OfficeSettings {
   outreachPaused: boolean;
   /** Писем / сообщений WhatsApp в день, на канал. */
   dailyCap: number;
-  /** Адрес для ответов на письма кандидатам. */
+  /**
+   * Адрес для ответов на письма кандидатам (Reply-To). Пусто (по умолчанию) — заголовка нет,
+   * ответы приходят в ящик, с которого ушло письмо: туда смотрит владелец и туда же придёт
+   * чтение ответов. Раньше по умолчанию стоял адрес с сайта — это другой ящик.
+   */
   replyTo: string;
   /** WhatsApp на обычный мобильный из карточки. */
   whatsappToPhone: boolean;
@@ -85,10 +107,12 @@ export interface OfficeSettings {
   aiOffers: boolean;
   /** ИИ-предложений в сутки, 0…AI_DAILY_CAP_MAX. */
   aiDailyCap: number;
-  /** Режим рассылки (К2), по умолчанию 'approve'. */
+  /** Режим рассылки (К2), по умолчанию DEFAULT_OUTREACH_MODE. */
   outreachMode: OutreachMode;
   /** Ставка НДС в счёте-оферте, %; 0 — без НДС. */
   vatRate: number;
+  /** Режим «сам» отправляет и WhatsApp через шлюз (по умолчанию нет). */
+  whatsappAuto: boolean;
 }
 
 function flag(value: string | undefined): boolean {
@@ -119,7 +143,7 @@ export function parseOfficeSettings(
     paused: flag(byKey.get(OFFICE_SETTINGS.paused)),
     outreachPaused: flag(byKey.get(OFFICE_SETTINGS.outreachPaused)),
     dailyCap: int(byKey.get(OFFICE_SETTINGS.dailyCap), DEFAULT_DAILY_CAP),
-    replyTo: replyTo || SITE.email,
+    replyTo: replyTo ?? '',
     // Владелец, 2026-11-09: «если в карте оставили номера для связи — значит, нужно связаться».
     // Поэтому мобильный из карточки по умолчанию годится для WhatsApp; флажок в админке это
     // выключает. Каждое сообщение всё равно уходит только после «Отправить» владельца.
@@ -134,6 +158,7 @@ export function parseOfficeSettings(
     ),
     outreachMode: parseOutreachMode(byKey.get(OFFICE_EXTRA_SETTINGS.outreachMode)),
     vatRate: parseVatRate(byKey.get(OFFICE_EXTRA_SETTINGS.vatRate)),
+    whatsappAuto: flag(byKey.get(OFFICE_EXTRA_SETTINGS.whatsappAuto)),
   };
 }
 

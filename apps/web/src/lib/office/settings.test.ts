@@ -4,6 +4,7 @@ vi.mock('@specai/database', () => ({ prisma: {} }));
 
 import {
   DEFAULT_AI_DAILY_CAP,
+  DEFAULT_OUTREACH_MODE,
   DEFAULT_VAT_RATE,
   OFFICE_EXTRA_SETTINGS,
   parseOfficeSettings,
@@ -33,17 +34,23 @@ describe('parseOfficeSettings — ИИ-аналитик (U2)', () => {
 });
 
 describe('parseOfficeSettings — режим рассылки (К2)', () => {
-  it('по умолчанию письма ждут утверждения владельцем', () => {
-    expect(parseOfficeSettings([]).outreachMode).toBe('approve');
+  it('по умолчанию офис отправляет сам (владелец, 2026-11-11: «Начинай отправку сам уже»)', () => {
+    expect(DEFAULT_OUTREACH_MODE).toBe('auto');
+    expect(parseOfficeSettings([]).outreachMode).toBe('auto');
+    // Пустая строка в базе — тоже «не выбирал».
+    expect(
+      parseOfficeSettings([{ key: OFFICE_EXTRA_SETTINGS.outreachMode, value: '  ' }]).outreachMode,
+    ).toBe('auto');
   });
 
-  it('«auto» — только явно; всё остальное — утверждение', () => {
+  it('выбор владельца сохраняется; непонятное значение — утверждение, а не отправка', () => {
     const read = (value: string) =>
       parseOfficeSettings([{ key: OFFICE_EXTRA_SETTINGS.outreachMode, value }]).outreachMode;
     expect(read('auto')).toBe('auto');
     expect(read(' auto ')).toBe('auto');
     expect(read('approve')).toBe('approve');
     expect(read('1')).toBe('approve');
+    expect(read('AUTO')).toBe('approve');
   });
 });
 
@@ -72,5 +79,17 @@ describe('parseOfficeSettings — ставка НДС в счёте (К8)', () =
     // Мусор и ставка не из списка — по умолчанию, а не «без НДС».
     for (const bad of ['', 'abc', '18', '-1']) expect(at(bad)).toBe(22);
     expect(parseVatRate(undefined)).toBe(22);
+  });
+});
+
+describe('parseOfficeSettings — адрес для ответов', () => {
+  it('по умолчанию пусто: ответы приходят в ящик, с которого ушло письмо', () => {
+    expect(parseOfficeSettings([]).replyTo).toBe('');
+  });
+
+  it('сохранённый владельцем адрес остаётся', () => {
+    expect(
+      parseOfficeSettings([{ key: 'office.replyTo', value: ' owner@example.ru ' }]).replyTo,
+    ).toBe('owner@example.ru');
   });
 });
