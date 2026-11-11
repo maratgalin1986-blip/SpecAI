@@ -29,7 +29,9 @@ import {
   markReplied,
   OUTREACH_BUDGET_MS,
   outreachErrorText,
+  AUTO_SEND_HOURS,
   DELIVERY_UNKNOWN,
+  inAutoSendHours,
   SEND_TIMEOUT_MS,
   planOutreach,
   sendOutreach,
@@ -1404,5 +1406,68 @@ describe('один адрес — одно первое сообщение (ре
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+describe('режим «сам по расписанию»: офис пишет только днём по Москве (владелец, 2026-11-11)', () => {
+  const at = (msk: string) => new Date(`2026-11-11T${msk}:00+03:00`);
+
+  it('часы отправки: с 8:00 до 19:59 по Москве, в любой день', () => {
+    expect(AUTO_SEND_HOURS).toEqual({ from: 8, to: 20 });
+    expect(inAutoSendHours(at('07:59'))).toBe(false);
+    expect(inAutoSendHours(at('08:00'))).toBe(true);
+    expect(inAutoSendHours(at('13:30'))).toBe(true);
+    expect(inAutoSendHours(at('19:59'))).toBe(true);
+    expect(inAutoSendHours(at('20:00'))).toBe(false);
+    expect(inAutoSendHours(at('03:13'))).toBe(false);
+    // Час считается по Москве, а не по часам сервера: 05:13 UTC — это 08:13 в Москве.
+    expect(inAutoSendHours(new Date('2026-11-11T05:13:00Z'))).toBe(true);
+    expect(inAutoSendHours(new Date('2026-11-11T17:00:00Z'))).toBe(false);
+  });
+
+  it('ночью крон ничего не отправляет и строк не трогает; днём — отправляет', async () => {
+    const rows = [row({ id: 'a' }), row({ id: 'b' })];
+    const { db, updates, claims } = fakeDb(rows);
+    const night = await sendOutreach(at('05:13'), deps(db));
+    expect(night).toEqual({ email: 0, whatsapp: 0, followUps: 0, skipped: 'night', errors: 0 });
+    expect(okEmail).not.toHaveBeenCalled();
+    expect(updates).toEqual([]);
+    expect(claims).toEqual([]);
+    const day = await sendOutreach(at('10:39'), deps(db));
+    expect(day).toMatchObject({ email: 2, skipped: null });
+    expect(okEmail).toHaveBeenCalledTimes(2);
+  });
+
+  it('кнопка владельца работает и ночью: утверждённое уходит', async () => {
+    const rows = [row({ id: 'a' })];
+    const fake = fakeDb(rows);
+    // Письмо дня подготовлено (предложение записано), владелец нажал «Отправить» в 23:30.
+    await planOutreach(at('23:30'), deps(fake.db));
+    const result = await sendOutreach(
+      at('23:30'),
+      deps(fake.db, { onlyApproved: fake.approveAll() }),
+    );
+    expect(result).toMatchObject({ email: 1, skipped: null });
+  });
+
+  it('в режиме «с утверждением» время суток не важно: письма только готовятся', async () => {
+    const rows = [row({ id: 'a' })];
+    const { db } = fakeDb(rows);
+    const result = await sendOutreach(
+      at('03:00'),
+      deps(db, { settings: settings({ outreachMode: 'approve' }) }),
+    );
+    expect(result).toMatchObject({ email: 0, skipped: 'approve', waiting: 1 });
+    expect(okEmail).not.toHaveBeenCalled();
+  });
+
+  it('пауза важнее всего: на паузе не уходит ничего и днём', async () => {
+    const { db } = fakeDb([row({ id: 'a' })]);
+    const result = await sendOutreach(
+      at('12:00'),
+      deps(db, { settings: settings({ outreachPaused: true }) }),
+    );
+    expect(result).toMatchObject({ email: 0, skipped: 'paused' });
+    expect(okEmail).not.toHaveBeenCalled();
   });
 });

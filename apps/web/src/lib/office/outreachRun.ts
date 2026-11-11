@@ -951,16 +951,33 @@ async function runOutreach(
   return done();
 }
 
+/** Часы по Москве, в которые офис отправляет сам: с AUTO_SEND_HOURS.from до AUTO_SEND_HOURS.to. */
+export const AUTO_SEND_HOURS = { from: 8, to: 20 } as const;
+
+const MSK_OFFSET_MS = 3 * 60 * 60 * 1000;
+
+/** Сейчас ли время, когда офис отправляет сам (8:00–19:59 по Москве, в любой день недели). */
+export function inAutoSendHours(now: Date): boolean {
+  const hour = new Date(now.getTime() + MSK_OFFSET_MS).getUTCHours();
+  return hour >= AUTO_SEND_HOURS.from && hour < AUTO_SEND_HOURS.to;
+}
+
 /**
  * Один проход рассылки. Возвращает, сколько писем, сообщений и напоминаний ушло, сколько
  * ошибок, и `skipped: 'paused'`, если владелец поставил рассылку на паузу. В режиме
  * 'approve' (К2) без `onlyApproved` ничего не отправляет: готовит письма дня и возвращает
- * `skipped: 'approve'` и `waiting` — сколько их ждёт кнопки владельца.
+ * `skipped: 'approve'` и `waiting` — сколько их ждёт кнопки владельца. В режиме 'auto' вне
+ * AUTO_SEND_HOURS — `skipped: 'night'`: письма уйдут первым же проходом днём.
  */
 export async function sendOutreach(now: Date, deps: OutreachDeps = {}): Promise<OutreachResult> {
   const settings = await (deps.settings ?? readOfficeSettings)();
   if (settings.outreachPaused) {
     return { email: 0, whatsapp: 0, followUps: 0, skipped: 'paused', errors: 0 };
+  }
+  // Сам офис (режим 'auto', без кнопки владельца) пишет только днём по Москве: письмо в три
+  // часа ночи выглядит как робот и остаётся без ответа. Кнопка «Отправить» работает всегда.
+  if (!deps.onlyApproved && settings.outreachMode === 'auto' && !inAutoSendHours(now)) {
+    return { email: 0, whatsapp: 0, followUps: 0, skipped: 'night', errors: 0 };
   }
   if (!deps.onlyApproved && settings.outreachMode !== 'auto') {
     const { result, items } = await runOutreach(now, deps, 'plan', settings);

@@ -15,8 +15,9 @@ export const OFFICE_EXTRA_SETTINGS = {
   /** Сколько предложений в московские сутки ИИ может переписать (целое 0…500). */
   aiDailyCap: 'office.aiDailyCap',
   /**
-   * Как уходят письма офиса (К2): 'approve' (по умолчанию) — крон только готовит «письма дня»,
-   * уходят они по кнопке владельца на /admin/office/pisma; 'auto' — крон отправляет сам.
+   * Как уходят письма офиса (К2): 'auto' (по умолчанию с 2026-11-11, решение владельца) — офис
+   * сам отправляет первые письма днём по Москве; 'approve' — крон только готовит «письма дня»,
+   * уходят они по кнопке владельца на /admin/office/pisma.
    */
   outreachMode: 'office.outreachMode',
   /** Ставка НДС в счёте-оферте, % (К8): 0 — «НДС не облагается»; по умолчанию DEFAULT_VAT_RATE. */
@@ -27,9 +28,22 @@ export const OFFICE_EXTRA_SETTINGS = {
 export type OutreachMode = 'approve' | 'auto';
 export const OUTREACH_MODES: readonly OutreachMode[] = ['approve', 'auto'];
 
-/** Режим из строки настройки: всё, кроме «auto», — утверждение владельцем. */
+/**
+ * Режим, пока владелец не выбрал свой на странице «Письма дня». Владелец, 2026-11-11: «Начинай
+ * отправку сам уже» (до этого по умолчанию было 'approve' — каждое письмо дня по его кнопке).
+ * Риск записан в docs/owner-requests.md: закон «О рекламе» (ч. 2 ст. 18) запрещает рассылку
+ * без участия человека; решение и ответственность — владельца, вернуть 'approve' — одна кнопка.
+ */
+export const DEFAULT_OUTREACH_MODE: OutreachMode = 'auto';
+
+/**
+ * Режим из строки настройки: пусто — по умолчанию; «auto» и «approve» — как выбрал владелец;
+ * любое другое значение — утверждение владельцем (непонятное не должно отправлять само).
+ */
 export function parseOutreachMode(value: string | undefined): OutreachMode {
-  return value?.trim() === 'auto' ? 'auto' : 'approve';
+  const text = value?.trim() ?? '';
+  if (text === '') return DEFAULT_OUTREACH_MODE;
+  return text === 'auto' ? 'auto' : 'approve';
 }
 
 /** Лимит ИИ-предложений в сутки, если владелец не задал свой. */
@@ -85,7 +99,7 @@ export interface OfficeSettings {
   aiOffers: boolean;
   /** ИИ-предложений в сутки, 0…AI_DAILY_CAP_MAX. */
   aiDailyCap: number;
-  /** Режим рассылки (К2), по умолчанию 'approve'. */
+  /** Режим рассылки (К2), по умолчанию DEFAULT_OUTREACH_MODE. */
   outreachMode: OutreachMode;
   /** Ставка НДС в счёте-оферте, %; 0 — без НДС. */
   vatRate: number;
