@@ -31,6 +31,11 @@ export const HOUSE_SERVES_KM = 300;
 
 export const NOBODY_ON_LINE =
   'Сейчас на линии никого — оставьте заявку, исполнители рядом пришлют цены';
+/**
+ * СпецПласт16's machines are on the line (always, owner 2026-11-11) and no
+ * other provider is: «никого» would be untrue.
+ */
+export const ONLY_HOUSE_ON_LINE = `Сейчас на линии техника ${SITE.name} — выберите машину выше или оставьте заявку, и другие исполнители пришлют цены`;
 
 export interface OfferCard {
   /** The machine's id: «Подробнее» goes to its public page. */

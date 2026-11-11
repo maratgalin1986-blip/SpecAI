@@ -22,10 +22,11 @@ function coordinate(raw: string | null, limit: number): number | null {
  * whose session the evening cutoff ended (21:00 in the phone's time zone,
  * lib/lineDay.ts) is left out even while that phone keeps reporting.
  *
- * `base`: СпецПласт16's own free machines at their base within the same
- * radius (lib/linePresence.ts baseMachines), priced by customerRates and
- * labelled «на базе» — a house machine whose driver is online is in
- * `machines` instead. Older apps read only `machines`.
+ * СпецПласт16's own free machines are always in `machines` (owner,
+ * 2026-11-11: «всегда на линии», lib/houseLine.ts): without a phone they
+ * stand at the base as «Я на линии до отключения», ids `house-line-<machine>`.
+ * `base` (house machines «на базе», lib/linePresence.ts baseMachines) is kept
+ * for the apps that read it and is empty since then.
  */
 export async function GET(request: NextRequest) {
   const user = await getRequestUser(request);

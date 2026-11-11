@@ -304,6 +304,29 @@ async function main() {
   }
   console.log(`Парк СпецПласт16: добавлено ${created}, всего позиций ${FLEET.length}.`);
 
+  // «Всегда на линии» (owner, 2026-11-11): the house fleet is on the line while
+  // a machine is free and the company has a point — the site derives it from
+  // these rows (apps/web/src/lib/houseLine.ts), nothing is written here. The
+  // deploy only checks that the line is not empty and tells the owner if it is.
+  try {
+    const [onLine, house] = await Promise.all([
+      prisma.equipment.count({ where: { companyId: COMPANY_ID, status: 'AVAILABLE' } }),
+      prisma.company.findUnique({
+        where: { id: COMPANY_ID },
+        select: { baseLat: true, baseLon: true },
+      }),
+    ]);
+    const placed = house?.baseLat != null && house.baseLon != null;
+    console.log(`Парк СпецПласт16 на линии: ${placed ? onLine : 0} машин.`);
+    if (process.env.VERCEL_ENV === 'production' && (!placed || onLine === 0)) {
+      await alertOwner(
+        '⚠️ Сайт: на линии нет ни одной машины СпецПласт16 — отметьте технику «Свободна» в кабинете исполнителя',
+      );
+    }
+  } catch (error) {
+    console.error('house line check failed', error);
+  }
+
   // 2026-10-02: the owner raised every customer price by 1000 ₽/h. Production
   // only (previews share the database), only rows still at the old price and
   // not edited since 2026-10-02 (so prices edited by hand in the cabinet are

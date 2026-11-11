@@ -4,11 +4,12 @@ import { NextRequest } from 'next/server';
 const findMany = vi.fn();
 const equipmentFindMany = vi.fn();
 const getRequestUser = vi.fn();
+const bookingFindMany = vi.fn(async (_args?: unknown): Promise<unknown[]> => []);
 vi.mock('@specai/database', () => ({
   prisma: {
     linePresence: { findMany },
     equipment: { findMany: equipmentFindMany },
-    booking: { findMany: async () => [] },
+    booking: { findMany: bookingFindMany },
   },
   Prisma: {},
 }));
@@ -114,42 +115,81 @@ describe('GET /api/line/nearby', () => {
     expect(status).toBe(401);
   });
 
-  it('adds СпецПласт16 machines at the base: priced by the list, labelled, no user ids', async () => {
+  it('puts СпецПласт16 free machines on the line without any phone: priced by the list, no user ids', async () => {
     equipmentFindMany.mockResolvedValue([houseMachine()]);
     const { body } = await get('?lat=55.74312&lon=52.39811');
-    expect(body.machines).toHaveLength(1);
-    expect(body.base).toHaveLength(1);
-    const [pin] = body.base;
-    expect(pin.id).toBe('sp16-jcb');
-    expect(pin.equipment.id).toBe('sp16-jcb');
-    expect(pin.company).toEqual({ name: 'СпецПласт16', isHouse: true });
+    expect(body.machines).toHaveLength(2);
+    // «Всегда на линии» (owner, 2026-11-11): not «на базе» any more.
+    expect(body.base).toEqual([]);
+    const pin = body.machines.find(
+      (machine: { equipment: { id: string } }) => machine.equipment.id === 'sp16-jcb',
+    );
+    expect(pin.id).toBe('house-line-sp16-jcb');
+    expect(pin.company).toEqual({
+      id: HOUSE_COMPANY_ID,
+      name: 'СпецПласт16',
+      verified: true,
+      isHouse: true,
+    });
+    expect(pin.live).toBe(false);
+    expect(pin.until).toBe('до отключения');
+    expect(pin.busyToday).toBe(false);
+    expect({ lat: pin.lat, lon: pin.lon }).toEqual({ lat: 55.7436, lon: 52.3959 });
     // The house floor (customerRates), not the 100 ₽ stored by mistake.
     expect(pin.equipment.hourlyRate).toBeGreaterThan(100);
-    expect(pin.bubble.startsWith('СпецПласт16 · Экскаватор-погрузчик JCB 3CX · от ')).toBe(true);
-    expect(pin.bubble.endsWith(' · на базе')).toBe(true);
-    expect(pin.bubble).not.toContain('Я на линии');
-    expect(pin.priceText).toMatch(/^от .+₽\/ч$/);
+    expect(pin.bubble).toMatch(
+      /^Я на линии до отключения · Экскаватор-погрузчик JCB 3CX · от .+₽\/ч$/,
+    );
     const json = JSON.stringify(body);
     expect(json).not.toContain('driver-user-id');
     expect(json).not.toContain('userId');
-    // Only the free house fleet, without machines whose driver is online.
+    // The whole free house fleet, whatever its presence rows say.
     const where = equipmentFindMany.mock.calls[0]?.[0].where;
-    expect(where.companyId).toBe(HOUSE_COMPANY_ID);
-    expect(where.status).toBe('AVAILABLE');
-    expect(where.linePresences.none.OR[0].online).toBe(true);
+    expect(where).toEqual({ companyId: HOUSE_COMPANY_ID, status: 'AVAILABLE' });
     expect(equipmentFindMany.mock.calls[0]?.[0].take).toBe(500);
   });
 
-  it('keeps base pins within the radius and a house machine on the line out of them', async () => {
+  it('keeps house machines within the radius and shows a machine with a real row once', async () => {
     equipmentFindMany.mockResolvedValue([
       houseMachine(),
       houseMachine({ id: 'sp16-far', location: { latitude: 55.79, longitude: 49.11 } }),
       houseMachine({ id: 'e1' }),
     ]);
+    const ids = (body: { machines: { equipment: { id: string } }[] }) =>
+      body.machines.map((machine) => machine.equipment.id).sort();
     const { body } = await get('?lat=55.74312&lon=52.39811');
-    expect(body.base.map((pin: { id: string }) => pin.id)).toEqual(['sp16-jcb']);
+    expect(ids(body)).toEqual(['e1', 'sp16-jcb']);
     const wide = await get('?lat=55.74312&lon=52.39811&km=300');
-    expect(wide.body.base.map((pin: { id: string }) => pin.id)).toEqual(['sp16-jcb', 'sp16-far']);
+    expect(ids(wide.body)).toEqual(['e1', 'sp16-far', 'sp16-jcb']);
+    // «e1» is the phone's own row (fresh GPS), not a second standing one.
+    expect(
+      wide.body.machines.filter((m: { id: string }) => m.id.startsWith('house-line-')),
+    ).toHaveLength(2);
+    expect(wide.body.base).toEqual([]);
+  });
+
+  it('shows a house machine booked today as «Занята сегодня», as any provider’s', async () => {
+    equipmentFindMany.mockResolvedValue([houseMachine(), houseMachine({ id: 'sp16-busy' })]);
+    const now = Date.now();
+    bookingFindMany.mockResolvedValueOnce([
+      {
+        equipmentId: 'sp16-busy',
+        status: 'CONFIRMED',
+        startDate: new Date(now - 3_600_000),
+        endDate: new Date(now + 3_600_000),
+      },
+    ]);
+    const { body } = await get();
+    const asked = bookingFindMany.mock.calls.at(-1)?.[0] as {
+      where: { equipmentId: { in: string[] } };
+    };
+    expect(asked.where.equipmentId.in).toEqual(expect.arrayContaining(['sp16-jcb', 'sp16-busy']));
+    const busy = body.machines.find(
+      (machine: { equipment: { id: string } }) => machine.equipment.id === 'sp16-busy',
+    );
+    expect(busy.busyToday).toBe(true);
+    expect(busy.bubble.startsWith('Занята сегодня')).toBe(true);
+    expect(body.machines.at(-1).equipment.id).toBe('sp16-busy');
   });
 
   describe('the evening cutoff', () => {
