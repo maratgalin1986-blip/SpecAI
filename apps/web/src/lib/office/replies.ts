@@ -79,14 +79,13 @@ export function classifyReply(input: {
   return 'other';
 }
 
-/** Отчёт о недоставке: от почтового робота или с темой недоставки. */
+/**
+ * Отчёт о недоставке: только от почтового робота (mailer-daemon, postmaster). По одной теме письма
+ * не судим: иначе любой отправитель письмом «Undelivered…» со списком адресов закрыл бы фирмам
+ * напоминания.
+ */
 export function isBounce(input: { from: string; subject: string }): boolean {
-  return (
-    /mailer-daemon|postmaster/i.test(input.from) ||
-    /undeliver|delivery status|недостав|не доставлено|returned mail|failure notice/i.test(
-      input.subject,
-    )
-  );
+  return /^(?:mailer-daemon|postmaster)@/i.test(input.from.trim());
 }
 
 const ADDRESS_RE = /[a-z0-9._%+-]+@[a-z0-9-]+(?:\.[a-z0-9-]+)+/gi;

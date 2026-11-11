@@ -57,7 +57,9 @@ describe('classifyReply', () => {
 describe('отчёты о недоставке', () => {
   it('узнаёт почтового робота и вынимает адреса', () => {
     expect(isBounce({ from: 'mailer-daemon@yandex.ru', subject: 'x' })).toBe(true);
-    expect(isBounce({ from: 'a@b.ru', subject: 'Undelivered Mail Returned to Sender' })).toBe(true);
+    expect(isBounce({ from: 'a@b.ru', subject: 'Undelivered Mail Returned to Sender' })).toBe(
+      false,
+    );
     expect(isBounce({ from: 'a@b.ru', subject: 'Re: страница' })).toBe(false);
     expect(addressesIn('Final-Recipient: rfc822; Firm@Mail.ru\n<firm@mail.ru>: 550')).toEqual([
       'firm@mail.ru',
