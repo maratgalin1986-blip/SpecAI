@@ -187,6 +187,9 @@ if curl -fsS --max-time 70 -H "$AUTH" -o "$TMP/tick.json" "$BASE_URL/api/cron/of
   # Signs of the mailbox settings without their values (which server, the login's domain, whether
   # the sender equals the login, whether the password looks like an app password).
   jq -r '(.outreach.mailHint // "") | select(length > 0) | "tick: mail settings: \(.[0:160])"' "$TMP/tick.json" 2>/dev/null || true
+  # Replies read from the mailbox: counts only.
+  jq -r '.replies // empty | "tick: replies: seen=\(.seen // 0) replies=\(.replies // 0) answered=\(.answered // 0) stops=\(.stops // 0) bounces=\(.bounces // 0) needOwner=\(.needOwner // 0) skipped=\(.skipped // "no") error=\(if .error then "yes" else "no" end)"' "$TMP/tick.json" 2>/dev/null || true
+  jq -r '(.replies.error // "") | select(length > 0) | "tick: mailbox error: \(.[0:160])"' "$TMP/tick.json" 2>/dev/null || true
 else
   TICK_OK=0
   echo "tick: no answer"
