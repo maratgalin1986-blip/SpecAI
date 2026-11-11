@@ -26,8 +26,9 @@ const TITLE = 'Цены на аренду спецтехники с машини
  * is not a page about market prices.
  */
 export async function generateMetadata(): Promise<Metadata> {
-  const { index } = await loadPriceIndex();
-  const hasData = indexHasData(index);
+  const { index, loaded } = await loadPriceIndex();
+  // A failed load is not «no data»: the page keeps its usual metadata then.
+  const hasData = indexHasData(index) || !loaded;
   return {
     title: TITLE,
     description: hasData
