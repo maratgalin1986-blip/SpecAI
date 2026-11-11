@@ -68,7 +68,8 @@ const SERVICES: {
     title: 'Колёсный экскаватор с гидромолотом',
     photo: 'wheeled-excavator',
     text: 'Дробление бетона и асфальта в городе — своим ходом, без трала.',
-    price: fromPerHour('wheeled-excavator'),
+    // «С гидромолотом» is the hammer rate, not the bare machine's.
+    price: fromPerHour(HAMMER_RATE),
   },
   {
     icon: 'crane',
