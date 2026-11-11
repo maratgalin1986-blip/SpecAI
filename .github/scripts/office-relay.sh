@@ -179,9 +179,11 @@ done
 # Outreach planning and the owner's digest; the plan steps were done above.
 TICK_OK=1
 if curl -fsS --max-time 70 -H "$AUTH" -o "$TMP/tick.json" "$BASE_URL/api/cron/office?steps=0"; then
-  # Counts and status words only (the answer has no names or addresses); of an SMTP error only
-  # its numeric code is printed.
+  # Counts and status words only (the answer has no names or addresses).
   echo "tick: $(jq -r 'if .skipped then "skipped=\(.skipped)" else (.outreach // {}) | "email=\(.email // 0) whatsapp=\(.whatsapp // 0) followUps=\(.followUps // 0) errors=\(.errors // 0) filtered=\(.filtered // 0) skipped=\(.skipped // "no") mail=\(.mail // "ok") code=\((.mailError // "") | (capture("(?<c>[0-9]{3})") | .c) // "-")" end' "$TMP/tick.json" 2>/dev/null || echo 'done')"
+  # The mail server's own refusal text (it carries no password; addresses are masked): without it
+  # «mail=broken» cannot be told apart — wrong password, wrong login or a blocked sign-in.
+  jq -r '(.outreach.mailError // "") | select(length > 0) | gsub("[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+"; "<address>") | "tick: mail error: \(.[0:180])"' "$TMP/tick.json" 2>/dev/null || true
 else
   TICK_OK=0
   echo "tick: no answer"
