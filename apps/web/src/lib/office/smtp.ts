@@ -29,8 +29,17 @@ export const SMTP_CONNECT_TIMEOUT_MS = 5_000;
 
 type Env = Record<string, string | undefined>;
 
+/** Значение без невидимых знаков и без кавычек вокруг: так его нередко вставляют в Vercel. */
+function unwrap(text: string): string {
+  return text
+    .replace(/[\u200B-\u200D\uFEFF]/g, '')
+    .trim()
+    .replace(/^["'«»]+|["'«»]+$/g, '')
+    .trim();
+}
+
 function value(env: Env, key: string): string {
-  return (env[key] ?? '').trim();
+  return unwrap(env[key] ?? '');
 }
 
 /**
@@ -59,8 +68,20 @@ function domainOf(address: string): string {
 
 /** Адрес из «Имя <адрес>» или сам адрес. */
 function addressOf(from: string): string {
-  const match = /<([^<>]+)>\s*$/.exec(from);
+  const match = /<([^<>]+)>/.exec(from);
   return (match?.[1] ?? from).trim();
+}
+
+/**
+ * Отправитель письма: имя — из OUTREACH_FROM, адрес — всегда логин ящика. Яндекс и Mail.ru
+ * отклоняют письмо с чужим адресом отправителя (553), а проверка входа этого не видит: отказ
+ * пришёлся бы на первые фирмы. Логин без «@» оставляет значение как есть.
+ */
+function senderOf(from: string, user: string): string {
+  if (!user.includes('@')) return from || user;
+  const named = /^([^<>]*)</.exec(from);
+  const name = unwrap(named?.[1] ?? (from.includes('@') ? '' : from));
+  return name ? `${name} <${user}>` : user;
 }
 
 /**
@@ -68,7 +89,7 @@ function addressOf(from: string): string {
  * не содержат, а при вставке в Vercel пробел в конце или «abcd efgh ijkl mnop» дают отказ 535.
  */
 function cleanPass(raw: string): string {
-  return raw.replace(/\s+/g, '');
+  return unwrap(raw).replace(/\s+/g, '');
 }
 
 /** Настройки SMTP из переменных окружения; null — ящик не настроен. */
@@ -89,7 +110,7 @@ export function officeMailConfig(env: Env = process.env): OfficeMailConfig | nul
     secure: port === 465,
     user,
     pass,
-    from: value(env, 'OUTREACH_FROM') || user,
+    from: senderOf(value(env, 'OUTREACH_FROM'), user),
   };
 }
 
@@ -103,11 +124,13 @@ export function officeMailHint(env: Env = process.env): string {
   const config = officeMailConfig(env);
   if (!config) return 'no-smtp';
   const domain = domainOf(config.user);
-  const sameSender = addressOf(config.from).toLowerCase() === config.user.toLowerCase();
+  const asked = value(env, 'OUTREACH_FROM');
+  const sameSender =
+    !asked.includes('@') || addressOf(asked).toLowerCase() === config.user.toLowerCase();
   return [
     `host=${config.host}`,
     `login=${domain ? `@${domain}` : 'not-an-address'}`,
-    `from=${sameSender ? 'login' : 'other'}`,
+    `from=${sameSender ? 'login' : 'replaced-by-login'}`,
     `pass=${/^[a-z]{16}$/.test(config.pass) ? 'app-password' : 'other'}`,
     ...((env.OUTREACH_SMTP_PASS ?? '') !== config.pass ? ['pass-had-spaces'] : []),
   ].join(' ');
