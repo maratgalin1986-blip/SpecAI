@@ -22,7 +22,7 @@ vi.mock('@specai/database', () => ({
   },
 }));
 
-const { cronRunKey, onceADay } = await import('./cronOnce');
+const { cronRunKey, onceADay, onceForKey } = await import('./cronOnce');
 const { prisma } = await import('@specai/database');
 
 beforeEach(() => keys.clear());
@@ -64,5 +64,30 @@ describe('onceADay', () => {
       onceADay('evening', async () => Promise.reject(new Error('db down')), evening),
     ).rejects.toThrow('db down');
     expect(await onceADay('evening', async () => 'sent', later)).toBe('sent');
+  });
+});
+
+describe('onceForKey', () => {
+  const key = 'cron:weekly-report:2026-11-02';
+  const monday = new Date('2026-11-09T05:00:00Z');
+
+  it('skips a repeated call for the same period on any later day', async () => {
+    const task = vi.fn(async () => 'sent');
+    clock = monday;
+    expect(await onceForKey(key, task, monday)).toBe('sent');
+    // Tuesday's backstop run and a manual one on Thursday.
+    expect(await onceForKey(key, task, new Date('2026-11-10T05:00:00Z'))).toBeNull();
+    expect(await onceForKey(key, task, new Date('2026-11-12T12:00:00Z'))).toBeNull();
+    // The next week has its own key.
+    expect(await onceForKey('cron:weekly-report:2026-11-09', task, monday)).toBe('sent');
+    expect(task).toHaveBeenCalledTimes(2);
+  });
+
+  it('lets a later call retry when the task failed', async () => {
+    clock = monday;
+    await expect(
+      onceForKey(key, async () => Promise.reject(new Error('telegram down')), monday),
+    ).rejects.toThrow('telegram down');
+    expect(await onceForKey(key, async () => 'sent', monday)).toBe('sent');
   });
 });
