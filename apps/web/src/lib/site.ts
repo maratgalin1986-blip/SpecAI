@@ -42,6 +42,9 @@ export const SITE = {
   phone: '+7 (927) 242-80-88',
   phoneHref: 'tel:+79272428088',
   email: 'specplast16@yandex.ru',
+  // Кто подписывает письма офиса фирмам (владелец, 2026-11-12: «чтобы не было видно, что это
+  // бот»): человек, который отвечает по телефону площадки.
+  contactPerson: 'Марат',
   // WhatsApp chat with the same number (click-to-chat).
   whatsappHref: 'https://wa.me/79272428088',
   // Yandex.Metrika counter (created 2026-09-29); the env var can override it.

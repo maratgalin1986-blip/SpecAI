@@ -1,10 +1,13 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   DEFAULT_SMTP_HOST,
   officeMailConfig,
   officeMailConfigured,
   officeMailHint,
   OFFICE_TEST_SUBJECT,
+  resetMailLogin,
+  verifyOfficeMail,
+  type OfficeMailConfig,
   sendOfficeMail,
   sendOfficeTestMail,
   type OfficeMailTransport,
@@ -88,6 +91,74 @@ describe('отправитель и кавычки', () => {
   });
 });
 
+describe('запасной логин — адрес площадки с сайта', () => {
+  beforeEach(() => resetMailLogin());
+  const env = { OUTREACH_SMTP_USER: 'owner@ya.ru', OUTREACH_SMTP_PASS: 'abcdefghijklmnop' };
+  const refusal = Object.assign(
+    new Error('Invalid login: 535 5.7.8 Error: authentication failed'),
+    {
+      responseCode: 535,
+    },
+  );
+  const transportFor = (accepted: string) => {
+    const sendMail = vi.fn<OfficeMailTransport['sendMail']>(async () => ({}));
+    const seen: string[] = [];
+    const transport = (config: OfficeMailConfig): OfficeMailTransport => ({
+      sendMail: async (message) => {
+        seen.push(config.user);
+        if (config.user !== accepted) throw refusal;
+        return sendMail(message);
+      },
+      verify: async () => {
+        seen.push(config.user);
+        if (config.user !== accepted) throw refusal;
+      },
+    });
+    return { transport, sendMail, seen };
+  };
+
+  it('сервер отказал логину из настроек и принял адрес с сайта: дальше письма идут с него', async () => {
+    const { transport, sendMail, seen } = transportFor('specplast16@yandex.ru');
+    expect(await verifyOfficeMail({ env, transport })).toEqual({ ok: true });
+    expect(seen).toEqual(['owner@ya.ru', 'specplast16@yandex.ru']);
+    expect(await sendOfficeMail(MAIL, { env, transport })).toEqual({ ok: true });
+    // Второй раз основной логин не пробуется, отправитель — принятый адрес.
+    expect(seen).toEqual(['owner@ya.ru', 'specplast16@yandex.ru', 'specplast16@yandex.ru']);
+    expect(sendMail.mock.calls[0]?.[0].from).toBe('specplast16@yandex.ru');
+    expect(officeMailHint(env)).toContain('site-address-login=accepted');
+  });
+
+  it('оба логина отклонены — причина основного, запасной не запоминается', async () => {
+    const { transport, seen } = transportFor('nobody@example.ru');
+    const result = await verifyOfficeMail({ env, transport });
+    expect(result).toMatchObject({ ok: false });
+    expect(seen).toEqual(['owner@ya.ru', 'specplast16@yandex.ru']);
+    expect(officeMailHint(env)).toContain('site-address-login=also-refused');
+  });
+
+  it('отказ письма (не входа) запасной логин не пробует', async () => {
+    const seen: string[] = [];
+    const transport = (config: OfficeMailConfig): OfficeMailTransport => ({
+      sendMail: async () => {
+        seen.push(config.user);
+        throw Object.assign(new Error('550 5.1.1 no such user'), { responseCode: 550 });
+      },
+    });
+    expect(await sendOfficeMail(MAIL, { env, transport })).toMatchObject({ ok: false });
+    expect(seen).toEqual(['owner@ya.ru']);
+  });
+
+  it('логин уже равен адресу с сайта или живёт на другом сервере — запасного нет', async () => {
+    const { transport, seen } = transportFor('nobody@example.ru');
+    await verifyOfficeMail({
+      env: { ...env, OUTREACH_SMTP_USER: 'SpecPlast16@yandex.ru' },
+      transport,
+    });
+    await verifyOfficeMail({ env: { ...env, OUTREACH_SMTP_USER: 'firm@mail.ru' }, transport });
+    expect(seen).toEqual(['SpecPlast16@yandex.ru', 'firm@mail.ru']);
+  });
+});
+
 describe('officeMailHint', () => {
   it('без ящика — no-smtp', () => {
     expect(officeMailHint({})).toBe('no-smtp');
@@ -99,7 +170,9 @@ describe('officeMailHint', () => {
       OUTREACH_SMTP_PASS: 'abcdefghijklmnop',
       OUTREACH_FROM: 'ИИСтройка24 <firma@yandex.ru>',
     });
-    expect(hint).toBe('host=smtp.yandex.ru login=@yandex.ru from=login pass=app-password');
+    expect(hint).toBe(
+      'host=smtp.yandex.ru login=@yandex.ru from=login pass=app-password site-address-login=also-refused',
+    );
     expect(hint).not.toContain('Firma');
     expect(hint).not.toContain('abcdefgh');
   });
@@ -112,7 +185,7 @@ describe('officeMailHint', () => {
         OUTREACH_FROM: 'other@mail.ru',
       }),
     ).toBe(
-      'host=smtp.yandex.ru login=not-an-address from=replaced-by-login pass=other pass-had-spaces',
+      'host=smtp.yandex.ru login=not-an-address from=replaced-by-login pass=other pass-had-spaces site-address-login=also-refused',
     );
   });
 });

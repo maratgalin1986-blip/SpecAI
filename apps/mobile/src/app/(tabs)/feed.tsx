@@ -47,18 +47,10 @@ import {
   type Order,
   type ProviderBooking,
 } from '@/lib/api';
+import { orderPlace } from '@/lib/orderPlace';
 import { bidShiftRate, deliveryEstimate, feedOrders } from '@/lib/providerFeed';
 import { EQUIPMENT_STATUS_OPTIONS, formatMoney, pluralizeRu } from '@/lib/format';
-import {
-  addressFromDescription,
-  categoryIcon,
-  distanceKm,
-  formatDistance,
-  monthIncome,
-  orderDays,
-  priceByRate,
-  relativeDay,
-} from '@/lib/orderFlow';
+import { categoryIcon, monthIncome, orderDays, priceByRate, relativeDay } from '@/lib/orderFlow';
 import { feedTodayText } from '@/lib/activity';
 import { lineAutoOffMessage, lineOffAtText, positionStatus } from '@/lib/line';
 import { setLineAutoOff, setProviderOnline, usePrefs } from '@/lib/prefs';
@@ -355,15 +347,11 @@ function FeedCard({
   onTake: (order: Order, machine: Equipment) => void;
 }) {
   const days = orderDays(order.desiredStartDate, order.desiredEndDate);
-  const address = order.location?.addressLine || addressFromDescription(order.description);
-  const lat = order.location?.latitude;
-  const lon = order.location?.longitude;
-  const km =
-    base && typeof lat === 'number' && typeof lon === 'number'
-      ? distanceKm(base, { lat, lon })
-      : null;
-  const distance = km !== null ? formatDistance(km) : null;
-  const delivery = deliveryEstimate(km, pricePerKm);
+  // До подтверждения брони сервер даёт исполнителю только город и километры
+  // от базы (lib/orderPlace.ts): без адреса и без точки.
+  const place = orderPlace(order, base);
+  const distance = place.distanceText;
+  const delivery = deliveryEstimate(place.km, pricePerKm);
   const ownBid = order.bids.find((bid) => bid.status === 'PENDING');
   // The shift price the customer sees on the card: the house fleet by the price list.
   const byRate = machine ? priceByRate(bidShiftRate(machine), days) : 0;
@@ -390,14 +378,15 @@ function FeedCard({
         ) : null}
       </View>
       <BidCountdown bidsUntil={order.bidsUntil} lateStillOpen />
-      {address ? (
+      {place.text || place.fromBaseText ? (
         <View style={styles.orderPlace}>
           <Ionicons name="location-outline" size={16} color={colors.primary} />
           <Text style={styles.orderPlaceText} numberOfLines={2}>
-            {address}
+            {[place.text, place.fromBaseText].filter(Boolean).join(' · ')}
           </Text>
         </View>
       ) : null}
+      {place.hint ? <Text style={styles.orderPlaceHint}>{place.hint}</Text> : null}
       <Text style={styles.orderText} numberOfLines={3}>
         {order.description}
       </Text>
@@ -962,6 +951,7 @@ const styles = StyleSheet.create({
   orderWhen: { fontSize: 14, color: colors.primaryDark, fontWeight: '700' },
   orderPlace: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   orderPlaceText: { flex: 1, fontSize: 14, color: colors.text },
+  orderPlaceHint: { fontSize: 12, color: colors.textMuted },
   orderText: { fontSize: 15, lineHeight: 21, color: colors.text },
   orderMeta: { fontSize: 13, color: colors.textMuted },
   orderActions: { gap: spacing.sm },

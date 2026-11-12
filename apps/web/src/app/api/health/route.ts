@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@specai/database';
 import { integrationFlags } from '@/lib/integrationFlags';
+import { LAST_OUTREACH_KEY } from '@/lib/office/tick';
+import { MAIL_READ_KEY } from '@/lib/office/repliesRun';
 import { SEARCH_HEALTH_RUNS, searchHealth, type SearchHealth } from '@/lib/office/searchHealth';
 
 export const dynamic = 'force-dynamic';
@@ -16,6 +18,17 @@ function moscowDayStart(now: Date): Date {
   return new Date(shifted - (shifted % 86_400_000) - 3 * 3_600_000);
 }
 
+/** Запись настройки как объект из чисел и слов состояния; null — записи нет или она не JSON. */
+function parseRecord(value: string | undefined): Record<string, unknown> | null {
+  if (!value) return null;
+  try {
+    const parsed: unknown = JSON.parse(value);
+    return parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : null;
+  } catch {
+    return null;
+  }
+}
+
 interface OutreachHealth {
   /** Писем фирмам за сегодня (сутки по Москве) и за всё время. */
   sentToday: number;
@@ -24,6 +37,12 @@ interface OutreachHealth {
   lastSentAt: string | null;
   /** Сколько фирм сегодня получили отметку об ошибке отправки. */
   errorsToday: number;
+  /** Ответов фирм, прочитанных из ящика сегодня. */
+  repliesToday: number;
+  /** Итог последнего прохода рассылки: время, числа, состояние ящика, код ответа сервера. */
+  lastPass: Record<string, unknown> | null;
+  /** Итог последнего чтения ответов из ящика: время и числа. */
+  mailbox: Record<string, unknown> | null;
 }
 
 async function officeHealth(): Promise<
@@ -64,6 +83,14 @@ async function officeHealth(): Promise<
       }),
       prisma.prospect.count({ where: { outreachErrorAt: { gte: dayStart } } }),
     ]);
+    const [repliesToday, records] = await Promise.all([
+      prisma.prospect.count({ where: { repliedAt: { gte: dayStart } } }),
+      prisma.appSetting.findMany({
+        where: { key: { in: [LAST_OUTREACH_KEY, MAIL_READ_KEY] } },
+        select: { key: true, value: true },
+      }),
+    ]);
+    const record = (key: string) => parseRecord(records.find((r) => r.key === key)?.value);
     return {
       ...searchHealth(runs, new Date()),
       queue: { ready, withEmail, withWhatsapp, withMobile },
@@ -72,6 +99,9 @@ async function officeHealth(): Promise<
         sentTotal,
         lastSentAt: lastSent?.emailSentAt?.toISOString() ?? null,
         errorsToday,
+        repliesToday,
+        lastPass: record(LAST_OUTREACH_KEY),
+        mailbox: record(MAIL_READ_KEY),
       },
     };
   } catch {
@@ -86,6 +116,9 @@ export async function GET() {
       ok: true,
       database: 'ok',
       integrations: integrationFlags(),
+      // Хвост номера развёртывания: по нему видно, что сайт перезапущен (новые переменные среды
+      // вступают в силу только с новым развёртыванием). Не секрет.
+      deployment: (process.env.VERCEL_DEPLOYMENT_ID ?? '').slice(-6) || null,
       office: await officeHealth(),
     });
   } catch (error) {

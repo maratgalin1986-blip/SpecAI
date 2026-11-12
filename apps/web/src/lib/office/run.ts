@@ -476,14 +476,15 @@ export type ScheduledStepResult =
   | { skipped: null; step: PlanStep; result: RunStepResult };
 
 /**
- * Эпоха плана: при её смене обход начинается с первого шага. 2026-11-10: источник карт сутки не
+ * Эпоха плана: при её смене обход начинается с первого шага. 2026-11-12: в начало плана
+ * поставлены города Дальнего Востока (plan.ts → EAST_SITE_CITIES). 2026-11-10: источник карт сутки не
  * отвечал и «съел» первые шаги (Казань, Набережные Челны), порядок плана изменился (три шага
  * «Сайтов» на один «Подрядчиков»), а поиск переехал на раннер GitHub с полным ответом Overpass.
  */
-export const PLAN_EPOCH = '2026-11-10-relay';
+export const PLAN_EPOCH = '2026-11-12-east';
 
 /** Через раннер приходит весь ответ Overpass (сотни фирм на город) — за шаг берём больше. */
-export const RELAY_STEP_LIMIT = 30;
+export const RELAY_STEP_LIMIT = 45;
 
 const PLAN_KEYS = [
   OFFICE_SETTINGS.paused,

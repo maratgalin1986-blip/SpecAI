@@ -112,7 +112,8 @@ export async function GET(request: NextRequest) {
   // ежедневного он не отодвигает, а без времени делает только рассылку и сводку.
   const office = await officeTick(new Date(), {
     budgetMs: Math.max(0, OFFICE_DEADLINE_MS - (Date.now() - now.getTime())),
-    maxSteps: 1,
+    // Поиск идёт на раннере GitHub; здесь всё время — ответам фирм и письмам.
+    maxSteps: 0,
     digest: 'any',
   }).catch((error: unknown) => {
     console.error('[cron/daily] office tick failed', error);

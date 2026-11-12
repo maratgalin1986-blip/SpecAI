@@ -246,9 +246,9 @@ describe('запас кандидатов (К15)', () => {
   it('лимит из настройки, пусто или мусор — по умолчанию', () => {
     expect(parseDailyCap('35')).toBe(35);
     expect(parseDailyCap(' 0 ')).toBe(0);
-    expect(parseDailyCap(undefined)).toBe(20);
-    expect(parseDailyCap('много')).toBe(20);
-    expect(parseDailyCap('-3')).toBe(20);
+    expect(parseDailyCap(undefined)).toBe(300);
+    expect(parseDailyCap('много')).toBe(300);
+    expect(parseDailyCap('-3')).toBe(300);
   });
 });
 
