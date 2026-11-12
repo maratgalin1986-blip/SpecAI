@@ -13,7 +13,8 @@ import {
 import { isCabinetPage } from '@/lib/workPages';
 import { useSoundLive } from '@/components/useSoundLive';
 
-const HINT_MS = 5000;
+const HINT_MS = 4000;
+const HIDE_ON = ['pointerdown', 'keydown', 'scroll'] as const;
 
 /**
  * «🔊 Звук» / «🔇»: the one switch of the cinematic sound layer. Sound is on
@@ -67,7 +68,16 @@ export function SoundToggle({
         /* shown once per page then */
       }
       setHint(true);
-      hideTimer = window.setTimeout(() => setHint(false), HINT_MS);
+      hideTimer = window.setTimeout(hide, HINT_MS);
+      // …or at the first touch, key or scroll: the hint has been seen. Without
+      // this it stayed over the page for a visitor who came back to the tab
+      // (timers of a hidden tab are held) or scrolled right away.
+      for (const type of HIDE_ON) window.addEventListener(type, hide, { passive: true });
+    };
+    const hide = () => {
+      window.clearTimeout(hideTimer);
+      for (const type of HIDE_ON) window.removeEventListener(type, hide);
+      setHint(false);
     };
     // Wait for the opening titles (IntroSplash) to finish first.
     const introOn = () => {
@@ -85,6 +95,7 @@ export function SoundToggle({
       window.clearInterval(poll);
       window.clearTimeout(showTimer);
       window.clearTimeout(hideTimer);
+      for (const type of HIDE_ON) window.removeEventListener(type, hide);
     };
   }, []);
 

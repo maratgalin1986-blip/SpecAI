@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { usePathname } from 'next/navigation';
-import { ConsentText } from '@/components/ConsentText';
+import { CONSENT_ERROR, ConsentCheck, focusFirstInvalid, PhoneInput } from '@/components/FormBits';
 import { Icon } from '@/components/Icon';
 import { WhatsAppIcon } from '@/components/MessengerButtons';
 import { reachGoal } from '@/lib/marketing';
@@ -17,6 +17,7 @@ import {
   storozhPathAllowed,
   type StorozhTrigger,
 } from '@/lib/storozh';
+import { phoneError } from '@/lib/phoneMask';
 import { leadErrorText, submitLead } from '@/lib/submitLead';
 
 // «Сторож»: when a visitor is about to leave without a contact, Иван from
@@ -107,6 +108,8 @@ function StorozhCard({ trigger, onClose }: { trigger: StorozhTrigger; onClose: (
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [entered, setEntered] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState<{ phone?: string; consent?: string }>({});
+  const formRef = useRef<HTMLFormElement>(null);
 
   useEffect(() => {
     reachGoal('storozh_shown');
@@ -134,6 +137,15 @@ function StorozhCard({ trigger, onClose }: { trigger: StorozhTrigger; onClose: (
   async function send(event: React.FormEvent) {
     event.preventDefault();
     setError(null);
+    const problems = {
+      phone: phoneError(phone) ?? undefined,
+      consent: consent ? undefined : CONSENT_ERROR,
+    };
+    setFieldErrors(problems);
+    if (problems.phone || problems.consent) {
+      focusFirstInvalid(formRef.current);
+      return;
+    }
     setSending(true);
     try {
       await submitLead({
@@ -228,34 +240,32 @@ function StorozhCard({ trigger, onClose }: { trigger: StorozhTrigger; onClose: (
               </button>
             </div>
           ) : (
-            <form onSubmit={send} className="ym-hide-content mt-4 flex flex-col gap-2">
-              <input
-                required
+            <form
+              ref={formRef}
+              noValidate
+              onSubmit={send}
+              className="ym-hide-content mt-4 flex flex-col gap-2"
+            >
+              <PhoneInput
                 autoFocus
-                type="tel"
-                name="phone"
+                dark
                 value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                maxLength={30}
-                pattern="(?:\D*\d){10,15}\D*"
-                title="Номер телефона: от 10 цифр"
-                placeholder="+7 (___) ___-__-__"
-                autoComplete="tel"
-                inputMode="tel"
-                aria-label="Телефон"
+                onChange={(next) => {
+                  setPhone(next);
+                  if (fieldErrors.phone) setFieldErrors((now) => ({ ...now, phone: undefined }));
+                }}
+                error={fieldErrors.phone}
                 className="min-h-11 w-full rounded-md border border-slate-600 bg-slate-900/60 px-3 py-2 text-base text-white placeholder:text-slate-400"
               />
-              <label className="flex items-start gap-2 text-xs text-white/70">
-                <input
-                  type="checkbox"
-                  required
-                  name="consent"
-                  checked={consent}
-                  onChange={(e) => setConsent(e.target.checked)}
-                  className="mt-0.5"
-                />
-                <ConsentText />
-              </label>
+              <ConsentCheck
+                dark
+                checked={consent}
+                onChange={(next) => {
+                  setConsent(next);
+                  if (next) setFieldErrors((now) => ({ ...now, consent: undefined }));
+                }}
+                error={fieldErrors.consent}
+              />
               {error && (
                 <p role="alert" className="text-sm text-red-300">
                   {error}

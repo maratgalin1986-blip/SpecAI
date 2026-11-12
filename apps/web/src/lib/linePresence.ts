@@ -186,6 +186,9 @@ export function presenceBubble(
   return parts.join(' · ');
 }
 
+/** The first line for СпецПласт16's fleet standing at the base: the company, not a driver. */
+export const HOUSE_LINE_HEAD = 'На линии';
+
 /** The small first line of the bubble. */
 export function bubbleHead(live: boolean, until: string | null, busyToday: boolean): string {
   if (busyToday) return 'Занята сегодня';
@@ -230,7 +233,11 @@ export function liveMachines(
       : (row.basePoint ?? { lat: row.lat, lon: row.lon });
     const km = around ? distanceKm(around, point) : null;
     if (km !== null && km > radiusKm) continue;
-    const until = untilText(row, now, row.timeZone);
+    // СпецПласт16's fleet stands on the line always (lib/houseLine.ts): to a
+    // customer «до отключения» says nothing, and «Я» is nobody when no driver
+    // is signed in — plain «На линии» (the maps add «· СпецПласт16»).
+    const isHouse = row.company.id === HOUSE_COMPANY_ID;
+    const until = row.standingForever && isHouse ? null : untilText(row, now, row.timeZone);
     const days = busyDays(bookings, row.equipment.id, today);
     const busyToday = days[0] === today;
     result.push({
@@ -258,7 +265,12 @@ export function liveMachines(
       },
       note: publicNote(row.note),
       distanceKm: km === null ? null : Math.round(km * 10) / 10,
-      bubble: presenceBubble(row, bubbleHead(live, until, busyToday)),
+      bubble: presenceBubble(
+        row,
+        isHouse && !live && !busyToday && until === null
+          ? HOUSE_LINE_HEAD
+          : bubbleHead(live, until, busyToday),
+      ),
       updatedAt: (row.gpsAt ?? row.updatedAt).toISOString(),
       live,
       until,

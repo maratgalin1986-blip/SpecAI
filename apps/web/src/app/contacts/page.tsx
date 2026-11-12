@@ -4,6 +4,9 @@ import { CallbackForm } from '@/components/CallbackForm';
 import { SITE } from '@/lib/site';
 import { CinemaBand } from '@/components/CinemaBand';
 import { CinemaHero } from '@/components/CinemaHero';
+import { Icon } from '@/components/Icon';
+import { WhatsAppIcon } from '@/components/MessengerButtons';
+import { TelegramButton } from '@/components/TelegramButton';
 
 export const metadata: Metadata = {
   title: 'Контакты',
@@ -14,11 +17,40 @@ export const metadata: Metadata = {
 export default function ContactsPage() {
   return (
     <div className="flex flex-col gap-6">
+      {/* The three ways to reach us come first: the page is opened for them,
+          the film band is below. */}
+      <nav
+        aria-label="Связаться"
+        data-contact-first
+        className="grid grid-cols-1 gap-2 sm:grid-cols-3"
+      >
+        <a
+          href={SITE.phoneHref}
+          className="inline-flex min-h-14 items-center justify-center gap-2.5 rounded-2xl bg-amber-500 px-4 font-mono text-lg font-bold tabular-nums text-slate-950 hover:bg-amber-400"
+        >
+          <Icon name="phone" className="h-5 w-5" />
+          {SITE.phone}
+        </a>
+        <a
+          href={SITE.whatsappHref}
+          target="_blank"
+          rel="noopener"
+          className="inline-flex min-h-14 items-center justify-center gap-2 rounded-2xl bg-emerald-700 px-4 text-base font-semibold text-white hover:bg-emerald-600"
+        >
+          <WhatsAppIcon className="h-5 w-5" /> Написать в WhatsApp
+        </a>
+        <TelegramButton
+          page="/contacts"
+          label="Написать в Telegram"
+          className="min-h-14 !rounded-2xl !text-base"
+        />
+      </nav>
       <CinemaHero
         eyebrow={`Вся Россия · офис ${SITE.name} — ${SITE.city}`}
         title="Контакты"
         clips={['crane-sun', 'building-sun']}
         camera={5}
+        compact
       >
         <p>Звоните, пишите или оставьте заявку — подберём технику под вашу задачу.</p>
       </CinemaHero>

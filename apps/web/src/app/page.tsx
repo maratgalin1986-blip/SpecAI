@@ -410,9 +410,26 @@ export default async function HomePage() {
         </div>
       </section>
 
-      {/* Right under the hero, so no entrance effect: it must read at rest.
-          The numbers themselves count up. */}
-      <section className="-mt-12 grid grid-cols-2 overflow-hidden rounded-3xl border border-slate-200 bg-white lg:grid-cols-4">
+      {/* The short way in, right under the hero: a phone and the consent
+          (the full form with a comment and a map point is #callback below). */}
+      <section
+        id="quick-callback"
+        aria-label="Заявка на звонок"
+        data-fab-avoid
+        className="-mt-12 rounded-3xl border border-slate-200 bg-white p-4 shadow-xl sm:p-6"
+      >
+        <div className="mx-auto max-w-xl">
+          <CallbackForm
+            source="home-hero"
+            compact
+            title="Перезвоним и назовём цену"
+            subtitle="Оставьте телефон — диспетчер подберёт технику под задачу."
+          />
+        </div>
+      </section>
+
+      {/* The numbers themselves count up; no entrance effect, they read at rest. */}
+      <section className="grid grid-cols-2 overflow-hidden rounded-3xl border border-slate-200 bg-white lg:grid-cols-4">
         {stats.map((stat) => (
           <div
             key={stat.label}

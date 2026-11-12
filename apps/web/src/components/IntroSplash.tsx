@@ -27,6 +27,14 @@ const SEEN_KEY = 'sp16_intro_seen';
 const DURATION_MS = 2800;
 /** Set on <html> while the titles play: the floating buttons wait (globals.css). */
 const PLAYING_ATTR = 'data-intro';
+/**
+ * When the titles started (set by the inline script, before the page's code
+ * loads): the 2.8 s count from there, not from the moment React woke up — on
+ * a slow phone that was a second or two later, and the titles ran that much
+ * longer. If the code is later still, the inline script hides them itself.
+ */
+const START_KEY = '__introAt';
+const FALLBACK_MS = 150;
 
 /** What the site offers, under the card (owner, 2026-10-03: «чтобы привлечь больше людей»). */
 const OFFERS = [
@@ -40,7 +48,7 @@ const OFFERS = [
 // click id or a UTM tag (`yclid`, `gclid`, `utm_*`), a machine or the 3D city
 // (`?m=`, `?walk=1`) and any `#anchor` (`/#callback`, `#podbor`): the visitor
 // asked for something, not for the titles. Hiding also marks them seen.
-const HIDE_IF_SEEN = `(function(){${AB_INLINE};var d=document.documentElement,s=function(){try{sessionStorage.setItem('${SEEN_KEY}','1');localStorage.setItem('${SEEN_KEY}','1')}catch(e){}};try{if(ab==='calm'||sessionStorage.getItem('${SEEN_KEY}')||localStorage.getItem('${SEEN_KEY}')||/[?&](intro=0|m=|walk=|yclid|gclid|utm_[a-z]+=)/.test(location.search)||location.hash.length>1||matchMedia('(prefers-reduced-motion: reduce)').matches){document.getElementById('intro').hidden=true;s()}else{d.setAttribute('${PLAYING_ATTR}','');setTimeout(function(){d.removeAttribute('${PLAYING_ATTR}')},${DURATION_MS})}}catch(e){}})()`;
+const HIDE_IF_SEEN = `(function(){${AB_INLINE};var d=document.documentElement,s=function(){try{sessionStorage.setItem('${SEEN_KEY}','1');localStorage.setItem('${SEEN_KEY}','1')}catch(e){}};try{if(ab==='calm'||sessionStorage.getItem('${SEEN_KEY}')||localStorage.getItem('${SEEN_KEY}')||/[?&](intro=0|m=|walk=|yclid|gclid|utm_[a-z]+=)/.test(location.search)||location.hash.length>1||matchMedia('(prefers-reduced-motion: reduce)').matches){document.getElementById('intro').hidden=true;s()}else{window.${START_KEY}=Date.now();d.setAttribute('${PLAYING_ATTR}','');setTimeout(function(){d.removeAttribute('${PLAYING_ATTR}');var i=document.getElementById('intro');if(i)i.hidden=true},${DURATION_MS + FALLBACK_MS})}}catch(e){}})()`;
 
 /** The address asks for the order form or the wizard. */
 const FORM_HASH = /^#(callback|podbor)/;
@@ -154,10 +162,15 @@ export function IntroSplash() {
       finish();
     };
     const skips = ['keydown', 'click', 'wheel', 'touchmove', 'scroll'] as const;
-    const timer = window.setTimeout(() => {
-      reachGoal('intro_full');
-      finish();
-    }, DURATION_MS);
+    const startedAt = (window as unknown as Record<string, unknown>)[START_KEY];
+    const played = typeof startedAt === 'number' ? Date.now() - startedAt : 0;
+    const timer = window.setTimeout(
+      () => {
+        reachGoal('intro_full');
+        finish();
+      },
+      Math.max(0, DURATION_MS - played),
+    );
     skips.forEach((name) => window.addEventListener(name, onSkip, { passive: true }));
     return () => {
       window.clearTimeout(timer);

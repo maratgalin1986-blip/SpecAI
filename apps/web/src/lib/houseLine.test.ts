@@ -73,10 +73,10 @@ describe('houseStandingRows', () => {
     expect(live).toHaveLength(2);
     const first = live[0]!;
     expect(first.live).toBe(false);
-    expect(first.until).toBe('до отключения');
+    expect(first.until).toBeNull();
     expect(first.company.isHouse).toBe(true);
     expect(first.driver).toBe('СпецПласт16');
-    expect(first.bubble).toBe('Я на линии до отключения · Экскаватор a · от 4 000 ₽/ч');
+    expect(first.bubble).toBe('На линии · Экскаватор a · от 4 000 ₽/ч');
     expect({ lat: first.lat, lon: first.lon }).toEqual({ lat: 55.7436, lon: 52.3959 });
     // Nothing of an account leaves: the row has no user id to leak.
     expect(JSON.stringify(live)).not.toContain('userId');

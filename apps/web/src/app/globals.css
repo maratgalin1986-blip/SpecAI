@@ -378,26 +378,32 @@ html {
   }
 }
 
+/* Movement only: with opacity in these keyframes every block near the top or
+   the bottom edge of the screen read as grey, half-faded text. */
 @keyframes depth-in {
   from {
-    opacity: 0;
     transform: perspective(1200px) translate3d(0, 80px, -420px) rotateX(10deg);
   }
   to {
-    opacity: 1;
     transform: none;
   }
 }
 
 @keyframes depth-out {
   from {
-    opacity: 1;
     transform: none;
   }
   to {
-    opacity: 0;
     transform: perspective(1200px) translate3d(0, -40px, 260px);
   }
+}
+
+/* A Leaflet map keeps its panes and buttons (z-index 200…1000) to itself:
+   without its own stacking context they paint over the header, the bottom
+   bar and the cookie strip. */
+.leaflet-container {
+  z-index: 0;
+  isolation: isolate;
 }
 
 /* ---- Hero photos: slow push-in on the active slide ------------------------ */

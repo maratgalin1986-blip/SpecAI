@@ -113,9 +113,11 @@ const SEEK_MIN_S = 0.15;
 /** Zoom, fade and blur of shot `i` of `n` at position `pos` (0…n). */
 function shotLook(pos: number, i: number, n: number) {
   // Arrive: the previous stop's dive lands us deep inside this shot.
-  const arrive = i === 0 ? 1 : smooth(clamp((pos - i + 0.16) / 0.4));
-  // Leave: dive into the focal point during the last third.
-  const leave = i === n - 1 ? 0 : smooth(clamp((pos - i - 0.6) / 0.4));
+  // Short on both ends: the long dives left half of every stop as a blurred
+  // frame, so the sharp shot now holds from 12% to 80% of the stop.
+  const arrive = i === 0 ? 1 : smooth(clamp((pos - i + 0.12) / 0.24));
+  // Leave: dive into the focal point during the last fifth.
+  const leave = i === n - 1 ? 0 : smooth(clamp((pos - i - 0.8) / 0.2));
   const blur = (1 - arrive) * 4 + leave * 5;
   return {
     visible: pos > i - 0.2 && pos < i + 1.02,
@@ -132,16 +134,20 @@ function flashOpacity(pos: number, n: number) {
   return local > 0.9 && index < n - 1 ? (local - 0.9) * 6 : local < 0.08 ? (0.08 - local) * 8 : 0;
 }
 
-/** Fade and lift of caption `i` at position `pos`. */
+/**
+ * Caption `i` at position `pos`: the title of the stop the camera is in is
+ * fully opaque for the whole stop (a faded title over a blurred frame read as
+ * an empty screen); it only rises into place at the start. The flash at the
+ * cut covers the change of titles.
+ */
 function captionLook(pos: number, i: number, n: number) {
   const index = Math.min(n - 1, Math.floor(pos));
   const local = pos - index;
   const shown = i === index;
-  const fade = shown ? clamp(local < 0.5 ? (local - 0.12) / 0.2 : (0.7 - local) / 0.15) : 0;
-  const last = i === n - 1 && shown;
+  const rise = index === 0 ? 1 : smooth(clamp(local / 0.1));
   return {
-    opacity: last ? clamp((local - 0.06) / 0.14) : fade,
-    transform: `translateY(${(1 - (last ? 1 : fade)) * 24}px)`,
+    opacity: shown ? 1 : 0,
+    transform: `translateY(${shown ? (1 - rise) * 24 : 0}px)`,
   };
 }
 
@@ -431,7 +437,8 @@ export function SiteJourney() {
       ref={sectionRef}
       aria-label="Путешествие по объекту"
       className="relative ml-[calc(50%-50vw)] w-screen"
-      style={{ height: `${n * 110 + 100}vh` }}
+      // 80 vh of scroll per stop (was 110): less empty distance between the titles.
+      style={{ height: `${n * 80 + 100}vh` }}
     >
       <div className="sticky top-0 h-[100svh] overflow-hidden bg-black text-white">
         {scenes.map((scene, i) => {
