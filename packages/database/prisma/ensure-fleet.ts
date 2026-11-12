@@ -35,6 +35,11 @@ async function alertOwner(text: string) {
   }
 }
 const LOCATION_ID = 'specplast16-location';
+// «Гидромолот 4500» (owner, 2026-11-12): the wheeled excavator with the hammer
+// costs HAMMER_RATE of apps/web/src/lib/prices.ts.
+const HAMMER_MACHINE_ID = 'sp16-excavator-wheeled';
+const HAMMER_RATE = 4500;
+const SHIFT_HOURS = 8;
 
 interface FleetItem {
   id: string;
@@ -158,7 +163,7 @@ const FLEET: FleetItem[] = [
     make: '',
     model: '',
     categorySlug: 'wheeled-excavators',
-    hourlyRate: 4000,
+    hourlyRate: HAMMER_RATE,
     description:
       'Колёсный экскаватор с машинистом: земляные работы в городе, демонтаж и разбивка гидромолотом.',
     specs: { 'Навесное оборудование': 'ковш, гидромолот' },
@@ -325,6 +330,34 @@ async function main() {
     }
   } catch (error) {
     console.error('house line check failed', error);
+  }
+
+  // 2026-11-12, «Гидромолот 4500»: the house wheeled excavator with the hammer
+  // goes from 4000 to 4500 ₽/h. Only that row of the house company and only
+  // while it is below the new price (hour and shift apart), so a second run
+  // changes nothing and a higher price set in the cabinet stays. Production
+  // only: previews share the database. Bookings keep their stored totals.
+  if (process.env.VERCEL_ENV === 'production') {
+    try {
+      const hour = await prisma.equipment.updateMany({
+        where: { id: HAMMER_MACHINE_ID, companyId: COMPANY_ID, hourlyRate: { lt: HAMMER_RATE } },
+        data: { hourlyRate: HAMMER_RATE },
+      });
+      const shift = await prisma.equipment.updateMany({
+        where: {
+          id: HAMMER_MACHINE_ID,
+          companyId: COMPANY_ID,
+          dailyRate: { lt: HAMMER_RATE * SHIFT_HOURS },
+        },
+        data: { dailyRate: HAMMER_RATE * SHIFT_HOURS },
+      });
+      if (hour.count + shift.count > 0) {
+        console.log(`Колёсный экскаватор с гидромолотом: цена ${HAMMER_RATE} ₽/ч.`);
+      }
+    } catch (error) {
+      // The site still shows 4500 (houseRate never goes below lib/prices.ts).
+      console.error('hammer repricing failed', error);
+    }
   }
 
   // 2026-10-02: the owner raised every customer price by 1000 ₽/h. Production
