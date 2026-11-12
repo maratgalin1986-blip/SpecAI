@@ -8,9 +8,9 @@ import { TAP_ERRORS, tapVisitorFix } from '@/components/visitorPosition';
 import { ConsentText } from '@/components/ConsentText';
 import { LeadSuccess } from '@/components/LeadSuccess';
 import { formatCoords, inServiceArea } from '@/lib/geo';
-import { LANDINGS } from '@/lib/landings';
+import { LANDINGS, landingListRate } from '@/lib/landings';
 import { pointMessageLine, type MapPoint } from '@/lib/mapPoint';
-import { rateOf, rub } from '@/lib/prices';
+import { rub } from '@/lib/prices';
 import { SITE } from '@/lib/site';
 import { leadErrorText, submitLead } from '@/lib/submitLead';
 import { useHydrated } from '@/lib/useHydrated';
@@ -253,7 +253,7 @@ export function OrderMap({ embed = false }: { embed?: boolean }) {
             <option value="">Техника — подберёт диспетчер</option>
             {LANDINGS.map((l) => (
               <option key={l.slug} value={l.short}>
-                {l.short} — от {rub(rateOf(l.machine))} ₽/ч с машинистом
+                {l.short} — от {rub(landingListRate(l))} ₽/ч с машинистом
               </option>
             ))}
           </select>

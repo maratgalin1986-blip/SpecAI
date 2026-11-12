@@ -15,8 +15,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { AdminLoginRow, AdminMenuCard } from '@/components/AdminEntry';
 import { ContactActions } from '@/components/ContactActions';
 import { Button, Input } from '@/components/ui';
-import { ApiError, API_URL } from '@/lib/api';
+import { ApiError, API_URL, requestPasswordReset } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
+import { RESET_SENT_MESSAGE, resetFailure, type ResetNotice } from '@/lib/passwordReset';
 import { SITE } from '@/lib/site';
 import { colors, spacing } from '@/lib/theme';
 
@@ -26,6 +27,30 @@ export default function LoginScreen() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [resetting, setResetting] = useState(false);
+  const [resetNotice, setResetNotice] = useState<ResetNotice | null>(null);
+
+  // «Забыли пароль?»: с введённым e-mail письмо просим прямо отсюда и
+  // показываем ответ сервера (пока почта не подключена — он так и говорит);
+  // без e-mail — страница восстановления на сайте, как раньше.
+  const handleForgot = async () => {
+    Keyboard.dismiss();
+    setResetNotice(null);
+    if (!email.trim()) {
+      void WebBrowser.openBrowserAsync(`${API_URL}/forgot-password`);
+      return;
+    }
+    if (resetting) return;
+    setResetting(true);
+    try {
+      await requestPasswordReset(email);
+      setResetNotice({ ok: true, text: RESET_SENT_MESSAGE });
+    } catch (caught) {
+      setResetNotice(resetFailure(caught));
+    } finally {
+      setResetting(false);
+    }
+  };
 
   const handleSubmit = async () => {
     Keyboard.dismiss();
@@ -93,11 +118,20 @@ export default function LoginScreen() {
             {error ? <Text style={styles.error}>{error}</Text> : null}
             <Button title="Войти" onPress={handleSubmit} loading={submitting} />
             <Pressable
-              accessibilityRole="link"
-              onPress={() => void WebBrowser.openBrowserAsync(`${API_URL}/forgot-password`)}
+              accessibilityRole="button"
+              disabled={resetting}
+              onPress={() => void handleForgot()}
             >
-              <Text style={styles.link}>Забыли пароль?</Text>
+              <Text style={styles.link}>{resetting ? 'Отправляем…' : 'Забыли пароль?'}</Text>
             </Pressable>
+            {resetNotice ? (
+              <Text
+                accessibilityLiveRegion="polite"
+                style={[styles.notice, !resetNotice.ok && styles.noticeError]}
+              >
+                {resetNotice.text}
+              </Text>
+            ) : null}
             <Link href="/(auth)/register" style={styles.link}>
               Нет аккаунта? Зарегистрироваться
             </Link>
@@ -157,6 +191,8 @@ const styles = StyleSheet.create({
   contacts: { gap: spacing.sm },
   form: { gap: spacing.lg },
   error: { color: colors.danger, fontSize: 14 },
+  notice: { color: colors.text, fontSize: 14, textAlign: 'center' },
+  noticeError: { color: colors.danger },
   link: {
     color: colors.primaryDark,
     fontSize: 15,

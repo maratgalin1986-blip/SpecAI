@@ -31,6 +31,7 @@ describe('storozh: routes', () => {
     expect(storozhPathAllowed('/')).toBe(true);
     expect(storozhPathAllowed('/arenda/samosval')).toBe(true);
     expect(storozhPathAllowed('/arenda/ekskavator-pogruzchik/kazan')).toBe(true);
+    expect(storozhPathAllowed('/uborka-snega')).toBe(true);
   });
   it('keeps quiet on the owner, legal and film pages', () => {
     for (const path of [

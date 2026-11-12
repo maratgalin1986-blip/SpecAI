@@ -374,7 +374,7 @@ export default async function EquipmentDetailPage(props: { params: Promise<{ id:
             <p className="mt-4 max-w-3xl whitespace-pre-line leading-relaxed text-slate-700">
               {item.description
                 ? maskContactsAndLinks(item.description)
-                : 'Описание не указано — уточните детали у менеджера.'}
+                : 'Описание не указано — уточните детали у диспетчера.'}
             </p>
           </section>
 

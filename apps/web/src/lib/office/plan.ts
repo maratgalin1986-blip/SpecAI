@@ -23,11 +23,24 @@ export const OFFICE_SETTINGS = {
 /** Регион, который офис обходит целиком и первым (владелец, 2026-11-09: «возьми весь Татарстан»). */
 export const HOME_REGION = 'Республика Татарстан';
 
-/** Сколько городов из RUSSIAN_CITIES обходит агент «Подрядчики» после домашнего региона. */
-export const DEFAULT_PROVIDER_CITIES = 30;
-
 /** Города агента «Сайты» за пределами домашнего региона в плане по умолчанию. */
 export const DEFAULT_SITE_CITIES: readonly string[] = ['Уфа', 'Самара', 'Пермь', 'Екатеринбург'];
+
+/**
+ * Дальний Восток — первым в обходе «Сайтов» (владелец, 2026-11-12: «во Владивостоке уже утро —
+ * отправь им»): письма уходят по местному времени фирмы (localTime.ts), и восточным городам они
+ * приходят, пока в Москве ночь.
+ */
+export const EAST_SITE_CITIES: readonly string[] = [
+  'Владивосток',
+  'Хабаровск',
+  'Уссурийск',
+  'Южно-Сахалинск',
+  'Находка',
+  'Благовещенск',
+  'Петропавловск-Камчатский',
+  'Якутск',
+];
 
 /** Все города домашнего региона из списка городов России, крупные первыми. */
 export function homeRegionCities(): string[] {
@@ -35,31 +48,42 @@ export function homeRegionCities(): string[] {
 }
 
 /**
- * Сначала весь Татарстан (оба агента, каждый его город), затем остальная Россия:
- * providers × machinery по первым 30 городам и sites × ниши × 4 города; агенты
- * идут так: один шаг providers, три шага sites. Когда один список кончается, идёт
- * остаток другого.
+ * Сначала весь Татарстан (оба агента, каждый его город), затем остальная Россия: и providers,
+ * и sites — по каждому городу списка, крупные первыми. В городе «Подрядчики» проходят все свои
+ * ниши подряд: у кого техника и грузовики, потом заказчики (владелец, 2026-11-12: «всем, кто
+ * связан со спецтехникой и грузоперевозками»). Агенты идут так: один шаг providers, три шага
+ * sites. Когда один список кончается, идёт остаток другого.
  */
 export function defaultPlan(): PlanStep[] {
   const home = homeRegionCities();
-  const providerCities = [
-    ...home,
-    ...RUSSIAN_CITIES.slice(0, DEFAULT_PROVIDER_CITIES)
-      .map((city) => city.name)
-      .filter((name) => !home.includes(name)),
-  ];
+  const providerCities = [...new Set([...home, ...RUSSIAN_CITIES.map((city) => city.name)])];
   const providers: PlanStep[] = providerCities.flatMap((city) =>
     AGENTS.providers.defaultNiches.map((niche) => ({ agent: 'providers' as const, niche, city })),
   );
   const sites: PlanStep[] = [];
-  for (const cityName of [...home, ...DEFAULT_SITE_CITIES]) {
+  // Вся Россия (владелец, 2026-11-12: «не только Дальний Восток, бери всю Россию»): после
+  // домашнего региона и первых четырёх городов — остальные города списка, крупные первыми.
+  const siteCities = [
+    ...new Set([...home, ...DEFAULT_SITE_CITIES, ...RUSSIAN_CITIES.map((c) => c.name)]),
+  ];
+  for (const cityName of siteCities.filter((name) => !EAST_SITE_CITIES.includes(name))) {
     const city = cityByName(cityName);
     if (!city) continue;
     for (const niche of AGENTS.sites.defaultNiches) {
       sites.push({ agent: 'sites', niche, city: city.name });
     }
   }
-  return interleave(providers, sites);
+  // Восточные города — в начале плана, без чередования с «Подрядчиками»: их нужно успеть обойти
+  // до их утра.
+  const east: PlanStep[] = [];
+  for (const cityName of EAST_SITE_CITIES) {
+    const city = cityByName(cityName);
+    if (!city) continue;
+    for (const niche of AGENTS.sites.defaultNiches) {
+      east.push({ agent: 'sites', niche, city: city.name });
+    }
+  }
+  return [...east, ...interleave(providers, sites)];
 }
 
 /** Сколько шагов «Сайтов» идёт на один шаг «Подрядчиков» в плане по умолчанию. */

@@ -3,6 +3,7 @@ import { PLATFORM_PROMISE } from '@specai/shared';
 import { SITE } from '@/lib/site';
 import {
   buildEmail,
+  displayUrl,
   buildFollowUpEmail,
   buildWhatsAppText,
   isRuMobile,
@@ -10,7 +11,14 @@ import {
   LEADS_TO_EMAIL_LINE,
   LEGAL_SIGNATURE,
   NOT_OFFER_LINE,
+  ORDER_BUTTON_LABEL,
+  ORDER_PATH,
   pickChannels,
+  PLATFORM_LINK_LABEL,
+  PLATFORM_NOT_OFFER_LINE,
+  platformUrl,
+  PRICES_LINK_LABEL,
+  PRICES_PATH,
   SERVICE_LINK_LABEL,
   serviceUrl,
   STOP_LINE,
@@ -104,7 +112,10 @@ describe('buildEmail', () => {
     const letter = buildEmail(site, input);
     expect(letter.subject).toBe('Сделали страницу для Стоматология «Улыбка» — посмотрите');
     expect(letter.text).toContain(SITE.name);
-    expect(letter.text).toContain(SITE.platform);
+    // Письмо о сайте — отдельный проект: площадка заявок в нём не упоминается (владелец, 2026-11-12).
+    expect(letter.text).not.toContain(SITE.platform);
+    expect(buildWhatsAppText(site, input)).not.toContain(SITE.platform);
+    expect(buildFollowUpEmail(site, input).text).not.toContain(SITE.platform);
     // Факт — о карточке, с источником; не утверждение о самой фирме.
     expect(letter.text).toContain(
       'В открытой карточке компании Стоматология «Улыбка» на карте не указан сайт.',
@@ -149,7 +160,7 @@ describe('buildEmail', () => {
     expect(text.indexOf(SERVICE_EMAIL)).toBeLessThan(text.indexOf(STOP_LINE));
     // In html the link is escaped (&amp;) and labelled.
     expect(letter.html).toContain(
-      `<a href="${SERVICE_EMAIL.replace('&', '&amp;')}">${SERVICE_LINK_LABEL}</a>`,
+      `<a href="${SERVICE_EMAIL.replace('&', '&amp;')}" style="color:#0f766e">${SERVICE_LINK_LABEL}</a>`,
     );
     expect(letter.html.toLowerCase()).toContain(LEADS_TO_EMAIL_LINE.toLowerCase());
     expect(letter.html.indexOf(SERVICE_LINK_LABEL)).toBeLessThan(letter.html.indexOf(STOP_LINE));
@@ -486,12 +497,219 @@ describe('ссылка «Больше не писать» (К3)', () => {
       buildEmail(provider, { ...input, unsubscribeUrl: url }),
     ]) {
       expect(letter.text.trim().split('\n').at(-1)).toBe(`${UNSUBSCRIBE_LABEL}: ${url}`);
-      expect(letter.html).toContain(`<a href="${url}">`);
+      expect(letter.html).toContain(`<a href="${url}" style=`);
       expect(letter.html).toContain(UNSUBSCRIBE_LABEL);
     }
   });
 
   it('без ссылки строки нет', () => {
     expect(buildEmail(site, input).text).not.toContain(UNSUBSCRIBE_LABEL);
+  });
+});
+
+describe('письмо-презентация под фирму (владелец, 2026-11-12)', () => {
+  it('обложка: название, сфера, город и данные карточки; адрес показан кириллицей, ссылка — как есть', () => {
+    const letter = buildEmail(
+      { ...site, address: 'ул. Баумана, 5', hours: 'Пн–Пт 9:00–18:00' },
+      input,
+    );
+    expect(letter.html).toContain('Черновик сайта для вашей компании');
+    expect(letter.html).toContain('Адрес: ул. Баумана, 5');
+    expect(letter.html).toContain('Часы работы: Пн–Пт 9:00–18:00');
+    expect(letter.html).toContain(`<a href="${input.previewUrl}"`);
+    expect(letter.html).toContain('иистройка24.рф/preview/');
+    expect(letter.html).not.toContain('<img');
+  });
+
+  it('пишет человек: имя, компания и город в приветствии, подпись перед реквизитами', () => {
+    const letter = buildEmail(site, input);
+    expect(letter.text).toContain(`Меня зовут ${SITE.contactPerson}, я из компании ${SITE.name}`);
+    expect(letter.html).toContain(`С уважением, ${SITE.contactPerson}, ${SITE.name}`);
+    expect(letter.html.indexOf('С уважением')).toBeLessThan(letter.html.indexOf(SITE.inn));
+  });
+
+  it('displayUrl: кириллический домен без протокола и меток', () => {
+    expect(displayUrl('https://xn--24-6kc5aagh4arjl.xn--p1ai/preview/abc?x=1')).toBe(
+      'иистройка24.рф/preview/abc',
+    );
+    expect(displayUrl('не адрес')).toBe('не адрес');
+  });
+});
+
+describe('проект площадки: письма по роли ниши', () => {
+  /** Ниши-заказчики: дорожники, строители, проектировщики, сметчики, бетон и карьеры. */
+  const CUSTOMER_NICHES = [
+    'road_construction',
+    'construction',
+    'design_engineering',
+    'estimators',
+    'concrete_aggregates',
+  ] as const;
+  /** Тем, кто считает сметы, — ещё и ссылка на страницу цен. */
+  const WITH_PRICES: readonly string[] = ['design_engineering', 'estimators'];
+  const customer: OutreachProspect = {
+    ...provider,
+    slug: 'dorstroy-omsk',
+    name: 'ООО «Дорстрой»',
+    city: 'Омск',
+    tags: null,
+  };
+  const forNiche = (nicheKey: string): OutreachInput => ({ ...input, nicheKey });
+  const url = (path: string, source: 'email' | 'whatsapp', niche: string) =>
+    `${BASE}${path}?utm_source=${source}&utm_campaign=office-${niche}`;
+  /** Обещания сроков и результата, которых в письмах площадки быть не должно. */
+  const PROMISES = /за \d+ (мин|час|дн)|в течение|сегодня же|через час|дешевле|выгодн|скидк/i;
+
+  it('platformUrl: настоящие страницы площадки с метками канала и аудитории', () => {
+    expect(ORDER_PATH).toBe('/orders');
+    expect(PRICES_PATH).toBe('/ceny');
+    expect(platformUrl(BASE, ORDER_PATH, 'email', 'construction')).toBe(
+      url('/orders', 'email', 'construction'),
+    );
+    expect(platformUrl(`${BASE}/`, '/', 'whatsapp', 'estimators')).toBe(
+      url('/', 'whatsapp', 'estimators'),
+    );
+  });
+
+  it.each(CUSTOMER_NICHES)(
+    '%s: письмо заказчику — без цен и обещаний, со «стоп» и подписью',
+    (niche) => {
+      const letter = buildEmail(customer, forNiche(niche));
+      for (const text of [letter.subject, letter.text, letter.html]) {
+        noPricesOrPromises(text);
+        expect(text).not.toMatch(FORBIDDEN);
+        expect(text).not.toMatch(PROMISES);
+      }
+      // Кто пишет и что это за площадка.
+      expect(letter.text).toContain(SITE.contactPerson);
+      expect(letter.text).toContain(
+        `${SITE.platform} — площадка заявок на спецтехнику по всей России`,
+      );
+      expect(letter.text).toContain(PLATFORM_PROMISE);
+      // О фирме — только то, что она есть на карте.
+      expect(letter.text).toContain(
+        'Мы увидели вашу компанию ООО «Дорстрой» на карте в городе Омск',
+      );
+      expect(letter.text).toContain('Заявку можно оставить без регистрации.');
+      // Кнопка — на страницу заявки, не на страницу исполнителя: её заказчик не просил.
+      const order = url('/orders', 'email', niche);
+      expect(letter.text).toContain(`${ORDER_BUTTON_LABEL}: ${order}`);
+      expect(letter.html).toContain(`<a href="${order.replace('&', '&amp;')}"`);
+      expect(letter.text).toContain(`${PLATFORM_LINK_LABEL}: ${url('/', 'email', niche)}`);
+      for (const text of [letter.text, letter.html]) {
+        expect(text).not.toContain('/preview/');
+        expect(text).not.toContain(input.previewUrl);
+        expect(text).not.toContain('«Это моя компания»');
+        expect(text).not.toContain('страницу исполнителя');
+        expect(text).not.toContain('Черновик сайта');
+        expect(text).not.toContain('sajt-pod-klyuch');
+        expect(text).toContain(STOP_LINE);
+        expect(text).toContain(PLATFORM_NOT_OFFER_LINE);
+        expect(text).toContain(LEGAL_SIGNATURE);
+      }
+      expect(letter.text.includes(`${PRICES_LINK_LABEL}: ${url('/ceny', 'email', niche)}`)).toBe(
+        WITH_PRICES.includes(niche),
+      );
+      expect(letter.html).not.toContain('<img');
+      stopLineIsLast(letter.text);
+    },
+  );
+
+  it('у каждой аудитории свои слова: дорожнику — катки и грейдеры, сметчику — цены для сметы', () => {
+    const road = buildEmail(customer, forNiche('road_construction'));
+    expect(road.subject).toBe(`Самосвалы, катки и грейдеры на объект — ${SITE.platform}`);
+    expect(road.text).toContain('самосвалы, катки, грейдеры и асфальтоукладчики');
+    expect(road.text).toContain('исполнители рядом с объектом сами называют цену');
+    expect(road.text).toContain('посредников и комиссии нет');
+    expect(road.text).toContain('её тоже можно выставить на площадке');
+    const estimator = buildEmail(customer, forNiche('estimators'));
+    expect(estimator.text).toContain('для сметы пригодится открытая страница с ценами');
+    expect(estimator.text).not.toContain('катки');
+    expect(estimator.text).not.toContain('простаивает');
+    expect(buildEmail(customer, forNiche('construction')).text).toContain('автокраны');
+    expect(buildEmail(customer, forNiche('concrete_aggregates')).text).toContain('миксеры');
+    const subjects = CUSTOMER_NICHES.map((n) => buildEmail(customer, forNiche(n)).subject);
+    expect(new Set(subjects).size).toBe(subjects.length);
+  });
+
+  it.each(CUSTOMER_NICHES)(
+    '%s: напоминание и WhatsApp заказчику — те же ссылки и правила',
+    (niche) => {
+      const reminder = buildFollowUpEmail(customer, forNiche(niche));
+      expect(reminder.subject).toMatch(/^Напоминаем: /);
+      expect(reminder.text).toContain(`${ORDER_BUTTON_LABEL}: ${url('/orders', 'email', niche)}`);
+      expect(reminder.text).toContain(`${STOP_LINE} Это единственное напоминание.`);
+      expect(reminder.text.length).toBeLessThan(buildEmail(customer, forNiche(niche)).text.length);
+      stopLineIsLast(reminder.text);
+      const whatsapp = buildWhatsAppText(customer, forNiche(niche));
+      expect(whatsapp.length).toBeLessThanOrEqual(WHATSAPP_MAX_LENGTH);
+      expect(whatsapp).toContain(url('/orders', 'whatsapp', niche));
+      expect(whatsapp).toContain(PLATFORM_PROMISE);
+      expect(whatsapp.includes(url('/ceny', 'whatsapp', niche))).toBe(WITH_PRICES.includes(niche));
+      expect(
+        whatsapp
+          .trim()
+          .endsWith('Сообщение отправлено один раз на номер из открытой карточки компании.'),
+      ).toBe(true);
+      for (const text of [reminder.text, reminder.html, whatsapp]) {
+        noPricesOrPromises(text);
+        expect(text).not.toMatch(FORBIDDEN);
+        expect(text).not.toMatch(PROMISES);
+        expect(text).not.toContain('/preview/');
+        expect(text).not.toContain('«Это моя компания»');
+        expect(text).toContain(STOP_LINE);
+      }
+    },
+  );
+
+  it('WhatsApp заказчику с очень длинным названием: лимит, ссылка на заявку и «стоп» остаются', () => {
+    const long = { ...customer, name: 'Общество с ограниченной ответственностью '.repeat(6) };
+    const text = buildWhatsAppText(long, forNiche('estimators'));
+    expect(text).toContain(url('/orders', 'whatsapp', 'estimators'));
+    expect(text.trim().endsWith(STOP_LINE)).toBe(true);
+  });
+
+  it('перевозчик — исполнитель: своя страница и «Это моя компания», слова про грузовики и рейсы', () => {
+    const letter = buildEmail(provider, forNiche('freight'));
+    expect(letter.subject).toBe(`Ваша страница на ${SITE.platform} уже готова`);
+    expect(letter.text).toContain(
+      'площадка заявок на спецтехнику и грузовой транспорт по всей России',
+    );
+    expect(letter.text).toContain('заявки на грузовики и рейсы рядом с вами');
+    expect(letter.text).not.toContain('вид техники');
+    expect(letter.text).toContain('«Это моя компания»');
+    expect(letter.text).toContain(`Открыть мою страницу: ${input.previewUrl}`);
+    expect(letter.html).toContain(`<a href="${input.previewUrl}"`);
+    stopLineIsLast(letter.text);
+    const reminder = buildFollowUpEmail(provider, forNiche('freight'));
+    expect(reminder.text).toContain('на площадке заявок на спецтехнику и грузовой транспорт');
+    expect(reminder.text).toContain(input.previewUrl);
+    const whatsapp = buildWhatsAppText(provider, forNiche('freight'));
+    expect(whatsapp.length).toBeLessThanOrEqual(WHATSAPP_MAX_LENGTH);
+    expect(whatsapp).toContain('грузовики добавите сами');
+    expect(whatsapp).toContain(input.previewUrl);
+    for (const text of [letter.text, letter.html, reminder.text, whatsapp]) {
+      noPricesOrPromises(text);
+      expect(text).not.toMatch(FORBIDDEN);
+      expect(text).toContain(STOP_LINE);
+    }
+  });
+
+  it('спецтехника и строки без ключа ниши получают прежнее письмо исполнителю', () => {
+    const before = buildEmail(provider, input);
+    expect(buildEmail(provider, forNiche('machinery'))).toEqual(before);
+    expect(buildEmail(provider, forNiche('нет такой'))).toEqual(before);
+    expect(before.text).toContain('название, город, ваша техника и кнопка «Заказать технику»');
+    expect(before.text).toContain('имя, номер, вид техники');
+    expect(buildWhatsAppText(provider, forNiche('machinery'))).toBe(
+      buildWhatsAppText(provider, input),
+    );
+    expect(buildWhatsAppText(provider, input)).toContain(
+      'заявок на спецтехнику по всей России: техника, город, кнопка «Заказать технику».',
+    );
+  });
+
+  it('роль действует только в проекте площадки: фирме «Сайтов» ключ ниши письмо не меняет', () => {
+    expect(buildEmail(site, forNiche('construction'))).toEqual(buildEmail(site, input));
   });
 });

@@ -12,10 +12,18 @@ export const SHIFT_HOURS = 8;
 /** Most machines. */
 export const DEFAULT_RATE = 4000;
 
+/**
+ * Work with the hydraulic hammer: the backhoe's hammer jobs and the wheeled
+ * excavator, which the house sells only «с гидромолотом».
+ */
+export const HAMMER_RATE = 4500;
+
 export const RATES: Record<MachineType, number> = {
   backhoe: DEFAULT_RATE,
   excavator: DEFAULT_RATE,
-  'wheeled-excavator': DEFAULT_RATE,
+  // «Гидромолот 4500» (owner, 2026-11-12): the wheeled excavator is the machine
+  // with the hammer, one price on every surface — tiles, landing, cards, bookings.
+  'wheeled-excavator': HAMMER_RATE,
   kmu: DEFAULT_RATE,
   agp: 3500,
   roller: DEFAULT_RATE,
@@ -27,9 +35,6 @@ export const RATES: Record<MachineType, number> = {
   tractor: 3500,
   trench: DEFAULT_RATE,
 };
-
-/** Work with the hydraulic hammer (backhoe, wheeled excavator). */
-export const HAMMER_RATE = 4500;
 
 /** The 32 t crane, for heavy lifts. */
 export const CRANE_HEAVY_RATE = 5500;
@@ -89,11 +94,15 @@ export function fromPerHour(typeOrRate: MachineType | number): string {
 export const PRICE_GROUPS: { names: string; types: MachineType[]; rate: number }[] = [
   {
     names:
-      'Экскаватор-погрузчик, фронтальный погрузчик, гусеничный и колёсный экскаватор, манипулятор КМУ, бульдозер и каток',
-    types: ['backhoe', 'loader', 'excavator', 'wheeled-excavator', 'kmu', 'dozer', 'roller'],
+      'Экскаватор-погрузчик, фронтальный погрузчик, гусеничный экскаватор, манипулятор КМУ, бульдозер и каток',
+    types: ['backhoe', 'loader', 'excavator', 'kmu', 'dozer', 'roller'],
     rate: RATES.backhoe,
   },
-  { names: 'с гидромолотом', types: [], rate: HAMMER_RATE },
+  {
+    names: 'колёсный экскаватор с гидромолотом и экскаватор-погрузчик с гидромолотом',
+    types: ['wheeled-excavator'],
+    rate: HAMMER_RATE,
+  },
   { names: 'автокран', types: ['crane'], rate: RATES.crane },
   { names: 'автокран 32 т', types: [], rate: CRANE_HEAVY_RATE },
   { names: 'трактор и автовышка', types: ['tractor', 'agp'], rate: RATES.tractor },

@@ -9,9 +9,9 @@
 set -uo pipefail
 
 BASE_URL="${BASE_URL:-https://spec-ai-web.vercel.app}"
-RELAY_STEPS="${RELAY_STEPS:-6}"
+RELAY_STEPS="${RELAY_STEPS:-12}"
 # New steps start only within this many seconds, so the final tick still fits the job timeout.
-RELAY_BUDGET_S="${RELAY_BUDGET_S:-300}"
+RELAY_BUDGET_S="${RELAY_BUDGET_S:-540}"
 UA='SpecPlast16-office/1.0 (+https://xn--24-6kc5aagh4arjl.xn--p1ai; specplast16@yandex.ru)'
 
 if [ -z "${CRON_SECRET:-}" ]; then
@@ -176,10 +176,30 @@ while [ "$i" -lt "$RELAY_STEPS" ] && [ "$SECONDS" -lt "$RELAY_BUDGET_S" ]; do
   sleep 3
 done
 
+# The owner's test letter (apps/web/src/lib/office/testLetter.ts): sent when the last line of the
+# on-demand file asks for it. The recipient is fixed in the code; the log gets status words only.
+if tail -n 1 .github/office-relay-run.txt 2>/dev/null | grep -q 'пробное письмо'; then
+  if curl -fsS --max-time 60 -H "$AUTH" -o "$TMP/test.json" "$BASE_URL/api/cron/office/test-letter"; then
+    echo "test letter: $(jq -r 'if .ok then "sent created=\(.created)" else "not sent: \(.reason // "?" | .[0:160])" end' "$TMP/test.json" 2>/dev/null || echo 'unreadable answer')"
+  else
+    echo "test letter: no answer"
+  fi
+fi
+
 # Outreach planning and the owner's digest; the plan steps were done above.
 TICK_OK=1
 if curl -fsS --max-time 70 -H "$AUTH" -o "$TMP/tick.json" "$BASE_URL/api/cron/office?steps=0"; then
-  echo "tick: done"
+  # Counts and status words only (the answer has no names or addresses).
+  echo "tick: $(jq -r 'if .skipped then "skipped=\(.skipped)" else (.outreach // {}) | "email=\(.email // 0) whatsapp=\(.whatsapp // 0) followUps=\(.followUps // 0) errors=\(.errors // 0) filtered=\(.filtered // 0) skipped=\(.skipped // "no") mail=\(.mail // "ok") code=\((.mailError // "") | (capture("(?<c>[0-9]{3})") | .c) // "-")" end' "$TMP/tick.json" 2>/dev/null || echo 'done')"
+  # The mail server's own refusal text (it carries no password; addresses are masked): without it
+  # «mail=broken» cannot be told apart — wrong password, wrong login or a blocked sign-in.
+  jq -r '(.outreach.mailError // "") | select(length > 0) | gsub("[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+"; "<address>") | "tick: mail error: \(.[0:180])"' "$TMP/tick.json" 2>/dev/null || true
+  # Signs of the mailbox settings without their values (which server, the login's domain, whether
+  # the sender equals the login, whether the password looks like an app password).
+  jq -r '(.outreach.mailHint // "") | select(length > 0) | "tick: mail settings: \(.[0:160])"' "$TMP/tick.json" 2>/dev/null || true
+  # Replies read from the mailbox: counts only.
+  jq -r '.replies // empty | "tick: replies: seen=\(.seen // 0) replies=\(.replies // 0) answered=\(.answered // 0) stops=\(.stops // 0) bounces=\(.bounces // 0) needOwner=\(.needOwner // 0) skipped=\(.skipped // "no") error=\(if .error then "yes" else "no" end)"' "$TMP/tick.json" 2>/dev/null || true
+  jq -r '(.replies.error // "") | select(length > 0) | "tick: mailbox error: \(.[0:160])"' "$TMP/tick.json" 2>/dev/null || true
 else
   TICK_OK=0
   echo "tick: no answer"

@@ -855,7 +855,8 @@ export default async function ProviderPage(props: { searchParams: Promise<Provid
               <a href={providerPath(companyId)} className="text-signal-700 underline">
                 публичной странице
               </a>{' '}
-              и телефон, который заказчик увидит после подтверждения брони.
+              и телефон компании: он виден на карте и на этой странице, пока включено «Показывать
+              телефон на карте».
             </p>
           </div>
           <div className="cab-card max-w-xl">

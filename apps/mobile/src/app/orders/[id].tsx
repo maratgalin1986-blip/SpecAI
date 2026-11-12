@@ -54,9 +54,7 @@ import {
 } from '@/lib/format';
 import {
   ORDER_STAGES,
-  addressFromDescription,
   categoryIcon,
-  distanceKm,
   HOUSE_COMPANY_ID,
   houseFirstBids,
   orderDays,
@@ -64,6 +62,7 @@ import {
   relativeDay,
   stageHeadline,
 } from '@/lib/orderFlow';
+import { orderPlace } from '@/lib/orderPlace';
 import { deliveryEstimate } from '@/lib/providerFeed';
 import { colors, radius, spacing, TAP, typography } from '@/theme';
 
@@ -330,7 +329,6 @@ export default function OrderDetailScreen() {
   };
   const stage = orderStage(stageInput);
   const canAccept = isOwner && order.status === 'OPEN';
-  const address = order.location?.addressLine || addressFromDescription(order.description);
   const days = orderDays(order.desiredStartDate, order.desiredEndDate);
   const pendingPrices = order.bids
     .filter((bid) => bid.status === 'PENDING')
@@ -345,13 +343,9 @@ export default function OrderDetailScreen() {
     fleet?.pin && typeof fleet.pin.baseLat === 'number' && typeof fleet.pin.baseLon === 'number'
       ? { lat: fleet.pin.baseLat, lon: fleet.pin.baseLon }
       : null;
-  const orderLat = order.location?.latitude;
-  const orderLon = order.location?.longitude;
-  const km =
-    base && typeof orderLat === 'number' && typeof orderLon === 'number'
-      ? distanceKm(base, { lat: orderLat, lon: orderLon })
-      : null;
-  const suggestedDelivery = deliveryEstimate(km, fleet?.pin?.deliveryPricePerKm);
+  // Исполнителю до подтверждения брони — только город и километры от базы.
+  const place = orderPlace(order, base);
+  const suggestedDelivery = deliveryEstimate(place.km, fleet?.pin?.deliveryPricePerKm);
 
   const handleBidSubmitted = () => {
     setBidOpen(false);
@@ -410,14 +404,15 @@ export default function OrderDetailScreen() {
             </View>
             {searching && bidCount === 0 ? <ActivityIndicator color={colors.primary} /> : null}
           </View>
-          {address ? (
+          {place.text || place.fromBaseText ? (
             <View style={styles.heroAddress}>
               <Ionicons name="location" size={16} color={colors.primary} />
               <Text style={styles.heroAddressText} numberOfLines={2}>
-                {address}
+                {[place.text, place.fromBaseText].filter(Boolean).join(' · ')}
               </Text>
             </View>
           ) : null}
+          {place.hint ? <Text style={styles.heroAddressHint}>{place.hint}</Text> : null}
           {searching ? (
             <Text style={styles.heroHint}>
               {bidCount === 0
@@ -653,6 +648,7 @@ const styles = StyleSheet.create({
   heroMeta: { fontSize: 14, color: colors.onDarkMuted, marginTop: 2 },
   heroAddress: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   heroAddressText: { flex: 1, color: colors.onDark, fontSize: 14 },
+  heroAddressHint: { color: colors.onDark, opacity: 0.75, fontSize: 12 },
   heroHint: { color: colors.onDarkMuted, fontSize: 13, lineHeight: 18 },
   timeline: { gap: 0 },
   step: { flexDirection: 'row', gap: spacing.md, minHeight: 36 },

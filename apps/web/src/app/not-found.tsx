@@ -14,8 +14,8 @@ export default function NotFound() {
       </div>
       <h1 className="mt-4 text-3xl font-bold">Страница не найдена</h1>
       <p className="mt-2 text-slate-600">
-        Тут пока котлован — экскаватор {SITE.name} уже едет. А пока вернитесь на главную, загляните
-        в каталог или спросите ИИ-агента.
+        Такой страницы нет: возможно, адрес изменился. Вернитесь на главную, откройте каталог или
+        позвоните — подскажем.
       </p>
       <div className="mt-6 flex flex-wrap justify-center gap-3">
         <a

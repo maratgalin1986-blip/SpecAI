@@ -28,6 +28,8 @@ import {
   followUpWindow,
   markReplied,
   OUTREACH_BUDGET_MS,
+  RAMP_START,
+  rampedCap,
   outreachErrorText,
   AUTO_SEND_HOURS,
   DELIVERY_UNKNOWN,
@@ -44,6 +46,8 @@ import {
 import { DUPLICATE_CLOSED_AT, isDuplicateMark } from './contacted';
 
 const NOW = new Date('2026-11-09T08:00:00+03:00');
+/** Тот же день, 11:00 по Москве: в дневном окне лимита уже есть «раньше сегодня». */
+const LATER = new Date('2026-11-09T11:00:00+03:00');
 const DAY = 24 * 60 * 60 * 1000;
 const daysAgo = (days: number) => new Date(NOW.getTime() - days * DAY);
 
@@ -270,7 +274,15 @@ describe('sendOutreach', () => {
   it('sends one letter per READY prospect with an address and marks it CONTACTED', async () => {
     const { db, updates } = fakeDb([row({ id: 'a' }), row({ id: 'b', email: null })]);
     const result = await sendOutreach(NOW, deps(db));
-    expect(result).toEqual({ email: 1, whatsapp: 0, followUps: 0, skipped: null, errors: 0 });
+    expect(result).toEqual({
+      email: 1,
+      whatsapp: 0,
+      followUps: 0,
+      skipped: null,
+      errors: 0,
+      // Первые письма прохода — для сообщения владельцу (тик снимает поле перед ответом).
+      samples: [{ name: 'Компания a', city: 'Казань', kind: 'site', token: 'tok-a' }],
+    });
     expect(okEmail).toHaveBeenCalledTimes(1);
     const sent = okEmail.mock.calls[0]![0];
     expect(sent.to).toBe('a@example.com');
@@ -367,7 +379,8 @@ describe('sendOutreach', () => {
 
   it('respects the daily cap per channel, counting what went out this Moscow day', async () => {
     const { start } = mskDayBounds(NOW);
-    const earlierToday = new Date(start.getTime() + 3_600_000);
+    // Дневное окно лимита — с 8:00 по Москве: считаются письма, ушедшие в нём.
+    const earlierToday = new Date(start.getTime() + 9 * 3_600_000);
     const yesterday = new Date(start.getTime() - 3_600_000);
     const { db } = fakeDb([
       row({
@@ -387,7 +400,7 @@ describe('sendOutreach', () => {
       row({ id: 'b' }),
       row({ id: 'c', whatsapp: '+79271112233' }),
     ]);
-    const result = await sendOutreach(NOW, deps(db, { settings: settings({ dailyCap: 3 }) }));
+    const result = await sendOutreach(LATER, deps(db, { settings: settings({ dailyCap: 3 }) }));
     // 2 letters already today → 1 left; WhatsApp: none today → up to 3.
     expect(result.email).toBe(1);
     expect(result.whatsapp).toBe(1);
@@ -455,8 +468,9 @@ describe('sendOutreach', () => {
     let tick = 0;
     const clock = () => {
       tick += 1;
-      // The start, the row check and the send check read 0; after one send the budget is spent.
-      return tick <= 3 ? 0 : OUTREACH_BUDGET_MS + 1;
+      // The pass start, the project start, the row check and the send check read 0; after one
+      // send the budget is spent.
+      return tick <= 4 ? 0 : OUTREACH_BUDGET_MS + 1;
     };
     const result = await sendOutreach(NOW, deps(db, { clock }));
     expect(result.email).toBe(1);
@@ -689,14 +703,18 @@ describe('sendOutreach — reminders (S8)', () => {
 
   it('reminders sent earlier today use up the cap for first letters too', async () => {
     const { start } = mskDayBounds(NOW);
-    const earlierToday = new Date(start.getTime() + 3_600_000);
+    // Дневное окно лимита — с 8:00 по Москве: считаются письма, ушедшие в нём.
+    const earlierToday = new Date(start.getTime() + 9 * 3_600_000);
     const fake = fakeDb([
       contacted('done1', 6, { followUpSentAt: earlierToday }),
       contacted('done2', 7, { followUpSentAt: earlierToday }),
       row({ id: 'new', kind: 'provider' }),
       contacted('due', 5),
     ]);
-    const result = await sendOutreach(NOW, approved(fake, { settings: settings({ dailyCap: 2 }) }));
+    const result = await sendOutreach(
+      LATER,
+      approved(fake, { settings: settings({ dailyCap: 2 }) }),
+    );
     expect(result).toMatchObject({ email: 0, followUps: 0 });
     expect(okEmail).not.toHaveBeenCalled();
   });
@@ -1504,9 +1522,12 @@ describe('режим «сам по расписанию»: защиты перв
       ok: false as const,
       reason: 'Invalid login: 535 5.7.8 Error: authentication failed',
     }));
-    const result = await sendOutreach(day, deps(db, { settings: auto(), verifyMail }));
+    const mailHint = () => 'host=smtp.yandex.ru login=@yandex.ru from=login pass=other';
+    const result = await sendOutreach(day, deps(db, { settings: auto(), verifyMail, mailHint }));
     expect(result).toMatchObject({ email: 0, errors: 0, mail: 'broken' });
     expect(result.mailError).toContain('535');
+    // Признаки настроек — без значений: по ним видно, что чинить, не заходя в Vercel.
+    expect(result.mailHint).toBe('host=smtp.yandex.ru login=@yandex.ru from=login pass=other');
     expect(verifyMail).toHaveBeenCalledTimes(1);
     expect(okEmail).not.toHaveBeenCalled();
     expect(updates).toEqual([]);
@@ -1632,5 +1653,111 @@ describe('режим «сам по расписанию»: защиты перв
     expect(email).toHaveBeenCalledTimes(2);
     // Замок снят: следующий проход работает.
     expect(held).toBe(false);
+  });
+});
+
+describe('местное время фирмы и «восточное утро» (владелец, 2026-11-12)', () => {
+  // 01:00 по Москве = 08:00 во Владивостоке.
+  const eastMorning = new Date('2026-11-13T01:00:00+03:00');
+  const autoMode = () => settings({ outreachMode: 'auto', whatsappAuto: false, dailyCap: 30 });
+
+  it('ночью по Москве письмо уходит фирме из Владивостока, казанская ждёт своего утра', async () => {
+    const rows = [row({ id: 'kzn' }), row({ id: 'vl', city: 'Владивосток', email: 'vl@mail.ru' })];
+    const { db } = fakeDb(rows);
+    const result = await sendOutreach(eastMorning, deps(db, { settings: autoMode() }));
+    expect(result).toMatchObject({ email: 1, skipped: null });
+    expect(okEmail.mock.calls.map((c) => c[0].to)).toEqual(['vl@mail.ru']);
+  });
+
+  it('ночью, когда писать некому, — «night»', async () => {
+    const { db } = fakeDb([row({ id: 'kzn' })]);
+    const result = await sendOutreach(eastMorning, deps(db, { settings: autoMode() }));
+    expect(result).toMatchObject({ email: 0, skipped: 'night' });
+    expect(okEmail).not.toHaveBeenCalled();
+  });
+
+  it('днём по Москве у Владивостока уже вечер — ему не пишем', async () => {
+    const afternoon = new Date('2026-11-13T15:00:00+03:00'); // 22:00 во Владивостоке
+    const rows = [row({ id: 'kzn' }), row({ id: 'vl', city: 'Владивосток', email: 'vl@mail.ru' })];
+    const { db } = fakeDb(rows);
+    const result = await sendOutreach(afternoon, deps(db, { settings: autoMode() }));
+    expect(result.email).toBe(1);
+    expect(okEmail.mock.calls.map((c) => c[0].to)).toEqual(['kzn@example.com']);
+  });
+
+  it('лимит — на сутки по Москве: ночные письма востоку считаются вместе с дневными', async () => {
+    const { start } = mskDayBounds(LATER);
+    const night = new Date(start.getTime() + 3_600_000);
+    const { db } = fakeDb([
+      row({ id: 's1', status: 'CONTACTED', emailSentAt: night, contactedAt: night }),
+      row({ id: 's2', status: 'CONTACTED', emailSentAt: night, contactedAt: night }),
+      row({ id: 'a' }),
+      row({ id: 'b', email: 'b@mail.ru' }),
+    ]);
+    const result = await sendOutreach(
+      LATER,
+      deps(db, { settings: settings({ outreachMode: 'auto', whatsappAuto: false, dailyCap: 3 }) }),
+    );
+    expect(result.email).toBe(1);
+  });
+});
+
+describe('два проекта — два лимита, лимит растёт постепенно (владелец, 2026-11-12)', () => {
+  it('письма о сайтах и письма площадки считаются раздельно', async () => {
+    const day = new Date('2026-11-13T12:00:00+03:00'); // чётный час: сайты первыми
+    const rows = [
+      row({ id: 's1' }),
+      row({ id: 's2', email: 's2@mail.ru' }),
+      row({ id: 'p1', kind: 'provider', email: 'p1@mail.ru' }),
+      row({ id: 'p2', kind: 'provider', email: 'p2@mail.ru' }),
+    ];
+    const { db } = fakeDb(rows);
+    const result = await sendOutreach(
+      day,
+      deps(db, { settings: settings({ outreachMode: 'auto', whatsappAuto: false, dailyCap: 1 }) }),
+    );
+    // По одному письму на проект, а не одно на всех.
+    expect(result.email).toBe(2);
+    expect(rows.filter((r) => r.emailSentAt).map((r) => r.id)).toEqual(['s1', 'p1']);
+  });
+
+  it('rampedCap: 250 на проект действует сразу; выше — растёт примерно в 1,4 раза в день', () => {
+    const at = (days: number) => new Date(RAMP_START.getTime() + days * 86_400_000 + 3_600_000);
+    expect(rampedCap(250, at(0))).toBe(250);
+    expect(rampedCap(20, at(5))).toBe(20);
+    expect(rampedCap(1000, at(0))).toBe(250);
+    expect(rampedCap(1000, at(1))).toBe(350);
+    expect(rampedCap(1000, at(30))).toBe(1000);
+    expect(rampedCap(1000, new Date(RAMP_START.getTime() - 86_400_000))).toBe(250);
+  });
+});
+
+describe('проект площадки: письмо по роли ниши', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('строителю с почтой на своём домене уходит письмо заказчика, без страницы исполнителя', async () => {
+    const fake = fakeDb([
+      row({
+        id: 'builder',
+        kind: 'provider',
+        niche: 'construction',
+        name: 'ООО «СтройГрад»',
+        email: 'info@stroygrad-kzn.ru',
+      }),
+      row({ id: 'carrier', kind: 'provider', niche: 'freight', name: 'ООО «ТрансРейс»' }),
+    ]);
+    const result = await sendOutreach(NOW, deps(fake.db));
+    // Почта на своём домене — причина не писать только о сайте: площадке сайт фирмы не мешает.
+    expect(result).toMatchObject({ email: 2 });
+    expect(result.filtered ?? 0).toBe(0);
+    const [builder, carrier] = okEmail.mock.calls.map((c) => c[0]);
+    expect(builder!.to).toBe('info@stroygrad-kzn.ru');
+    expect(builder!.text).toContain('/orders?utm_source=email&utm_campaign=office-construction');
+    expect(builder!.text).not.toContain('/preview/');
+    expect(builder!.text).not.toContain('«Это моя компания»');
+    // Перевозчик — исполнитель: его страница и «Это моя компания».
+    expect(carrier!.text).toContain('/preview/tok-carrier');
+    expect(carrier!.text).toContain('«Это моя компания»');
+    expect(carrier!.text).toContain('грузовики и рейсы');
   });
 });

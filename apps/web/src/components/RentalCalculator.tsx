@@ -69,7 +69,7 @@ export function RentalCalculator({
         </div>
         <div className="text-2xl font-bold text-slate-900">{rub(total)}</div>
         <div className="text-xs text-slate-500">
-          Предварительно, без подачи техники. Точную цену подтвердит менеджер.
+          Предварительно, без подачи техники. Точную цену подтвердит диспетчер.
         </div>
       </div>
       <CallbackForm

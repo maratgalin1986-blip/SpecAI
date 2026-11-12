@@ -17,6 +17,7 @@ export default function robots(): MetadataRoute.Robots {
         '/kp',
         '/otpiska',
         '/oplata',
+        '/pokaz',
       ],
     },
     sitemap: `${siteUrl()}/sitemap.xml`,

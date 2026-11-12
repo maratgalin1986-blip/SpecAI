@@ -19,7 +19,7 @@ export function ObjectPhotos() {
               src={photo.src}
               alt={`${photo.caption} — объект ${SITE.name}`}
               loading="lazy"
-              className="aspect-[4/3] w-full object-cover"
+              className="aspect-[3/4] w-full object-cover"
             />
             <figcaption className="p-2 text-xs text-slate-600">
               {photo.stage === 'before' ? 'До · ' : photo.stage === 'after' ? 'После · ' : ''}

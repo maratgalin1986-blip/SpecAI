@@ -1,5 +1,5 @@
 import type { NearPoint } from './near';
-import type { IntakePin, ProviderPin } from './providersMap';
+import type { CustomerPin, IntakePin, ProviderPin } from './providersMap';
 import { STORAGE_KEYS, getItem } from './storage';
 
 /**
@@ -300,6 +300,12 @@ export interface Order {
     city?: string | null;
     latitude?: number | null;
     longitude?: number | null;
+    /**
+     * Есть только у исполнителя до подтверждения брони: сервер скрывает адрес
+     * и точку (addressLine, latitude, longitude — null) и даёт город и целые
+     * километры от базы компании (null — база не задана). См. lib/orderPlace.ts.
+     */
+    distanceKm?: number | null;
   } | null;
   /** Непрочитанные сообщения в чатах по заявке (для бейджей). */
   unreadMessages?: number;
@@ -396,6 +402,19 @@ export function login(email: string, password: string) {
   return apiFetch<{ token: string; user: ApiUser }>('/api/mobile/login', {
     method: 'POST',
     body: { email, password },
+    anonymous: true,
+  });
+}
+
+/**
+ * Письмо со ссылкой для сброса пароля. Сервер отвечает одинаково для любого
+ * адреса; пока почта площадки не подключена — 503 с понятным текстом
+ * (ApiError.message), его и показываем.
+ */
+export function requestPasswordReset(email: string) {
+  return apiFetch<{ ok: boolean }>('/api/auth/forgot-password', {
+    method: 'POST',
+    body: { email: email.trim().toLowerCase() },
     anonymous: true,
   });
 }
@@ -694,6 +713,9 @@ export interface CompanyPin {
   /** Радиус выезда от базы, км, и цена подачи за км (null — не задана). */
   deliveryRadiusKm?: number;
   deliveryPricePerKm?: string | number | null;
+  /** «Показывать меня на карте» и «Показывать телефон на карте»: null и нет поля — включено. */
+  showOnMap?: boolean | null;
+  showPhoneOnMap?: boolean | null;
 }
 
 export function fetchMyCompanyPin() {
@@ -709,6 +731,8 @@ export function updateMyCompanyPin(input: {
   pinNote?: string;
   deliveryRadiusKm?: number;
   deliveryPricePerKm?: number | null;
+  showOnMap?: boolean;
+  showPhoneOnMap?: boolean;
 }) {
   return apiFetch<{ company: CompanyPin }>('/api/companies/me', { method: 'PATCH', body: input });
 }
@@ -725,9 +749,19 @@ export function fetchOpenOrders(params: { scope?: 'near' | 'all'; offset?: numbe
   return apiFetch<{ orders: Order[]; nextOffset?: number | null }>(`/api/orders?${query}`);
 }
 
-/** Исполнители на карте: точки баз компаний (публично, без контактов). */
-export function fetchProviderPins() {
-  return apiFetch<{ providers: ProviderPin[]; intake?: IntakePin[] }>('/api/providers/map');
+/**
+ * Карта «все видят всех»: исполнители (телефон — только если сам показывает),
+ * открытые заявки как «Заказчик рядом» и точки «приём заявок». `bbox` —
+ * окно карты «south,west,north,east»: сервер отдаёт ближайших к его центру.
+ */
+export function fetchProviderPins(params: { bbox?: string | null; limit?: number } = {}) {
+  const query = new URLSearchParams();
+  if (params.bbox) query.set('bbox', params.bbox);
+  if (params.limit) query.set('limit', String(params.limit));
+  const search = query.toString();
+  return apiFetch<{ providers: ProviderPin[]; customers?: CustomerPin[]; intake?: IntakePin[] }>(
+    `/api/providers/map${search ? `?${search}` : ''}`,
+  );
 }
 
 /** Все открытые заявки с ожидающими предложениями своей компании («Мои предложения»). */
@@ -1304,6 +1338,15 @@ export interface LiveMachine {
   /** Подпись на карте: «Я на линии · машина · цена · имя». */
   bubble: string;
   updatedAt: string;
+  /**
+   * Телефон шлёт свежее положение: значок там, где машина сейчас. false —
+   * машина стоит на базе (парк СпецПласт16 на линии всегда, без GPS).
+   */
+  live?: boolean;
+  /** «до пт», «до отключения»; null — живая линия без срока. */
+  until?: string | null;
+  /** Сегодня занята подтверждённой бронью: на карте, но как занятая. */
+  busyToday?: boolean;
 }
 
 /**
@@ -1341,7 +1384,7 @@ export function fetchNearbyLine(around: { lat: number; lon: number } | null, km?
   }
   if (km) q.set('km', String(km));
   const query = q.toString();
-  return apiFetch<{ machines: LiveMachine[]; base?: BaseMachine[] }>(
+  return apiFetch<{ machines: LiveMachine[]; base?: BaseMachine[] | null }>(
     `/api/line/nearby${query ? `?${query}` : ''}`,
   );
 }

@@ -21,7 +21,8 @@ const NAV_LINKS: NavLink[] = [
   { href: '/equipment', label: 'Техника', tier: 'core' },
   { href: '/map', label: 'Карта', tier: 'xl' },
   { href: '/?walk=1', label: '3D-город', tier: 'more' },
-  { href: '/agents', label: 'ИИ-агенты', tier: 'more' },
+  { href: '/uborka-snega', label: 'Уборка снега', tier: 'more' },
+  { href: '/agents', label: 'Помощник', tier: 'more' },
   { href: '/contacts', label: 'Контакты', tier: 'more' },
 ];
 

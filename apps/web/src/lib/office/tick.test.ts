@@ -7,6 +7,8 @@ import {
   STEP_MIN_MS,
   TICK_LOCK_MS,
   TICK_RESERVE_MS,
+  lastPassValue,
+  sentNotice,
   officeTick,
   purgeTerminatedSiteLeads,
   sendDigestChunks,
@@ -33,6 +35,18 @@ function deps(over: Partial<TickDeps> = {}): TickDeps {
     step: vi.fn(async () => okStep('Казань')),
     outreach: vi.fn(async () => ({ email: 1, whatsapp: 0, skipped: null, errors: 0 })),
     sendDigest: vi.fn(async () => true),
+    replies: vi.fn(async () => ({
+      skipped: null,
+      seen: 0,
+      replies: 0,
+      answered: 0,
+      stops: 0,
+      bounces: 0,
+      needOwner: 0,
+    })),
+    savePass: vi.fn(async () => undefined),
+    alert: vi.fn(async () => undefined),
+    notify: vi.fn(async () => true),
     ...over,
   };
 }
@@ -284,5 +298,110 @@ describe('purgeTerminatedSiteLeads — заявки посетителей по�
     const spy = vi.spyOn(db.prospect, 'findMany');
     expect(await purgeTerminatedSiteLeads(NOW, db)).toBe(0);
     expect(spy).not.toHaveBeenCalled();
+  });
+});
+
+describe('ответы фирм, итог прохода и сломанный ящик', () => {
+  it('ответы читаются до рассылки, когда времени хватает на обе', async () => {
+    const order: string[] = [];
+    const d = deps({
+      replies: vi.fn(async () => {
+        order.push('replies');
+        return {
+          skipped: null,
+          seen: 2,
+          replies: 1,
+          answered: 1,
+          stops: 0,
+          bounces: 0,
+          needOwner: 0,
+        };
+      }),
+      outreach: vi.fn(async () => {
+        order.push('outreach');
+        return { email: 1, whatsapp: 0, skipped: null, errors: 0 };
+      }),
+    });
+    const result = await officeTick(
+      MORNING,
+      { budgetMs: 50_000, maxSteps: 0, digest: 'window' },
+      d,
+    );
+    expect(order).toEqual(['replies', 'outreach']);
+    expect(result).toMatchObject({ replies: { replies: 1, answered: 1 } });
+    expect(d.savePass).toHaveBeenCalledTimes(1);
+    expect(d.alert).not.toHaveBeenCalled();
+  });
+
+  it('после шагов поиска времени мало — ответы не читаются, рассылка идёт', async () => {
+    let now = 0;
+    const d = deps({
+      clock: () => now,
+      step: vi.fn(async () => {
+        now += 25_000;
+        return okStep('Казань');
+      }),
+    });
+    await officeTick(MORNING, { budgetMs: 50_000, maxSteps: 1, digest: 'window' }, d);
+    expect(d.replies).not.toHaveBeenCalled();
+    expect(d.outreach).toHaveBeenCalledTimes(1);
+  });
+
+  it('ящик отклонил вход — владельцу уходит срочное сообщение, итог записан с кодом', async () => {
+    const broken = {
+      email: 0,
+      whatsapp: 0,
+      skipped: null,
+      errors: 0,
+      mail: 'broken' as const,
+      mailError: 'Invalid login: 535 5.7.8 Error: authentication failed',
+      mailHint: 'host=smtp.yandex.ru login=@ya.ru from=login pass=app-password',
+    };
+    const d = deps({ outreach: vi.fn(async () => broken) });
+    await officeTick(MORNING, { budgetMs: 50_000, maxSteps: 0, digest: 'window' }, d);
+    expect(d.alert).toHaveBeenCalledWith(
+      'office-mail-broken',
+      MORNING,
+      expect.stringContaining('ящик отвечает ошибкой'),
+    );
+    expect(JSON.parse(lastPassValue(MORNING, broken))).toEqual({
+      at: MORNING.toISOString(),
+      email: 0,
+      errors: 0,
+      skipped: null,
+      mail: 'broken',
+      code: '535',
+      hint: 'host=smtp.yandex.ru login=@ya.ru from=login pass=app-password',
+    });
+  });
+});
+
+describe('примеры отправленных писем владельцу', () => {
+  it('уходят в Telegram со ссылками на презентации и не попадают в ответ крона', async () => {
+    const samples = [
+      { name: 'Автомойка «Блеск»', city: 'Владивосток', kind: 'site', token: 'tok1' },
+      { name: 'Кран-Сервис', city: null, kind: 'provider', token: 'tok2' },
+    ];
+    const d = deps({
+      outreach: vi.fn(async () => ({ email: 2, whatsapp: 0, skipped: null, errors: 0, samples })),
+    });
+    const result = await officeTick(
+      MORNING,
+      { budgetMs: 50_000, maxSteps: 0, digest: 'window' },
+      d,
+    );
+    expect(d.notify).toHaveBeenCalledTimes(1);
+    expect(JSON.stringify(result)).not.toContain('Блеск');
+    const text = sentNotice(2, samples, 'https://site.example/');
+    expect(text).toContain('1. Автомойка «Блеск», Владивосток — https://site.example/pokaz/tok1');
+    expect(text).toContain('2. Кран-Сервис — https://site.example/preview/tok2');
+  });
+
+  it('без отправленных писем сообщения нет', async () => {
+    const d = deps({
+      outreach: vi.fn(async () => ({ email: 0, whatsapp: 0, skipped: 'night', errors: 0 })),
+    });
+    await officeTick(NIGHT, { budgetMs: 50_000, maxSteps: 0, digest: 'window' }, d);
+    expect(d.notify).not.toHaveBeenCalled();
   });
 });

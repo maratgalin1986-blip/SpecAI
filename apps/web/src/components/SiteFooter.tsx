@@ -35,6 +35,9 @@ export function SiteFooter() {
           <a href="/ceny" className={LINK}>
             Цены
           </a>
+          <a href="/uborka-snega" className={LINK}>
+            Уборка снега
+          </a>
           <a href="/providers" className="hover:text-white">
             Исполнители
           </a>
@@ -50,7 +53,7 @@ export function SiteFooter() {
             Заявка на технику
           </a>
           <a href="/agents" className={LINK}>
-            ИИ-агенты
+            Помощник на сайте
           </a>
           <a href="/contacts" className={LINK}>
             Контакты

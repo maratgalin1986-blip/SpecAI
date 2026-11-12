@@ -7,6 +7,7 @@ import { PromiseNote } from '@/components/PromiseNote';
 import { CinemaBackdrop } from '@/components/CinemaHero';
 import { BasePicker, type BaseValue } from '@/components/BasePicker';
 import { ConsentText } from '@/components/ConsentText';
+import { useEmailFeatures } from '@/components/EmailFeaturesProvider';
 import { Hint } from '@/components/Hint';
 import { QuickProviderForm, type QuickProviderInitial } from '@/components/QuickProviderForm';
 import { noteInstallMoment } from '@/lib/installHint';
@@ -57,6 +58,7 @@ export default function RegisterPage() {
   const [publicConsent, setPublicConsent] = useState(false);
   // The weekly newsletter (ФЗ «О рекламе» ст. 18): optional and unticked.
   const [newsConsent, setNewsConsent] = useState(false);
+  const { weeklyDigest } = useEmailFeatures();
   const [base, setBase] = useState<BaseValue>({ address: '', lat: null, lon: null });
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -272,15 +274,18 @@ export default function RegisterPage() {
                 </span>
               </label>
             )}
-            <label className="flex items-start gap-2 text-xs text-slate-600">
-              <input
-                type="checkbox"
-                checked={newsConsent}
-                onChange={(e) => setNewsConsent(e.target.checked)}
-                className="mt-0.5"
-              />
-              <span>{NEWS_CONSENT_LABEL}</span>
-            </label>
+            {/* No weekly letter is offered while letters are not sent (lib/emailFeatures.ts). */}
+            {weeklyDigest && (
+              <label className="flex items-start gap-2 text-xs text-slate-600">
+                <input
+                  type="checkbox"
+                  checked={newsConsent}
+                  onChange={(e) => setNewsConsent(e.target.checked)}
+                  className="mt-0.5"
+                />
+                <span>{NEWS_CONSENT_LABEL}</span>
+              </label>
+            )}
             <p className="text-xs text-slate-500">
               Создавая аккаунт, вы принимаете{' '}
               <a href="/pravila" className="underline" target="_blank">

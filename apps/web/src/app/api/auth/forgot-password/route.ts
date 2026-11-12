@@ -7,6 +7,7 @@ import { emailSchema } from '@specai/shared';
 import { checkRateLimit } from '@/lib/rateLimit';
 import { generateRawToken, hashToken } from '@/lib/tokens';
 import { sendEmail } from '@/lib/email';
+import { emailFeatures, PASSWORD_RECOVERY_OFF_MESSAGE } from '@/lib/emailFeatures';
 import { getEmailBaseUrl, passwordReset } from '@/lib/emailTemplates';
 
 const RATE_LIMIT = { limit: 5, windowMs: 60 * 60_000 };
@@ -27,6 +28,11 @@ export async function POST(request: NextRequest) {
   const parsed = schema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json({ error: 'Укажите корректный e-mail' }, { status: 400 });
+  }
+
+  // Letters are off: say so (the same answer for every address) instead of «мы отправили письмо».
+  if (!emailFeatures().passwordRecovery) {
+    return NextResponse.json({ error: PASSWORD_RECOVERY_OFF_MESSAGE }, { status: 503 });
   }
 
   const email = parsed.data.email;

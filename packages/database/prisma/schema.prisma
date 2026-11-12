@@ -1150,6 +1150,11 @@ model Prospect {
   whatsappSentAt DateTime?
   contactedAt    DateTime?
   repliedAt      DateTime?
+  // Ответ фирмы на письмо офиса, прочитанный из ящика (lib/office/repliesRun.ts): верх письма без
+  // цитаты, когда офис сам ответил на него и когда пришёл отчёт о недоставке. Только добавление.
+  replyText        String?
+  replyAnsweredAt  DateTime?
+  emailBouncedAt   DateTime?
   outreachError  String?
   // Когда отправка упала (повтор — на следующие сутки); не updatedAt: его двигает любая запись.
   outreachErrorAt DateTime?

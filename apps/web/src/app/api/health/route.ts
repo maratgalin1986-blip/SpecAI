@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@specai/database';
 import { integrationFlags } from '@/lib/integrationFlags';
+import { LAST_OUTREACH_KEY } from '@/lib/office/tick';
+import { MAIL_READ_KEY } from '@/lib/office/repliesRun';
 import { SEARCH_HEALTH_RUNS, searchHealth, type SearchHealth } from '@/lib/office/searchHealth';
 
 export const dynamic = 'force-dynamic';
@@ -10,7 +12,42 @@ export const dynamic = 'force-dynamic';
 // `office` says whether the agents' search for companies works (lib/office/searchHealth.ts):
 // a word, a time and the run's counts — no names, phones or ids. A cloud session without the
 // admin password reads it to see that the search really runs in production.
-async function officeHealth(): Promise<(SearchHealth & { queue: Record<string, number> }) | null> {
+/** Начало текущих суток по Москве (UTC+3, без перехода на летнее время). */
+function moscowDayStart(now: Date): Date {
+  const shifted = now.getTime() + 3 * 3_600_000;
+  return new Date(shifted - (shifted % 86_400_000) - 3 * 3_600_000);
+}
+
+/** Запись настройки как объект из чисел и слов состояния; null — записи нет или она не JSON. */
+function parseRecord(value: string | undefined): Record<string, unknown> | null {
+  if (!value) return null;
+  try {
+    const parsed: unknown = JSON.parse(value);
+    return parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : null;
+  } catch {
+    return null;
+  }
+}
+
+interface OutreachHealth {
+  /** Писем фирмам за сегодня (сутки по Москве) и за всё время. */
+  sentToday: number;
+  sentTotal: number;
+  /** Когда ушло последнее письмо. */
+  lastSentAt: string | null;
+  /** Сколько фирм сегодня получили отметку об ошибке отправки. */
+  errorsToday: number;
+  /** Ответов фирм, прочитанных из ящика сегодня. */
+  repliesToday: number;
+  /** Итог последнего прохода рассылки: время, числа, состояние ящика, код ответа сервера. */
+  lastPass: Record<string, unknown> | null;
+  /** Итог последнего чтения ответов из ящика: время и числа. */
+  mailbox: Record<string, unknown> | null;
+}
+
+async function officeHealth(): Promise<
+  (SearchHealth & { queue: Record<string, number>; outreach: OutreachHealth }) | null
+> {
   try {
     const runs = await prisma.officeRun.findMany({
       orderBy: { startedAt: 'desc' },
@@ -34,9 +71,38 @@ async function officeHealth(): Promise<(SearchHealth & { queue: Record<string, n
       prisma.prospect.count({ where: { ...waiting, whatsapp: { startsWith: '+79' } } }),
       prisma.prospect.count({ where: { ...waiting, phone: { startsWith: '+79' } } }),
     ]);
+    // Рассылка — тоже только числа и время: по ним сессия без пароля видит, что письма уходят.
+    const dayStart = moscowDayStart(new Date());
+    const [sentToday, sentTotal, lastSent, errorsToday] = await Promise.all([
+      prisma.prospect.count({ where: { emailSentAt: { gte: dayStart } } }),
+      prisma.prospect.count({ where: { emailSentAt: { not: null } } }),
+      prisma.prospect.findFirst({
+        where: { emailSentAt: { not: null } },
+        orderBy: { emailSentAt: 'desc' },
+        select: { emailSentAt: true },
+      }),
+      prisma.prospect.count({ where: { outreachErrorAt: { gte: dayStart } } }),
+    ]);
+    const [repliesToday, records] = await Promise.all([
+      prisma.prospect.count({ where: { repliedAt: { gte: dayStart } } }),
+      prisma.appSetting.findMany({
+        where: { key: { in: [LAST_OUTREACH_KEY, MAIL_READ_KEY] } },
+        select: { key: true, value: true },
+      }),
+    ]);
+    const record = (key: string) => parseRecord(records.find((r) => r.key === key)?.value);
     return {
       ...searchHealth(runs, new Date()),
       queue: { ready, withEmail, withWhatsapp, withMobile },
+      outreach: {
+        sentToday,
+        sentTotal,
+        lastSentAt: lastSent?.emailSentAt?.toISOString() ?? null,
+        errorsToday,
+        repliesToday,
+        lastPass: record(LAST_OUTREACH_KEY),
+        mailbox: record(MAIL_READ_KEY),
+      },
     };
   } catch {
     return null;
@@ -50,6 +116,9 @@ export async function GET() {
       ok: true,
       database: 'ok',
       integrations: integrationFlags(),
+      // Хвост номера развёртывания: по нему видно, что сайт перезапущен (новые переменные среды
+      // вступают в силу только с новым развёртыванием). Не секрет.
+      deployment: (process.env.VERCEL_DEPLOYMENT_ID ?? '').slice(-6) || null,
       office: await officeHealth(),
     });
   } catch (error) {

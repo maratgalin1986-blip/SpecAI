@@ -3,6 +3,8 @@
 import { useState } from 'react';
 import { Button, Card } from '@specai/ui';
 import { CinemaBackdrop } from '@/components/CinemaHero';
+import { useEmailFeatures } from '@/components/EmailFeaturesProvider';
+import { SITE } from '@/lib/site';
 import { useHydrated } from '@/lib/useHydrated';
 
 export default function ForgotPasswordPage() {
@@ -11,6 +13,7 @@ export default function ForgotPasswordPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const hydrated = useHydrated();
   const [isSent, setIsSent] = useState(false);
+  const { passwordRecovery } = useEmailFeatures();
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -41,7 +44,16 @@ export default function ForgotPasswordPage() {
       <CinemaBackdrop clip="building-sun" />
       <Card className="cine-sub shadow-2xl">
         <h1 className="cine-title mb-4 text-xl font-bold">Восстановление пароля</h1>
-        {isSent ? (
+        {!passwordRecovery ? (
+          <p className="text-sm text-slate-700" data-testid="recovery-off">
+            Письма сейчас не отправляются, поэтому ссылку для сброса пароля прислать не можем.
+            Позвоните диспетчеру:{' '}
+            <a href={SITE.phoneHref} className="font-semibold text-amber-700">
+              {SITE.phone}
+            </a>
+            .
+          </p>
+        ) : isSent ? (
           <p className="text-sm text-slate-700">
             Если аккаунт с таким e-mail существует, мы отправили на него письмо со ссылкой для
             сброса пароля. Ссылка действует 1 час.

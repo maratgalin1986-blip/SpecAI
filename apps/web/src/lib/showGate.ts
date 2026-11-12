@@ -46,7 +46,7 @@ export function showLevel(s: ShowSignals): ShowLevel {
  * providers, prices, works, contacts and the how-to pages.
  */
 export const SHOW_PAGES =
-  /^\/(?:$|orders\/?$|(?:arenda|map|providers|ceny|raboty|contacts|equipment|kak-polzovatsya|predlozheniya)(?:\/|$))/;
+  /^\/(?:$|orders\/?$|(?:arenda|map|providers|ceny|raboty|contacts|equipment|kak-polzovatsya|predlozheniya|uborka-snega)(?:\/|$))/;
 
 export function showPage(pathname: string | null | undefined): boolean {
   return SHOW_PAGES.test(pathname ?? '');

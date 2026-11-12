@@ -6,10 +6,13 @@ import {
   filterProviderCards,
   fleetSummary,
   isListed,
+  PROVIDER_SORT_NO_RATINGS_LABEL,
   parseProviderQuery,
   providerCities,
+  providerSortOptions,
   providersHref,
   radiusLabel,
+  radiusValue,
   sinceLabel,
   sortProviderCards,
   toProviderCard,
@@ -82,7 +85,9 @@ describe('toProviderCard', () => {
     expect(card.badges).toEqual(['Проверен', '★ 4.7 (10)', '12 заказов выполнено', 'Отмены 7%']);
     expect(card.city).toBe('Елабуга');
     expect(card.fleetCount).toBe(4);
-    expect(card.fleetSummary).toBe('4 машины: краны, экскаваторы-погрузчики, самосвалы');
+    expect(card.fleetSummary).toBe(
+      '4 машины: краны, экскаваторы-погрузчики, самосвалы и ещё 1 вид',
+    );
     expect(card.groupIds).toEqual(['lifting', 'earth']);
     expect(card.radiusLabel).toBe('Выезд до 150 км');
     expect(card.sinceLabel).toBe('с октября 2026');
@@ -137,6 +142,34 @@ describe('helpers', () => {
     expect(categoryPlural('Что-то')).toBe('что-то');
     expect(fleetSummary(1, ['Автокраны', 'Автокраны'])).toBe('1 машина: краны');
     expect(fleetSummary(2, [])).toBe('2 машины');
+  });
+
+  it('names the kinds the company has most of and counts the rest', () => {
+    const names = [
+      'Тракторы',
+      'Самосвалы',
+      'Самосвалы',
+      'Автокраны',
+      'Автокраны',
+      'Автокраны',
+      'Катки',
+      'Бульдозеры',
+    ];
+    expect(fleetSummary(names.length, names)).toBe(
+      '8 машин: краны, самосвалы, тракторы и ещё 2 вида',
+    );
+  });
+
+  it('offers «По рейтингу» only when somebody has a rating', () => {
+    expect(providerSortOptions([{ rating: null }]).map((option) => option.label)).toEqual([
+      PROVIDER_SORT_NO_RATINGS_LABEL,
+      'По размеру парка',
+      'Сначала новые',
+    ]);
+    expect(providerSortOptions([{ rating: null }, { rating: 4.5 }])[0]!.label).toBe('По рейтингу');
+    // The cell is already titled «Выезд».
+    expect(radiusValue(100)).toBe('до 100 км');
+    expect(radiusValue(0)).toBe('по договорённости');
   });
 
   it('labels the radius and the start month', () => {
