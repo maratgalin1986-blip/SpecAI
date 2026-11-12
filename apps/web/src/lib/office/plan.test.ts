@@ -1,4 +1,4 @@
-import { cityByName } from '@specai/shared';
+import { RUSSIAN_CITIES, cityByName } from '@specai/shared';
 import { describe, expect, it } from 'vitest';
 import { AGENTS, MEDICAL_NICHES } from './agents';
 import {
@@ -97,7 +97,8 @@ describe('office plan: defaultPlan', () => {
     // 5 ниш на каждый город «Сайтов».
     // По каждой нише агента «Сайты» на каждый город.
     expect(rest.filter((s) => s.agent === 'sites')).toHaveLength(
-      (home.length + 4) * AGENTS.sites.defaultNiches.length,
+      // Вся Россия: каждый город списка, кроме восточных (они — в начале плана).
+      (RUSSIAN_CITIES.length - EAST_SITE_CITIES.length) * AGENTS.sites.defaultNiches.length,
     );
     for (const step of plan) expect(cityByName(step.city)?.name).toBe(step.city);
   });

@@ -28,6 +28,8 @@ import {
   followUpWindow,
   markReplied,
   OUTREACH_BUDGET_MS,
+  RAMP_START,
+  rampedCap,
   outreachErrorText,
   AUTO_SEND_HOURS,
   DELIVERY_UNKNOWN,
@@ -466,8 +468,9 @@ describe('sendOutreach', () => {
     let tick = 0;
     const clock = () => {
       tick += 1;
-      // The start, the row check and the send check read 0; after one send the budget is spent.
-      return tick <= 3 ? 0 : OUTREACH_BUDGET_MS + 1;
+      // The pass start, the project start, the row check and the send check read 0; after one
+      // send the budget is spent.
+      return tick <= 4 ? 0 : OUTREACH_BUDGET_MS + 1;
     };
     const result = await sendOutreach(NOW, deps(db, { clock }));
     expect(result.email).toBe(1);
@@ -1695,5 +1698,37 @@ describe('местное время фирмы и «восточное утро�
       deps(db, { settings: settings({ outreachMode: 'auto', whatsappAuto: false, dailyCap: 2 }) }),
     );
     expect(result.email).toBe(1);
+  });
+});
+
+describe('два проекта — два лимита, лимит растёт постепенно (владелец, 2026-11-12)', () => {
+  it('письма о сайтах и письма площадки считаются раздельно', async () => {
+    const day = new Date('2026-11-13T12:00:00+03:00'); // чётный час: сайты первыми
+    const rows = [
+      row({ id: 's1' }),
+      row({ id: 's2', email: 's2@mail.ru' }),
+      row({ id: 'p1', kind: 'provider', email: 'p1@mail.ru' }),
+      row({ id: 'p2', kind: 'provider', email: 'p2@mail.ru' }),
+    ];
+    const { db } = fakeDb(rows);
+    const result = await sendOutreach(
+      day,
+      deps(db, { settings: settings({ outreachMode: 'auto', whatsappAuto: false, dailyCap: 1 }) }),
+    );
+    // По одному письму на проект, а не одно на всех.
+    expect(result.email).toBe(2);
+    expect(rows.filter((r) => r.emailSentAt).map((r) => r.id)).toEqual(['s1', 'p1']);
+  });
+
+  it('rampedCap: с 30 в первый день до заданного лимита примерно за неделю', () => {
+    const at = (days: number) => new Date(RAMP_START.getTime() + days * 86_400_000 + 3_600_000);
+    expect(rampedCap(300, at(0))).toBe(30);
+    expect(rampedCap(300, at(1))).toBe(42);
+    expect(rampedCap(300, at(3))).toBe(82);
+    expect(rampedCap(300, at(7))).toBe(300);
+    expect(rampedCap(300, at(30))).toBe(300);
+    // Лимит не больше стартового не трогается; до начала разгона — стартовое значение.
+    expect(rampedCap(20, at(5))).toBe(20);
+    expect(rampedCap(300, new Date(RAMP_START.getTime() - 86_400_000))).toBe(30);
   });
 });

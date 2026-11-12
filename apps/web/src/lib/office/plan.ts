@@ -68,7 +68,12 @@ export function defaultPlan(): PlanStep[] {
     AGENTS.providers.defaultNiches.map((niche) => ({ agent: 'providers' as const, niche, city })),
   );
   const sites: PlanStep[] = [];
-  for (const cityName of [...home, ...DEFAULT_SITE_CITIES]) {
+  // Вся Россия (владелец, 2026-11-12: «не только Дальний Восток, бери всю Россию»): после
+  // домашнего региона и первых четырёх городов — остальные города списка, крупные первыми.
+  const siteCities = [
+    ...new Set([...home, ...DEFAULT_SITE_CITIES, ...RUSSIAN_CITIES.map((c) => c.name)]),
+  ];
+  for (const cityName of siteCities.filter((name) => !EAST_SITE_CITIES.includes(name))) {
     const city = cityByName(cityName);
     if (!city) continue;
     for (const niche of AGENTS.sites.defaultNiches) {

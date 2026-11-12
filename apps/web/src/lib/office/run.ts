@@ -484,7 +484,7 @@ export type ScheduledStepResult =
 export const PLAN_EPOCH = '2026-11-12-east';
 
 /** Через раннер приходит весь ответ Overpass (сотни фирм на город) — за шаг берём больше. */
-export const RELAY_STEP_LIMIT = 30;
+export const RELAY_STEP_LIMIT = 45;
 
 const PLAN_KEYS = [
   OFFICE_SETTINGS.paused,
