@@ -516,18 +516,13 @@ async function runOutreach(
   if (!channels.email) result.mail = 'no-smtp';
   const project = deps.project;
   const ofProject = project ? { kind: project } : {};
-  // В проходе без кнопки лимит растёт постепенно (rampedCap) и действует отдельно для «восточного
-  // утра» и для дня; по кнопке владельца — лимит из настроек целиком.
+  // В проходе без кнопки лимит выше стартового растёт постепенно (rampedCap); по кнопке владельца —
+  // лимит из настроек целиком.
   const fullCap = Math.max(0, Math.floor(settings.dailyCap));
   const cap = mode === 'send' && !deps.onlyApproved ? rampedCap(fullCap, now) : fullCap;
   const bounds = mskDayBounds(now);
-  // Лимит считается отдельно для «восточного утра» (до 8:00 по Москве) и для дня: ночная пачка
-  // Дальнему Востоку не съедает дневные письма остальным регионам.
-  const split = new Date(bounds.start.getTime() + AUTO_SEND_HOURS.from * 3_600_000);
-  const capWindow =
-    now.getTime() < split.getTime()
-      ? { gte: bounds.start, lt: split }
-      : { gte: split, lt: bounds.end };
+  // Лимит — на сутки по Москве и на проект (владелец, 2026-11-12: «по 250 в день на проект»).
+  const capWindow = { gte: bounds.start, lt: bounds.end };
   const day = { gte: bounds.start, lt: bounds.end };
   // Напоминания — в том же дневном лимите писем, что и первые письма.
   const [emailToday, followUpsToday, whatsappToday] = await Promise.all([
@@ -1138,13 +1133,13 @@ function mergeResults(a: OutreachResult, b: OutreachResult): OutreachResult {
 }
 
 /**
- * Разгон дневного лимита (2026-11-13): владелец назвал 300 писем в день на проект, но ящик на
- * бесплатной почте за резкий рост холодной рассылки блокируют. Лимит растёт примерно в полтора
- * раза в день от RAMP_START_CAP и за неделю доходит до заданного; лимит меньше стартового не
- * меняется.
+ * Разгон дневного лимита. Владелец (2026-11-12, после предупреждения о риске блокировки ящика):
+ * «делай по 250 в день на проект» — это стартовое значение, оно действует сразу. Лимит выше него
+ * (если владелец поднимет в настройках) растёт примерно в 1,4 раза в день: резкий рост холодной
+ * рассылки с одного ящика почтовые сервисы блокируют.
  */
 export const RAMP_START = new Date('2026-11-12T21:00:00Z'); // 13.11 00:00 по Москве
-export const RAMP_START_CAP = 30;
+export const RAMP_START_CAP = 250;
 export const RAMP_FACTOR = 1.4;
 
 export function rampedCap(target: number, now: Date): number {
