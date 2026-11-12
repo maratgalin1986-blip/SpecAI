@@ -4,7 +4,13 @@ import { useEffect, useState } from 'react';
 import { categoryEmoji } from '@specai/shared';
 import { allowedVisitorFix } from '@/components/visitorPosition';
 import { distanceKm } from '@/lib/geo';
-import { HOUSE_SERVES_KM, NOBODY_ON_LINE, OFFER_LINE_MAX, type OfferCard } from '@/lib/offerNow';
+import {
+  HOUSE_SERVES_KM,
+  NOBODY_ON_LINE,
+  OFFER_LINE_MAX,
+  ONLY_HOUSE_ON_LINE,
+  type OfferCard,
+} from '@/lib/offerNow';
 import { requestOrderPrefill } from '@/lib/orderPrefillEvent';
 import { SITE } from '@/lib/site';
 
@@ -123,7 +129,9 @@ export function OfferNow({
           </ul>
         </div>
       ) : (
-        house.length === 0 && <p className={`text-sm ${muted}`}>{NOBODY_ON_LINE}</p>
+        <p className={`text-sm ${muted}`}>
+          {house.some((item) => item.live) ? ONLY_HOUSE_ON_LINE : NOBODY_ON_LINE}
+        </p>
       )}
     </div>
   );

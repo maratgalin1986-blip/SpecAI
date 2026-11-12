@@ -40,7 +40,13 @@ const company = (over: Record<string, unknown>) => ({
   ...over,
 });
 
-function fakePrisma(rows: { companies: unknown[]; presences?: unknown[]; orders?: unknown[] }) {
+function fakePrisma(rows: {
+  companies: unknown[];
+  presences?: unknown[];
+  orders?: unknown[];
+  houseMachines?: unknown[];
+  bookings?: unknown[];
+}) {
   const companyFindMany = vi.fn(async () => rows.companies);
   const presenceFindMany = vi.fn(async () => rows.presences ?? []);
   const orderFindMany = vi.fn(async () => rows.orders ?? []);
@@ -48,6 +54,8 @@ function fakePrisma(rows: { companies: unknown[]; presences?: unknown[]; orders?
     company: { findMany: companyFindMany },
     linePresence: { findMany: presenceFindMany },
     order: { findMany: orderFindMany },
+    equipment: { findMany: vi.fn(async () => rows.houseMachines ?? []) },
+    booking: { findMany: vi.fn(async () => rows.bookings ?? []) },
   } as unknown as PrismaClient;
   return { prisma, companyFindMany, presenceFindMany, orderFindMany };
 }
@@ -122,6 +130,46 @@ describe('loadMapPins', () => {
     });
     const { providers } = await loadMapPins(prisma);
     expect(providers[0]?.onLine).toBe(false);
+  });
+
+  it('СпецПласт16 is on the line while it has a free machine today; others keep their own state', async () => {
+    const now = new Date('2026-11-11T09:00:00Z');
+    const houseMachine = (id: string) => ({
+      id,
+      companyId: HOUSE_COMPANY_ID,
+      status: 'AVAILABLE',
+      categoryId: 'cat',
+      location: null,
+      company: { baseLat: 55.7436, baseLon: 52.3959 },
+    });
+    const companies = [company({ id: HOUSE_COMPANY_ID, name: 'СпецПласт16' }), company({})];
+    const free = await loadMapPins(
+      fakePrisma({ companies, houseMachines: [houseMachine('h1')] }).prisma,
+      { now },
+    );
+    expect(free.providers.map((pin) => [pin.id, pin.onLine])).toEqual([
+      [HOUSE_COMPANY_ID, true],
+      ['c1', false],
+    ]);
+    // Its only free machine is booked today, or nothing is free: not on the line.
+    const busy = await loadMapPins(
+      fakePrisma({
+        companies,
+        houseMachines: [houseMachine('h1')],
+        bookings: [
+          {
+            equipmentId: 'h1',
+            status: 'ACTIVE',
+            startDate: new Date('2026-11-10T05:00:00Z'),
+            endDate: new Date('2026-11-12T14:00:00Z'),
+          },
+        ],
+      }).prisma,
+      { now },
+    );
+    expect(busy.providers[0]?.onLine).toBe(false);
+    const none = await loadMapPins(fakePrisma({ companies }).prisma, { now });
+    expect(none.providers[0]?.onLine).toBe(false);
   });
 
   it('customers come from open orders without a phone or an address, at a rounded point', async () => {

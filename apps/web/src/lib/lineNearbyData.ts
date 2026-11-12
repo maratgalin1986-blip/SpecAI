@@ -1,6 +1,7 @@
 import { prisma } from '@specai/database';
 import { customerRates } from './equipmentCatalog';
 import { OWN_FLEET } from './fleet';
+import { houseStandingRows } from './houseLine';
 import { BUSY_STATUSES } from './lineStanding';
 import {
   basePoint,
@@ -17,7 +18,9 @@ const DAY_MS = 24 * 60 * 60_000;
 
 /**
  * The machines «на линии» around a point (or the freshest across Russia
- * without one) and СпецПласт16's free machines at the base, as GET
+ * without one) — СпецПласт16's free machines always among them (owner,
+ * 2026-11-11, lib/houseLine.ts; `base` is left for a house machine that
+ * somehow is not on the line and is empty in practice) — as GET
  * /api/line/nearby and the «Сейчас на линии» block above the order forms
  * show them (lib/linePresence.ts has the rules: fresh, not past the evening
  * cutoff, AVAILABLE, prices from customerRates, never a phone or an account id).
@@ -37,11 +40,9 @@ export async function loadLineNearby(
   const housePromise = prisma.equipment.findMany({
     where: {
       ...OWN_FLEET,
+      // «Всегда на линии» (owner, 2026-11-11, lib/houseLine.ts): every free
+      // house machine; one without a real row on the line gets a standing one below.
       status: 'AVAILABLE',
-      // A machine whose driver is online is a live pin, not a base one.
-      linePresences: {
-        none: { OR: [{ online: true, updatedAt: { gte: freshSince } }, ...standing] },
-      },
     },
     select: {
       id: true,
@@ -100,8 +101,18 @@ export async function loadLineNearby(
     orderBy: { updatedAt: 'desc' },
     take: NEARBY_MAX_ROWS,
   });
-  const [rows, houseRows] = await Promise.all([presencePromise, housePromise]);
-  const equipmentIds = [...new Set(rows.flatMap((row) => row.equipmentId ?? []))];
+  const [presenceRows, houseRows] = await Promise.all([presencePromise, housePromise]);
+  // The house fleet stands on the line by the owner's declaration: derived
+  // rows at the base for the machines no phone reports for (never written).
+  const housePriced = houseRows.map((row) => {
+    // The house price list as the floor, the same numbers as on the card.
+    const rates = customerRates({ ...row, categoryName: row.category?.name ?? '' });
+    return { ...row, hourlyRate: rates.hourlyRate, dailyRate: rates.dailyRate };
+  });
+  const houseRowsOnLine = houseStandingRows(housePriced, presenceRows, now);
+  const equipmentIds = [
+    ...new Set([...presenceRows, ...houseRowsOnLine].flatMap((row) => row.equipment?.id ?? [])),
+  ];
   // Busy days (lib/lineStanding.ts busyDays): the next two weeks' CONFIRMED/ACTIVE bookings.
   const bookings = equipmentIds.length
     ? await prisma.booking.findMany({
@@ -117,40 +128,34 @@ export async function loadLineNearby(
       })
     : [];
   const machines = liveMachines(
-    rows.map((row) => ({
-      ...row,
-      basePoint: row.equipment
-        ? basePoint({ location: row.equipment.location, company: row.equipment.company })
-        : null,
-      equipment: row.equipment
-        ? {
-            id: row.equipment.id,
-            name: row.equipment.name,
-            status: row.equipment.status,
-            category: row.equipment.category,
-            // The customer's price: the house fleet never below the price list.
-            ...customerRates({
-              ...row.equipment,
-              categoryName: row.equipment.category?.name ?? '',
-            }),
-          }
-        : null,
-    })),
+    [
+      ...presenceRows.map((row) => ({
+        ...row,
+        basePoint: row.equipment
+          ? basePoint({ location: row.equipment.location, company: row.equipment.company })
+          : null,
+        equipment: row.equipment
+          ? {
+              id: row.equipment.id,
+              name: row.equipment.name,
+              status: row.equipment.status,
+              category: row.equipment.category,
+              // The customer's price: the house fleet never below the price list.
+              ...customerRates({
+                ...row.equipment,
+                categoryName: row.equipment.category?.name ?? '',
+              }),
+            }
+          : null,
+      })),
+      ...houseRowsOnLine,
+    ],
     around,
     km,
     now,
     bookings,
   );
   const liveIds = new Set(machines.flatMap((machine) => machine.equipment?.id ?? []));
-  const base = baseMachines(
-    houseRows.map((row) => {
-      // The house price list as the floor, the same numbers as on the card.
-      const rates = customerRates({ ...row, categoryName: row.category?.name ?? '' });
-      return { ...row, hourlyRate: rates.hourlyRate, dailyRate: rates.dailyRate };
-    }),
-    liveIds,
-    around,
-    km,
-  );
+  const base = baseMachines(housePriced, liveIds, around, km);
   return { machines, base };
 }

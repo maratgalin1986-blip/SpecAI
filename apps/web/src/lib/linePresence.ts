@@ -73,6 +73,8 @@ export interface PresenceRow {
   equipment: {
     id: string;
     name: string;
+    /** Whose machine it is, for the price rule (customerRates); never sent to the map. */
+    companyId?: string;
     status: EquipmentStatus | string;
     hourlyRate: number;
     dailyRate: number;
@@ -235,7 +237,11 @@ export function liveMachines(
       id: row.id,
       lat: point.lat,
       lon: point.lon,
-      driver: shortAuthorName(row.user.name),
+      // The house fleet's standing line (lib/houseLine.ts) has no driver: the company answers.
+      driver:
+        row.user.name === null && row.company.id === HOUSE_COMPANY_ID
+          ? SITE.name
+          : shortAuthorName(row.user.name),
       company: {
         id: row.company.id,
         name: row.company.name,

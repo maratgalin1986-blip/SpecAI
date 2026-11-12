@@ -5,11 +5,13 @@ const orderFindMany = vi.fn();
 const bookingCount = vi.fn();
 const bookingFindMany = vi.fn();
 const lineFindMany = vi.fn();
+const equipmentFindMany = vi.fn(async (): Promise<unknown[]> => []);
 vi.mock('@specai/database', () => ({
   prisma: {
     order: { count: orderCount, findMany: orderFindMany },
     booking: { count: bookingCount, findMany: bookingFindMany },
     linePresence: { findMany: lineFindMany },
+    equipment: { findMany: equipmentFindMany },
   },
 }));
 // No Data Cache in tests: the loader runs on every call.
@@ -64,6 +66,43 @@ describe('GET /api/activity', () => {
       'Машина вышла на линию: экскаваторы · Набережные Челны',
       'Новая заявка из чата: самосвалы, Елабуга',
     ]);
+  });
+
+  it('counts СпецПласт16 free machines as on the line without a ping, but not one booked today', async () => {
+    const house = (id: string) => ({
+      id,
+      companyId: 'specplast16-house',
+      status: 'AVAILABLE',
+      categoryId: 'cat',
+      location: null,
+      company: { baseLat: 55.7436, baseLon: 52.3959 },
+    });
+    equipmentFindMany.mockResolvedValueOnce([house('h1'), house('h2'), house('h3')]);
+    // The event query asks by confirmedAt, the house line by its machines.
+    bookingFindMany.mockImplementation(async (args: { where: { equipmentId?: unknown } }) =>
+      args.where.equipmentId
+        ? [
+            {
+              equipmentId: 'h3',
+              status: 'CONFIRMED',
+              startDate: new Date('2026-10-17T05:00:00Z'),
+              endDate: new Date('2026-10-17T14:00:00Z'),
+            },
+          ]
+        : [],
+    );
+    const body = await (await GET()).json();
+    // The other provider's machine and two free house machines; no invented event.
+    expect(body.today.online).toBe(3);
+    expect(body.summary).toContain('3 машины на линии');
+    expect(body.events.filter((event: { kind: string }) => event.kind === 'line')).toHaveLength(1);
+    const asked = (equipmentFindMany.mock.calls as unknown[][]).at(-1)?.[0] as { where: unknown };
+    expect(asked.where).toEqual({
+      companyId: 'specplast16-house',
+      status: 'AVAILABLE',
+    });
+    // Standing lines of every provider are read, not only live GPS.
+    expect(lineFindMany.mock.calls[0]?.[0].where.OR).toHaveLength(3);
   });
 
   it('counts by the Moscow day and never PENDING_REVIEW or CANCELLED orders', async () => {
