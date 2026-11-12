@@ -1685,17 +1685,18 @@ describe('местное время фирмы и «восточное утро�
     expect(okEmail.mock.calls.map((c) => c[0].to)).toEqual(['kzn@example.com']);
   });
 
-  it('ночная пачка не съедает дневной лимит', async () => {
+  it('лимит — на сутки по Москве: ночные письма востоку считаются вместе с дневными', async () => {
     const { start } = mskDayBounds(LATER);
     const night = new Date(start.getTime() + 3_600_000);
     const { db } = fakeDb([
       row({ id: 's1', status: 'CONTACTED', emailSentAt: night, contactedAt: night }),
       row({ id: 's2', status: 'CONTACTED', emailSentAt: night, contactedAt: night }),
       row({ id: 'a' }),
+      row({ id: 'b', email: 'b@mail.ru' }),
     ]);
     const result = await sendOutreach(
       LATER,
-      deps(db, { settings: settings({ outreachMode: 'auto', whatsappAuto: false, dailyCap: 2 }) }),
+      deps(db, { settings: settings({ outreachMode: 'auto', whatsappAuto: false, dailyCap: 3 }) }),
     );
     expect(result.email).toBe(1);
   });
@@ -1720,15 +1721,13 @@ describe('два проекта — два лимита, лимит растёт
     expect(rows.filter((r) => r.emailSentAt).map((r) => r.id)).toEqual(['s1', 'p1']);
   });
 
-  it('rampedCap: с 30 в первый день до заданного лимита примерно за неделю', () => {
+  it('rampedCap: 250 на проект действует сразу; выше — растёт примерно в 1,4 раза в день', () => {
     const at = (days: number) => new Date(RAMP_START.getTime() + days * 86_400_000 + 3_600_000);
-    expect(rampedCap(300, at(0))).toBe(30);
-    expect(rampedCap(300, at(1))).toBe(42);
-    expect(rampedCap(300, at(3))).toBe(82);
-    expect(rampedCap(300, at(7))).toBe(300);
-    expect(rampedCap(300, at(30))).toBe(300);
-    // Лимит не больше стартового не трогается; до начала разгона — стартовое значение.
+    expect(rampedCap(250, at(0))).toBe(250);
     expect(rampedCap(20, at(5))).toBe(20);
-    expect(rampedCap(300, new Date(RAMP_START.getTime() - 86_400_000))).toBe(30);
+    expect(rampedCap(1000, at(0))).toBe(250);
+    expect(rampedCap(1000, at(1))).toBe(350);
+    expect(rampedCap(1000, at(30))).toBe(1000);
+    expect(rampedCap(1000, new Date(RAMP_START.getTime() - 86_400_000))).toBe(250);
   });
 });

@@ -250,6 +250,10 @@ function defaultTransport(config: OfficeMailConfig): OfficeMailTransport {
     port: config.port,
     secure: config.secure,
     auth: { user: config.user, pass: config.pass },
+    // Одно соединение на проход: вход в ящик один раз, а не на каждое письмо — письма идут
+    // быстрее и без всплеска одновременных входов, за которые почтовые сервисы блокируют.
+    pool: true,
+    maxConnections: 1,
     connectionTimeout: SMTP_CONNECT_TIMEOUT_MS,
     greetingTimeout: SMTP_CONNECT_TIMEOUT_MS,
     socketTimeout: SMTP_TIMEOUT_MS,
