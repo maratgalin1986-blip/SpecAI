@@ -126,8 +126,9 @@ it('map script: setBase draws the base and hides the company pin at the same spo
   expect(
     log.some((line) => line.startsWith('tooltip <small>СпецПласт16 · на базе</small>2 машины')),
   ).toBe(true);
-  // Without base machines the company pin comes back.
+  // Without base machines (the server's answer since 2026-11-11) nothing is
+  // drawn and the company pin comes back to its layer.
   log.length = 0;
   setBase([]);
-  expect(log).toContain('addTo');
+  expect(log).toEqual(['clear', 'add']);
 });
