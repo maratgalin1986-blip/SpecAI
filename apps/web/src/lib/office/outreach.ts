@@ -10,6 +10,10 @@
 // пункта и рекомендованный пакет с ценой.
 // Отписка (К3): если рассылка передала `unsubscribeUrl`, последней строкой письма идёт
 // «Больше не писать: <ссылка>» (заголовок List-Unsubscribe ставит outreachRun.ts).
+// Проект площадки (владелец, 2026-11-12: «всем, кто связан со спецтехникой и
+// грузоперевозками»): письмо зависит от роли ниши (niches.ts → platformRole). У кого техника
+// или грузовики — страница исполнителя и «Это моя компания»; кто технику заказывает — письмо
+// заказчику со ссылками только на площадку: страницу исполнителя он не просил.
 import { domainToUnicode } from 'node:url';
 import { SERVICE_PAGE_PATH } from './clientSite';
 import { quotedName } from './pages';
@@ -17,6 +21,7 @@ import { PLATFORM_PROMISE, PLATFORM_PROMISE_DETAIL } from '@specai/shared';
 import { escapeHtml } from '@/lib/emailTemplates';
 import { SITE } from '@/lib/site';
 import { sitePackages } from '@/lib/prices';
+import { platformRole } from './niches';
 import type { Offer } from './offer';
 import type { PageProspect } from './pageTypes';
 import { phoneDigits } from './pages';
@@ -34,6 +39,11 @@ export interface OutreachInput {
   /** Цена сайта и поддержка в месяц (R16), в рублях. */
   prices: { setup: number; monthly: number };
   nicheTitle: string;
+  /**
+   * Ключ ниши (`Prospect.niche`): по нему письмо проекта площадки узнаёт роль фирмы и её
+   * слова. Без ключа фирма проекта площадки — владелец техники, как раньше.
+   */
+  nicheKey?: string;
   /** Адрес, на который приходят ответы (Reply-To). */
   replyTo: string;
   /** Персональное предложение (U2) — только для сайта; без него — общее письмо. */
@@ -100,6 +110,8 @@ const DRAFT_LINE =
 const NEXT_STEP_LINE =
   'Из этого черновика можем сделать лендинг — одну страницу, это дешевле, — или полноценный сайт ' +
   `с разделами, это дороже. Дальше по желанию ведём сайт по подписке: правки, продвижение, поддержка. ${NOT_OFFER_LINE}`;
+/** Письмо заказчику техники — тоже не оферта; «страницы услуги» у площадки нет. */
+export const PLATFORM_NOT_OFFER_LINE = 'Письмо не является офертой: условия — на сайте площадки.';
 /** Подпись: кто пишет (§ 9.1, п. 4). */
 export const LEGAL_SIGNATURE = `${SITE.name} — ${SITE.legalName}, ИНН ${SITE.inn}, ОГРН ${SITE.ogrn}, ${SITE.legalAddress}. Телефон ${SITE.phone}.`;
 const WHATSAPP_ONCE_LINE = 'Сообщение отправлено один раз на номер из открытой карточки компании.';
@@ -121,6 +133,31 @@ export const LEADS_TO_EMAIL_LINE = 'Заявки с сайта будут при
 export function serviceUrl(baseUrl: string, source: OutreachChannel, slug: string): string {
   const query = new URLSearchParams({ utm_source: source, utm_campaign: slug });
   return `${baseUrl.replace(/\/+$/, '')}${SERVICE_PATH}?${query.toString()}`;
+}
+
+/** Страница заявки на технику: гостевая форма, регистрация не нужна (app/orders). */
+export const ORDER_PATH = '/orders';
+/** Открытая страница цен на аренду спецтехники (app/ceny). */
+export const PRICES_PATH = '/ceny';
+/** Главная площадки: на ней 3D-город с техникой «на линии». */
+export const HOME_PATH = '/';
+/** Подписи ссылок письма заказчику. */
+export const ORDER_BUTTON_LABEL = 'Заказать технику';
+export const PLATFORM_LINK_LABEL = 'Посмотреть площадку и 3D-город';
+export const PRICES_LINK_LABEL = 'Цены на аренду спецтехники';
+
+/**
+ * Ссылка на страницу площадки с метками: канал (`utm_source`) и аудитория (`utm_campaign` —
+ * ключ ниши, не название фирмы).
+ */
+export function platformUrl(
+  baseUrl: string,
+  path: string,
+  source: OutreachChannel,
+  nicheKey: string,
+): string {
+  const query = new URLSearchParams({ utm_source: source, utm_campaign: `office-${nicheKey}` });
+  return `${baseUrl.replace(/\/+$/, '')}${path}?${query.toString()}`;
 }
 
 /**
@@ -167,6 +204,11 @@ interface Letter {
   /** Абзацы после пунктов. */
   after?: string[];
   button: string;
+  /**
+   * Куда ведёт кнопка, если не на превью: письмо заказчику техники ведёт на страницу заявки —
+   * страницу исполнителя он не просил.
+   */
+  url?: string;
   /** Ссылки под кнопкой («Кто мы и цены»). */
   links: { label: string; url: string }[];
   closing: string[];
@@ -256,20 +298,58 @@ function offerLetter(
   };
 }
 
-function providerLetter(p: OutreachProspect, _input: OutreachInput): Letter {
+/** Слова письма исполнителю по нише: владелец техники или перевозчик. */
+interface ProviderWords {
+  /** Что такое площадка — для этой аудитории. */
+  platform: string;
+  /** Что на странице исполнителя. */
+  page: string;
+  /** Что указать при регистрации и что будет после. */
+  claim: string;
+  /** «…на площадке заявок на <что>» в напоминании и WhatsApp. */
+  board: string;
+  /** Что на странице — коротко, для WhatsApp. */
+  pageShort: string;
+}
+
+const MACHINERY_WORDS: ProviderWords = {
+  platform: 'площадка заявок на спецтехнику по всей России',
+  page: 'название, город, ваша техника и кнопка «Заказать технику»',
+  claim:
+    'имя, номер, вид техники. После этого вы видите заявки рядом с вами и сами называете цену.',
+  board: 'спецтехнику',
+  pageShort: 'техника, город, кнопка «Заказать технику»',
+};
+
+/** Перевозчику — про грузовики и рейсы: «вид техники» ему ничего не говорит. */
+const FREIGHT_WORDS: ProviderWords = {
+  platform: 'площадка заявок на спецтехнику и грузовой транспорт по всей России',
+  page: 'название, город и кнопка «Заказать технику»; свои грузовики вы добавите сами',
+  claim:
+    'имя, номер, ваши грузовики. После этого вы видите заявки на грузовики и рейсы рядом с ' +
+    'вами и сами называете цену.',
+  board: 'спецтехнику и грузовой транспорт',
+  pageShort: 'город, кнопка «Заказать технику», грузовики добавите сами',
+};
+
+function providerWords(input: OutreachInput): ProviderWords {
+  return input.nicheKey === 'freight' ? FREIGHT_WORDS : MACHINERY_WORDS;
+}
+
+function providerLetter(p: OutreachProspect, input: OutreachInput): Letter {
   const name = quotedName(p.name);
+  const words = providerWords(input);
   return {
     subject: `Ваша страница на ${SITE.platform} уже готова`,
     greeting: PROVIDER_GREETING,
     paragraphs: [
-      `${SITE.platform} — площадка заявок на спецтехнику по всей России. ${promiseSentence()}`,
+      `${SITE.platform} — ${words.platform}. ${promiseSentence()}`,
       `Мы увидели вашу компанию ${name} на карте${where(p)} и уже сделали вам страницу ` +
-        'исполнителя на площадке: название, город, ваша техника и кнопка «Заказать технику». ' +
+        `исполнителя на площадке: ${words.page}. ` +
         'Заказчики смогут заказывать у вас напрямую, заявка уходит сразу вам. Всё с вашей ' +
         'карточки, ничего не придумано; телефон покажем только с вашего согласия.',
       'Как встать на линию: откройте страницу по ссылке ниже и нажмите «Это моя компания» — ' +
-        'регистрация за минуту прямо с телефона: имя, номер, вид техники. После этого вы видите ' +
-        'заявки рядом с вами и сами называете цену.',
+        `регистрация за минуту прямо с телефона: ${words.claim}`,
     ],
     button: 'Открыть мою страницу',
     links: [],
@@ -280,7 +360,131 @@ function providerLetter(p: OutreachProspect, _input: OutreachInput): Letter {
   };
 }
 
+/** Что площадка даёт заказчику — его словами, по нише. */
+interface CustomerWords {
+  subject: string;
+  /** Продолжение фразы «…и пишем по делу: ». */
+  need: string;
+  /** Коротко для WhatsApp и напоминания. */
+  short: string;
+  /** Показывать ссылку на страницу цен (тем, кто считает сметы). */
+  prices: boolean;
+  /** Строительным фирмам: свою простаивающую технику тоже можно выставить. */
+  ownFleet: boolean;
+}
+
+/** Как устроен заказ: одна заявка, цену называют исполнители — те же слова, что на сайте. */
+const ORDER_HOW =
+  'Вы оставляете одну заявку — исполнители рядом с объектом сами называют цену, посредников ' +
+  'и комиссии нет.';
+
+const BUILDER_WORDS: CustomerWords = {
+  subject: `Спецтехника на объект напрямую у владельцев — ${SITE.platform}`,
+  need:
+    'стройке нужны экскаваторы, автокраны, самосвалы и бетононасосы — на площадке их ' +
+    `заказывают напрямую у владельцев. ${ORDER_HOW}`,
+  short: 'экскаваторы, автокраны, самосвалы на объект — напрямую у владельцев',
+  prices: false,
+  ownFleet: true,
+};
+
+const CUSTOMER_WORDS: Record<string, CustomerWords> = {
+  construction: BUILDER_WORDS,
+  road_construction: {
+    subject: `Самосвалы, катки и грейдеры на объект — ${SITE.platform}`,
+    need:
+      'дорожным работам нужны самосвалы, катки, грейдеры и асфальтоукладчики — на площадке их ' +
+      `заказывают напрямую у владельцев. ${ORDER_HOW}`,
+    short: 'самосвалы, катки, грейдеры на объект — напрямую у владельцев',
+    prices: false,
+    ownFleet: true,
+  },
+  concrete_aggregates: {
+    subject: `Самосвалы и миксеры под отгрузку — ${SITE.platform}`,
+    need:
+      'под отгрузку и доставку нужны самосвалы, миксеры и погрузчики — на площадке их ' +
+      `заказывают напрямую у владельцев. ${ORDER_HOW}`,
+    short: 'самосвалы, миксеры, погрузчики под отгрузку — напрямую у владельцев',
+    prices: false,
+    ownFleet: true,
+  },
+  design_engineering: {
+    subject: `Цены на аренду спецтехники для проекта и сметы — ${SITE.platform}`,
+    need:
+      'для проекта и сметы пригодится открытая страница с ценами на аренду спецтехники с ' +
+      'машинистом — ссылка ниже. А когда вашему заказчику понадобится техника на объект, её ' +
+      `заказывают там же, напрямую у владельцев. ${ORDER_HOW}`,
+    short: 'открытая страница с ценами на аренду спецтехники — для проекта и сметы',
+    prices: true,
+    ownFleet: false,
+  },
+  estimators: {
+    subject: `Цены на аренду спецтехники для сметы — ${SITE.platform}`,
+    need:
+      'для сметы пригодится открытая страница с ценами на аренду спецтехники с машинистом — ' +
+      'ссылка ниже. А когда вашему заказчику понадобится техника на объект, её заказывают там ' +
+      `же, напрямую у владельцев. ${ORDER_HOW}`,
+    short: 'открытая страница с ценами на аренду спецтехники — для сметы',
+    prices: true,
+    ownFleet: false,
+  },
+};
+
+function customerWords(input: OutreachInput): CustomerWords {
+  return CUSTOMER_WORDS[input.nicheKey ?? ''] ?? BUILDER_WORDS;
+}
+
+/** Фирма проекта площадки, которая технику заказывает, а не сдаёт. */
+function isCustomer(p: Pick<OutreachProspect, 'kind'>, input: OutreachInput): boolean {
+  return p.kind === 'provider' && platformRole(input.nicheKey) === 'customer';
+}
+
+function customerUrl(input: OutreachInput, path: string, source: OutreachChannel): string {
+  return platformUrl(input.baseUrl, path, source, input.nicheKey ?? 'customer');
+}
+
+function customerLinks(input: OutreachInput, words: CustomerWords): Letter['links'] {
+  return [
+    ...(words.prices
+      ? [{ label: PRICES_LINK_LABEL, url: customerUrl(input, PRICES_PATH, 'email') }]
+      : []),
+    { label: PLATFORM_LINK_LABEL, url: customerUrl(input, HOME_PATH, 'email') },
+  ];
+}
+
+/**
+ * Письмо заказчику техники: кто мы, что площадка даёт именно ему, как оставить заявку. Ссылки —
+ * только на площадку: заявка, главная с 3D-городом и, сметчикам и проектировщикам, цены.
+ * Цен, сроков и обещаний нет; о фирме — только то, что она есть на карте.
+ */
+function customerLetter(p: OutreachProspect, input: OutreachInput): Letter {
+  const name = quotedName(p.name);
+  const words = customerWords(input);
+  return {
+    subject: words.subject,
+    greeting: PROVIDER_GREETING,
+    paragraphs: [
+      `${SITE.platform} — площадка заявок на спецтехнику по всей России. ${promiseSentence()}`,
+      `Мы увидели вашу компанию ${name} на карте${where(p)} и пишем по делу: ${words.need}`,
+      'Как заказать: откройте страницу заявки по ссылке ниже и напишите, какая техника и куда ' +
+        'нужна. Заявку можно оставить без регистрации.' +
+        (words.ownFleet
+          ? ' Если у вас есть своя техника и она простаивает, её тоже можно выставить на площадке.'
+          : ''),
+      PLATFORM_NOT_OFFER_LINE,
+    ],
+    button: ORDER_BUTTON_LABEL,
+    url: customerUrl(input, ORDER_PATH, 'email'),
+    links: customerLinks(input, words),
+    closing: [
+      `Вопросы — ответьте на это письмо или позвоните ${SITE.phone}.`,
+      `${STOP_LINE} ${EMAIL_ONCE_LINE}`,
+    ],
+  };
+}
+
 function letterFor(p: OutreachProspect, input: OutreachInput): Letter {
+  if (isCustomer(p, input)) return customerLetter(p, input);
   if (p.kind === 'provider') return providerLetter(p, input);
   return input.offer ? offerLetter(p, input, input.offer) : siteLetter(p, input);
 }
@@ -296,14 +500,29 @@ function followUpLetter(p: OutreachProspect, input: OutreachInput): Letter {
     `${ask} — ответьте на это письмо или позвоните ${SITE.phone}.`,
     `${STOP_LINE} ${FOLLOW_UP_ONCE_LINE}`,
   ];
+  if (isCustomer(p, input)) {
+    const words = customerWords(input);
+    return {
+      subject: `Напоминаем: ${words.subject.charAt(0).toLowerCase()}${words.subject.slice(1)}`,
+      greeting,
+      paragraphs: [
+        `Недавно мы писали вам о площадке заявок на спецтехнику: ${words.short}. ` +
+          'Оставить заявку можно по ссылке ниже, без регистрации.',
+      ],
+      button: ORDER_BUTTON_LABEL,
+      url: customerUrl(input, ORDER_PATH, 'email'),
+      links: customerLinks(input, words),
+      closing: closing('Вопросы'),
+    };
+  }
   if (p.kind === 'provider') {
     return {
       subject: `Напоминаем: ваша страница на ${SITE.platform} готова`,
       greeting,
       paragraphs: [
         `Недавно мы писали вам: сделали для ${name} страницу исполнителя на площадке заявок на ` +
-          'спецтехнику. Посмотрите — это 30 секунд. Чтобы получать заявки, нажмите на странице ' +
-          '«Это моя компания».',
+          `${providerWords(input).board}. Посмотрите — это 30 секунд. Чтобы получать заявки, ` +
+          'нажмите на странице «Это моя компания».',
       ],
       button: 'Открыть мою страницу',
       links: [],
@@ -436,14 +655,20 @@ function renderText(letter: Letter, previewUrl: string, unsubscribeUrl?: string)
 }
 
 function render(letter: Letter, input: OutreachInput, card?: LetterCard): OutreachEmail {
+  const url = letter.url ?? input.previewUrl;
   return {
     subject: letter.subject,
-    text: renderText(letter, input.previewUrl, input.unsubscribeUrl),
-    html: renderHtml(letter, input.previewUrl, input.unsubscribeUrl, card),
+    text: renderText(letter, url, input.unsubscribeUrl),
+    html: renderHtml(letter, url, input.unsubscribeUrl, card),
   };
 }
 
-function cardOf(p: OutreachProspect, input: OutreachInput): LetterCard {
+/**
+ * Обложка — «черновик сайта для вашей компании» с кнопкой на её страницу. Заказчику техники
+ * страницу никто не делал, поэтому обложки у его письма нет.
+ */
+function cardOf(p: OutreachProspect, input: OutreachInput): LetterCard | undefined {
+  if (isCustomer(p, input)) return undefined;
   return {
     name: p.name,
     niche: input.nicheTitle.trim(),
@@ -455,7 +680,7 @@ function cardOf(p: OutreachProspect, input: OutreachInput): LetterCard {
   };
 }
 
-/** Письмо кандидату по виду агента: сайт-визитка или страница исполнителя. */
+/** Письмо по виду агента и роли ниши: сайт-визитка, страница исполнителя или письмо заказчику. */
 export function buildEmail(p: OutreachProspect, input: OutreachInput): OutreachEmail {
   return render(letterFor(p, input), input, cardOf(p, input));
 }
@@ -480,10 +705,29 @@ export function buildWhatsAppText(p: OutreachProspect, input: OutreachInput): st
       : `Здравствуйте! Это ${SITE.contactPerson} из компании ${SITE.name}, мы делаем сайты.`;
   const reply = `Ответьте здесь или позвоните ${SITE.phone}.`;
   const stop = `${STOP_LINE} ${WHATSAPP_ONCE_LINE}`;
+  if (isCustomer(p, input)) {
+    const words = customerWords(input);
+    const body =
+      `Увидели ${name} на карте${where(p)}. На площадке заявок на спецтехнику по всей России: ` +
+      `${words.short}. ${PLATFORM_PROMISE}: цену называют сами исполнители. ` +
+      `Оставить заявку можно без регистрации: ${customerUrl(input, ORDER_PATH, 'whatsapp')}`;
+    const prices = words.prices
+      ? [`${PRICES_LINK_LABEL}: ${customerUrl(input, PRICES_PATH, 'whatsapp')}`]
+      : [];
+    // Длинное название фирмы: сначала уходит строка «один раз», ответ, затем ссылка на цены;
+    // ссылка на заявку и «стоп» (последней) остаются всегда.
+    return firstThatFits([
+      [intro, body, ...prices, reply, stop],
+      [intro, body, ...prices, stop],
+      [intro, body, ...prices, STOP_LINE],
+      [intro, body, STOP_LINE],
+    ]);
+  }
   if (p.kind === 'provider') {
+    const words = providerWords(input);
     const body =
       `Увидели ${name} на карте${where(p)} и сделали вам страницу исполнителя на площадке ` +
-      'заявок на спецтехнику по всей России: техника, город, кнопка «Заказать технику». ' +
+      `заявок на ${words.board} по всей России: ${words.pageShort}. ` +
       `${PLATFORM_PROMISE}. Заказчики смогут заказывать у вас напрямую. Посмотреть и встать на ` +
       `линию (кнопка «Это моя компания»): ${input.previewUrl}`;
     return firstThatFits([

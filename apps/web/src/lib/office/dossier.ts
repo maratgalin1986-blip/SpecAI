@@ -301,7 +301,8 @@ export function buildDossier(input: {
     competitors = { radiusKm: DOSSIER_RADIUS_KM, sameNiche, withSite };
   }
 
-  const gaps = ['нет своего сайта'];
+  // Фирмы с сайтом бывают у проекта площадки (run.ts → websiteIsFine): им этот пробел не пишем.
+  const gaps = c.website ? [] : ['нет своего сайта'];
   if (!c.hours) gaps.push('в карточке нет часов работы');
   if (!c.email && !c.whatsapp && !c.telegram) gaps.push('кроме телефона, связаться не через что');
 
