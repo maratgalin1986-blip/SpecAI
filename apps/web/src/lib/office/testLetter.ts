@@ -10,6 +10,7 @@ import { parseDossier } from './dossier';
 import { nicheTitle } from './niches';
 import { applicableAngles, buildOffer } from './offer';
 import { buildEmail } from './outreach';
+import { nichePitch } from './pitch';
 import { officePrices } from './prices';
 import { createManualProspects } from './run';
 import { parseManualLines } from './sources/manual';
@@ -68,6 +69,8 @@ export async function sendTestLetter(now: Date): Promise<TestLetterResult> {
       replyTo: '',
       offer,
       unsubscribeUrl: links.page,
+      showUrl: `${base}/pokaz/${encodeURIComponent(row.token)}`,
+      pitchLine: nichePitch(row.niche).letterLine,
     },
   );
   const sent = await sendOfficeMail({

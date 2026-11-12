@@ -38,6 +38,12 @@ export interface OutreachInput {
   replyTo: string;
   /** Персональное предложение (U2) — только для сайта; без него — общее письмо. */
   offer?: Pick<Offer, 'subject' | 'opener' | 'bullets' | 'packageKey' | 'packageReason'>;
+  /**
+   * Презентация под фирму (/pokaz/<token>) и фраза «что сделаем именно вам» по её сфере
+   * (pitch.ts): только для писем о сайте. С ними кнопка на обложке письма ведёт на презентацию.
+   */
+  showUrl?: string;
+  pitchLine?: string;
   /** Ссылка «Больше не писать» (К3, unsubscribe.ts): в письме строкой и ссылкой внизу. */
   unsubscribeUrl?: string;
 }
@@ -167,7 +173,22 @@ interface Letter {
 }
 
 function serviceLinks(p: OutreachProspect, input: OutreachInput): Letter['links'] {
-  return [{ label: SERVICE_LINK_LABEL, url: serviceUrl(input.baseUrl, 'email', p.slug) }];
+  return [
+    ...(input.showUrl ? [{ label: SHOW_LINK_LABEL, url: input.showUrl }] : []),
+    { label: SERVICE_LINK_LABEL, url: serviceUrl(input.baseUrl, 'email', p.slug) },
+  ];
+}
+
+/** Подпись ссылки на презентацию под фирму. */
+export const SHOW_LINK_LABEL = 'Презентация для вашей компании';
+/** Пример нашей работы — в презентации, там же вход в 3D-город (владелец, 2026-11-12). */
+const SHOWCASE_LINE =
+  'В презентации — пример нашей работы: площадка с мобильным приложением и 3D-городом, по которому можно прогуляться.';
+
+/** Что сделаем именно этой фирме и где это посмотреть; без презентации — ничего. */
+function pitchParagraphs(input: OutreachInput): string[] {
+  if (!input.pitchLine) return [];
+  return [input.showUrl ? `${input.pitchLine} ${SHOWCASE_LINE}` : input.pitchLine];
 }
 
 function siteLetter(p: OutreachProspect, input: OutreachInput): Letter {
@@ -184,6 +205,7 @@ function siteLetter(p: OutreachProspect, input: OutreachInput): Letter {
       'Что на странице: название, адрес, часы работы и телефон из карточки, кнопка «Позвонить» ' +
         'и ссылка на карту; список услуг — типовой для вашей сферы, поправим по вашим словам. ' +
         `После подключения добавим форму заявки: ${LEADS_TO_EMAIL_LINE.charAt(0).toLowerCase()}${LEADS_TO_EMAIL_LINE.slice(1)}.`,
+      ...pitchParagraphs(input),
       NEXT_STEP_LINE,
     ],
     button: 'Открыть страницу',
@@ -220,6 +242,7 @@ function offerLetter(
     paragraphs: [
       `${offer.opener} Мы собрали по данным карточки черновик страницы — посмотреть можно по ` +
         `ссылке ниже. ${DRAFT_LINE}`,
+      ...pitchParagraphs(input),
       'Что на странице:',
     ],
     bullets: offer.bullets,
@@ -319,6 +342,8 @@ interface LetterCard {
   address: string | null;
   hours: string | null;
   phone: string | null;
+  /** Презентация под фирму: если есть, кнопка обложки ведёт на неё. */
+  showUrl?: string;
 }
 
 const FONT = 'font-family:Arial,Helvetica,sans-serif';
@@ -344,8 +369,8 @@ function renderHtml(
     `<p style="margin:0 0 14px;color:#1f2937;font-size:16px;line-height:1.6">${escapeHtml(text)}</p>`;
   const small = (text: string) =>
     `<p style="margin:0 0 8px;color:#9ca3af;font-size:12px;line-height:1.5">${escapeHtml(text)}</p>`;
-  const button = (label: string, light: boolean) =>
-    `<a href="${href}" style="display:inline-block;padding:14px 26px;background:${light ? '#ffffff' : '#0f766e'};color:${light ? '#0f3d3a' : '#ffffff'};text-decoration:none;border-radius:10px;font-size:16px;font-weight:bold;${FONT}">${escapeHtml(label)}</a>`;
+  const button = (label: string, light: boolean, to: string = href) =>
+    `<a href="${to}" style="display:inline-block;padding:14px 26px;background:${light ? '#ffffff' : '#0f766e'};color:${light ? '#0f3d3a' : '#ffffff'};text-decoration:none;border-radius:10px;font-size:16px;font-weight:bold;${FONT}">${escapeHtml(label)}</a>`;
   const facts = card
     ? [
         card.address ? `Адрес: ${card.address}` : '',
@@ -359,7 +384,7 @@ function renderHtml(
 <p style="margin:0 0 8px;color:#ffffff;font-size:28px;line-height:1.2;font-weight:bold">${escapeHtml(card.name)}</p>
 <p style="margin:0 0 18px;color:#ccfbf1;font-size:15px;line-height:1.5">${escapeHtml([card.niche, card.city].filter(Boolean).join(' · '))}</p>
 ${facts.length ? `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 0 22px;width:100%;background:#134e4a;border-radius:10px"><tr><td style="padding:14px 16px;${FONT}">${facts.map((f) => `<p style="margin:0 0 4px;color:#e6fffb;font-size:14px;line-height:1.5">${escapeHtml(f)}</p>`).join('')}</td></tr></table>` : ''}
-${button(letter.button, true)}
+${card.showUrl ? button('Смотреть презентацию', true, escapeHtml(card.showUrl)) : button(letter.button, true)}
 </td></tr>`
     : '';
   // Строки закона и отписки — мелко в подвале: они обязательны, но это не текст письма.
@@ -426,6 +451,7 @@ function cardOf(p: OutreachProspect, input: OutreachInput): LetterCard {
     address: p.address?.trim() || null,
     hours: p.hours?.trim() || null,
     phone: p.phone?.trim() || null,
+    ...(p.kind !== 'provider' && input.showUrl ? { showUrl: input.showUrl } : {}),
   };
 }
 
