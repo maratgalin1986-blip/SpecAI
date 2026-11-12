@@ -35,7 +35,7 @@ export function storozhPathAllowed(pathname: string | null | undefined): boolean
   if (!pathname) return false;
   if (STOROZH_EXCLUDED.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`)))
     return false;
-  return pathname === '/' || pathname.startsWith('/arenda/');
+  return pathname === '/' || pathname === '/uborka-snega' || pathname.startsWith('/arenda/');
 }
 
 type StorageLike = Pick<Storage, 'getItem' | 'setItem'>;

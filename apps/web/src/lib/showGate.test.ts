@@ -61,6 +61,7 @@ describe('showPage', () => {
       '/contacts',
       '/equipment',
       '/equipment/abc',
+      '/uborka-snega',
     ]) {
       expect(showPage(path), path).toBe(true);
     }

@@ -45,6 +45,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     '/ceny',
     '/ceny/opros',
     ...JOBS.map((job) => `/raboty/${job.slug}`),
+    '/uborka-snega',
     '/equipment',
     '/map',
     '/orders',
