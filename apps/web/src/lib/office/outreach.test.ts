@@ -3,6 +3,7 @@ import { PLATFORM_PROMISE } from '@specai/shared';
 import { SITE } from '@/lib/site';
 import {
   buildEmail,
+  displayUrl,
   buildFollowUpEmail,
   buildWhatsAppText,
   isRuMobile,
@@ -149,7 +150,7 @@ describe('buildEmail', () => {
     expect(text.indexOf(SERVICE_EMAIL)).toBeLessThan(text.indexOf(STOP_LINE));
     // In html the link is escaped (&amp;) and labelled.
     expect(letter.html).toContain(
-      `<a href="${SERVICE_EMAIL.replace('&', '&amp;')}">${SERVICE_LINK_LABEL}</a>`,
+      `<a href="${SERVICE_EMAIL.replace('&', '&amp;')}" style="color:#0f766e">${SERVICE_LINK_LABEL}</a>`,
     );
     expect(letter.html.toLowerCase()).toContain(LEADS_TO_EMAIL_LINE.toLowerCase());
     expect(letter.html.indexOf(SERVICE_LINK_LABEL)).toBeLessThan(letter.html.indexOf(STOP_LINE));
@@ -486,12 +487,41 @@ describe('ссылка «Больше не писать» (К3)', () => {
       buildEmail(provider, { ...input, unsubscribeUrl: url }),
     ]) {
       expect(letter.text.trim().split('\n').at(-1)).toBe(`${UNSUBSCRIBE_LABEL}: ${url}`);
-      expect(letter.html).toContain(`<a href="${url}">`);
+      expect(letter.html).toContain(`<a href="${url}" style=`);
       expect(letter.html).toContain(UNSUBSCRIBE_LABEL);
     }
   });
 
   it('без ссылки строки нет', () => {
     expect(buildEmail(site, input).text).not.toContain(UNSUBSCRIBE_LABEL);
+  });
+});
+
+describe('письмо-презентация под фирму (владелец, 2026-11-12)', () => {
+  it('обложка: название, сфера, город и данные карточки; адрес показан кириллицей, ссылка — как есть', () => {
+    const letter = buildEmail(
+      { ...site, address: 'ул. Баумана, 5', hours: 'Пн–Пт 9:00–18:00' },
+      input,
+    );
+    expect(letter.html).toContain('Черновик сайта для вашей компании');
+    expect(letter.html).toContain('Адрес: ул. Баумана, 5');
+    expect(letter.html).toContain('Часы работы: Пн–Пт 9:00–18:00');
+    expect(letter.html).toContain(`<a href="${input.previewUrl}"`);
+    expect(letter.html).toContain('иистройка24.рф/preview/');
+    expect(letter.html).not.toContain('<img');
+  });
+
+  it('пишет человек: имя, компания и город в приветствии, подпись перед реквизитами', () => {
+    const letter = buildEmail(site, input);
+    expect(letter.text).toContain(`Меня зовут ${SITE.contactPerson}, я из компании ${SITE.name}`);
+    expect(letter.html).toContain(`С уважением, ${SITE.contactPerson}, ${SITE.name}`);
+    expect(letter.html.indexOf('С уважением')).toBeLessThan(letter.html.indexOf(SITE.inn));
+  });
+
+  it('displayUrl: кириллический домен без протокола и меток', () => {
+    expect(displayUrl('https://xn--24-6kc5aagh4arjl.xn--p1ai/preview/abc?x=1')).toBe(
+      'иистройка24.рф/preview/abc',
+    );
+    expect(displayUrl('не адрес')).toBe('не адрес');
   });
 });

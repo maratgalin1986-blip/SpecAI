@@ -10,6 +10,7 @@
 // пункта и рекомендованный пакет с ценой.
 // Отписка (К3): если рассылка передала `unsubscribeUrl`, последней строкой письма идёт
 // «Больше не писать: <ссылка>» (заголовок List-Unsubscribe ставит outreachRun.ts).
+import { domainToUnicode } from 'node:url';
 import { SERVICE_PAGE_PATH } from './clientSite';
 import { quotedName } from './pages';
 import { PLATFORM_PROMISE, PLATFORM_PROMISE_DETAIL } from '@specai/shared';
@@ -131,6 +132,14 @@ export function isRuMobile(phone: string | null | undefined): boolean {
   return /^79\d{9}$/.test(phoneDigits(phone));
 }
 
+/**
+ * Приветствие от человека, а не от «площадки» (владелец, 2026-11-12): кто пишет, откуда и чем
+ * занимается — одной фразой, как в обычном деловом письме.
+ */
+const GREETING = `Здравствуйте! Меня зовут ${SITE.contactPerson}, я из компании ${SITE.name} (${SITE.city}) — мы делаем сайты небольшим компаниям на площадке ${SITE.platform}.`;
+/** Подпись человека перед реквизитами. */
+const PERSON_SIGNATURE = `С уважением, ${SITE.contactPerson}, ${SITE.name}`;
+
 interface Letter {
   subject: string;
   greeting: string;
@@ -154,7 +163,7 @@ function siteLetter(p: OutreachProspect, input: OutreachInput): Letter {
   const niche = input.nicheTitle.trim().toLowerCase();
   return {
     subject: `Сделали страницу для ${name} — посмотрите`,
-    greeting: `Здравствуйте! Пишет ${SITE.name}, площадка ${SITE.platform}.`,
+    greeting: GREETING,
     paragraphs: [
       `В открытой карточке компании ${name} на карте не указан сайт. Мы собрали по данным ` +
         `карточки черновик страницы (${niche}): посмотреть можно по ссылке ниже. ${DRAFT_LINE}`,
@@ -195,7 +204,7 @@ function offerLetter(
 ): Letter {
   return {
     subject: offer.subject,
-    greeting: `Здравствуйте! Пишет ${SITE.name}, площадка ${SITE.platform}.`,
+    greeting: GREETING,
     paragraphs: [
       `${offer.opener} Мы собрали по данным карточки черновик страницы — посмотреть можно по ` +
         `ссылке ниже. ${DRAFT_LINE}`,
@@ -218,7 +227,7 @@ function providerLetter(p: OutreachProspect, _input: OutreachInput): Letter {
   const name = quotedName(p.name);
   return {
     subject: `Ваша страница на ${SITE.platform} уже готова`,
-    greeting: `Здравствуйте! Пишет ${SITE.name}, площадка ${SITE.platform}.`,
+    greeting: GREETING,
     paragraphs: [
       `${SITE.platform} — площадка заявок на спецтехнику по всей России. ${promiseSentence()}`,
       `Мы увидели вашу компанию ${name} на карте${where(p)} и уже сделали вам страницу ` +
@@ -278,29 +287,95 @@ function followUpLetter(p: OutreachProspect, input: OutreachInput): Letter {
   };
 }
 
-/** Простой HTML в одну колонку, без картинок: заголовок, абзацы, кнопка-ссылка. */
-function renderHtml(letter: Letter, previewUrl: string, unsubscribeUrl?: string): string {
+/** Адрес для показа человеку: «иистройка24.рф/preview/…» вместо punycode (в href — как есть). */
+export function displayUrl(url: string): string {
+  try {
+    const parsed = new URL(url);
+    const host = domainToUnicode(parsed.hostname) || parsed.hostname;
+    return `${host}${parsed.pathname.replace(/\/$/, '')}`;
+  } catch {
+    return url;
+  }
+}
+
+/** Что известно о фирме для «обложки» письма: из карточки, пустое не показывается. */
+interface LetterCard {
+  name: string;
+  niche: string;
+  city: string | null;
+  address: string | null;
+  hours: string | null;
+  phone: string | null;
+}
+
+const FONT = 'font-family:Arial,Helvetica,sans-serif';
+
+/**
+ * Письмо-презентация под фирму: сверху «обложка» её будущего сайта (название, сфера, город,
+ * адрес, часы и телефон из карточки) с кнопкой, ниже — письмо от человека. Одна колонка,
+ * таблицы и встроенные стили (почтовые программы другого не понимают), без картинок и внешних
+ * файлов: такие письма реже уходят в спам и одинаково выглядят в Яндексе, Mail.ru и на телефоне.
+ */
+function renderHtml(
+  letter: Letter,
+  previewUrl: string,
+  unsubscribeUrl?: string,
+  card?: LetterCard,
+): string {
   const href = escapeHtml(previewUrl);
+  const shown = escapeHtml(displayUrl(previewUrl));
   const unsubscribe = unsubscribeUrl
-    ? `<p style="margin:12px 0 0;color:#6b7280;font-size:13px">${UNSUBSCRIBE_LABEL}: <a href="${escapeHtml(unsubscribeUrl)}">${escapeHtml(unsubscribeUrl)}</a></p>`
+    ? `<p style="margin:10px 0 0;color:#9ca3af;font-size:12px;line-height:1.5">${UNSUBSCRIBE_LABEL}: <a href="${escapeHtml(unsubscribeUrl)}" style="color:#9ca3af">${escapeHtml(displayUrl(unsubscribeUrl))}</a></p>`
     : '';
-  const paragraph = (text: string) => `<p style="margin:0 0 12px">${escapeHtml(text)}</p>`;
+  const paragraph = (text: string) =>
+    `<p style="margin:0 0 14px;color:#1f2937;font-size:16px;line-height:1.6">${escapeHtml(text)}</p>`;
+  const small = (text: string) =>
+    `<p style="margin:0 0 8px;color:#9ca3af;font-size:12px;line-height:1.5">${escapeHtml(text)}</p>`;
+  const button = (label: string, light: boolean) =>
+    `<a href="${href}" style="display:inline-block;padding:14px 26px;background:${light ? '#ffffff' : '#0f766e'};color:${light ? '#0f3d3a' : '#ffffff'};text-decoration:none;border-radius:10px;font-size:16px;font-weight:bold;${FONT}">${escapeHtml(label)}</a>`;
+  const facts = card
+    ? [
+        card.address ? `Адрес: ${card.address}` : '',
+        card.hours ? `Часы работы: ${card.hours}` : '',
+        card.phone ? `Телефон: ${card.phone}` : '',
+      ].filter(Boolean)
+    : [];
+  const cover = card
+    ? `<tr><td style="background:#0f3d3a;border-radius:16px 16px 0 0;padding:32px 28px 28px;${FONT}">
+<p style="margin:0 0 10px;color:#99f6e4;font-size:12px;letter-spacing:1.5px;text-transform:uppercase">Черновик сайта для вашей компании</p>
+<p style="margin:0 0 8px;color:#ffffff;font-size:28px;line-height:1.2;font-weight:bold">${escapeHtml(card.name)}</p>
+<p style="margin:0 0 18px;color:#ccfbf1;font-size:15px;line-height:1.5">${escapeHtml([card.niche, card.city].filter(Boolean).join(' · '))}</p>
+${facts.length ? `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 0 22px;width:100%;background:#134e4a;border-radius:10px"><tr><td style="padding:14px 16px;${FONT}">${facts.map((f) => `<p style="margin:0 0 4px;color:#e6fffb;font-size:14px;line-height:1.5">${escapeHtml(f)}</p>`).join('')}</td></tr></table>` : ''}
+${button(letter.button, true)}
+</td></tr>`
+    : '';
+  // Строки закона и отписки — мелко в подвале: они обязательны, но это не текст письма.
+  const legal = letter.closing.slice(1);
   return `<!doctype html>
 <html lang="ru">
-<body style="margin:0;padding:24px;background:#f9fafb;font-family:Arial,Helvetica,sans-serif;color:#111827;font-size:15px;line-height:1.5">
-<div style="max-width:560px;margin:0 auto;background:#ffffff;border-radius:8px;padding:24px">
-<h1 style="margin:0 0 16px;font-size:20px">${escapeHtml(letter.subject)}</h1>
+<body style="margin:0;padding:0;background:#f3f4f6">
+<div style="display:none;max-height:0;overflow:hidden;color:#f3f4f6;font-size:1px">${escapeHtml(letter.paragraphs[0] ?? letter.greeting)}</div>
+<table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background:#f3f4f6"><tr><td align="center" style="padding:20px 12px">
+<table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="max-width:600px">
+${cover}
+<tr><td style="background:#ffffff;${card ? 'border-radius:0 0 16px 16px' : 'border-radius:16px'};padding:28px;${FONT}">
 ${paragraph(letter.greeting)}
 ${letter.paragraphs.map(paragraph).join('\n')}
-${letter.bullets?.length ? `<ul style="margin:0 0 12px;padding-left:20px">${letter.bullets.map((b) => `<li style="margin:0 0 6px">${escapeHtml(b)}</li>`).join('')}</ul>` : ''}
+${letter.bullets?.length ? `<ul style="margin:0 0 14px;padding-left:20px;color:#1f2937;font-size:16px;line-height:1.6">${letter.bullets.map((b) => `<li style="margin:0 0 6px">${escapeHtml(b)}</li>`).join('')}</ul>` : ''}
 ${(letter.after ?? []).map(paragraph).join('\n')}
-<p style="margin:20px 0"><a href="${href}" style="display:inline-block;padding:10px 18px;background:#0f766e;color:#ffffff;text-decoration:none;border-radius:6px">${escapeHtml(letter.button)}</a></p>
-<p style="margin:0 0 12px;color:#6b7280;font-size:13px">Или откройте ссылку: <a href="${href}">${href}</a></p>
-${letter.links.map((link) => `<p style="margin:0 0 12px"><a href="${escapeHtml(link.url)}">${escapeHtml(link.label)}</a></p>`).join('\n')}
-${letter.closing.map(paragraph).join('\n')}
-<p style="margin:24px 0 0;color:#6b7280;font-size:13px">${escapeHtml(LEGAL_SIGNATURE)}</p>
+<p style="margin:22px 0 10px">${button(letter.button, false)}</p>
+<p style="margin:0 0 18px;color:#6b7280;font-size:13px;line-height:1.5">Или откройте ссылку: <a href="${href}" style="color:#0f766e">${shown}</a></p>
+${letter.links.map((link) => `<p style="margin:0 0 14px;font-size:15px"><a href="${escapeHtml(link.url)}" style="color:#0f766e">${escapeHtml(link.label)}</a></p>`).join('\n')}
+${letter.closing[0] ? paragraph(letter.closing[0]) : ''}
+${paragraph(PERSON_SIGNATURE)}
+</td></tr>
+<tr><td style="padding:18px 28px 8px;${FONT}">
+${legal.map(small).join('\n')}
+${small(LEGAL_SIGNATURE)}
 ${unsubscribe}
-</div>
+</td></tr>
+</table>
+</td></tr></table>
 </body>
 </html>`;
 }
@@ -322,17 +397,28 @@ function renderText(letter: Letter, previewUrl: string, unsubscribeUrl?: string)
   ].join('\n');
 }
 
-function render(letter: Letter, input: OutreachInput): OutreachEmail {
+function render(letter: Letter, input: OutreachInput, card?: LetterCard): OutreachEmail {
   return {
     subject: letter.subject,
     text: renderText(letter, input.previewUrl, input.unsubscribeUrl),
-    html: renderHtml(letter, input.previewUrl, input.unsubscribeUrl),
+    html: renderHtml(letter, input.previewUrl, input.unsubscribeUrl, card),
+  };
+}
+
+function cardOf(p: OutreachProspect, input: OutreachInput): LetterCard {
+  return {
+    name: p.name,
+    niche: input.nicheTitle.trim(),
+    city: p.city?.trim() || null,
+    address: p.address?.trim() || null,
+    hours: p.hours?.trim() || null,
+    phone: p.phone?.trim() || null,
   };
 }
 
 /** Письмо кандидату по виду агента: сайт-визитка или страница исполнителя. */
 export function buildEmail(p: OutreachProspect, input: OutreachInput): OutreachEmail {
-  return render(letterFor(p, input), input);
+  return render(letterFor(p, input), input, cardOf(p, input));
 }
 
 /**
@@ -340,7 +426,7 @@ export function buildEmail(p: OutreachProspect, input: OutreachInput): OutreachE
  * ссылка на превью (и «Кто мы и цены» для сайта), строка «стоп» последней.
  */
 export function buildFollowUpEmail(p: OutreachProspect, input: OutreachInput): OutreachEmail {
-  return render(followUpLetter(p, input), input);
+  return render(followUpLetter(p, input), input, cardOf(p, input));
 }
 
 /**
