@@ -2,8 +2,8 @@
 // visitor turns sound on; nothing here runs on the server.
 //
 // Every sound is a real recording (soundAssets.ts), fetched when first needed:
-// the beds after the first gesture, a machine when it is announced, a cue the
-// first time it plays (the small interface cues are fetched with the beds).
+// the beds at the first sign of the visitor's hand, a machine when it is announced, a cue the
+// first time it plays (the small interface cues are fetched at idle).
 // «По-людски» (owner, 2026-10-06): a little random pitch, level and variant
 // on every play so nothing repeats like a robot; repeated cues get quieter
 // over the session; everything fades in and out.
@@ -93,24 +93,29 @@ type Queued = { line: Line; radio: boolean; volume: number };
 const wait = (ms: number) => new Promise<void>((resolve) => window.setTimeout(resolve, ms));
 
 // ---- Prefetch: the sound is ready before the first touch ---------------------
-// Browsers allow no sound before the visitor's first gesture, so the files are
-// downloaded while the page is looked at (SoundDirector, at idle) and decoded
-// at the first touch: the opening sting and the music start at once instead
-// of after a download (owner, 2026-10-17: «звук должен быть первым»).
+// Browsers allow no sound before the visitor's first gesture, so the first
+// files are downloaded while the page is looked at (SoundDirector) and decoded
+// at the first touch: the opening sting and the site start at once instead of
+// after a download (owner, 2026-10-17: «звук должен быть первым»).
+// In two steps, so a visitor who only reads does not pay for the loops:
+// at idle — the sting and the interface cues (≈15 KB together); at the first
+// sign of the visitor's hand (a finger down, a key, the wheel, a scroll: all
+// earlier than the gesture that may start audio) — the three loops (≈580 KB),
+// in parallel. Each loop starts as soon as it is decoded (startBeds).
 
 /** The site bed of this visit, chosen once so the prefetch and startBeds agree. */
 const SITE_BED: SampleName = SITE_BEDS[Math.floor(Math.random() * SITE_BEDS.length)]!;
 
-/** What the first touch plays: the sting, the interface cues and the three beds. */
+/** Downloaded at idle: the sting and the interface cues the first touch plays. */
 export const FIRST_SOUNDS: readonly SampleName[] = [
   ...CUE_SAMPLES.boom,
   ...CUE_SAMPLES.whoosh,
   ...CUE_SAMPLES.click,
   ...CUE_SAMPLES.thunk,
-  MUSIC_BED,
-  SITE_BED,
-  CITY_BED,
 ];
+
+/** Downloaded at the first sign of the visitor's hand: the three loops. */
+export const BED_SOUNDS: readonly SampleName[] = [SITE_BED, MUSIC_BED, CITY_BED];
 
 const prefetched = new Map<SampleName, Promise<{ data: ArrayBuffer } | null>>();
 
@@ -155,6 +160,8 @@ export class SoundEngine {
   private buffers = new Map<string, Promise<AudioBuffer | null>>();
   private bedSources: AudioBufferSourceNode[] = [];
   private bedsOn = false;
+  /** Counts startBeds calls, so a late file of an earlier start is dropped. */
+  private bedRun = 0;
   private voice: Voice | null = null;
   private machineToken = 0;
   private lastArrival = -Infinity;
@@ -392,24 +399,23 @@ export class SoundEngine {
     for (const name of [...CUE_SAMPLES.click, ...CUE_SAMPLES.thunk, ...CUE_SAMPLES.whoosh]) {
       void this.sample(name);
     }
-    const bedName = SITE_BED;
-    const [music, bed, city] = await Promise.all([
-      this.sample(MUSIC_BED),
-      this.sample(bedName),
-      this.sample(CITY_BED),
-    ]);
-    if (!this.bedsOn || this.disposed) return;
-    const loop = (buffer: AudioBuffer | null, bus: GainNode, gain: number, pan = 0) => {
-      if (!buffer) return;
+    // Each loop starts when its own file is ready: one that is still on its
+    // way (a first tap with nothing else before it) does not hold the others.
+    const run = ++this.bedRun;
+    const loop = async (name: SampleName, bus: GainNode, gain: number, pan = 0) => {
+      const buffer = await this.sample(name);
+      // Stopped, or stopped and started again, while the file was loading.
+      if (!buffer || !this.bedsOn || this.disposed || run !== this.bedRun) return;
       // A random point of the loop: no two visits start the same way.
       const src = this.source(buffer, bus, { gain, pan, offset: Math.random() * buffer.duration });
       if (!src) return;
       src.loop = true;
       this.bedSources.push(src);
     };
-    loop(music, this.music, 1);
-    loop(bed, this.site, 1, -0.15);
-    loop(city, this.site, LEVEL.city, 0.25);
+    void loop(MUSIC_BED, this.music, 1);
+    void loop(CITY_BED, this.site, LEVEL.city, 0.25);
+    await loop(SITE_BED, this.site, 1, -0.15);
+    if (!this.bedsOn || this.disposed || run !== this.bedRun) return;
     this.resumeTimers();
   }
 

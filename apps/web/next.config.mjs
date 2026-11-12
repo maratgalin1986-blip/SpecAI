@@ -20,6 +20,16 @@ const withSerwist = withSerwistInit({
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  // The sitemap's lastmod of pages without a date of their own.
+  env: { NEXT_PUBLIC_BUILD_DATE: new Date().toISOString() },
+  // <title> and the meta tags stay inside <head> for every visitor: with
+  // streamed metadata the dynamic pages (/map, /orders) sent them in <body>,
+  // where link previews and some crawlers do not look.
+  htmlLimitedBots: /.*/,
+  images: {
+    // AVIF first (a fifth to a third lighter than WebP on the machine photos).
+    formats: ['image/avif', 'image/webp'],
+  },
   // Media in /public rarely changes: a week in the browser and CDN cache makes
   // repeat visits from ads fast. Rename a file when replacing it.
   async headers() {
