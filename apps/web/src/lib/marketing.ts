@@ -71,6 +71,7 @@ const FORM_LABELS: Record<string, string> = {
   'catalog-empty': 'Каталог, ничего не нашли',
   landing: 'Страница вида техники',
   job: 'Страница работы',
+  sneg: 'Уборка снега',
   contacts: 'Контакты',
   orders: 'Страница заявки',
   'agents-chat': 'Чат с ИИ-агентами',
@@ -177,7 +178,9 @@ export type Goal =
   // «Прогуляться по городу» (2026-11-10): the 3D walk opened, a stop viewed, «Заказать» from a stop.
   | 'walk_open'
   | 'walk_stop'
-  | 'walk_order';
+  | 'walk_order'
+  // «Уборка снега» (2026-11-12): a заявка from the form of /uborka-snega.
+  | 'sneg_lead';
 
 /**
  * The cookie choice in localStorage: 'yes' («Согласен», Metrika on), 'no'
