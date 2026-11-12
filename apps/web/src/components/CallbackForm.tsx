@@ -16,7 +16,7 @@ export function CallbackForm({
   defaultMessage = '',
   defaultName = '',
   title = 'Заявка на звонок',
-  subtitle = 'Оставьте телефон — менеджер перезвонит, подберёт технику и назовёт цену.',
+  subtitle = 'Оставьте телефон — диспетчер перезвонит и подберёт технику.',
   dark = false,
 }: {
   source: string;

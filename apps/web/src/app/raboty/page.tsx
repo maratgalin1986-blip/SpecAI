@@ -9,7 +9,7 @@ import { fromPerHour, fromPrice, MIN_RATE } from '@/lib/prices';
 import { SITE } from '@/lib/site';
 
 export const metadata: Metadata = {
-  title: 'Работы спецтехникой в Набережных Челнах — цены с машинистом',
+  title: 'Работы спецтехникой — цены парка СпецПласт16',
   description: `Траншеи, котлованы, септики, вывоз снега, демонтаж, планировка, краны и автовышки: техника ${SITE.name} ${fromPerHour(MIN_RATE)}. ${DELIVERY_NOTE}`,
   alternates: { canonical: '/raboty' },
 };

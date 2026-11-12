@@ -4,6 +4,7 @@ import { prisma } from '@specai/database';
 import { isEmailConfigured, sendEmail, type SendEmailInput, type SendEmailResult } from './email';
 import { getEmailBaseUrl } from './emailTemplates';
 import { distanceKm, orderPoint } from './geo';
+import { loadHouseLine } from './houseLineData';
 import {
   buildNewsEmail,
   countNear,
@@ -276,7 +277,14 @@ async function loadCounters(now: Date): Promise<Counters> {
     }),
     prisma.equipmentCategory.findMany({ select: { id: true, slug: true, parentId: true } }),
   ]);
-  const machines = distinctMachines(line);
+  // СпецПласт16's free machines are on the line all week (owner, 2026-11-11, lib/houseLine.ts).
+  const house = await loadHouseLine(prisma, now).catch(() => []);
+  const machines = distinctMachines([
+    ...line,
+    ...house.flatMap((machine) =>
+      machine.point ? [{ userId: '', equipmentId: machine.id, ...machine.point }] : [],
+    ),
+  ]);
   return {
     nationwide: { newOrders, providers, machinesOnLine: machines.length },
     categoryRows,

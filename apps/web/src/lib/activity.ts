@@ -48,6 +48,10 @@ export interface ActivityLineRow {
   lat: number;
   lon: number;
   companyId: string;
+  /** «На линии на 5 рабочих дней» (lib/lineStanding.ts): on the line without GPS too. */
+  standingUntil?: Date | null;
+  standingForever?: boolean | null;
+  gpsAt?: Date | null;
   equipment: { id: string; status: string; category: { name: string } | null } | null;
 }
 
@@ -60,7 +64,10 @@ export interface ActivityBookingRow {
 export interface ActivityToday {
   /** New published orders since Moscow midnight, chat imports included. */
   orders: number;
-  /** Machines on the line right now (fresh position, AVAILABLE). */
+  /**
+   * Machines on the line right now: a fresh position or a standing line,
+   * AVAILABLE; СпецПласт16's free machines always (lib/houseLine.ts).
+   */
   online: number;
   /** Bookings confirmed since Moscow midnight. */
   confirmed: number;
@@ -150,9 +157,17 @@ export function isLiveLine(row: ActivityLineRow, now: Date): boolean {
   return isOnLine(row, now) && row.equipment?.status === 'AVAILABLE';
 }
 
-/** Machines on the line now, each machine once. */
-export function onlineCount(rows: readonly ActivityLineRow[], now: Date): number {
-  const ids = new Set<string>();
+/**
+ * Machines on the line now, each machine once. `houseIds`: СпецПласт16's
+ * machines on the line by the standing declaration and free today
+ * (lib/houseLine.ts) — real machines, counted once with the rows.
+ */
+export function onlineCount(
+  rows: readonly ActivityLineRow[],
+  now: Date,
+  houseIds: readonly string[] = [],
+): number {
+  const ids = new Set<string>(houseIds);
   for (const row of rows) if (isLiveLine(row, now) && row.equipment) ids.add(row.equipment.id);
   return ids.size;
 }

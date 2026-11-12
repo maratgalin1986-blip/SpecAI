@@ -3,6 +3,7 @@ import {
   buildPriceIndex,
   cellText,
   indexCategories,
+  indexHasData,
   INDEX_MIN_REPORTERS,
   lookupPrice,
   lookupText,
@@ -20,6 +21,15 @@ const point = (reporter: string, hourly: number, extra: Partial<PricePoint> = {}
   city: 'Казань',
   region: 'Республика Татарстан',
   ...extra,
+});
+
+describe('indexHasData', () => {
+  it('is false until some number has enough reporters behind it', () => {
+    expect(indexHasData(buildPriceIndex([]))).toBe(false);
+    expect(indexHasData(buildPriceIndex([point('c:a', 3000), point('c:b', 3500)]))).toBe(false);
+    const enough = Array.from({ length: INDEX_MIN_REPORTERS }, (_, i) => point(`c:${i}`, 3000 + i));
+    expect(indexHasData(buildPriceIndex(enough))).toBe(true);
+  });
 });
 
 describe('median and range', () => {

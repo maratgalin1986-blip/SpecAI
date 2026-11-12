@@ -51,7 +51,7 @@ export const SITE = {
   telegramBot: process.env.NEXT_PUBLIC_TELEGRAM_BOT || 'specplast16_zayavki_bot',
   // Promise shown next to callback forms. Keep it realistic.
   callbackPromise: 'Перезвоним в течение 15 минут в рабочее время',
-  workingHours: 'Пн–Сб, 8:00–20:00 · ИИ-агенты — круглосуточно',
+  workingHours: 'Пн–Сб, 8:00–20:00 · заявки на сайте — в любое время',
   // Legal details of the personal-data operator shown in the privacy policy,
   // e.g. 'ИП Иванов Иван Иванович' and the ИНН. Fill in before launch.
   legalName: 'ООО «СПЕЦПЛАСТ 16»' as string,

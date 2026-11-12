@@ -20,7 +20,8 @@ const NAV_LINKS: NavLink[] = [
   { href: '/providers', label: 'Исполнители', tier: 'core' },
   { href: '/equipment', label: 'Техника', tier: 'core' },
   { href: '/map', label: 'Карта', tier: 'xl' },
-  { href: '/agents', label: 'ИИ-агенты', tier: 'more' },
+  { href: '/?walk=1', label: '3D-город', tier: 'more' },
+  { href: '/agents', label: 'Помощник', tier: 'more' },
   { href: '/contacts', label: 'Контакты', tier: 'more' },
 ];
 

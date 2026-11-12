@@ -23,7 +23,13 @@ export function Reveal({
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
-    return onceInView(el, () => setIsVisible(true), { threshold: 0.15 });
+    // Not a share of the block: a grid taller than ~6 screens (the catalogue on a phone)
+    // never has 15 % of itself on screen and stayed invisible. Any part of the block past
+    // the bottom tenth of the viewport reveals it.
+    return onceInView(el, () => setIsVisible(true), {
+      threshold: 0,
+      rootMargin: '0px 0px -10% 0px',
+    });
   }, []);
 
   return (
