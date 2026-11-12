@@ -105,7 +105,10 @@ describe('buildEmail', () => {
     const letter = buildEmail(site, input);
     expect(letter.subject).toBe('Сделали страницу для Стоматология «Улыбка» — посмотрите');
     expect(letter.text).toContain(SITE.name);
-    expect(letter.text).toContain(SITE.platform);
+    // Письмо о сайте — отдельный проект: площадка заявок в нём не упоминается (владелец, 2026-11-12).
+    expect(letter.text).not.toContain(SITE.platform);
+    expect(buildWhatsAppText(site, input)).not.toContain(SITE.platform);
+    expect(buildFollowUpEmail(site, input).text).not.toContain(SITE.platform);
     // Факт — о карточке, с источником; не утверждение о самой фирме.
     expect(letter.text).toContain(
       'В открытой карточке компании Стоматология «Улыбка» на карте не указан сайт.',
