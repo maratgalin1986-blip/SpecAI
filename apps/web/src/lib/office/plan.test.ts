@@ -1,7 +1,14 @@
 import { cityByName } from '@specai/shared';
 import { describe, expect, it } from 'vitest';
 import { AGENTS, MEDICAL_NICHES } from './agents';
-import { defaultPlan, formatPlan, homeRegionCities, nextStep, parsePlan } from './plan';
+import {
+  EAST_SITE_CITIES,
+  defaultPlan,
+  formatPlan,
+  homeRegionCities,
+  nextStep,
+  parsePlan,
+} from './plan';
 
 describe('office plan: parsePlan', () => {
   it('reads «agent; niche; city» lines and reports errors by line number', () => {
@@ -57,9 +64,12 @@ describe('office plan: nextStep', () => {
 describe('office plan: defaultPlan', () => {
   const plan = defaultPlan();
   const home = homeRegionCities();
+  const eastCount = EAST_SITE_CITIES.length * AGENTS.sites.defaultNiches.length;
+  const east = plan.slice(0, eastCount);
+  const rest = plan.slice(eastCount);
 
   it('one providers step, then three sites steps: sites are what the owner wants first', () => {
-    expect(plan.slice(0, 8).map((s) => s.agent)).toEqual([
+    expect(rest.slice(0, 8).map((s) => s.agent)).toEqual([
       'providers',
       'sites',
       'sites',
@@ -71,25 +81,30 @@ describe('office plan: defaultPlan', () => {
     ]);
   });
 
-  it('весь Татарстан идёт первым у обоих агентов, потом остальная Россия', () => {
+  it('после восточных городов — весь Татарстан у обоих агентов, потом остальная Россия', () => {
     expect(home.length).toBeGreaterThanOrEqual(18);
     expect(home).toContain('Казань');
     expect(home).toContain('Набережные Челны');
     expect(home).toContain('Арск');
-    const providerCities = plan.filter((s) => s.agent === 'providers').map((s) => s.city);
+    const providerCities = rest.filter((s) => s.agent === 'providers').map((s) => s.city);
     expect(providerCities.slice(0, home.length)).toEqual(home);
     // Остальные 30 крупных городов без повторов Татарстана.
     expect(new Set(providerCities).size).toBe(providerCities.length);
     expect(providerCities).toContain('Москва');
-    const siteCities = [...new Set(plan.filter((s) => s.agent === 'sites').map((s) => s.city))];
+    const siteCities = [...new Set(rest.filter((s) => s.agent === 'sites').map((s) => s.city))];
     expect(siteCities.slice(0, home.length)).toEqual(home);
     expect(siteCities).toContain('Уфа');
     // 5 ниш на каждый город «Сайтов».
     // По каждой нише агента «Сайты» на каждый город.
-    expect(plan.filter((s) => s.agent === 'sites')).toHaveLength(
+    expect(rest.filter((s) => s.agent === 'sites')).toHaveLength(
       (home.length + 4) * AGENTS.sites.defaultNiches.length,
     );
     for (const step of plan) expect(cityByName(step.city)?.name).toBe(step.city);
+  });
+  it('Дальний Восток — в начале плана: все ниши «Сайтов» по каждому восточному городу', () => {
+    expect(east.every((s) => s.agent === 'sites')).toBe(true);
+    expect([...new Set(east.map((s) => s.city))]).toEqual([...EAST_SITE_CITIES]);
+    expect(east[0]).toMatchObject({ city: 'Владивосток' });
   });
   it('К5: медицинских ниш в плане по умолчанию нет, в ручной строке ниша работает', () => {
     expect(MEDICAL_NICHES).toContain('dentist');

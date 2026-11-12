@@ -51,6 +51,8 @@ export interface TickDeps {
   replies?: (now: Date, budgetMs: number) => Promise<RepliesResult>;
   /** Запись итога прохода рассылки для /api/health. */
   savePass?: (now: Date, outreach: OutreachResult) => Promise<unknown>;
+  /** Сообщение владельцу в Telegram (примеры отправленных писем). */
+  notify?: (message: string) => Promise<boolean>;
   /** Срочное сообщение владельцу (не чаще раза в день на ключ). */
   alert?: (key: string, now: Date, message: string) => Promise<unknown>;
   sendDigest?: (now: Date, extra: DigestExtra) => Promise<boolean | null>;
@@ -264,6 +266,16 @@ export async function officeTick(
     return { email: 0, whatsapp: 0, skipped: 'error', errors: 0 } as OutreachResult;
   });
 
+  // «Покажи, что отправил» (владелец, 2026-11-12): первые письма прохода — в Telegram, со ссылкой
+  // на презентацию фирмы. В ответ крона и в журнал названия не попадают: поле снимается.
+  const samples = outreach.samples ?? [];
+  delete outreach.samples;
+  if (samples.length > 0) {
+    await (deps.notify ?? notifyTelegram)(sentNotice(outreach.email, samples, siteUrl())).catch(
+      (error: unknown) => console.error('[office] sent notice failed', error),
+    );
+  }
+
   // Итог прохода — в настройку: /api/health показывает его сессии без пароля. Сломанный ящик —
   // владельцу сразу, а не в завтрашней сводке (сегодняшняя могла уже уйти).
   await (deps.savePass ?? saveLastPass)(now, outreach).catch((error: unknown) => {
@@ -301,6 +313,20 @@ export async function officeTick(
     digest = sent === true;
   }
   return { steps, outreach, digest, ...(replies ? { replies } : {}) };
+}
+
+/** Сообщение владельцу: сколько писем ушло и первые из них со ссылками на презентации. */
+export function sentNotice(
+  sent: number,
+  samples: readonly { name: string; city: string | null; kind: string; token: string }[],
+  base: string,
+): string {
+  const root = base.replace(/\/+$/, '');
+  const lines = samples.map((s, i) => {
+    const path = s.kind === 'provider' ? 'preview' : 'pokaz';
+    return `${i + 1}. ${s.name}${s.city ? `, ${s.city}` : ''} — ${root}/${path}/${s.token}`;
+  });
+  return [`📨 Офис отправил писем: ${sent}. Первые из них:`, ...lines].join('\n');
 }
 
 /** Итог прохода рассылки без названий и адресов: числа, слова состояния, код ответа сервера. */

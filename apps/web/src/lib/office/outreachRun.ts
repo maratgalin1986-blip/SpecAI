@@ -52,6 +52,7 @@ import { parseDossier } from './dossier';
 import { collectAngleStats, chooseAngle, type AngleStat, type LearningDb } from './learning';
 import { applicableAngles, buildOffer, type OfferAngle } from './offer';
 import { readOfficeSettings, type OutreachMode } from '@/lib/office/settings';
+import { inLocalHours } from './localTime';
 import { nichePitch } from './pitch';
 import {
   officeMailConfigured,
@@ -285,6 +286,11 @@ export interface OutreachResult {
   mail?: 'no-smtp' | 'broken';
   /** Что ответил ящик, когда почта остановлена ('broken'), — для владельца. */
   mailError?: string;
+  /**
+   * Первые письма прохода — владельцу в Telegram («покажи, что отправил»). В ответ крона не
+   * попадают: тик снимает поле перед ответом.
+   */
+  samples?: { name: string; city: string | null; kind: string; token: string }[];
   /** Признаки настроек ящика без значений (smtp.ts → officeMailHint), когда почта 'broken'. */
   mailHint?: string;
   /** Напоминаний ждут кнопки владельца (режим 'auto' сам их не отправляет). */
@@ -335,6 +341,8 @@ export interface OutreachPlan {
 
 /** Сколько кандидатов берём за проход: лимит в день редко больше. */
 export const OUTREACH_BATCH = 50;
+/** Сколько отправленных писем прохода показать владельцу. */
+export const OUTREACH_SAMPLES = 5;
 /** Бюджет времени прохода, мс — укладываемся в maxDuration крона. */
 export const OUTREACH_BUDGET_MS = 40_000;
 /** Одна отправка (SMTP / Green API) не длиннее этого — иначе функция крона не успеет записать отметку. */
@@ -501,12 +509,19 @@ async function runOutreach(
   if (!channels.email) result.mail = 'no-smtp';
   const cap = Math.max(0, Math.floor(settings.dailyCap));
   const bounds = mskDayBounds(now);
+  // Лимит считается отдельно для «восточного утра» (до 8:00 по Москве) и для дня: ночная пачка
+  // Дальнему Востоку не съедает дневные письма остальным регионам.
+  const split = new Date(bounds.start.getTime() + AUTO_SEND_HOURS.from * 3_600_000);
+  const capWindow =
+    now.getTime() < split.getTime()
+      ? { gte: bounds.start, lt: split }
+      : { gte: split, lt: bounds.end };
   const day = { gte: bounds.start, lt: bounds.end };
   // Напоминания — в том же дневном лимите писем, что и первые письма.
   const [emailToday, followUpsToday, whatsappToday] = await Promise.all([
-    db.prospect.count({ where: { emailSentAt: day } }),
-    db.prospect.count({ where: { followUpSentAt: day } }),
-    db.prospect.count({ where: { whatsappSentAt: day } }),
+    db.prospect.count({ where: { emailSentAt: capWindow } }),
+    db.prospect.count({ where: { followUpSentAt: capWindow } }),
+    db.prospect.count({ where: { whatsappSentAt: capWindow } }),
   ]);
   let emailLeft = Math.max(0, cap - emailToday - followUpsToday);
   let whatsappLeft = Math.max(0, cap - whatsappToday);
@@ -681,10 +696,19 @@ async function runOutreach(
         AND: [{ OR: pending }, { OR: notFailedToday }],
       },
       orderBy: [{ outreachError: { sort: 'asc', nulls: 'first' } }, { createdAt: 'asc' }],
-      take: OUTREACH_BATCH,
+      // Ночью по Москве очередь фильтруется по местному времени: берём с запасом.
+      take: auto ? OUTREACH_BATCH * 8 : OUTREACH_BATCH,
     }),
     OUTREACH_STATUSES,
+  ).then((list) =>
+    // Без кнопки владельца — только фирмам, у которых сейчас рабочее время по их часам
+    // (владелец, 2026-11-12: Владивостоку — в его утро, а не в московское).
+    auto ? list.filter((r) => inLocalHours(now, r.city, AUTO_SEND_HOURS)) : list,
   );
+  if (auto && rows.length === 0 && !inAutoSendHours(now)) {
+    result.skipped = 'night';
+    return done();
+  }
   const pick = { whatsappToPhone: settings.whatsappToPhone, channels: active };
   let whatsappSent = false;
 
@@ -843,6 +867,14 @@ async function runOutreach(
         if (sent.ok) {
           emailLeft -= 1;
           result.email += 1;
+          if ((result.samples ??= []).length < OUTREACH_SAMPLES) {
+            result.samples.push({
+              name: row.name,
+              city: row.city,
+              kind: row.kind,
+              token: row.token,
+            });
+          }
           mailFailures = 0;
           await db.prospect.updateMany({
             where: guard,
@@ -1089,11 +1121,9 @@ export async function sendOutreach(now: Date, deps: OutreachDeps = {}): Promise<
   if (settings.outreachPaused) {
     return { email: 0, whatsapp: 0, followUps: 0, skipped: 'paused', errors: 0 };
   }
-  // Сам офис (режим 'auto', без кнопки владельца) пишет только днём по Москве: письмо в три
-  // часа ночи выглядит как робот и остаётся без ответа. Кнопка «Отправить» работает всегда.
-  if (!deps.onlyApproved && settings.outreachMode === 'auto' && !inAutoSendHours(now)) {
-    return { email: 0, whatsapp: 0, followUps: 0, skipped: 'night', errors: 0 };
-  }
+  // Сам офис (режим 'auto', без кнопки владельца) пишет фирме только в её рабочее время
+  // (runOutreach, AUTO_SEND_HOURS по часам её города): письмо в три часа ночи выглядит как робот.
+  // Кнопка «Отправить» работает всегда.
   if (!deps.onlyApproved && settings.outreachMode !== 'auto') {
     const { result, items } = await runOutreach(now, deps, 'plan', settings);
     if (result.skipped) return result;

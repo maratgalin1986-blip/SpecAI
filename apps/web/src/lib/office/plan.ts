@@ -29,6 +29,22 @@ export const DEFAULT_PROVIDER_CITIES = 30;
 /** Города агента «Сайты» за пределами домашнего региона в плане по умолчанию. */
 export const DEFAULT_SITE_CITIES: readonly string[] = ['Уфа', 'Самара', 'Пермь', 'Екатеринбург'];
 
+/**
+ * Дальний Восток — первым в обходе «Сайтов» (владелец, 2026-11-12: «во Владивостоке уже утро —
+ * отправь им»): письма уходят по местному времени фирмы (localTime.ts), и восточным городам они
+ * приходят, пока в Москве ночь.
+ */
+export const EAST_SITE_CITIES: readonly string[] = [
+  'Владивосток',
+  'Хабаровск',
+  'Уссурийск',
+  'Южно-Сахалинск',
+  'Находка',
+  'Благовещенск',
+  'Петропавловск-Камчатский',
+  'Якутск',
+];
+
 /** Все города домашнего региона из списка городов России, крупные первыми. */
 export function homeRegionCities(): string[] {
   return RUSSIAN_CITIES.filter((city) => city.region === HOME_REGION).map((city) => city.name);
@@ -59,7 +75,17 @@ export function defaultPlan(): PlanStep[] {
       sites.push({ agent: 'sites', niche, city: city.name });
     }
   }
-  return interleave(providers, sites);
+  // Восточные города — в начале плана, без чередования с «Подрядчиками»: их нужно успеть обойти
+  // до их утра.
+  const east: PlanStep[] = [];
+  for (const cityName of EAST_SITE_CITIES) {
+    const city = cityByName(cityName);
+    if (!city) continue;
+    for (const niche of AGENTS.sites.defaultNiches) {
+      east.push({ agent: 'sites', niche, city: city.name });
+    }
+  }
+  return [...east, ...interleave(providers, sites)];
 }
 
 /** Сколько шагов «Сайтов» идёт на один шаг «Подрядчиков» в плане по умолчанию. */
