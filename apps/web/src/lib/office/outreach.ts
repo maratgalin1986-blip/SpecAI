@@ -88,7 +88,7 @@ export const NOT_OFFER_LINE = 'Письмо не является офертой
 const DRAFT_LINE =
   'Это черновик, а не официальный сайт: в поиске его нет, открывается только по ссылке.';
 /** Подпись: кто пишет (§ 9.1, п. 4). */
-export const LEGAL_SIGNATURE = `${SITE.platform} от ${SITE.name} — ${SITE.legalName}, ИНН ${SITE.inn}, ОГРН ${SITE.ogrn}, ${SITE.legalAddress}. Телефон ${SITE.phone}.`;
+export const LEGAL_SIGNATURE = `${SITE.name} — ${SITE.legalName}, ИНН ${SITE.inn}, ОГРН ${SITE.ogrn}, ${SITE.legalAddress}. Телефон ${SITE.phone}.`;
 const WHATSAPP_ONCE_LINE = 'Сообщение отправлено один раз на номер из открытой карточки компании.';
 const FOLLOW_UP_ONCE_LINE = 'Это единственное напоминание.';
 
@@ -136,7 +136,12 @@ export function isRuMobile(phone: string | null | undefined): boolean {
  * Приветствие от человека, а не от «площадки» (владелец, 2026-11-12): кто пишет, откуда и чем
  * занимается — одной фразой, как в обычном деловом письме.
  */
-const GREETING = `Здравствуйте! Меня зовут ${SITE.contactPerson}, я из компании ${SITE.name} (${SITE.city}) — мы делаем сайты небольшим компаниям на площадке ${SITE.platform}.`;
+const GREETING = `Здравствуйте! Меня зовут ${SITE.contactPerson}, я из компании ${SITE.name} (${SITE.city}) — мы делаем сайты небольшим компаниям.`;
+/**
+ * Письмо исполнителю спецтехники — другой проект (владелец, 2026-11-12: «это два разных
+ * проекта»): площадка заявок. В письмах о сайтах площадка не упоминается.
+ */
+const PROVIDER_GREETING = `Здравствуйте! Меня зовут ${SITE.contactPerson}, я из компании ${SITE.name} (${SITE.city}) — мы ведём площадку заявок на спецтехнику ${SITE.platform}.`;
 /** Подпись человека перед реквизитами. */
 const PERSON_SIGNATURE = `С уважением, ${SITE.contactPerson}, ${SITE.name}`;
 
@@ -227,7 +232,7 @@ function providerLetter(p: OutreachProspect, _input: OutreachInput): Letter {
   const name = quotedName(p.name);
   return {
     subject: `Ваша страница на ${SITE.platform} уже готова`,
-    greeting: GREETING,
+    greeting: PROVIDER_GREETING,
     paragraphs: [
       `${SITE.platform} — площадка заявок на спецтехнику по всей России. ${promiseSentence()}`,
       `Мы увидели вашу компанию ${name} на карте${where(p)} и уже сделали вам страницу ` +
@@ -255,7 +260,10 @@ function letterFor(p: OutreachProspect, input: OutreachInput): Letter {
 /** Напоминание (S8): короче первого письма — что сделали, ссылка, «стоп». */
 function followUpLetter(p: OutreachProspect, input: OutreachInput): Letter {
   const name = quotedName(p.name);
-  const greeting = `Здравствуйте! Это снова ${SITE.name}, площадка ${SITE.platform}.`;
+  const greeting =
+    p.kind === 'provider'
+      ? `Здравствуйте! Это снова ${SITE.contactPerson} из ${SITE.name}, площадка ${SITE.platform}.`
+      : `Здравствуйте! Это снова ${SITE.contactPerson} из компании ${SITE.name}.`;
   const closing = (ask: string) => [
     `${ask} — ответьте на это письмо или позвоните ${SITE.phone}.`,
     `${STOP_LINE} ${FOLLOW_UP_ONCE_LINE}`,
@@ -435,7 +443,10 @@ export function buildFollowUpEmail(p: OutreachProspect, input: OutreachInput): O
  */
 export function buildWhatsAppText(p: OutreachProspect, input: OutreachInput): string {
   const name = quotedName(p.name);
-  const intro = `Здравствуйте! Это ${SITE.name}, площадка ${SITE.platform}.`;
+  const intro =
+    p.kind === 'provider'
+      ? `Здравствуйте! Это ${SITE.name}, площадка ${SITE.platform}.`
+      : `Здравствуйте! Это ${SITE.contactPerson} из компании ${SITE.name}, мы делаем сайты.`;
   const reply = `Ответьте здесь или позвоните ${SITE.phone}.`;
   const stop = `${STOP_LINE} ${WHATSAPP_ONCE_LINE}`;
   if (p.kind === 'provider') {
@@ -480,7 +491,7 @@ function offerWhatsAppText(
   input: OutreachInput,
   offer: NonNullable<OutreachInput['offer']>,
 ): string {
-  const intro = `Здравствуйте! Это ${SITE.name}, площадка ${SITE.platform}.`;
+  const intro = `Здравствуйте! Это ${SITE.contactPerson} из компании ${SITE.name}, мы делаем сайты.`;
   const body = `${offer.opener} Собрали по данным карточки черновик страницы: ${input.previewUrl} Это не официальный сайт, в поиске его нет.`;
   const bullets = offer.bullets.map((b) => `• ${b}`).join('\n');
   const price = 'Условия и цены — по ссылке ниже; сообщение не является офертой.';

@@ -125,7 +125,7 @@ function escapeHtml(text: string): string {
 
 function reSubject(subject: string): string {
   const clean = subject.replace(/[\r\n]+/g, ' ').trim();
-  if (!clean) return `Re: страница для вашей компании на ${SITE.platform}`;
+  if (!clean) return 'Re: страница для вашей компании';
   return /^re:/i.test(clean) ? clean : `Re: ${clean}`;
 }
 
