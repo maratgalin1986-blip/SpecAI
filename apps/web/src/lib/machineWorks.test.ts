@@ -3,9 +3,10 @@ import { HAMMER_RATE, MACHINE_WORKS, workRate } from './machineWorks';
 
 describe('workRate', () => {
   it('charges the hammer rate for hammer jobs only', () => {
+    // The wheeled excavator is sold «с гидромолотом»: one price for every job.
     const wheeled = MACHINE_WORKS['wheeled-excavator']!;
     expect(workRate(wheeled, 'Разбить бетон или асфальт гидромолотом')).toBe(HAMMER_RATE);
-    expect(workRate(wheeled, 'Траншея в городе')).toBe(4000);
+    expect(workRate(wheeled, 'Траншея в городе')).toBe(HAMMER_RATE);
     const backhoe = MACHINE_WORKS.backhoe!;
     expect(workRate(backhoe, 'Работа гидромолотом: демонтаж, мёрзлый грунт')).toBe(4500);
     expect(workRate(backhoe, 'Уборка снега')).toBe(4000);
