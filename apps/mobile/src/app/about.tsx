@@ -38,8 +38,7 @@ export default function AboutScreen() {
           <Text style={styles.description}>
             {/* Цены — из прайса сайта (apps/web/src/lib/prices.ts). */}
             Техника СпецПласт16 с опытными машинистами: экскаваторы-погрузчики и экскаваторы — от 4
-            000 ₽/ч, автокраны — от 4 500 ₽/ч, самосвалы — от 3 300 ₽/ч. ИИ-агенты круглосуточно
-            подберут технику, посчитают стоимость и оформят заявку.
+            000 ₽/ч, автокраны — от 4 500 ₽/ч, самосвалы — от 3 300 ₽/ч. {SITE.agentsHours}.
           </Text>
         </Card>
 
@@ -70,7 +69,7 @@ export default function AboutScreen() {
           <ContactRow
             icon="time-outline"
             label="Режим работы"
-            value={`${SITE.workingHours} · ${SITE.agentsHours}`}
+            value={`${SITE.workingHours}. ${SITE.agentsHours}`}
           />
           <ContactActions source="mobile:about" />
         </Card>
