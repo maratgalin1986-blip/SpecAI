@@ -158,6 +158,14 @@ function defaultDb(): OfficeDb {
   return prisma;
 }
 
+/**
+ * «Есть сайт — не кандидат» — правило только проекта «Сайты»: там мы сайт продаём. Проект
+ * площадки зовёт публиковать технику и заказывать её, и фирма с сайтом — такой же адресат.
+ */
+export function websiteIsFine(agent: AgentId): boolean {
+  return AGENTS[agent].kind !== 'site';
+}
+
 export function sourceNiche(niche: Niche): SourceNiche {
   return {
     key: niche.key,
@@ -165,6 +173,7 @@ export function sourceNiche(niche: Niche): SourceNiche {
     nameRegex: niche.osm.nameRegex,
     dgisQuery: niche.osm.dgisQuery,
     machineryTags: niche.key === 'machinery' ? machineryTags : undefined,
+    ...(websiteIsFine(niche.agent) ? { websiteOk: true } : {}),
   };
 }
 
@@ -216,7 +225,7 @@ export interface CreateResult {
 }
 
 /**
- * Дедупликация и создание кандидатов (R6). Компания с сайтом, ИП и люди (К5) — мимо;
+ * Дедупликация и создание кандидатов (R6). Компания с сайтом (только у «Сайтов»), ИП и люди (К5) — мимо;
  * `Prospect` с тем же `sourceRef` или телефоном (любой статус) — skipped; для «Подрядчиков» — ещё `Company`
  * с тем же номером на площадке. Возвращает счётчики и причины пропусков.
  */
@@ -270,8 +279,9 @@ async function createProspects(
   ctx: CreateContext,
 ): Promise<CreateResult> {
   const errors: string[] = [];
+  const withSiteOk = websiteIsFine(ctx.agent);
   const fresh = candidates.filter((c) => {
-    if (c.website) {
+    if (c.website && !withSiteOk) {
       errors.push(`${c.name}: у компании уже есть сайт`);
       return false;
     }
@@ -417,8 +427,10 @@ export async function runStep(input: RunStepInput, deps: RunDeps = {}): Promise<
       result.error = search.error;
       return finish();
     }
-    // Источник отдаёт всех: фирмы с сайтом — только соседи для досье, кандидатами не становятся.
-    const withoutSite = search.candidates.filter((c) => !c.website);
+    // Источник отдаёт всех: у «Сайтов» фирмы с сайтом — только соседи для досье, кандидатами
+    // не становятся; проекту площадки сайт не мешает (websiteIsFine).
+    const withSiteOk = websiteIsFine(input.agent);
+    const withoutSite = search.candidates.filter((c) => withSiteOk || !c.website);
     const withSite = search.candidates.length - withoutSite.length;
     // К5: ИП и люди — тоже только соседи; отсеиваем до обрезки, чтобы места шага шли компаниям.
     const companies = withoutSite.filter((c) => !candidateSkipText(c.name));
@@ -476,15 +488,17 @@ export type ScheduledStepResult =
   | { skipped: null; step: PlanStep; result: RunStepResult };
 
 /**
- * Эпоха плана: при её смене обход начинается с первого шага. 2026-11-12: в начало плана
+ * Эпоха плана: при её смене обход начинается с первого шага. 2026-11-12 (вторая смена за день):
+ * у «Подрядчиков» семь ниш вместо одной и вся Россия вместо 30 городов — шаги плана сдвинулись,
+ * прежний курсор указывал бы на случайный шаг. Раньше в тот же день: в начало плана
  * поставлены города Дальнего Востока (plan.ts → EAST_SITE_CITIES). 2026-11-10: источник карт сутки не
  * отвечал и «съел» первые шаги (Казань, Набережные Челны), порядок плана изменился (три шага
  * «Сайтов» на один «Подрядчиков»), а поиск переехал на раннер GitHub с полным ответом Overpass.
  */
-export const PLAN_EPOCH = '2026-11-12-east';
+export const PLAN_EPOCH = '2026-11-12-platform';
 
 /** Через раннер приходит весь ответ Overpass (сотни фирм на город) — за шаг берём больше. */
-export const RELAY_STEP_LIMIT = 30;
+export const RELAY_STEP_LIMIT = 45;
 
 const PLAN_KEYS = [
   OFFICE_SETTINGS.paused,

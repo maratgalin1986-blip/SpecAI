@@ -1,4 +1,4 @@
-import { cityByName } from '@specai/shared';
+import { RUSSIAN_CITIES, cityByName } from '@specai/shared';
 import { describe, expect, it } from 'vitest';
 import { AGENTS, MEDICAL_NICHES } from './agents';
 import {
@@ -86,20 +86,56 @@ describe('office plan: defaultPlan', () => {
     expect(home).toContain('Казань');
     expect(home).toContain('Набережные Челны');
     expect(home).toContain('Арск');
-    const providerCities = rest.filter((s) => s.agent === 'providers').map((s) => s.city);
+    const providerSteps = rest.filter((s) => s.agent === 'providers');
+    const providerCities = [...new Set(providerSteps.map((s) => s.city))];
     expect(providerCities.slice(0, home.length)).toEqual(home);
-    // Остальные 30 крупных городов без повторов Татарстана.
-    expect(new Set(providerCities).size).toBe(providerCities.length);
+    // Проект площадки — вся Россия: каждый город списка, восточные тоже, каждый один раз.
+    expect(providerCities).toHaveLength(RUSSIAN_CITIES.length);
     expect(providerCities).toContain('Москва');
+    expect(providerCities).toContain('Владивосток');
+    expect(providerSteps).toHaveLength(
+      RUSSIAN_CITIES.length * AGENTS.providers.defaultNiches.length,
+    );
     const siteCities = [...new Set(rest.filter((s) => s.agent === 'sites').map((s) => s.city))];
     expect(siteCities.slice(0, home.length)).toEqual(home);
     expect(siteCities).toContain('Уфа');
     // 5 ниш на каждый город «Сайтов».
     // По каждой нише агента «Сайты» на каждый город.
     expect(rest.filter((s) => s.agent === 'sites')).toHaveLength(
-      (home.length + 4) * AGENTS.sites.defaultNiches.length,
+      // Вся Россия: каждый город списка, кроме восточных (они — в начале плана).
+      (RUSSIAN_CITIES.length - EAST_SITE_CITIES.length) * AGENTS.sites.defaultNiches.length,
     );
     for (const step of plan) expect(cityByName(step.city)?.name).toBe(step.city);
+  });
+  it('«Подрядчики» проходят в городе все свои ниши подряд, и только свои', () => {
+    const niches = AGENTS.providers.defaultNiches;
+    expect(niches.length).toBeGreaterThan(1);
+    const steps = rest.filter((s) => s.agent === 'providers');
+    // Первый город — Казань: ниши в порядке агента, дорожники раньше строителей.
+    expect(steps.slice(0, niches.length)).toEqual(
+      niches.map((niche) => ({ agent: 'providers', niche, city: 'Казань' })),
+    );
+    expect(niches.indexOf('road_construction')).toBeLessThan(niches.indexOf('construction'));
+    for (let i = 0; i < steps.length; i += niches.length) {
+      const city = steps.slice(i, i + niches.length);
+      expect(new Set(city.map((s) => s.city)).size).toBe(1);
+      expect(city.map((s) => s.niche)).toEqual(niches);
+    }
+  });
+  it('чередование один к трём держится, пока есть шаги «Сайтов»; дальше — остаток площадки', () => {
+    const lastSite = rest.map((s) => s.agent).lastIndexOf('sites');
+    const mixed = rest.slice(0, lastSite + 1);
+    // Блоками по четыре: providers, sites, sites, sites — без единого сбоя.
+    for (let i = 0; i + 4 <= mixed.length; i += 4) {
+      expect(mixed.slice(i, i + 4).map((s) => s.agent)).toEqual([
+        'providers',
+        'sites',
+        'sites',
+        'sites',
+      ]);
+    }
+    expect(mixed.length).toBeGreaterThan(400);
+    expect(rest.slice(lastSite + 1).every((s) => s.agent === 'providers')).toBe(true);
   });
   it('Дальний Восток — в начале плана: все ниши «Сайтов» по каждому восточному городу', () => {
     expect(east.every((s) => s.agent === 'sites')).toBe(true);
