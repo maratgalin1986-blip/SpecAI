@@ -7,14 +7,17 @@
 // tab is visible, and falls back to the poster without WebGL, on data saver, on
 // weak phones or when the frame rate is too low. prefers-reduced-motion gets
 // one still frame and a walk that waits for the visitor. The walk itself
-// (WalkController) loads only when it is opened.
+// (WalkController) loads only when it is opened; without the live scene it shows
+// a picture per stop (rendered from the scene by scripts/world3d-pictures.cjs).
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import './world3d.css';
 import { WORLD_KINDS, worldMode, type WorldKind } from './kinds';
 import type { WorldHandle } from './scene';
 import type { WalkBridge } from './WalkController';
 
+/** The picture of the block: WebP, and the same frame as JPEG for browsers without it. */
 export const WORLD_POSTER = '/images/world3d-poster.jpg';
+export const WORLD_POSTER_WEBP = '/images/world3d-poster.webp';
 
 function hasWebGL() {
   try {
@@ -32,7 +35,6 @@ export function World3D({ categoryIds }: { categoryIds: Partial<Record<WorldKind
   const handleRef = useRef<WorldHandle | null>(null);
   const startRef = useRef<(() => void) | null>(null);
   const inviteRef = useRef<HTMLButtonElement>(null);
-  const posterRef = useRef<HTMLImageElement>(null);
   const bridgeRef = useRef<WalkBridge | null>(null);
   const [state, setState] = useState<'poster' | 'loading' | 'ready'>('poster');
   const [picked, setPicked] = useState<WorldKind | null>(null);
@@ -210,16 +212,20 @@ export function World3D({ categoryIds }: { categoryIds: Partial<Record<WorldKind
               : 'absolute inset-0 overflow-hidden rounded-[2rem] bg-sky-200 shadow-xl'
           }
         >
-          <img
-            ref={posterRef}
-            src={WORLD_POSTER}
-            alt="Иллюстрация: вечерняя стройка в городе, экскаватор, автокран, автовышка и самосвалы на линии"
-            loading="lazy"
-            decoding="async"
-            className={`w3d-poster-pan absolute inset-0 h-full w-full object-cover transition-opacity duration-700 ${
-              state === 'ready' ? 'opacity-0' : 'opacity-100'
-            }`}
-          />
+          <picture>
+            <source srcSet={WORLD_POSTER_WEBP} type="image/webp" />
+            <img
+              src={WORLD_POSTER}
+              alt="Иллюстрация: вечерняя стройка в городе, экскаватор, автокран, автовышка и самосвалы на линии"
+              width={1600}
+              height={900}
+              loading="lazy"
+              decoding="async"
+              className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-700 ${
+                state === 'ready' ? 'opacity-0' : 'opacity-100'
+              }`}
+            />
+          </picture>
           <canvas
             ref={canvasRef}
             aria-hidden
@@ -253,7 +259,6 @@ export function World3D({ categoryIds }: { categoryIds: Partial<Record<WorldKind
               state={state}
               handleRef={handleRef}
               boxRef={boxRef}
-              posterRef={posterRef}
               bridgeRef={bridgeRef}
               fromUrl={fromUrl}
               onClose={closeWalk}
