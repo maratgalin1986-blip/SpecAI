@@ -299,6 +299,7 @@ export async function manualWhatsAppQueue(
         baseUrl,
         prices,
         nicheTitle: nicheTitle(row.niche),
+        nicheKey: row.niche,
         replyTo: settings.replyTo,
         ...(offer ? { offer } : {}),
       },

@@ -13,6 +13,11 @@ export interface SourceNiche {
   dgisQuery?: string;
   /** Виды техники по названию и тегам объекта — slug'и из `packages/shared`. */
   machineryTags?: (name: string, tags: Record<string, string>) => string[];
+  /**
+   * Фирма с сайтом — тоже кандидат (проект площадки: сайт мы там не продаём). Без флага
+   * кандидатами считаются только фирмы без сайта, остальные — соседи для досье.
+   */
+  websiteOk?: boolean;
 }
 
 export interface SourceCity {

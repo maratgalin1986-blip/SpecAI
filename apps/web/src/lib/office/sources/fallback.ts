@@ -23,8 +23,14 @@ export function withFallback(sources: readonly ProspectSource[]): ProspectSource
           left === undefined ? input : { ...input, budgetMs: left },
         );
         // Источники отдают и фирмы с сайтом (для досье): побеждает ответ, где есть кого
-        // сделать кандидатом, — иначе спрашиваем следующий источник.
-        if (result.status === 'ok' && result.candidates.some((c) => !c.website)) return result;
+        // сделать кандидатом, — иначе спрашиваем следующий источник. Проекту площадки годится
+        // и фирма с сайтом (niche.websiteOk).
+        if (
+          result.status === 'ok' &&
+          result.candidates.some((c) => input.niche.websiteOk || !c.website)
+        ) {
+          return result;
+        }
         // Пустой «ok» или отказ запоминаем: если лучше никто не ответит, вернём его. Ответ «ok»
         // (источник жив, новых фирм нет) отказом следующего источника не заменяется: иначе
         // пустой шаг записался бы ошибкой «не ответил», и тик бросил бы остальные шаги.

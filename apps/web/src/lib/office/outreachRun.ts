@@ -601,6 +601,8 @@ async function runOutreach(
     baseUrl,
     prices: await (prices ??= (deps.prices ?? officePrices)()),
     nicheTitle: nicheTitle(row.niche),
+    // По ключу ниши письмо проекта площадки узнаёт роль фирмы: исполнитель или заказчик.
+    nicheKey: row.niche,
     replyTo: settings.replyTo,
     ...(offer ? { offer } : {}),
     ...(links ? { unsubscribeUrl: links.page } : {}),

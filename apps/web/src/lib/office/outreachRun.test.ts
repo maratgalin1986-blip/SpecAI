@@ -1731,3 +1731,33 @@ describe('два проекта — два лимита, лимит растёт
     expect(rampedCap(1000, new Date(RAMP_START.getTime() - 86_400_000))).toBe(250);
   });
 });
+
+describe('проект площадки: письмо по роли ниши', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('строителю с почтой на своём домене уходит письмо заказчика, без страницы исполнителя', async () => {
+    const fake = fakeDb([
+      row({
+        id: 'builder',
+        kind: 'provider',
+        niche: 'construction',
+        name: 'ООО «СтройГрад»',
+        email: 'info@stroygrad-kzn.ru',
+      }),
+      row({ id: 'carrier', kind: 'provider', niche: 'freight', name: 'ООО «ТрансРейс»' }),
+    ]);
+    const result = await sendOutreach(NOW, deps(fake.db));
+    // Почта на своём домене — причина не писать только о сайте: площадке сайт фирмы не мешает.
+    expect(result).toMatchObject({ email: 2 });
+    expect(result.filtered ?? 0).toBe(0);
+    const [builder, carrier] = okEmail.mock.calls.map((c) => c[0]);
+    expect(builder!.to).toBe('info@stroygrad-kzn.ru');
+    expect(builder!.text).toContain('/orders?utm_source=email&utm_campaign=office-construction');
+    expect(builder!.text).not.toContain('/preview/');
+    expect(builder!.text).not.toContain('«Это моя компания»');
+    // Перевозчик — исполнитель: его страница и «Это моя компания».
+    expect(carrier!.text).toContain('/preview/tok-carrier');
+    expect(carrier!.text).toContain('«Это моя компания»');
+    expect(carrier!.text).toContain('грузовики и рейсы');
+  });
+});

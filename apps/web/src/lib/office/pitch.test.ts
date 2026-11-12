@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { AGENTS } from './agents';
-import { NICHES } from './niches';
+import { nichesOf } from './niches';
 import { buildEmail } from './outreach';
 import { nichePitch, PITCH_NICHES } from './pitch';
 
@@ -9,7 +9,10 @@ const FORBIDDEN = /₽|руб|гарант|лучш|сам(ый|ая|ое|ые)\
 
 describe('предложение по сфере фирмы', () => {
   it('у каждой ниши офиса есть своё предложение', () => {
-    for (const key of Object.keys(NICHES)) expect(PITCH_NICHES).toContain(key);
+    // Презентация — про сайт: она нужна нишам «Сайтов» и спецтехнике (на ней пробное письмо
+    // владельцу). Остальным нишам проекта площадки сайт не предлагаем.
+    for (const niche of nichesOf('sites')) expect(PITCH_NICHES).toContain(niche.key);
+    expect(PITCH_NICHES).toContain('machinery');
     for (const key of AGENTS.sites.defaultNiches) expect(PITCH_NICHES).toContain(key);
   });
 
