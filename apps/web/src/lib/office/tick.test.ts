@@ -8,6 +8,7 @@ import {
   TICK_LOCK_MS,
   TICK_RESERVE_MS,
   lastPassValue,
+  sentNotice,
   officeTick,
   purgeTerminatedSiteLeads,
   sendDigestChunks,
@@ -45,6 +46,7 @@ function deps(over: Partial<TickDeps> = {}): TickDeps {
     })),
     savePass: vi.fn(async () => undefined),
     alert: vi.fn(async () => undefined),
+    notify: vi.fn(async () => true),
     ...over,
   };
 }
@@ -371,5 +373,35 @@ describe('ответы фирм, итог прохода и сломанный �
       code: '535',
       hint: 'host=smtp.yandex.ru login=@ya.ru from=login pass=app-password',
     });
+  });
+});
+
+describe('примеры отправленных писем владельцу', () => {
+  it('уходят в Telegram со ссылками на презентации и не попадают в ответ крона', async () => {
+    const samples = [
+      { name: 'Автомойка «Блеск»', city: 'Владивосток', kind: 'site', token: 'tok1' },
+      { name: 'Кран-Сервис', city: null, kind: 'provider', token: 'tok2' },
+    ];
+    const d = deps({
+      outreach: vi.fn(async () => ({ email: 2, whatsapp: 0, skipped: null, errors: 0, samples })),
+    });
+    const result = await officeTick(
+      MORNING,
+      { budgetMs: 50_000, maxSteps: 0, digest: 'window' },
+      d,
+    );
+    expect(d.notify).toHaveBeenCalledTimes(1);
+    expect(JSON.stringify(result)).not.toContain('Блеск');
+    const text = sentNotice(2, samples, 'https://site.example/');
+    expect(text).toContain('1. Автомойка «Блеск», Владивосток — https://site.example/pokaz/tok1');
+    expect(text).toContain('2. Кран-Сервис — https://site.example/preview/tok2');
+  });
+
+  it('без отправленных писем сообщения нет', async () => {
+    const d = deps({
+      outreach: vi.fn(async () => ({ email: 0, whatsapp: 0, skipped: 'night', errors: 0 })),
+    });
+    await officeTick(NIGHT, { budgetMs: 50_000, maxSteps: 0, digest: 'window' }, d);
+    expect(d.notify).not.toHaveBeenCalled();
   });
 });

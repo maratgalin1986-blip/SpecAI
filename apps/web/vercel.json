@@ -19,6 +19,14 @@
     {
       "path": "/api/cron/office?steps=0",
       "schedule": "30 6 * * *"
+    },
+    {
+      "path": "/api/cron/office?steps=0",
+      "schedule": "5 22 * * *"
+    },
+    {
+      "path": "/api/cron/office?steps=0",
+      "schedule": "45 22 * * *"
     }
   ]
 }
