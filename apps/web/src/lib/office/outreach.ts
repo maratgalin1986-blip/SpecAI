@@ -561,6 +561,8 @@ interface LetterCard {
   address: string | null;
   hours: string | null;
   phone: string | null;
+  /** Надпись над названием: черновик сайта или страница на площадке заявок. */
+  label: string;
   /** Презентация под фирму: если есть, кнопка обложки ведёт на неё. */
   showUrl?: string;
 }
@@ -599,7 +601,7 @@ function renderHtml(
     : [];
   const cover = card
     ? `<tr><td style="background:#0f3d3a;border-radius:16px 16px 0 0;padding:32px 28px 28px;${FONT}">
-<p style="margin:0 0 10px;color:#99f6e4;font-size:12px;letter-spacing:1.5px;text-transform:uppercase">Черновик сайта для вашей компании</p>
+<p style="margin:0 0 10px;color:#99f6e4;font-size:12px;letter-spacing:1.5px;text-transform:uppercase">${escapeHtml(card.label)}</p>
 <p style="margin:0 0 8px;color:#ffffff;font-size:28px;line-height:1.2;font-weight:bold">${escapeHtml(card.name)}</p>
 <p style="margin:0 0 18px;color:#ccfbf1;font-size:15px;line-height:1.5">${escapeHtml([card.niche, card.city].filter(Boolean).join(' · '))}</p>
 ${facts.length ? `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 0 22px;width:100%;background:#134e4a;border-radius:10px"><tr><td style="padding:14px 16px;${FONT}">${facts.map((f) => `<p style="margin:0 0 4px;color:#e6fffb;font-size:14px;line-height:1.5">${escapeHtml(f)}</p>`).join('')}</td></tr></table>` : ''}
@@ -671,6 +673,10 @@ function cardOf(p: OutreachProspect, input: OutreachInput): LetterCard | undefin
   if (isCustomer(p, input)) return undefined;
   return {
     name: p.name,
+    label:
+      p.kind === 'provider'
+        ? 'Страница вашей компании на площадке заявок'
+        : 'Черновик сайта для вашей компании',
     niche: input.nicheTitle.trim(),
     city: p.city?.trim() || null,
     address: p.address?.trim() || null,
