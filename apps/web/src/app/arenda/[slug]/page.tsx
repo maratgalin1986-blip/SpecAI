@@ -139,9 +139,13 @@ export default async function LandingPage(props: { params: Promise<{ slug: strin
               от {rub(from)} ₽
               <span className="text-base font-normal text-slate-300">/ч с машинистом</span>
             </p>
-            {/* The lowest price on the platform, not a promise for every city. */}
+            {/* What `from` really is (landingFromRate): the house list price, or a
+                cheaper machine of another provider. No «самая низкая» (ФЗ «О рекламе»). */}
             <p className="mt-2 text-sm text-slate-300">
-              Самая низкая цена на площадке. Цены в вашем городе —{' '}
+              {from < rateOf(machine)
+                ? 'Это минимальная ставка среди машин исполнителей на этой странице.'
+                : `Это минимальная ставка парка ${SITE.name}.`}{' '}
+              Цены в вашем городе —{' '}
               <a href="#cities" className="underline hover:text-white">
                 на странице города
               </a>
@@ -251,7 +255,7 @@ export default async function LandingPage(props: { params: Promise<{ slug: strin
         machine={machine}
         clip={landingLoop(landing.slug)}
         eyebrow={`Аренда ${landing.title}`}
-        phrase="Скажите задачу — приедет машина и машинист"
+        phrase="Опишите задачу — приедет машина с машинистом"
       />
 
       <section>
@@ -293,8 +297,8 @@ export default async function LandingPage(props: { params: Promise<{ slug: strin
 
       <CinemaBand
         machine={machine}
-        eyebrow="Подача сегодня"
-        phrase="Позвоните — назовём цену за пять минут"
+        eyebrow="Подача по заявке"
+        phrase="Позвоните — подберём машину под задачу"
         className="sm:min-h-[340px]"
       />
 

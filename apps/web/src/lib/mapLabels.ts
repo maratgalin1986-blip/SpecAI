@@ -62,3 +62,34 @@ export function liveLabel(machine: { bubble: string; company: { isHouse: boolean
     sub: machine.company.isHouse ? `${head} · ${SITE.name}` : head,
   };
 }
+
+/**
+ * Machines on the line that stand at one point without live GPS (a fleet at
+ * its base — СпецПласт16's is always there, owner 2026-11-11) are one pin, not
+ * a pile of fifteen: the groups in the order of the list. A machine with live
+ * GPS is always its own pin; so is a provider's single machine.
+ */
+export function groupLive<
+  T extends { lat: number; lon: number; live?: boolean; company: { isHouse: boolean } },
+>(machines: readonly T[]): T[][] {
+  const groups = new Map<string, T[]>();
+  machines.forEach((machine, index) => {
+    const key = machine.live
+      ? `live:${index}`
+      : `${machine.company.isHouse ? 'house' : 'other'}:${machine.lat.toFixed(4)},${machine.lon.toFixed(4)}`;
+    groups.set(key, [...(groups.get(key) ?? []), machine]);
+  });
+  return [...groups.values()];
+}
+
+/** «12 машин на линии» / «СпецПласт16» over a pin that stands for several machines. */
+export function liveGroupLabel(
+  group: readonly { busyToday?: boolean; company: { isHouse: boolean } }[],
+): MapLabel {
+  const free = group.filter((machine) => !machine.busyToday).length;
+  const word = (count: number) => pluralizeRu(count, ['машина', 'машины', 'машин']);
+  return {
+    title: free > 0 ? `${word(free)} на линии` : `${word(group.length)} · заняты сегодня`,
+    sub: group[0]?.company.isHouse ? SITE.name : 'Я на линии',
+  };
+}

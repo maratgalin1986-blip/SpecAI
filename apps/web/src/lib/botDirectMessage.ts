@@ -49,7 +49,7 @@ export function leadReply(lead: LeadData, sitePhone: string, delivered: boolean)
   }
   const hasPhone = /\d{10,}/.test(lead.phone.replace(/\D/g, ''));
   return hasPhone
-    ? `Спасибо! Передали менеджеру, перезвоним на ${lead.phone}. Срочно — ${sitePhone}`
-    : `Спасибо! Передали менеджеру, свяжемся с вами. Оставьте номер телефона, если удобнее ` +
+    ? `Спасибо! Передали диспетчеру, перезвоним на ${lead.phone}. Срочно — ${sitePhone}`
+    : `Спасибо! Передали диспетчеру, свяжемся с вами. Оставьте номер телефона, если удобнее ` +
         `созвониться, или звоните ${sitePhone}`;
 }

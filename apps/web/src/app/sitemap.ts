@@ -39,6 +39,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const base = siteUrl();
   const staticPages = [
     '',
+    '/arenda',
     ...LANDINGS.map((landing) => `/arenda/${landing.slug}`),
     // City pages only where a provider really serves the city (the others are
     // noindex until then, see app/arenda/[slug]/[city]).

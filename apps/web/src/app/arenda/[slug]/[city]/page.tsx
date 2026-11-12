@@ -363,7 +363,7 @@ export default async function CityLandingPage(props: { params: Promise<Params> }
         phrase={
           offer.kind === 'empty'
             ? 'Опишите задачу — найдём машину и машиниста'
-            : 'Скажите задачу — приедет машина и машинист'
+            : 'Опишите задачу — приедет машина с машинистом'
         }
       />
 

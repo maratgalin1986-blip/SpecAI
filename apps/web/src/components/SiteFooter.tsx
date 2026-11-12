@@ -50,7 +50,7 @@ export function SiteFooter() {
             Заявка на технику
           </a>
           <a href="/agents" className={LINK}>
-            ИИ-агенты
+            Помощник на сайте
           </a>
           <a href="/contacts" className={LINK}>
             Контакты

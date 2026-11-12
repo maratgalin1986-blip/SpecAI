@@ -3,6 +3,7 @@ import { categoryName } from '@specai/shared';
 import {
   cellText,
   indexCategories,
+  indexHasData,
   INDEX_MIN_REPORTERS,
   INDEX_RANGE_MIN_REPORTERS,
   placesWithData,
@@ -10,6 +11,7 @@ import {
 } from '@/lib/priceIndex';
 import { loadPriceIndex } from '@/lib/priceIndexData';
 import { PRICE_SURVEY_PATH, PRICE_SURVEY_TITLE } from '@/lib/priceReports';
+import { fromPerHour, PRICE_GROUPS, SHIFT_HOURS } from '@/lib/prices';
 import { ShowOrbs } from '@/components/ShowOrbs';
 import { SITE } from '@/lib/site';
 import { pageMeta } from '@/lib/pageMeta';
@@ -19,11 +21,23 @@ export const revalidate = 600;
 
 const TITLE = 'Цены на аренду спецтехники с машинистом — по данным исполнителей ИИСтройка24';
 
-export const metadata: Metadata = pageMeta('/ceny', {
-  title: TITLE,
-  description:
-    'Сколько стоит час спецтехники с машинистом: медиана и разброс цен по России, регионам и городам — по ценам исполнителей площадки и ответам на открытый опрос. Без имён компаний.',
-});
+/**
+ * Until the index has a single number the page shows СпецПласт16's price list
+ * (lib/prices.ts) and stays out of the search index: a table of «мало данных»
+ * is not a page about market prices.
+ */
+export async function generateMetadata(): Promise<Metadata> {
+  const { index, loaded } = await loadPriceIndex();
+  // A failed load is not «no data»: the page keeps its usual metadata then.
+  const hasData = indexHasData(index) || !loaded;
+  return pageMeta('/ceny', {
+    title: TITLE,
+    description: hasData
+      ? 'Сколько стоит час спецтехники с машинистом: медиана и разброс цен по России, регионам и городам — по ценам исполнителей площадки и ответам на открытый опрос. Без имён компаний.'
+      : `Цены на аренду спецтехники с машинистом: прайс парка ${SITE.name} в Набережных Челнах. Цены других исполнителей появятся, когда их наберётся достаточно для обезличенной сводки.`,
+    ...(hasData ? {} : { robots: { index: false, follow: true } }),
+  });
+}
 
 function Cell({ cell }: { cell: PriceCell | undefined }) {
   if (!cell) return <span className="text-slate-500">мало данных</span>;
@@ -46,6 +60,8 @@ export default async function PricesPage() {
   const categories = indexCategories(index);
   const regions = placesWithData(index.regions, points, 'region');
   const cities = placesWithData(index.cities, points, 'city');
+  // A failed load is not «no data»: it has its own note below.
+  const hasData = indexHasData(index) || !loaded;
   const updated = updatedAt.toLocaleString('ru-RU', {
     timeZone: 'Europe/Moscow',
     day: 'numeric',
@@ -82,31 +98,72 @@ export default async function PricesPage() {
         </p>
       )}
 
-      <section className="flex flex-col gap-3" aria-labelledby="russia">
-        <h2 id="russia" className="text-xl font-bold text-slate-900">
-          По России
-        </h2>
-        <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-slate-50 text-xs text-slate-500">
-              <tr>
-                <th className="px-4 py-2 font-medium">Вид техники</th>
-                <th className="px-4 py-2 font-medium">Медиана за час (разброс)</th>
-              </tr>
-            </thead>
-            <tbody>
-              {categories.map((category) => (
-                <tr key={category.slug} className="border-t border-slate-100">
-                  <td className="px-4 py-2">{category.name}</td>
-                  <td className="px-4 py-2">
-                    <Cell cell={index.russia.get(category.slug)} />
-                  </td>
+      {!hasData && (
+        <section className="flex flex-col gap-3" aria-labelledby="house" data-testid="house-prices">
+          <h2 id="house" className="text-xl font-bold text-slate-900">
+            Прайс парка {SITE.name} · Набережные Челны
+          </h2>
+          <p className="text-sm">
+            Сводка цен исполнителей появится, когда за каждым числом будет не меньше{' '}
+            {INDEX_MIN_REPORTERS} разных компаний или участников опроса. Пока — цены нашего парка, с
+            машинистом, смена {SHIFT_HOURS} часов.
+          </p>
+          <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white">
+            <table className="w-full text-left text-sm">
+              <thead className="bg-slate-50 text-xs text-slate-500">
+                <tr>
+                  <th className="px-4 py-2 font-medium">Техника</th>
+                  <th className="px-4 py-2 font-medium">Цена за час</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
+              </thead>
+              <tbody>
+                {PRICE_GROUPS.map((group) => (
+                  <tr key={group.names} className="border-t border-slate-100">
+                    <td className="px-4 py-2 first-letter:uppercase">{group.names}</td>
+                    <td className="whitespace-nowrap px-4 py-2 font-semibold text-slate-900">
+                      {fromPerHour(group.rate)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="text-sm">
+            Стоимость подачи зависит от расстояния до объекта — назовём до заказа.{' '}
+            <a href="/orders#new" className="font-semibold text-amber-700 underline">
+              Разместить заявку
+            </a>
+          </p>
+        </section>
+      )}
+
+      {hasData && (
+        <section className="flex flex-col gap-3" aria-labelledby="russia">
+          <h2 id="russia" className="text-xl font-bold text-slate-900">
+            По России
+          </h2>
+          <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white">
+            <table className="w-full text-left text-sm">
+              <thead className="bg-slate-50 text-xs text-slate-500">
+                <tr>
+                  <th className="px-4 py-2 font-medium">Вид техники</th>
+                  <th className="px-4 py-2 font-medium">Медиана за час (разброс)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {categories.map((category) => (
+                  <tr key={category.slug} className="border-t border-slate-100">
+                    <td className="px-4 py-2">{category.name}</td>
+                    <td className="px-4 py-2">
+                      <Cell cell={index.russia.get(category.slug)} />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
 
       {[
         { id: 'regions', title: 'По регионам', places: regions },

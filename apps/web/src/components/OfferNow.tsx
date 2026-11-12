@@ -4,7 +4,13 @@ import { useEffect, useState } from 'react';
 import { categoryEmoji } from '@specai/shared';
 import { allowedVisitorFix } from '@/components/visitorPosition';
 import { distanceKm } from '@/lib/geo';
-import { HOUSE_SERVES_KM, NOBODY_ON_LINE, OFFER_LINE_MAX, type OfferCard } from '@/lib/offerNow';
+import {
+  HOUSE_SERVES_KM,
+  NOBODY_ON_LINE,
+  OFFER_LINE_MAX,
+  ONLY_HOUSE_ON_LINE,
+  type OfferCard,
+} from '@/lib/offerNow';
 import { requestOrderPrefill } from '@/lib/orderPrefillEvent';
 import { SITE } from '@/lib/site';
 
@@ -114,16 +120,19 @@ export function OfferNow({
           <ul className="-mx-1 flex snap-x gap-3 overflow-x-auto px-1 pb-1">{house.map(card)}</ul>
         </div>
       )}
-      <div className="flex flex-col gap-2">
-        <h3 className={heading}>Сейчас на линии</h3>
-        {shownLine.length > 0 ? (
+      {/* No «Сейчас на линии: никого»: an empty heading reads as an empty platform. */}
+      {shownLine.length > 0 ? (
+        <div className="flex flex-col gap-2">
+          <h3 className={heading}>Сейчас на линии</h3>
           <ul className="-mx-1 flex snap-x gap-3 overflow-x-auto px-1 pb-1">
             {shownLine.map(card)}
           </ul>
-        ) : (
-          <p className={`text-sm ${muted}`}>{NOBODY_ON_LINE}</p>
-        )}
-      </div>
+        </div>
+      ) : (
+        <p className={`text-sm ${muted}`}>
+          {house.some((item) => item.live) ? ONLY_HOUSE_ON_LINE : NOBODY_ON_LINE}
+        </p>
+      )}
     </div>
   );
 }

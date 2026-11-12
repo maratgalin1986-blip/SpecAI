@@ -10,7 +10,25 @@ export const dynamic = 'force-dynamic';
 // `office` says whether the agents' search for companies works (lib/office/searchHealth.ts):
 // a word, a time and the run's counts — no names, phones or ids. A cloud session without the
 // admin password reads it to see that the search really runs in production.
-async function officeHealth(): Promise<(SearchHealth & { queue: Record<string, number> }) | null> {
+/** Начало текущих суток по Москве (UTC+3, без перехода на летнее время). */
+function moscowDayStart(now: Date): Date {
+  const shifted = now.getTime() + 3 * 3_600_000;
+  return new Date(shifted - (shifted % 86_400_000) - 3 * 3_600_000);
+}
+
+interface OutreachHealth {
+  /** Писем фирмам за сегодня (сутки по Москве) и за всё время. */
+  sentToday: number;
+  sentTotal: number;
+  /** Когда ушло последнее письмо. */
+  lastSentAt: string | null;
+  /** Сколько фирм сегодня получили отметку об ошибке отправки. */
+  errorsToday: number;
+}
+
+async function officeHealth(): Promise<
+  (SearchHealth & { queue: Record<string, number>; outreach: OutreachHealth }) | null
+> {
   try {
     const runs = await prisma.officeRun.findMany({
       orderBy: { startedAt: 'desc' },
@@ -34,9 +52,27 @@ async function officeHealth(): Promise<(SearchHealth & { queue: Record<string, n
       prisma.prospect.count({ where: { ...waiting, whatsapp: { startsWith: '+79' } } }),
       prisma.prospect.count({ where: { ...waiting, phone: { startsWith: '+79' } } }),
     ]);
+    // Рассылка — тоже только числа и время: по ним сессия без пароля видит, что письма уходят.
+    const dayStart = moscowDayStart(new Date());
+    const [sentToday, sentTotal, lastSent, errorsToday] = await Promise.all([
+      prisma.prospect.count({ where: { emailSentAt: { gte: dayStart } } }),
+      prisma.prospect.count({ where: { emailSentAt: { not: null } } }),
+      prisma.prospect.findFirst({
+        where: { emailSentAt: { not: null } },
+        orderBy: { emailSentAt: 'desc' },
+        select: { emailSentAt: true },
+      }),
+      prisma.prospect.count({ where: { outreachErrorAt: { gte: dayStart } } }),
+    ]);
     return {
       ...searchHealth(runs, new Date()),
       queue: { ready, withEmail, withWhatsapp, withMobile },
+      outreach: {
+        sentToday,
+        sentTotal,
+        lastSentAt: lastSent?.emailSentAt?.toISOString() ?? null,
+        errorsToday,
+      },
     };
   } catch {
     return null;

@@ -1,5 +1,7 @@
 import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
+import { EmailFeaturesProvider } from '@/components/EmailFeaturesProvider';
+import { emailFeatures } from '@/lib/emailFeatures';
 
 export const metadata: Metadata = {
   title: 'Регистрация',
@@ -7,5 +9,5 @@ export const metadata: Metadata = {
 };
 
 export default function Layout({ children }: { children: ReactNode }) {
-  return children;
+  return <EmailFeaturesProvider value={emailFeatures()}>{children}</EmailFeaturesProvider>;
 }

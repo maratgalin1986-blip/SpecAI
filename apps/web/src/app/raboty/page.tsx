@@ -10,7 +10,7 @@ import { SITE } from '@/lib/site';
 import { pageMeta } from '@/lib/pageMeta';
 
 export const metadata: Metadata = pageMeta('/raboty', {
-  title: 'Работы спецтехникой в Набережных Челнах — цены с машинистом',
+  title: 'Работы спецтехникой — цены парка СпецПласт16',
   description: `Траншеи, котлованы, септики, вывоз снега, демонтаж, планировка, краны и автовышки: техника ${SITE.name} ${fromPerHour(MIN_RATE)}. ${DELIVERY_NOTE}`,
 });
 

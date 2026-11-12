@@ -3,10 +3,10 @@ import { ReliabilityBadges } from '@/components/ReliabilityBadges';
 import { ShowOrbs } from '@/components/ShowOrbs';
 import type { Reliability } from '@/lib/reliability';
 import {
-  PROVIDER_SORT,
-  PROVIDER_SORT_LABELS,
   parseProviderQuery,
+  providerSortOptions,
   providersHref,
+  radiusValue,
   type ProviderCard,
 } from '@/lib/providerCards';
 import { loadProviderCards } from '@/lib/providerCardsData';
@@ -19,7 +19,7 @@ export const dynamic = 'force-dynamic';
 export const metadata: Metadata = pageMeta('/providers', {
   title: 'Исполнители — компании со своей спецтехникой',
   description:
-    'Компании и частники со своей спецтехникой по всей России: парк, база, рейтинг и отзывы. Заявка бесплатно — исполнители рядом с объектом сами пришлют цены.',
+    'Компании и частники со своей спецтехникой по всей России: парк, база и выезд. Заявка бесплатно — исполнители рядом с объектом сами пришлют цены.',
 });
 
 const field =
@@ -84,7 +84,7 @@ function ProviderListCard({ card }: { card: ProviderCard }) {
           </div>
           <div>
             <dt className="text-graphite-400">Выезд</dt>
-            <dd className="font-semibold text-graphite-800">{card.radiusLabel}</dd>
+            <dd className="font-semibold text-graphite-800">{radiusValue(card.radiusKm)}</dd>
           </div>
         </dl>
 
@@ -130,12 +130,13 @@ export default async function ProvidersPage(props: {
           Компании со своей техникой
         </h1>
         <p className="max-w-2xl text-graphite-200">
-          {list.total > 0
+          {/* One company is not a number to show: say who answers first instead. */}
+          {list.total > 1
             ? `${pluralizeRu(list.total, ['исполнитель', 'исполнителя', 'исполнителей'])} на площадке. `
-            : ''}
+            : `Исполнители подключаются — первым отвечает парк ${SITE.name}. `}
           Оставьте одну заявку — подходящие исполнители пришлют цены. Отметка «Проверен» значит, что
-          администратор проверил компанию и документы. Телефон исполнителя откроется после
-          подтверждения брони.
+          администратор проверил компанию и документы. Телефон компании виден на карте и на её
+          странице, пока исполнитель сам его не скрыл.
         </p>
         <div className="flex flex-wrap gap-2">
           <a href="/orders#new" className="cab-action" data-cta="place-order">
@@ -205,9 +206,10 @@ export default async function ProvidersPage(props: {
         <label className="flex flex-col gap-1.5">
           <span className="cab-eyebrow text-graphite-500">Сортировка</span>
           <select name="sort" defaultValue={query.sort} className={field}>
-            {PROVIDER_SORT.map((sort) => (
+            {/* «По рейтингу» only once somebody has a rating (lib/providerCards.ts). */}
+            {providerSortOptions(list.cards).map(({ sort, label }) => (
               <option key={sort} value={sort}>
-                {PROVIDER_SORT_LABELS[sort]}
+                {label}
               </option>
             ))}
           </select>
@@ -219,8 +221,14 @@ export default async function ProvidersPage(props: {
 
       <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-graphite-600">
         <p aria-live="polite">
-          Найдено: {list.cards.length}
-          {list.cards.length !== list.total && ` из ${list.total}`}
+          {list.cards.length > 1 || hasFilters ? (
+            <>
+              Найдено: {list.cards.length}
+              {list.cards.length !== list.total && ` из ${list.total}`}
+            </>
+          ) : (
+            list.cards.length === 1 && 'Своя техника? Встаньте на линию — заявки рядом придут сами.'
+          )}
         </p>
         {hasFilters && (
           <a href="/providers" className="font-medium text-graphite-500 hover:text-graphite-900">
@@ -242,7 +250,7 @@ export default async function ProvidersPage(props: {
           <p className="font-semibold text-graphite-800">
             {hasFilters
               ? 'По этим фильтрам исполнителей нет'
-              : 'Список исполнителей скоро появится'}
+              : `Исполнители подключаются — первым отвечает парк ${SITE.name}`}
           </p>
           <p className="mt-2 text-sm text-graphite-600">
             {hasFilters ? (

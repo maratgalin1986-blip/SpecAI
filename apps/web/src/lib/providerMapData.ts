@@ -1,5 +1,8 @@
 import type { PrismaClient } from '@specai/database';
 import { customerRates } from './equipmentCatalog';
+import { HOUSE_COMPANY_ID } from './fleet';
+import { houseFreeNow } from './houseLine';
+import { loadHouseLine } from './houseLineData';
 import { isOnLine, PRESENCE_FRESH_MS } from './linePresence';
 import { toCustomerPins, type CustomerMapPin } from './mapCustomers';
 import {
@@ -179,6 +182,12 @@ export async function loadMapPins(
         .map((row) => row.companyId),
     );
     for (const pin of pins) if (onLine.has(pin.id)) pin.onLine = true;
+  }
+  // СпецПласт16 is always on the line while it has a free machine today
+  // (owner, 2026-11-11, lib/houseLine.ts).
+  const housePin = pins.find((pin) => pin.id === HOUSE_COMPANY_ID && !pin.onLine);
+  if (housePin && houseFreeNow(await loadHouseLine(prisma, now)).length > 0) {
+    housePin.onLine = true;
   }
 
   let customers: CustomerMapPin[] = [];

@@ -14,6 +14,7 @@ import {
 } from './adapters';
 import { deliver, type DeliverDeps, type DeliverOptions, type DeliveryReport } from './deliver';
 import { orderPoint } from '../geo';
+import { loadHouseLine } from '../houseLineData';
 import { basePoint, isLive, PRESENCE_FRESH_MS } from '../linePresence';
 import {
   acceptedCategoryIds,
@@ -250,6 +251,25 @@ export async function matchOrderRecipients(orderId: string, now: Date = new Date
       now,
     );
     if (matched) lineCompanies.add(line.companyId);
+  }
+  // СпецПласт16's free machines stand on the line at the base for good
+  // (owner, 2026-11-11, lib/houseLine.ts): matched by the same rule.
+  const houseLine = await loadHouseLine(prisma, now).catch(() => []);
+  for (const machine of houseLine) {
+    if (!machine.point || lineCompanies.has(HOUSE_COMPANY_ID)) continue;
+    const matched = lineMatchesOrder(
+      {
+        categoryId: machine.categoryId,
+        lat: machine.point.lat,
+        lon: machine.point.lon,
+        live: false,
+        standingForever: true,
+        standingUntil: null,
+      },
+      { ...target, startDate: order.desiredStartDate },
+      now,
+    );
+    if (matched) lineCompanies.add(HOUSE_COMPANY_ID);
   }
   const seen = new Set<string>([order.customerId]);
   const recipients: OrderRecipient[] = [];

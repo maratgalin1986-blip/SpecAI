@@ -61,9 +61,9 @@ export function AgentChatWidget() {
           <div className="flex items-center justify-between bg-slate-900 px-4 py-3 text-white">
             <div>
               <div id="agent-chat-title" className="text-sm font-semibold">
-                ИИ-агенты СпецПласт16
+                Помощник ИИСтройка24
               </div>
-              <div className="text-xs text-slate-300">Отвечают круглосуточно</div>
+              <div className="text-xs text-slate-300">Примет заявку в любое время</div>
             </div>
             <button
               type="button"
@@ -91,7 +91,7 @@ export function AgentChatWidget() {
         type="button"
         data-platform-chrome
         onClick={() => setIsOpen((open) => !open)}
-        aria-label={isOpen ? 'Свернуть чат с ИИ-агентами' : 'Открыть чат с ИИ-агентами'}
+        aria-label={isOpen ? 'Свернуть чат с помощником' : 'Открыть чат с помощником'}
         aria-expanded={isOpen}
         aria-controls={isOpen ? 'agent-chat-dialog' : undefined}
         tabIndex={show ? undefined : -1}

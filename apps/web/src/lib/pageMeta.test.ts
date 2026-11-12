@@ -25,6 +25,7 @@ const page = (route: string) =>
 /** The sitemap's static pages and the dynamic ones (app/sitemap.ts), minus the office's own. */
 const PUBLIC_PAGES = [
   '',
+  '/arenda',
   '/arenda/[slug]',
   '/arenda/[slug]/[city]',
   '/raboty',

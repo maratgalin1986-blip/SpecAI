@@ -32,8 +32,9 @@ export function ActivityBlock({ initial }: { initial: Activity | null }) {
 
   // Owner, 2026-11-02 (site audit): a quiet day is not news — «новых заявок
   // пока нет» told visitors the platform is empty, so the block shows only
-  // when there is something to show.
-  if (!activity || activity.events.length === 0) return null;
+  // when there is something to show. Machines on the line are something to
+  // show (owner, 2026-11-11: СпецПласт16's fleet is always on the line).
+  if (!activity || (activity.events.length === 0 && activity.today.online === 0)) return null;
 
   return (
     <section
@@ -51,7 +52,7 @@ export function ActivityBlock({ initial }: { initial: Activity | null }) {
         </p>
       </div>
       <p className="mt-3 text-lg font-extrabold tracking-tight sm:text-2xl">{activity.summary}</p>
-      <ul className="mt-4 flex flex-col gap-2">
+      <ul className="mt-4 flex flex-col gap-2 empty:hidden">
         {activity.events.map((event) => (
           <li
             key={`${event.kind}-${event.at}-${event.text}`}

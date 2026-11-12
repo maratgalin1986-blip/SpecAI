@@ -257,7 +257,7 @@ export default async function OrdersPage(props: { searchParams: Promise<OrdersSe
         <p>
           {viewerIsProvider
             ? 'Открытые заявки заказчиков: откройте заявку и предложите свою технику и цену. Другие исполнители ваших цен не видят.'
-            : `Заказчики размещают заявки, исполнители со своей техникой и машинистами предлагают цены — включая парк ${SITE.name}. Заказчик выбирает лучшее. Сервис бесплатный.`}
+            : `Заказчики размещают заявки, исполнители со своей техникой и машинистами предлагают цены — включая парк ${SITE.name}. Заказчик выбирает подходящее. Сервис бесплатный.`}
         </p>
         <div className="mt-5 flex flex-wrap gap-3">
           {viewerIsProvider ? (
@@ -496,17 +496,26 @@ export default async function OrdersPage(props: { searchParams: Promise<OrdersSe
         </form>
 
         <p className="text-sm text-graphite-600" aria-live="polite">
-          Найдено: {board.total}
-          {board.totalPages > 1 && ` · страница ${board.page} из ${board.totalPages}`}
-          {' · '}
-          заказчик виден как «Анна П.», контакты — после подтверждения брони, а телефон из заявок
+          {/* Zero or one is not a number to show (it reads as an empty platform). */}
+          {(board.total > 1 || hasFilters) && (
+            <>
+              Найдено: {board.total}
+              {board.totalPages > 1 && ` · страница ${board.page} из ${board.totalPages}`}
+              {' · '}
+            </>
+          )}
+          Заказчик виден как «Анна П.», контакты — после подтверждения брони, а телефон из заявок
           без аккаунта — по кнопке «Показать телефон»
         </p>
 
         {board.items.length === 0 ? (
           <div className="rounded-3xl border border-dashed border-graphite-200 bg-white p-8 text-center">
             <p className="font-semibold text-graphite-800">
-              {hasFilters ? 'По этим фильтрам открытых заявок нет' : 'Открытых заявок сейчас нет'}
+              {hasFilters
+                ? 'По этим фильтрам открытых заявок нет'
+                : viewerIsProvider
+                  ? 'Новые заявки появятся здесь'
+                  : 'Разместите заявку первой — её увидят исполнители рядом'}
             </p>
             <p className="mt-2 text-sm text-graphite-600">
               {hasFilters ? (
@@ -517,11 +526,10 @@ export default async function OrdersPage(props: { searchParams: Promise<OrdersSe
                 'Включите уведомления в кабинете — новая заявка придёт сразу.'
               ) : (
                 <>
-                  Разместите свою —{' '}
+                  Первым отвечает парк {SITE.name}.{' '}
                   <a href="#new" className="font-medium text-signal-700 hover:underline">
-                    исполнители ответят ценами
+                    Разместить заявку
                   </a>
-                  .
                 </>
               )}
             </p>

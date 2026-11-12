@@ -158,6 +158,15 @@ export function lookupPrice(
   return cell ? { scope: 'russia', place: 'Россия', cell } : null;
 }
 
+/**
+ * Whether the index has a single number to show. Without one /ceny shows
+ * СпецПласт16's own price list instead of a table of «мало данных» and stays
+ * out of the search index.
+ */
+export function indexHasData(index: PriceIndex): boolean {
+  return index.russia.size > 0 || index.regions.size > 0 || index.cities.size > 0;
+}
+
 /** The categories /ceny lists: the popular ones always, the rest when they have a number. */
 export function indexCategories(index: PriceIndex): { slug: string; name: string }[] {
   const known = new Set(CATEGORIES.map((category) => category.slug));
