@@ -52,6 +52,7 @@ import { parseDossier } from './dossier';
 import { collectAngleStats, chooseAngle, type AngleStat, type LearningDb } from './learning';
 import { applicableAngles, buildOffer, type OfferAngle } from './offer';
 import { readOfficeSettings, type OutreachMode } from '@/lib/office/settings';
+import { nichePitch } from './pitch';
 import {
   officeMailConfigured,
   officeMailHint,
@@ -581,6 +582,13 @@ async function runOutreach(
     replyTo: settings.replyTo,
     ...(offer ? { offer } : {}),
     ...(links ? { unsubscribeUrl: links.page } : {}),
+    // Письмо о сайте: презентация под фирму и фраза по её сфере (pitch.ts).
+    ...(row.kind !== 'provider'
+      ? {
+          showUrl: `${baseUrl.replace(/\/+$/, '')}/pokaz/${encodeURIComponent(row.token)}`,
+          pitchLine: nichePitch(row.niche).letterLine,
+        }
+      : {}),
   });
 
   // Персональное предложение (U2): статистика заходов — один раз за проход и только если

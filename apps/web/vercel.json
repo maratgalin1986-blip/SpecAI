@@ -1,6 +1,24 @@
 {
   "crons": [
-    { "path": "/api/cron/weekly", "schedule": "0 5 * * 1" },
-    { "path": "/api/cron/daily", "schedule": "0 16 * * *" }
+    {
+      "path": "/api/cron/weekly",
+      "schedule": "0 5 * * 1"
+    },
+    {
+      "path": "/api/cron/daily",
+      "schedule": "0 16 * * *"
+    },
+    {
+      "path": "/api/cron/office?steps=0",
+      "schedule": "0 5 * * *"
+    },
+    {
+      "path": "/api/cron/office?steps=0",
+      "schedule": "20 9 * * *"
+    },
+    {
+      "path": "/api/cron/office?steps=0",
+      "schedule": "30 6 * * *"
+    }
   ]
 }

@@ -96,6 +96,9 @@ export interface RepliesResult {
   bounces: number;
   /** Ответов, после которых нужен владелец (согласие или непонятное письмо). */
   needOwner: number;
+  /** Номер следующего письма в ящике и закладка офиса: по ним видно, что новая почта замечена. */
+  uidNext?: number;
+  cursor?: number;
   /** Ящик не открылся или чтение оборвалось: текст ошибки сервера без адресов. */
   error?: string;
 }
@@ -192,6 +195,8 @@ export async function readReplies(now: Date, deps: RepliesDeps = {}): Promise<Re
       result.skipped = 'first-run';
       return result;
     }
+    result.uidNext = session.uidNext;
+    result.cursor = saved.uid;
     const messages = await session.list(saved.uid, MAIL_LIST_LIMIT);
     result.seen = messages.length;
     if (messages.length === 0) return result;
@@ -255,7 +260,10 @@ export async function readReplies(now: Date, deps: RepliesDeps = {}): Promise<Re
       }
       cursor = message.uid;
     }
-    if (cursor !== saved.uid) await saveCursor(cursor);
+    if (cursor !== saved.uid) {
+      await saveCursor(cursor);
+      result.cursor = cursor;
+    }
     return result;
   } catch (error) {
     result.error = safeError(error);
