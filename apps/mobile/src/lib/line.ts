@@ -47,6 +47,87 @@ export function toLivePins(machines: LiveMachine[]): LivePin[] {
 }
 
 /**
+ * Машины на линии без живого GPS, стоящие в одной точке, — одна группа (парк
+ * на базе: техника СпецПласт16 там всегда, владелец 2026-11-11), а не стопка
+ * значков; порядок групп — как в списке. Машина с живым GPS — всегда свой
+ * значок. То же правило, что groupLive в apps/web/src/lib/mapLabels.ts.
+ */
+export function groupLive<
+  T extends { lat: number; lon: number; live?: boolean; company: { isHouse: boolean } },
+>(machines: readonly T[]): T[][] {
+  const groups = new Map<string, T[]>();
+  machines.forEach((machine, index) => {
+    const key = machine.live
+      ? `live:${index}`
+      : `${machine.company.isHouse ? 'house' : 'other'}:${machine.lat.toFixed(4)},${machine.lon.toFixed(4)}`;
+    groups.set(key, [...(groups.get(key) ?? []), machine]);
+  });
+  return [...groups.values()];
+}
+
+/** Значок на карте: одна машина или несколько машин в одной точке (items). */
+export interface LiveMarker extends LivePin {
+  /** Ключ значка для списка «Рядом»: «live:<id>». */
+  key: string;
+  /** Заголовок списка машин: «15 машин на линии · СпецПласт16». */
+  title?: string;
+  /** Машины группы; у одиночной машины поля нет. */
+  items?: { equipmentId: string | null; name: string; price: string }[];
+}
+
+/** «от 2 500 ₽/ч» по цене часа для заказчика, иначе по смене; без цен — «цена договорная». */
+export function livePriceText(equipment: LiveMachine['equipment']): string {
+  const money = (value: number) => `${Math.round(value).toLocaleString('ru-RU')}\u00a0₽`;
+  if (equipment && equipment.hourlyRate > 0) return `от ${money(equipment.hourlyRate)}/ч`;
+  if (equipment && equipment.dailyRate > 0) return `от ${money(equipment.dailyRate)}/смена`;
+  return 'цена договорная';
+}
+
+/** «15 машин на линии» и чей это парк — подпись значка группы. */
+export function liveGroupLabel(group: readonly Pick<LiveMachine, 'busyToday' | 'company'>[]): {
+  title: string;
+  sub: string;
+} {
+  const free = group.filter((machine) => !machine.busyToday).length;
+  const word = (count: number) => pluralizeRu(count, ['машина', 'машины', 'машин']);
+  return {
+    title: free > 0 ? `${word(free)} на линии` : `${word(group.length)} · заняты сегодня`,
+    sub: group[0]?.company.isHouse ? 'СпецПласт16' : 'Я на линии',
+  };
+}
+
+/**
+ * Значки машин на линии для карты (window.setLive): машины без GPS в одной
+ * точке — один значок «N машин на линии · СпецПласт16» со списком машин,
+ * остальные — по одному, как раньше.
+ */
+export function toLiveMarkers(machines: LiveMachine[]): LiveMarker[] {
+  return groupLive(machines).map((group) => {
+    const first = group[0]!;
+    if (group.length === 1) return { ...toLivePins([first])[0]!, key: `live:${first.id}` };
+    const label = liveGroupLabel(group);
+    const house = first.company.isHouse;
+    return {
+      key: `live:${first.id}`,
+      equipmentId: null,
+      lat: first.lat,
+      lon: first.lon,
+      short: house ? `СП·${group.length}` : String(group.length),
+      head: label.sub,
+      body: label.title,
+      title: `${label.title} · ${house ? label.sub : first.company.name}`,
+      note: null,
+      house,
+      items: group.map((machine) => ({
+        equipmentId: machine.equipment?.id ?? null,
+        name: machine.equipment?.name ?? machine.company.name,
+        price: machine.busyToday ? 'занята сегодня' : livePriceText(machine.equipment),
+      })),
+    };
+  });
+}
+
+/**
  * Точка машин СпецПласт16 на базе (window.setBase в providersMapHtml). Машины
  * одной базы стоят в одной точке — это одна метка: подпись одной машины или
  * «N машин · от … ₽/ч», нажатие открывает список, из него — страница машины.
