@@ -132,7 +132,7 @@ export function PointPicker({
           <button
             type="button"
             onClick={() => setOpen(true)}
-            className={`text-left text-sm underline decoration-dotted underline-offset-4 ${muted} hover:text-amber-500`}
+            className={`flex min-h-11 items-center text-left text-sm underline decoration-dotted underline-offset-4 ${muted} hover:text-amber-500`}
           >
             {value ? `📍 Точка: ${formatCoords(value.lat, value.lon)} — изменить` : label}
           </button>

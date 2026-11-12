@@ -148,7 +148,9 @@ export function OrderMap({ embed = false }: { embed?: boolean }) {
     );
   }
 
-  const input = 'w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm';
+  // 16 px on phones: iOS zooms the page when a smaller field takes focus.
+  const input =
+    'min-h-11 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-base sm:text-sm';
 
   return (
     <div className="flex flex-col gap-4">
@@ -165,7 +167,7 @@ export function OrderMap({ embed = false }: { embed?: boolean }) {
           <button
             type="submit"
             disabled={searching}
-            className="shrink-0 rounded-md border border-slate-300 bg-white px-4 text-sm font-semibold hover:border-slate-900 disabled:opacity-60"
+            className="min-h-11 shrink-0 rounded-md border border-slate-300 bg-white px-4 text-sm font-semibold hover:border-slate-900 disabled:opacity-60"
           >
             {searching ? '…' : 'Найти'}
           </button>
@@ -173,7 +175,7 @@ export function OrderMap({ embed = false }: { embed?: boolean }) {
         <button
           type="button"
           onClick={() => void locate()}
-          className="min-h-10 rounded-md bg-slate-900 px-4 text-sm font-semibold text-white hover:bg-slate-700"
+          className="min-h-11 rounded-md bg-slate-900 px-4 text-sm font-semibold text-white hover:bg-slate-700"
         >
           📍 Я на объекте
         </button>
@@ -212,7 +214,7 @@ export function OrderMap({ embed = false }: { embed?: boolean }) {
             <button
               type="button"
               onClick={() => setSelection(null)}
-              className="shrink-0 rounded-md border border-slate-300 px-2 py-1 text-xs text-slate-600 hover:border-slate-900"
+              className="min-h-11 shrink-0 rounded-md border border-slate-300 px-3 py-1 text-xs text-slate-600 hover:border-slate-900"
               aria-label="Скрыть список"
             >
               Скрыть
@@ -307,7 +309,7 @@ export function OrderMap({ embed = false }: { embed?: boolean }) {
             required
             checked={consent}
             onChange={(e) => setConsent(e.target.checked)}
-            className="mt-0.5"
+            className="mt-0.5 h-6 w-6 shrink-0"
           />
           <ConsentText />
         </label>
@@ -319,7 +321,7 @@ export function OrderMap({ embed = false }: { embed?: boolean }) {
         <button
           type="submit"
           disabled={!hydrated || status === 'sending'}
-          className="rounded-md bg-amber-500 px-5 py-2.5 text-sm font-semibold text-slate-950 shadow-lg shadow-amber-600/30 transition hover:bg-amber-400 disabled:opacity-60"
+          className="min-h-11 rounded-md bg-amber-500 px-5 py-2.5 text-sm font-semibold text-slate-950 shadow-lg shadow-amber-600/30 transition hover:bg-amber-400 disabled:opacity-60"
         >
           {status === 'sending' ? 'Отправляем…' : 'Заказать технику сюда'}
         </button>

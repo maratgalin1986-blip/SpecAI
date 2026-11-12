@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { ConsentText } from '@/components/ConsentText';
 import { Icon } from '@/components/Icon';
@@ -108,6 +108,17 @@ function StorozhCard({ trigger, onClose }: { trigger: StorozhTrigger; onClose: (
     reachGoal('storozh_close');
     onClose();
   };
+
+  // Esc dismisses the card, the same as «Нет, спасибо».
+  const closeRef = useRef(close);
+  closeRef.current = close;
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') closeRef.current();
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, []);
 
   async function send(event: React.FormEvent) {
     event.preventDefault();
@@ -230,7 +241,7 @@ function StorozhCard({ trigger, onClose }: { trigger: StorozhTrigger; onClose: (
                   name="consent"
                   checked={consent}
                   onChange={(e) => setConsent(e.target.checked)}
-                  className="mt-0.5"
+                  className="mt-0.5 h-6 w-6 shrink-0"
                 />
                 <ConsentText />
               </label>

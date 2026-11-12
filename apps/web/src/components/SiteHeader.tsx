@@ -127,6 +127,50 @@ export function SiteHeader() {
     };
   }, []);
 
+  // The open phone menu behaves as a dialog: focus moves into it, Tab stays
+  // between the menu button and its links, the page behind is inert, Esc
+  // closes it and focus returns to the button.
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if (!isMenuOpen) return;
+    const button = menuButtonRef.current;
+    const items = () => [
+      ...(menuRef.current?.querySelectorAll<HTMLElement>('a[href], button:not([disabled])') ?? []),
+    ];
+    items()[0]?.focus({ preventScroll: true });
+    const behind = [...document.querySelectorAll('main, [data-site-footer]')];
+    behind.forEach((el) => el.setAttribute('inert', ''));
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        setIsMenuOpen(false);
+        button?.focus({ preventScroll: true });
+        return;
+      }
+      if (event.key !== 'Tab' || !button) return;
+      const list = items();
+      const last = list[list.length - 1] ?? button;
+      const active = document.activeElement;
+      if (!event.shiftKey && active === last) {
+        event.preventDefault();
+        button.focus();
+      } else if (event.shiftKey && active === button) {
+        event.preventDefault();
+        last.focus();
+      } else if (active !== button && !menuRef.current?.contains(active)) {
+        // Focus was elsewhere in the header (the logo, the call button).
+        event.preventDefault();
+        (event.shiftKey ? last : button).focus();
+      }
+    };
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      behind.forEach((el) => el.removeAttribute('inert'));
+    };
+  }, [isMenuOpen]);
+
   // A client's site or its preview has its own header (lib/office).
   if (isStandalonePage(pathname)) return null;
 
@@ -172,10 +216,14 @@ export function SiteHeader() {
               href={SITE.promiseHref}
               title={SITE.promiseDetail}
               data-promise-pill
-              className="promise-pill relative mt-1 inline-flex items-center gap-1 whitespace-nowrap rounded-full px-1.5 py-0.5 text-[0.65rem] font-semibold leading-none after:absolute after:inset-x-0 after:-bottom-2 after:-top-1 after:content-['']"
+              // The link is a 24 px target around the small pill; the negative
+              // margins keep the pill and the header where they were.
+              className="group/pill relative -mb-[5px] -mt-px inline-flex min-h-6 items-center rounded-full after:absolute after:inset-x-0 after:-bottom-2 after:top-0 after:content-['']"
             >
-              <span aria-hidden>✓</span>
-              {SITE.promiseShort}
+              <span className="promise-pill inline-flex items-center gap-1 whitespace-nowrap rounded-full px-1.5 py-0.5 text-[0.65rem] font-semibold leading-none">
+                <span aria-hidden>✓</span>
+                {SITE.promiseShort}
+              </span>
             </a>
           )}
         </div>
@@ -235,6 +283,7 @@ export function SiteHeader() {
 
         {!adminArea && (
           <button
+            ref={menuButtonRef}
             type="button"
             onClick={() => setIsMenuOpen((open) => !open)}
             aria-label={isMenuOpen ? 'Закрыть меню' : 'Открыть меню'}
@@ -269,6 +318,7 @@ export function SiteHeader() {
 
       {!adminArea && isMenuOpen && (
         <nav
+          ref={menuRef}
           id="mobile-nav"
           aria-label="Меню"
           className="flex flex-col gap-1 border-t border-slate-200 px-4 py-3 text-sm font-medium text-slate-600 lg:hidden"

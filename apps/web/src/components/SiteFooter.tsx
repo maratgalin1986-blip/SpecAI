@@ -35,7 +35,7 @@ export function SiteFooter() {
           <a href="/ceny" className={LINK}>
             Цены
           </a>
-          <a href="/providers" className="hover:text-white">
+          <a href="/providers" className={LINK}>
             Исполнители
           </a>
           <a href="/map" className={LINK}>

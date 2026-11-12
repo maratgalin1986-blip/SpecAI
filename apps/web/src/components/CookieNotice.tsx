@@ -143,14 +143,22 @@ export function CookieNotice() {
       {stroyka ? (
         <p className="flex min-w-0 flex-1 items-center gap-1 whitespace-nowrap text-[11px] leading-snug sm:text-xs lg:flex-wrap lg:whitespace-normal">
           <span className="truncate lg:whitespace-normal">Cookie — после «Согласен» ·</span>
-          <Link href="/privacy" className="shrink-0 font-medium text-amber-800 underline">
+          <Link
+            href="/privacy"
+            prefetch={false}
+            className="relative shrink-0 font-medium text-amber-800 underline after:absolute after:-inset-x-2 after:-inset-y-3 after:content-['']"
+          >
             Подробнее
           </Link>
         </p>
       ) : (
         <p className="min-w-0 flex-1 leading-snug">
           Cookie и Метрика — только после «Согласен» ·{' '}
-          <Link href="/privacy" className="font-medium text-amber-800 underline">
+          <Link
+            href="/privacy"
+            prefetch={false}
+            className="relative font-medium text-amber-800 underline after:absolute after:-inset-x-2 after:-inset-y-3 after:content-['']"
+          >
             Подробнее
           </Link>
         </p>

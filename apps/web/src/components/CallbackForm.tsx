@@ -158,7 +158,7 @@ export function CallbackForm({
           name="consent"
           checked={consent}
           onChange={(e) => setConsent(e.target.checked)}
-          className="mt-0.5"
+          className="mt-0.5 h-6 w-6 shrink-0"
         />
         <ConsentText />
       </label>

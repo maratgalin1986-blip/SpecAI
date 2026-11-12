@@ -265,6 +265,14 @@ html {
   transform: none;
 }
 
+/* Keyboard focus inside a block that has not scrolled into view yet: it shows
+   at once, so Tab never lands on an invisible link. */
+.reveal:focus-within {
+  opacity: 1;
+  transform: none;
+  transition: none;
+}
+
 /* ---- Editorial details: eyebrow labels, marker highlight, marquee -------- */
 
 .eyebrow {
@@ -375,6 +383,20 @@ html {
     animation: depth-out linear forwards;
     animation-timeline: view();
     animation-range: exit 10% exit 100%;
+  }
+}
+
+/* The big blocks of a long page (the home page) skip style, layout and paint
+   while they are far from the screen, and their looping animations rest: less
+   work per scroll frame. The remembered size keeps the scrollbar steady after
+   the first pass. Only where the engine can let shadows and glows spill over
+   the block's edge (overflow-clip-margin): paint containment would cut them
+   at the edge otherwise. */
+@supports (content-visibility: auto) and (overflow-clip-margin: 1px) {
+  main > div > .depth:not(.marquee-mask) {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 900px;
+    overflow-clip-margin: 3rem;
   }
 }
 
@@ -1720,7 +1742,7 @@ html[data-vt-kind='fade']::view-transition-group(root) {
     @apply inline-flex min-h-[44px] items-center justify-center gap-2 rounded-full bg-signal-500 px-5 py-2.5 text-sm font-bold text-graphite-950 transition hover:bg-signal-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-signal-600 disabled:cursor-not-allowed disabled:opacity-50;
   }
   .cab-ghost {
-    @apply inline-flex min-h-[40px] items-center justify-center gap-2 rounded-full border border-graphite-200 bg-white px-4 py-2 text-sm font-semibold text-graphite-800 transition hover:border-graphite-800;
+    @apply inline-flex min-h-[44px] items-center justify-center gap-2 rounded-full border border-graphite-200 bg-white px-4 py-2 text-sm font-semibold text-graphite-800 transition hover:border-graphite-800;
   }
   .cab-eyebrow {
     @apply text-[0.7rem] font-bold uppercase tracking-[0.14em] text-signal-700;

@@ -61,8 +61,8 @@ export function TelegramButton({
       onClick={() => reachGoal('telegram_click')}
       className={`inline-flex min-h-11 items-center justify-center gap-2 rounded-full px-5 text-sm font-semibold transition ${
         dark
-          ? 'bg-[#2aabee] text-white hover:bg-[#229ed9]'
-          : 'bg-[#2aabee] text-white shadow-sm hover:bg-[#229ed9]'
+          ? 'bg-[#0a75b3] text-white hover:bg-[#0c6aa3]'
+          : 'bg-[#0a75b3] text-white shadow-sm hover:bg-[#0c6aa3]'
       } ${className}`}
     >
       <svg aria-hidden viewBox="0 0 24 24" className="h-5 w-5 fill-current">

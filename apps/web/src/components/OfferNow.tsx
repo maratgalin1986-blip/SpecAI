@@ -97,7 +97,7 @@ export function OfferNow({
           </button>
           <a
             href={`/equipment/${encodeURIComponent(item.id)}`}
-            className={`text-xs underline underline-offset-2 ${muted}`}
+            className={`inline-flex min-h-11 items-center px-1 text-xs underline underline-offset-2 ${muted}`}
           >
             Подробнее
           </a>

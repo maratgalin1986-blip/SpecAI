@@ -590,13 +590,14 @@ export function SiteJourney() {
                     <a
                       href={SITE.phoneHref}
                       aria-label={`Позвонить: ${SITE.phone}`}
-                      className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1 text-xs font-semibold text-white ring-1 ring-white/25 hover:bg-white/25 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400"
+                      // The small chip keeps its look; ::after makes it a 44 px target.
+                      className="relative after:absolute after:inset-x-0 after:-inset-y-2.5 after:content-[''] inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1 text-xs font-semibold text-white ring-1 ring-white/25 hover:bg-white/25 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400"
                     >
                       <Icon name="phone" className="h-3.5 w-3.5" /> {SITE.phone}
                     </a>
                     <a
                       href={scene.type === 'trench' ? '/#podbor' : `/?m=${scene.type}#podbor`}
-                      className="inline-flex items-center rounded-full bg-amber-500 px-3 py-1 text-xs font-semibold text-slate-950 hover:bg-amber-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white"
+                      className="relative after:absolute after:inset-x-0 after:-inset-y-2.5 after:content-[''] inline-flex items-center rounded-full bg-amber-500 px-3 py-1 text-xs font-semibold text-slate-950 hover:bg-amber-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white"
                     >
                       Заявка
                     </a>

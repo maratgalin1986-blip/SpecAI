@@ -192,6 +192,9 @@ export function HeroPhotos() {
       </div>
       <a
         href={current === -1 ? '/orders#new' : slide.href}
+        // A caption that repeats the buttons above and fades out with the
+        // hero on scroll: not a keyboard stop.
+        tabIndex={-1}
         className="absolute bottom-3 left-6 z-10 inline-flex min-h-11 items-center font-mono text-[0.65rem] uppercase tracking-[0.2em] text-slate-400 hover:text-amber-400 sm:left-10 lg:hidden"
       >
         {current === -1 ? 'Разместить заявку' : MACHINE_LABELS[slide.type]} →
