@@ -2,7 +2,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import * as ImagePicker from 'expo-image-picker';
 import { Link } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
-import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { Button, Card, ErrorBanner, Input } from '@/components/ui';
 import {
   ApiError,
@@ -12,6 +12,7 @@ import {
   type CompanyPin,
 } from '@/lib/api';
 import { phoneNear } from '@/lib/phoneNear';
+import { mapSwitchOn } from '@/lib/providersMap';
 import { colors, radius, spacing } from '@/lib/theme';
 
 /** Как PIN_NOTE_MAX и PIN_NOTE_EXAMPLES в apps/web/src/lib/providerMap.ts. */
@@ -23,10 +24,15 @@ const NOTE_EXAMPLES = [
 ];
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 
+type MapSwitch = 'showOnMap' | 'showPhoneOnMap';
+
 /**
  * «Моя точка на карте» в кабинете поставщика: адрес базы (сайт находит его
  * на карте), значок — стандартный или фото своей техники, и подпись для
- * заказчиков. Сохраняется через PATCH /api/companies/me.
+ * заказчиков. Сохраняется через PATCH /api/companies/me. Два переключателя
+ * «все видят всех» (владелец, 2026-11-08) сохраняются сразу: «Показывать
+ * меня на карте» — единственный способ уйти с карты, «Показывать телефон на
+ * карте» — номер в карточке точки; оба включены, пока исполнитель не выключит.
  */
 export function MyMapPinCard() {
   const [company, setCompany] = useState<CompanyPin | null>(null);
@@ -39,6 +45,8 @@ export function MyMapPinCard() {
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
+  const [switching, setSwitching] = useState<MapSwitch | null>(null);
+  const [switchError, setSwitchError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoadError(null);
@@ -130,6 +138,25 @@ export function MyMapPinCard() {
     }
   };
 
+  // Переключатель сохраняется сам, без «Сохранить»; при ошибке возвращается назад.
+  const toggle = async (key: MapSwitch, value: boolean) => {
+    if (!company || switching) return;
+    const before = company[key];
+    setSwitching(key);
+    setSwitchError(null);
+    setCompany({ ...company, [key]: value });
+    try {
+      const { company: saved } = await updateMyCompanyPin({ [key]: value });
+      // Остальные поля формы могли быть изменены и ещё не сохранены — их не трогаем.
+      setCompany((current) => (current ? { ...current, [key]: saved[key] ?? value } : current));
+    } catch (caught) {
+      setCompany((current) => (current ? { ...current, [key]: before } : current));
+      setSwitchError(caught instanceof ApiError ? caught.message : 'Не удалось сохранить');
+    } finally {
+      setSwitching(null);
+    }
+  };
+
   if (loadError) return <ErrorBanner message={loadError} onRetry={() => void load()} />;
   if (!company) return null;
 
@@ -142,8 +169,40 @@ export function MyMapPinCard() {
       <Text style={styles.hint}>
         {company.baseLat === null
           ? 'Вас пока нет на карте — укажите адрес, где стоит техника.'
-          : 'По ней заказчики находят ближайшего исполнителя. Телефон и e-mail на карте не видны.'}
+          : 'По ней заказчики находят ближайшего исполнителя. Адрес и e-mail на карте не видны.'}
       </Text>
+
+      <View style={styles.switchRow}>
+        <Text style={styles.switchLabel}>Показывать меня на карте</Text>
+        <Switch
+          value={mapSwitchOn(company.showOnMap)}
+          disabled={switching !== null}
+          accessibilityLabel="Показывать меня на карте"
+          onValueChange={(value) => void toggle('showOnMap', value)}
+          trackColor={{ true: colors.primary }}
+        />
+      </View>
+      <Text style={styles.hint}>
+        {mapSwitchOn(company.showOnMap)
+          ? 'Вас видят всегда, и когда вы не на линии — тогда значок приглушён.'
+          : 'Вас нет на карте и телефона нет на вашей странице. Заявки в ленте приходят как раньше.'}
+      </Text>
+      <View style={styles.switchRow}>
+        <Text style={styles.switchLabel}>Показывать телефон на карте</Text>
+        <Switch
+          value={mapSwitchOn(company.showPhoneOnMap)}
+          disabled={switching !== null || !mapSwitchOn(company.showOnMap)}
+          accessibilityLabel="Показывать телефон на карте"
+          onValueChange={(value) => void toggle('showPhoneOnMap', value)}
+          trackColor={{ true: colors.primary }}
+        />
+      </View>
+      <Text style={styles.hint}>
+        {mapSwitchOn(company.showPhoneOnMap)
+          ? 'Телефон компании виден в карточке вашей точки — заказчик звонит сразу.'
+          : 'Телефон скрыт: в карточке кнопка «Написать», заказчик оставляет заявку.'}
+      </Text>
+      {switchError ? <Text style={styles.switchError}>{switchError}</Text> : null}
 
       <Input
         label="Адрес базы"
@@ -245,6 +304,14 @@ const styles = StyleSheet.create({
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   title: { fontSize: 17, fontWeight: '700', color: colors.text },
   hint: { fontSize: 13, color: colors.textMuted },
+  switchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    minHeight: 48,
+  },
+  switchLabel: { flex: 1, fontSize: 15, fontWeight: '500', color: colors.text, paddingRight: 8 },
+  switchError: { fontSize: 14, color: colors.danger },
   label: { fontSize: 14, fontWeight: '500', color: colors.text, marginTop: spacing.xs },
   photos: { flexDirection: 'row', gap: spacing.sm, paddingVertical: spacing.xs },
   photo: {

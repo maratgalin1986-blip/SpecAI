@@ -13,6 +13,8 @@ import { HeroPhotos } from '@/components/HeroPhotos';
 import { HowItWorks } from '@/components/HowItWorks';
 import { Icon, type IconName } from '@/components/Icon';
 import { ShowOrbs } from '@/components/ShowOrbs';
+import { SnegHomeLink } from '@/components/SnegHomeLink';
+import { isSnowSeason } from '@/lib/sneg';
 import { IntroSplash } from '@/components/IntroSplash';
 import { MachinePhoto } from '@/components/MachinePhoto';
 import { MarketplaceBlock } from '@/components/MarketplaceBlock';
@@ -423,6 +425,9 @@ export default async function HomePage() {
           </div>
         ))}
       </section>
+
+      {/* November–March by the Moscow date: the seasonal page (roadmap № 4). */}
+      {isSnowSeason() && <SnegHomeLink />}
 
       {/* «Сейчас на площадке»: today's real counts and anonymous events (lib/activity.ts). */}
       <ActivityBlock initial={activity} />
