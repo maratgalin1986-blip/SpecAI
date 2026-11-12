@@ -7,12 +7,12 @@ import { DELIVERY_NOTE, shiftExample } from '@/lib/cities';
 import { JOBS, jobMachineLabel, jobRate } from '@/lib/jobs';
 import { fromPerHour, fromPrice, MIN_RATE } from '@/lib/prices';
 import { SITE } from '@/lib/site';
+import { pageMeta } from '@/lib/pageMeta';
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMeta('/raboty', {
   title: 'Работы спецтехникой в Набережных Челнах — цены с машинистом',
   description: `Траншеи, котлованы, септики, вывоз снега, демонтаж, планировка, краны и автовышки: техника ${SITE.name} ${fromPerHour(MIN_RATE)}. ${DELIVERY_NOTE}`,
-  alternates: { canonical: '/raboty' },
-};
+});
 
 export default function JobsIndexPage() {
   return (

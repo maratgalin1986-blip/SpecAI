@@ -21,6 +21,7 @@ import { cityInText, nearestCity } from '@/lib/geo';
 import { SITE } from '@/lib/site';
 import { siteUrl } from '@/lib/siteUrl';
 import { HOUSE_COMPANY_ID } from '@/lib/fleet';
+import { pageMeta } from '@/lib/pageMeta';
 
 export const dynamic = 'force-dynamic';
 
@@ -115,26 +116,11 @@ export async function generateMetadata(props: {
     [provider.pinImageUrl, ...provider.equipment.flatMap((item) => item.imageUrls)].find(
       (url): url is string => Boolean(url) && isDisplayableImage(url as string),
     ) ?? null;
-  return {
+  return pageMeta(providerPath(provider.id), {
     title,
     description,
-    alternates: { canonical: providerPath(provider.id) },
-    openGraph: {
-      type: 'website',
-      locale: 'ru_RU',
-      siteName: SITE.name,
-      title,
-      description,
-      url: providerPath(provider.id),
-      ...(photo ? { images: [{ url: photo, alt: provider.name }] } : {}),
-    },
-    twitter: {
-      card: photo ? 'summary_large_image' : 'summary',
-      title,
-      description,
-      ...(photo ? { images: [photo] } : {}),
-    },
-  };
+    image: photo ? { url: photo, alt: provider.name } : null,
+  });
 }
 
 export default async function ProviderPublicPage(props: { params: Promise<{ id: string }> }) {

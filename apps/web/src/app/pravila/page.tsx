@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { SITE } from '@/lib/site';
 import { CHAT_PHONE_REVEALS_PER_DAY } from '@/lib/chatOrders';
+import { pageMeta } from '@/lib/pageMeta';
 
 // Terms of use of the aggregator (audit 2026-10-13): who the contracting
 // party is, what the platform does and does not do, the rules for providers,
@@ -8,11 +9,10 @@ import { CHAT_PHONE_REVEALS_PER_DAY } from '@/lib/chatOrders';
 // TODO владелец: a lawyer should read this edition before it is relied on;
 // acceptance at sign-up is shown as a line under the consent checkbox.
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMeta('/pravila', {
   title: 'Правила площадки',
   description: `Правила площадки ${SITE.platform} от ${SITE.name}: кто исполнитель, как работают заявки, брони, отзывы и что запрещено.`,
-  alternates: { canonical: '/pravila' },
-};
+});
 
 export default function TermsPage() {
   const operator = SITE.legalName || SITE.name;

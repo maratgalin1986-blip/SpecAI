@@ -29,6 +29,7 @@ import { LANDINGS, landingBySlug } from '@/lib/landings';
 import { rub, SHIFT_HOURS } from '@/lib/prices';
 import { SITE } from '@/lib/site';
 import { siteUrl } from '@/lib/siteUrl';
+import { pageMeta, pickTitle } from '@/lib/pageMeta';
 
 type Params = { slug: string; city: string };
 
@@ -57,16 +58,20 @@ export async function generateMetadata(props: { params: Promise<Params> }): Prom
   const offer = await loadCityOffer(page.landing, page.city);
   const text = cityPageText(page.landing, page.city, offer);
   const path = cityPath(page.landing.slug, page.city.slug);
-  return {
-    title: text.title,
+  return pageMeta(path, {
+    // A long machine and city: without «— от … ₽/ч», then the short name of
+    // the machinery (65 characters).
+    title: pickTitle(
+      text.title,
+      text.title.replace(/ — [^—]*$/, ''),
+      `${page.landing.short} ${page.city.inCity}`,
+    ),
     description: text.description,
-    alternates: { canonical: path },
-    openGraph: { title: text.title, description: text.description, url: path },
     // A city nobody serves yet stays out of search: a thousand near-identical
     // «исполнители подключаются» pages read as doorways to Яндекс. It opens to
     // search by itself once a provider serves the city.
     ...(offer.kind === 'empty' ? { robots: { index: false, follow: true } } : {}),
-  };
+  });
 }
 
 export default async function CityLandingPage(props: { params: Promise<Params> }) {

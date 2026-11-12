@@ -11,7 +11,7 @@ import { SITE } from '@/lib/site';
 import { siteUrl } from '@/lib/siteUrl';
 import { CinemaBand } from '@/components/CinemaBand';
 import { CinemaLayer } from '@/components/CinemaHero';
-import { fromPerHour, houseRate, rateOf, rub, SHIFT_HOURS } from '@/lib/prices';
+import { fromPerHour, fromPrice, houseRate, rateOf, rub, SHIFT_HOURS } from '@/lib/prices';
 import { HOUSE_FIRST_ORDER, PUBLIC_FLEET, isHouseEquipment } from '@/lib/fleet';
 import { customerRates } from '@/lib/equipmentCatalog';
 import { MachineAmbience } from '@/components/MachineAmbience';
@@ -21,6 +21,7 @@ import { landingClips } from '@/lib/landingClips';
 import { landingLoop } from '@/lib/loops';
 import { CountUp } from '@/components/CountUp';
 import { Reveal } from '@/components/Reveal';
+import { pageMeta, pickTitle } from '@/lib/pageMeta';
 
 export const revalidate = 300;
 
@@ -73,13 +74,19 @@ export async function generateMetadata(props: {
   const items = await loadEquipment(landing.categorySlug);
   const from = landingFromRate(landing.machine, landing.title, items);
   // The whole country (owner, 2026-10-17); each city has its own page.
-  const title = `Аренда ${landing.title} по всей России — ${fromPerHour(from)}`;
-  return {
+  // A long name of the machine leaves no room for «по всей России», the
+  // longest one for «с машинистом» either (65 characters; the description
+  // keeps both).
+  const title = pickTitle(
+    `Аренда ${landing.title} по всей России — ${fromPerHour(from)}`,
+    `Аренда ${landing.title} — ${fromPerHour(from)}`,
+    `Аренда ${landing.title} — ${fromPrice(from)}`,
+  );
+  return pageMeta(`/arenda/${landing.slug}`, {
     title,
     description: `${landing.intro} Исполнители по всей России и парк ${SITE.name} в Набережных Челнах. ${SITE.phone}`,
-    alternates: { canonical: `/arenda/${landing.slug}` },
-    openGraph: { title, description: landing.intro },
-  };
+    ogDescription: landing.intro,
+  });
 }
 
 export default async function LandingPage(props: { params: Promise<{ slug: string }> }) {

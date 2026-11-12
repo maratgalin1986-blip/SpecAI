@@ -1,16 +1,16 @@
 import type { Metadata } from 'next';
 import { REPLY_LIMITS } from '@/lib/groupBot';
 import { SITE } from '@/lib/site';
+import { pageMeta } from '@/lib/pageMeta';
 
 // For admins of Telegram chats about construction and machinery: what the
 // group bot does (lib/groupBot.ts), why it helps the chat and how to add it.
 // Linked quietly from the footer and from the bot's /about.
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMeta('/bot', {
   title: 'Бот для чатов о спецтехнике',
   description: `Бот ${SITE.platform} молча собирает заявки о технике из вашего Telegram-чата и передаёт их исполнителям рядом. По умолчанию ничего не пишет в чат, не пишет в личку и не рассылает рекламу; админ выключает его командой /quiet.`,
-  alternates: { canonical: '/bot' },
-};
+});
 
 /** «Добавить в группу»: Telegram asks which chat and opens it with the bot. */
 const addLink = SITE.telegramBot ? `https://t.me/${SITE.telegramBot}?startgroup=1` : null;

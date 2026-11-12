@@ -4,12 +4,12 @@ import { CallbackForm } from '@/components/CallbackForm';
 import { SITE } from '@/lib/site';
 import { CinemaBand } from '@/components/CinemaBand';
 import { CinemaHero } from '@/components/CinemaHero';
+import { pageMeta } from '@/lib/pageMeta';
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMeta('/contacts', {
   title: 'Контакты',
   description: `Телефон, e-mail и заявка на звонок — ${SITE.platform} от ${SITE.name}: заказ спецтехники по всей России, офис в городе ${SITE.city}`,
-  alternates: { canonical: '/contacts' },
-};
+});
 
 export default function ContactsPage() {
   return (

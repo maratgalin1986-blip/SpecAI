@@ -2,12 +2,12 @@ import type { Metadata } from 'next';
 import { PUBLIC_AGENT_PROFILES, agentIdSchema } from '@specai/shared';
 import { AgentChat } from '@/components/AgentChat';
 import { CinemaHero } from '@/components/CinemaHero';
+import { pageMeta } from '@/lib/pageMeta';
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMeta('/agents', {
   title: 'ИИ-агенты',
   // ?agent=<id> preselects an agent: one canonical for every variant.
-  alternates: { canonical: '/agents' },
-};
+});
 
 export default async function AgentsPage(props: { searchParams: Promise<{ agent?: string }> }) {
   const searchParams = await props.searchParams;

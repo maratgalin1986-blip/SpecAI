@@ -322,7 +322,9 @@ describe('city page texts', () => {
 
   it('points every city page’s canonical at itself', () => {
     const source = pageSource('arenda', '[slug]', '[city]', 'page.tsx');
-    expect(source).toContain('alternates: { canonical: path }');
+    // pageMeta sets the canonical and og:url from the path it is given.
+    expect(source).toContain('const path = cityPath(page.landing.slug, page.city.slug);');
+    expect(source).toContain('return pageMeta(path, {');
     expect(source).not.toContain('naberezhnye-chelny');
   });
 });

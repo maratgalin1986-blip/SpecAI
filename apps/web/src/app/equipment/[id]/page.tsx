@@ -35,8 +35,11 @@ import { ReliabilityBadges } from '@/components/ReliabilityBadges';
 import { companyReliability } from '@/lib/companyStats';
 import { providerPath } from '@/lib/providerSeo';
 import { siteUrl } from '@/lib/siteUrl';
+import { equipmentJsonLd } from '@/lib/equipmentSeo';
+import { jsonLdScript } from '@/lib/providerSeo';
 import { HAMMER_RATE } from '@/lib/machineWorks';
 import { NextFreeDate } from '@/components/shifts/NextFreeDate';
+import { pageMeta } from '@/lib/pageMeta';
 
 export const dynamic = 'force-dynamic';
 
@@ -75,29 +78,15 @@ export async function generateMetadata(props: {
     item.description ?? `Аренда: ${item.name}, ${item.category.name.toLowerCase()} с машинистом`,
   ).slice(0, 200);
   const photo = item.imageUrls.find(isDisplayableImage);
-  const url = `/equipment/${params.id}`;
-  return {
+  // The machine's own photo in the preview; the site picture when it has none.
+  return pageMeta(`/equipment/${params.id}`, {
     title,
     description,
+    ogDescription: `${description} · исполнитель: ${item.company.name}`,
+    image: photo ? { url: photo, alt: item.name } : null,
     // A retired machine keeps its page for old links but leaves the search index.
     robots: item.status === 'RETIRED' ? { index: false } : undefined,
-    alternates: { canonical: url },
-    openGraph: {
-      type: 'website',
-      locale: 'ru_RU',
-      siteName: SITE.name,
-      url,
-      title,
-      description: `${description} · исполнитель: ${item.company.name}`.slice(0, 300),
-      ...(photo ? { images: [{ url: photo, alt: item.name }] } : {}),
-    },
-    twitter: {
-      card: photo ? 'summary_large_image' : 'summary',
-      title,
-      description,
-      ...(photo ? { images: [photo] } : {}),
-    },
-  };
+  });
 }
 
 export default async function EquipmentDetailPage(props: { params: Promise<{ id: string }> }) {
@@ -202,8 +191,33 @@ export default async function EquipmentDetailPage(props: { params: Promise<{ id:
     })),
   ];
 
+  // Product/Offer for search: the price is the one shown below (`hour`/`shift`).
+  const productLd = equipmentJsonLd(
+    {
+      id: item.id,
+      name: item.name,
+      category: item.category.name,
+      description: item.description ? maskContactsAndLinks(item.description) : null,
+      seller: ownFleet ? SITE.name : item.company.name,
+      hour,
+      shift,
+      currency: item.currency,
+      status: item.status,
+      photos,
+      rating: averageRating,
+      reviews: item.reviews.length,
+    },
+    siteUrl(),
+  );
+
   return (
     <div className="flex flex-col gap-16">
+      {productLd && (
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: jsonLdScript(productLd) }}
+        />
+      )}
       {illustration && <MachineAmbience type={illustration} />}
       <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_400px] lg:gap-10">
         {/* Title, chips and gallery */}

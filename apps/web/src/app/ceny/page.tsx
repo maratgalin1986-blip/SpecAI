@@ -12,21 +12,21 @@ import { loadPriceIndex } from '@/lib/priceIndexData';
 import { PRICE_SURVEY_PATH, PRICE_SURVEY_TITLE } from '@/lib/priceReports';
 import { ShowOrbs } from '@/components/ShowOrbs';
 import { SITE } from '@/lib/site';
+import { pageMeta } from '@/lib/pageMeta';
 
 // As the city pages: a page built while the database was unreachable does not stay long.
 export const revalidate = 600;
 
 const TITLE = 'Цены на аренду спецтехники с машинистом — по данным исполнителей ИИСтройка24';
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMeta('/ceny', {
   title: TITLE,
   description:
     'Сколько стоит час спецтехники с машинистом: медиана и разброс цен по России, регионам и городам — по ценам исполнителей площадки и ответам на открытый опрос. Без имён компаний.',
-  alternates: { canonical: '/ceny' },
-};
+});
 
 function Cell({ cell }: { cell: PriceCell | undefined }) {
-  if (!cell) return <span className="text-slate-400">мало данных</span>;
+  if (!cell) return <span className="text-slate-500">мало данных</span>;
   return (
     <span>
       <span className="font-semibold text-slate-900">{cellText(cell)}</span>{' '}

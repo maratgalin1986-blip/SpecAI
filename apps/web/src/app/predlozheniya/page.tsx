@@ -1,16 +1,16 @@
 import type { Metadata } from 'next';
 import { ProposalForm } from '@/components/ProposalForm';
 import { SITE } from '@/lib/site';
+import { pageMeta } from '@/lib/pageMeta';
 
 // «Предложения и партнёрство» (owner, 2026-10-17): a quiet page for ideas
 // about the service and partnership offers. Reached from a text link in the
 // footer, from /kak-polzovatsya and from the app; never a floating button.
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMeta('/predlozheniya', {
   title: 'Предложения и партнёрство',
   description: `Предложите идею, как сделать ${SITE.platform} удобнее, или расскажите о сотрудничестве и партнёрстве — мы читаем каждое сообщение.`,
-  alternates: { canonical: '/predlozheniya' },
-};
+});
 
 export default function ProposalsPage() {
   return (
