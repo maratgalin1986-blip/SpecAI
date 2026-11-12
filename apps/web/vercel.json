@@ -10,11 +10,15 @@
     },
     {
       "path": "/api/cron/office?steps=0",
-      "schedule": "20 5 * * *"
+      "schedule": "0 5 * * *"
     },
     {
       "path": "/api/cron/office?steps=0",
       "schedule": "20 9 * * *"
+    },
+    {
+      "path": "/api/cron/office?steps=0",
+      "schedule": "30 6 * * *"
     }
   ]
 }

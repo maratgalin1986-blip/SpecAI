@@ -15,7 +15,7 @@ export function isAdminArea(pathname: string | null | undefined): boolean {
  * their own header and footer, so the platform's chrome and widgets stay off them.
  */
 export function isStandalonePage(pathname: string | null | undefined): boolean {
-  return /^\/(s|preview|kp|oplata)(\/|$)/.test(pathname ?? '');
+  return /^\/(s|preview|kp|oplata|pokaz)(\/|$)/.test(pathname ?? '');
 }
 
 export function PublicOnly({ children }: { children: ReactNode }) {
