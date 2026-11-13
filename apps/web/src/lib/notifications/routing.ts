@@ -8,7 +8,7 @@
 import { AKTUALNO_PATH, PRICE_ASK_BODY, PRICE_ASK_TITLE } from '../aktualno';
 import { stripChatOrderNote } from '../chatOrders';
 import { DEMAND_NUDGE_PATH, demandNudgeText } from '../demandNudge';
-import { maskContacts } from '../privacy';
+import { maskContacts, maskOrderText } from '../privacy';
 import { lineRenewPath } from '../lineRenew';
 import { untilLong } from '../lineStanding';
 import { EARLY_NOTICE_LINE, EARLY_NOTICE_MINUTES, priorityDate } from '../referralPriority';
@@ -291,7 +291,7 @@ export function renderNotification(event: NotificationEvent): RenderedNotificati
       return {
         title: `Новая заявка: ${what}${where}`,
         body:
-          `${day(event.startDate)} · ${clip(maskContacts(text), 180)}` +
+          `${day(event.startDate)} · ${clip(maskOrderText(text), 180)}` +
           (event.fromChat ? '\nНайдена в открытом чате.' : '') +
           (event.early ? `\n${EARLY_NOTICE_LINE}` : ''),
         path: `/orders/${event.orderId}`,
@@ -401,7 +401,7 @@ export function renderNotification(event: NotificationEvent): RenderedNotificati
       const count = event.items.length;
       return {
         title: `На завтра: ${count} ${pluralOrders(count)}`,
-        body: `${event.items.map((item) => clip(maskContacts(item), 80)).join('; ')}. Предложите цену вечером — утром заказчики выбирают.`,
+        body: `${event.items.map((item) => clip(maskOrderText(item), 80)).join('; ')}. Предложите цену вечером — утром заказчики выбирают.`,
         path: '/orders',
       };
     }

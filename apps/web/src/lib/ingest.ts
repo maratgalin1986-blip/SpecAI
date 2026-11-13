@@ -64,7 +64,31 @@ function parseDate(value: string | null | undefined) {
   return Number.isNaN(date.getTime()) ? undefined : date;
 }
 
-async function locationFor(city: string | undefined) {
+/** «ул. Строителей, 7» + «Елабуга» → «Елабуга, ул. Строителей, 7»; the town is not repeated. */
+export function chatAddressLine(city: string | undefined, address: string): string {
+  const street = maskContacts(address).replace(/\s+/g, ' ').trim().slice(0, 200);
+  if (!city || street.toLowerCase().includes(city.toLowerCase())) return street;
+  return `${city}, ${street}`.slice(0, 200);
+}
+
+/**
+ * The work site of a chat order. A street and a house the message names go to
+ * a Location of their own (addressLine), never into the description: the
+ * address is shown by lib/orderLocationPrivacy.ts. A message that names only
+ * the town shares that town's row.
+ */
+async function locationFor(city: string | undefined, address?: string) {
+  if (address?.trim()) {
+    const created = await prisma.location.create({
+      data: {
+        addressLine: chatAddressLine(city, address),
+        city: city ?? '',
+        region: cityByName(city)?.region ?? null,
+        country: 'Россия',
+      },
+    });
+    return created.id;
+  }
   if (!city) return undefined;
   const existing = await prisma.location.findFirst({ where: { city, addressLine: city } });
   if (existing) return existing.id;
@@ -98,6 +122,7 @@ export async function ingestMessage(message: IncomingMessage): Promise<IngestRes
   let start = heuristic.startDate;
   let end = heuristic.endDate;
   let summary: string | undefined;
+  let address: string | undefined;
   let phone = message.authorPhone ?? heuristic.phone;
 
   // With an API key, let the AI make the call (it handles slang and context).
@@ -113,6 +138,7 @@ export async function ingestMessage(message: IncomingMessage): Promise<IngestRes
       end = parseDate(ai.end_date) ?? end;
       if (end <= start) end = new Date(start.getTime() + 86_400_000);
       summary = ai.summary ?? undefined;
+      address = ai.address ?? undefined;
       phone = phone ?? ai.phone ?? undefined;
     } catch (error) {
       console.error('[ingest] AI analysis failed, using the rule-based parser', error);
@@ -145,7 +171,7 @@ export async function ingestMessage(message: IncomingMessage): Promise<IngestRes
       desiredEndDate: end,
       status: published ? 'OPEN' : 'PENDING_REVIEW',
       categoryId: category?.id,
-      locationId: await locationFor(city),
+      locationId: await locationFor(city, address),
       source: message.source,
       externalId: message.externalId,
       fingerprint,

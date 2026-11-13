@@ -20,7 +20,7 @@ import { PhotoShare } from '@/components/PhotoShare';
 import { CommentForm, CommentList } from '@/components/Comments';
 import { guideFor } from '@/lib/guideState';
 import { loadIncomingOrders } from '@/lib/providerFeedData';
-import { maskContactsAndLinks } from '@/lib/privacy';
+import { maskOrderText } from '@/lib/privacy';
 import { toPublicComment } from '@/lib/comments';
 import { MyMapPin } from '@/components/MyMapPin';
 import { isDisplayableImage, pinPhotoChoices } from '@/lib/providerMap';
@@ -526,7 +526,7 @@ export default async function ProviderPage(props: { searchParams: Promise<Provid
                     </span>
                   </div>
                   <p className="line-clamp-3 break-words text-sm text-graphite-700">
-                    {maskContactsAndLinks(order.description)}
+                    {maskOrderText(order.description)}
                   </p>
                   <p className="text-xs text-graphite-500">
                     {order.desiredStartDate.toLocaleDateString('ru-RU')} –{' '}
@@ -718,7 +718,7 @@ export default async function ProviderPage(props: { searchParams: Promise<Provid
                   >
                     <span className="min-w-0 text-sm">
                       <span className="line-clamp-2 break-words font-semibold text-graphite-950">
-                        {maskContactsAndLinks(bid.order.description)}
+                        {maskOrderText(bid.order.description)}
                       </span>
                       <span className="block text-graphite-500">
                         {bid.equipment.name} · {formatMoney(bid.price, bid.currency)}

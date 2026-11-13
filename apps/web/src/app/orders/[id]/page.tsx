@@ -13,7 +13,8 @@ import { formatMoney } from '@/lib/money';
 import { isAdminRequest } from '@/lib/admin';
 import { SiteConditions } from '@/components/SiteConditions';
 import { houseFirstBids, isHouseManager, isProvider } from '@/lib/fleet';
-import { isSafeHttpUrl, maskContactsAndLinks } from '@/lib/privacy';
+import { isSafeHttpUrl, maskContactsAndLinks, orderTextForViewer } from '@/lib/privacy';
+import { companyBase, roughLocation, roughPlaceLine } from '@/lib/orderLocationPrivacy';
 import { bookedProviderSees, contactsOpenFor } from '@/lib/bidPrivacy';
 import { BookingActionButtons } from '@/components/BookingActionButtons';
 import { CONTACTS_AFTER_CONFIRM } from '@/lib/customerPrivacy';
@@ -34,7 +35,6 @@ import { SITE } from '@/lib/site';
 import { OrderChat } from '@/components/OrderChat';
 import { bidsLeftText, isLateBid } from '@/lib/bidWindow';
 import { orderDays } from '@/lib/offerBreakdown';
-import { distanceKm } from '@/lib/geo';
 import { CloseOrderButton } from '@/components/AdminIntegrations';
 import { PhoneLink } from '@/components/admin/PhoneLink';
 import { isRealEmail } from '@/lib/notifications/routing';
@@ -189,7 +189,6 @@ export default async function OrderDetailPage(props: { params: Promise<{ id: str
   const ownPendingBid = viewerIsProvider
     ? visibleBids.find((bid) => bid.status === 'PENDING')
     : undefined;
-  // «Подача» prefilled from the distance base → site × the company's price per km.
   const viewerCompany =
     viewerIsProvider && session?.user.companyId
       ? await prisma.company.findUnique({
@@ -197,16 +196,18 @@ export default async function OrderDetailPage(props: { params: Promise<{ id: str
           select: { baseLat: true, baseLon: true, deliveryPricePerKm: true },
         })
       : null;
+  // The work site (REVIEW.md §1), as in GET /api/orders/[id]: the address and
+  // the exact point for the customer, the platform's managers and the booked
+  // company once confirmed; another provider reads the city and the distance
+  // from its base in whole kilometres.
+  const bookedSees = bookedProviderSees(order.booking, session?.user.companyId);
+  const seesAddress = isOwner || isAdmin || isHouseManager(session?.user) || bookedSees;
+  const rough = roughLocation(order.location, companyBase(viewerCompany));
+  const roughPlace = seesAddress ? null : rough;
+  // «Подача» prefilled from the same whole kilometres × the company's price per km.
   const suggestedDelivery =
-    viewerCompany?.baseLat != null &&
-    viewerCompany.baseLon != null &&
-    viewerCompany.deliveryPricePerKm != null &&
-    order.location?.latitude != null &&
-    order.location.longitude != null
-      ? distanceKm(
-          { lat: viewerCompany.baseLat, lon: viewerCompany.baseLon },
-          { lat: order.location.latitude, lon: order.location.longitude },
-        ) * Number(viewerCompany.deliveryPricePerKm)
+    rough?.distanceKm != null && viewerCompany?.deliveryPricePerKm != null
+      ? rough.distanceKm * Number(viewerCompany.deliveryPricePerKm)
       : null;
   const bidsLeft = order.status === 'OPEN' ? bidsLeftText(order.bidsUntil) : null;
   // The provider the customer chose: confirms the booking right here, and
@@ -350,10 +351,16 @@ export default async function OrderDetailPage(props: { params: Promise<{ id: str
       <Card>
         <h2 className="font-semibold">Описание</h2>
         <p className="mt-2 whitespace-pre-line text-sm text-slate-600">
-          {isOwner || isAdmin || bookedProviderSees(order.booking, session?.user.companyId)
-            ? order.description
-            : maskContactsAndLinks(order.description)}
+          {orderTextForViewer(order.description, {
+            full: isOwner || isAdmin || bookedSees,
+            address: seesAddress,
+          })}
         </p>
+        {roughPlace && (
+          <p className="mt-3 text-sm text-slate-600" data-testid="order-place">
+            {roughPlaceLine(roughPlace)}
+          </p>
+        )}
       </Card>
 
       {/* An async server component, awaited directly so the JSX types do not
@@ -362,6 +369,7 @@ export default async function OrderDetailPage(props: { params: Promise<{ id: str
         date: order.desiredStartDate,
         location: order.location,
         categoryName: order.category?.name,
+        showExact: seesAddress,
       })}
 
       {isImported && (
