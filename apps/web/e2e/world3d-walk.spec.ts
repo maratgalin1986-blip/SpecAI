@@ -128,6 +128,33 @@ test('/?walk=1 opens the walk straight away and leaves the address clean', async
   await expect.poll(() => page.url()).not.toContain('walk=1');
   await page.getByRole('button', { name: 'Выйти из прогулки' }).click();
   await expect(walkDialog(page)).toHaveCount(0);
+  // The exit lands on the 3D block of the home page, not on the top of the page.
+  await expect
+    .poll(async () => {
+      const box = await page.locator('[data-w3d="block"]').boundingBox();
+      return !!box && box.y < page.viewportSize()!.height && box.y + box.height > 0;
+    })
+    .toBe(true);
+});
+
+test('the walk controls are big enough to tap and drawn as icons, not emoji', async ({ page }) => {
+  await guard(page);
+  await openHome(page);
+  await invitation(page).click();
+  const dialog = walkDialog(page);
+  await expect(exitButton(page)).toBeVisible();
+  for (const name of [/Выйти из прогулки/, /Назад/, /Пауза|Играть/, /Дальше/, /звук/]) {
+    const box = await dialog.getByRole('button', { name }).first().boundingBox();
+    expect(box!.height, String(name)).toBeGreaterThanOrEqual(44);
+  }
+  for (const name of ['Заказать', 'Позвонить']) {
+    const box = await dialog.getByRole('link', { name }).boundingBox();
+    expect(box!.height, name).toBeGreaterThanOrEqual(44);
+  }
+  const text = await dialog.innerText();
+  expect(text).not.toMatch(/\p{Extended_Pictographic}/u);
+  const section = await page.locator('section[aria-labelledby="world3d-title"]').innerText();
+  expect(section).not.toMatch(/\p{Extended_Pictographic}/u);
 });
 
 test('without the live scene every stop shows its own picture, above the card', async ({
