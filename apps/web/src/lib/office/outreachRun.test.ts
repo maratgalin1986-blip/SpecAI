@@ -31,6 +31,7 @@ import {
   RAMP_START,
   rampedCap,
   HOURLY_SHARE,
+  WHATSAPP_DAILY_CAP,
   smtpErrorCode,
   outreachErrorText,
   AUTO_SEND_HOURS,
@@ -1843,5 +1844,20 @@ describe('50 писем в сутки на проект, равномерно (�
       deps(db, { settings: settings({ outreachMode: 'auto', whatsappAuto: false, dailyCap: 50 }) }),
     );
     expect(result.email).toBe(5);
+  });
+});
+
+describe('WhatsApp сам по расписанию (владелец, 2026-11-13)', () => {
+  it('не больше доли WHATSAPP_DAILY_CAP в час на проект', async () => {
+    const at = new Date('2026-11-13T12:00:00+03:00');
+    const rows = Array.from({ length: 6 }, (_, i) =>
+      row({ id: `w${i}`, email: null, whatsapp: `+7927111223${i}` }),
+    );
+    const { db } = fakeDb(rows);
+    const result = await sendOutreach(
+      at,
+      deps(db, { settings: settings({ outreachMode: 'auto', whatsappAuto: true, dailyCap: 50 }) }),
+    );
+    expect(result.whatsapp).toBe(Math.ceil(WHATSAPP_DAILY_CAP / HOURLY_SHARE));
   });
 });
