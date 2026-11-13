@@ -31,8 +31,13 @@ const STOROZH_CORNER = { right: 88, width: 352, height: 340 };
 export function Storozh() {
   const pathname = usePathname();
   const [trigger, setTrigger] = useState<StorozhTrigger | null>(null);
+  // The first page of the visit counts from its opening (this component loads
+  // lazily, a moment after it); a later page from the move to it.
+  const firstPage = useRef(true);
 
   useEffect(() => {
+    const openedAt = firstPage.current ? Date.now() - performance.now() : Date.now();
+    firstPage.current = false;
     if (!storozhPathAllowed(pathname)) return;
     let storage: Storage | null = null;
     try {
@@ -41,7 +46,7 @@ export function Storozh() {
       storage = null;
     }
     if (storozhBlockedReason(storage)) return;
-    const state = createStorozhState();
+    const state = createStorozhState(openedAt);
     const mobile = window.matchMedia('(max-width: 639px)').matches;
     // The cookie strip no longer silences Сторож (most visitors never answer
     // the strip, so they never saw him): the card stands above it (globals.css,

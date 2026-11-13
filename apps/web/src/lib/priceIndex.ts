@@ -167,6 +167,14 @@ export function indexHasData(index: PriceIndex): boolean {
   return index.russia.size > 0 || index.regions.size > 0 || index.cities.size > 0;
 }
 
+/**
+ * Whether /ceny goes to search and the sitemap: with data, or when the data
+ * could not be read (a failed load is not «no data»).
+ */
+export function pricePageIndexable(index: PriceIndex, loaded: boolean): boolean {
+  return indexHasData(index) || !loaded;
+}
+
 /** The categories /ceny lists: the popular ones always, the rest when they have a number. */
 export function indexCategories(index: PriceIndex): { slug: string; name: string }[] {
   const known = new Set(CATEGORIES.map((category) => category.slug));

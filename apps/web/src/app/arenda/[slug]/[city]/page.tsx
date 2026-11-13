@@ -1,3 +1,5 @@
+import { Breadcrumbs } from '@/components/Breadcrumbs';
+import { HOME_CRUMB } from '@/lib/breadcrumbs';
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { Card } from '@specai/ui';
@@ -12,6 +14,7 @@ import {
   cityBySlug,
   cityFaq,
   cityPageText,
+  cityPageIndexable,
   cityPath,
   DELIVERY_NOTE,
   firstOnLineInvite,
@@ -67,10 +70,12 @@ export async function generateMetadata(props: { params: Promise<Params> }): Prom
       `${page.landing.short} ${page.city.inCity}`,
     ),
     description: text.description,
-    // A city nobody serves yet stays out of search: a thousand near-identical
-    // «исполнители подключаются» pages read as doorways to Яндекс. It opens to
-    // search by itself once a provider serves the city.
-    ...(offer.kind === 'empty' ? { robots: { index: false, follow: true } } : {}),
+    // Only a city with something of its own goes to search (cityPageIndexable):
+    // a provider's machine there, or СпецПласт16's fleet in its base city.
+    // Empty cities and towns that would repeat the house fleet's list are near
+    // copies that read as doorways to Яндекс; they open by themselves once a
+    // provider serves the city. The sitemap follows the same rule.
+    ...(cityPageIndexable(page.city, offer) ? {} : { robots: { index: false, follow: true } }),
   });
 }
 
@@ -98,20 +103,6 @@ export default async function CityLandingPage(props: { params: Promise<Params> }
       name: item.q,
       acceptedAnswer: { '@type': 'Answer', text: item.a },
     })),
-  };
-  const breadcrumbLd = {
-    '@context': 'https://schema.org',
-    '@type': 'BreadcrumbList',
-    itemListElement: [
-      { '@type': 'ListItem', position: 1, name: 'Главная', item: `${base}/` },
-      {
-        '@type': 'ListItem',
-        position: 2,
-        name: landing.short,
-        item: `${base}/arenda/${landing.slug}`,
-      },
-      { '@type': 'ListItem', position: 3, name: city.name, item: `${base}${path}` },
-    ],
   };
 
   const jsonLd = {
@@ -162,16 +153,13 @@ export default async function CityLandingPage(props: { params: Promise<Params> }
         <CinemaLayer clips={landingClips(landing.slug)} />
         <div className="relative grid gap-8 lg:grid-cols-[1fr_380px]">
           <div className="flex min-w-0 flex-col justify-center">
-            <nav className="text-sm text-slate-400">
-              <a href="/" className="hover:text-white">
-                Главная
-              </a>{' '}
-              /{' '}
-              <a href={`/arenda/${landing.slug}`} className="hover:text-white">
-                {landing.short}
-              </a>{' '}
-              / <span>{city.name}</span>
-            </nav>
+            <Breadcrumbs
+              trail={[
+                HOME_CRUMB,
+                { name: landing.short, path: `/arenda/${landing.slug}` },
+                { name: city.name, path },
+              ]}
+            />
             <h1 className="cine-title mt-3 break-words text-3xl font-extrabold leading-tight sm:text-5xl">
               {text.h1}
             </h1>
@@ -242,7 +230,10 @@ export default async function CityLandingPage(props: { params: Promise<Params> }
               dark
             />
             <p className="mt-3 text-xs text-slate-400">
-              <a href="/privacy" className="underline hover:text-white">
+              <a
+                href="/privacy"
+                className="inline-flex min-h-6 items-center underline hover:text-white"
+              >
                 Политика конфиденциальности
               </a>
             </p>
@@ -446,10 +437,6 @@ export default async function CityLandingPage(props: { params: Promise<Params> }
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(faqLd) }}
-      />
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbLd) }}
       />
     </div>
   );

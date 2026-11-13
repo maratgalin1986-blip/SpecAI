@@ -25,18 +25,24 @@ import {
   boardHref,
   parseBoardQuery,
 } from '@/lib/orderBoard';
-import { loadOrderBoard } from '@/lib/orderBoardData';
+import { loadNewestOpenOrderAt, loadOrderBoard } from '@/lib/orderBoardData';
 import { pluralizeRu } from '@/lib/pluralize';
 import { MODE_COOKIE, cabinetMode } from '@/lib/cabinetMode';
 import { ModeSwitch } from '@/components/ModeSwitch';
 import { Hint } from '@/components/Hint';
 import { pageMeta } from '@/lib/pageMeta';
 
-export const metadata: Metadata = pageMeta('/orders', {
-  title: 'Заявки на спецтехнику по всей России — доска заказов',
-  description:
-    'Открытые заявки заказчиков на экскаваторы, краны, самосвалы и другую технику с машинистом по всей России. Исполнители рядом с объектом предлагают цену, заказчик выбирает. Разместить заявку бесплатно.',
-});
+export async function generateMetadata(): Promise<Metadata> {
+  // An empty board is not a page for search (as /ceny without data); a failed
+  // read is not «empty» and keeps the page indexable. The sitemap follows suit.
+  const newest = await loadNewestOpenOrderAt();
+  return pageMeta('/orders', {
+    title: 'Заявки на спецтехнику по всей России — доска заказов',
+    description:
+      'Открытые заявки заказчиков на экскаваторы, краны, самосвалы и другую технику с машинистом по всей России. Исполнители рядом с объектом предлагают цену, заказчик выбирает. Разместить заявку бесплатно.',
+    ...(newest === null ? { robots: { index: false, follow: true } } : {}),
+  });
+}
 
 export const dynamic = 'force-dynamic';
 

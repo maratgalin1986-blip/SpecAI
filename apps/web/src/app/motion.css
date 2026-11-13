@@ -135,6 +135,21 @@
 [data-offscreen] .cta-shine {
   animation-play-state: paused;
 }
+/* Every loop rests in a section far from the viewport and in a background tab
+   (components/AnimationPause.tsx); it resumes from the same frame. */
+[data-fx-off],
+[data-fx-off] *,
+[data-fx-off] *::before,
+[data-fx-off] *::after,
+html[data-tab-hidden] *,
+html[data-tab-hidden] *::before,
+html[data-tab-hidden] *::after {
+  animation-play-state: paused !important;
+}
+/* A poster frame the playing clip has faded in over (CinemaVideo). */
+img[data-covered] {
+  animation-play-state: paused !important;
+}
 
 /* Press feedback on touch: the card sinks a little under the finger. */
 .press {
