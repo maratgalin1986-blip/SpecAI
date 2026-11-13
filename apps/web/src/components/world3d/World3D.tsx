@@ -153,15 +153,33 @@ export function World3D({ categoryIds }: { categoryIds: Partial<Record<WorldKind
     if (!closed) return;
     inviteRef.current?.focus({ preventScroll: true });
     if (!fromUrl) return;
-    const toBlock = () => slotRef.current?.scrollIntoView({ block: 'center' });
-    const onPop = () => window.setTimeout(toBlock, 0);
-    toBlock();
-    window.addEventListener('popstate', onPop);
-    const stop = window.setTimeout(() => window.removeEventListener('popstate', onPop), 1500);
-    return () => {
-      window.clearTimeout(stop);
+    const toBlock = () => slotRef.current?.scrollIntoView({ block: 'center', behavior: 'instant' });
+    let restoration: ScrollRestoration | null = null;
+    try {
+      restoration = history.scrollRestoration;
+      history.scrollRestoration = 'manual';
+    } catch {
+      /* history blocked: the block is still brought into view below */
+    }
+    const done = () => {
       window.removeEventListener('popstate', onPop);
+      window.clearTimeout(stop);
+      try {
+        if (restoration) history.scrollRestoration = restoration;
+      } catch {
+        /* nothing to restore */
+      }
     };
+    const onPop = () => {
+      toBlock();
+      window.setTimeout(toBlock, 50);
+      done();
+    };
+    toBlock();
+    window.requestAnimationFrame(toBlock);
+    window.addEventListener('popstate', onPop);
+    const stop = window.setTimeout(done, 6000);
+    return done;
   }, [walkOpen, fromUrl]);
 
   const openWalk = useCallback((direct = false) => {

@@ -53,7 +53,7 @@ export const WALK_STOPS: WalkStop[] = [
     kind: 'crane',
     mode: 'site',
     wide: { cam: [10.5, 8, 14], look: [-1.0, 7.4, -1.5], fov: 58 },
-    tall: { cam: [10.5, 8.2, 14], look: [1.7, 7.8, -0.4], fov: 78 },
+    tall: { cam: [10.5, 8.2, 14], look: [1.7, 8.8, -0.4], fov: 80 },
     key: { from: [9, 13, -8], radius: 9 },
   },
   {
