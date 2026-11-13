@@ -75,6 +75,33 @@
   animation: install-glow 1.8s ease-out 1;
 }
 
+/* Folded: a 48 px round icon with a soft amber glow (InstallButton decides when).
+   Screen readers still get the name from aria-label on the button. */
+.install-fab[data-shape='icon'] .install-btn {
+  width: 3rem;
+  height: 3rem;
+  justify-content: center;
+  padding: 0;
+  box-shadow:
+    0 6px 18px rgba(2, 6, 23, 0.35),
+    0 0 0 3px rgba(251, 191, 36, 0.35),
+    0 0 16px 2px rgba(251, 191, 36, 0.55);
+}
+.install-fab[data-shape='icon']:not([data-attn]) .install-btn {
+  animation: install-pop 0.35s cubic-bezier(0.2, 1.4, 0.4, 1) 1 both;
+}
+.install-fab[data-shape='icon'] .install-btn:not([data-done]) .install-btn__label {
+  display: none;
+}
+/* No free place under it right now: it waits, out of the way. */
+.install-fab {
+  transition: opacity 0.2s ease;
+}
+.install-fab[data-away]:not([data-help]) {
+  opacity: 0;
+  pointer-events: none;
+}
+
 @keyframes install-in {
   from {
     opacity: 0;

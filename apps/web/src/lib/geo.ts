@@ -405,6 +405,9 @@ export const TILE_MAX_ZOOM = 19;
 /** The country overview the maps open on when the user's place is unknown. */
 export const RUSSIA_VIEW = { lat: 57, lon: 55, zoom: 3 } as const;
 
+/** Kaliningrad to the Urals, the Caucasus to Arkhangelsk: where /map opens (most pins are here). */
+export const EUROPEAN_RUSSIA = { south: 43, north: 62, west: 28, east: 62 } as const;
+
 /** Whether a point lies in the service area: Russia (a rough box, not the border). */
 export function inServiceArea(lat: number, lon: number) {
   return RUSSIA_AREAS.some(

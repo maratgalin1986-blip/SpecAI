@@ -283,7 +283,7 @@ export default async function HomePage() {
       <section className="hero-short depth-exit relative -mt-2 min-h-[520px] overflow-hidden rounded-[2rem] sm:min-h-[640px] bg-slate-950 text-white shadow-2xl lg:min-h-[680px]">
         <HeroPhotos />
         <div className="hero-parallax-text relative grid lg:grid-cols-2">
-          <div className="hero-copy z-10 flex flex-col justify-center px-5 pb-16 pt-7 sm:px-10 sm:pb-20 sm:pt-14 lg:py-24">
+          <div className="hero-copy z-10 flex flex-col justify-center px-5 pb-16 pt-7 sm:px-10 sm:pb-20 sm:pt-14 lg:py-12">
             <div className="float-in inline-flex w-fit items-center gap-2 rounded-full bg-white/10 px-3 py-1.5 ring-1 ring-white/15">
               <span className="relative flex h-2 w-2">
                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75 motion-reduce:animate-none" />
@@ -297,17 +297,19 @@ export default async function HomePage() {
             >
               Аренда <span className="marker text-white">спецтехники</span> с машинистом
             </h1>
-            {/* Phones get the short line, so «Заказать технику» is on the
-                first screen at 360x740 above the bottom bars. */}
+            {/* Phones and ordinary laptops get the short line, so «Заказать
+                технику» and the phone are on the first screen (360x740 above
+                the bottom bar, 1280x720, 1440x900); a tall window gets the
+                long paragraph (globals.css, .hero-brief / .hero-long). */}
             <p
-              className="float-in mt-3 max-w-xl text-base leading-snug text-slate-300 sm:hidden"
+              className="hero-brief float-in mt-3 max-w-xl text-base leading-snug text-slate-300"
               style={{ animationDelay: '240ms' }}
             >
-              Одна заявка — цены исполнителей. Парк {SITE.name}: {fromPerHour(MIN_RATE)}, подача по{' '}
-              {HOUSE_CITY} за {HOUSE_DELIVERY}. {SITE.promise}.
+              Одна заявка — цены исполнителей. Парк {SITE.name}: {fromPerHour(MIN_RATE)}, с НДС,
+              подача по {HOUSE_CITY} за {HOUSE_DELIVERY}. {SITE.promise}.
             </p>
             <p
-              className="float-in mt-6 hidden max-w-xl text-lg leading-relaxed text-slate-300 sm:block"
+              className="hero-long float-in mt-6 max-w-xl text-lg leading-relaxed text-slate-300"
               style={{ animationDelay: '240ms' }}
             >
               Экскаваторы-погрузчики, автокраны и погрузчики с машинистами по всей России.
@@ -408,9 +410,26 @@ export default async function HomePage() {
         </div>
       </section>
 
-      {/* Right under the hero, so no entrance effect: it must read at rest.
-          The numbers themselves count up. */}
-      <section className="-mt-12 grid grid-cols-2 overflow-hidden rounded-3xl border border-slate-200 bg-white lg:grid-cols-4">
+      {/* The short way in, right under the hero: a phone and the consent
+          (the full form with a comment and a map point is #callback below). */}
+      <section
+        id="quick-callback"
+        aria-label="Заявка на звонок"
+        data-fab-avoid
+        className="-mt-12 rounded-3xl border border-slate-200 bg-white p-4 shadow-xl sm:p-6"
+      >
+        <div className="mx-auto max-w-xl">
+          <CallbackForm
+            source="home-hero"
+            compact
+            title="Перезвоним и назовём цену"
+            subtitle="Оставьте телефон — диспетчер подберёт технику под задачу."
+          />
+        </div>
+      </section>
+
+      {/* The numbers themselves count up; no entrance effect, they read at rest. */}
+      <section className="grid grid-cols-2 overflow-hidden rounded-3xl border border-slate-200 bg-white lg:grid-cols-4">
         {stats.map((stat) => (
           <div
             key={stat.label}
@@ -728,6 +747,8 @@ export default async function HomePage() {
             </div>
             <div
               id="callback"
+              // The cookie strip and the install button never lie on this card (lib/overlayClear.ts).
+              data-fab-avoid
               className="order-first min-w-0 scroll-mt-28 rounded-3xl bg-slate-950/50 p-4 ring-1 ring-white/10 backdrop-blur sm:p-6 lg:order-none"
             >
               {/* The link is there only when the block above has machines to show. */}

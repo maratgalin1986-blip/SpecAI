@@ -32,6 +32,21 @@ function overlaps(a: Box, b: Box): boolean {
   return a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
 }
 
+/**
+ * The phone's bottom bar: its three buttons. Once folded, the round icon
+ * stands in the bar's own row at its right end (the bar makes room,
+ * globals.css data-install-dock), so it is the buttons that must stay clear.
+ */
+async function barButtons(page: Page): Promise<Box[]> {
+  const items = page.locator('nav[aria-label="Быстрая связь"] > *');
+  const boxes: Box[] = [];
+  for (let i = 0; i < (await items.count()); i += 1) {
+    const box = await items.nth(i).boundingBox();
+    if (box) boxes.push(box);
+  }
+  return boxes;
+}
+
 test('install button is visible, in the viewport and clear of other fixed controls', async ({
   page,
 }) => {
@@ -49,12 +64,11 @@ test('install button is visible, in the viewport and clear of other fixed contro
   expect(box.y + box.height).toBeLessThanOrEqual(viewport.height);
   await expect(button).toContainText(/На экран телефона|На рабочий стол/);
 
-  // The bottom bar (phones only), the chat button and the cookie strip.
-  for (const selector of [
-    'nav[aria-label="Быстрая связь"]',
-    '.chat-fab',
-    '[data-testid="cookie-strip"]',
-  ]) {
+  // The bottom bar's buttons (phones only), the chat button and the cookie strip.
+  for (const barButton of await barButtons(page)) {
+    expect(overlaps(box, barButton), `install button over a bottom bar button`).toBe(false);
+  }
+  for (const selector of ['.chat-fab', '[data-testid="cookie-strip"]']) {
     const other = page.locator(selector).first();
     if (!(await other.isVisible().catch(() => false))) continue;
     const otherBox = (await other.boundingBox())!;
@@ -65,12 +79,23 @@ test('install button is visible, in the viewport and clear of other fixed contro
   }
 });
 
-test('on a phone the button is above the bottom bar', async ({ page }, testInfo) => {
+test('on a phone the button is above the bottom bar or in its row', async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== 'iphone-13', 'bottom bar is for phones');
   await open(page);
   const bar = (await page.locator('nav[aria-label="Быстрая связь"]').boundingBox())!;
   const button = (await page.getByTestId('install-fab').locator('button').boundingBox())!;
-  expect(button.y + button.height).toBeLessThanOrEqual(bar.y);
+  const docked = await page.evaluate(() =>
+    document.documentElement.hasAttribute('data-install-dock'),
+  );
+  if (docked) {
+    // In the bar's row, at its right end, clear of its three buttons.
+    expect(button.y).toBeGreaterThanOrEqual(bar.y);
+    for (const barButton of await barButtons(page)) {
+      expect(overlaps(button, barButton)).toBe(false);
+    }
+  } else {
+    expect(button.y + button.height).toBeLessThanOrEqual(bar.y);
+  }
 });
 
 test('on a narrow phone the button is clear of the cookie strip too', async ({
@@ -84,8 +109,9 @@ test('on a narrow phone the button is clear of the cookie strip too', async ({
   if (await strip.isVisible().catch(() => false)) {
     expect(overlaps(button, (await strip.boundingBox())!)).toBe(false);
   }
-  const bar = (await page.locator('nav[aria-label="Быстрая связь"]').boundingBox())!;
-  expect(overlaps(button, bar)).toBe(false);
+  for (const barButton of await barButtons(page)) {
+    expect(overlaps(button, barButton)).toBe(false);
+  }
 });
 
 test('a press opens the instruction and closes again', async ({ page }) => {

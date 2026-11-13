@@ -10,6 +10,8 @@ import {
   snoozeValue,
   startMetrika,
 } from '@/lib/marketing';
+import { coversContent, KEY_ACTIONS, watchOverlay } from '@/lib/overlayClear';
+import { hidesContactBar } from '@/lib/workPages';
 
 // A small strip at the bottom on arrival: consent to the processing of
 // personal data and cookies (owner's request, 2026-10-03). Yandex.Metrika
@@ -18,8 +20,11 @@ import {
 // (COOKIE_SNOOZE_MS). A firm refusal is on /privacy. The choice is kept in
 // localStorage; nothing is rendered on the
 // server, and the strip is fixed, so it cannot shift the page. Both buttons
-// are 44 px tap targets; while the strip is open on a phone the page gets
-// extra bottom padding and scroll padding (globals.css, data-cookie-strip).
+// are 44 px tap targets. On a phone it stands under the header (data-cookie-top);
+// on pages without the contact bar and on wider screens at the bottom
+// (data-cookie-strip: extra bottom padding and scroll padding, globals.css).
+// It never lies on the phone number, an order or submit button or a field:
+// while one of them is under it, it is hidden (lib/overlayClear.ts).
 export function CookieNotice() {
   const pathname = usePathname();
   const [visible, setVisible] = useState(false);
@@ -85,10 +90,24 @@ export function CookieNotice() {
   // Lets the chat button sit above the strip (see globals.css).
   const open = visible && !pathname?.startsWith('/admin');
   const stripRef = useRef<HTMLDivElement>(null);
+  // Phones with the contact bar: the strip goes to the top, under the header.
+  // At the bottom it lay, with the bar, on the hero's phone number and on
+  // «Жду звонка»; there the bottom edge is the bar alone. The bottom rules of
+  // globals.css (data-cookie-strip: page padding, lifted buttons) then do not
+  // apply, hence the separate attribute.
+  const stroykaPage = pathname?.startsWith('/stroyka') ?? false;
+  const topOnPhone = !stroykaPage && !hidesContactBar(pathname);
   useEffect(() => {
     if (!open) return;
     const root = document.documentElement;
-    root.setAttribute('data-cookie-strip', '');
+    const phone = window.matchMedia('(max-width: 639px)');
+    const mark = () => {
+      const top = topOnPhone && phone.matches;
+      root.toggleAttribute('data-cookie-top', top);
+      root.toggleAttribute('data-cookie-strip', !top);
+    };
+    mark();
+    phone.addEventListener('change', mark);
     // The strip wraps to two or three lines on a narrow phone: the buttons above it
     // (globals.css, .install-fab) follow its real height instead of a guess.
     const el = stripRef.current;
@@ -98,12 +117,27 @@ export function CookieNotice() {
     measure();
     const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measure);
     if (el) observer?.observe(el);
+    // The strip is fixed over the page: while the phone number, an order or
+    // submit button or a field is under it, it waits out of the way (globals.css,
+    // data-away) and comes back as soon as the visitor scrolls on.
+    const stopWatch = watchOverlay(() => {
+      if (!el || getComputedStyle(el).position !== 'fixed') return;
+      const rect = el.getBoundingClientRect();
+      const away = coversContent(
+        { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom },
+        (hit) => hit.matches(KEY_ACTIONS),
+      );
+      el.toggleAttribute('data-away', away);
+    });
     return () => {
+      stopWatch();
       observer?.disconnect();
+      phone.removeEventListener('change', mark);
+      root.removeAttribute('data-cookie-top');
       root.removeAttribute('data-cookie-strip');
       root.style.removeProperty('--cookie-strip-h');
     };
-  }, [open]);
+  }, [open, topOnPhone]);
 
   function choose(value: 'yes' | 'later') {
     try {
@@ -122,11 +156,18 @@ export function CookieNotice() {
   // strip goes between them, at the top under the bar (the dialogue and the
   // zone card live lower), in one compact line on phones; on wide screens the
   // zone tabs take the top, so it goes to the free bottom-left corner.
-  const stroyka = pathname?.startsWith('/stroyka') ?? false;
+  const stroyka = stroykaPage;
   const place = stroyka
     ? 'inset-x-2 top-[calc(max(0.5rem,env(safe-area-inset-top))+3rem)] z-[90] sm:inset-x-auto sm:left-1/2 sm:w-[30rem] sm:-ml-[15rem] lg:bottom-4 lg:left-4 lg:top-auto lg:ml-0 lg:w-[17rem] lg:rounded-2xl'
-    : 'inset-x-2 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-[45] sm:inset-x-auto sm:bottom-4 sm:right-6';
-  const hiddenShift = stroyka ? '-translate-y-4' : 'translate-y-4';
+    : topOnPhone
+      ? // Under the header (66 px on a phone) and below it in the stack, so the open menu covers it.
+        'inset-x-2 top-[4.5rem] z-[39] sm:inset-x-auto sm:top-auto sm:bottom-4 sm:right-6 sm:z-[45]'
+      : 'inset-x-2 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-[45] sm:inset-x-auto sm:bottom-4 sm:right-6';
+  const hiddenShift = stroyka
+    ? '-translate-y-4'
+    : topOnPhone
+      ? 'max-sm:-translate-y-4 sm:translate-y-4'
+      : 'translate-y-4';
 
   return (
     <div
