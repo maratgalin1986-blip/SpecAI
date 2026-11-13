@@ -1685,17 +1685,18 @@ describe('местное время фирмы и «восточное утро�
     expect(okEmail.mock.calls.map((c) => c[0].to)).toEqual(['kzn@example.com']);
   });
 
-  it('ночная пачка не съедает дневной лимит', async () => {
+  it('лимит — на сутки по Москве: ночные письма востоку считаются вместе с дневными', async () => {
     const { start } = mskDayBounds(LATER);
     const night = new Date(start.getTime() + 3_600_000);
     const { db } = fakeDb([
       row({ id: 's1', status: 'CONTACTED', emailSentAt: night, contactedAt: night }),
       row({ id: 's2', status: 'CONTACTED', emailSentAt: night, contactedAt: night }),
       row({ id: 'a' }),
+      row({ id: 'b', email: 'b@mail.ru' }),
     ]);
     const result = await sendOutreach(
       LATER,
-      deps(db, { settings: settings({ outreachMode: 'auto', whatsappAuto: false, dailyCap: 2 }) }),
+      deps(db, { settings: settings({ outreachMode: 'auto', whatsappAuto: false, dailyCap: 3 }) }),
     );
     expect(result.email).toBe(1);
   });
@@ -1720,15 +1721,43 @@ describe('два проекта — два лимита, лимит растёт
     expect(rows.filter((r) => r.emailSentAt).map((r) => r.id)).toEqual(['s1', 'p1']);
   });
 
-  it('rampedCap: с 30 в первый день до заданного лимита примерно за неделю', () => {
+  it('rampedCap: 250 на проект действует сразу; выше — растёт примерно в 1,4 раза в день', () => {
     const at = (days: number) => new Date(RAMP_START.getTime() + days * 86_400_000 + 3_600_000);
-    expect(rampedCap(300, at(0))).toBe(30);
-    expect(rampedCap(300, at(1))).toBe(42);
-    expect(rampedCap(300, at(3))).toBe(82);
-    expect(rampedCap(300, at(7))).toBe(300);
-    expect(rampedCap(300, at(30))).toBe(300);
-    // Лимит не больше стартового не трогается; до начала разгона — стартовое значение.
+    expect(rampedCap(250, at(0))).toBe(250);
     expect(rampedCap(20, at(5))).toBe(20);
-    expect(rampedCap(300, new Date(RAMP_START.getTime() - 86_400_000))).toBe(30);
+    expect(rampedCap(1000, at(0))).toBe(250);
+    expect(rampedCap(1000, at(1))).toBe(350);
+    expect(rampedCap(1000, at(30))).toBe(1000);
+    expect(rampedCap(1000, new Date(RAMP_START.getTime() - 86_400_000))).toBe(250);
+  });
+});
+
+describe('проект площадки: письмо по роли ниши', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('строителю с почтой на своём домене уходит письмо заказчика, без страницы исполнителя', async () => {
+    const fake = fakeDb([
+      row({
+        id: 'builder',
+        kind: 'provider',
+        niche: 'construction',
+        name: 'ООО «СтройГрад»',
+        email: 'info@stroygrad-kzn.ru',
+      }),
+      row({ id: 'carrier', kind: 'provider', niche: 'freight', name: 'ООО «ТрансРейс»' }),
+    ]);
+    const result = await sendOutreach(NOW, deps(fake.db));
+    // Почта на своём домене — причина не писать только о сайте: площадке сайт фирмы не мешает.
+    expect(result).toMatchObject({ email: 2 });
+    expect(result.filtered ?? 0).toBe(0);
+    const [builder, carrier] = okEmail.mock.calls.map((c) => c[0]);
+    expect(builder!.to).toBe('info@stroygrad-kzn.ru');
+    expect(builder!.text).toContain('/orders?utm_source=email&utm_campaign=office-construction');
+    expect(builder!.text).not.toContain('/preview/');
+    expect(builder!.text).not.toContain('«Это моя компания»');
+    // Перевозчик — исполнитель: его страница и «Это моя компания».
+    expect(carrier!.text).toContain('/preview/tok-carrier');
+    expect(carrier!.text).toContain('«Это моя компания»');
+    expect(carrier!.text).toContain('грузовики и рейсы');
   });
 });
