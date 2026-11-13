@@ -540,6 +540,20 @@ async function runOutreach(
   // Проход без кнопки владельца (режим 'auto'): сам офис отправляет только письма. Напоминания
   // и сообщения WhatsApp через шлюз уходят по кнопке (шлюз в 'auto' — только с whatsappAuto).
   const auto = mode === 'send' && !only;
+  // Равномерно (2026-11-13): без кнопки владельца — не больше 1/HOURLY_SHARE дневного лимита за
+  // последний час на проект. Иначе весь дневной лимит забирают регионы, где утро наступает раньше
+  // (ночью по Москве ушли все 250 писем Сибири и Дальнему Востоку), а всплеск из сотен писем с
+  // одного ящика почтовые сервисы принимают за спам.
+  // Маленький лимит (меньше двух писем в час) всплеска не даёт — его не делим.
+  if (auto && cap >= HOURLY_SHARE * 2) {
+    const hourAgo = { gte: new Date(now.getTime() - 3_600_000), lt: new Date(now.getTime() + 1) };
+    const [emailHour, followUpsHour] = await Promise.all([
+      db.prospect.count({ where: { ...ofProject, emailSentAt: hourAgo } }),
+      db.prospect.count({ where: { ...ofProject, followUpSentAt: hourAgo } }),
+    ]);
+    const perHour = Math.max(1, Math.ceil(cap / HOURLY_SHARE));
+    emailLeft = Math.min(emailLeft, Math.max(0, perHour - emailHour - followUpsHour));
+  }
   const active: OutreachChannels = {
     // Письма дня видны владельцу и без настроенного ящика: он сразу видит персональные
     // предложения; отправка без ящика всё равно невозможна (mail: 'no-smtp').
@@ -1164,6 +1178,9 @@ function mergeResults(a: OutreachResult, b: OutreachResult): OutreachResult {
  * (если владелец поднимет в настройках) растёт примерно в 1,4 раза в день: резкий рост холодной
  * рассылки с одного ящика почтовые сервисы блокируют.
  */
+/** Дневной лимит проекта делится на столько часов: в час уходит не больше лимит / HOURLY_SHARE. */
+export const HOURLY_SHARE = 12;
+
 export const RAMP_START = new Date('2026-11-12T21:00:00Z'); // 13.11 00:00 по Москве
 export const RAMP_START_CAP = 250;
 export const RAMP_FACTOR = 1.4;
