@@ -2,6 +2,8 @@
 
 // The walk through the city (owner, 2026-11-10): state, history, keys, camera
 // stops, goals and sound cues, and the controls with the card of each stop.
+// Without the live scene every stop shows its own picture (rendered from the
+// same scene with the camera of that stop) with a slow move across it.
 // Loaded only when the visitor opens the walk, so the home page's first chunk
 // does not carry any of it.
 import {
@@ -21,7 +23,10 @@ import { kindInfo, type WorldKind } from './kinds';
 import type { WorldHandle } from './scene';
 import {
   isWalkHistory,
-  POSTER_FOCUS,
+  nextIndex,
+  posterShape,
+  STOP_POSTER_ALT,
+  stopPoster,
   walkAutoplay,
   walkCard,
   walkReducer,
@@ -45,7 +50,6 @@ export default function WalkController({
   state,
   handleRef,
   boxRef,
-  posterRef,
   bridgeRef,
   fromUrl,
   onClose,
@@ -54,7 +58,6 @@ export default function WalkController({
   state: 'poster' | 'loading' | 'ready';
   handleRef: MutableRefObject<WorldHandle | null>;
   boxRef: RefObject<HTMLDivElement | null>;
-  posterRef: RefObject<HTMLImageElement | null>;
   bridgeRef: MutableRefObject<WalkBridge | null>;
   fromUrl: boolean;
   onClose: () => void;
@@ -164,7 +167,7 @@ export default function WalkController({
     };
   }, [boxRef, closeWalk]);
 
-  // The camera follows the stop; without the live scene the poster pans instead.
+  // The camera follows the stop; without the live scene the picture of the stop is shown.
   useEffect(() => {
     setArrived(false);
     const handle = handleRef.current;
@@ -177,7 +180,7 @@ export default function WalkController({
       return;
     }
     inScene.current = false;
-    const id = window.setTimeout(() => setArrived(true), 1900);
+    const id = window.setTimeout(() => setArrived(true), 900);
     return () => window.clearTimeout(id);
   }, [walk.index, state, handleRef]);
   useEffect(
@@ -187,21 +190,31 @@ export default function WalkController({
     [handleRef],
   );
 
-  // Poster fallback: zoom into the machine of the stop.
+  // Pictures instead of the live scene: no WebGL, data saver, a weak phone, the
+  // scene is still loading, or the frame-rate guard gave up in the middle of the walk.
+  const fallback = state !== 'ready';
+  const [pictures, setPictures] = useState(fallback);
+  const [shape, setShape] = useState(() => posterShape(window.innerWidth / window.innerHeight));
   useEffect(() => {
-    const img = posterRef.current;
-    if (!img) return;
-    if (state === 'ready') {
-      img.style.transform = '';
-      return;
-    }
-    const focus = POSTER_FOCUS[WALK_STOPS[walk.index]!.kind];
-    img.style.transformOrigin = `${focus.x}% ${focus.y}%`;
-    img.style.transform = `scale(${focus.scale})`;
-    return () => {
-      img.style.transform = '';
-    };
-  }, [walk.index, state, posterRef]);
+    if (fallback) setPictures(true);
+  }, [fallback]);
+  useEffect(() => {
+    const onResize = () => setShape(posterShape(window.innerWidth / window.innerHeight));
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+  // The picture of the stop just left stays underneath while the new one fades in.
+  const trail = useRef<[number | null, number]>([null, walk.index]);
+  if (trail.current[1] !== walk.index) trail.current = [trail.current[1], walk.index];
+  const shownStops = pictures
+    ? [trail.current[0], walk.index].filter((i): i is number => i !== null)
+    : [];
+  // The next picture is fetched while the visitor looks at this one.
+  useEffect(() => {
+    if (!fallback) return;
+    const next = new Image();
+    next.src = stopPoster(WALK_STOPS[nextIndex(walk.index)]!.kind, shape);
+  }, [fallback, walk.index, shape]);
 
   // The tour moves on by itself after a rest at the stop, unless paused.
   useEffect(() => {
@@ -224,6 +237,28 @@ export default function WalkController({
   const card = walkCard(walk.index, categoryIds);
   return (
     <>
+      {pictures && (
+        <div
+          className={`w3d-stops ${fallback ? 'opacity-100' : 'opacity-0'}`}
+          aria-hidden={!fallback}
+          data-shape={shape}
+        >
+          {shownStops.map((index) => {
+            const kind = WALK_STOPS[index]!.kind;
+            return (
+              <img
+                key={index}
+                src={stopPoster(kind, shape)}
+                alt={index === walk.index ? STOP_POSTER_ALT[kind] : ''}
+                data-stop={kind}
+                data-current={index === walk.index ? '' : undefined}
+                decoding="async"
+                className={index === walk.index ? 'w3d-stop-img w3d-stop-in' : 'w3d-stop-img'}
+              />
+            );
+          })}
+        </div>
+      )}
       <div className="absolute inset-x-0 top-0 z-10 flex items-start justify-between gap-3 p-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
         <button
           ref={exitRef}
@@ -262,9 +297,11 @@ export default function WalkController({
           </button>
         ))}
       </div>
-      <p className="w3d-hint motion-reduce:hidden pointer-events-none absolute inset-x-0 top-[34%] z-10 text-center text-sm font-semibold text-white drop-shadow-[0_2px_6px_rgba(0,0,0,0.8)]">
-        Потяните в сторону, чтобы осмотреться
-      </p>
+      {!fallback && (
+        <p className="w3d-hint motion-reduce:hidden pointer-events-none absolute inset-x-0 top-[34%] z-10 text-center text-sm font-semibold text-white drop-shadow-[0_2px_6px_rgba(0,0,0,0.8)]">
+          Потяните в сторону, чтобы осмотреться
+        </p>
+      )}
       <div
         key={walk.index}
         className="w3d-card absolute inset-x-3 bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-10 mx-auto rounded-2xl bg-slate-950/85 p-4 text-white shadow-2xl ring-1 ring-white/10 backdrop-blur sm:w-[34rem]"

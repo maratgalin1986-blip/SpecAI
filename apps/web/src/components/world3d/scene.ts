@@ -7,11 +7,13 @@
 // Loaded only when the block scrolls into view (dynamic import), so three.js
 // never weighs on the first paint. Machines and the Rig come from the
 // 2026-10-06 /stroyka world (machines.ts, kit.ts, people.ts); the look and the
-// show are in effects.ts; the guided walk path is in walk.ts.
+// show are in effects.ts; where everything stands is in layout.ts (checked by
+// layout.test.ts); the guided walk and its four shots are in walk.ts.
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { SITE } from '@/lib/site';
 import { createMaterials, Debris, node, Rig } from './kit';
-import { makeAgp, makeBackhoe, makeCrane, makeDumpTruck } from './machines';
+import { makeAgp, makeBackhoe, makeCrane, makeDumpTruck, palletBuilder } from './machines';
 import {
   animatePerson,
   lookFor,
@@ -25,7 +27,10 @@ import {
   asphaltTextures,
   blobShadow,
   blobTexture,
+  dirtTexture,
+  fenceTexture,
   glowTexture,
+  installFilmGrade,
   lightWindows,
   makeBeam,
   makeGrassMaterial,
@@ -37,14 +42,38 @@ import {
   Sparks,
   Sprites,
 } from './effects';
-import { SLOW_FRAME_MS, worldPixelRatio, type WorldKind } from './kinds';
+import { LITE_FRAME_MS, SLOW_FRAME_MS, worldPixelRatio, type WorldKind } from './kinds';
+import {
+  AGP_AT,
+  AGP_TURRET_YAW,
+  BACKHOE_AT,
+  BACKHOE_SWING,
+  CABIN,
+  CRANE_AT,
+  CRANE_SLEW,
+  craneYaw,
+  CREW,
+  FRAME,
+  FRAME_TOP,
+  LOAD_TRUCK_AT,
+  PALLETS,
+  PIT,
+  SITE as YARD,
+  SLAB,
+  SLAB_DROP,
+  SLAB_STACK,
+  TOWERS,
+  declutter,
+} from './layout';
 import {
   blendPose,
   flightProgress,
   stopFov,
+  stopKey,
+  stopLift,
   stopPose,
-  stopView,
   WALK_FLIGHT_MS,
+  WALK_MAX_YAW,
   WALK_STOPS,
   type CameraPose,
   type Vec3,
@@ -55,6 +84,10 @@ export interface WorldOptions {
   phone: boolean;
   /** One rendered frame, no motion (prefers-reduced-motion). */
   still: boolean;
+  /** The «на линии» tags over the machines (default: shown). The stop pictures are rendered without. */
+  labels?: boolean;
+  /** The moment of the working cycles the scene starts at, seconds (for rendering the pictures). */
+  clock?: number;
   onPick(kind: WorldKind): void;
   /** The camera of the walk reached the stop `index`. */
   onArrive?(index: number): void;
@@ -118,43 +151,7 @@ function seeded(seed: number) {
   };
 }
 
-/** The «на линии» tag over a machine: large and bold, crisp even at a distance. */
-function labelTexture(text: string, sub: string) {
-  const canvas = document.createElement('canvas');
-  canvas.width = 1024;
-  canvas.height = 256;
-  const ctx = canvas.getContext('2d')!;
-  ctx.fillStyle = 'rgba(15,23,42,0.9)';
-  ctx.beginPath();
-  ctx.roundRect(8, 8, 1008, 192, 96);
-  ctx.fill();
-  ctx.lineWidth = 6;
-  ctx.strokeStyle = 'rgba(251,191,36,0.9)';
-  ctx.stroke();
-  ctx.fillStyle = 'rgba(15,23,42,0.9)';
-  ctx.beginPath();
-  ctx.moveTo(472, 198);
-  ctx.lineTo(552, 198);
-  ctx.lineTo(512, 248);
-  ctx.fill();
-  ctx.fillStyle = '#22c55e';
-  ctx.beginPath();
-  ctx.arc(112, 104, 32, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = '#f8fafc';
-  ctx.font = 'bold 76px Arial, sans-serif';
-  ctx.textBaseline = 'middle';
-  ctx.fillText(text, 176, 80);
-  ctx.fillStyle = '#fbbf24';
-  ctx.font = 'bold 52px Arial, sans-serif';
-  ctx.fillText(sub, 176, 152);
-  const t = new THREE.CanvasTexture(canvas);
-  t.colorSpace = THREE.SRGBColorSpace;
-  t.anisotropy = 4;
-  return t;
-}
-
-/** The banner on the site fence: brand in bold, a gradient, a light edge. */
+/** The banner of the site: the platform in bold, whose it is, a gradient, a dark edge. */
 function brandTexture() {
   const canvas = document.createElement('canvas');
   canvas.width = 2048;
@@ -167,16 +164,16 @@ function brandTexture() {
   ctx.fillStyle = g;
   ctx.fillRect(0, 0, 2048, 512);
   ctx.fillStyle = 'rgba(255,255,255,0.18)';
-  ctx.fillRect(0, 0, 2048, 36);
-  ctx.fillStyle = 'rgba(15,23,42,0.85)';
-  ctx.fillRect(0, 476, 2048, 36);
+  ctx.fillRect(0, 0, 2048, 30);
+  ctx.fillStyle = 'rgba(15,23,42,0.9)';
+  ctx.fillRect(0, 470, 2048, 42);
   ctx.fillStyle = '#0f172a';
-  ctx.font = 'bold 236px Arial, sans-serif';
+  ctx.font = '900 250px Arial, sans-serif';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillText(SITE.platform, 1024, 210, 1940);
-  ctx.font = 'bold 86px Arial, sans-serif';
-  ctx.fillText('спецтехника по всей России', 1024, 385);
+  ctx.fillText(SITE.platform, 1024, 196, 1940);
+  ctx.font = 'bold 92px Arial, sans-serif';
+  ctx.fillText(`от ${SITE.name} · спецтехника по всей России`, 1024, 388, 1900);
   const t = new THREE.CanvasTexture(canvas);
   t.colorSpace = THREE.SRGBColorSpace;
   t.anisotropy = 8;
@@ -212,15 +209,101 @@ function ringShape(outer: number, inner: number) {
   return new THREE.ShapeGeometry(shape, 24);
 }
 
+/**
+ * Everything on the site that never moves, merged into one mesh per material:
+ * the frame with its columns, walls and rails, the fence, the slab stack. Plain
+ * boxes (12 triangles each): the detail comes from how many there are.
+ */
+class Batch {
+  private parts = new Map<THREE.Material, THREE.BufferGeometry[]>();
+  add(mat: THREE.Material, geo: THREE.BufferGeometry) {
+    const list = this.parts.get(mat);
+    if (list) list.push(geo);
+    else this.parts.set(mat, [geo]);
+  }
+  /** A box of size w×h×d centred at x, y, z, turned by `ry`; `tile` repeats its texture along the long side. */
+  box(mat: THREE.Material, size: Vec3, pos: Vec3, ry = 0, tile = 0) {
+    const geo = new THREE.BoxGeometry(size[0], size[1], size[2]);
+    if (tile > 0) {
+      const uv = geo.attributes.uv!;
+      const k = Math.max(size[0], size[2]) / tile;
+      for (let i = 0; i < uv.count; i++) uv.setX(i, uv.getX(i) * k);
+    }
+    if (ry) geo.rotateY(ry);
+    geo.translate(pos[0], pos[1], pos[2]);
+    this.add(mat, geo);
+  }
+  build(parent: THREE.Object3D, cast: boolean, receive: (mat: THREE.Material) => boolean) {
+    for (const [mat, list] of this.parts) {
+      const merged = list.length === 1 ? list[0]! : mergeGeometries(list, false);
+      if (!merged) continue;
+      list.forEach((g) => g !== merged && g.dispose());
+      const mesh = new THREE.Mesh(merged, mat);
+      mesh.castShadow = cast;
+      mesh.receiveShadow = receive(mat);
+      mesh.matrixAutoUpdate = false;
+      parent.add(mesh);
+    }
+    this.parts.clear();
+  }
+}
+
+/**
+ * The «на линии» tag over a machine. It keeps its size on the screen whatever
+ * the distance, so it reads on a phone: there the tag is the name alone, on a
+ * wide screen the name and what the machine is doing.
+ */
+function labelTexture(text: string, sub: string | null) {
+  const canvas = document.createElement('canvas');
+  canvas.width = sub ? 1024 : 800;
+  canvas.height = 256;
+  const w = canvas.width;
+  const ctx = canvas.getContext('2d')!;
+  ctx.fillStyle = 'rgba(15,23,42,0.94)';
+  ctx.beginPath();
+  ctx.roundRect(8, 8, w - 16, 192, 96);
+  ctx.fill();
+  ctx.lineWidth = 8;
+  ctx.strokeStyle = 'rgba(251,191,36,0.95)';
+  ctx.stroke();
+  ctx.fillStyle = 'rgba(15,23,42,0.94)';
+  ctx.beginPath();
+  ctx.moveTo(w / 2 - 40, 198);
+  ctx.lineTo(w / 2 + 40, 198);
+  ctx.lineTo(w / 2, 248);
+  ctx.fill();
+  ctx.fillStyle = '#22c55e';
+  ctx.beginPath();
+  ctx.arc(108, 104, 34, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#f8fafc';
+  ctx.textBaseline = 'middle';
+  if (sub) {
+    ctx.font = 'bold 78px Arial, sans-serif';
+    ctx.fillText(text, 172, 78, w - 230);
+    ctx.fillStyle = '#fbbf24';
+    ctx.font = 'bold 54px Arial, sans-serif';
+    ctx.fillText(sub, 172, 152, w - 230);
+  } else {
+    ctx.font = 'bold 100px Arial, sans-serif';
+    ctx.fillText(text, 168, 110, w - 220);
+  }
+  const t = new THREE.CanvasTexture(canvas);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = 4;
+  return t;
+}
+
 export function createWorld(opts: WorldOptions): WorldHandle {
   const { canvas, phone, still } = opts;
+  const withLabels = opts.labels !== false;
   const renderer = new THREE.WebGLRenderer({
     canvas,
     antialias: true,
     powerPreference: 'high-performance',
   });
   renderer.setPixelRatio(worldPixelRatio(window.devicePixelRatio, phone));
-  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  installFilmGrade(renderer);
   renderer.toneMappingExposure = 0.95;
   renderer.shadowMap.enabled = !phone;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -228,7 +311,11 @@ export function createWorld(opts: WorldOptions): WorldHandle {
 
   const disposables: { dispose(): void }[] = [];
   const scene = new THREE.Scene();
-  scene.fog = new THREE.Fog(0xe2b690, 55, 190);
+  // Evening haze: the far city melts into the sky. A walk shot stands close to
+  // its machine, so the haze is pulled in and everything behind falls back.
+  const FOG = { near: 55, far: 190, walkNear: 20, walkFar: 125 };
+  const fog = new THREE.Fog(0xe2b690, FOG.near, FOG.far);
+  scene.fog = fog;
 
   // ----- evening sky: a dome around the camera, and the same sky as the light
   // that falls on every surface (no environment file, no RoomEnvironment).
@@ -247,27 +334,37 @@ export function createWorld(opts: WorldOptions): WorldHandle {
     const env = pmrem.fromScene(envScene, 0.02).texture;
     envSky.geometry.dispose();
     scene.environment = env;
-    scene.environmentIntensity = 0.55;
     pmrem.dispose();
     disposables.push(env);
   }
 
+  // The light of the whole city, and what is left of it while a walk shot is
+  // on: the stop's machine gets its own key light, the rest steps back.
+  const LIGHT = { sun: 2.5, hemi: 0.55, env: 0.55, walkSun: 2.1, walkHemi: 0.36, walkEnv: 0.4 };
+  const KEY_POWER = 1.7;
+  scene.environmentIntensity = LIGHT.env;
   const camera = new THREE.PerspectiveCamera(38, 1, 0.5, 420);
-  scene.add(new THREE.HemisphereLight(0x9bb4dc, 0x6b4f34, 0.55));
-  const sun = new THREE.DirectionalLight(0xffbe84, 2.5);
+  const hemi = new THREE.HemisphereLight(0x9bb4dc, 0x6b4f34, LIGHT.hemi);
+  scene.add(hemi);
+  const sun = new THREE.DirectionalLight(0xffbe84, LIGHT.sun);
   sun.position.copy(sunDir).multiplyScalar(80);
   if (!phone) {
     sun.castShadow = true;
     sun.shadow.mapSize.set(1024, 1024);
     const c = sun.shadow.camera;
-    c.left = c.bottom = -40;
-    c.right = c.top = 40;
+    c.left = c.bottom = -36;
+    c.right = c.top = 36;
     c.near = 10;
     c.far = 170;
     sun.shadow.bias = -0.0004;
     sun.shadow.normalBias = 0.05;
   }
   scene.add(sun);
+  // The key light of a walk stop. Always in the scene (dark outside the walk),
+  // so the shaders are compiled once; it casts no shadow of its own.
+  const key = new THREE.SpotLight(0xffe6c4, 0, 0, 0.5, 0.75, 0);
+  key.position.set(0, 12, 0);
+  scene.add(key, key.target);
 
   const M = createMaterials();
   // Contact shadows: soft blobs under everything, on phones (no shadow map) and desktops alike.
@@ -304,9 +401,10 @@ export function createWorld(opts: WorldOptions): WorldHandle {
   disposables.push(pavement, edgeLine);
   for (const [a, b, mat, y] of [
     [ROAD_W, ROAD_W + 1.8, pavement, 0.07],
-    [-ROAD_W - 1.8, -ROAD_W, pavement, 0.07],
-    [ROAD_W - 0.45, ROAD_W - 0.25, edgeLine, 0.045],
-    [-ROAD_W + 0.25, -ROAD_W + 0.45, edgeLine, 0.045],
+    // (outer edge first: the other way round the ring fills the whole site)
+    [-ROAD_W, -ROAD_W - 1.8, pavement, 0.07],
+    [ROAD_W - 0.25, ROAD_W - 0.45, edgeLine, 0.045],
+    [-ROAD_W + 0.45, -ROAD_W + 0.25, edgeLine, 0.045],
   ] as const) {
     const m = new THREE.Mesh(ringShape(a, b), mat);
     m.rotation.x = -Math.PI / 2;
@@ -314,7 +412,7 @@ export function createWorld(opts: WorldOptions): WorldHandle {
     m.receiveShadow = mat === pavement;
     scene.add(m);
   }
-  // Avenues out of the district.
+  // Avenues out of the district: four strips of asphalt in one mesh.
   const avenueDash = new THREE.InstancedMesh(
     new THREE.PlaneGeometry(2.2, 0.2),
     new THREE.MeshBasicMaterial({ color: 0xf5f5f4 }),
@@ -324,18 +422,14 @@ export function createWorld(opts: WorldOptions): WorldHandle {
     let i = 0;
     const m4 = new THREE.Matrix4();
     const q = new THREE.Quaternion();
+    const strips: THREE.BufferGeometry[] = [];
     for (const [w, d, x, z] of [
       [8, 140, 0, 92],
       [8, 140, 0, -92],
       [140, 8, 98, 0],
       [140, 8, -98, 0],
     ] as const) {
-      const m = new THREE.Mesh(new THREE.PlaneGeometry(w, d), asphalt);
-      m.rotation.x = -Math.PI / 2;
-      m.position.set(x, 0.02, z);
-      m.receiveShadow = true;
-      scene.add(m);
-      m.geometry.computeBoundingSphere();
+      strips.push(new THREE.PlaneGeometry(w, d).rotateX(-Math.PI / 2).translate(x, 0.02, z));
       const alongZ = d > w;
       for (let k = 0; k < 10; k++) {
         const along = (k - 4.5) * 12 + (alongZ ? z : x);
@@ -348,13 +442,17 @@ export function createWorld(opts: WorldOptions): WorldHandle {
         avenueDash.setMatrixAt(i++, m4);
       }
     }
-    scene.add(avenueDash);
+    const avenues = new THREE.Mesh(mergeGeometries(strips, false)!, asphalt);
+    strips.forEach((g) => g.dispose());
+    avenues.receiveShadow = true;
+    scene.add(avenues, avenueDash);
+    disposables.push(avenueDash.material as THREE.Material);
   }
   // Dashed centre line on the ring.
   {
     const dash = new THREE.InstancedMesh(
       new THREE.PlaneGeometry(1.4, 0.18),
-      new THREE.MeshBasicMaterial({ color: 0xf5f5f4 }),
+      avenueDash.material,
       90,
     );
     const m4 = new THREE.Matrix4();
@@ -399,11 +497,11 @@ export function createWorld(opts: WorldOptions): WorldHandle {
     });
     blocks.castShadow = blocks.receiveShadow = !phone;
     scene.add(blocks);
-    // Roof plant on top of each block, and a soft shadow under it.
+    // A parapet and roof plant on top of each block, and a soft shadow under it.
     const roofs = new THREE.InstancedMesh(
       new THREE.BoxGeometry(1, 0.6, 1),
       new THREE.MeshStandardMaterial({ color: 0x55606e, roughness: 0.9 }),
-      spots.length,
+      spots.length * 2,
     );
     const feet = new THREE.InstancedMesh(
       new THREE.PlaneGeometry(1, 1),
@@ -419,11 +517,17 @@ export function createWorld(opts: WorldOptions): WorldHandle {
     const flat = new THREE.Quaternion().setFromEuler(new THREE.Euler(-Math.PI / 2, 0, 0));
     spots.forEach(([x, z, w, h, d], i) => {
       m4.compose(
-        new THREE.Vector3(x, h + 0.3, z),
+        new THREE.Vector3(x + w * 0.12, h + 0.6, z - d * 0.1),
         new THREE.Quaternion(),
-        new THREE.Vector3(w * 0.4, 1, d * 0.4),
+        new THREE.Vector3(w * 0.36, 1.6, d * 0.36),
       );
-      roofs.setMatrixAt(i, m4);
+      roofs.setMatrixAt(i * 2, m4);
+      m4.compose(
+        new THREE.Vector3(x, h + 0.12, z),
+        new THREE.Quaternion(),
+        new THREE.Vector3(w + 0.3, 0.6, d + 0.3),
+      );
+      roofs.setMatrixAt(i * 2 + 1, m4);
       m4.compose(new THREE.Vector3(x, 0.05, z), flat, new THREE.Vector3(w * 1.9, d * 1.9, 1));
       feet.setMatrixAt(i, m4);
     });
@@ -466,76 +570,138 @@ export function createWorld(opts: WorldOptions): WorldHandle {
     disposables.push(crowns.material as THREE.Material, trunks.material as THREE.Material);
   }
 
-  // ----- the construction site
+  // ----- the construction site (where everything stands: layout.ts)
   const site = new THREE.Group();
   scene.add(site);
+  const brandMat = new THREE.MeshBasicMaterial({ map: brandTexture() });
+  disposables.push(brandMat.map!, brandMat);
   {
-    const dirtMat = new THREE.MeshStandardMaterial({ color: 0x96693a, roughness: 1 });
-    disposables.push(dirtMat);
-    const dirt = new THREE.Mesh(new THREE.PlaneGeometry(40, 30), dirtMat);
+    const dirtMap = dirtTexture();
+    dirtMap.repeat.set(4, 3);
+    const dirtMat = new THREE.MeshStandardMaterial({ map: dirtMap, roughness: 1 });
+    const fenceMap = fenceTexture();
+    const fenceMat = new THREE.MeshStandardMaterial({
+      map: fenceMap,
+      roughness: 0.55,
+      metalness: 0.35,
+    });
+    disposables.push(dirtMat, dirtMap, fenceMat, fenceMap);
+    const dirt = new THREE.Mesh(new THREE.PlaneGeometry(YARD.hx * 2, YARD.hz * 2), dirtMat);
     dirt.rotation.x = -Math.PI / 2;
     dirt.position.y = 0.03;
     dirt.receiveShadow = true;
     site.add(dirt);
-    // Fence with the brand banner.
-    const fenceMat = M.fence;
-    const fence = (w: number, d: number, x: number, z: number) => {
-      const m = new THREE.Mesh(new THREE.BoxGeometry(w, 1.8, d), fenceMat);
-      m.position.set(x, 0.9, z);
-      m.castShadow = !phone;
-      site.add(m);
-    };
-    fence(40, 0.15, 0, 15);
-    fence(40, 0.15, 0, -15);
-    fence(0.15, 30, -20, 0);
-    fence(0.15, 30, 20, 0);
-    const brandMat = new THREE.MeshBasicMaterial({ map: brandTexture() });
-    disposables.push(brandMat.map!, brandMat);
-    for (const [x, z, ry] of [
-      [0, 15.1, 0],
-      [0, -15.1, Math.PI],
+
+    const batch = new Batch();
+    // Fence of profiled sheet on posts, all round the site.
+    for (const [w, d, x, z] of [
+      [YARD.hx * 2, 0.1, 0, YARD.hz],
+      [YARD.hx * 2, 0.1, 0, -YARD.hz],
+      [0.1, YARD.hz * 2, -YARD.hx, 0],
+      [0.1, YARD.hz * 2, YARD.hx, 0],
     ] as const) {
-      const b = new THREE.Mesh(new THREE.PlaneGeometry(12, 3), brandMat);
-      b.position.set(x, 3.2, z);
-      b.rotation.y = ry;
-      site.add(b);
-      for (const sx of [-5.5, 5.5]) {
-        const post = new THREE.Mesh(new THREE.BoxGeometry(0.2, 3, 0.2), M.dark);
-        post.position.set(x + sx, 1.5, z);
-        site.add(post);
+      batch.box(fenceMat, [w, 2, d], [x, 1, z], 0, 2);
+      const along = Math.max(w, d);
+      for (let k = 0; k <= along / 4; k++) {
+        const t = -along / 2 + k * 4;
+        batch.box(M.dark, [0.14, 2.2, 0.14], [w > d ? t : x, 1.1, w > d ? z : t]);
       }
     }
-    // The building going up: columns and slabs, three floors.
-    const frame = node(site, [-4, 0, -7]);
-    for (let f = 0; f < 3; f++) {
-      const slab = new THREE.Mesh(new THREE.BoxGeometry(14, 0.3, 8), M.concrete);
-      slab.position.set(0, 2.9 + f * 2.9, 0);
-      slab.castShadow = slab.receiveShadow = !phone;
-      frame.add(slab);
-      for (const cx of [-6.6, -2.2, 2.2, 6.6])
-        for (const cz of [-3.6, 3.6]) {
-          const col = new THREE.Mesh(new THREE.BoxGeometry(0.4, 2.9, 0.4), M.concreteDark);
-          col.position.set(cx, 1.45 + f * 2.9, cz);
-          col.castShadow = !phone;
-          frame.add(col);
-        }
+    // The building going up: a concrete frame on a footing, columns and slabs.
+    const fx = FRAME.x;
+    const fz = FRAME.z;
+    const hw = FRAME.w / 2;
+    const hd = FRAME.d / 2;
+    const H = FRAME.floorH;
+    batch.box(M.concreteDark, [FRAME.w + 0.8, 0.24, FRAME.d + 0.8], [fx, 0.12, fz]);
+    const colX = [-hw + 0.4, -hw / 3 + 0.13, hw / 3 - 0.13, hw - 0.4];
+    for (let f = 0; f < FRAME.floors; f++) {
+      batch.box(M.concrete, [FRAME.w, 0.3, FRAME.d], [fx, (f + 1) * H, fz]);
+      for (const cx of colX)
+        for (const cz of [-hd + 0.4, 0, hd - 0.4])
+          batch.box(M.concreteDark, [0.42, H - 0.3, 0.42], [fx + cx, f * H + H / 2, fz + cz]);
     }
-    const walls = new THREE.Mesh(new THREE.BoxGeometry(14, 2.9, 0.25), M.block);
-    walls.position.set(0, 1.45, 3.9);
-    frame.add(walls);
-    const frameShadow = blobShadow(19, 13, blobOpacity);
-    frameShadow.position.set(0, 0.07, 0);
-    frame.add(frameShadow);
-    // A slab stack for the crane.
+    // Stair and lift core, a floor higher than the frame.
+    batch.box(
+      M.concreteDark,
+      [2.6, FRAME_TOP + 1.5, 2.4],
+      [fx - 4.3, (FRAME_TOP + 1.5) / 2, fz - 1.9],
+    );
+    // Block walls: the ground floor all round, with window openings on the
+    // south face (where the lift works); the second floor is half laid.
+    const wall = (x0: number, x1: number, y0: number, y1: number, z: number) =>
+      batch.box(M.block, [x1 - x0, y1 - y0, 0.25], [fx + (x0 + x1) / 2, (y0 + y1) / 2, fz + z]);
+    for (let b = 0; b < 3; b++) {
+      const x0 = colX[b]! + 0.21;
+      const x1 = colX[b + 1]! - 0.21;
+      wall(x0, x1, 0.24, 1.0, hd - 0.2);
+      wall(x0, x1, 2.25, H - 0.15, hd - 0.2);
+      wall(x0, x0 + 0.9, 1.0, 2.25, hd - 0.2);
+      wall(x1 - 0.9, x1, 1.0, 2.25, hd - 0.2);
+      wall(x0, x1, 0.24, H - 0.15, -hd + 0.2);
+      if (b > 0) wall(x0, x1, H + 0.15, H + 0.15 + (b === 1 ? 1.1 : 0.55), -hd + 0.2);
+    }
+    for (const sx of [-1, 1])
+      batch.box(
+        M.block,
+        [0.25, H - 0.39, FRAME.d - 1.2],
+        [fx + sx * (hw - 0.2), 0.24 + (H - 0.39) / 2, fz],
+      );
+    // Guard rail round the top slab: posts and two orange rails.
+    for (const [w, d, x, z] of [
+      [FRAME.w, 0.05, 0, hd - 0.08],
+      [FRAME.w, 0.05, 0, -hd + 0.08],
+      [0.05, FRAME.d, -hw + 0.08, 0],
+      [0.05, FRAME.d, hw - 0.08, 0],
+    ] as const) {
+      for (const y of [0.55, 1.05])
+        batch.box(M.vest, [w, 0.07, d], [fx + x, FRAME_TOP + y, fz + z]);
+      const along = Math.max(w, d);
+      const n = Math.round(along / 2.3);
+      for (let k = 0; k <= n; k++) {
+        const t = -along / 2 + (k * along) / n;
+        batch.box(
+          M.dark,
+          [0.06, 1.1, 0.06],
+          [fx + (w > d ? t : x), FRAME_TOP + 0.55, fz + (w > d ? z : t)],
+        );
+      }
+    }
+    // The stack of slabs the crane takes from, on timber spacers.
     for (let i = 0; i < 4; i++) {
-      const s = new THREE.Mesh(new THREE.BoxGeometry(6, 0.25, 1.6), M.concrete);
-      s.position.set(12, 0.15 + i * 0.27, -9);
-      s.castShadow = !phone;
-      site.add(s);
+      batch.box(
+        M.concrete,
+        [SLAB.length, 0.25, SLAB.width],
+        [SLAB_STACK.x, 0.2 + i * 0.27, SLAB_STACK.z],
+        SLAB_STACK.yaw,
+      );
     }
+    // Posts of the banners and of the searchlights.
+    for (const z of [YARD.hz + 0.1, -YARD.hz - 0.1])
+      for (const sx of [-5.5, 5.5]) batch.box(M.dark, [0.2, 3, 0.2], [sx, 1.5, z]);
+    batch.build(site, !phone, (mat) => mat === M.concrete || mat === M.block);
+
+    // The platform's banners: on the fence towards both streets, and across
+    // the top floor of the frame, where the shots of the walk see it.
+    const banners: THREE.BufferGeometry[] = [
+      new THREE.PlaneGeometry(12, 3).translate(0, 3.2, YARD.hz + 0.2),
+      new THREE.PlaneGeometry(12, 3).rotateY(Math.PI).translate(0, 3.2, -YARD.hz - 0.2),
+      new THREE.PlaneGeometry(8.6, 2.15).translate(fx + 2.35, 2 * H + 0.15 + 1.32, fz + hd + 0.06),
+    ];
+    const bannerMesh = new THREE.Mesh(mergeGeometries(banners, false)!, brandMat);
+    banners.forEach((g) => g.dispose());
+    site.add(bannerMesh);
+
+    const frameShadow = blobShadow(FRAME.w + 5, FRAME.d + 5, blobOpacity);
+    frameShadow.position.set(fx, 0.07, fz);
     const stackShadow = blobShadow(9, 5, blobOpacity);
-    stackShadow.position.set(12, 0.07, -9);
-    site.add(stackShadow);
+    stackShadow.position.set(SLAB_STACK.x, 0.07, SLAB_STACK.z);
+    stackShadow.rotation.z = SLAB_STACK.yaw;
+    // The trench the excavator digs: a dark cut in the ground.
+    const pit = blobShadow(5.4, 3.6, 0.95);
+    (pit.material as THREE.MeshBasicMaterial).color.set(0x1a0f08);
+    pit.position.set(PIT.x, 0.08, PIT.z);
+    site.add(frameShadow, stackShadow, pit);
   }
 
   // ----- show: lamp posts, searchlights, smoke, sparks, pulsing rings
@@ -572,7 +738,7 @@ export function createWorld(opts: WorldOptions): WorldHandle {
       size,
       color,
       rate,
-      phase: Math.random() * 6,
+      phase: flashers.length * 1.7,
       steady,
     });
   };
@@ -646,10 +812,7 @@ export function createWorld(opts: WorldOptions): WorldHandle {
 
   // Searchlight towers at two corners of the site sweep the evening sky.
   const beams: { pivot: THREE.Group; speed: number; phase: number }[] = [];
-  for (const [x, z, color, speed, phase] of [
-    [-19, 14, 0xfff0cc, 0.42, 0],
-    [19, -14, 0xc8e4ff, -0.36, 2.4],
-  ] as const) {
+  TOWERS.forEach(([x, z], i) => {
     const tower = new THREE.Mesh(
       new THREE.CylinderGeometry(0.12, 0.2, 8, 8).translate(0, 4, 0),
       M.dark,
@@ -660,11 +823,11 @@ export function createWorld(opts: WorldOptions): WorldHandle {
     pivot.position.set(x, 8.1, z);
     const lamp = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.5, 0.9), M.lamp);
     pivot.add(lamp);
-    const beam = makeBeam(color, phone ? 40 : 48, 2.2);
+    const beam = makeBeam(i ? 0xc8e4ff : 0xfff0cc, phone ? 40 : 48, 2.2);
     beam.rotation.x = 0.82;
     pivot.add(beam);
     scene.add(tower, pivot);
-    beams.push({ pivot, speed, phase });
+    beams.push({ pivot, speed: i ? -0.36 : 0.42, phase: i * 2.4 });
     disposables.push(
       beam.geometry,
       beam.material as THREE.Material,
@@ -672,7 +835,7 @@ export function createWorld(opts: WorldOptions): WorldHandle {
       tower.geometry,
     );
     addGlow(scene, [x, 8.1, z], 3.2, [1, 0.92, 0.7]);
-  }
+  });
 
   // ----- machines
   const rig = new Rig(M);
@@ -682,7 +845,7 @@ export function createWorld(opts: WorldOptions): WorldHandle {
   const pickables: THREE.Object3D[] = [];
   const anchors = new Map<WorldKind, THREE.Object3D>();
   const labelMats: THREE.SpriteMaterial[] = [];
-  const labels: THREE.Sprite[] = [];
+  const labels: { sprite: THREE.Sprite; aspect: number }[] = [];
   const rings = new PulseRings(7);
   scene.add(rings.mesh);
   const ringRoots: { root: THREE.Object3D; size: number }[] = [];
@@ -694,36 +857,46 @@ export function createWorld(opts: WorldOptions): WorldHandle {
     moving?: boolean;
   }[] = [];
 
-  function tag(root: THREE.Object3D, kind: WorldKind, labelY: number, sub: string) {
+  const place = (root: THREE.Object3D, at: { x: number; z: number; yaw: number }) => {
+    root.position.set(at.x, 0, at.z);
+    root.rotation.y = at.yaw;
+    scene.add(root);
+  };
+
+  function tag(
+    root: THREE.Object3D,
+    kind: WorldKind,
+    labelY: number,
+    sub: string,
+    labelled = true,
+  ) {
     root.traverse((o) => (o.userData.kind = kind));
     pickables.push(root);
-    const mat = new THREE.SpriteMaterial({
-      map: labelTexture(LABELS[kind], sub),
-      depthTest: false,
-    });
-    labelMats.push(mat);
-    const label = new THREE.Sprite(mat);
-    label.scale.set(phone ? 10 : 7.2, phone ? 2.5 : 1.8, 1);
-    label.position.set(0, labelY, 0);
-    label.renderOrder = 10;
-    label.userData.kind = kind;
-    root.add(label);
-    labels.push(label);
-    pickables.push(label);
     if (!anchors.has(kind)) anchors.set(kind, root);
+    if (!withLabels || !labelled) return;
+    const map = labelTexture(LABELS[kind], phone ? null : sub);
+    const mat = new THREE.SpriteMaterial({ map, depthTest: false, sizeAttenuation: false });
+    labelMats.push(mat);
+    const sprite = new THREE.Sprite(mat);
+    // The tag stands on its pointer, above the machine.
+    sprite.center.set(0.5, 0);
+    sprite.position.set(0, labelY, 0);
+    sprite.renderOrder = 10;
+    sprite.userData.kind = kind;
+    root.add(sprite);
+    labels.push({ sprite, aspect: (map.image as HTMLCanvasElement).width / 256 });
+    pickables.push(sprite);
   }
 
   const smokeEvery = phone ? 0.3 : 0.18;
 
-  // Excavator loading a dump truck on the site.
+  // Excavator-loader digging a trench and loading the dump truck beside it.
   const truck1 = makeDumpTruck(rig);
-  truck1.root.position.set(6.35, 0, 10.05);
-  truck1.root.rotation.y = 0;
-  const backhoe = makeBackhoe(rig, dirtParticles, truck1);
-  backhoe.root.position.set(9, 0, 6);
-  scene.add(truck1.root, backhoe.root);
+  place(truck1.root, LOAD_TRUCK_AT);
+  const backhoe = makeBackhoe(rig, dirtParticles, truck1, BACKHOE_SWING);
+  place(backhoe.root, BACKHOE_AT);
   updaters.push(backhoe.update);
-  tag(backhoe.root, 'excavator', 6.2, 'на линии · работает');
+  tag(backhoe.root, 'excavator', 4.3, 'на линии · работает');
   ringRoots.push({ root: backhoe.root, size: 11 });
   emitters.push({
     root: backhoe.root,
@@ -734,44 +907,76 @@ export function createWorld(opts: WorldOptions): WorldHandle {
   addGlow(backhoe.root, [-0.93, 3.2, 0.38], 1.5, [1, 0.6, 0.15], false, 4.4);
   addGlow(backhoe.root, [2.15, 1.95, 0.5], 1.7, [1, 0.95, 0.8]);
   addGlow(backhoe.root, [2.15, 1.95, -0.5], 1.7, [1, 0.95, 0.8]);
-  for (const r of [backhoe.root, truck1.root]) {
-    const b = blobShadow(r === backhoe.root ? 9 : 8.5, 4.6, blobOpacity);
-    r.add(b);
-  }
+  backhoe.root.add(blobShadow(8.4, 4.4, blobOpacity));
+  truck1.root.add(blobShadow(8.5, 4.4, blobOpacity));
 
-  // Crane lifting slabs from the stack onto the frame.
+  // Crane carrying slabs from the stack onto the frame.
   {
-    const crane = makeCrane(rig, 1.1, 8.9);
-    crane.root.position.set(4, 0, -1);
-    crane.root.rotation.y = Math.PI * 0.08;
-    scene.add(crane.root);
+    const crane = makeCrane(rig, {
+      yawA: craneYaw(CRANE_SLEW.stack),
+      yawB: craneYaw(CRANE_SLEW.frame),
+      groundA: 1.14,
+      groundB: FRAME_TOP,
+    });
+    place(crane.root, CRANE_AT);
+    crane.placed.position.set(SLAB_DROP.x, FRAME_TOP, SLAB_DROP.z);
+    crane.placed.rotation.y = SLAB_DROP.yaw;
+    scene.add(crane.placed);
     updaters.push((t, dt) => crane.update(t, dt));
-    tag(crane.root, 'crane', 7.5, 'на линии · монтаж');
+    tag(crane.root, 'crane', 6.4, 'на линии · монтаж');
     ringRoots.push({ root: crane.root, size: 14 });
-    crane.root.add(blobShadow(13, 6, blobOpacity));
+    crane.root.add(blobShadow(13, 7.5, blobOpacity));
     emitters.push({
       root: crane.root,
-      local: new THREE.Vector3(3.2, 2.2, -1.3),
+      local: new THREE.Vector3(3.75, 3.1, -1.0),
       every: smokeEvery * 1.6,
       left: 0,
     });
-    addGlow(crane.root, [4.4, 3.45, 0.1], 1.5, [1, 0.6, 0.15], false, 3.8);
-    addGlow(crane.root, [5.4, 1.2, 0.9], 1.7, [1, 0.95, 0.8]);
-    addGlow(crane.root, [5.4, 1.2, -0.9], 1.7, [1, 0.95, 0.8]);
+    addGlow(crane.root, [4.4, 2.98, 0.6], 1.5, [1, 0.6, 0.15], false, 3.8);
+    addGlow(crane.root, [5.32, 1.32, 0.82], 1.7, [1, 0.95, 0.8]);
+    addGlow(crane.root, [5.32, 1.32, -0.82], 1.7, [1, 0.95, 0.8]);
   }
 
-  // Aerial platform at the frame's west face.
+  // Aerial platform at the south face of the frame.
   {
-    const agp = makeAgp(rig);
-    agp.root.position.set(-14, 0, -12.5);
-    scene.add(agp.root);
+    const agp = makeAgp(rig, AGP_TURRET_YAW);
+    place(agp.root, AGP_AT);
     updaters.push((t, dt) => agp.update(t, dt));
-    tag(agp.root, 'agp', 5.5, 'на линии · фасад');
+    tag(agp.root, 'agp', 4.4, 'на линии · фасад');
     ringRoots.push({ root: agp.root, size: 10 });
-    agp.root.add(blobShadow(9, 5.2, blobOpacity));
-    addGlow(agp.root, [2.7, 3.0, 0.6], 1.5, [1, 0.6, 0.15], false, 4.8);
-    addGlow(agp.root, [3.7, 1.3, 0.8], 1.7, [1, 0.95, 0.8]);
-    addGlow(agp.root, [3.7, 1.3, -0.8], 1.7, [1, 0.95, 0.8]);
+    agp.root.add(blobShadow(9, 5.6, blobOpacity));
+    addGlow(agp.root, [2.7, 2.98, 0.6], 1.5, [1, 0.6, 0.15], false, 4.8);
+    addGlow(agp.root, [3.62, 1.32, 0.82], 1.7, [1, 0.95, 0.8]);
+    addGlow(agp.root, [3.62, 1.32, -0.82], 1.7, [1, 0.95, 0.8]);
+  }
+
+  // Small things of the site: the office cabin with the platform's board,
+  // pallets of blocks, spoil heaps by the trench.
+  {
+    const props = node(scene);
+    const cabin = node(props, [CABIN.x, 0, CABIN.z]);
+    cabin.rotation.y = CABIN.yaw;
+    rig.box(cabin, [CABIN.w, 2.5, CABIN.d], 'cabin', [0, 1.45, 0]);
+    rig.box(cabin, [CABIN.w + 0.2, 0.1, CABIN.d + 0.2], 'white', [0, 2.75, 0]);
+    for (const x of [-CABIN.w / 2 + 0.4, CABIN.w / 2 - 0.4])
+      rig.box(cabin, [0.5, 0.2, CABIN.d], 'dark', [x, 0.1, 0]);
+    for (const s of [1, -1]) {
+      rig.box(cabin, [0.9, 1.9, 0.05], 'dark', [-2.2, 1.2, s * (CABIN.d / 2 + 0.01)]);
+      rig.box(cabin, [1.1, 0.8, 0.05], 'glass', [2.1, 1.75, s * (CABIN.d / 2 + 0.01)]);
+      rig.decal(
+        cabin,
+        'platformBoard',
+        2.9,
+        [0, 1.9, s * (CABIN.d / 2 + 0.03)],
+        [0, s > 0 ? 0 : Math.PI, 0],
+      );
+    }
+    cabin.add(blobShadow(CABIN.w + 3, CABIN.d + 3, blobOpacity));
+    const pallet = palletBuilder(rig);
+    for (const [x, z] of PALLETS) pallet(node(props, [x, 0, z]));
+    rig.heap(props, 1.5, 1.1, 'dirt', [PIT.x - 0.4, 0.03, PIT.z + 2.5]);
+    rig.heap(props, 1.2, 0.8, 'dirt', [PIT.x - 2.9, 0.03, PIT.z + 0.5]);
+    rig.heap(props, 0.9, 0.55, 'dirt', [PIT.x + 1.6, 0.03, PIT.z + 2.2]);
   }
 
   // Machines driving the ring road «на линии»: lights on, dust behind, a lean in the corners.
@@ -790,7 +995,8 @@ export function createWorld(opts: WorldOptions): WorldHandle {
     t.root.scale.setScalar(0.85);
     t.root.rotation.order = 'YXZ';
     scene.add(t.root);
-    tag(t.root, 'dump', 5.8, sub);
+    // On a phone one truck carries the tag: three more would cover the picture.
+    tag(t.root, 'dump', 3.9, sub, !phone || drivers.length === 0);
     // Headlights: bright points and a pool of light on the road ahead.
     addGlow(t.root, [3.5, 1.32, 0.82], 1.9, [1, 0.95, 0.78]);
     addGlow(t.root, [3.5, 1.32, -0.82], 1.9, [1, 0.95, 0.78]);
@@ -860,12 +1066,11 @@ export function createWorld(opts: WorldOptions): WorldHandle {
   // ----- people: workers on the site (the vest carries the brand)
   const crew: {
     person: Person;
-    walk?: { from: number; to: number; z: number; speed: number; phase: number; dir: number };
+    walk?: { from: number; to: number; speed: number; phase: number; dir: number };
     talk?: boolean;
-    welder?: boolean;
   }[] = [];
   {
-    const place = (
+    const stand = (
       id: string,
       x: number,
       y: number,
@@ -877,30 +1082,30 @@ export function createWorld(opts: WorldOptions): WorldHandle {
       person.root.position.set(x, y, z);
       person.root.rotation.y = yaw;
       scene.add(person.root);
-      const entry = { person, ...extra };
-      crew.push(entry);
-      return entry;
+      crew.push({ person, ...extra });
     };
-    place('walker', -14, 0.03, 12.6, Math.PI / 2, {
-      walk: { from: -15, to: -2, z: 12.6, speed: 1.35, phase: 0, dir: 1 },
+    const w = CREW.walker;
+    stand('walker', w.from + 1, 0.03, w.z, Math.PI / 2, {
+      walk: { from: w.from, to: w.to, speed: 1.35, phase: 0, dir: 1 },
     });
-    place('foreman', 10.2, 0.03, -6.4, Math.PI / 2, { talk: true });
-    place('rigger', 11.6, 0.03, -6.4, -Math.PI / 2, { talk: true });
-    place('welder', -9.5, 3.05, -3.4, 0, { welder: true });
+    stand('foreman', CREW.foreman.x, 0.03, CREW.foreman.z, Math.PI / 2, { talk: true });
+    stand('rigger', CREW.rigger.x, 0.03, CREW.rigger.z, -Math.PI / 2, { talk: true });
+    stand('welder', FRAME.x + CREW.welder.x, FRAME.floorH + 0.15, FRAME.z + CREW.welder.z, 0);
   }
-  let welderGlow = -1;
-  const WELD = new THREE.Vector3(-9.0, 3.5, -2.9);
-  if (crew.length) {
-    welderGlow = glowSlot++;
-  }
+  const WELD = new THREE.Vector3(
+    FRAME.x + CREW.welder.x + 0.5,
+    FRAME.floorH + 0.6,
+    FRAME.z + CREW.welder.z + 0.4,
+  );
+  const welderGlow = glowSlot++;
 
   // ----- camera: slow cinematic orbit with a gentle dolly; a guided walk takes over on demand
   const target = new THREE.Vector3(0, 2.5, 0);
   const focusTarget = new THREE.Vector3(0, 2.5, 0);
-  let azimuth = 0.7;
+  let azimuth = 0.62;
   let autoSpin = !still;
-  const radius = phone ? 50 : 56;
-  const height = phone ? 25 : 22;
+  const radius = phone ? 47 : 50;
+  const height = phone ? 19 : 15.5;
   const lookNow = new THREE.Vector3(0, 2.5, 0);
   let baseFov = 38;
   let fovNow = 38;
@@ -914,7 +1119,11 @@ export function createWorld(opts: WorldOptions): WorldHandle {
     yawTarget: number;
   }
   let walking: Walk | null = null;
+  /** 0 in the block view, 1 in a walk shot: the light, the haze and the lift of the picture follow it. */
+  let walkMix = 0;
   const tmpAnchor = new THREE.Vector3();
+  const keyAt = new THREE.Vector3(0, 12, 0);
+  const keyTo = new THREE.Vector3();
 
   function anchorOf(kind: WorldKind): Vec3 {
     const a = anchors.get(kind);
@@ -922,16 +1131,39 @@ export function createWorld(opts: WorldOptions): WorldHandle {
     a.getWorldPosition(tmpAnchor);
     return [tmpAnchor.x, tmpAnchor.y, tmpAnchor.z];
   }
+  const headingOf = (kind: WorldKind) => anchors.get(kind)?.rotation.y ?? 0;
 
-  function placeCamera(time: number) {
+  function placeCamera(time: number, dt: number) {
+    const instant = still || dt === 0;
+    walkMix += ((walking ? 1 : 0) - walkMix) * (instant ? 1 : Math.min(1, dt * 1.7));
+    if (walkMix < 0.002) walkMix = 0;
+    const k = walkMix;
+    sun.intensity = LIGHT.sun + (LIGHT.walkSun - LIGHT.sun) * k;
+    hemi.intensity = LIGHT.hemi + (LIGHT.walkHemi - LIGHT.hemi) * k;
+    scene.environmentIntensity = LIGHT.env + (LIGHT.walkEnv - LIGHT.env) * k;
+    fog.near = FOG.near + (FOG.walkNear - FOG.near) * k;
+    fog.far = FOG.far + (FOG.walkFar - FOG.far) * k;
+    key.intensity = KEY_POWER * k;
+    // The picture is lifted, so the machine stands above the card of the stop.
+    const lift = stopLift(camera.aspect) * k;
+    if (lift > 0) {
+      const w = renderer.domElement.width || 1;
+      const h = renderer.domElement.height || 1;
+      camera.setViewOffset(w, h, 0, Math.round(lift * h), w, h);
+    } else if (camera.view?.enabled) {
+      camera.clearViewOffset();
+    }
+
     if (walking) {
       const stop = WALK_STOPS[walking.index]!;
-      walking.yaw += (walking.yawTarget - walking.yaw) * 0.12;
-      let pose = stopPose(stop, anchorOf(stop.kind), walking.yaw, stopView(camera.aspect));
+      const anchor = anchorOf(stop.kind);
+      const heading = headingOf(stop.kind);
+      walking.yaw += (walking.yawTarget - walking.yaw) * (instant ? 1 : 0.12);
+      let pose = stopPose(stop, anchor, walking.yaw, camera.aspect, heading);
       if (!walking.arrived) {
-        const k = flightProgress(walking.start * 1000, time * 1000, WALK_FLIGHT_MS);
-        pose = blendPose(walking.from, pose, k);
-        if (k >= 1) {
+        const p = flightProgress(walking.start * 1000, wall * 1000, WALK_FLIGHT_MS);
+        pose = blendPose(walking.from, pose, p);
+        if (p >= 1) {
           walking.arrived = true;
           opts.onArrive?.(walking.index);
         }
@@ -939,39 +1171,83 @@ export function createWorld(opts: WorldOptions): WorldHandle {
       // A slow breath of the camera while it rests: never a dead frame.
       const bob = still ? 0 : 1;
       camera.position.set(
-        pose.pos[0] + Math.sin(time * 0.5) * 0.12 * bob,
-        pose.pos[1] + Math.sin(time * 0.7) * 0.1 * bob,
-        pose.pos[2] + Math.cos(time * 0.45) * 0.12 * bob,
+        pose.pos[0] + Math.sin(time * 0.5) * 0.1 * bob,
+        Math.max(0.8, pose.pos[1] + Math.sin(time * 0.7) * 0.06 * bob),
+        pose.pos[2] + Math.cos(time * 0.45) * 0.1 * bob,
       );
       lookNow.set(...pose.look);
       const fov = stopFov(stop, camera.aspect);
-      fovNow += (fov - fovNow) * 0.06;
+      fovNow += (fov - fovNow) * (instant ? 1 : 0.06);
       if (Math.abs(camera.fov - fovNow) > 0.01) {
         camera.fov = fovNow;
         camera.updateProjectionMatrix();
         updateSpriteScale();
       }
       camera.lookAt(lookNow);
+      // The key light travels to the machine of the stop.
+      const light = stopKey(stop, anchor, heading);
+      keyTo.set(...light.pos);
+      keyAt.lerp(keyTo, instant ? 1 : Math.min(1, dt * 2.2));
+      key.position.copy(keyAt);
+      key.target.position.set(...light.target);
+      key.angle += (light.angle - key.angle) * (instant ? 1 : Math.min(1, dt * 2.2));
       return;
     }
     target.lerp(focusTarget, 0.08);
-    const dolly = still ? 0 : Math.sin(time * 0.11) * 3.5;
+    const dolly = still ? 0 : Math.sin(time * 0.11) * 3;
     const r = radius + dolly;
     camera.position.set(
       target.x + Math.sin(azimuth) * r,
-      height + (still ? 0 : Math.sin(time * 0.09) * 1.6),
+      height + (still ? 0 : Math.sin(time * 0.09) * 1.4),
       target.z + Math.cos(azimuth) * r,
     );
     lookNow.copy(target);
     camera.lookAt(target);
   }
 
+  // Tags never lie on top of one another: the machines of the site come first,
+  // a truck driving behind them loses its tag while it passes.
+  let tick = 0;
+  let labelWidth = 150;
+  const labelAt = new THREE.Vector3();
+  function declutterLabels() {
+    const cssW = canvas.clientWidth || 1;
+    const cssH = canvas.clientHeight || 1;
+    camera.updateMatrixWorld();
+    const boxes = labels.map((l) => {
+      l.sprite.getWorldPosition(labelAt).project(camera);
+      if (labelAt.z > 1 || labelAt.z < -1) return null;
+      const h = labelWidth / l.aspect;
+      // A tag that is shown keeps its place a little longer than a hidden one takes to return.
+      const pad = l.sprite.visible ? -3 : 3;
+      return {
+        x: ((labelAt.x + 1) / 2) * cssW - labelWidth / 2 - pad,
+        y: ((1 - labelAt.y) / 2) * cssH - h - pad,
+        w: labelWidth + pad * 2,
+        h: h + pad * 2,
+      };
+    });
+    declutter(boxes).forEach((shown, i) => (labels[i]!.sprite.visible = shown));
+  }
+
   function updateSpriteScale() {
     const h = renderer.domElement.height || 1;
-    const px = h / (2 * Math.tan((camera.fov * Math.PI) / 360));
+    const tan = Math.tan((camera.fov * Math.PI) / 360);
+    const px = h / (2 * tan);
     glows.setScale(px);
     smoke.sprites.setScale(px);
     sparks.sprites.setScale(px);
+    // Tags: a fixed width on the screen, about a third of a phone's picture.
+    const cssW = canvas.clientWidth || 1;
+    const cssH = canvas.clientHeight || 1;
+    const width = phone
+      ? Math.min(150, Math.max(108, cssW * 0.32))
+      : Math.min(236, Math.max(170, cssW * 0.19));
+    labelWidth = width;
+    for (const l of labels) {
+      const sy = (width / l.aspect / cssH) * 2 * tan;
+      l.sprite.scale.set(sy * l.aspect, sy, 1);
+    }
   }
 
   function resize() {
@@ -979,7 +1255,7 @@ export function createWorld(opts: WorldOptions): WorldHandle {
     const h = canvas.clientHeight || 1;
     renderer.setSize(w, h, false);
     camera.aspect = w / h;
-    baseFov = w / h < 1.2 ? 48 : 38;
+    baseFov = w / h < 1.2 ? 46 : 38;
     if (!walking) {
       camera.fov = fovNow = baseFov;
     }
@@ -1008,7 +1284,7 @@ export function createWorld(opts: WorldOptions): WorldHandle {
     if (Math.abs(dx) > 6) {
       dragged = true;
       if (walking) {
-        walking.yawTarget = Math.max(-1.35, Math.min(1.35, down.yaw - dx * 0.006));
+        walking.yawTarget = Math.max(-WALK_MAX_YAW, Math.min(WALK_MAX_YAW, down.yaw - dx * 0.006));
       } else {
         autoSpin = false;
         azimuth = down.az - dx * 0.006;
@@ -1026,7 +1302,9 @@ export function createWorld(opts: WorldOptions): WorldHandle {
       -((e.clientY - rect.top) / rect.height) * 2 + 1,
     );
     ray.setFromCamera(ndc, camera);
-    const hit = ray.intersectObjects(pickables, true).find((h) => h.object.userData.kind);
+    const hit = ray
+      .intersectObjects(pickables, true)
+      .find((h) => h.object.userData.kind && h.object.visible);
     if (hit) {
       const kind = hit.object.userData.kind as WorldKind;
       if (!walking) focus(kind);
@@ -1062,8 +1340,8 @@ export function createWorld(opts: WorldOptions): WorldHandle {
       look: [lookNow.x, lookNow.y, lookNow.z],
     };
     autoSpin = false;
-    for (const l of labels) l.visible = false;
-    walking = { index, from, start: time, arrived: false, yaw: 0, yawTarget: 0 };
+    for (const l of labels) l.sprite.visible = false;
+    walking = { index, from, start: wall, arrived: false, yaw: 0, yawTarget: 0 };
     if (still) instantArrive();
     else if (!running) frame(0);
   }
@@ -1074,7 +1352,7 @@ export function createWorld(opts: WorldOptions): WorldHandle {
       look: [lookNow.x, lookNow.y, lookNow.z],
     };
     walking.index = index;
-    walking.start = time;
+    walking.start = wall;
     walking.arrived = false;
     walking.yawTarget = 0;
     if (still) instantArrive();
@@ -1089,7 +1367,7 @@ export function createWorld(opts: WorldOptions): WorldHandle {
   }
   function walkEnd() {
     walking = null;
-    for (const l of labels) l.visible = true;
+    tick = 0;
     camera.fov = fovNow = baseFov;
     camera.updateProjectionMatrix();
     updateSpriteScale();
@@ -1101,11 +1379,21 @@ export function createWorld(opts: WorldOptions): WorldHandle {
   // ----- loop
   let running = false;
   let raf = 0;
-  let time = 3; // start mid-cycle: the crane already holds a slab
+  let time = opts.clock ?? 3; // start mid-cycle: the machines are already at work
   let last = 0;
   let sampled = 0;
   let sampleMs = 0;
   let slowReported = false;
+  let wall = 0;
+  /** The plainer picture of a device that renders under ~30 frames a second. */
+  let lite = false;
+  function goLite() {
+    lite = true;
+    renderer.setPixelRatio(1);
+    sun.castShadow = false;
+    for (const b of beams) b.pivot.visible = false;
+    resize();
+  }
   let weldIn = 0.6;
   const wp = new THREE.Vector3();
 
@@ -1122,7 +1410,7 @@ export function createWorld(opts: WorldOptions): WorldHandle {
     for (const e of emitters) {
       e.left -= dt;
       if (e.left > 0) continue;
-      e.left = e.every * (0.7 + Math.random() * 0.6);
+      e.left = e.every * (lite ? 3 : 1) * (0.7 + Math.random() * 0.6);
       e.root.updateWorldMatrix(true, false);
       wp.copy(e.local).applyMatrix4(e.root.matrixWorld);
       smoke.emit(wp.x, wp.y, wp.z, {
@@ -1170,10 +1458,8 @@ export function createWorld(opts: WorldOptions): WorldHandle {
         f.steady ? 0.85 : k,
       );
     }
-    if (welderGlow >= 0) {
-      const flick = weldIn > 0.2 ? 0.5 + Math.random() * 0.5 : 0.15;
-      glows.set(welderGlow, WELD.x, WELD.y, WELD.z, 1.4 * flick + 0.4, 0.7, 0.85, 1, flick);
-    }
+    const flick = weldIn > 0.2 ? 0.5 + Math.random() * 0.5 : 0.15;
+    glows.set(welderGlow, WELD.x, WELD.y, WELD.z, 1.4 * flick + 0.4, 0.7, 0.85, 1, flick);
     glows.commit();
   }
 
@@ -1218,26 +1504,39 @@ export function createWorld(opts: WorldOptions): WorldHandle {
   }
 
   function frame(now: number) {
+    const prev = last;
     const dt = last ? Math.min(0.05, (now - last) / 1000) : 0;
     if (running && last) {
       // Watchdog over the first frames: a phone that cannot keep up falls back.
       if (sampled < 90) {
         sampled++;
         sampleMs += now - last;
-        if (sampled === 90 && sampleMs / 90 > SLOW_FRAME_MS && !slowReported) {
-          slowReported = true;
-          opts.onSlow();
+        if (sampled === 90) {
+          const average = sampleMs / 90;
+          if (average > SLOW_FRAME_MS && !slowReported) {
+            slowReported = true;
+            opts.onSlow();
+          } else if (average > LITE_FRAME_MS && !lite) {
+            // Not smooth, not hopeless: a plainer picture, then the frames are measured again.
+            goLite();
+            sampled = 0;
+            sampleMs = 0;
+          }
         }
       }
     }
     last = now;
     time += dt;
+    // The flight of the walk runs by the clock on the wall: on a slow device it
+    // skips frames instead of lasting several times longer.
+    wall += last && prev ? Math.min(0.5, (now - prev) / 1000) : 0;
     if (autoSpin) azimuth += dt * 0.05;
     for (const u of updaters) u(time, dt);
     dirtParticles.update(dt);
     crewUpdate(dt);
     showUpdate(dt);
-    placeCamera(time);
+    placeCamera(time, dt);
+    if (!walking && labels.length && tick++ % 6 === 0) declutterLabels();
     dome.position.copy(camera.position);
     renderer.render(scene, camera);
     if (running) raf = requestAnimationFrame(frame);
@@ -1276,7 +1575,10 @@ export function createWorld(opts: WorldOptions): WorldHandle {
         const mesh = o as THREE.Mesh;
         mesh.geometry?.dispose();
       });
-      for (const m of Object.values(M)) m.dispose();
+      for (const m of Object.values(M)) {
+        (m as THREE.MeshStandardMaterial).map?.dispose();
+        m.dispose();
+      }
       for (const m of labelMats) {
         m.map?.dispose();
         m.dispose();

@@ -90,3 +90,10 @@ export function worldPixelRatio(devicePixelRatio: number, phone: boolean): numbe
  * poster: under ~20 fps for two seconds is not «smooth».
  */
 export const SLOW_FRAME_MS = 50;
+
+/**
+ * Average frame time (ms) after which the scene goes plainer instead of giving
+ * up: under ~30 fps it drops to pixel ratio 1, switches the shadow map and the
+ * searchlights off and thins the smoke, then measures again.
+ */
+export const LITE_FRAME_MS = 33;

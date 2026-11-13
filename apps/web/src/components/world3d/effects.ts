@@ -108,6 +108,122 @@ export function asphaltTextures() {
   return { map, rough };
 }
 
+/** The site's ground: trodden earth with damp patches, stones and the ruts of tyres. */
+export function dirtTexture() {
+  const t = canvasTexture(512, (ctx, s) => {
+    ctx.fillStyle = '#8a6239';
+    ctx.fillRect(0, 0, s, s);
+    let seed = 29;
+    const rnd = () => ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646;
+    // Damp and dry patches, wrapped round the edges so the tile repeats cleanly.
+    for (let i = 0; i < 60; i++) {
+      const x = rnd() * s;
+      const y = rnd() * s;
+      const r = 24 + rnd() * 80;
+      const dark = rnd() < 0.6;
+      for (const dx of [-s, 0, s])
+        for (const dy of [-s, 0, s]) {
+          const g = ctx.createRadialGradient(x + dx, y + dy, 0, x + dx, y + dy, r);
+          g.addColorStop(0, dark ? 'rgba(52,33,18,0.5)' : 'rgba(190,148,96,0.42)');
+          g.addColorStop(1, 'rgba(0,0,0,0)');
+          ctx.fillStyle = g;
+          ctx.fillRect(x + dx - r, y + dy - r, r * 2, r * 2);
+        }
+    }
+    // Ruts: pairs of dark tracks with a pale ridge pressed up beside each.
+    for (const [y, bend] of [
+      [120, 26],
+      [156, 26],
+      [352, -34],
+      [388, -34],
+    ] as const) {
+      for (const [dy, style, width] of [
+        [0, 'rgba(40,26,15,0.55)', 13],
+        [9, 'rgba(196,156,104,0.4)', 4],
+      ] as const) {
+        ctx.strokeStyle = style;
+        ctx.lineWidth = width;
+        ctx.beginPath();
+        ctx.moveTo(0, y + dy);
+        ctx.bezierCurveTo(s * 0.3, y + dy + bend, s * 0.7, y + dy - bend, s, y + dy);
+        ctx.stroke();
+      }
+    }
+    // Grit and stones.
+    for (let i = 0; i < 5200; i++) {
+      const v = 50 + rnd() * 110;
+      ctx.fillStyle = `rgba(${v + 34},${v + 4},${v - 28},${0.14 + rnd() * 0.3})`;
+      ctx.fillRect(rnd() * s, rnd() * s, 1 + rnd() * 2.4, 1 + rnd() * 2.4);
+    }
+    for (let i = 0; i < 130; i++) {
+      const x = rnd() * s;
+      const y = rnd() * s;
+      const r = 1.6 + rnd() * 3;
+      ctx.fillStyle = 'rgba(40,28,18,0.5)';
+      ctx.beginPath();
+      ctx.ellipse(x + 1, y + 1.4, r, r * 0.7, 0, 0, Math.PI * 2);
+      ctx.fill();
+      const grey = 150 + rnd() * 60;
+      ctx.fillStyle = `rgba(${grey + 12},${grey},${grey - 16},0.9)`;
+      ctx.beginPath();
+      ctx.ellipse(x, y, r, r * 0.7, rnd() * 3, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  });
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.anisotropy = 8;
+  return t;
+}
+
+/** Profiled steel sheet of the site fence: vertical ribs, a kick board and a top rail. */
+export function fenceTexture() {
+  const t = canvasTexture(64, (ctx, s) => {
+    for (let x = 0; x < s; x++) {
+      const k = 0.5 + 0.5 * Math.sin((x / s) * Math.PI * 8);
+      const v = 120 + k * 110;
+      ctx.fillStyle = `rgb(${Math.round(v * 0.3)},${Math.round(v * 0.42)},${Math.round(v * 0.6)})`;
+      ctx.fillRect(x, 0, 1, s);
+    }
+    ctx.fillStyle = '#ffcf5a';
+    ctx.fillRect(0, 0, s, 5);
+    ctx.fillStyle = 'rgba(30,30,30,0.55)';
+    ctx.fillRect(0, s - 6, s, 6);
+  });
+  t.wrapS = THREE.RepeatWrapping;
+  t.anisotropy = 4;
+  return t;
+}
+
+// ---------------------------------------------------------------- film grade
+
+/**
+ * The film look, for free: three.js tone-maps every pixel in the material's own
+ * shader, so the grade rides there instead of in a full-screen pass (which a
+ * phone would pay for on every frame). ACES, then a soft S-curve, a little more
+ * colour, teal in the shadows and warmth in the highlights.
+ */
+const GRADE = /* glsl */ `
+vec3 CustomToneMapping( vec3 color ) {
+	color = ACESFilmicToneMapping( color );
+	float w3dLuma = dot( color, vec3( 0.2126, 0.7152, 0.0722 ) );
+	color = mix( vec3( w3dLuma ), color, 1.14 );
+	color = mix( color, color * color * ( 3.0 - 2.0 * color ), 0.34 );
+	color += ( 1.0 - smoothstep( 0.0, 0.42, w3dLuma ) ) * vec3( -0.014, 0.004, 0.022 );
+	color *= mix( vec3( 1.0 ), vec3( 1.05, 1.0, 0.92 ), smoothstep( 0.35, 1.0, w3dLuma ) );
+	return clamp( color, 0.0, 1.0 );
+}`;
+
+/** Installs the grade as three.js' custom tone mapping (once; only this scene uses three.js). */
+export function installFilmGrade(renderer: THREE.WebGLRenderer) {
+  const chunk = THREE.ShaderChunk.tonemapping_pars_fragment;
+  const stub = 'vec3 CustomToneMapping( vec3 color ) { return color; }';
+  if (chunk.includes(stub))
+    THREE.ShaderChunk.tonemapping_pars_fragment = chunk.replace(stub, GRADE);
+  renderer.toneMapping = THREE.ShaderChunk.tonemapping_pars_fragment.includes('w3dLuma')
+    ? THREE.CustomToneMapping
+    : THREE.ACESFilmicToneMapping;
+}
+
 export function makeGrassMaterial() {
   const map = grassTexture();
   map.wrapS = map.wrapT = THREE.RepeatWrapping;
@@ -213,11 +329,16 @@ export function lightWindows(material: THREE.MeshStandardMaterial, lit = 0.45) {
         float pane = step(0.2, f.x) * step(f.x, 0.8) * step(0.28, f.y) * step(f.y, 0.78) * wall * step(1.4, vWinPos.y);
         float on = step(1.0 - ${lit.toFixed(2)}, winHash(id + floor(vWinPos.xz * 0.37)));
         vec3 glass = vec3(0.07, 0.11, 0.17);
+        // Floor slabs as thin bands, a plinth, and shade gathering towards the ground.
+        float band = (1.0 - step(0.06, f.y)) * wall;
+        diffuseColor.rgb *= 1.0 - band * 0.22;
+        diffuseColor.rgb *= mix(0.62, 1.0, smoothstep(0.0, 5.0, vWinPos.y));
+        diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.2, 0.2, 0.22), (1.0 - step(1.1, vWinPos.y)) * wall * 0.6);
         diffuseColor.rgb = mix(diffuseColor.rgb, glass, pane * 0.85);
         totalEmissiveRadiance += pane * on * vec3(1.0, 0.66, 0.30) * (0.7 + 0.6 * winHash(id * 3.7));`,
       );
   };
-  material.customProgramCacheKey = () => `windows-${lit}`;
+  material.customProgramCacheKey = () => `windows2-${lit}`;
   return material;
 }
 

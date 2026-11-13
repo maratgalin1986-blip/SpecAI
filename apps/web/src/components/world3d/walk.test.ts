@@ -7,10 +7,15 @@ import {
   flightProgress,
   isWalkHistory,
   nextIndex,
+  posterShape,
   prevIndex,
   stopFov,
   stopIndexOf,
+  stopKey,
+  stopLift,
   stopPose,
+  stopPoster,
+  STOP_POSTER_ALT,
   walkAutoplay,
   walkCard,
   walkReducer,
@@ -84,10 +89,13 @@ describe('camera path', () => {
     expect(ease(0.1)).toBeLessThan(0.1);
   });
 
-  it('puts an offset stop at its offset and looks at the machine', () => {
-    const pose = stopPose(WALK_STOPS[0]!, anchor);
-    expect(pose.pos).toEqual([18, 5.2, 20]);
-    expect(pose.look).toEqual([7.5, 1.7, 6]);
+  it('puts a site stop at its offset and looks at the machine', () => {
+    const stop = WALK_STOPS[0]!;
+    const pose = stopPose(stop, anchor);
+    expect(pose.pos).toEqual([9 + stop.wide.cam[0], stop.wide.cam[1], 6 + stop.wide.cam[2]]);
+    expect(pose.look).toEqual([9 + stop.wide.look[0], stop.wide.look[1], 6 + stop.wide.look[2]]);
+    // A portrait phone gets its own shot.
+    expect(stopPose(stop, anchor, 0, 0.46).pos[0]).toBeCloseTo(9 + stop.tall.cam[0], 6);
   });
 
   it('keeps the distance when the visitor drags to look around, within the limit', () => {
@@ -102,14 +110,39 @@ describe('camera path', () => {
     expect(huge.pos).toEqual(edge.pos);
   });
 
-  it('stands between a driving truck and the middle of the district', () => {
+  it('travels with a driving truck: the shot turns with its heading', () => {
     const truck = WALK_STOPS[3]!;
-    const pose = stopPose(truck, [28, 0, -10]);
-    expect(pose.pos[0]).toBeCloseTo(28 * 0.55, 6);
-    expect(pose.pos[2]).toBeCloseTo(-10 * 0.55, 6);
-    expect(pose.pos[1]).toBe(5.5);
+    expect(truck.mode).toBe('chase');
+    const [cx, cy, cz] = truck.wide.cam;
+    // Heading 0: the truck's nose points to +x, its right side to +z.
+    const east = stopPose(truck, [28, 0, -10], 0, 1.6, 0);
+    expect(east.pos[0]).toBeCloseTo(28 + cx, 6);
+    expect(east.pos[1]).toBe(cy);
+    expect(east.pos[2]).toBeCloseTo(-10 + cz, 6);
+    // Heading π/2 (rotation.y): the nose points to −z, so «ahead» is north of the truck.
+    const north = stopPose(truck, [28, 0, -10], 0, 1.6, Math.PI / 2);
+    expect(north.pos[0]).toBeCloseTo(28 + cz, 6);
+    expect(north.pos[2]).toBeCloseTo(-10 - cx, 6);
     // The pose follows the truck.
-    expect(stopPose(truck, [20, 0, -20]).pos[0]).toBeCloseTo(11, 6);
+    expect(stopPose(truck, [20, 0, -20], 0, 1.6, 0).pos[0]).toBeCloseTo(20 + cx, 6);
+  });
+
+  it('hangs the key light over the machine of the stop and nowhere else', () => {
+    for (const stop of WALK_STOPS) {
+      const key = stopKey(stop, [5, 0, 7]);
+      expect(key.pos[1]).toBeGreaterThan(6);
+      expect(key.target).toEqual([5, 1.4, 7]);
+      // A cone, not a flood: the other machines stand outside it.
+      expect(key.angle).toBeGreaterThan(0.2);
+      expect(key.angle).toBeLessThan(0.75);
+      expect(stop.key.radius).toBeLessThan(10);
+    }
+  });
+
+  it('lifts the picture above the card, more on a portrait phone', () => {
+    expect(stopLift(0.46)).toBeGreaterThan(stopLift(1.6));
+    expect(stopLift(1.6)).toBeGreaterThan(0);
+    expect(stopLift(0.46)).toBeLessThan(0.2);
   });
 
   it('flies from one pose to the next: ends exactly, rises on the way', () => {
@@ -132,8 +165,28 @@ describe('camera path', () => {
 
   it('uses a wider lens on a portrait phone', () => {
     const stop = WALK_STOPS[0]!;
-    expect(stopFov(stop, 0.46)).toBe(stop.fov[1]);
-    expect(stopFov(stop, 1.78)).toBe(stop.fov[0]);
+    expect(stopFov(stop, 0.46)).toBe(stop.tall.fov);
+    expect(stopFov(stop, 1.78)).toBe(stop.wide.fov);
+    expect(stop.tall.fov).toBeGreaterThan(stop.wide.fov);
+  });
+});
+
+describe('pictures of the stops (the walk without the live scene)', () => {
+  it('gives every stop its own picture for a phone and for a wide screen', () => {
+    const files = new Set<string>();
+    for (const stop of WALK_STOPS)
+      for (const shape of ['tall', 'wide'] as const) files.add(stopPoster(stop.kind, shape));
+    expect(files.size).toBe(8);
+    expect(stopPoster('agp', 'tall')).toBe('/images/world3d-stop-agp-tall.webp');
+    expect(posterShape(390 / 844)).toBe('tall');
+    expect(posterShape(1440 / 900)).toBe('wide');
+  });
+
+  it('describes each picture by its own machine', () => {
+    expect(STOP_POSTER_ALT.excavator).toMatch(/Экскаватор/);
+    expect(STOP_POSTER_ALT.crane).toMatch(/Автокран/);
+    expect(STOP_POSTER_ALT.agp).toMatch(/Автовышка/);
+    expect(STOP_POSTER_ALT.dump).toMatch(/Самосвал/);
   });
 });
 
