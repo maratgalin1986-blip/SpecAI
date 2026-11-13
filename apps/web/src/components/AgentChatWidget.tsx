@@ -116,7 +116,7 @@ export function AgentChatWidget() {
         data-platform-chrome
         onClick={() => setIsOpen((open) => !open)}
         // The spoken name begins with the words on the button (WCAG 2.5.3).
-        aria-label={isOpen ? 'Свернуть чат с помощником' : 'ИИ-помощник: открыть чат'}
+        aria-label={isOpen ? 'Свернуть чат с помощником' : 'Помощник: открыть чат'}
         aria-expanded={isOpen}
         aria-controls={isOpen ? 'agent-chat-dialog' : undefined}
         tabIndex={show ? undefined : -1}
@@ -138,7 +138,7 @@ export function AgentChatWidget() {
             d="M8 10h8M8 14h5m-9 6 2.5-3H19a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v11a2 2 0 0 0 1 1.7Z"
           />
         </svg>
-        <span className="hidden sm:inline">{isOpen ? 'Свернуть' : 'ИИ-помощник'}</span>
+        <span className="hidden sm:inline">{isOpen ? 'Свернуть' : 'Помощник'}</span>
       </button>
     </>
   );
