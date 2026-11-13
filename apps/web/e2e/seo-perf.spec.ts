@@ -64,8 +64,10 @@ test('job-site photos reserve their box and come through the image optimizer', a
   expect(box.height / box.width).toBeGreaterThan(1.25);
   expect(box.height / box.width).toBeLessThan(1.42);
   // A phone gets a copy several times lighter than the 170–290 KB original.
+  // The optimizer makes the copy on the first request: on a cold CI server
+  // that alone can take several seconds. What is checked is the weight.
   await expect
-    .poll(() => first.evaluate((img: HTMLImageElement) => img.naturalWidth))
+    .poll(() => first.evaluate((img: HTMLImageElement) => img.naturalWidth), { timeout: 15_000 })
     .toBeGreaterThan(0);
   const bytes = await first.evaluate(async (img: HTMLImageElement) => {
     const entry = performance.getEntriesByName(img.currentSrc)[0] as
