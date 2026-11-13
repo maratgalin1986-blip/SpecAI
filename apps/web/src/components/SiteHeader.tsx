@@ -254,6 +254,14 @@ export function SiteHeader() {
             ))}
             <MoreMenu />
             <AuthStatus />
+            {/* The number itself on a computer: nobody should scroll to find it. */}
+            <a
+              href={SITE.phoneHref}
+              data-testid="header-phone"
+              className="font-bold tabular-nums text-slate-900 hover:text-amber-700"
+            >
+              {SITE.phone}
+            </a>
             <a
               href="/#callback"
               className="group inline-flex items-center gap-1.5 rounded-full bg-slate-900 px-4 py-2 text-white transition hover:bg-amber-500 hover:text-slate-950"

@@ -7,7 +7,7 @@ import { drawProviderLayer, type MapSelection } from '@/components/providerLayer
 import { TAP_ERRORS, tapVisitorFix } from '@/components/visitorPosition';
 import { ConsentText } from '@/components/ConsentText';
 import { LeadSuccess } from '@/components/LeadSuccess';
-import { formatCoords, inServiceArea } from '@/lib/geo';
+import { EUROPEAN_RUSSIA, formatCoords, inServiceArea } from '@/lib/geo';
 import { LANDINGS, landingListRate } from '@/lib/landings';
 import { pointMessageLine, type MapPoint } from '@/lib/mapPoint';
 import { rub } from '@/lib/prices';
@@ -50,6 +50,17 @@ export function OrderMap({ embed = false }: { embed?: boolean }) {
         if (cancelled || !element.current || mapRef.current) return;
         const map = createBaseMap(L, element.current);
         mapRef.current = map;
+        // Opens on the European part of the country, where the pins are — the
+        // country-wide view on a tall phone map showed mostly the Arctic Ocean.
+        // The visitor's own place (below) and the pins' card still move it.
+        map.invalidateSize();
+        map.fitBounds(
+          [
+            [EUROPEAN_RUSSIA.south, EUROPEAN_RUSSIA.west],
+            [EUROPEAN_RUSSIA.north, EUROPEAN_RUSSIA.east],
+          ],
+          { animate: false },
+        );
         showVisitor(L, map, { centreZoom: 11 });
         // Every provider with a label over its pin — on the line or not —, the
         // machines on the line (signed in), customers with open orders and the

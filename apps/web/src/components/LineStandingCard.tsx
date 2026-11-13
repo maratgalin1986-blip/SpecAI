@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { SITE } from '@/lib/site';
 
 // «На линии на 5 рабочих дней» (owner, 2026-10-28) in the provider cabinet:
 // one switch with the end date. The machine stands at its own point or the
@@ -32,10 +33,13 @@ export function LineStandingCard({
   hasBase,
   maxDate,
   minDate,
+  house = false,
 }: {
   machines: LineMachineOption[];
   initial: LineStandingState;
   hasBase: boolean;
+  /** СпецПласт16's own manager: the fleet is on the line always (lib/houseLine.ts). */
+  house?: boolean;
   /** «YYYY-MM-DD» bounds for «до …». */
   minDate: string;
   maxDate: string;
@@ -108,6 +112,14 @@ export function LineStandingCard({
         напоминание «Продлить на 5 рабочих дней?».
         {initial.on && initial.live ? ' Телефон машиниста передаёт место — «рядом сейчас».' : ''}
       </p>
+      {house && (
+        <p
+          data-house-line-note
+          className="rounded-xl bg-graphite-100 px-3 py-2 text-sm text-graphite-800"
+        >
+          Парк {SITE.name} на линии всегда; чтобы снять машину — смените её статус.
+        </p>
+      )}
 
       {!hasBase && (
         <p className="rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-900">

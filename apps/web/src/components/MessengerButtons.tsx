@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { Icon } from '@/components/Icon';
+import { OrderSheet } from '@/components/OrderSheet';
 import { useJourneyInView } from '@/components/useJourneyInView';
 import { isOnShift, SHIFT, SITE } from '@/lib/site';
 import { hidesContactBar } from '@/lib/workPages';
@@ -15,13 +16,14 @@ function WhatsAppIcon({ className = 'h-5 w-5' }: { className?: string }) {
   );
 }
 
-// Mobile: a sticky bar with the most-used actions: call, WhatsApp and the
-// order form («Заявка» → the callback form of this page, or the home one).
+// Mobile: a sticky bar with the most-used actions: call, WhatsApp and
+// «Заказать», which opens the short order form in place (OrderSheet).
 // Desktop: a round WhatsApp button above the AI assistant.
 export function MessengerButtons() {
   const pathname = usePathname();
   // Known only on the client (the server does not know the visitor's time).
   const [onShift, setOnShift] = useState<boolean | null>(null);
+  const [orderOpen, setOrderOpen] = useState(false);
   useEffect(() => {
     const update = () => setOnShift(isOnShift());
     update();
@@ -70,7 +72,7 @@ export function MessengerButtons() {
         aria-label="Быстрая связь"
         data-bottom-bar
         data-platform-chrome
-        className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-3 gap-1.5 border-t border-slate-200 bg-white/95 p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] backdrop-blur sm:hidden"
+        className="contact-bar fixed inset-x-0 bottom-0 z-40 grid grid-cols-3 gap-1.5 border-t border-slate-200 bg-white/95 p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] backdrop-blur sm:hidden"
       >
         <a
           href={SITE.phoneHref}
@@ -97,24 +99,18 @@ export function MessengerButtons() {
         >
           <WhatsAppIcon className="h-4 w-4" /> WhatsApp
         </a>
-        <a
-          href={pathname === '/' ? '#callback' : '/#callback'}
-          onClick={(event) => {
-            // A page with its own callback or order form (landings, catalogue,
-            // a machine, the board): go there instead of leaving for the home page.
-            const form =
-              document.getElementById('callback') ??
-              document.querySelector<HTMLElement>('[data-callback-form], [data-order-form]');
-            if (!form) return;
-            event.preventDefault();
-            const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-            form.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'start' });
-          }}
+        {/* The short form opens in place (OrderSheet): no trip to another
+            page and no long scroll to a form further down. */}
+        <button
+          type="button"
+          aria-haspopup="dialog"
+          onClick={() => setOrderOpen(true)}
           className="flex min-h-12 items-center justify-center gap-1.5 rounded-lg bg-slate-900 text-sm font-bold text-white"
         >
           <Icon name="document" className="h-4 w-4" /> Заказать
-        </a>
+        </button>
       </nav>
+      {orderOpen && <OrderSheet source="bottom-bar" onClose={() => setOrderOpen(false)} />}
       <aside aria-label="WhatsApp" data-platform-chrome>
         <a
           href={SITE.whatsappHref}

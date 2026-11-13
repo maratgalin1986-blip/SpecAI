@@ -122,7 +122,7 @@ test('callback form sends a lead without a name', async ({ page }) => {
   await form.locator('input[name="consent"]').check();
   await form.getByRole('button', { name: 'Жду звонка' }).click();
   await expect(page.getByText(/Заявка у диспетчера/)).toBeVisible();
-  expect(sent.body?.phone).toBe('+7 927 000-00-00');
+  expect(sent.body?.phone).toBe('+7 (927) 000-00-00');
   expect(errors, 'page errors').toEqual([]);
 });
 
@@ -331,6 +331,8 @@ test.describe('order form finds the machinery from the words', () => {
     );
     await page.goto('/orders#new', { waitUntil: 'networkidle' });
     const form = page.locator('#new');
+    // The task is under «Уточнить детали» since the first step became short.
+    await form.locator('[data-order-details] summary').click();
     const description = form.locator('textarea').first();
     const combo = form.getByRole('combobox', { name: 'Техника' });
     await expect(combo).toBeVisible();
@@ -412,7 +414,7 @@ test('storozh: desktop exit brings the card and sends a lead', async ({ page }, 
   await card.locator('input[name="consent"]').check();
   await card.getByRole('button', { name: 'Жду звонка' }).click();
   await expect(card).toContainText('Заявка у Ивана');
-  expect(sent.body?.phone).toBe('+7 927 000-00-01');
+  expect(sent.body?.phone).toBe('+7 (927) 000-00-01');
   expect(String(sent.body?.source)).toMatch(/^storozh/);
   expect(await page.evaluate(() => localStorage.getItem('lead-sent'))).toBeTruthy();
   expect(errors, 'page errors').toEqual([]);

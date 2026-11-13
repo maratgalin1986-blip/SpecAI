@@ -41,6 +41,23 @@ export function LeadSuccess({ dark = false, summary }: { dark?: boolean; summary
     node?.focus({ preventScroll: true });
     node?.scrollIntoView({ block: 'center' });
   }, []);
+  // Two install offers at once is one too many: while this line is on screen
+  // the floating button hides (globals.css, data-lead-install).
+  const installRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    const node = installRef.current;
+    if (!installLabel || !node || typeof IntersectionObserver === 'undefined') return;
+    const root = document.documentElement;
+    const observer = new IntersectionObserver((entries) => {
+      const last = entries[entries.length - 1];
+      root.toggleAttribute('data-lead-install', !!last?.isIntersecting);
+    });
+    observer.observe(node);
+    return () => {
+      observer.disconnect();
+      root.removeAttribute('data-lead-install');
+    };
+  }, [installLabel]);
   const whatsapp = `${SITE.whatsappHref}?text=${encodeURIComponent(
     `Здравствуйте! Оставил заявку на сайте${summary ? `: ${summary}` : ''}.`,
   )}`;
@@ -91,6 +108,7 @@ export function LeadSuccess({ dark = false, summary }: { dark?: boolean; summary
       </p>
       {installLabel && (
         <button
+          ref={installRef}
           type="button"
           data-testid="lead-install"
           onClick={() => window.dispatchEvent(new Event(INSTALL_OPEN_EVENT))}

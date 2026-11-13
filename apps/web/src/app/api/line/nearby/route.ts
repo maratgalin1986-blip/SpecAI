@@ -24,7 +24,7 @@ function coordinate(raw: string | null, limit: number): number | null {
  *
  * СпецПласт16's own free machines are always in `machines` (owner,
  * 2026-11-11: «всегда на линии», lib/houseLine.ts): without a phone they
- * stand at the base as «Я на линии до отключения», ids `house-line-<machine>`.
+ * stand at the base as «На линии», ids `house-line-<machine>`.
  * `base` (house machines «на базе», lib/linePresence.ts baseMachines) is kept
  * for the apps that read it and is empty since then.
  */

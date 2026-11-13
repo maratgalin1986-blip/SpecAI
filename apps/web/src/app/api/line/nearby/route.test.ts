@@ -132,14 +132,12 @@ describe('GET /api/line/nearby', () => {
       isHouse: true,
     });
     expect(pin.live).toBe(false);
-    expect(pin.until).toBe('до отключения');
+    expect(pin.until).toBeNull();
     expect(pin.busyToday).toBe(false);
     expect({ lat: pin.lat, lon: pin.lon }).toEqual({ lat: 55.7436, lon: 52.3959 });
     // The house floor (customerRates), not the 100 ₽ stored by mistake.
     expect(pin.equipment.hourlyRate).toBeGreaterThan(100);
-    expect(pin.bubble).toMatch(
-      /^Я на линии до отключения · Экскаватор-погрузчик JCB 3CX · от .+₽\/ч$/,
-    );
+    expect(pin.bubble).toMatch(/^На линии · Экскаватор-погрузчик JCB 3CX · от .+₽\/ч$/);
     const json = JSON.stringify(body);
     expect(json).not.toContain('driver-user-id');
     expect(json).not.toContain('userId');

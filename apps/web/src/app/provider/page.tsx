@@ -552,6 +552,7 @@ export default async function ProviderPage(props: { searchParams: Promise<Provid
             available: item.status === 'AVAILABLE',
           }))}
           initial={lineState}
+          house={isHouseManager(session.user)}
           hasBase={pinCompany?.baseLat != null && pinCompany?.baseLon != null}
           minDate={lineToday}
           maxDate={addDays(lineToday, STANDING_MAX_DAYS)}

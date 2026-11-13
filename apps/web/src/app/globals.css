@@ -386,26 +386,32 @@ html {
   }
 }
 
+/* Movement only: with opacity in these keyframes every block near the top or
+   the bottom edge of the screen read as grey, half-faded text. */
 @keyframes depth-in {
   from {
-    opacity: 0;
     transform: perspective(1200px) translate3d(0, 80px, -420px) rotateX(10deg);
   }
   to {
-    opacity: 1;
     transform: none;
   }
 }
 
 @keyframes depth-out {
   from {
-    opacity: 1;
     transform: none;
   }
   to {
-    opacity: 0;
     transform: perspective(1200px) translate3d(0, -40px, 260px);
   }
+}
+
+/* A Leaflet map keeps its panes and buttons (z-index 200…1000) to itself:
+   without its own stacking context they paint over the header, the bottom
+   bar and the cookie strip. */
+.leaflet-container {
+  z-index: 0;
+  isolation: isolate;
 }
 
 /* ---- Hero photos: slow push-in on the active slide ------------------------ */
@@ -719,16 +725,15 @@ html {
   }
 }
 
-/* Opening titles (IntroSplash): ~7.8 s, cut like a TV channel ident.
-   0–1.5 s «представляет» over light beams · 1.75 s brass hit, flash, gold
-   logo · 2.5–7.2 s the partner card under a spotlight (on phones it comes
-   in at 2.85 s, once the wide logo has cleared), the three offers (rent,
-   estimate, design) rising under it from 3.4 s, light sweeping across the
-   card while it holds · 7.0 s the card and offers fade out, so nothing of
-   them ghosts over the hero · 7.2 s dive in.
-   All timings are CSS, so it ends even before hydration. */
+/* Opening titles (IntroSplash): 2.8 s in all, the fade included (the owner asked
+   for «заставка ~3 с»; 7.8 s kept visitors from the phone and the order button).
+   0–0.6 s «представляет» over light beams · 0.65 s flash and the gold logo ·
+   1.3–2.3 s the partner card under a spotlight with the three offers ·
+   2.4 s dive in. The layer sits under the header and the phone contact bar
+   (z-index in IntroSplash.tsx), so calling and ordering work from the first
+   frame. All timings are CSS, so it ends even before hydration. */
 .intro {
-  animation: intro-out 0.6s cubic-bezier(0.7, 0, 0.84, 0) 7.2s forwards;
+  animation: intro-out 0.4s cubic-bezier(0.7, 0, 0.84, 0) 2.4s forwards;
 }
 @keyframes intro-out {
   to {
@@ -744,7 +749,7 @@ html {
 .intro-drone {
   transform-origin: 50% 60%;
   will-change: transform;
-  animation: intro-drone 7.8s cubic-bezier(0.25, 0.1, 0.25, 1) both;
+  animation: intro-drone 2.8s cubic-bezier(0.25, 0.1, 0.25, 1) both;
 }
 .intro-drone::after {
   content: '';
@@ -752,7 +757,7 @@ html {
   inset: 0;
   background: #000;
   opacity: 0.45;
-  animation: intro-drone-light 7.8s ease-out both;
+  animation: intro-drone-light 2.8s ease-out both;
 }
 @keyframes intro-drone {
   from {
@@ -769,7 +774,7 @@ html {
 }
 .intro-dim {
   opacity: 0;
-  animation: intro-dim 0.8s ease-out 2.3s forwards;
+  animation: intro-dim 0.4s ease-out 1.2s forwards;
 }
 @keyframes intro-dim {
   to {
@@ -788,8 +793,8 @@ html {
   opacity: 0;
   will-change: transform, opacity;
   animation:
-    intro-rays-spin 7s linear both,
-    intro-rays-fade 2.8s ease-in-out both;
+    intro-rays-spin 2.8s linear both,
+    intro-rays-fade 1.4s ease-in-out both;
 }
 @keyframes intro-rays-spin {
   to {
@@ -813,7 +818,7 @@ html {
     transparent 70%
   );
   opacity: 0;
-  animation: intro-flash 0.7s ease-out 1.7s both;
+  animation: intro-flash 0.5s ease-out 0.65s both;
 }
 @keyframes intro-flash {
   15% {
@@ -824,13 +829,13 @@ html {
   }
 }
 .intro-stage-1 {
-  animation: intro-leave 0.35s ease-in 1.45s forwards;
+  animation: intro-leave 0.2s ease-in 0.5s forwards;
 }
 .intro-presents {
-  animation: intro-rise 0.7s ease-out 0.15s both;
+  animation: intro-rise 0.3s ease-out 0.05s both;
 }
 .intro-presents-2 {
-  animation: intro-rise 0.7s ease-out 0.45s both;
+  animation: intro-rise 0.3s ease-out 0.15s both;
 }
 @keyframes intro-rise {
   from {
@@ -849,8 +854,8 @@ html {
 .intro-stage-2 {
   opacity: 0;
   animation:
-    intro-slam 0.5s cubic-bezier(0.2, 0.9, 0.25, 1.15) 1.65s forwards,
-    intro-leave 0.4s ease-in 2.45s forwards;
+    intro-slam 0.35s cubic-bezier(0.2, 0.9, 0.25, 1.15) 0.65s forwards,
+    intro-leave 0.2s ease-in 1.15s forwards;
 }
 @keyframes intro-slam {
   from {
@@ -872,8 +877,8 @@ html {
 .intro-stage-3 {
   opacity: 0;
   animation:
-    intro-appear 0.3s ease-out 2.45s forwards,
-    intro-vanish 0.2s ease-in 7s forwards;
+    intro-appear 0.2s ease-out 1.3s forwards,
+    intro-vanish 0.15s ease-in 2.3s forwards;
 }
 @keyframes intro-appear {
   to {
@@ -899,7 +904,7 @@ html {
 /* The offers under the card: big, one after another. */
 .intro-offer {
   opacity: 0;
-  animation: intro-offer 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+  animation: intro-offer 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
 }
 @keyframes intro-offer {
   from {
@@ -918,8 +923,8 @@ html {
     linear-gradient(135deg, #fde68a 0%, #fbbf24 38%, #f59e0b 62%, #d97706 100%);
   transform-style: preserve-3d;
   animation:
-    intro-card 1.1s cubic-bezier(0.2, 0.8, 0.2, 1) 2.45s both,
-    intro-card-hold 4.2s ease-in-out 3.55s forwards;
+    intro-card 0.55s cubic-bezier(0.2, 0.8, 0.2, 1) 1.3s both,
+    intro-card-hold 0.6s ease-in-out 1.85s forwards;
 }
 @keyframes intro-card {
   from {
@@ -951,24 +956,7 @@ html {
     transparent 60%
   );
   background-size: 250% 100%;
-  animation:
-    intro-shine 1.1s ease-in-out 3.1s both,
-    intro-shine 1.1s ease-in-out 4.5s forwards,
-    intro-shine 1.1s ease-in-out 5.85s forwards;
-}
-/* Phones: the logo spans the screen, so the card waits until it has gone. */
-@media (max-width: 640px) {
-  .intro-card {
-    animation:
-      intro-card 1.1s cubic-bezier(0.2, 0.8, 0.2, 1) 2.85s both,
-      intro-card-hold 3.85s ease-in-out 3.95s forwards;
-  }
-  .intro-card-shine {
-    animation:
-      intro-shine 1.1s ease-in-out 3.6s both,
-      intro-shine 1.1s ease-in-out 4.75s forwards,
-      intro-shine 1.1s ease-in-out 5.9s forwards;
-  }
+  animation: intro-shine 0.8s ease-in-out 1.5s both;
 }
 @keyframes intro-shine {
   from {
@@ -991,7 +979,15 @@ html {
   animation: rec 1s steps(2) infinite;
 }
 .intro-sound-hint {
-  animation: intro-rise 0.6s ease-out 0.6s both;
+  animation: intro-rise 0.3s ease-out 0.2s both;
+}
+/* The floating buttons (install, chat, WhatsApp) wait for the titles to end:
+   the attribute is set by the titles' inline script and removed 2.8 s later. */
+html[data-intro] .install-fab,
+html[data-intro] .chat-fab,
+html[data-intro] .wa-fab {
+  opacity: 0;
+  pointer-events: none;
 }
 /* The hero footage starts from above, like a drone coming down. */
 .hero-drone {
@@ -1495,15 +1491,34 @@ html[data-cookie-strip] .chat-fab,
 html[data-tg-chip] .chat-fab {
   bottom: calc(7.25rem + env(safe-area-inset-bottom));
 }
+/* Сторож speaks even while the cookie strip is open: his card stands above the
+   strip (its measured height, CookieNotice) instead of waiting for an answer. */
+html[data-cookie-strip] .storozh-card {
+  bottom: calc(5rem + var(--cookie-strip-h, 3.5rem) + env(safe-area-inset-bottom));
+}
+@media (min-width: 640px) {
+  html[data-cookie-strip] .storozh-card {
+    bottom: calc(1.5rem + var(--cookie-strip-h, 3.5rem));
+  }
+  /* The callback form came on screen after the card: the card gives way,
+     unless the visitor is already typing in it. */
+  html[data-callback-view] .storozh-card:not(:focus-within) {
+    opacity: 0;
+    pointer-events: none;
+  }
+}
 /* «На рабочий стол» (InstallButton): bottom left, level with the chat button,
    above the contact bar and the chips; away while the «Установить» card shows. */
 .install-fab {
   bottom: calc(4.75rem + env(safe-area-inset-bottom));
 }
-/* The cookie strip wraps to two lines on a phone (about 54px): the button sits above it. */
-html[data-cookie-strip] .install-fab {
-  /* above the contact bar (4.5rem) and the strip's measured height (CookieNotice) */
-  bottom: calc(5rem + var(--cookie-strip-h, 3.5rem) + env(safe-area-inset-bottom));
+/* The cookie strip wraps to two lines on a phone (about 54px): the pill sits above it.
+   Phones only: on wider screens the strip is at the right, the button at the left. */
+@media (max-width: 639px) {
+  html[data-cookie-strip] .install-fab {
+    /* above the contact bar (4.5rem) and the strip's measured height (CookieNotice) */
+    bottom: calc(5rem + var(--cookie-strip-h, 3.5rem) + env(safe-area-inset-bottom));
+  }
 }
 html[data-tg-chip] .install-fab {
   bottom: calc(8.75rem + env(safe-area-inset-bottom));
@@ -1514,6 +1529,40 @@ html[data-storozh] .install-fab {
 }
 html[data-no-contact-bar] .install-fab {
   bottom: calc(1rem + env(safe-area-inset-bottom));
+}
+/* Phones: once folded, the round icon stands in the contact bar's own row, at
+   its right end (the bar makes room), so it covers nothing of the page. */
+@media (max-width: 639px) {
+  html[data-install-dock] .install-fab[data-shape='icon'] {
+    left: auto;
+    right: 0.5rem;
+    bottom: max(0.5rem, env(safe-area-inset-bottom));
+  }
+  html[data-install-dock] .install-fab[data-shape='icon'] .install-help {
+    left: auto;
+    right: 0;
+  }
+  html[data-install-dock]:not([data-install-hint], [data-storozh], [data-lead-install])
+    .contact-bar {
+    padding-right: 3.875rem;
+  }
+}
+/* The «Принято» screen offers the installation in its own line (LeadSuccess):
+   the floating button steps aside while that line is on screen. */
+html[data-lead-install] .install-fab:not([data-help]) {
+  opacity: 0;
+  pointer-events: none;
+}
+/* Phones: the cookie strip stands under the header (CookieNotice): a jump to
+   an anchor lands below it. */
+html[data-cookie-top] {
+  scroll-padding-top: calc(5rem + var(--cookie-strip-h, 3.5rem));
+}
+/* The cookie strip found the phone, an order button or a field under it
+   (CookieNotice, lib/overlayClear.ts): it waits out of the way. */
+[data-testid='cookie-strip'][data-away] {
+  opacity: 0;
+  pointer-events: none;
 }
 @media (min-width: 640px) {
   .install-fab,
@@ -1638,7 +1687,28 @@ html[data-install-hint] .chat-fab {
   transform: scale(1.12);
 }
 
-/* Short laptop screens: both hero buttons must fit at 1280x720. */
+/* The hero's paragraph by screen height: the long one only where the order
+   button and the phone still fit on the first screen with it (a tall window);
+   phones and ordinary laptops (1280x720, 1366x768, 1440x900) get the short
+   line. The words of both are in app/page.tsx. */
+.hero-long {
+  display: none;
+}
+@media (min-width: 640px) and (min-height: 941px) {
+  .hero-long {
+    display: block;
+  }
+  .hero-brief {
+    display: none;
+  }
+}
+@media (min-width: 640px) and (max-height: 940px) {
+  .hero-brief {
+    margin-top: 1rem;
+    font-size: 1.0625rem;
+  }
+}
+/* Short laptop screens: the order button, «Встать на линию» and the phone fit at 1280x720. */
 @media (min-width: 1024px) and (max-height: 760px) {
   .hero-short h1 {
     font-size: clamp(2.2rem, 7.2vh, 3.4rem);

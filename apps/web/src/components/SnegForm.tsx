@@ -1,16 +1,17 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { ConsentText } from '@/components/ConsentText';
+import { useEffect, useRef, useState } from 'react';
+import { CONSENT_ERROR, ConsentCheck, focusFirstInvalid, PhoneInput } from '@/components/FormBits';
 import { LeadSuccess } from '@/components/LeadSuccess';
 import { reachGoal } from '@/lib/marketing';
+import { formatPhone, phoneError } from '@/lib/phoneMask';
 import { SITE } from '@/lib/site';
 import { SNEG_SOURCE, snegLeadMessage } from '@/lib/snegLead';
 import { leadErrorText, readLeadDraft, submitLead } from '@/lib/submitLead';
 import { useHydrated } from '@/lib/useHydrated';
 
 const INPUT =
-  'min-h-11 w-full rounded-md border border-slate-600 bg-slate-900/60 px-3 py-2 text-base text-white placeholder:text-slate-400 sm:text-sm';
+  'min-h-11 w-full rounded-md border border-slate-600 bg-slate-900/60 px-3 py-2 text-base text-white placeholder:text-slate-400';
 
 // The short заявка of /uborka-snega: the phone and the consent, the address and
 // what to clear if the visitor wants to say. Goes to the same POST /api/leads
@@ -23,12 +24,14 @@ export function SnegForm() {
   const [website, setWebsite] = useState('');
   const [status, setStatus] = useState<'idle' | 'sending' | 'sent'>('idle');
   const [error, setError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<{ phone?: string; consent?: string }>({});
+  const formRef = useRef<HTMLFormElement>(null);
   const hydrated = useHydrated();
 
   // A phone that did not go through last time (bad connection) comes back.
   useEffect(() => {
     const draft = readLeadDraft();
-    if (draft?.phone) setPhone(draft.phone);
+    if (draft?.phone) setPhone(formatPhone(draft.phone));
   }, []);
 
   const message = snegLeadMessage({ address, what });
@@ -36,6 +39,16 @@ export function SnegForm() {
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
     setError(null);
+    // The form's own words under the fields, not the browser's bubbles.
+    const problems = {
+      phone: phoneError(phone) ?? undefined,
+      consent: consent ? undefined : CONSENT_ERROR,
+    };
+    setFieldErrors(problems);
+    if (problems.phone || problems.consent) {
+      focusFirstInvalid(formRef.current);
+      return;
+    }
     setStatus('sending');
     try {
       await submitLead({ phone, message, source: SNEG_SOURCE, consent, website });
@@ -51,7 +64,9 @@ export function SnegForm() {
 
   return (
     <form
+      ref={formRef}
       method="post"
+      noValidate
       onSubmit={handleSubmit}
       data-callback-form
       data-testid="sneg-form"
@@ -63,19 +78,14 @@ export function SnegForm() {
           Оставьте телефон — диспетчер перезвонит, уточнит объём и назовёт цену.
         </p>
       </div>
-      <input
-        required
-        type="tel"
-        name="phone"
+      <PhoneInput
+        dark
         value={phone}
-        onChange={(e) => setPhone(e.target.value)}
-        maxLength={30}
-        pattern="(?:\D*\d){10,15}\D*"
-        title="Номер телефона: от 10 цифр"
-        placeholder="+7 (___) ___-__-__"
-        autoComplete="tel"
-        inputMode="tel"
-        aria-label="Телефон"
+        onChange={(next) => {
+          setPhone(next);
+          if (fieldErrors.phone) setFieldErrors((now) => ({ ...now, phone: undefined }));
+        }}
+        error={fieldErrors.phone}
         className={INPUT}
       />
       <input
@@ -107,17 +117,15 @@ export function SnegForm() {
         aria-hidden
         name="website"
       />
-      <label className="flex items-start gap-2 text-xs text-slate-300">
-        <input
-          type="checkbox"
-          required
-          name="consent"
-          checked={consent}
-          onChange={(e) => setConsent(e.target.checked)}
-          className="mt-0.5"
-        />
-        <ConsentText />
-      </label>
+      <ConsentCheck
+        dark
+        checked={consent}
+        onChange={(next) => {
+          setConsent(next);
+          if (next) setFieldErrors((now) => ({ ...now, consent: undefined }));
+        }}
+        error={fieldErrors.consent}
+      />
       {error && (
         <p role="alert" className="text-sm text-red-300">
           {error}
@@ -126,7 +134,7 @@ export function SnegForm() {
       <button
         type="submit"
         disabled={!hydrated || status === 'sending'}
-        className="show-cta min-h-11 rounded-md bg-amber-500 px-5 py-2.5 text-sm font-bold text-slate-950 shadow-lg shadow-amber-600/30 transition hover:bg-amber-400 disabled:opacity-60"
+        className="show-cta min-h-11 rounded-md bg-amber-500 px-5 py-2.5 text-base font-bold text-slate-950 shadow-lg shadow-amber-600/30 transition hover:bg-amber-400 disabled:opacity-60"
       >
         {status === 'sending' ? 'Отправляем…' : 'Жду звонка'}
       </button>
