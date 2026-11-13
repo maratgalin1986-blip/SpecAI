@@ -1173,8 +1173,8 @@ function mergeResults(a: OutreachResult, b: OutreachResult): OutreachResult {
 }
 
 /**
- * Разгон дневного лимита. Владелец (2026-11-12, после предупреждения о риске блокировки ящика):
- * «делай по 250 в день на проект» — это стартовое значение, оно действует сразу. Лимит выше него
+ * Разгон дневного лимита. Владелец (2026-11-13, после ночи с 250 письмами с одного ящика): «в сутки
+ * по 50 писем равномерно» — это стартовое значение, оно действует сразу. Лимит выше него
  * (если владелец поднимет в настройках) растёт примерно в 1,4 раза в день: резкий рост холодной
  * рассылки с одного ящика почтовые сервисы блокируют.
  */
@@ -1182,7 +1182,7 @@ function mergeResults(a: OutreachResult, b: OutreachResult): OutreachResult {
 export const HOURLY_SHARE = 12;
 
 export const RAMP_START = new Date('2026-11-12T21:00:00Z'); // 13.11 00:00 по Москве
-export const RAMP_START_CAP = 250;
+export const RAMP_START_CAP = 50;
 export const RAMP_FACTOR = 1.4;
 
 export function rampedCap(target: number, now: Date): number {
