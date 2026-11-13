@@ -143,13 +143,18 @@ test('the walk controls are big enough to tap and drawn as icons, not emoji', as
   await invitation(page).click();
   const dialog = walkDialog(page);
   await expect(exitButton(page)).toBeVisible();
+  await expect(dialog.getByText('Остановка 1 из 4')).toBeVisible();
+  const height = async (target: ReturnType<Page['locator']>) =>
+    (await target.boundingBox())?.height ?? 0;
   for (const name of [/Выйти из прогулки/, /Назад/, /Пауза|Играть/, /Дальше/, /звук/]) {
-    const box = await dialog.getByRole('button', { name }).first().boundingBox();
-    expect(box!.height, String(name)).toBeGreaterThanOrEqual(44);
+    await expect
+      .poll(() => height(dialog.getByRole('button', { name }).first()), { message: String(name) })
+      .toBeGreaterThanOrEqual(44);
   }
   for (const name of ['Заказать', 'Позвонить']) {
-    const box = await dialog.getByRole('link', { name }).boundingBox();
-    expect(box!.height, name).toBeGreaterThanOrEqual(44);
+    await expect
+      .poll(() => height(dialog.getByRole('link', { name })), { message: name })
+      .toBeGreaterThanOrEqual(44);
   }
   const text = await dialog.innerText();
   expect(text).not.toMatch(/\p{Extended_Pictographic}/u);

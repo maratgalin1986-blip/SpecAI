@@ -153,33 +153,24 @@ export function World3D({ categoryIds }: { categoryIds: Partial<Record<WorldKind
     if (!closed) return;
     inviteRef.current?.focus({ preventScroll: true });
     if (!fromUrl) return;
-    const toBlock = () => slotRef.current?.scrollIntoView({ block: 'center', behavior: 'instant' });
-    let restoration: ScrollRestoration | null = null;
-    try {
-      restoration = history.scrollRestoration;
-      history.scrollRestoration = 'manual';
-    } catch {
-      /* history blocked: the block is still brought into view below */
-    }
-    const done = () => {
-      window.removeEventListener('popstate', onPop);
-      window.clearTimeout(stop);
-      try {
-        if (restoration) history.scrollRestoration = restoration;
-      } catch {
-        /* nothing to restore */
-      }
-    };
-    const onPop = () => {
-      toBlock();
-      window.setTimeout(toBlock, 50);
-      done();
+    const slot = slotRef.current;
+    if (!slot) return;
+    // The closing Back is followed, a moment later, by the browser's and the
+    // router's own scroll to where that entry was (the top, smoothly): for a few
+    // seconds the block is brought back whenever it has left the screen. A visitor
+    // who scrolls on is not fought for long, and a block on screen is left alone.
+    const toBlock = () => slot.scrollIntoView({ block: 'center', behavior: 'instant' });
+    const offScreen = () => {
+      const box = slot.getBoundingClientRect();
+      return box.bottom < 0 || box.top > window.innerHeight;
     };
     toBlock();
-    window.requestAnimationFrame(toBlock);
-    window.addEventListener('popstate', onPop);
-    const stop = window.setTimeout(done, 6000);
-    return done;
+    const started = Date.now();
+    const watch = window.setInterval(() => {
+      if (Date.now() - started > 3500) window.clearInterval(watch);
+      else if (offScreen()) toBlock();
+    }, 120);
+    return () => window.clearInterval(watch);
   }, [walkOpen, fromUrl]);
 
   const openWalk = useCallback((direct = false) => {
