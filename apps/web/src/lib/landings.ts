@@ -5,6 +5,7 @@ import {
   fromPrice,
   HAMMER_RATE,
   rateOf,
+  MIN_ORDER_TEXT,
   SHIFT_HOURS,
 } from '@/lib/prices';
 
@@ -12,6 +13,8 @@ import {
 // Each maps to a catalog category; prices in the FAQ come from lib/prices.ts.
 
 const cap = (text: string) => `${text[0]!.toUpperCase()}${text.slice(1)}`;
+/** «минимум 4 часа, дальше по часам» after «Смена — 8 часов,». */
+const lowerFirstMin = `${MIN_ORDER_TEXT[0]!.toLowerCase()}${MIN_ORDER_TEXT.slice(1)}`;
 
 export interface Landing {
   slug: string;
@@ -47,7 +50,7 @@ export const LANDINGS: Landing[] = [
     faq: [
       {
         q: 'Сколько стоит час работы экскаватора-погрузчика?',
-        a: `${cap(fromPrice('backhoe'))} с машинистом, с гидромолотом — ${fromPrice(HAMMER_RATE)}. Смена — ${SHIFT_HOURS} часов. Точную цену с подачей назовёт диспетчер.`,
+        a: `${cap(fromPrice('backhoe'))} с машинистом, с гидромолотом — ${fromPrice(HAMMER_RATE)}. Смена — ${SHIFT_HOURS} часов, ${lowerFirstMin}. Точную цену с подачей назовёт диспетчер.`,
       },
       {
         q: 'Какие модели есть в парке СпецПласт16?',
@@ -77,7 +80,7 @@ export const LANDINGS: Landing[] = [
     faq: [
       {
         q: 'Сколько стоит аренда автокрана?',
-        a: `${cap(fromPrice('crane'))}, автокран 32 т — ${fromPerHour(CRANE_HEAVY_RATE)}. Смена — ${SHIFT_HOURS} часов.`,
+        a: `${cap(fromPrice('crane'))}, автокран 32 т — ${fromPerHour(CRANE_HEAVY_RATE)}. Смена — ${SHIFT_HOURS} часов, ${lowerFirstMin}.`,
       },
       {
         q: 'Нужен ли стропальщик?',
@@ -106,7 +109,7 @@ export const LANDINGS: Landing[] = [
     faq: [
       {
         q: 'Сколько стоит час работы фронтального погрузчика?',
-        a: `${cap(fromPrice('loader'))} с машинистом. Смена — ${SHIFT_HOURS} часов.`,
+        a: `${cap(fromPrice('loader'))} с машинистом. Смена — ${SHIFT_HOURS} часов, ${lowerFirstMin}.`,
       },
       {
         q: 'Можно заказать на уборку снега?',
@@ -125,7 +128,7 @@ export const LANDINGS: Landing[] = [
     faq: [
       {
         q: 'Сколько стоит аренда трактора?',
-        a: `${cap(fromPrice('tractor'))} с машинистом. Смена — ${SHIFT_HOURS} часов.`,
+        a: `${cap(fromPrice('tractor'))} с машинистом. Смена — ${SHIFT_HOURS} часов, ${lowerFirstMin}.`,
       },
     ],
   },

@@ -2,11 +2,18 @@
 // client bundle (the header) and in the middleware, which must not pull in
 // zod and the city list with it.
 import {
+  PLATFORM_CALLBACK_WHO,
   PLATFORM_PROMISE,
   PLATFORM_PROMISE_DETAIL,
   PLATFORM_PROMISE_LINE,
   PLATFORM_PROMISE_SHORT,
 } from '@specai/shared/src/promise';
+import { pluralizeRu } from './pluralize';
+
+/** «Перезвоним за 15 минут» (owner, 2026-11-13: kept, from one number). */
+export const CALLBACK_MINUTES = 15;
+/** «15 минут», for «в течение …» and «за …». */
+export const CALLBACK_IN = pluralizeRu(CALLBACK_MINUTES, ['минуту', 'минуты', 'минут']);
 
 // Company branding and contacts, in one place so they're easy to update.
 export const SITE = {
@@ -20,8 +27,8 @@ export const SITE = {
   // service to Tatarstan (site.test.ts checks it).
   tagline: 'Заказ спецтехники с машинистом по всей России',
   description:
-    'ИИСтройка24 от СпецПласт16 — заказ спецтехники с машинистом по всей России, бесплатно и без ' +
-    'посредников: одна заявка — цены исполнителей рядом с вами, расчёт напрямую с владельцем ' +
+    'ИИСтройка24 от СпецПласт16 — заказ спецтехники с машинистом, заявка из любого города России, ' +
+    'без комиссии для заказчика: одна заявка — цены исполнителей, расчёт напрямую с владельцем ' +
     'техники. Свой парк СпецПласт16 — в Набережных Челнах.',
   // The headline promise (owner, 2026-10-17), from packages/shared/src/promise.ts:
   // the header pill, the hero, the forms, the footer, the shared texts. True
@@ -31,8 +38,12 @@ export const SITE = {
   promise: PLATFORM_PROMISE,
   promiseShort: PLATFORM_PROMISE_SHORT,
   promiseDetail: PLATFORM_PROMISE_DETAIL,
-  /** Both in one sentence: «Бесплатно и без посредников: цену назначает…». */
+  /** Both in one sentence: «Без комиссии для заказчика: цену назначает…». */
   promiseLine: PLATFORM_PROMISE_LINE,
+  /** «Перезвонит диспетчер СпецПласт16 — он сравнивает предложения исполнителей.» */
+  callbackWho: PLATFORM_CALLBACK_WHO,
+  /** Where the order comes from (owner, 2026-11-13): instead of «Вся Россия · исполнители рядом». */
+  reach: 'Заявка из любого города России',
   /** Where the header pill and the notes lead: the explanation on /kak-polzovatsya. */
   promiseHref: '/kak-polzovatsya#besplatno',
   // The company's own contacts (the legal owner and the house provider), not
@@ -53,7 +64,7 @@ export const SITE = {
   // The bot is @specplast16_zayavki_bot; NEXT_PUBLIC_TELEGRAM_BOT can override it.
   telegramBot: process.env.NEXT_PUBLIC_TELEGRAM_BOT || 'specplast16_zayavki_bot',
   // Promise shown next to callback forms. Keep it realistic.
-  callbackPromise: 'Перезвоним в течение 15 минут в рабочее время',
+  callbackPromise: `Перезвоним в течение ${CALLBACK_IN} в рабочее время`,
   workingHours: 'Пн–Сб, 8:00–20:00 · заявки на сайте — в любое время',
   // Legal details of the personal-data operator shown in the privacy policy,
   // e.g. 'ИП Иванов Иван Иванович' and the ИНН. Fill in before launch.

@@ -25,10 +25,11 @@ small so merges stay conflict-free.
    existing `enum` is not: `ALTER TYPE ... ADD VALUE` cannot run through the
    pooled connection, and the Vercel build dies before `next build`. Use a
    column instead, or ask the owner to set `DIRECT_URL` in Vercel first.
-3. **The database is Yandex Managed PostgreSQL** (see
-   `packages/database/src/connection.ts`). A branch without that code cannot
-   connect from Vercel, so previews of stale branches fail in ~15 s. If your
-   preview fails that fast, merge main first, then investigate.
+3. **Since 2026-10-28 the production database is a free Neon PostgreSQL**
+   (Vercel Storage, region iad1; see `packages/database/src/connection.ts` and
+   the handoff entry of 28.10). Previews use the same database. A preview that
+   fails in ~15 s is usually a stale branch: merge main first, then
+   investigate. Where personal data is stored is the owner's 152-ФЗ decision.
 4. **Never disable, delete or reschedule another session's scheduled tasks**
    (Routines / reminders). One session switched off another's reminders on
    2026‑09‑27; it took a while to notice.
@@ -100,7 +101,7 @@ small so merges stay conflict-free.
   together, lessons log), `docs/marketing.md`.
 - The mobile app is on Expo: project `@maratgalin1986s-team/specai`, EAS Update
   branch `preview` for Expo Go; steps in `apps/mobile/README.md`.
-- pnpm 10 workspaces, Node 20 in CI. Packages: `apps/web` (Next.js 14),
+- pnpm 10 workspaces, Node 20 in CI. Packages: `apps/web` (Next.js 15, React 19),
   `apps/mobile` (Expo SDK 57), `packages/{database,shared,ui,ai-service}`.
 - Checks: `pnpm lint`, `pnpm typecheck`, `pnpm format:check`, `pnpm test`
   (vitest 4 — vitest 5 needs Node 22 and breaks CI), and for the app

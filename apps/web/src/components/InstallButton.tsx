@@ -37,6 +37,24 @@ function isStandalone(): boolean {
 
 // Per page load, not per route: the layout keeps the button across navigation.
 let attentionPasses = 0;
+/** localStorage: the visitor has been here before. The first visit gets no glow ring. */
+const VISITED_KEY = 'sp16_install_visited';
+
+/**
+ * The first visit: the button is there, quiet — no glow ring and no jumps;
+ * they start from the second visit (a reviewer's note, 2026-11-13: on
+ * arrival the ring competed with the order buttons). True on the first call
+ * of a first visit only; storage blocked counts as a return.
+ */
+function firstVisit(): boolean {
+  try {
+    if (localStorage.getItem(VISITED_KEY)) return false;
+    localStorage.setItem(VISITED_KEY, '1');
+    return true;
+  } catch {
+    return false;
+  }
+}
 let shownReported = false;
 
 const SPARKS = sparkOffsets(8, 46);
@@ -238,6 +256,7 @@ export function InstallButton() {
   // Attention: a few passes, then calm (INSTALL_ATTENTION). Not while the help is open.
   useEffect(() => {
     if (!visible) return;
+    if (attentionPasses === 0 && firstVisit()) attentionPasses = INSTALL_ATTENTION.times;
     let timer = 0;
     const schedule = () => {
       const delay = attentionDelay(attentionPasses);

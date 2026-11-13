@@ -11,7 +11,15 @@ import { SITE } from '@/lib/site';
 import { siteUrl } from '@/lib/siteUrl';
 import { CinemaBand } from '@/components/CinemaBand';
 import { CinemaLayer } from '@/components/CinemaHero';
-import { fromPerHour, fromPrice, houseRate, rateOf, rub, SHIFT_HOURS } from '@/lib/prices';
+import {
+  fromPerHour,
+  fromPrice,
+  houseRate,
+  MIN_ORDER_HOURS,
+  rateOf,
+  rub,
+  SHIFT_HOURS,
+} from '@/lib/prices';
 import { HOUSE_FIRST_ORDER, PUBLIC_FLEET, isHouseEquipment } from '@/lib/fleet';
 import { customerRates } from '@/lib/equipmentCatalog';
 import { MachineAmbience } from '@/components/MachineAmbience';
@@ -282,9 +290,9 @@ export default async function LandingPage(props: { params: Promise<{ slug: strin
           </div>
           <div>
             <div className="whitespace-nowrap text-3xl font-extrabold tracking-tight text-slate-900">
-              <CountUp value={SHIFT_HOURS} duration={900} /> ч
+              <CountUp value={MIN_ORDER_HOURS} duration={900} /> ч
             </div>
-            <div className="text-sm text-slate-600">смена, оплата по факту</div>
+            <div className="text-sm text-slate-600">минимальный заказ, дальше по часам</div>
           </div>
         </div>
         <ul className="mt-4 space-y-1 text-sm text-slate-700">

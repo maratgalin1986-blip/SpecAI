@@ -9,6 +9,7 @@ import { approvedComments } from '@/lib/commentAccess';
 import { companyReliability } from '@/lib/companyStats';
 import { isDisplayableImage, providerPagePhone } from '@/lib/providerMap';
 import { maskContactsAndLinks } from '@/lib/privacy';
+import { PHONE_VISIBILITY } from '@/lib/phoneVisibility';
 import { shortAuthorName } from '@/lib/comments';
 import {
   jsonLdScript,
@@ -217,7 +218,7 @@ export default async function ProviderPublicPage(props: { params: Promise<{ id: 
           {contact
             ? 'Позвоните или оставьте заявку.'
             : 'Исполнитель не показывает телефон — оставьте заявку, он ответит ценой.'}{' '}
-          Ваш телефон исполнитель увидит только после подтверждения брони. Сервис бесплатный.
+          {PHONE_VISIBILITY} Сервис бесплатный.
         </p>
       </header>
 

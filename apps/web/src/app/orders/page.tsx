@@ -203,8 +203,7 @@ export default async function OrdersPage(props: { searchParams: Promise<OrdersSe
           <p className="mb-3 max-w-xl text-sm text-slate-600">
             Без регистрации: заявку увидят{' '}
             {forProvider ? `«${forProvider.name}» и другие исполнители` : 'все исполнители'} и
-            пришлют цены, а телефон откроется только по запросу исполнителя. С аккаунтом удобнее
-            сравнивать предложения:{' '}
+            пришлют цены. С аккаунтом удобнее сравнивать предложения:{' '}
             <a href="/register" className="underline">
               зарегистрируйтесь
             </a>{' '}
@@ -504,8 +503,10 @@ export default async function OrdersPage(props: { searchParams: Promise<OrdersSe
               {' · '}
             </>
           )}
-          Заказчик виден как «Анна П.», контакты — после подтверждения брони, а телефон из заявок
-          без аккаунта — по кнопке «Показать телефон»
+          {/* The provider's rules for a provider; a visitor only needs to know the board is safe. */}
+          {viewerIsProvider
+            ? 'Заказчик виден по имени и первой букве фамилии, контакты — после подтверждения брони, а телефон из заявок без аккаунта — по кнопке «Показать телефон»'
+            : 'На доске имена заказчиков сокращены, телефонов и точных адресов нет'}
         </p>
 
         {board.items.length === 0 ? (
@@ -515,7 +516,7 @@ export default async function OrdersPage(props: { searchParams: Promise<OrdersSe
                 ? 'По этим фильтрам открытых заявок нет'
                 : viewerIsProvider
                   ? 'Новые заявки появятся здесь'
-                  : 'Разместите заявку первой — её увидят исполнители рядом'}
+                  : 'Разместите заявку первой — её увидят исполнители площадки'}
             </p>
             <p className="mt-2 text-sm text-graphite-600">
               {hasFilters ? (

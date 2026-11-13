@@ -10,7 +10,7 @@ import { PRICES_BUTTON } from '@/lib/botPrices';
 import { LANDINGS } from '@/lib/landings';
 import { MACHINE_LABELS } from '@/lib/machinePhotos';
 import { HAMMER_RATE, rateOf, rub, SHIFT_HOURS } from '@/lib/prices';
-import { SITE } from '@/lib/site';
+import { CALLBACK_IN, SITE } from '@/lib/site';
 import { siteUrl } from '@/lib/siteUrl';
 
 export type InlineButton = { text: string; callback_data: string };
@@ -143,7 +143,7 @@ export function calcText(machine: number, hours: number, hammer = false) {
 export function greeting() {
   return (
     `Здравствуйте! Это бот ${SITE.platform} от ${SITE.name} — площадка аренды спецтехники с машинистом ` +
-    `по всей России: парк ${SITE.name} в Набережных Челнах и техника других компаний-исполнителей рядом с вашим объектом.\n\n` +
+    `с заявкой из любого города России: парк ${SITE.name} в Набережных Челнах и техника других компаний-исполнителей.\n\n` +
     `Три шага — и заявка у диспетчера. Какая техника нужна?`
   );
 }
@@ -183,7 +183,7 @@ export function askPhoneText(c: Extract<Callback, { step: 'place' }>) {
 
 export function acceptedText(onShift: boolean) {
   return onShift
-    ? `Заявка принята! Диспетчер ${SITE.name} перезвонит в течение 15 минут. Срочно — ${SITE.phone}`
+    ? `Заявка принята! Диспетчер ${SITE.name} перезвонит в течение ${CALLBACK_IN}. Срочно — ${SITE.phone}`
     : `Заявка принята, позвоним с 8:00. Срочно — ${SITE.phone}`;
 }
 

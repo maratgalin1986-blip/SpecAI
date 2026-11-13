@@ -59,7 +59,7 @@ export default function AboutScreen() {
           <ContactRow
             icon="location-outline"
             label="Где работаем"
-            value="По всей России — заявку видят исполнители рядом с объектом"
+            value="Заявка из любого города России — предложения пришлют исполнители"
           />
           <ContactRow
             icon="business-outline"
