@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 vi.mock('@specai/database', () => ({ prisma: {} }));
 
 import { parseDossier } from './dossier';
+import { nicheByKey } from './niches';
 import { OFFICE_SETTINGS, defaultPlan } from './plan';
 import {
   SEARCH_LIMIT,
@@ -11,6 +12,8 @@ import {
   ingestScheduledStep,
   peekScheduledStep,
   relayRequest,
+  sourceNiche,
+  websiteIsFine,
   stepKey,
   phoneTail,
   resolvePlan,
@@ -877,6 +880,25 @@ describe('поиск через раннер: peekScheduledStep / ingestSchedule
     expect(beauty.split('nwr[').length).toBeGreaterThan(1);
   });
 
+  it('ниши площадки с отбором по названию: в Москве и Петербурге без office=company', () => {
+    const omsk = relayRequest({
+      agent: 'providers',
+      niche: 'road_construction',
+      city: 'Омск',
+    }).query!;
+    expect(omsk).toContain('nwr["office"="construction_company"](around:15000,');
+    expect(omsk).toContain('nwr["office"="company"](around:15000,');
+    expect(omsk).not.toContain('"name"');
+    const moscow = relayRequest({ agent: 'providers', niche: 'estimators', city: 'Москва' }).query!;
+    expect(moscow).toContain('nwr["office"="consulting"](around:15000,');
+    expect(moscow).toContain('nwr["office"="engineer"](around:15000,');
+    expect(moscow).not.toContain('"office"="company"');
+    // Точные теги без отбора по названию идут как есть.
+    const freight = relayRequest({ agent: 'providers', niche: 'freight', city: 'Москва' }).query!;
+    expect(freight).toContain('nwr["office"="logistics"](around:15000,');
+    expect(freight).toContain('nwr["office"="moving_company"](around:15000,');
+  });
+
   it('эпоха плана: курсор прежней эпохи не действует, обход с первого шага; запись ставит эпоху', async () => {
     const { db, settings } = fakeDb();
     settings.set(OFFICE_SETTINGS.plan, PLAN);
@@ -925,5 +947,85 @@ describe('phoneTail', () => {
   it('последние 10 цифр', () => {
     expect(phoneTail('+7 (843) 200-11-22')).toBe('8432001122');
     expect(phoneTail('88432001122')).toBe('8432001122');
+  });
+});
+
+describe('правило «есть сайт — не кандидат» — только у «Сайтов»', () => {
+  const list = () => [
+    candidate({ name: 'ТрансЛогистик', sourceRef: 'osm:node/1', phone: '+78432000001' }),
+    candidate({
+      name: 'Грузовая компания «Рейс»',
+      sourceRef: 'osm:node/2',
+      phone: '+78432000002',
+      website: 'https://reis.example',
+    }),
+  ];
+
+  it('websiteIsFine и флаг источника: проекту площадки сайт не мешает', () => {
+    expect(websiteIsFine('sites')).toBe(false);
+    expect(websiteIsFine('providers')).toBe(true);
+    expect(sourceNiche(nicheByKey('freight')!).websiteOk).toBe(true);
+    expect(sourceNiche(nicheByKey('construction')!).websiteOk).toBe(true);
+    expect(sourceNiche(nicheByKey('car_repair')!).websiteOk).toBeUndefined();
+  });
+
+  it('проект площадки: фирма с сайтом становится кандидатом, в досье нет «нет своего сайта»', async () => {
+    const { db, prospects } = fakeDb();
+    const result = await runStep(
+      { agent: 'providers', niche: 'freight', city: 'Омск', trigger: 'cron' },
+      { db, source: source(ok(list())) },
+    );
+    expect(result).toMatchObject({ found: 2, created: 2, skipped: 0, error: null });
+    expect(prospects.map((p) => [p.kind, p.niche, p.sourceRef])).toEqual([
+      ['provider', 'freight', 'osm:node/1'],
+      ['provider', 'freight', 'osm:node/2'],
+    ]);
+    expect(parseDossier(prospects[0]!.dossierJson)!.gaps).toContain('нет своего сайта');
+    expect(parseDossier(prospects[1]!.dossierJson)!.gaps).not.toContain('нет своего сайта');
+  });
+
+  it('заказчики площадки (строители) — тоже с сайтом, вид кандидата остаётся provider', async () => {
+    const { db, prospects } = fakeDb();
+    const result = await runStep(
+      { agent: 'providers', niche: 'construction', city: 'Омск', trigger: 'cron' },
+      {
+        db,
+        source: source(
+          ok([
+            candidate({
+              name: 'СтройГрад',
+              sourceRef: 'osm:node/5',
+              phone: '+78432000005',
+              website: 'https://stroygrad.example',
+            }),
+          ]),
+        ),
+      },
+    );
+    expect(result).toMatchObject({ found: 1, created: 1, skipped: 0 });
+    expect(prospects[0]).toMatchObject({ kind: 'provider', niche: 'construction' });
+  });
+
+  it('«Сайты»: те же фирмы — с сайтом мимо, как раньше', async () => {
+    const { db, prospects } = fakeDb();
+    const result = await runStep(
+      { agent: 'sites', niche: 'car_repair', city: 'Омск', trigger: 'cron' },
+      { db, source: source(ok(list())) },
+    );
+    expect(result).toMatchObject({ found: 2, created: 1, skipped: 1 });
+    expect(prospects.map((p) => p.sourceRef)).toEqual(['osm:node/1']);
+  });
+
+  it('ИП и люди не становятся кандидатами и в проекте площадки', async () => {
+    const { db, prospects } = fakeDb();
+    const result = await runStep(
+      { agent: 'providers', niche: 'freight', city: 'Омск', trigger: 'cron' },
+      {
+        db,
+        source: source(ok([candidate({ name: 'ИП Иванов', website: 'https://ivanov.example' })])),
+      },
+    );
+    expect(result).toMatchObject({ found: 1, created: 0, skipped: 1 });
+    expect(prospects).toHaveLength(0);
   });
 });
