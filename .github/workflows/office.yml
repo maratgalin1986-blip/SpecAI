@@ -23,16 +23,26 @@ name: Office tick
 # that changes .github/office-relay-run.txt on its branch starts one run from that branch.
 on:
   schedule:
-    - cron: '37 * * * *'
+    - cron: '7,37 * * * *'
   workflow_dispatch:
   push:
     branches: ['claude/pensive-feynman-bila02']
     paths: ['.github/office-relay-run.txt']
 
+# Один запуск за раз; лишние ждут в очереди по одному (GitHub держит в группе один ожидающий).
+concurrency:
+  group: office-relay
+  cancel-in-progress: false
+
+# Запуск следующего прохода (шаг «Next run») — единственное, для чего нужен доступ на запись.
+permissions:
+  contents: read
+  actions: write
+
 jobs:
   tick:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
         with:
@@ -41,3 +51,16 @@ jobs:
         env:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: bash .github/scripts/office-relay.sh
+      # Непрерывный поиск (владелец, 2026-11-12: 250 писем в день на проект): расписание GitHub
+      # срабатывает раз в несколько часов, поэтому каждый проход сам ставит следующий. Выключатель —
+      # файл .github/office-relay-chain.txt: первая строка «on». Сбой прохода цепочку не рвёт
+      # надолго: её поднимет расписание.
+      - name: Next run
+        if: ${{ success() }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ "$(head -n 1 .github/office-relay-chain.txt 2>/dev/null)" = "on" ]; then
+            sleep 60
+            gh workflow run office.yml --repo "$GITHUB_REPOSITORY" --ref main
+          fi

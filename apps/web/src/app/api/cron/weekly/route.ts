@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { cronAllowed } from '@/lib/cronAuth';
-import { prisma } from '@specai/database';
-import { onceADay } from '@/lib/cronOnce';
+import { onceForKey } from '@/lib/cronOnce';
 import { notifyTelegram } from '@/lib/notify';
-import { SITE } from '@/lib/site';
-import { buildWeeklyReport } from '@/lib/weeklyReport';
+import { buildWeeklyReport, reportDue, reportWeek, type ReportWeek } from '@/lib/weeklyReport';
+import { loadWeeklyData } from '@/lib/weeklyReportData';
 import { submitToIndexNow } from '@/lib/indexNow';
 import { sendWeeklyNewsletter } from '@/lib/newsletterData';
 import { sendWeeklyPriceAsk } from '@/lib/aktualnoData';
@@ -23,19 +22,31 @@ const NEWSLETTER_BUDGET_MS = 35_000;
 // Its sends time out after 8 s (lib/aktualnoData.ts), so the run ends within maxDuration.
 const PRICE_ASK_BUDGET_MS = 48_000;
 
-// Called by Vercel Cron on Monday mornings (apps/web/vercel.json); only
-// requests carrying CRON_SECRET are accepted (lib/cronAuth.ts).
+// Called on Monday mornings by Vercel Cron (apps/web/vercel.json) and, as a
+// backstop, by .github/workflows/weekly-report.yml — GitHub starts scheduled
+// runs hours late, so the call may come more than once and on a later day.
+// Only requests carrying CRON_SECRET are accepted (lib/cronAuth.ts).
 export async function GET(request: NextRequest) {
   if (!cronAllowed(request)) return NextResponse.json({ error: 'forbidden' }, { status: 403 });
   const started = Date.now();
-  // Once a day (lib/cronOnce.ts): a repeated call does not resend the report.
+  const now = new Date(started);
+  const week = reportWeek(now);
+  const due = reportDue(now);
+  // One report per reported week (lib/cronOnce.ts): the key is the week's
+  // Monday, so a second call for the same week sends nothing, whatever the day.
   let result: Awaited<ReturnType<typeof sendWeeklyReport>> | null = null;
   let failed = false;
-  try {
-    result = await onceADay('weekly', sendWeeklyReport);
-  } catch (error) {
-    console.error('[cron/weekly] report failed', error);
-    failed = true;
+  if (due) {
+    try {
+      result = await onceForKey(
+        `cron:weekly-report:${week.key}`,
+        () => sendWeeklyReport(week, now),
+        now,
+      );
+    } catch (error) {
+      console.error('[cron/weekly] report failed', error);
+      failed = true;
+    }
   }
   // «Заявки рядом за неделю» to subscribers, after the report and on its own:
   // an error here never costs the report. Each user is guarded by lastNewsAt,
@@ -57,34 +68,37 @@ export async function GET(request: NextRequest) {
   });
   if (failed) {
     return NextResponse.json(
-      { ok: false, error: 'report failed', newsletter, priceAsk },
+      { ok: false, error: 'report failed', week: week.key, newsletter, priceAsk },
       { status: 500 },
     );
   }
   if (!result) {
-    return NextResponse.json({ ok: true, skipped: 'already sent today', newsletter, priceAsk });
+    return NextResponse.json({
+      ok: true,
+      week: week.key,
+      skipped: due ? 'already sent for this week' : 'too early',
+      newsletter,
+      priceAsk,
+    });
   }
-  return NextResponse.json({ ok: true, ...result, newsletter, priceAsk });
+  return NextResponse.json({ ok: true, week: week.key, ...result, newsletter, priceAsk });
 }
 
-async function sendWeeklyReport() {
-  const since = new Date(Date.now() - 14 * 86_400_000);
-  const [leads, orders] = await Promise.all([
-    prisma.lead.findMany({
-      // Bot drafts without a phone are not leads yet.
-      where: { createdAt: { gte: since }, NOT: { phone: '' } },
-      select: { createdAt: true, source: true, status: true, outcome: true, amount: true },
-    }),
-    prisma.order.findMany({
-      where: { createdAt: { gte: since } },
-      select: { createdAt: true, source: true },
-    }),
-  ]);
-  const sent = await notifyTelegram(buildWeeklyReport(leads, orders, Date.now(), SITE.name));
+async function sendWeeklyReport(week: ReportWeek, now: Date) {
+  const text = buildWeeklyReport(await loadWeeklyData(week, now), week);
+  // Not accepted (Telegram is down or not set up): the error gives the week
+  // back, so the next scheduled call sends the report instead of losing it.
+  if (!(await notifyTelegram(text))) throw new Error('Telegram did not accept the report');
   // Also remind Yandex of every page (new machines and landings get indexed).
+  // Its failure must not give the week back: the report is already delivered.
   const indexNow =
     process.env.VERCEL_ENV === 'production'
-      ? await submitToIndexNow((await sitemap()).map((entry) => entry.url))
+      ? await sitemap()
+          .then((entries) => submitToIndexNow(entries.map((entry) => entry.url)))
+          .catch((error: unknown) => {
+            console.error('[cron/weekly] IndexNow failed', error);
+            return null;
+          })
       : null;
-  return { sent, indexNow };
+  return { sent: true, indexNow };
 }

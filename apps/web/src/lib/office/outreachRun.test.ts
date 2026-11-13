@@ -28,6 +28,8 @@ import {
   followUpWindow,
   markReplied,
   OUTREACH_BUDGET_MS,
+  RAMP_START,
+  rampedCap,
   outreachErrorText,
   AUTO_SEND_HOURS,
   DELIVERY_UNKNOWN,
@@ -466,8 +468,9 @@ describe('sendOutreach', () => {
     let tick = 0;
     const clock = () => {
       tick += 1;
-      // The start, the row check and the send check read 0; after one send the budget is spent.
-      return tick <= 3 ? 0 : OUTREACH_BUDGET_MS + 1;
+      // The pass start, the project start, the row check and the send check read 0; after one
+      // send the budget is spent.
+      return tick <= 4 ? 0 : OUTREACH_BUDGET_MS + 1;
     };
     const result = await sendOutreach(NOW, deps(db, { clock }));
     expect(result.email).toBe(1);
@@ -1682,18 +1685,79 @@ describe('местное время фирмы и «восточное утро�
     expect(okEmail.mock.calls.map((c) => c[0].to)).toEqual(['kzn@example.com']);
   });
 
-  it('ночная пачка не съедает дневной лимит', async () => {
+  it('лимит — на сутки по Москве: ночные письма востоку считаются вместе с дневными', async () => {
     const { start } = mskDayBounds(LATER);
     const night = new Date(start.getTime() + 3_600_000);
     const { db } = fakeDb([
       row({ id: 's1', status: 'CONTACTED', emailSentAt: night, contactedAt: night }),
       row({ id: 's2', status: 'CONTACTED', emailSentAt: night, contactedAt: night }),
       row({ id: 'a' }),
+      row({ id: 'b', email: 'b@mail.ru' }),
     ]);
     const result = await sendOutreach(
       LATER,
-      deps(db, { settings: settings({ outreachMode: 'auto', whatsappAuto: false, dailyCap: 2 }) }),
+      deps(db, { settings: settings({ outreachMode: 'auto', whatsappAuto: false, dailyCap: 3 }) }),
     );
     expect(result.email).toBe(1);
+  });
+});
+
+describe('два проекта — два лимита, лимит растёт постепенно (владелец, 2026-11-12)', () => {
+  it('письма о сайтах и письма площадки считаются раздельно', async () => {
+    const day = new Date('2026-11-13T12:00:00+03:00'); // чётный час: сайты первыми
+    const rows = [
+      row({ id: 's1' }),
+      row({ id: 's2', email: 's2@mail.ru' }),
+      row({ id: 'p1', kind: 'provider', email: 'p1@mail.ru' }),
+      row({ id: 'p2', kind: 'provider', email: 'p2@mail.ru' }),
+    ];
+    const { db } = fakeDb(rows);
+    const result = await sendOutreach(
+      day,
+      deps(db, { settings: settings({ outreachMode: 'auto', whatsappAuto: false, dailyCap: 1 }) }),
+    );
+    // По одному письму на проект, а не одно на всех.
+    expect(result.email).toBe(2);
+    expect(rows.filter((r) => r.emailSentAt).map((r) => r.id)).toEqual(['s1', 'p1']);
+  });
+
+  it('rampedCap: 250 на проект действует сразу; выше — растёт примерно в 1,4 раза в день', () => {
+    const at = (days: number) => new Date(RAMP_START.getTime() + days * 86_400_000 + 3_600_000);
+    expect(rampedCap(250, at(0))).toBe(250);
+    expect(rampedCap(20, at(5))).toBe(20);
+    expect(rampedCap(1000, at(0))).toBe(250);
+    expect(rampedCap(1000, at(1))).toBe(350);
+    expect(rampedCap(1000, at(30))).toBe(1000);
+    expect(rampedCap(1000, new Date(RAMP_START.getTime() - 86_400_000))).toBe(250);
+  });
+});
+
+describe('проект площадки: письмо по роли ниши', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('строителю с почтой на своём домене уходит письмо заказчика, без страницы исполнителя', async () => {
+    const fake = fakeDb([
+      row({
+        id: 'builder',
+        kind: 'provider',
+        niche: 'construction',
+        name: 'ООО «СтройГрад»',
+        email: 'info@stroygrad-kzn.ru',
+      }),
+      row({ id: 'carrier', kind: 'provider', niche: 'freight', name: 'ООО «ТрансРейс»' }),
+    ]);
+    const result = await sendOutreach(NOW, deps(fake.db));
+    // Почта на своём домене — причина не писать только о сайте: площадке сайт фирмы не мешает.
+    expect(result).toMatchObject({ email: 2 });
+    expect(result.filtered ?? 0).toBe(0);
+    const [builder, carrier] = okEmail.mock.calls.map((c) => c[0]);
+    expect(builder!.to).toBe('info@stroygrad-kzn.ru');
+    expect(builder!.text).toContain('/orders?utm_source=email&utm_campaign=office-construction');
+    expect(builder!.text).not.toContain('/preview/');
+    expect(builder!.text).not.toContain('«Это моя компания»');
+    // Перевозчик — исполнитель: его страница и «Это моя компания».
+    expect(carrier!.text).toContain('/preview/tok-carrier');
+    expect(carrier!.text).toContain('«Это моя компания»');
+    expect(carrier!.text).toContain('грузовики и рейсы');
   });
 });
