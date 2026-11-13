@@ -1733,14 +1733,14 @@ describe('два проекта — два лимита, лимит растёт
     expect(rows.filter((r) => r.emailSentAt).map((r) => r.id)).toEqual(['s1', 'p1']);
   });
 
-  it('rampedCap: 250 на проект действует сразу; выше — растёт примерно в 1,4 раза в день', () => {
+  it('rampedCap: 50 на проект действует сразу; выше — растёт примерно в 1,4 раза в день', () => {
     const at = (days: number) => new Date(RAMP_START.getTime() + days * 86_400_000 + 3_600_000);
-    expect(rampedCap(250, at(0))).toBe(250);
+    expect(rampedCap(50, at(0))).toBe(50);
     expect(rampedCap(20, at(5))).toBe(20);
-    expect(rampedCap(1000, at(0))).toBe(250);
-    expect(rampedCap(1000, at(1))).toBe(350);
-    expect(rampedCap(1000, at(30))).toBe(1000);
-    expect(rampedCap(1000, new Date(RAMP_START.getTime() - 86_400_000))).toBe(250);
+    expect(rampedCap(1000, at(0))).toBe(50);
+    expect(rampedCap(1000, at(1))).toBe(70);
+    expect(rampedCap(1000, at(60))).toBe(1000);
+    expect(rampedCap(1000, new Date(RAMP_START.getTime() - 86_400_000))).toBe(50);
   });
 });
 
@@ -1830,5 +1830,18 @@ describe('равномерная отправка: доля дневного л�
     const result = await sendOutreach(at, deps(db, { settings: auto(24) }));
     expect(result.email).toBe(2);
     expect(HOURLY_SHARE).toBe(12);
+  });
+});
+
+describe('50 писем в сутки на проект, равномерно (владелец, 2026-11-13)', () => {
+  it('по умолчанию в час уходит не больше 5 писем на проект', async () => {
+    const at = new Date('2026-11-13T12:00:00+03:00');
+    const rows = Array.from({ length: 8 }, (_, i) => row({ id: `a${i}`, email: `a${i}@mail.ru` }));
+    const { db } = fakeDb(rows);
+    const result = await sendOutreach(
+      at,
+      deps(db, { settings: settings({ outreachMode: 'auto', whatsappAuto: false, dailyCap: 50 }) }),
+    );
+    expect(result.email).toBe(5);
   });
 });

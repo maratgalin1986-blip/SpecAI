@@ -79,8 +79,8 @@ export const OFFICE_SETTING_KEYS: readonly string[] = [
   ...Object.values(OFFICE_EXTRA_SETTINGS),
 ];
 
-/** Дневной лимит отправок на канал, если владелец не задал свой (250 на проект — владелец, 2026-11-12). */
-export const DEFAULT_DAILY_CAP = 250;
+/** Дневной лимит отправок на канал, если владелец не задал свой (50 на проект в сутки, равномерно — владелец, 2026-11-13). */
+export const DEFAULT_DAILY_CAP = 50;
 
 export interface OfficeSettings {
   /** Текст плана «агент; ниша; город» построчно (по умолчанию — defaultPlan()). */
