@@ -1861,3 +1861,45 @@ describe('WhatsApp сам по расписанию (владелец, 2026-11-1
     expect(result.whatsapp).toBe(Math.ceil(WHATSAPP_DAILY_CAP / HOURLY_SHARE));
   });
 });
+
+describe('одна компания — одно письмо (владелец, 2026-11-13: «ПЭК — одна и та же компания»)', () => {
+  const at = new Date('2026-11-13T12:00:00+03:00');
+  const auto = () => settings({ outreachMode: 'auto', whatsappAuto: false, dailyCap: 20 });
+
+  it('филиалы одной компании с разной почтой: письмо одному, остальные закрыты дублями', async () => {
+    const rows = [
+      row({ id: 'k1', name: 'Автосервис «Мотор» (Казань)', email: 'kzn@mail.ru' }),
+      row({ id: 'k2', name: 'Автосервис «Мотор» — Челны', email: 'nch@mail.ru' }),
+      row({ id: 'z', name: 'Колесо', email: 'z@mail.ru' }),
+    ];
+    const { db } = fakeDb(rows);
+    const result = await sendOutreach(
+      at,
+      deps(db, { settings: auto(), contactedBrands: async () => [] }),
+    );
+    expect(okEmail.mock.calls.map((c) => c[0].to)).toEqual(['kzn@mail.ru', 'z@mail.ru']);
+    expect(result).toMatchObject({ email: 2, duplicates: 1 });
+  });
+
+  it('компании, которой уже писали раньше, второе письмо не уходит', async () => {
+    const rows = [row({ id: 'k3', name: 'Автосервис «Мотор»', email: 'ufa@mail.ru' })];
+    const { db } = fakeDb(rows);
+    const result = await sendOutreach(
+      at,
+      deps(db, { settings: auto(), contactedBrands: async () => ['автосервис мотор'] }),
+    );
+    expect(result.email).toBe(0);
+    expect(okEmail).not.toHaveBeenCalled();
+  });
+
+  it('федеральной сети не пишем: строка снимается', async () => {
+    const rows = [row({ id: 'p', name: 'ПЭК', email: 'pek@pecom.ru', kind: 'provider' })];
+    const { db } = fakeDb(rows);
+    const result = await sendOutreach(
+      at,
+      deps(db, { settings: auto(), contactedBrands: async () => [] }),
+    );
+    expect(result).toMatchObject({ email: 0, filtered: 1 });
+    expect(rows[0]).toMatchObject({ status: 'DECLINED' });
+  });
+});

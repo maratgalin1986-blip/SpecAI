@@ -47,7 +47,7 @@ import {
   phoneKey,
   type ContactedContacts,
 } from './contacted';
-import { candidateSkipText, hasOwnDomainEmail } from './candidateFilter';
+import { brandKey, candidateSkipText, hasOwnDomainEmail, isFederalChain } from './candidateFilter';
 import { parseDossier } from './dossier';
 import { collectAngleStats, chooseAngle, type AngleStat, type LearningDb } from './learning';
 import { applicableAngles, buildOffer, type OfferAngle } from './offer';
@@ -254,6 +254,8 @@ export interface OutreachDeps {
    * письма о сайтах, 'provider' — письма площадки. Без него проход общий (кнопка владельца).
    */
   project?: 'site' | 'provider';
+  /** Ключи названий компаний, которым уже писали (brandKey), — для «одна компания — одно письмо». */
+  contactedBrands?: () => Promise<Iterable<string>>;
   /** Признаки настроек ящика для сводки об отказе (подменяется в тестах). */
   mailHint?: () => string;
   /**
@@ -763,6 +765,12 @@ async function runOutreach(
     rows.map((r) => r.email ?? '').filter((e) => e.trim().length > 0),
     rows.flatMap((r) => [r.phone, r.whatsapp ?? '']).filter((p) => p.trim().length > 0),
   );
+  // Одна компания — одно письмо (владелец, 2026-11-13): филиалы сети в разных городах с разной
+  // почтой узнаются по ключу названия (brandKey). Ключи компаний, которым уже писали, — из базы.
+  const usedBrands = new Set<string>(
+    await (deps.contactedBrands ?? defaultContactedBrands)().catch(() => new Set<string>()),
+  );
+  const plannedBrands = new Set<string>();
   const usedEmails = new Map<string, Date | null>(contacted.emails);
   const usedPhones = new Map<string, Date | null>(contacted.phones);
   // Канал строки закрывается без отправки особой отметкой (DUPLICATE_CLOSED_AT): иначе дубли
@@ -795,11 +803,13 @@ async function runOutreach(
     // Отбор перед отправкой — и для фирм, попавших в очередь до ужесточения правил (ревью
     // 2026-11-11): человеку («Адвокат Иванов И. И.») не пишем вовсе; фирме с почтой на своём
     // домене не пишем «у вас не указан сайт» — он у неё, скорее всего, есть. Строка снимается.
-    const unfit = candidateSkipText(row.name)
-      ? 'Не писали: похоже на имя человека, а не на компанию'
-      : prospect.kind === 'site' && hasOwnDomainEmail(row.email)
-        ? 'Не писали: почта на своём домене — у фирмы, вероятно, уже есть сайт'
-        : null;
+    const unfit = isFederalChain(row.name)
+      ? 'Не писали: федеральная сеть с филиалами по стране — одна компания'
+      : candidateSkipText(row.name)
+        ? 'Не писали: похоже на имя человека, а не на компанию'
+        : prospect.kind === 'site' && hasOwnDomainEmail(row.email)
+          ? 'Не писали: почта на своём домене — у фирмы, вероятно, уже есть сайт'
+          : null;
     if (unfit) {
       const { count } = await db.prospect.updateMany({
         where: { id: row.id, status: { in: [...OUTREACH_STATUSES] } },
@@ -815,6 +825,14 @@ async function runOutreach(
     let mailTo = links && row.email ? row.email.trim() : null;
     let toWhatsApp = wanted.includes('whatsapp') ? whatsappTarget(row, pick) : null;
     const mailKey = emailKey(mailTo);
+    const brand = brandKey(row.name);
+    if (mailTo && brand.length >= 3 && usedBrands.has(brand)) {
+      await closeDuplicate(row, 'email');
+      mailTo = null;
+    } else if (mailTo && brand.length >= 3 && plannedBrands.has(brand)) {
+      // Филиал той же компании уже стоит в списке писем дня — второе письмо не показываем.
+      mailTo = null;
+    }
     if (mailTo && usedEmails.has(mailKey)) {
       // Дата — адресу действительно писали; null — письмо ему только показано в этом списке.
       if (usedEmails.get(mailKey)) await closeDuplicate(row, 'email');
@@ -853,6 +871,7 @@ async function runOutreach(
       if (mailTo) {
         emailLeft -= 1;
         usedEmails.set(mailKey, null);
+        plannedBrands.add(brand);
       }
       if (toWhatsApp) {
         whatsappLeft -= 1;
@@ -897,6 +916,7 @@ async function runOutreach(
       });
       if (claim.count > 0) {
         usedEmails.set(mailKey, sentAt);
+        if (brand.length >= 3) usedBrands.add(brand);
         const sent = await deliverEmail(
           email,
           mailTo,
@@ -1140,6 +1160,20 @@ async function runOutreach(
     }
   }
   return done();
+}
+
+/** Сколько последних писем смотреть для ключей компаний: сети пишут из многих городов. */
+const CONTACTED_BRANDS_LIMIT = 20_000;
+
+/** Ключи компаний, которым уже ушло письмо (настоящее, не отметка дубля). */
+async function defaultContactedBrands(): Promise<Set<string>> {
+  const rows = await prisma.prospect.findMany({
+    where: { emailSentAt: { gt: DUPLICATE_CLOSED_AT } },
+    select: { name: true },
+    orderBy: { emailSentAt: 'desc' },
+    take: CONTACTED_BRANDS_LIMIT,
+  });
+  return new Set(rows.map((r) => brandKey(r.name)).filter((key) => key.length >= 3));
 }
 
 /** Код отказа почтового сервера из текста ошибки: «550 5.1.1», «550», иначе «other». */

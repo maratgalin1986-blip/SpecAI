@@ -9,6 +9,7 @@
 export const CANDIDATE_SKIP_REASONS = {
   entrepreneur: 'индивидуальный предприниматель — не пишем',
   person: 'название похоже на имя человека — не пишем',
+  chain: 'федеральная сеть с филиалами по стране — не пишем',
 } as const;
 
 export type CandidateSkipReason = keyof typeof CANDIDATE_SKIP_REASONS;
@@ -130,10 +131,89 @@ export function looksLikeEntrepreneur(raw: string): boolean {
   return IP_START.test(name) || IP_INSIDE.test(name) || IP_WORDS.test(name) || OGRNIP.test(name);
 }
 
+/**
+ * Федеральные сети (владелец, 2026-11-13: «ПЭК — прекрати посылать письма, это одна и та же
+ * компания»): у них филиал в каждом городе, на карте — десятки карточек одной фирмы, решения
+ * принимают не на месте. Им не пишем ни о сайте, ни о площадке. Ключи — в виде brandKey.
+ */
+const FEDERAL_CHAINS: readonly string[] = [
+  // Перевозки и доставка.
+  'пэк',
+  'деловые линии',
+  'сдэк',
+  'cdek',
+  'байкал сервис',
+  'кит',
+  'gtd',
+  'энергия',
+  'желдорэкспедиция',
+  'ждэ',
+  'boxberry',
+  'боксберри',
+  'dpd',
+  'почта россии',
+  'major express',
+  'dhl',
+  'возовоз',
+  'автотрейдинг',
+  'магистраль',
+  'globalcarg',
+  'ozon',
+  'озон',
+  'wildberries',
+  'вайлдберриз',
+  'яндекс маркет',
+  'пятерочка',
+  'магнит',
+  // Стройка и стройматериалы.
+  'петрович',
+  'леруа мерлен',
+  'лемана про',
+  'оби',
+  'obi',
+  'максидом',
+  'строительный двор',
+  'всеинструменты ру',
+  'всеинструменты',
+  // Автосервис и шины.
+  'fit service',
+  'фит сервис',
+  'вианор',
+  'колеса даром',
+  'шинсервис',
+];
+
+/**
+ * Ключ компании по названию: без кавычек, организационно-правовой формы и пояснений после
+ * запятой, тире или в скобках («ПЭК (терминал Казань)», «ООО «Деловые Линии», филиал» → одно и
+ * то же). Филиалы одной сети с разной почтой по этому ключу получают одно письмо на всех.
+ */
+export function brandKey(raw: string): string {
+  return raw
+    .toLowerCase()
+    .replace(/ё/g, 'е')
+    .replace(/\([^)]*\)/g, ' ')
+    .split(/\s[—–-]\s|,|;|\|/)[0]!
+    .replace(/["«»“”„'`.]/g, ' ')
+    .replace(
+      /(^|\s)(ооо|оао|зао|пао|ао|ип|тк|тэк|ск|гк|транспортная компания|группа компаний|филиал|терминал|отделение|склад|пункт выдачи)(?=\s|$)/g,
+      ' ',
+    )
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/** Федеральная сеть по названию: ключ начинается с названия сети («пэк казань» → «пэк»). */
+export function isFederalChain(name: string): boolean {
+  const key = brandKey(name);
+  return FEDERAL_CHAINS.some((chain) => key === chain || key.startsWith(`${chain} `));
+}
+
 /** Почему кандидата не берём; null — брать можно. */
 export function candidateSkipReason(name: string): CandidateSkipReason | null {
   if (looksLikeEntrepreneur(name)) return 'entrepreneur';
   if (looksLikePersonName(name)) return 'person';
+  if (isFederalChain(name)) return 'chain';
   return null;
 }
 

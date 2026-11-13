@@ -6,6 +6,8 @@ import {
   candidateSkipText,
   looksLikeEntrepreneur,
   looksLikePersonName,
+  brandKey,
+  isFederalChain,
 } from './candidateFilter';
 
 describe('candidateFilter: ИП (К5)', () => {
@@ -107,5 +109,31 @@ describe('hasOwnDomainEmail: почта на своём домене — сай�
     }
     expect(hasOwnDomainEmail(null)).toBe(false);
     expect(hasOwnDomainEmail('не почта')).toBe(false);
+  });
+});
+
+describe('одна компания — одно письмо; федеральным сетям не пишем (владелец, 2026-11-13)', () => {
+  it('brandKey: без кавычек, формы, пояснений в скобках и после тире или запятой', () => {
+    expect(brandKey('ПЭК (терминал Казань)')).toBe('пэк');
+    expect(brandKey('ООО «Деловые Линии», филиал в Уфе')).toBe('деловые линии');
+    expect(brandKey('ТК «Деловые линии» — Казань')).toBe('деловые линии');
+    expect(brandKey('Шиномонтаж «Колесо»')).toBe('шиномонтаж колесо');
+  });
+
+  it('федеральные сети узнаются по названию, местные фирмы — нет', () => {
+    for (const name of [
+      'ПЭК',
+      'ПЭК Набережные Челны',
+      'ТК «Деловые линии»',
+      'СДЭК',
+      'Байкал Сервис',
+      'Леруа Мерлен',
+    ]) {
+      expect(isFederalChain(name)).toBe(true);
+    }
+    for (const name of ['Пэкстрой', 'Энергетик', 'Деловой центр', 'Кит-Авто Сервис', 'Колесо']) {
+      expect(isFederalChain(name)).toBe(false);
+    }
+    expect(candidateSkipText('ПЭК')).toBe('ПЭК: федеральная сеть с филиалами по стране — не пишем');
   });
 });
