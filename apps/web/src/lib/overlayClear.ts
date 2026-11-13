@@ -51,6 +51,14 @@ export function hasOwnText(el: Element, minPx: number): boolean {
   return parseFloat(getComputedStyle(el).fontSize) >= minPx;
 }
 
+/** The element itself shows a price («от 4 000 ₽/ч»), whatever its size. */
+export function hasOwnPrice(el: Element): boolean {
+  for (const node of Array.from(el.childNodes)) {
+    if (node.nodeType === 3 && (node.textContent ?? '').includes('₽')) return true;
+  }
+  return false;
+}
+
 /**
  * Whether the page's own content (inside <main>, not the site's fixed chrome)
  * has an element matching `blocks` under the box. Browser only.

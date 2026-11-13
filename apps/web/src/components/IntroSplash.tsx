@@ -121,7 +121,25 @@ export function IntroSplash() {
       root.classList.add(LIVE_CLASS);
       flushSync(() => setDone(true));
     });
+    // While the number flies (0.7 s) the browser gives every tap to <html>,
+    // not to what is under the finger. A tap then ends the flight and goes to
+    // the link or button it was aimed at, so «Заказать технику» answers at once.
+    let aimed: { x: number; y: number } | null = null;
+    const onFlightTap = (event: MouseEvent) => {
+      if (aimed || event.target !== root) return;
+      aimed = { x: event.clientX, y: event.clientY };
+      transition.skipTransition();
+    };
+    window.addEventListener('click', onFlightTap);
     const land = () => {
+      window.removeEventListener('click', onFlightTap);
+      if (aimed) {
+        document
+          .elementFromPoint(aimed.x, aimed.y)
+          ?.closest<HTMLElement>('a[href], button')
+          ?.click();
+        aimed = null;
+      }
       root.classList.remove(LIVE_CLASS);
       const button = document.querySelector('.vt-phone');
       if (button) {

@@ -53,18 +53,24 @@ test('opening titles are gone within 3 s and the main button takes a tap', async
   expect(played).toBeLessThan(3000 + 500);
   const cta = page.locator('main a[href="#callback"]').first();
   await expect(cta).toBeVisible();
-  // The topmost element at the button's centre is the button itself.
+  // A tap right away — even while the phone number still flies into the
+  // header (the browser gives such taps to <html>) — reaches the button.
   const box = (await cta.boundingBox())!;
-  const hit = await page.evaluate(
-    ([x, y]) => document.elementFromPoint(x!, y!)?.closest('a')?.getAttribute('href') ?? null,
-    [box.x + box.width / 2, box.y + box.height / 2],
-  );
-  expect(hit).toBe('#callback');
+  await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+  await expect.poll(() => new URL(page.url()).hash, { timeout: 1500 }).toBe('#callback');
 });
 
 // The install button and the cookie strip against what brings the заявка.
-const PAGES = ['/?intro=0', '/arenda/ekskavator-pogruzchik', '/contacts', '/orders'];
+const PAGES = [
+  '/?intro=0',
+  '/arenda/ekskavator-pogruzchik',
+  '/contacts',
+  '/orders',
+  '/uborka-snega',
+  '/uborka-snega#callback',
+];
 const SIZES = [
+  { width: 360, height: 740 },
   { width: 390, height: 844 },
   { width: 390, height: 664 },
   { width: 1280, height: 720 },
@@ -114,6 +120,11 @@ for (const size of SIZES) {
         const box = await el.boundingBox();
         if (box) overlays.push({ name, box });
       }
+      // The phone's contact bar is opaque: what has scrolled under it is not
+      // on the screen, and the folded install icon stands in the bar's own row.
+      const bar = page.locator('nav[aria-label="Быстрая связь"]');
+      const barBox = (await bar.isVisible().catch(() => false)) ? await bar.boundingBox() : null;
+      const floor = barBox ? barBox.y : size.height;
       for (const selector of IMPORTANT) {
         const items = page.locator(selector);
         const count = Math.min(await items.count(), 12);
@@ -122,10 +133,11 @@ for (const size of SIZES) {
           if (!(await item.isVisible().catch(() => false))) continue;
           const box = await item.boundingBox();
           // Only what is on the screen now can be covered.
-          if (!box || box.y + box.height <= 0 || box.y >= size.height) continue;
+          if (!box || box.y + box.height <= 0 || box.y >= floor) continue;
+          const shown = { ...box, height: Math.min(box.height, floor - box.y) };
           for (const overlay of overlays) {
             expect(
-              overlaps(box, overlay.box),
+              overlaps(shown, overlay.box),
               `${overlay.name} over ${selector} on ${path} at ${size.width}x${size.height}`,
             ).toBe(false);
           }
@@ -282,4 +294,59 @@ test('the sound hint goes away by itself with reduced motion', async ({ page }) 
     .catch(() => false);
   test.skip(!shown, 'the hint is not shown in this state');
   await expect(hint).toHaveCount(0, { timeout: 6000 });
+});
+
+test('phone: the install button, the cookie strip and the bottom bar do not lie on each other', async ({
+  page,
+}) => {
+  test.skip(!isPhone(page), 'the bottom bar is for phones');
+  await guard(page);
+  for (const size of [
+    { width: 360, height: 740 },
+    { width: 390, height: 844 },
+  ]) {
+    await page.setViewportSize(size);
+    for (const path of ['/?intro=0', '/orders', '/uborka-snega']) {
+      await page.goto(path, { waitUntil: 'load' });
+      await page
+        .getByTestId('cookie-strip')
+        .waitFor({ state: 'visible', timeout: 4000 })
+        .catch(() => undefined);
+      await page.waitForTimeout(2400);
+      const boxes: { name: string; box: Box }[] = [];
+      for (const [name, selector] of [
+        ['install button', '[data-testid="install-fab"] button'],
+        ['cookie strip', '[data-testid="cookie-strip"]'],
+        // The folded install icon stands in the bar's own row (the bar makes
+        // room for it), so it is the bar's three buttons that must stay clear.
+        ['bar: call', 'nav[aria-label="Быстрая связь"] > :nth-child(1)'],
+        ['bar: WhatsApp', 'nav[aria-label="Быстрая связь"] > :nth-child(2)'],
+        ['bar: order', 'nav[aria-label="Быстрая связь"] > :nth-child(3)'],
+      ] as const) {
+        const el = page.locator(selector).first();
+        if (!(await el.isVisible().catch(() => false))) continue;
+        const seen = await el.evaluate((node) => {
+          let opacity = 1;
+          for (let at: Element | null = node; at; at = at.parentElement) {
+            opacity *= parseFloat(getComputedStyle(at).opacity);
+          }
+          return opacity > 0.05;
+        });
+        const box = await el.boundingBox();
+        if (seen && box) boxes.push({ name, box });
+      }
+      expect(
+        boxes.some((item) => item.name === 'bar: order'),
+        `bottom bar on ${path}`,
+      ).toBe(true);
+      for (let a = 0; a < boxes.length; a += 1) {
+        for (let b = a + 1; b < boxes.length; b += 1) {
+          expect(
+            overlaps(boxes[a]!.box, boxes[b]!.box),
+            `${boxes[a]!.name} over ${boxes[b]!.name} on ${path} at ${size.width}px`,
+          ).toBe(false);
+        }
+      }
+    }
+  }
 });

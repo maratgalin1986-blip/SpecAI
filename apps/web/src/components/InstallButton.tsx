@@ -18,7 +18,7 @@ import {
   type InstallIosStepIcon,
 } from '@/lib/installHint';
 import { reachGoal } from '@/lib/marketing';
-import { CONTROLS, coversContent, hasOwnText, watchOverlay } from '@/lib/overlayClear';
+import { CONTROLS, coversContent, hasOwnPrice, hasOwnText, watchOverlay } from '@/lib/overlayClear';
 
 interface BeforeInstallPromptEvent extends Event {
   prompt(): Promise<void>;
@@ -56,7 +56,10 @@ function onContent(el: HTMLElement, shape: 'pill' | 'icon', phone: boolean): boo
   const rect = el.getBoundingClientRect();
   const box = { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom };
   if (phone) {
-    return coversContent(box, (hit) => hit.matches(CONTROLS) || hasOwnText(hit, 20));
+    return coversContent(
+      box,
+      (hit) => hit.matches(CONTROLS) || hasOwnText(hit, 20) || hasOwnPrice(hit),
+    );
   }
   const main = document.querySelector('main');
   if (main) {
