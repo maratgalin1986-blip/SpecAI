@@ -306,7 +306,6 @@ describe('sendOutreach', () => {
     // No dossier: the personal offer with a general angle (U2) — a fact about the card,
     // no prices, not an offer, a draft, the legal signature.
     expect(sent.text).toContain('В открытой карточке компании Компания a на карте не указан сайт.');
-    expect(sent.text).toContain('Что на странице:');
     expect(sent.text).toContain(
       'После подключения клиент сможет оставить заявку на странице — она придёт вам на почту.',
     );
@@ -880,7 +879,8 @@ describe('sendOutreach — personal offer (U2)', () => {
     const letter = okEmail.mock.calls[0]![0];
     expect(letter.subject).toBe(expected.subject);
     expect(letter.text).toContain(expected.opener);
-    for (const bullet of expected.bullets) expect(letter.text).toContain(`• ${bullet}`);
+    // Короткое письмо: из пунктов предложения — строка захода (второй пункт).
+    expect(letter.text).toContain(expected.bullets[1]!);
     // The package and its price stay on the service page: the first letter has no prices.
     expect(letter.text).not.toContain('₽');
     expect(letter.text).toContain(NOT_OFFER_LINE);
