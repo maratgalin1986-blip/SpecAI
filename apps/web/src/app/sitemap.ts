@@ -2,9 +2,13 @@ import { OFERTA_PATH } from '@/lib/office/oferta';
 import type { MetadataRoute } from 'next';
 import { prisma } from '@specai/database';
 import { LANDINGS } from '@/lib/landings';
-import { cityBySlug, cityPages, cityPath } from '@/lib/cities';
+import { cityBySlug, cityPageIndexable, cityPages, cityPath } from '@/lib/cities';
 import { loadCityOffers } from '@/lib/cityFleetData';
 import { JOBS } from '@/lib/jobs';
+import { loadNewestOpenOrderAt } from '@/lib/orderBoardData';
+import { pricePageIndexable } from '@/lib/priceIndex';
+import { loadPriceIndex } from '@/lib/priceIndexData';
+import { sitemapPages } from '@/lib/sitemapPages';
 import { siteUrl } from '@/lib/siteUrl';
 import { PUBLIC_FLEET } from '@/lib/fleet';
 import { providerPath } from '@/lib/providerSeo';
@@ -12,9 +16,6 @@ import { SERVICE_PAGE_PATH } from '@/lib/office/clientSite';
 import { SITEMAP_PROSPECT_WHERE, officeSitemapEntries } from '@/lib/office/visibility';
 
 export const revalidate = 3600;
-
-/** When this release was built (next.config.mjs); the start of the server otherwise. */
-const BUILD_DATE = new Date(process.env.NEXT_PUBLIC_BUILD_DATE ?? Date.now());
 
 async function servedCityPaths(): Promise<string[]> {
   const paths: string[] = [];
@@ -28,8 +29,10 @@ async function servedCityPaths(): Promise<string[]> {
     const offers = await loadCityOffers(landing, cities).catch(() => null);
     if (!offers) return [];
     for (const city of cities) {
-      if (offers.get(city.slug)?.kind === 'available')
-        paths.push(cityPath(landing.slug, city.slug));
+      // The page's own rule (app/arenda/[slug]/[city]): only cities with
+      // something of their own; the others are noindex.
+      const offer = offers.get(city.slug);
+      if (offer && cityPageIndexable(city, offer)) paths.push(cityPath(landing.slug, city.slug));
     }
   }
   return paths;
@@ -37,33 +40,21 @@ async function servedCityPaths(): Promise<string[]> {
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const base = siteUrl();
-  const staticPages = [
-    '',
-    '/arenda',
-    ...LANDINGS.map((landing) => `/arenda/${landing.slug}`),
-    // City pages only where a provider really serves the city (the others are
-    // noindex until then, see app/arenda/[slug]/[city]).
-    ...(await servedCityPaths()),
-    '/raboty',
-    '/ceny',
-    '/ceny/opros',
-    ...JOBS.map((job) => `/raboty/${job.slug}`),
-    '/uborka-snega',
-    '/equipment',
-    '/map',
-    '/orders',
-    '/providers',
-    '/agents',
-    '/contacts',
-    '/privacy',
-    '/pravila',
-    '/kak-polzovatsya',
-    '/predlozheniya',
-    '/bot',
+  const [cityPaths, newestOpenOrderAt, prices] = await Promise.all([
+    servedCityPaths(),
+    loadNewestOpenOrderAt(),
+    loadPriceIndex().catch(() => null),
+  ]);
+  const staticPages = sitemapPages({
+    landingPaths: LANDINGS.map((landing) => `/arenda/${landing.slug}`),
+    cityPaths,
+    jobPaths: JOBS.map((job) => `/raboty/${job.slug}`),
+    newestOpenOrderAt,
+    // As the page decides (app/ceny): with data, or when it could not be read.
+    pricesIndexable: prices ? pricePageIndexable(prices.index, prices.loaded) : true,
     // «Сайт под ключ» (S2): indexed, though not in the main menu; its public offer (К9).
-    SERVICE_PAGE_PATH,
-    OFERTA_PATH,
-  ];
+    extraPaths: [SERVICE_PAGE_PATH, OFERTA_PATH],
+  });
   const equipment = await prisma.equipment
     .findMany({
       where: { ...PUBLIC_FLEET, status: { not: 'RETIRED' } },
@@ -94,12 +85,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       .catch(() => []),
   );
   return [
-    ...staticPages.map((path) => ({
-      url: `${base}${path}`,
-      // Texts and prices of these pages change with a release.
-      lastModified: BUILD_DATE,
+    ...staticPages.map((page) => ({
+      url: `${base}${page.path}`,
+      // Only a real date of change (lib/sitemapPages.ts); none — no lastmod.
+      ...(page.lastModified ? { lastModified: page.lastModified } : {}),
       changeFrequency: 'weekly' as const,
-      priority: path === '' ? 1 : 0.7,
+      priority: page.path === '' ? 1 : 0.7,
     })),
     ...equipment.map((item) => ({
       url: `${base}/equipment/${item.id}`,

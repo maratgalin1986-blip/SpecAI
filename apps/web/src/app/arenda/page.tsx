@@ -1,3 +1,5 @@
+import { Breadcrumbs } from '@/components/Breadcrumbs';
+import { HOME_CRUMB } from '@/lib/breadcrumbs';
 import type { Metadata } from 'next';
 import { LANDINGS, landingListRate } from '@/lib/landings';
 import { pageMeta } from '@/lib/pageMeta';
@@ -16,12 +18,7 @@ export default function ArendaIndexPage() {
   return (
     <div className="flex flex-col gap-8">
       <header className="flex flex-col gap-3">
-        <nav className="text-sm text-slate-500">
-          <a href="/" className="hover:text-slate-900">
-            Главная
-          </a>{' '}
-          / <span>Аренда</span>
-        </nav>
+        <Breadcrumbs dark={false} trail={[HOME_CRUMB, { name: 'Аренда', path: '/arenda' }]} />
         <h1 className="text-3xl font-extrabold tracking-tight sm:text-5xl">
           Аренда спецтехники с машинистом
         </h1>

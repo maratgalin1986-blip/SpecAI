@@ -83,7 +83,11 @@ export function OfferNow({
           </p>
           <p className={`mt-1 text-xs ${muted}`}>
             {item.live && (
-              <span className="mr-1 inline-flex items-center gap-1 font-semibold text-emerald-500">
+              <span
+                className={`mr-1 inline-flex items-center gap-1 font-semibold ${
+                  dark ? 'text-emerald-300' : 'text-emerald-700'
+                }`}
+              >
                 <span aria-hidden className="live-dot h-1.5 w-1.5 rounded-full bg-emerald-500" />
                 на линии ·
               </span>

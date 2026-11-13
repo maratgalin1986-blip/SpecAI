@@ -5,6 +5,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { defaultPhotoOf, pickPhoto, type MachineType } from '@/lib/machinePhotos';
 import { currentSiteObject, SITE_OBJECTS, type ObjectStop } from '@/lib/siteObjects';
 import { clipSources, footageAllowed, lightFootage } from '@/components/CinemaVideo';
+import { isPhoneScreen } from '@/lib/phoneVideo';
 import { LiveClock } from '@/components/LiveClock';
 import { Icon } from '@/components/Icon';
 import { useMachineSound } from '@/components/useMachineSound';
@@ -236,7 +237,9 @@ export function SiteJourney() {
     setPhotos(route.map((scene) => pickPhoto(scene.type, 'journey')));
     setObject(currentSiteObject());
     setLight(lightFootage());
-    setMounted(footageAllowed());
+    // Phones keep the photos with their camera moves: the page's one clip is
+    // the hero's (lib/phoneVideo.ts).
+    setMounted(footageAllowed() && !isPhoneScreen());
     setHydrated(true);
   }, []);
 

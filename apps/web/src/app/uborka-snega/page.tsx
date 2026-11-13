@@ -1,3 +1,5 @@
+import { Breadcrumbs } from '@/components/Breadcrumbs';
+import { HOME_CRUMB } from '@/lib/breadcrumbs';
 import type { Metadata } from 'next';
 import { Faq } from '@/components/Faq';
 import { Icon } from '@/components/Icon';
@@ -87,12 +89,7 @@ export default function SnegPage() {
         <ShowOrbs dark />
         <div className="grid gap-8 lg:grid-cols-[1fr_400px]">
           <div className="show-seq flex min-w-0 flex-col justify-center">
-            <nav className="text-sm text-slate-400">
-              <a href="/" className="hover:text-white">
-                Главная
-              </a>{' '}
-              / <span>Уборка снега</span>
-            </nav>
+            <Breadcrumbs trail={[HOME_CRUMB, { name: 'Уборка снега', path: '/uborka-snega' }]} />
             <p className="eyebrow mt-4 text-sky-300">Сезон: ноябрь — март</p>
             <h1 className="mt-2 break-words text-3xl font-extrabold leading-tight sm:text-5xl">
               Уборка и вывоз снега в {SNEG_CITY.in}

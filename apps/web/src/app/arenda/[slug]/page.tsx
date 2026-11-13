@@ -1,3 +1,5 @@
+import { Breadcrumbs } from '@/components/Breadcrumbs';
+import { HOME_CRUMB } from '@/lib/breadcrumbs';
 import type { Metadata } from 'next';
 import type { MachineType } from '@/lib/machinePhotos';
 import { notFound } from 'next/navigation';
@@ -125,12 +127,9 @@ export default async function LandingPage(props: { params: Promise<{ slug: strin
         <CinemaLayer clips={landingClips(landing.slug)} />
         <div className="relative grid gap-8 lg:grid-cols-[1fr_380px]">
           <div className="flex flex-col justify-center">
-            <nav className="text-sm text-slate-400">
-              <a href="/" className="hover:text-white">
-                Главная
-              </a>{' '}
-              / <span>{landing.short}</span>
-            </nav>
+            <Breadcrumbs
+              trail={[HOME_CRUMB, { name: landing.short, path: `/arenda/${landing.slug}` }]}
+            />
             <h1 className="cine-title mt-3 text-3xl font-extrabold leading-tight sm:text-5xl">
               Аренда {landing.title} по всей России
             </h1>
@@ -183,7 +182,10 @@ export default async function LandingPage(props: { params: Promise<{ slug: strin
               ))}
             </p>
             <p className="mt-2 text-xs text-slate-400">
-              <a href="/privacy" className="underline hover:text-white">
+              <a
+                href="/privacy"
+                className="inline-flex min-h-6 items-center underline hover:text-white"
+              >
                 Политика конфиденциальности
               </a>
             </p>

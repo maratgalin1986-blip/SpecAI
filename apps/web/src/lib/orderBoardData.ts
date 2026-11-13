@@ -143,3 +143,22 @@ export async function loadMarketplaceCounters(): Promise<{
     return null;
   }
 }
+
+/**
+ * When the newest open order on the board was placed: null when there is none
+ * (an empty board stays out of search and the sitemap), undefined when the
+ * database is away (the page keeps its usual metadata).
+ */
+export async function loadNewestOpenOrderAt(): Promise<Date | null | undefined> {
+  try {
+    const newest = await prisma.order.findFirst({
+      where: { status: 'OPEN' },
+      orderBy: { createdAt: 'desc' },
+      select: { createdAt: true },
+    });
+    return newest?.createdAt ?? null;
+  } catch (error) {
+    console.error('[orders] failed to read the newest open order', error);
+    return undefined;
+  }
+}

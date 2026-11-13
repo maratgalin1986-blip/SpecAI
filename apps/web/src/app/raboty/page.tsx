@@ -1,3 +1,5 @@
+import { Breadcrumbs } from '@/components/Breadcrumbs';
+import { HOME_CRUMB } from '@/lib/breadcrumbs';
 import type { Metadata } from 'next';
 import { CallbackForm } from '@/components/CallbackForm';
 import { LoopVideo } from '@/components/LoopVideo';
@@ -21,12 +23,7 @@ export default function JobsIndexPage() {
         {/* Real footage behind the header: an excavator loading a truck. */}
         <LoopVideo clip="step-work" className="absolute inset-0 -z-10 h-full w-full opacity-60" />
         <div className="absolute inset-0 -z-10 bg-gradient-to-r from-slate-950/95 via-slate-950/75 to-slate-950/30" />
-        <nav className="text-sm text-slate-400">
-          <a href="/" className="hover:text-white">
-            Главная
-          </a>{' '}
-          / <span>Работы и цены</span>
-        </nav>
+        <Breadcrumbs trail={[HOME_CRUMB, { name: 'Работы и цены', path: '/raboty' }]} />
         <h1 className="cine-title mt-3 text-3xl font-extrabold leading-tight sm:text-5xl">
           Работы спецтехникой и цены
         </h1>
@@ -76,7 +73,7 @@ export default function JobsIndexPage() {
       <section className="mx-auto w-full max-w-xl rounded-2xl border border-slate-200 bg-white p-5">
         <CallbackForm source="job:index" defaultMessage="Нужна техника для работ" />
         <p className="mt-3 text-xs text-slate-500">
-          <a href="/privacy" className="underline">
+          <a href="/privacy" className="inline-flex min-h-6 items-center underline">
             Политика конфиденциальности
           </a>
         </p>

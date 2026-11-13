@@ -4,6 +4,12 @@ import { useEffect, useRef, useState } from 'react';
 import { footageAllowed, lightFootage } from '@/components/CinemaVideo';
 import { watchInView } from '@/lib/inView';
 import { loopPoster, loopSrc, type LoopName } from '@/lib/loops';
+import {
+  claimPhoneVideo,
+  isPhoneScreen,
+  phonePosterOnly,
+  releasePhoneVideo,
+} from '@/lib/phoneVideo';
 
 // A short muted loop from public/loops over its poster frame (lib/loops.ts).
 // - The server renders the poster only; the <video> is created after
@@ -13,7 +19,9 @@ import { loopPoster, loopSrc, type LoopName } from '@/lib/loops';
 //   the poster stays.
 // - Phones get the 480p cut; and when the page already has another video
 //   (a hero clip), a phone waits for the visitor's first touch before
-//   starting this one, so two decoders don't start on a cold page.
+//   starting this one, so two decoders don't start on a cold page. Screens up
+//   to 640 px follow lib/phoneVideo.ts: always the first touch, one clip per
+//   page, none on form, machine and job pages.
 // - `active={false}` (a step not shown yet) keeps it parked on its poster.
 
 const FIRST_INPUT = ['pointerdown', 'touchstart', 'keydown'] as const;
@@ -70,11 +78,13 @@ export function LoopVideo({
   // the page, wait for the first touch.
   useEffect(() => {
     if (!footageAllowed()) return;
+    if (isPhoneScreen() && phonePosterOnly(window.location.pathname)) return;
     setLight(lightFootage());
     // CinemaVideo mounts its clip late (after load and idle), so its poster
     // frame (an <img> from public/video) counts as «another video» too.
     const otherVideo = document.querySelector('video:not([data-loop]), img[src^="/video/"]');
-    if (isPhone() && otherVideo) return afterFirstInput(() => setAllowed(true));
+    if (isPhoneScreen() || (isPhone() && otherVideo))
+      return afterFirstInput(() => setAllowed(true));
     setAllowed(true);
   }, []);
 
@@ -84,9 +94,14 @@ export function LoopVideo({
     return watchInView(el, (entry) => setNear(entry.isIntersecting), { rootMargin: '25% 0px' });
   }, [allowed]);
 
+  // A phone's single clip of the page (lib/phoneVideo.ts): kept until unmount.
+  const [token] = useState(() => ({}));
+  useEffect(() => () => releasePhoneVideo(token), [token]);
   useEffect(() => {
-    if (allowed && near && active) setMounted(true);
-  }, [allowed, near, active]);
+    if (!allowed || !near || !active) return;
+    if (isPhoneScreen() && !claimPhoneVideo(token)) return;
+    setMounted(true);
+  }, [allowed, near, active, token]);
 
   useEffect(() => {
     const video = videoRef.current;

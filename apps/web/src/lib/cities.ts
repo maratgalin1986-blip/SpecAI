@@ -421,6 +421,20 @@ export function cityOffer(
   };
 }
 
+/**
+ * Whether /arenda/<slug>/<city> may be in the search index (and the sitemap).
+ * Only a page with something of its own: a provider's machine that serves
+ * the city, or СпецПласт16's fleet in its base city. Pages that would only
+ * repeat the house fleet's list for a nearby town (a near copy of the base
+ * city's page) and empty cities stay `noindex, follow`; they open by
+ * themselves once a provider serves the city.
+ */
+export function cityPageIndexable(city: City, offer: CityOffer): boolean {
+  if (offer.kind !== 'available') return false;
+  if (offer.machines.some((machine) => !machine.isHouse)) return true;
+  return offer.houseServes && city.houseKm === 0;
+}
+
 /** The sentence of an empty city page (owner, 2026-10-17). */
 export function joiningText(city: City): string {
   return `Исполнители ${city.inCity} подключаются — оставьте заявку, мы найдём технику.`;
