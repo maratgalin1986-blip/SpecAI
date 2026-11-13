@@ -39,21 +39,21 @@ export interface WalkStop {
  */
 export const WALK_STOPS: WalkStop[] = [
   {
-    // From the south-east corner of the site: the loader bucket in front, the
-    // arm swinging over the truck behind it.
+    // Three quarters from the right side: the loader bucket at the front and
+    // the digging arm behind the cab, both in the frame.
     kind: 'excavator',
     mode: 'site',
-    wide: { cam: [8.3, 2.0, 6.4], look: [-1.3, 1.7, -0.9], fov: 40 },
-    tall: { cam: [9.6, 2.2, 3.6], look: [0.9, 1.8, -0.3], fov: 62 },
+    wide: { cam: [5.2, 2.6, 6.8], look: [-0.5, 1.7, -0.5], fov: 50 },
+    tall: { cam: [9.0, 2.6, 5.4], look: [0.7, 1.8, -0.2], fov: 78 },
     key: { from: [7, 10, 7], radius: 7.5 },
   },
   {
-    // From the north-east, low, by the slab stack: the cab towards the camera,
-    // the boom carrying a slab across the sky to the frame.
+    // From the south-east of the yard and a little higher: the whole crane —
+    // carrier, outriggers, the boom and the slab on its hook.
     kind: 'crane',
     mode: 'site',
-    wide: { cam: [10.3, 1.8, -6.6], look: [-1.5, 4.6, 0.3], fov: 50 },
-    tall: { cam: [11.2, 1.9, -6.2], look: [0.3, 5.0, -0.3], fov: 68 },
+    wide: { cam: [10.5, 8, 14], look: [-1.0, 7.4, -1.5], fov: 58 },
+    tall: { cam: [10.5, 8.2, 14], look: [1.7, 8.8, -0.4], fov: 80 },
     key: { from: [9, 13, -8], radius: 9 },
   },
   {
@@ -61,8 +61,8 @@ export const WALK_STOPS: WalkStop[] = [
     // basket rising along the facade under the platform's banner.
     kind: 'agp',
     mode: 'site',
-    wide: { cam: [6.0, 2.2, 8.4], look: [-1.2, 3.0, -2.0], fov: 44 },
-    tall: { cam: [6.5, 2.0, 8.6], look: [-1.0, 3.2, -2.0], fov: 72 },
+    wide: { cam: [-4.6, 2.5, 11.2], look: [1.0, 3.6, -1.6], fov: 50 },
+    tall: { cam: [-4.6, 2.5, 11.2], look: [1.0, 3.8, -1.6], fov: 78 },
     key: { from: [-6, 11, 7], radius: 8 },
   },
   {
@@ -169,7 +169,7 @@ export function posterShape(aspect: number): 'tall' | 'wide' {
  * the stop covers the bottom of the screen, the machine sits above it.
  */
 export function stopLift(aspect: number): number {
-  return aspect < WALK_TALL_ASPECT ? 0.13 : 0.08;
+  return aspect < WALK_TALL_ASPECT ? 0.1 : 0.07;
 }
 
 /** An offset in the frame of the stop (world axes, or the machine's own) as a world offset. */

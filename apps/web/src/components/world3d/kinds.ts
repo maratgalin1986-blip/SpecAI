@@ -97,3 +97,10 @@ export const SLOW_FRAME_MS = 50;
  * searchlights off and thins the smoke, then measures again.
  */
 export const LITE_FRAME_MS = 33;
+
+/**
+ * The frame-rate guard averages the frames drawn in this much wall time (after
+ * the first frame): a weak device falls back to the pictures in 2–4 seconds
+ * whatever its frame rate, a lite pass is measured again for as long.
+ */
+export const WATCH_WINDOW_MS = 2000;

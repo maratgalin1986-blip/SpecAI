@@ -42,7 +42,13 @@ import {
   Sparks,
   Sprites,
 } from './effects';
-import { LITE_FRAME_MS, SLOW_FRAME_MS, worldPixelRatio, type WorldKind } from './kinds';
+import {
+  LITE_FRAME_MS,
+  SLOW_FRAME_MS,
+  WATCH_WINDOW_MS,
+  worldPixelRatio,
+  type WorldKind,
+} from './kinds';
 import {
   AGP_AT,
   AGP_TURRET_YAW,
@@ -86,6 +92,8 @@ export interface WorldOptions {
   still: boolean;
   /** The «на линии» tags over the machines (default: shown). The stop pictures are rendered without. */
   labels?: boolean;
+  /** A fixed pixel ratio (for rendering the pictures at full size); else from the device. */
+  pixelRatio?: number;
   /** The moment of the working cycles the scene starts at, seconds (for rendering the pictures). */
   clock?: number;
   onPick(kind: WorldKind): void;
@@ -302,7 +310,7 @@ export function createWorld(opts: WorldOptions): WorldHandle {
     antialias: true,
     powerPreference: 'high-performance',
   });
-  renderer.setPixelRatio(worldPixelRatio(window.devicePixelRatio, phone));
+  renderer.setPixelRatio(opts.pixelRatio ?? worldPixelRatio(window.devicePixelRatio, phone));
   installFilmGrade(renderer);
   renderer.toneMappingExposure = 0.95;
   renderer.shadowMap.enabled = !phone;
@@ -869,6 +877,8 @@ export function createWorld(opts: WorldOptions): WorldHandle {
     labelY: number,
     sub: string,
     labelled = true,
+    /** Along the machine: a tag moved off what stands right behind it (the banner). */
+    labelX = 0,
   ) {
     root.traverse((o) => (o.userData.kind = kind));
     pickables.push(root);
@@ -880,7 +890,7 @@ export function createWorld(opts: WorldOptions): WorldHandle {
     const sprite = new THREE.Sprite(mat);
     // The tag stands on its pointer, above the machine.
     sprite.center.set(0.5, 0);
-    sprite.position.set(0, labelY, 0);
+    sprite.position.set(labelX, labelY, 0);
     sprite.renderOrder = 10;
     sprite.userData.kind = kind;
     root.add(sprite);
@@ -896,7 +906,7 @@ export function createWorld(opts: WorldOptions): WorldHandle {
   const backhoe = makeBackhoe(rig, dirtParticles, truck1, BACKHOE_SWING);
   place(backhoe.root, BACKHOE_AT);
   updaters.push(backhoe.update);
-  tag(backhoe.root, 'excavator', 4.3, 'на линии · работает');
+  tag(backhoe.root, 'excavator', 5.6, 'на линии · работает');
   ringRoots.push({ root: backhoe.root, size: 11 });
   emitters.push({
     root: backhoe.root,
@@ -923,7 +933,7 @@ export function createWorld(opts: WorldOptions): WorldHandle {
     crane.placed.rotation.y = SLAB_DROP.yaw;
     scene.add(crane.placed);
     updaters.push((t, dt) => crane.update(t, dt));
-    tag(crane.root, 'crane', 6.4, 'на линии · монтаж');
+    tag(crane.root, 'crane', 8.4, 'на линии · монтаж');
     ringRoots.push({ root: crane.root, size: 14 });
     crane.root.add(blobShadow(13, 7.5, blobOpacity));
     emitters.push({
@@ -942,7 +952,7 @@ export function createWorld(opts: WorldOptions): WorldHandle {
     const agp = makeAgp(rig, AGP_TURRET_YAW);
     place(agp.root, AGP_AT);
     updaters.push((t, dt) => agp.update(t, dt));
-    tag(agp.root, 'agp', 4.4, 'на линии · фасад');
+    tag(agp.root, 'agp', 6.0, 'на линии · фасад', true, -2.2);
     ringRoots.push({ root: agp.root, size: 10 });
     agp.root.add(blobShadow(9, 5.6, blobOpacity));
     addGlow(agp.root, [2.7, 2.98, 0.6], 1.5, [1, 0.6, 0.15], false, 4.8);
@@ -996,7 +1006,7 @@ export function createWorld(opts: WorldOptions): WorldHandle {
     t.root.rotation.order = 'YXZ';
     scene.add(t.root);
     // On a phone one truck carries the tag: three more would cover the picture.
-    tag(t.root, 'dump', 3.9, sub, !phone || drivers.length === 0);
+    tag(t.root, 'dump', 4.5, sub, !phone || drivers.length === 0);
     // Headlights: bright points and a pool of light on the road ahead.
     addGlow(t.root, [3.5, 1.32, 0.82], 1.9, [1, 0.95, 0.78]);
     addGlow(t.root, [3.5, 1.32, -0.82], 1.9, [1, 0.95, 0.78]);
@@ -1218,8 +1228,9 @@ export function createWorld(opts: WorldOptions): WorldHandle {
       l.sprite.getWorldPosition(labelAt).project(camera);
       if (labelAt.z > 1 || labelAt.z < -1) return null;
       const h = labelWidth / l.aspect;
-      // A tag that is shown keeps its place a little longer than a hidden one takes to return.
-      const pad = l.sprite.visible ? -3 : 3;
+      // Tags keep a clear gap between them; a tag that is shown keeps its place a
+      // little longer than a hidden one takes to return.
+      const pad = (l.sprite.visible ? 6 : 12) * (phone ? 0.5 : 1);
       return {
         x: ((labelAt.x + 1) / 2) * cssW - labelWidth / 2 - pad,
         y: ((1 - labelAt.y) / 2) * cssH - h - pad,
@@ -1237,12 +1248,13 @@ export function createWorld(opts: WorldOptions): WorldHandle {
     glows.setScale(px);
     smoke.sprites.setScale(px);
     sparks.sprites.setScale(px);
-    // Tags: a fixed width on the screen, about a third of a phone's picture.
+    // Tags: a fixed width on the screen. On a phone the name alone, its letters
+    // 16–18 px high; on a wide screen smaller, so the machines stay in sight.
     const cssW = canvas.clientWidth || 1;
     const cssH = canvas.clientHeight || 1;
     const width = phone
-      ? Math.min(150, Math.max(108, cssW * 0.32))
-      : Math.min(236, Math.max(170, cssW * 0.19));
+      ? Math.min(150, Math.max(120, cssW * 0.34))
+      : Math.min(200, Math.max(150, cssW * 0.16));
     labelWidth = width;
     for (const l of labels) {
       const sy = (width / l.aspect / cssH) * 2 * tan;
@@ -1383,7 +1395,22 @@ export function createWorld(opts: WorldOptions): WorldHandle {
   let last = 0;
   let sampled = 0;
   let sampleMs = 0;
+  let warm = 0;
+  let measuring = !still;
   let slowReported = false;
+  /** Once only: the caller swaps the live scene for the pictures. */
+  function reportSlow() {
+    if (slowReported) return;
+    slowReported = true;
+    opts.onSlow();
+  }
+  // A lost GPU context (the phone reclaimed it) is the same as a device that
+  // cannot keep up: the pictures take over instead of a black canvas.
+  const onContextLost = (event: Event) => {
+    event.preventDefault();
+    reportSlow();
+  };
+  canvas.addEventListener('webglcontextlost', onContextLost);
   let wall = 0;
   /** The plainer picture of a device that renders under ~30 frames a second. */
   let lite = false;
@@ -1506,21 +1533,25 @@ export function createWorld(opts: WorldOptions): WorldHandle {
   function frame(now: number) {
     const prev = last;
     const dt = last ? Math.min(0.05, (now - last) / 1000) : 0;
-    if (running && last) {
-      // Watchdog over the first frames: a phone that cannot keep up falls back.
-      if (sampled < 90) {
+    if (running && last && measuring) {
+      // Watchdog over a window of wall time, not a count of frames: a device that
+      // draws two frames a second is found out in about two seconds, not in 45.
+      // The very first frame (shaders compiling) is not counted.
+      if (warm++ > 0) {
         sampled++;
         sampleMs += now - last;
-        if (sampled === 90) {
-          const average = sampleMs / 90;
-          if (average > SLOW_FRAME_MS && !slowReported) {
-            slowReported = true;
-            opts.onSlow();
+        if (sampleMs >= WATCH_WINDOW_MS) {
+          const average = sampleMs / sampled;
+          sampled = 0;
+          sampleMs = 0;
+          if (average > SLOW_FRAME_MS) {
+            measuring = false;
+            reportSlow();
           } else if (average > LITE_FRAME_MS && !lite) {
             // Not smooth, not hopeless: a plainer picture, then the frames are measured again.
             goLite();
-            sampled = 0;
-            sampleMs = 0;
+          } else {
+            measuring = false;
           }
         }
       }
@@ -1571,6 +1602,7 @@ export function createWorld(opts: WorldOptions): WorldHandle {
       canvas.removeEventListener('pointermove', onMove);
       canvas.removeEventListener('pointerup', onUp);
       canvas.removeEventListener('pointercancel', onCancel);
+      canvas.removeEventListener('webglcontextlost', onContextLost);
       scene.traverse((o) => {
         const mesh = o as THREE.Mesh;
         mesh.geometry?.dispose();

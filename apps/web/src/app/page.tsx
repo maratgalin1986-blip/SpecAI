@@ -405,7 +405,7 @@ export default async function HomePage() {
                   data-testid="hero-walk"
                   className="show-cta inline-flex min-h-[44px] flex-1 items-center justify-center gap-2 rounded-full bg-white/10 px-5 py-3 text-base font-bold text-white ring-2 ring-sky-300/70 backdrop-blur transition hover:bg-white/20 sm:flex-none"
                 >
-                  <span aria-hidden>🏙️</span>
+                  <Icon name="crane" className="h-5 w-5" />
                   Прогуляться по 3D-городу
                 </a>
               </div>
