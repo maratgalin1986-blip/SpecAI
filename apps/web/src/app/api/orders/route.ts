@@ -21,7 +21,7 @@ import { customerShortName } from '@/lib/customerPrivacy';
 import { unreadMessagesByOrder } from '@/lib/orderChatAccess';
 import { bidForCustomer, bookedProviderSees } from '@/lib/bidPrivacy';
 import { companyBase, locationForViewer } from '@/lib/orderLocationPrivacy';
-import { maskContactsAndLinks } from '@/lib/privacy';
+import { orderTextForViewer } from '@/lib/privacy';
 import { buyerJson, resolveBuyer } from '@/lib/buyerRequisites';
 import {
   assessWork,
@@ -209,14 +209,16 @@ export async function GET(request: NextRequest) {
         { contactPhone },
         { isProvider: isProvider(currentUser), isHouse: false },
       );
+      const booked = bookedProviderSees(booking, currentUser.companyId);
       return {
         ...rest,
         location: locationForViewer(rest.location, {
-          full: house || bookedProviderSees(booking, currentUser.companyId),
+          full: house || booked,
           base,
         }),
-        // Phones typed into the task text stay private until the booking.
-        description: maskContactsAndLinks(rest.description),
+        // Phones and the address typed into the task text stay private until
+        // the booking, like the location above.
+        description: orderTextForViewer(rest.description, { full: booked, address: house }),
         ...(chatContact ? { chatContact } : {}),
         customer: { name: customerShortName(customer.name) },
         bids: order.bids.filter((bid) => bid.equipment.companyId === currentUser.companyId),

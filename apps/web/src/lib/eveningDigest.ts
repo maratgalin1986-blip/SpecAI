@@ -4,7 +4,7 @@
 import { moscowDateKey } from './bookingRules';
 import { stripChatOrderNote } from './chatOrders';
 import { providerMatchesOrder, type ProviderForMatch } from './notifications/routing';
-import { maskContacts } from './privacy';
+import { orderTextWithoutAddress } from './privacy';
 
 const DAY_MS = 86_400_000;
 
@@ -74,7 +74,7 @@ export function digestItem(order: {
     parts.push(`${shortDay(order.startDate)}–${shortDay(order.endDate)}`);
   }
   const text = order.description
-    ? maskContacts(stripChatOrderNote(order.description)).replace(/\s+/g, ' ').trim()
+    ? orderTextWithoutAddress(stripChatOrderNote(order.description))
     : '';
   const excerpt =
     text.length > DIGEST_EXCERPT ? `${text.slice(0, DIGEST_EXCERPT - 1).trimEnd()}…` : text;

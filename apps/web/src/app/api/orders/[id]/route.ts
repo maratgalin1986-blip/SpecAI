@@ -9,7 +9,7 @@ import { maskedContactFor } from '@/lib/chatOrders';
 import { updateOrderSchema } from '@specai/shared';
 import { INVALID_JSON_MESSAGE, readJson, zodErrorMessage } from '@/lib/apiInput';
 import { unreadMessagesByOrder } from '@/lib/orderChatAccess';
-import { maskContactsAndLinks } from '@/lib/privacy';
+import { orderTextForViewer } from '@/lib/privacy';
 import { bidForCustomer, bookedProviderSees } from '@/lib/bidPrivacy';
 import { companyBase, locationForViewer } from '@/lib/orderLocationPrivacy';
 import { notifyCompany } from '@/lib/notifications/notifyUser';
@@ -149,9 +149,12 @@ export async function GET(request: NextRequest, props: { params: Promise<{ id: s
     order: {
       ...publicRest,
       location,
-      ...(isOwner || bookedProviderSees(rest.booking, currentUser.companyId)
-        ? {}
-        : { description: maskContactsAndLinks(rest.description) }),
+      // The task text follows the location: contacts and the address typed
+      // into it open with the confirmed booking.
+      description: orderTextForViewer(rest.description, {
+        full: isOwner || bookedProviderSees(rest.booking, currentUser.companyId),
+        address: seesAddress,
+      }),
       // Requisites «Заказываю от …»: the customer's own; the provider reads them
       // on the confirmed booking (GET /api/bookings?as=provider).
       ...(isOwner ? { customerId, buyer } : {}),

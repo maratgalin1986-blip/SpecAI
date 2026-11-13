@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
+  HIDDEN_ADDRESS,
   HIDDEN_CONTACT,
+  HIDDEN_LINK,
   containsContact,
   canSeeChatContacts,
   canSeeCustomerName,
@@ -8,7 +10,10 @@ import {
   isSafeHttpUrl,
   maskContacts,
   maskMessagesForAi,
+  maskOrderText,
   orderDescriptionFor,
+  orderTextForViewer,
+  orderTextWithoutAddress,
   visibleBids,
 } from './privacy';
 
@@ -196,5 +201,189 @@ describe('containsContact', () => {
     expect(containsContact('Кран, пишите ivan@mail.ru')).toBe(true);
     expect(containsContact('КамАЗ 65115-6058-48')).toBe(false);
     expect(containsContact('Hitachi ZX200-5G 2019')).toBe(false);
+  });
+});
+
+describe('maskOrderText', () => {
+  const A = HIDDEN_ADDRESS;
+
+  it('hides a street with a house and keeps the rest of the task', () => {
+    const cases: [string, string][] = [
+      ['Нужен кран, ул. Мира, д. 15, завтра', `Нужен кран, ${A}, завтра`],
+      ['ул.Мира,15', A],
+      ['пр-т Сююмбике 40', A],
+      ['проспект Мира 52/16, подъезд 3', A],
+      ['улица 40 лет Победы, 12', A],
+      ['ул мира 15 нужен экскаватор', `${A} нужен экскаватор`],
+      ['улица ленина 5а', A],
+      ['Московский проспект, 15', A],
+      ['Сармановский тракт, 60', A],
+      ['Мира проспект 40', A],
+      ['пер. Садовый 3', A],
+      ['б-р Энтузиастов, 9', A],
+      ['шоссе Энтузиастов 12', A],
+      ['мкр. Яшьлек, д. 4', A],
+      ['Ул. Академика Королёва д.3 корп.2', A],
+      ['улица Гагарина', A],
+      ['ЖК «Солнечный», дом 2', A],
+      ['СНТ Ромашка, участок 15', A],
+      ['ул. Мира 15, кран 25 т на 2 смены', `${A}, кран 25 т на 2 смены`],
+      ['на улице Ленина 2 дня работы', `на ${A} 2 дня работы`],
+    ];
+    for (const [text, masked] of cases) expect(maskOrderText(text), text).toBe(masked);
+  });
+
+  it('hides a house, a flat and a building written without a street', () => {
+    expect(maskOrderText('дом 7 кв 12')).toBe(A);
+    expect(maskOrderText('д. 15, кв. 3')).toBe(A);
+    expect(maskOrderText('дом 15к2, со двора')).toBe(`${A}, со двора`);
+    expect(maskOrderText('заезд к корпусу 2')).toBe(`заезд к ${A}`);
+    expect(maskOrderText('корпус 2, офис 14')).toBe(A);
+  });
+
+  it('hides the addresses of Набережные Челны: complexes and «ГЭС 10/25»', () => {
+    expect(maskOrderText('52 комплекс, д. 12')).toBe(A);
+    expect(maskOrderText('в 17А комплексе дом 3')).toBe(`в ${A}`);
+    expect(maskOrderText('комплекс 52')).toBe(A);
+    expect(maskOrderText('ГЭС 10/25')).toBe(A);
+    expect(maskOrderText('Новый город 30/05, разгрузить плиты')).toBe(`${A}, разгрузить плиты`);
+    expect(maskOrderText('пос. ЗЯБ, 17/04')).toBe(`пос. ${A}`);
+  });
+
+  it('hides the whole «Адрес: …» line and what follows «по адресу»', () => {
+    expect(maskOrderText('Адрес: Набережные Челны, Мира 15\nНужен кран 25 т')).toBe(
+      `Адрес: ${A}\nНужен кран 25 т`,
+    );
+    expect(maskOrderText('Адрес объекта — Сармановский тракт 60, въезд с торца')).toBe(
+      `Адрес объекта — ${A}`,
+    );
+    expect(maskOrderText('Копать по адресу: Мира 15, двор')).toBe(`Копать по адресу: ${A}`);
+    expect(maskOrderText('работы по адресу Мира 15 на 2 смены')).toBe(
+      `работы по адресу ${A} на 2 смены`,
+    );
+    expect(maskOrderText('адрес уточню при звонке')).toBe('адрес уточню при звонке');
+  });
+
+  it('keeps the city', () => {
+    expect(maskOrderText('Казань, ул. Хади Такташа 85к2, кв. 7')).toBe(`Казань, ${A}`);
+    expect(maskOrderText('Елабуга, Окружное шоссе 7')).toBe(`Елабуга, ${A}`);
+    for (const text of [
+      'Набережные Челны',
+      'Набережные Челны, кран 16 т',
+      'г. Елабуга, манипулятор 5 т',
+      'д. Калмаш, нужен трактор',
+      'Нижнекамск — Казань, перевезти экскаватор',
+    ]) {
+      expect(maskOrderText(text), text).toBe(text);
+    }
+  });
+
+  it('leaves volumes, tonnage, hours, sizes and prices alone', () => {
+    for (const text of [
+      'нужен кран на 25 т',
+      '10 часов',
+      '2 смены',
+      'глубина 1,5 м',
+      'КамАЗ 6520',
+      'КамАЗ 65115',
+      '15 кубов',
+      'Нужен автокран 25 т на 10 часов, 2 смены, глубина 1,5 м, КамАЗ 6520',
+      'траншея 100 м, ширина 0,6 м',
+      'вывезти 20 м3 грунта',
+      'ковш 0,8 куба',
+      'стрела 28 м, 16 т',
+      'бетон М300 5 кубов',
+      'экскаватор-погрузчик JCB 3CX на 2 дня',
+      'цена до 2500 р/час',
+      'бюджет 15 000 руб',
+      'оплата 3000 в час',
+      'с 8:00 до 17:00',
+      '12.11.2026 с утра',
+      'Работаем 24/7',
+      'нужно 2 машины на 3 рейса',
+      'до 5 этажа поднять 3 поддона',
+      'участок 15 соток',
+      'площадь участка 600 кв. м',
+      'площадь 200 м2',
+      'кв. м плитки 40',
+      'снести дом 6 на 8',
+      'дом 6х8 под снос',
+      'дом 2 этажа, поднять плиты',
+      'дом 120 м2, фундамент',
+      'дом из бруса, 2 дня работы',
+    ]) {
+      expect(maskOrderText(text), text).toBe(text);
+    }
+  });
+
+  it('leaves plain speech about streets and driveways alone', () => {
+    for (const text of [
+      'на улице минус 20, нужен тепловой обогрев',
+      'работа на улице, 3 дня',
+      'проезд узкий, 3 метра',
+      'Нужен проезд для техники 4 м',
+      'Узкий проезд, нужен мини-погрузчик',
+      'проезд КамАЗа свободный, площадка ровная',
+      'подъезд к участку свободный',
+      'на шоссе авария, эвакуатор',
+      'на проспекте работаем 2 смены',
+      'Нужен самосвал 20 т. Улица сухая',
+      'комплекс работ по благоустройству',
+      '2 комплекса работ',
+      'в 3 квартале планируем стройку',
+      'корпус насоса заменить',
+      'стр. 3 договора',
+    ]) {
+      expect(maskOrderText(text), text).toBe(text);
+    }
+  });
+
+  it('hides contacts and links as before', () => {
+    expect(maskOrderText('ул. Мира 15 89174445566')).toBe(`${A} ${HIDDEN_CONTACT}`);
+    expect(maskOrderText('пишите t.me/stroyka или на site.ru, кран 25 т')).toBe(
+      `пишите ${HIDDEN_CONTACT} или на ${HIDDEN_LINK}, кран 25 т`,
+    );
+  });
+
+  it('answers at once on a long text', () => {
+    const long = 'ул. Мира дом улица проспект 15 т 2 смены, '.repeat(50);
+    const started = Date.now();
+    maskOrderText(long);
+    expect(Date.now() - started).toBeLessThan(500);
+  });
+});
+
+describe('orderTextWithoutAddress', () => {
+  it('drops the address without a mark and keeps the job on one line', () => {
+    expect(orderTextWithoutAddress('ул. Строителей, д. 7 — разгрузить плиты, 25 т')).toBe(
+      'разгрузить плиты, 25 т',
+    );
+    expect(orderTextWithoutAddress('Кран 25 т, ул. Мира 15, завтра')).toBe('Кран 25 т, завтра');
+    expect(orderTextWithoutAddress('Адрес: Челны, Мира 15\nНужен кран 25 т')).toBe(
+      'Нужен кран 25 т',
+    );
+    expect(orderTextWithoutAddress('Копать траншею 100 м, звоните 89174445566')).toBe(
+      `Копать траншею 100 м, звоните ${HIDDEN_CONTACT}`,
+    );
+  });
+});
+
+describe('orderTextForViewer', () => {
+  const text = 'Кран 25 т, ул. Мира, д. 15, звоните 89174445566';
+
+  it('gives the whole text to the author, the admin and the booked company', () => {
+    expect(orderTextForViewer(text, { full: true })).toBe(text);
+  });
+
+  it('hides contacts and the address for every other viewer', () => {
+    expect(orderTextForViewer(text, { full: false })).toBe(
+      `Кран 25 т, ${HIDDEN_ADDRESS}, звоните ${HIDDEN_CONTACT}`,
+    );
+  });
+
+  it('keeps the address for a viewer who reads the location in full', () => {
+    expect(orderTextForViewer(text, { full: false, address: true })).toBe(
+      `Кран 25 т, ул. Мира, д. 15, звоните ${HIDDEN_CONTACT}`,
+    );
   });
 });

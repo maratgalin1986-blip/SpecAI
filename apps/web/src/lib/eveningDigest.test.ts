@@ -89,6 +89,16 @@ describe('digestsForCompanies', () => {
     expect(digestItem({ categoryName: 'Автокраны', city: 'Самара' })).toBe('автокраны, Самара');
   });
 
+  it('keeps the street and the house out of the excerpt', () => {
+    expect(
+      digestItem({
+        categoryName: 'Автокраны',
+        city: 'Елабуга',
+        description: 'ул. Строителей, д. 7 — разгрузить плиты, 25 т',
+      }),
+    ).toBe('автокраны, Елабуга: разгрузить плиты, 25 т');
+  });
+
   it('tells orders apart by the excerpt and the dates', () => {
     expect(
       digestItem({
