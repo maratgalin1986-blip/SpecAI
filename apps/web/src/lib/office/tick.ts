@@ -340,6 +340,7 @@ export function lastPassValue(now: Date, outreach: OutreachResult): string {
     mail: outreach.mail ?? 'ok',
     ...(code ? { code } : {}),
     ...(outreach.mailHint ? { hint: outreach.mailHint } : {}),
+    ...(outreach.errorCodes ? { errorCodes: outreach.errorCodes } : {}),
   });
 }
 

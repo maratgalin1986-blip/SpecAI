@@ -108,8 +108,14 @@ const DRAFT_LINE =
  * дороже; дальше сопровождение по подписке. Цен в первом письме нет (К6) — они на странице услуги.
  */
 const NEXT_STEP_LINE =
-  'Из этого черновика можем сделать лендинг — одну страницу, это дешевле, — или полноценный сайт ' +
-  `с разделами, это дороже. Дальше по желанию ведём сайт по подписке: правки, продвижение, поддержка. ${NOT_OFFER_LINE}`;
+  'Сделаем лендинг (одна страница, дешевле) или сайт с разделами и дальше будем вести его по ' +
+  `подписке: правки, продвижение, поддержка. ${NOT_OFFER_LINE}`;
+/**
+ * Один простой шаг в конце (разведка 2026-11-12, docs/marketing.md: короткое письмо с одним
+ * вопросом получает больше ответов, чем «ответьте или позвоните»). Ответ «да» офис понимает как
+ * интерес и сам присылает условия (replies.ts).
+ */
+const ASK_LINE = `Прислать условия под вашу задачу? Ответьте «да» на это письмо или позвоните ${SITE.phone}.`;
 /** Письмо заказчику техники — тоже не оферта; «страницы услуги» у площадки нет. */
 export const PLATFORM_NOT_OFFER_LINE = 'Письмо не является офертой: условия — на сайте площадки.';
 /** Подпись: кто пишет (§ 9.1, п. 4). */
@@ -186,7 +192,7 @@ export function isRuMobile(phone: string | null | undefined): boolean {
  * Приветствие от человека, а не от «площадки» (владелец, 2026-11-12): кто пишет, откуда и чем
  * занимается — одной фразой, как в обычном деловом письме.
  */
-const GREETING = `Здравствуйте! Меня зовут ${SITE.contactPerson}, я из компании ${SITE.name} (${SITE.city}). У нас есть IT-направление: создаём сайты и лендинги для небольших компаний, продвигаем и ведём их.`;
+const GREETING = `Здравствуйте! Меня зовут ${SITE.contactPerson}, ${SITE.name} (${SITE.city}): делаем сайты и лендинги для небольших компаний, продвигаем и ведём их.`;
 /**
  * Письмо исполнителю спецтехники — другой проект (владелец, 2026-11-12: «это два разных
  * проекта»): площадка заявок. В письмах о сайтах площадка не упоминается.
@@ -221,16 +227,15 @@ function serviceLinks(p: OutreachProspect, input: OutreachInput): Letter['links'
   ];
 }
 
-/** Подпись ссылки на презентацию под фирму. */
-export const SHOW_LINK_LABEL = 'Презентация для вашей компании';
-/** Пример нашей работы — в презентации, там же вход в 3D-город (владелец, 2026-11-12). */
-const SHOWCASE_LINE =
-  'В презентации — пример нашей работы: площадка с мобильным приложением и 3D-городом, по которому можно прогуляться.';
+/**
+ * Подпись ссылки на презентацию под фирму; пример нашей работы и вход в 3D-город — в ней, письмо
+ * их не пересказывает (короче письмо — больше ответов).
+ */
+export const SHOW_LINK_LABEL = 'Презентация и 3D-город — пример нашей работы';
 
 /** Что сделаем именно этой фирме и где это посмотреть; без презентации — ничего. */
 function pitchParagraphs(input: OutreachInput): string[] {
-  if (!input.pitchLine) return [];
-  return [input.showUrl ? `${input.pitchLine} ${SHOWCASE_LINE}` : input.pitchLine];
+  return input.pitchLine ? [input.pitchLine] : [];
 }
 
 function siteLetter(p: OutreachProspect, input: OutreachInput): Letter {
@@ -252,10 +257,7 @@ function siteLetter(p: OutreachProspect, input: OutreachInput): Letter {
     ],
     button: 'Открыть страницу',
     links: serviceLinks(p, input),
-    closing: [
-      `Если интересно — ответьте на это письмо или позвоните ${SITE.phone}.`,
-      `${STOP_LINE} ${EMAIL_ONCE_LINE}`,
-    ],
+    closing: [ASK_LINE, `${STOP_LINE} ${EMAIL_ONCE_LINE}`],
   };
 }
 
@@ -272,6 +274,11 @@ export function packageLine(
   );
 }
 
+/** Строка захода из предложения: второй пункт — тот, что отличает заход (offer.ts). */
+function angleLine(offer: NonNullable<OutreachInput['offer']>): string {
+  return (offer.bullets[1] ?? offer.bullets[0] ?? '').trim();
+}
+
 /** Письмо для сайта из персонального предложения (U2). */
 function offerLetter(
   p: OutreachProspect,
@@ -281,20 +288,18 @@ function offerLetter(
   return {
     subject: offer.subject,
     greeting: GREETING,
+    // Короткое письмо (разведка 2026-11-12): факт о карточке, одна личная строка захода, что
+    // сделаем именно этой фирме, выбор «лендинг или сайт» и один вопрос. Что на странице, видно
+    // на обложке письма и в презентации — списком не пересказываем.
     paragraphs: [
-      `${offer.opener} Мы собрали по данным карточки черновик страницы — посмотреть можно по ` +
-        `ссылке ниже. ${DRAFT_LINE}`,
-      ...pitchParagraphs(input),
-      'Что на странице:',
+      `${offer.opener} Мы собрали по данным карточки черновик страницы — он по ссылке ниже. ` +
+        DRAFT_LINE,
+      ...[...pitchParagraphs(input), angleLine(offer)].filter(Boolean).slice(0, 2),
+      NEXT_STEP_LINE,
     ],
-    bullets: offer.bullets,
-    after: [NEXT_STEP_LINE],
     button: 'Открыть страницу',
     links: serviceLinks(p, input),
-    closing: [
-      `Если интересно — ответьте на это письмо или позвоните ${SITE.phone}.`,
-      `${STOP_LINE} ${EMAIL_ONCE_LINE}`,
-    ],
+    closing: [ASK_LINE, `${STOP_LINE} ${EMAIL_ONCE_LINE}`],
   };
 }
 

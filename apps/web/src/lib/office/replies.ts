@@ -74,6 +74,13 @@ export function classifyReply(input: {
   if (!top) return 'other';
   if (isStopReply(top) || NO_RE.test(top)) return 'stop';
   if (AGREE_RE.test(top)) return 'agree';
+  // Короткое «да» в ответ на вопрос письма «Прислать условия?» — интерес: офис присылает условия.
+  if (
+    /^(?:да|давайте|ок|окей|хорошо|пришлите|присылайте)(?![а-яa-z])/.test(top) &&
+    top.length <= 40
+  ) {
+    return 'interest';
+  }
   if (PRICE_RE.test(top)) return 'price';
   if (INTEREST_RE.test(top)) return 'interest';
   return 'other';

@@ -43,6 +43,10 @@ describe('classifyReply', () => {
     expect(kind('Какие условия и цена?')).toBe('price');
     expect(kind('Интересно, расскажите подробнее')).toBe('interest');
     expect(kind('Передал директору')).toBe('other');
+    // Ответ на вопрос письма «Прислать условия?».
+    expect(kind('Да')).toBe('interest');
+    expect(kind('да, пришлите')).toBe('interest');
+    expect(kind('Дальше не надо')).toBe('stop');
     expect(kind('')).toBe('other');
   });
 

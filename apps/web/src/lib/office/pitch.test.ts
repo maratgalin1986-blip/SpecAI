@@ -73,7 +73,9 @@ describe('письмо с презентацией', () => {
     expect(letter.html).toContain('Смотреть презентацию');
     expect(letter.html).toContain(`<a href="${input.previewUrl}"`);
     expect(letter.text).toContain(input.pitchLine);
-    expect(letter.text).toContain(`Презентация для вашей компании: ${base}/pokaz/tok`);
+    expect(letter.text).toContain(
+      `Презентация и 3D-город — пример нашей работы: ${base}/pokaz/tok`,
+    );
     expect(letter.text).toContain('3D-город');
     expect(letter.text).not.toMatch(/₽|руб\./);
   });

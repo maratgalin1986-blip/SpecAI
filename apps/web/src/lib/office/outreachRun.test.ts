@@ -30,6 +30,7 @@ import {
   OUTREACH_BUDGET_MS,
   RAMP_START,
   rampedCap,
+  smtpErrorCode,
   outreachErrorText,
   AUTO_SEND_HOURS,
   DELIVERY_UNKNOWN,
@@ -153,13 +154,16 @@ function fakeDb(rows: Row[]) {
           ).length;
         }
         return rows.filter((r) =>
-          where.emailSentAt
-            ? inRange(r.emailSentAt, where.emailSentAt)
-            : where.whatsappSentAt
-              ? inRange(r.whatsappSentAt, where.whatsappSentAt)
-              : where.followUpSentAt
-                ? inRange(r.followUpSentAt, where.followUpSentAt)
-                : true,
+          // Проект прохода: письма о сайтах и письма площадки считаются раздельно.
+          where.kind && (r.kind === 'provider' ? 'provider' : 'site') !== where.kind
+            ? false
+            : where.emailSentAt
+              ? inRange(r.emailSentAt, where.emailSentAt)
+              : where.whatsappSentAt
+                ? inRange(r.whatsappSentAt, where.whatsappSentAt)
+                : where.followUpSentAt
+                  ? inRange(r.followUpSentAt, where.followUpSentAt)
+                  : true,
         ).length;
       },
       async findMany({ where, orderBy, take }) {
@@ -302,7 +306,6 @@ describe('sendOutreach', () => {
     // No dossier: the personal offer with a general angle (U2) — a fact about the card,
     // no prices, not an offer, a draft, the legal signature.
     expect(sent.text).toContain('В открытой карточке компании Компания a на карте не указан сайт.');
-    expect(sent.text).toContain('Что на странице:');
     expect(sent.text).toContain(
       'После подключения клиент сможет оставить заявку на странице — она придёт вам на почту.',
     );
@@ -431,7 +434,14 @@ describe('sendOutreach', () => {
       .mockResolvedValueOnce({ ok: false, reason: 'smtp 421' } as never)
       .mockRejectedValueOnce(new Error('сеть недоступна'));
     const result = await sendOutreach(NOW, deps(db, { email: failing }));
-    expect(result).toEqual({ email: 0, whatsapp: 0, followUps: 0, skipped: null, errors: 2 });
+    expect(result).toEqual({
+      errorCodes: { 421: 1, other: 1 },
+      email: 0,
+      whatsapp: 0,
+      followUps: 0,
+      skipped: null,
+      errors: 2,
+    });
     expect(updates).toHaveLength(2);
     // The failure time is its own field: any later write moves updatedAt, not outreachErrorAt.
     // The letter certainly did not leave, so the claim taken before the send is released.
@@ -869,7 +879,8 @@ describe('sendOutreach — personal offer (U2)', () => {
     const letter = okEmail.mock.calls[0]![0];
     expect(letter.subject).toBe(expected.subject);
     expect(letter.text).toContain(expected.opener);
-    for (const bullet of expected.bullets) expect(letter.text).toContain(`• ${bullet}`);
+    // Короткое письмо: из пунктов предложения — строка захода (второй пункт).
+    expect(letter.text).toContain(expected.bullets[1]!);
     // The package and its price stay on the service page: the first letter has no prices.
     expect(letter.text).not.toContain('₽');
     expect(letter.text).toContain(NOT_OFFER_LINE);
@@ -1759,5 +1770,32 @@ describe('проект площадки: письмо по роли ниши', (
     expect(carrier!.text).toContain('/preview/tok-carrier');
     expect(carrier!.text).toContain('«Это моя компания»');
     expect(carrier!.text).toContain('грузовики и рейсы');
+  });
+});
+
+describe('коды отказов почтового сервера (2026-11-13)', () => {
+  it('smtpErrorCode: код и расширенный код без адресов и текста', () => {
+    expect(smtpErrorCode('550 5.1.1 <a@b.ru>: Recipient address rejected: user unknown')).toBe(
+      '550 5.1.1',
+    );
+    expect(
+      smtpErrorCode('Message failed: 554 5.7.1 Message rejected under suspicion of SPAM'),
+    ).toBe('554 5.7.1');
+    expect(smtpErrorCode('421 Too many connections')).toBe('421');
+    expect(smtpErrorCode('Почта: нет ответа за 8000 мс')).toBe('other');
+    expect(smtpErrorCode('Connection timeout')).toBe('timeout');
+  });
+
+  it('проход считает отказы по кодам', async () => {
+    const rows = [row({ id: 'a' }), row({ id: 'b', email: 'b@mail.ru' })];
+    const { db } = fakeDb(rows);
+    const email = vi.fn(async (mail: { to: string }) =>
+      mail.to === 'b@mail.ru'
+        ? { ok: false as const, reason: '550 5.1.1 Recipient address rejected' }
+        : { ok: true as const },
+    );
+    const result = await sendOutreach(NOW, deps(db, { email }));
+    expect(result.email).toBe(1);
+    expect(result.errorCodes).toEqual({ '550 5.1.1': 1 });
   });
 });
