@@ -37,6 +37,8 @@ interface OutreachHealth {
   lastSentAt: string | null;
   /** Сколько фирм сегодня получили отметку об ошибке отправки. */
   errorsToday: number;
+  /** Писем сегодня и фирм с почтой в очереди — по проектам. */
+  projects: Record<'sites' | 'platform', { sentToday: number; queueWithEmail: number }>;
   /** Ответов фирм, прочитанных из ящика сегодня. */
   repliesToday: number;
   /** Итог последнего прохода рассылки: время, числа, состояние ящика, код ответа сервера. */
@@ -91,6 +93,13 @@ async function officeHealth(): Promise<
       }),
     ]);
     const record = (key: string) => parseRecord(records.find((r) => r.key === key)?.value);
+    // По проектам (сайты и площадка — раздельные лимиты): писем сегодня и фирм с почтой в очереди.
+    const [siteToday, platformToday, siteQueue, platformQueue] = await Promise.all([
+      prisma.prospect.count({ where: { kind: 'site', emailSentAt: { gte: dayStart } } }),
+      prisma.prospect.count({ where: { kind: 'provider', emailSentAt: { gte: dayStart } } }),
+      prisma.prospect.count({ where: { ...waiting, kind: 'site', email: { not: null } } }),
+      prisma.prospect.count({ where: { ...waiting, kind: 'provider', email: { not: null } } }),
+    ]);
     return {
       ...searchHealth(runs, new Date()),
       queue: { ready, withEmail, withWhatsapp, withMobile },
@@ -100,6 +109,10 @@ async function officeHealth(): Promise<
         lastSentAt: lastSent?.emailSentAt?.toISOString() ?? null,
         errorsToday,
         repliesToday,
+        projects: {
+          sites: { sentToday: siteToday, queueWithEmail: siteQueue },
+          platform: { sentToday: platformToday, queueWithEmail: platformQueue },
+        },
         lastPass: record(LAST_OUTREACH_KEY),
         mailbox: record(MAIL_READ_KEY),
       },
