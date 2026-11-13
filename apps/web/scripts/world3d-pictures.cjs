@@ -24,11 +24,17 @@ function loadEsbuild() {
 }
 
 const STOPS = ['excavator', 'crane', 'agp', 'dump'];
+// Each picture: the CSS size the scene lays itself out for (tags, lift of the
+// picture) and the pixel ratio it is drawn at. Tall: 1080×2340, a phone's screen.
 const SHAPES = {
-  tall: { width: 720, height: 1558 },
-  wide: { width: 1600, height: 900 },
+  tall: { size: { width: 360, height: 780 }, ratio: 3, quality: 0.72 },
+  wide: { size: { width: 1600, height: 900 }, ratio: 1, quality: 0.78 },
 };
 const POSTER = { width: 1600, height: 900 };
+// The square block of a phone, 1080×1080: tags with the name alone, phone-sized.
+const PHONE_POSTER = { width: 360, height: 360 };
+/** Every stop picture stays under this weight; the quality steps down until it fits. */
+const MAX_STOP_BYTES = 120 * 1024;
 
 (async () => {
   const bundle = loadEsbuild().buildSync({
@@ -72,6 +78,7 @@ const POSTER = { width: 1600, height: 900 };
     fs.writeFileSync(file, Buffer.from(dataUrl.split(',')[1], 'base64'));
     console.log(name, Math.round(fs.statSync(file).size / 1024) + ' KB');
   };
+  const bytes = (dataUrl) => Math.floor(((dataUrl.length - dataUrl.indexOf(',') - 1) * 3) / 4);
 
   // The block: the district from above, tags on.
   const poster = await open(POSTER);
@@ -84,26 +91,54 @@ const POSTER = { width: 1600, height: 900 };
   save('world3d-poster.jpg', block[1]);
   await poster.context().close();
 
+  const phonePoster = await open(PHONE_POSTER);
+  const square = await phonePoster.evaluate(() => {
+    const canvas = document.getElementById('c');
+    window.createWorld({
+      canvas,
+      phone: true,
+      still: true,
+      pixelRatio: 3,
+      onPick() {},
+      onSlow() {},
+    });
+    return canvas.toDataURL('image/webp', 0.74);
+  });
+  save('world3d-poster-phone.webp', square);
+  await phonePoster.context().close();
+
   // The stops: the camera of each stop, no tags (the card names the machine).
-  for (const [shape, size] of Object.entries(SHAPES)) {
+  for (const [shape, { size, ratio, quality }] of Object.entries(SHAPES)) {
     const page = await open(size);
-    await page.evaluate(() => {
+    await page.evaluate((pixelRatio) => {
       const canvas = document.getElementById('c');
       window.world = window.createWorld({
         canvas,
         phone: false,
         still: true,
         labels: false,
+        pixelRatio,
         onPick() {},
         onSlow() {},
       });
-    });
+    }, ratio);
     for (let index = 0; index < STOPS.length; index++) {
-      const picture = await page.evaluate((i) => {
-        if (i) window.world.walkTo(i);
-        else window.world.walkStart(0);
-        return document.getElementById('c').toDataURL('image/webp', 0.78);
-      }, index);
+      // Drawn and read in one go: the canvas keeps no drawing buffer between calls.
+      const draw = (q) =>
+        page.evaluate(
+          ([i, q]) => {
+            if (i) window.world.walkTo(i);
+            else window.world.walkStart(0);
+            return document.getElementById('c').toDataURL('image/webp', q);
+          },
+          [index, q],
+        );
+      let q = quality;
+      let picture = await draw(q);
+      while (bytes(picture) > MAX_STOP_BYTES && q > 0.4) {
+        q -= 0.04;
+        picture = await draw(q);
+      }
       save(`world3d-stop-${STOPS[index]}-${shape}.webp`, picture);
     }
     await page.context().close();

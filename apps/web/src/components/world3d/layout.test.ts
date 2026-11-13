@@ -140,9 +140,12 @@ describe('walk shots on the site', () => {
   it('stands near the height of the machine and looks at it from close by', () => {
     for (const stop of WALK_STOPS)
       for (const shot of [stop.wide, stop.tall]) {
-        expect(shot.cam[1], stop.kind).toBeLessThanOrEqual(2.6);
+        // The crane is 16 m tall with its boom up: it is seen whole from a little
+        // higher and farther (the carrier, the outriggers, the boom and the load).
+        const tall = stop.kind === 'crane';
+        expect(shot.cam[1], stop.kind).toBeLessThanOrEqual(tall ? 9 : 2.6);
         expect(shot.cam[1], stop.kind).toBeGreaterThanOrEqual(1.4);
-        expect(Math.hypot(shot.cam[0], shot.cam[2]), stop.kind).toBeLessThan(14);
+        expect(Math.hypot(shot.cam[0], shot.cam[2]), stop.kind).toBeLessThan(tall ? 18 : 14);
         // The machine is what the camera looks at: the target is within its length.
         expect(Math.hypot(shot.look[0], shot.look[2]), stop.kind).toBeLessThan(3.2);
       }
@@ -155,10 +158,14 @@ describe('walk shots on the site', () => {
         for (let j = i + 1; j < poses.length; j++) {
           const a = poses[i]!;
           const b = poses[j]!;
-          expect(Math.hypot(a.pos[0] - b.pos[0], a.pos[2] - b.pos[2])).toBeGreaterThan(8);
+          expect(
+            Math.hypot(a.pos[0] - b.pos[0], a.pos[1] - b.pos[1], a.pos[2] - b.pos[2]),
+          ).toBeGreaterThan(6);
           const dir = (p: typeof a) => Math.atan2(p.look[2] - p.pos[2], p.look[0] - p.pos[0]);
           const turn = Math.abs(Math.atan2(Math.sin(dir(a) - dir(b)), Math.cos(dir(a) - dir(b))));
-          expect(turn, `${siteStops[i]!.kind} / ${siteStops[j]!.kind}`).toBeGreaterThan(0.3);
+          // A shot from well above (the crane's) is its own shot even facing the same way.
+          if (Math.abs(a.pos[1] - b.pos[1]) < 4)
+            expect(turn, `${siteStops[i]!.kind} / ${siteStops[j]!.kind}`).toBeGreaterThan(0.3);
         }
     }
   });

@@ -276,29 +276,73 @@ export function makeBackhoe(rig: Rig, dirt: Debris, truck: DumpTruck, swingTo = 
     rig.box(root, [0.2, 1.2, 0.2], 'hazard', [-2.3, 0.62, z], [z > 0 ? -0.25 : 0.25, 0, 0]);
     rig.box(root, [0.55, 0.08, 0.55], 'dark', [-2.3, 0.04, z * 1.25]);
   }
-  // Front loader bucket.
+  // Front loader: two lift arms from towers beside the cab, a cross tube, and a
+  // real bucket carried off the ground — an open scoop with side plates, a
+  // curled back, a steel edge and teeth, so it reads as a loader, not a plough.
   const loader = node(root, [0.3, 1.5, 0]);
-  for (const z of [1.0, -1.0])
-    rig.box(loader, [2.6, 0.2, 0.16], 'yellow', [1.2, -0.4, z], [0, 0, -0.35]);
-  // Loader bucket: open to the front, a sloping back and a flat floor.
-  rig.profile(
-    loader,
-    [
-      [2.3, -0.55],
-      [2.52, -0.6],
-      [3.02, -1.06],
-      [3.08, -1.32],
-      [2.42, -1.32],
-      [2.28, -1.12],
-    ],
-    2.3,
-    'yellow',
-    [0, 0, 0],
-    [0, 0, 0],
-    0.04,
-  );
-  rig.box(loader, [0.1, 0.08, 2.3], 'steel', [3.0, -1.3, 0]);
-  for (const z of [0.7, -0.7]) ram(rig, loader, [0.2, -0.15, z], [1.9, -0.75, z], 0.06);
+  for (const z of [1.06, -1.06]) {
+    rig.box(root, [0.34, 0.62, 0.16], 'dark', [0.3, 1.38, z]);
+    // A bent lift arm: a short drop by the hood, then the long reach to the bucket.
+    rig.profile(
+      loader,
+      [
+        [-0.12, 0.14],
+        [1.0, -0.02],
+        [2.52, -0.66],
+        [2.52, -0.9],
+        [2.3, -0.9],
+        [0.95, -0.28],
+        [-0.12, -0.12],
+      ],
+      0.16,
+      'yellow',
+      [0, 0, z],
+      [0, 0, 0],
+      0.03,
+    );
+  }
+  rig.cyl(loader, 0.08, 2.1, 'dark', [1.5, -0.4, 0], [Math.PI / 2, 0, 0]);
+  // The bucket in profile: a C open to the front, its floor about 0.4 m off the ground.
+  const scoop: [number, number][] = [
+    [2.38, -1.0],
+    [2.46, -0.12],
+    [2.92, -0.1],
+    [2.92, -0.22],
+    [2.6, -0.24],
+    [2.55, -0.96],
+    [2.7, -1.06],
+    [3.42, -1.02],
+    [3.44, -1.16],
+    [2.64, -1.2],
+  ];
+  rig.profile(loader, scoop, 2.2, 'yellow', [0, 0, 0], [0, 0, 0], 0.03);
+  // Side plates close the scoop at both ends.
+  for (const z of [1.13, -1.13])
+    rig.profile(
+      loader,
+      [
+        [2.38, -1.0],
+        [2.46, -0.12],
+        [2.92, -0.1],
+        [3.44, -1.02],
+        [3.44, -1.16],
+        [2.64, -1.2],
+      ],
+      0.07,
+      'yellow',
+      [0, 0, z],
+      [0, 0, 0],
+      0.015,
+    );
+  // The inside of the scoop is in shadow: a dark lining under the open mouth.
+  rig.box(loader, [0.04, 0.7, 2.18], 'dark', [2.6, -0.6, 0], [0, 0, -0.05]);
+  rig.box(loader, [0.75, 0.04, 2.18], 'dark', [3.0, -1.0, 0]);
+  rig.box(loader, [0.12, 0.08, 2.3], 'steel', [3.44, -1.1, 0]);
+  for (let i = 0; i < 6; i++)
+    rig.box(loader, [0.2, 0.06, 0.09], 'steel', [3.56, -1.1, -0.9 + i * 0.36]);
+  for (const z of [0.7, -0.7]) ram(rig, loader, [0.2, -0.15, z], [1.9, -0.6, z], 0.06);
+  // The tilt ram: from the cross tube to the top of the bucket's back.
+  ram(rig, loader, [1.5, -0.3, 0], [2.48, -0.2, 0], 0.07);
   // Backhoe arm: swing post → boom → stick → bucket.
   const swing = node(root, [-2.45, 1.25, 0]);
   rig.box(swing, [0.45, 0.65, 0.55], 'dark', [0, 0, 0]);

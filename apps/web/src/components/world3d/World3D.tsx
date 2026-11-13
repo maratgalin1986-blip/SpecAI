@@ -13,11 +13,14 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 import './world3d.css';
 import { WORLD_KINDS, worldMode, type WorldKind } from './kinds';
 import type { WorldHandle } from './scene';
+import { WorldIcon } from './icons';
 import type { WalkBridge } from './WalkController';
 
 /** The picture of the block: WebP, and the same frame as JPEG for browsers without it. */
 export const WORLD_POSTER = '/images/world3d-poster.jpg';
 export const WORLD_POSTER_WEBP = '/images/world3d-poster.webp';
+/** The square block of a phone: the name-only tags, drawn at the phone's size. */
+export const WORLD_POSTER_PHONE = '/images/world3d-poster-phone.webp';
 
 function hasWebGL() {
   try {
@@ -139,12 +142,36 @@ export function World3D({ categoryIds }: { categoryIds: Partial<Record<WorldKind
     };
   }, [walkOpen]);
 
-  // Focus goes back to the invitation when the walk closes.
+  // Focus goes back to the invitation when the walk closes. A walk opened from
+  // the address (/?walk=1, the hero's button) closes onto this block, not onto
+  // the top of the page: the closing Back may restore the old scroll, so the
+  // block is brought into view once more after it.
   const wasOpen = useRef(false);
   useEffect(() => {
-    if (wasOpen.current && !walkOpen) inviteRef.current?.focus({ preventScroll: true });
+    const closed = wasOpen.current && !walkOpen;
     wasOpen.current = walkOpen;
-  }, [walkOpen]);
+    if (!closed) return;
+    inviteRef.current?.focus({ preventScroll: true });
+    if (!fromUrl) return;
+    const slot = slotRef.current;
+    if (!slot) return;
+    // The closing Back is followed, a moment later, by the browser's and the
+    // router's own scroll to where that entry was (the top, smoothly): for a few
+    // seconds the block is brought back whenever it has left the screen. A visitor
+    // who scrolls on is not fought for long, and a block on screen is left alone.
+    const toBlock = () => slot.scrollIntoView({ block: 'center', behavior: 'instant' });
+    const offScreen = () => {
+      const box = slot.getBoundingClientRect();
+      return box.bottom < 0 || box.top > window.innerHeight;
+    };
+    toBlock();
+    const started = Date.now();
+    const watch = window.setInterval(() => {
+      if (Date.now() - started > 3500) window.clearInterval(watch);
+      else if (offScreen()) toBlock();
+    }, 120);
+    return () => window.clearInterval(watch);
+  }, [walkOpen, fromUrl]);
 
   const openWalk = useCallback((direct = false) => {
     setFromUrl(direct);
@@ -186,12 +213,10 @@ export function World3D({ categoryIds }: { categoryIds: Partial<Record<WorldKind
             onClick={() => openWalk()}
             className="w3d-invite inline-flex min-h-[3.25rem] items-center gap-3 rounded-full px-6 py-3 text-base font-bold text-slate-950 transition-transform hover:scale-[1.03] active:scale-95"
           >
-            <span aria-hidden className="text-xl">
-              🚶
-            </span>
+            <WorldIcon name="walk" className="h-6 w-6" />
             Прогуляться по городу
-            <span aria-hidden className="w3d-invite-arrow text-xl">
-              →
+            <span className="w3d-invite-arrow">
+              <WorldIcon name="arrow" className="h-5 w-5" />
             </span>
           </button>
           <span className="text-sm text-slate-500">
@@ -213,6 +238,7 @@ export function World3D({ categoryIds }: { categoryIds: Partial<Record<WorldKind
           }
         >
           <picture>
+            <source media="(max-width: 639px)" srcSet={WORLD_POSTER_PHONE} type="image/webp" />
             <source srcSet={WORLD_POSTER_WEBP} type="image/webp" />
             <img
               src={WORLD_POSTER}
@@ -246,7 +272,7 @@ export function World3D({ categoryIds }: { categoryIds: Partial<Record<WorldKind
               onClick={() => openWalk()}
               className="w3d-float absolute right-3 top-3 inline-flex min-h-11 items-center gap-2 rounded-full bg-slate-950/80 px-4 text-sm font-bold text-amber-300 shadow-lg ring-1 ring-amber-300/60 backdrop-blur hover:bg-slate-950"
             >
-              <span aria-hidden>▶</span>
+              <WorldIcon name="play" className="h-4 w-4" />
               Прогуляться
             </button>
           )}

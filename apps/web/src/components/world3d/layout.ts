@@ -226,7 +226,7 @@ export function siteFootprints(): Footprint[] {
     // Outrigger pads at ±2.45; the boom works over the gap to the facade.
     { id: 'agp', ...AGP_AT, minX: -3.45, maxX: 3.8, minZ: -2.5, maxZ: 2.5 },
     // Stabiliser legs at the back, loader bucket at the front; the digging arm is not a footprint.
-    { id: 'backhoe', ...BACKHOE_AT, minX: -2.8, maxX: 3.45, minZ: -1.75, maxZ: 1.75 },
+    { id: 'backhoe', ...BACKHOE_AT, minX: -2.8, maxX: 4.0, minZ: -1.75, maxZ: 1.75 },
     truckFootprint('load-truck', LOAD_TRUCK_AT),
     { id: 'pit', ...PIT, minX: -2.3, maxX: 2.3, minZ: -1.5, maxZ: 1.5 },
     {

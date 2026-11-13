@@ -12,18 +12,26 @@ import {
   useReducer,
   useRef,
   useState,
+  useSyncExternalStore,
   type MutableRefObject,
   type RefObject,
 } from 'react';
-import { SoundToggle } from '@/components/SoundToggle';
+import { useSoundLive } from '@/components/useSoundLive';
 import { reachGoal } from '@/lib/marketing';
 import { SITE } from '@/lib/site';
-import { announceMachine, playCue } from '@/lib/sound';
+import {
+  announceMachine,
+  playCue,
+  setSoundEnabled,
+  soundEnabled,
+  startedByPress,
+  subscribeSound,
+} from '@/lib/sound';
+import { WorldIcon } from './icons';
 import { kindInfo, type WorldKind } from './kinds';
 import type { WorldHandle } from './scene';
 import {
   isWalkHistory,
-  nextIndex,
   posterShape,
   STOP_POSTER_ALT,
   stopPoster,
@@ -192,29 +200,33 @@ export default function WalkController({
 
   // Pictures instead of the live scene: no WebGL, data saver, a weak phone, the
   // scene is still loading, or the frame-rate guard gave up in the middle of the walk.
+  // The picture of the current stop is always in the page (hidden under the live
+  // scene) and all four are fetched when the walk opens, so the moment the live
+  // scene drops out its picture is already there: never a black screen.
   const fallback = state !== 'ready';
-  const [pictures, setPictures] = useState(fallback);
   const [shape, setShape] = useState(() => posterShape(window.innerWidth / window.innerHeight));
-  useEffect(() => {
-    if (fallback) setPictures(true);
-  }, [fallback]);
   useEffect(() => {
     const onResize = () => setShape(posterShape(window.innerWidth / window.innerHeight));
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
   }, []);
+  const preloaded = useRef<HTMLImageElement[]>([]);
+  useEffect(() => {
+    preloaded.current = WALK_STOPS.map((stop) => {
+      const image = new Image();
+      image.decoding = 'async';
+      image.src = stopPoster(stop.kind, shape);
+      return image;
+    });
+  }, [shape]);
   // The picture of the stop just left stays underneath while the new one fades in.
   const trail = useRef<[number | null, number]>([null, walk.index]);
   if (trail.current[1] !== walk.index) trail.current = [trail.current[1], walk.index];
-  const shownStops = pictures
-    ? [trail.current[0], walk.index].filter((i): i is number => i !== null)
-    : [];
-  // The next picture is fetched while the visitor looks at this one.
-  useEffect(() => {
-    if (!fallback) return;
-    const next = new Image();
-    next.src = stopPoster(WALK_STOPS[nextIndex(walk.index)]!.kind, shape);
-  }, [fallback, walk.index, shape]);
+  const shownStops = [fallback ? trail.current[0] : null, walk.index].filter(
+    (i): i is number => i !== null,
+  );
+  const [more, setMore] = useState(false);
+  useEffect(() => setMore(false), [walk.index]);
 
   // The tour moves on by itself after a rest at the stop, unless paused.
   useEffect(() => {
@@ -237,65 +249,38 @@ export default function WalkController({
   const card = walkCard(walk.index, categoryIds);
   return (
     <>
-      {pictures && (
-        <div
-          className={`w3d-stops ${fallback ? 'opacity-100' : 'opacity-0'}`}
-          aria-hidden={!fallback}
-          data-shape={shape}
-        >
-          {shownStops.map((index) => {
-            const kind = WALK_STOPS[index]!.kind;
-            return (
-              <img
-                key={index}
-                src={stopPoster(kind, shape)}
-                alt={index === walk.index ? STOP_POSTER_ALT[kind] : ''}
-                data-stop={kind}
-                data-current={index === walk.index ? '' : undefined}
-                decoding="async"
-                className={index === walk.index ? 'w3d-stop-img w3d-stop-in' : 'w3d-stop-img'}
-              />
-            );
-          })}
-        </div>
-      )}
-      <div className="absolute inset-x-0 top-0 z-10 flex items-start justify-between gap-3 p-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
+      <div
+        className={`w3d-stops ${fallback ? 'opacity-100' : 'opacity-0'}`}
+        aria-hidden={!fallback}
+        data-shape={shape}
+        data-live={fallback ? '0' : '1'}
+      >
+        {shownStops.map((index) => {
+          const kind = WALK_STOPS[index]!.kind;
+          return (
+            <img
+              key={index}
+              src={stopPoster(kind, shape)}
+              alt={index === walk.index ? STOP_POSTER_ALT[kind] : ''}
+              data-stop={kind}
+              data-current={index === walk.index ? '' : undefined}
+              decoding="async"
+              className={index === walk.index ? 'w3d-stop-img w3d-stop-in' : 'w3d-stop-img'}
+            />
+          );
+        })}
+      </div>
+      <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex items-start justify-between gap-3 p-3 pt-[max(0.75rem,env(safe-area-inset-top))] [&>*]:pointer-events-auto">
         <button
           ref={exitRef}
           type="button"
           onClick={closeWalk}
-          className="inline-flex min-h-11 items-center gap-2 rounded-full bg-white px-4 text-sm font-bold text-slate-900 shadow-lg hover:bg-amber-100"
+          className="inline-flex min-h-11 items-center gap-2 rounded-full bg-white/95 px-4 text-sm font-bold text-slate-900 shadow-lg hover:bg-amber-100"
         >
-          <span aria-hidden className="text-lg leading-none">
-            ✕
-          </span>
+          <WorldIcon name="close" className="h-4 w-4" />
           Выйти из прогулки
         </button>
-        <span className="rounded-full bg-white/90 text-slate-900 shadow-lg">
-          <SoundToggle iconOnPhone large />
-        </span>
-      </div>
-      <div
-        className="absolute inset-x-0 top-[calc(max(0.75rem,env(safe-area-inset-top))+3.5rem)] z-10 flex justify-center gap-2"
-        role="group"
-        aria-label="Остановки прогулки"
-      >
-        {WALK_STOPS.map((stop, index) => (
-          <button
-            key={stop.kind}
-            type="button"
-            onClick={() => dispatch({ type: 'goto', index })}
-            aria-label={`Остановка ${index + 1}: ${kindInfo(stop.kind).title}`}
-            aria-current={index === walk.index ? 'step' : undefined}
-            className="flex h-8 w-8 items-center justify-center"
-          >
-            <span
-              className={`block h-2.5 rounded-full transition-all ${
-                index === walk.index ? 'w-8 bg-amber-400' : 'w-2.5 bg-white/70'
-              }`}
-            />
-          </button>
-        ))}
+        <WalkSound />
       </div>
       {!fallback && (
         <p className="w3d-hint motion-reduce:hidden pointer-events-none absolute inset-x-0 top-[34%] z-10 text-center text-sm font-semibold text-white drop-shadow-[0_2px_6px_rgba(0,0,0,0.8)]">
@@ -304,19 +289,36 @@ export default function WalkController({
       )}
       <div
         key={walk.index}
-        className="w3d-card absolute inset-x-3 bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-10 mx-auto rounded-2xl bg-slate-950/85 p-4 text-white shadow-2xl ring-1 ring-white/10 backdrop-blur sm:w-[34rem]"
+        className="w3d-card absolute inset-x-3 bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-10 rounded-2xl bg-slate-950/85 p-3 text-white shadow-2xl ring-1 ring-white/10 backdrop-blur sm:inset-x-auto sm:bottom-6 sm:left-6 sm:w-[30rem] sm:p-4"
       >
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
-          <p className="text-xs font-semibold uppercase tracking-wide text-amber-300">
-            {card.counter}
-          </p>
-          <div className="flex items-center gap-1.5 [&>button]:flex-1 sm:[&>button]:flex-none">
+        <div className="flex items-center justify-between gap-2">
+          <div className="-ml-1.5 flex" role="group" aria-label="Остановки прогулки">
+            {WALK_STOPS.map((stop, index) => (
+              <button
+                key={stop.kind}
+                type="button"
+                onClick={() => dispatch({ type: 'goto', index })}
+                aria-label={`Остановка ${index + 1}: ${kindInfo(stop.kind).title}`}
+                aria-current={index === walk.index ? 'step' : undefined}
+                className="flex h-11 w-7 items-center justify-center sm:w-8"
+              >
+                <span
+                  className={`block h-2.5 rounded-full transition-all ${
+                    index === walk.index ? 'w-6 bg-amber-400' : 'w-2.5 bg-white/60'
+                  }`}
+                />
+              </button>
+            ))}
+          </div>
+          <div className="flex items-center gap-1.5">
             <button
               type="button"
               onClick={() => dispatch({ type: 'prev' })}
-              className="inline-flex min-h-10 items-center rounded-full bg-white/10 px-3 text-sm font-semibold hover:bg-white/20"
+              aria-label="Назад"
+              className="inline-flex h-11 min-w-11 items-center justify-center gap-1 rounded-full bg-white/10 px-2.5 text-sm font-semibold hover:bg-white/20 sm:px-3"
             >
-              <span aria-hidden>‹</span>&nbsp;Назад
+              <WorldIcon name="prev" className="h-4 w-4" />
+              <span className="hidden sm:inline">Назад</span>
             </button>
             <button
               type="button"
@@ -325,52 +327,99 @@ export default function WalkController({
                 dispatch({ type: 'toggle-pause' });
               }}
               aria-pressed={walk.paused}
-              className="inline-flex min-h-10 min-w-[5.5rem] items-center justify-center rounded-full bg-white/10 px-3 text-sm font-semibold hover:bg-white/20"
+              aria-label={walk.paused ? 'Играть' : 'Пауза'}
+              className="inline-flex h-11 min-w-11 items-center justify-center gap-1.5 rounded-full bg-white/10 px-2.5 text-sm font-semibold hover:bg-white/20 sm:px-3"
             >
-              {walk.paused ? (
-                <>
-                  <span aria-hidden>▶</span>&nbsp;Играть
-                </>
-              ) : (
-                <>
-                  <span aria-hidden>❚❚</span>&nbsp;Пауза
-                </>
-              )}
+              <WorldIcon name={walk.paused ? 'play' : 'pause'} className="h-4 w-4" />
+              <span className="hidden sm:inline">{walk.paused ? 'Играть' : 'Пауза'}</span>
             </button>
             <button
               type="button"
               onClick={() => dispatch({ type: 'next' })}
-              className="inline-flex min-h-10 items-center rounded-full bg-amber-400 px-3 text-sm font-bold text-slate-950 hover:bg-amber-300"
+              className="inline-flex h-11 items-center gap-1 rounded-full bg-amber-400 pl-3.5 pr-2.5 text-sm font-bold text-slate-950 hover:bg-amber-300"
             >
-              Дальше&nbsp;<span aria-hidden>›</span>
+              Дальше
+              <WorldIcon name="next" className="h-4 w-4" />
             </button>
           </div>
         </div>
-        <p aria-live="polite" className="mt-2 text-xl font-bold leading-tight">
-          {card.title}
+        <p className="mt-1 text-xs font-semibold uppercase tracking-wide text-amber-300">
+          {card.counter}
         </p>
-        <p className="mt-0.5 text-base font-semibold text-amber-300">{card.price}</p>
-        <p className="mt-1 text-sm text-slate-300">{card.text}</p>
-        <div className="mt-3 grid grid-cols-2 gap-2">
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <p aria-live="polite" className="text-lg font-bold leading-tight sm:text-xl">
+              {card.title}
+            </p>
+            <p className="text-base font-semibold text-amber-300">{card.price}</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setMore((open) => !open)}
+            aria-expanded={more}
+            aria-controls="w3d-card-text"
+            aria-label="Подробнее о технике"
+            className="-mr-1.5 -mt-1 inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-slate-300 hover:bg-white/10 sm:hidden"
+          >
+            <WorldIcon name="info" className="h-5 w-5" />
+          </button>
+        </div>
+        <p
+          id="w3d-card-text"
+          className={`mt-1 text-sm text-slate-300 ${more ? 'block' : 'hidden'} sm:block`}
+        >
+          {card.text}
+        </p>
+        <div className="mt-2.5 grid grid-cols-2 gap-2">
           <a
             href={card.orderHref}
             onClick={() => {
               reachGoal('walk_order');
               playCue('thunk');
             }}
-            className="inline-flex min-h-12 items-center justify-center rounded-full bg-amber-400 px-4 font-bold text-slate-950 hover:bg-amber-300"
+            className="inline-flex min-h-11 items-center justify-center rounded-full bg-amber-400 px-4 font-bold text-slate-950 hover:bg-amber-300"
           >
             Заказать
           </a>
           <a
             href={SITE.phoneHref}
             onClick={() => playCue('thunk')}
-            className="inline-flex min-h-12 items-center justify-center rounded-full border border-white/40 px-4 font-bold text-white hover:bg-white/10"
+            className="inline-flex min-h-11 items-center justify-center rounded-full border border-white/40 px-4 font-bold text-white hover:bg-white/10"
           >
             Позвонить
           </a>
         </div>
       </div>
     </>
+  );
+}
+
+/**
+ * The sound switch of the walk: the same layer as the site's SoundToggle
+ * (lib/sound.ts), drawn with the walk's own icons.
+ */
+function WalkSound() {
+  const enabled = useSyncExternalStore(subscribeSound, soundEnabled, () => true);
+  const live = useSoundLive();
+  const on = enabled && live;
+  return (
+    <button
+      type="button"
+      data-sound-toggle={enabled && !live ? undefined : ''}
+      onClick={(event) => {
+        if (startedByPress(event.currentTarget)) return;
+        setSoundEnabled(!soundEnabled());
+      }}
+      aria-pressed={on}
+      aria-label={on ? 'Выключить звук' : 'Включить звук'}
+      title={on ? 'Выключить звук' : 'Включить звук'}
+      className={`inline-flex h-11 w-11 items-center justify-center rounded-full shadow-lg ring-1 transition ${
+        on
+          ? 'bg-amber-400 text-slate-950 ring-amber-300'
+          : 'bg-white/95 text-slate-700 ring-white hover:bg-amber-100'
+      }`}
+    >
+      <WorldIcon name={on ? 'soundOn' : 'soundOff'} className="h-5 w-5" />
+    </button>
   );
 }
