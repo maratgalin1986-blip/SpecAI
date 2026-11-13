@@ -158,9 +158,9 @@ export function parseOfficeSettings(
     ),
     outreachMode: parseOutreachMode(byKey.get(OFFICE_EXTRA_SETTINGS.outreachMode)),
     vatRate: parseVatRate(byKey.get(OFFICE_EXTRA_SETTINGS.vatRate)),
-    // Владелец, 2026-11-13: «на WhatsApp им тоже пиши — WhatsApp лучше читают». Работает, только
-    // когда подключён шлюз (GREEN_API_*); выключается в настройках офиса.
-    whatsappAuto: flagOr(byKey.get(OFFICE_EXTRA_SETTINGS.whatsappAuto), true),
+    // Владелец, 2026-11-13: «пока без WhatsApp, только электронная почта». Сам офис в WhatsApp не
+    // пишет, пока владелец не включит это в настройках (и не подключит шлюз GREEN_API_*).
+    whatsappAuto: flag(byKey.get(OFFICE_EXTRA_SETTINGS.whatsappAuto)),
   };
 }
 

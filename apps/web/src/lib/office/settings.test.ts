@@ -94,11 +94,11 @@ describe('parseOfficeSettings — адрес для ответов', () => {
   });
 });
 
-describe('WhatsApp сам по расписанию (владелец, 2026-11-13)', () => {
-  it('по умолчанию включён; сохранённое «0» выключает', () => {
-    expect(parseOfficeSettings([]).whatsappAuto).toBe(true);
+describe('WhatsApp сам по расписанию (владелец, 2026-11-13: «пока без WhatsApp»)', () => {
+  it('по умолчанию выключен; включает только сохранённая настройка', () => {
+    expect(parseOfficeSettings([]).whatsappAuto).toBe(false);
     expect(
-      parseOfficeSettings([{ key: OFFICE_EXTRA_SETTINGS.whatsappAuto, value: '0' }]).whatsappAuto,
-    ).toBe(false);
+      parseOfficeSettings([{ key: OFFICE_EXTRA_SETTINGS.whatsappAuto, value: '1' }]).whatsappAuto,
+    ).toBe(true);
   });
 });
