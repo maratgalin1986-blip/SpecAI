@@ -22,17 +22,37 @@ const Storozh = dynamic(() => import('@/components/Storozh').then((m) => m.Storo
   ssr: false,
 });
 
-/** True once the page has loaded and the main thread is idle. */
+/** Set on <html> while the opening titles play (IntroSplash). */
+const INTRO_ATTR = 'data-intro';
+
+/**
+ * True once the page has loaded, the opening titles are over and the main
+ * thread is idle: the extra chunks must not land in the 2.8 s of the titles
+ * and hold up their end on a slow phone.
+ */
 function usePageIdle(): boolean {
   const [idle, setIdle] = useState(false);
   useEffect(() => {
     let cancelIdle = () => {};
-    const cancelLoad = afterLoad(() => {
+    let watcher: MutationObserver | null = null;
+    const root = document.documentElement;
+    const whenIdle = () => {
       cancelIdle = onIdle(() => setIdle(true), 2000);
+    };
+    const cancelLoad = afterLoad(() => {
+      if (!root.hasAttribute(INTRO_ATTR)) return whenIdle();
+      watcher = new MutationObserver(() => {
+        if (root.hasAttribute(INTRO_ATTR)) return;
+        watcher?.disconnect();
+        watcher = null;
+        whenIdle();
+      });
+      watcher.observe(root, { attributes: true, attributeFilter: [INTRO_ATTR] });
     }, 0);
     return () => {
       cancelLoad();
       cancelIdle();
+      watcher?.disconnect();
     };
   }, []);
   return idle;

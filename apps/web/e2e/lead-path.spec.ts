@@ -45,12 +45,28 @@ test('opening titles are gone within 3 s and the main button takes a tap', async
   await page.goto('/', { waitUntil: 'commit' });
   // The titles do play for a first-time visitor…
   await expect(page.locator('#intro:not([hidden])')).toHaveCount(1);
-  // …and are gone 3 s after they started, however late the page's code woke up.
-  await expect(page.locator('#intro:not([hidden])')).toHaveCount(0, { timeout: 3500 });
+  // …and are gone 3 s after they started, however late the page's code woke
+  // up. The moment they go is taken in the page itself: the polling of
+  // `expect` would add up to a second of its own to the count.
   const played = await page.evaluate(
-    () => Date.now() - (window as unknown as { __introAt: number }).__introAt,
+    () =>
+      new Promise<number>((resolve) => {
+        const startedAt = (window as unknown as { __introAt: number }).__introAt;
+        const gone = () => {
+          const intro = document.getElementById('intro');
+          return !intro || intro.hidden;
+        };
+        if (gone()) return resolve(Date.now() - startedAt);
+        const watcher = new MutationObserver(() => {
+          if (!gone()) return;
+          watcher.disconnect();
+          resolve(Date.now() - startedAt);
+        });
+        watcher.observe(document.body, { subtree: true, childList: true, attributes: true });
+      }),
   );
   expect(played).toBeLessThan(3000 + 500);
+  await expect(page.locator('#intro:not([hidden])')).toHaveCount(0);
   const cta = page.locator('main a[href="#callback"]').first();
   await expect(cta).toBeVisible();
   // A tap right away — even while the phone number still flies into the
