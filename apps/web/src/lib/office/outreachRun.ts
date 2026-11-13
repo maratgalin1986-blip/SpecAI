@@ -298,6 +298,11 @@ export interface OutreachResult {
    * попадают: тик снимает поле перед ответом.
    */
   samples?: { name: string; city: string | null; kind: string; token: string }[];
+  /**
+   * Отказы сервера по кодам («550 5.1.1»: 3, «unknown»: 1) — без адресов и текста: по ним видно,
+   * мёртвые ли это адреса или почтовый сервис начал резать рассылку (владелец, 2026-11-13).
+   */
+  errorCodes?: Record<string, number>;
   /** Признаки настроек ящика без значений (smtp.ts → officeMailHint), когда почта 'broken'. */
   mailHint?: string;
   /** Напоминаний ждут кнопки владельца (режим 'auto' сам их не отправляет). */
@@ -535,6 +540,20 @@ async function runOutreach(
   // Проход без кнопки владельца (режим 'auto'): сам офис отправляет только письма. Напоминания
   // и сообщения WhatsApp через шлюз уходят по кнопке (шлюз в 'auto' — только с whatsappAuto).
   const auto = mode === 'send' && !only;
+  // Равномерно (2026-11-13): без кнопки владельца — не больше 1/HOURLY_SHARE дневного лимита за
+  // последний час на проект. Иначе весь дневной лимит забирают регионы, где утро наступает раньше
+  // (ночью по Москве ушли все 250 писем Сибири и Дальнему Востоку), а всплеск из сотен писем с
+  // одного ящика почтовые сервисы принимают за спам.
+  // Маленький лимит (меньше двух писем в час) всплеска не даёт — его не делим.
+  if (auto && cap >= HOURLY_SHARE * 2) {
+    const hourAgo = { gte: new Date(now.getTime() - 3_600_000), lt: new Date(now.getTime() + 1) };
+    const [emailHour, followUpsHour] = await Promise.all([
+      db.prospect.count({ where: { ...ofProject, emailSentAt: hourAgo } }),
+      db.prospect.count({ where: { ...ofProject, followUpSentAt: hourAgo } }),
+    ]);
+    const perHour = Math.max(1, Math.ceil(cap / HOURLY_SHARE));
+    emailLeft = Math.min(emailLeft, Math.max(0, perHour - emailHour - followUpsHour));
+  }
   const active: OutreachChannels = {
     // Письма дня видны владельцу и без настроенного ящика: он сразу видит персональные
     // предложения; отправка без ящика всё равно невозможна (mail: 'no-smtp').
@@ -896,6 +915,7 @@ async function runOutreach(
           // видит пометку у фирмы.
           emailLeft -= 1;
           result.errors += 1;
+          countError(result, 'unknown');
           unconfirmed = {
             outreachError: outreachErrorText('email', DELIVERY_UNKNOWN),
             outreachErrorAt: new Date(),
@@ -929,6 +949,7 @@ async function runOutreach(
             active.email = false;
           } else {
             result.errors += 1;
+            countError(result, smtpErrorCode(sent.reason));
             mailFailures += 1;
             if (mailFailures >= MAIL_FAILURES_STOP) stopMail(sent.reason);
           }
@@ -1111,6 +1132,18 @@ async function runOutreach(
   return done();
 }
 
+/** Код отказа почтового сервера из текста ошибки: «550 5.1.1», «550», иначе «other». */
+export function smtpErrorCode(reason: string): string {
+  const match = /\b([45]\d\d)(?:[ -]+([45]\.\d{1,3}\.\d{1,3}))?/.exec(reason);
+  if (!match) return /timeout|время|не ответил/i.test(reason) ? 'timeout' : 'other';
+  return match[2] ? `${match[1]} ${match[2]}` : match[1]!;
+}
+
+function countError(result: OutreachResult, code: string): void {
+  result.errorCodes ??= {};
+  result.errorCodes[code] = (result.errorCodes[code] ?? 0) + 1;
+}
+
 /** Итог двух проходов (сайты и площадка) одним результатом. */
 function mergeResults(a: OutreachResult, b: OutreachResult): OutreachResult {
   const sum = (x?: number, y?: number) => (x ?? 0) + (y ?? 0);
@@ -1118,8 +1151,13 @@ function mergeResults(a: OutreachResult, b: OutreachResult): OutreachResult {
   const followUpsWaiting = sum(a.followUpsWaiting, b.followUpsWaiting);
   const filtered = sum(a.filtered, b.filtered);
   const optedOut = sum(a.optedOut, b.optedOut);
+  const errorCodes: Record<string, number> = { ...(a.errorCodes ?? {}) };
+  for (const [code, n] of Object.entries(b.errorCodes ?? {})) {
+    errorCodes[code] = (errorCodes[code] ?? 0) + n;
+  }
   return {
     ...a,
+    ...(Object.keys(errorCodes).length ? { errorCodes } : {}),
     email: a.email + b.email,
     whatsapp: a.whatsapp + b.whatsapp,
     followUps: sum(a.followUps, b.followUps),
@@ -1140,6 +1178,9 @@ function mergeResults(a: OutreachResult, b: OutreachResult): OutreachResult {
  * (если владелец поднимет в настройках) растёт примерно в 1,4 раза в день: резкий рост холодной
  * рассылки с одного ящика почтовые сервисы блокируют.
  */
+/** Дневной лимит проекта делится на столько часов: в час уходит не больше лимит / HOURLY_SHARE. */
+export const HOURLY_SHARE = 12;
+
 export const RAMP_START = new Date('2026-11-12T21:00:00Z'); // 13.11 00:00 по Москве
 export const RAMP_START_CAP = 250;
 export const RAMP_FACTOR = 1.4;
