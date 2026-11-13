@@ -43,11 +43,11 @@ describe('cityPageIndexable', () => {
     expect(cityPageIndexable(base, cityOffer(backhoe, base, []))).toBe(true);
   });
 
-  it('keeps a nearby town with only the house fleet out of the index', () => {
+  it('indexes a nearby town the house fleet drives to', () => {
     for (const town of NEARBY_CITIES) {
       const offer = cityOffer(backhoe, town, [house], undefined, true);
       expect(offer.kind, town.slug).toBe('available');
-      expect(cityPageIndexable(town, offer), town.slug).toBe(false);
+      expect(cityPageIndexable(town, offer), town.slug).toBe(true);
     }
   });
 
