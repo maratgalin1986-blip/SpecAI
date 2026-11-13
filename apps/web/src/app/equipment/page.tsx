@@ -32,14 +32,14 @@ import {
   priceParam,
   type EquipmentSearchParams,
 } from '@/lib/catalogParams';
+import { pageMeta } from '@/lib/pageMeta';
 
-export const metadata = {
+export const metadata = pageMeta('/equipment', {
   title: 'Каталог спецтехники',
   description:
     'Аренда экскаваторов-погрузчиков, автокранов, погрузчиков и другой спецтехники с машинистом по всей России: техника исполнителей площадки и парк СпецПласт16.',
   // Filters live in the query: one canonical for the whole catalogue.
-  alternates: { canonical: '/equipment' },
-};
+});
 
 export const dynamic = 'force-dynamic';
 

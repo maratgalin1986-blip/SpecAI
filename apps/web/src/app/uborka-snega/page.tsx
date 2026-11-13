@@ -7,6 +7,7 @@ import { ShowOrbs } from '@/components/ShowOrbs';
 import { SnegForm } from '@/components/SnegForm';
 import { TelegramButton } from '@/components/TelegramButton';
 import { DELIVERY_NOTE } from '@/lib/cities';
+import { pageMeta, pickTitle } from '@/lib/pageMeta';
 import { fromPerHour, fromPrice, rateOf } from '@/lib/prices';
 import { SHIFT, SITE } from '@/lib/site';
 import { siteUrl } from '@/lib/siteUrl';
@@ -27,38 +28,19 @@ import {
 // in Набережные Челны; a visitor from another city is sent to the platform's
 // order form, where the providers of that city answer. Static: no database.
 
-const TITLE = `Уборка и вывоз снега в ${SNEG_CITY.in} — погрузчик и самосвал с машинистом`;
+const TITLE = pickTitle(
+  `Уборка и вывоз снега в ${SNEG_CITY.in} — погрузчик и самосвал с машинистом`,
+  `Уборка и вывоз снега в ${SNEG_CITY.in} — погрузчик и самосвал`,
+);
 const DESCRIPTION = `Механизированная уборка и вывоз снега техникой ${SITE.name}: ${snegPackageLine()}. ${HOUSE_DELIVERY_PROMISE}, работаем с НДС. В других городах — заявка на площадке ${SITE.platform}.`;
-/** The site's default preview image (app/opengraph-image.png). */
-const OG_IMAGE = {
-  url: '/opengraph-image.png',
-  width: 1200,
-  height: 630,
-  alt: `${SITE.platform} от ${SITE.name}`,
-};
 
-export const metadata: Metadata = {
+// The search snippet keeps whole sentences within 160 characters; link
+// previews show the full text.
+export const metadata: Metadata = pageMeta(SNEG_PATH, {
   title: TITLE,
   description: DESCRIPTION,
-  alternates: { canonical: SNEG_PATH },
-  // A page's own openGraph replaces the root one whole, the default preview
-  // image included: everything is named again (there is no lib/pageMeta.ts yet).
-  openGraph: {
-    type: 'website',
-    locale: 'ru_RU',
-    siteName: `${SITE.platform} от ${SITE.name}`,
-    title: TITLE,
-    description: DESCRIPTION,
-    url: SNEG_PATH,
-    images: [OG_IMAGE],
-  },
-  twitter: {
-    card: 'summary_large_image',
-    title: TITLE,
-    description: DESCRIPTION,
-    images: [OG_IMAGE.url],
-  },
-};
+  ogDescription: DESCRIPTION,
+});
 
 const WHATSAPP = `${SITE.whatsappHref}?text=${encodeURIComponent(
   'Здравствуйте! Нужна уборка снега. Адрес: ',

@@ -18,13 +18,19 @@ import { landingClips } from '@/lib/landingClips';
 import { fromPerHour, fromPrice, rub, SHIFT_HOURS } from '@/lib/prices';
 import { SITE } from '@/lib/site';
 import { siteUrl } from '@/lib/siteUrl';
+import { pageMeta, pickTitle } from '@/lib/pageMeta';
 
 export function generateStaticParams() {
   return JOBS.map((job) => ({ slug: job.slug }));
 }
 
 function jobTitle(job: Job) {
-  return `${job.name} в Набережных Челнах — ${fromPerHour(jobRate(job))}`;
+  // A long name leaves no room for «с машинистом» (65 characters; the
+  // description keeps it).
+  return pickTitle(
+    `${job.name} в Набережных Челнах — ${fromPerHour(jobRate(job))}`,
+    `${job.name} в Набережных Челнах — ${fromPrice(jobRate(job))}`,
+  );
 }
 
 function jobDescription(job: Job) {
@@ -39,12 +45,7 @@ export async function generateMetadata(props: {
   if (!job) return { title: 'Страница не найдена' };
   const title = jobTitle(job);
   const description = jobDescription(job);
-  return {
-    title,
-    description,
-    alternates: { canonical: `/raboty/${job.slug}` },
-    openGraph: { title, description },
-  };
+  return pageMeta(`/raboty/${job.slug}`, { title, description });
 }
 
 export default async function JobPage(props: { params: Promise<{ slug: string }> }) {

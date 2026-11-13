@@ -30,13 +30,13 @@ import { pluralizeRu } from '@/lib/pluralize';
 import { MODE_COOKIE, cabinetMode } from '@/lib/cabinetMode';
 import { ModeSwitch } from '@/components/ModeSwitch';
 import { Hint } from '@/components/Hint';
+import { pageMeta } from '@/lib/pageMeta';
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMeta('/orders', {
   title: 'Заявки на спецтехнику по всей России — доска заказов',
   description:
     'Открытые заявки заказчиков на экскаваторы, краны, самосвалы и другую технику с машинистом по всей России. Исполнители рядом с объектом предлагают цену, заказчик выбирает. Разместить заявку бесплатно.',
-  alternates: { canonical: '/orders' },
-};
+});
 
 export const dynamic = 'force-dynamic';
 
@@ -118,7 +118,7 @@ async function loadProvider(id: string | undefined) {
 }
 
 const field =
-  'w-full rounded-xl border border-graphite-200 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-signal-600 focus:ring-2 focus:ring-signal-200';
+  'min-h-11 w-full rounded-xl border border-graphite-200 bg-white px-3 py-2.5 text-base outline-none transition focus:border-signal-600 focus:ring-2 focus:ring-signal-200 sm:text-sm';
 
 export default async function OrdersPage(props: { searchParams: Promise<OrdersSearchParams> }) {
   const searchParams = await props.searchParams;
@@ -234,7 +234,7 @@ export default async function OrdersPage(props: { searchParams: Promise<OrdersSe
               </p>
               <a
                 href="/#podbor"
-                className="w-fit rounded-full bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white hover:bg-slate-800"
+                className="inline-flex min-h-11 w-fit items-center rounded-full bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white hover:bg-slate-800"
               >
                 Подобрать технику за 30 секунд
               </a>
@@ -427,8 +427,8 @@ export default async function OrdersPage(props: { searchParams: Promise<OrdersSe
               aria-current={!boardQuery.group ? 'page' : undefined}
               className={
                 !boardQuery.group
-                  ? 'shrink-0 rounded-full bg-graphite-950 px-4 py-2 text-sm font-semibold text-white'
-                  : 'shrink-0 rounded-full border border-graphite-200 bg-white px-4 py-2 text-sm font-semibold text-graphite-700 hover:border-graphite-900'
+                  ? 'inline-flex min-h-11 shrink-0 items-center rounded-full bg-graphite-950 px-4 py-2 text-sm font-semibold text-white'
+                  : 'inline-flex min-h-11 shrink-0 items-center rounded-full border border-graphite-200 bg-white px-4 py-2 text-sm font-semibold text-graphite-700 hover:border-graphite-900'
               }
             >
               Вся техника
@@ -440,8 +440,8 @@ export default async function OrdersPage(props: { searchParams: Promise<OrdersSe
                 aria-current={group.id === boardQuery.group ? 'page' : undefined}
                 className={
                   group.id === boardQuery.group
-                    ? 'shrink-0 rounded-full bg-graphite-950 px-4 py-2 text-sm font-semibold text-white'
-                    : 'shrink-0 rounded-full border border-graphite-200 bg-white px-4 py-2 text-sm font-semibold text-graphite-700 hover:border-graphite-900'
+                    ? 'inline-flex min-h-11 shrink-0 items-center rounded-full bg-graphite-950 px-4 py-2 text-sm font-semibold text-white'
+                    : 'inline-flex min-h-11 shrink-0 items-center rounded-full border border-graphite-200 bg-white px-4 py-2 text-sm font-semibold text-graphite-700 hover:border-graphite-900'
                 }
               >
                 {group.label}

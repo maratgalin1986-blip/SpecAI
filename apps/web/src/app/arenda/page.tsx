@@ -1,16 +1,16 @@
 import type { Metadata } from 'next';
 import { LANDINGS, landingListRate } from '@/lib/landings';
+import { pageMeta } from '@/lib/pageMeta';
 import { fromPerHour, SHIFT_HOURS } from '@/lib/prices';
 import { SITE } from '@/lib/site';
 
 // The index of /arenda/<вид>: the address used to answer 404 while every kind
 // under it worked. Kinds and prices come from lib/landings.ts and lib/prices.ts.
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMeta('/arenda', {
   title: 'Аренда спецтехники с машинистом — виды техники',
   description: `Аренда спецтехники с машинистом по всей России: исполнители рядом с объектом и парк ${SITE.name} в Набережных Челнах. Выберите вид техники.`,
-  alternates: { canonical: '/arenda' },
-};
+});
 
 export default function ArendaIndexPage() {
   return (

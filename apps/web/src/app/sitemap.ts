@@ -13,6 +13,9 @@ import { SITEMAP_PROSPECT_WHERE, officeSitemapEntries } from '@/lib/office/visib
 
 export const revalidate = 3600;
 
+/** When this release was built (next.config.mjs); the start of the server otherwise. */
+const BUILD_DATE = new Date(process.env.NEXT_PUBLIC_BUILD_DATE ?? Date.now());
+
 async function servedCityPaths(): Promise<string[]> {
   const paths: string[] = [];
   for (const landing of LANDINGS) {
@@ -93,6 +96,8 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   return [
     ...staticPages.map((path) => ({
       url: `${base}${path}`,
+      // Texts and prices of these pages change with a release.
+      lastModified: BUILD_DATE,
       changeFrequency: 'weekly' as const,
       priority: path === '' ? 1 : 0.7,
     })),

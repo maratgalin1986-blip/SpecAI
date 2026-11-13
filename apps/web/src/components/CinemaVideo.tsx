@@ -166,12 +166,14 @@ export function CinemaVideo({
       setNear(true);
       return;
     }
+    // The page's first clip is prepared a screen ahead; the second and later
+    // ones (bands further down) only when they are about to be seen.
     const observer = new IntersectionObserver(([entry]) => setNear(!!entry?.isIntersecting), {
-      rootMargin: '100% 0px',
+      rootMargin: priority || deferred ? '100% 0px' : '40% 0px',
     });
     observer.observe(el);
     return () => observer.disconnect();
-  }, [allowed]);
+  }, [allowed, priority, deferred]);
 
   useEffect(() => {
     const video = videoRef.current;

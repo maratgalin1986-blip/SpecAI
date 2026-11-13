@@ -38,7 +38,7 @@ export function SiteFooter() {
           <a href="/uborka-snega" className={LINK}>
             Уборка снега
           </a>
-          <a href="/providers" className="hover:text-white">
+          <a href="/providers" className={LINK}>
             Исполнители
           </a>
           <a href="/map" className={LINK}>
