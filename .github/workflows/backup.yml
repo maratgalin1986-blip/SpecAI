@@ -1,0 +1,35 @@
+name: Database backup
+
+# Once a week: asks the site to make an encrypted copy of the database and
+# send it to the owner's Telegram chat (apps/web/src/app/api/cron/backup,
+# docs/backup.md). This job only makes the call: the copy never passes through
+# GitHub, nothing is uploaded as an artifact, and the log shows numbers only
+# (tables, rows, bytes, parts). It requires CRON_SECRET (repository secret,
+# equal to the one in Vercel). GitHub may start a scheduled run hours late —
+# for a weekly copy that does not matter. The endpoint sends one copy a day,
+# so a repeated run is harmless.
+on:
+  schedule:
+    # Mondays 00:40 UTC (03:40 Moscow), away from the other jobs.
+    - cron: '40 0 * * 1'
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Ask the site for the weekly copy
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          if [ -z "$CRON_SECRET" ]; then echo "::error::CRON_SECRET repository secret is not set"; exit 1; fi
+          code=$(curl -sS --retry 2 --retry-delay 30 --max-time 90 -o answer.json -w '%{http_code}' \
+            -H "Authorization: Bearer $CRON_SECRET" https://spec-ai-web.vercel.app/api/cron/backup)
+          # Only the known numeric fields and fixed words are printed, never the raw answer.
+          jq -r '"ok=\(.ok == true) tables=\(.tables // "-" | tonumber? // "-") rows=\(.rows // "-" | tonumber? // "-") bytes=\(.bytes // "-" | tonumber? // "-") parts=\(.parts // "-" | tonumber? // "-") skipped=\(.skipped != null) failed=\(.failed != null)"' \
+            answer.json 2>/dev/null || echo "answer is not JSON"
+          rm -f answer.json
+          if [ "$code" != "200" ]; then echo "::error::backup answered $code"; exit 1; fi
