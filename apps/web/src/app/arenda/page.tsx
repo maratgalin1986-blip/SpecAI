@@ -9,7 +9,7 @@ import { SITE } from '@/lib/site';
 
 export const metadata: Metadata = pageMeta('/arenda', {
   title: 'Аренда спецтехники с машинистом — виды техники',
-  description: `Аренда спецтехники с машинистом по всей России: исполнители рядом с объектом и парк ${SITE.name} в Набережных Челнах. Выберите вид техники.`,
+  description: `Аренда спецтехники с машинистом из любого города России: исполнители площадки и парк ${SITE.name} в Набережных Челнах. Выберите вид техники.`,
 });
 
 export default function ArendaIndexPage() {

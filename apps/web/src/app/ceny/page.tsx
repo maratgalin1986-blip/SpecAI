@@ -11,7 +11,7 @@ import {
 } from '@/lib/priceIndex';
 import { loadPriceIndex } from '@/lib/priceIndexData';
 import { PRICE_SURVEY_PATH, PRICE_SURVEY_TITLE } from '@/lib/priceReports';
-import { fromPerHour, PRICE_GROUPS, SHIFT_HOURS } from '@/lib/prices';
+import { fromPerHour, MIN_ORDER_TEXT, PRICE_GROUPS, SHIFT_HOURS } from '@/lib/prices';
 import { ShowOrbs } from '@/components/ShowOrbs';
 import { SITE } from '@/lib/site';
 import { pageMeta } from '@/lib/pageMeta';
@@ -106,7 +106,7 @@ export default async function PricesPage() {
           <p className="text-sm">
             Сводка цен исполнителей появится, когда за каждым числом будет не меньше{' '}
             {INDEX_MIN_REPORTERS} разных компаний или участников опроса. Пока — цены нашего парка, с
-            машинистом, смена {SHIFT_HOURS} часов.
+            машинистом, смена {SHIFT_HOURS} часов. {MIN_ORDER_TEXT}.
           </p>
           <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white">
             <table className="w-full text-left text-sm">

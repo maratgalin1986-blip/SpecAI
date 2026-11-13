@@ -8,7 +8,7 @@ description: Bring a finished subagent worktree branch into the site branch clau
    `git worktree remove -f -f .claude/worktrees/<agent-dir> && git branch -D worktree-<agent-dir> <branch>`
 3. Grep the merged work for rules the owner set:
    - no «СП16»/«SP16» in visible text (brand is always «СпецПласт16»; internal ids like `sp16_*` are fine);
-   - machinery is only ever СпецПласт16; no links to other websites; no supplier names or markup shown;
+   - the site is an aggregator: any provider's machines, СпецПласт16's always listed first (`lib/fleet.ts`); no links to other websites; no supplier names or markup shown;
    - prices come from `MACHINE_WORKS`, `HAMMER_RATE`, `CRANE_HEAVY_RATE` — never hard-coded.
 4. Run the `site-check` skill, look at screenshots of the new screens on the phone size, then commit the fixes and
    `git fetch origin main && git merge origin/main && git push -u origin claude/specplast16-setup-7rjxvw`.

@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { PROMISE_POINTS } from './promise';
 import { SITE } from './site';
 
-// Owner, 2026-10-17: «бесплатно и без посредников» always in view, quietly.
+// Owner, 2026-10-17: «без комиссии для заказчика» always in view, quietly.
 const NO_SUPERLATIVES = /лучш|самы[ейх]|дешевл|гарант/i;
 
 describe('the promise explanation (/kak-polzovatsya#besplatno)', () => {
@@ -24,7 +24,7 @@ describe('SITE.promiseLine (PromiseNote, the footer, the channel post, the bot)'
   it('is the headline, a colon and the detail starting in lower case', () => {
     expect(SITE.promiseLine.startsWith(`${SITE.promise}: `)).toBe(true);
     expect(SITE.promiseLine).toBe(
-      'Бесплатно и без посредников: цену назначает владелец техники, расчёт — напрямую с ним, ' +
+      'Без комиссии для заказчика: цену назначает владелец техники, расчёт — напрямую с ним, ' +
         'площадка не берёт процент.',
     );
   });

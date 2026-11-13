@@ -8,6 +8,7 @@ import { isAdminArea, isStandalonePage } from '@/components/PublicOnly';
 import { SITE } from '@/lib/site';
 
 import { AuthStatus } from '@/components/AuthStatus';
+import { OrderSheet, orderSource } from '@/components/OrderSheet';
 
 // The marketplace first (owner, 2026-10-11: a board of orders and a list of
 // providers, like a classifieds platform), then the rest of the site.
@@ -71,6 +72,9 @@ function MoreMenu() {
 
 export function SiteHeader() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  // «Заказать технику →» opens the same short form in place as the phone's
+  // bottom bar «Заказать» (OrderSheet), not a trip to the home page's form.
+  const [orderOpen, setOrderOpen] = useState(false);
   // Dark translucent variant while the header is over the journey scene.
   const [dark, setDark] = useState(false);
   const pathname = usePathname();
@@ -262,13 +266,18 @@ export function SiteHeader() {
             >
               {SITE.phone}
             </a>
-            <a
-              href="/#callback"
-              className="group inline-flex items-center gap-1.5 rounded-full bg-slate-900 px-4 py-2 text-white transition hover:bg-amber-500 hover:text-slate-950"
+            <button
+              type="button"
+              aria-haspopup="dialog"
+              data-header-order
+              onClick={() => setOrderOpen(true)}
+              className="header-order group inline-flex items-center gap-1.5 rounded-full bg-slate-900 px-4 py-2 text-white transition hover:bg-amber-500 hover:text-slate-950"
             >
               Заказать технику
-              <span className="transition group-hover:translate-x-0.5">→</span>
-            </a>
+              <span aria-hidden className="transition group-hover:translate-x-0.5">
+                →
+              </span>
+            </button>
             <SoundToggle iconOnly large />
           </nav>
         )}
@@ -324,6 +333,10 @@ export function SiteHeader() {
           </button>
         )}
       </div>
+
+      {orderOpen && (
+        <OrderSheet source={orderSource('header', pathname)} onClose={() => setOrderOpen(false)} />
+      )}
 
       {!adminArea && isMenuOpen && (
         <nav

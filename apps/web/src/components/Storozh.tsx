@@ -6,7 +6,7 @@ import { CONSENT_ERROR, ConsentCheck, focusFirstInvalid, PhoneInput } from '@/co
 import { Icon } from '@/components/Icon';
 import { WhatsAppIcon } from '@/components/MessengerButtons';
 import { reachGoal } from '@/lib/marketing';
-import { isOnShift, nextShiftText, SITE } from '@/lib/site';
+import { CALLBACK_IN, isOnShift, nextShiftText, SITE } from '@/lib/site';
 import {
   createStorozhState,
   onMouseLeave,
@@ -209,7 +209,7 @@ function StorozhCard({ trigger, onClose }: { trigger: StorozhTrigger; onClose: (
           <p className="mt-3 text-base font-bold">Заявка у Ивана, {SITE.name}</p>
           <p className="mt-1 text-sm text-white/70">
             {isOnShift()
-              ? 'Перезвонит в течение 15 минут.'
+              ? `Перезвонит в течение ${CALLBACK_IN}.`
               : `Сейчас нерабочее время — перезвонит ${nextShiftText()}.`}
           </p>
           <a href={SITE.phoneHref} className={`${button} mt-3 bg-amber-500 text-slate-950`}>
@@ -222,8 +222,8 @@ function StorozhCard({ trigger, onClose }: { trigger: StorozhTrigger; onClose: (
             Подобрать технику и цену за минуту?
           </h2>
           <p className="mt-2 text-sm leading-snug text-white/80">
-            Скажите, какая машина и на когда — перезвоню за 15 минут в рабочее время. Иван, отдел
-            логистики {SITE.name}
+            Скажите, какая машина и на когда — перезвоню за {CALLBACK_IN} в рабочее время. Иван,
+            отдел логистики {SITE.name}
           </p>
           {step === 'ask' ? (
             <div className="mt-4 flex flex-wrap gap-2">

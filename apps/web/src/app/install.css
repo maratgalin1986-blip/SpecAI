@@ -95,6 +95,8 @@
 }
 /* No free place under it right now: it waits, out of the way. */
 .install-fab {
+  /* Opacity only: the place (a transform, globals.css) changes at once, so the
+     button is measured where it stands (InstallButton, lib/overlayClear.ts). */
   transition: opacity 0.2s ease;
 }
 .install-fab[data-away]:not([data-help]) {
@@ -206,7 +208,7 @@
 @keyframes install-pop {
   from {
     opacity: 0;
-    transform: scale(0.3);
+    transform: scale(0.6);
   }
   to {
     opacity: 1;

@@ -42,7 +42,8 @@
   background: #fffbeb;
 }
 .labels-off .leaflet-tooltip.map-label,
-.leaflet-tooltip.map-label.label-clash {
+.leaflet-tooltip.map-label.label-clash,
+.leaflet-tooltip.map-label.pin-folded {
   visibility: hidden;
 }
 .leaflet-tooltip.map-label-r4 {
@@ -66,4 +67,28 @@
     height: 44px;
     line-height: 44px;
   }
+}
+
+/* A pin folded under a neighbour (declutterPins): out of the way of taps and
+   the keyboard until the map is zoomed in; the pin on top says how many. */
+.leaflet-marker-icon.pin-folded {
+  visibility: hidden;
+  pointer-events: none;
+}
+.leaflet-marker-icon[data-more]::after {
+  content: attr(data-more);
+  position: absolute;
+  top: -6px;
+  right: -10px;
+  min-width: 22px;
+  padding: 1px 5px;
+  border-radius: 9999px;
+  background: #0f172a;
+  color: #fff;
+  font:
+    700 11px/16px system-ui,
+    sans-serif;
+  text-align: center;
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.35);
+  pointer-events: none;
 }

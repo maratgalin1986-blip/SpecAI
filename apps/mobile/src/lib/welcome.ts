@@ -25,7 +25,7 @@ export const WELCOME_PATHS: readonly WelcomePath[] = [
     accountType: 'CUSTOMER',
     role: 'customer',
     title: 'Мне нужна техника',
-    text: `Разместите заявку: что, где и на какую дату. Исполнители рядом сами пришлют цены — выберете подходящую. ${PROMISE}.`,
+    text: `Разместите заявку: что, где и на какую дату. Исполнители сами пришлют цены — выберете подходящую. ${PROMISE}.`,
   },
   {
     accountType: 'PROVIDER',

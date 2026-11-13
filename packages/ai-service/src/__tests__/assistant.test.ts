@@ -221,9 +221,15 @@ describe('streamAssistantReply', () => {
 
 describe('ASSISTANT_SYSTEM_PROMPT', () => {
   it('carries the platform promise and its honest detail (owner, 2026-10-17)', () => {
-    expect(ASSISTANT_SYSTEM_PROMPT).toContain('«Бесплатно и без посредников»');
+    expect(ASSISTANT_SYSTEM_PROMPT).toContain('«Без комиссии для заказчика»');
+    expect(ASSISTANT_SYSTEM_PROMPT).toContain('Перезвонит диспетчер СпецПласт16');
     expect(ASSISTANT_SYSTEM_PROMPT).toContain('расчёт — напрямую с ним');
     expect(ASSISTANT_SYSTEM_PROMPT).toContain('площадка не берёт процент');
     expect(ASSISTANT_SYSTEM_PROMPT).not.toContain('${');
+  });
+
+  it('answers the minimum order the owner set (2026-11-13): 4 hours, then by the hour', () => {
+    expect(ASSISTANT_SYSTEM_PROMPT).toContain('«Минимум 4 часа, дальше по часам»');
+    expect(ASSISTANT_SYSTEM_PROMPT).not.toMatch(/оплата по факту|отработанные часы/);
   });
 });

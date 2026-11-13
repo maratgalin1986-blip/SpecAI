@@ -5,8 +5,14 @@ import { CallbackForm } from '@/components/CallbackForm';
 import { Icon } from '@/components/Icon';
 import { SITE } from '@/lib/site';
 
+/** The lead's source: where the sheet was opened and on which page («header:/arenda/avtokran»). */
+export function orderSource(place: string, pathname: string | null | undefined): string {
+  const page = (pathname || '/').slice(0, 60);
+  return `${place}:${page}`;
+}
+
 /**
- * «Заказать» in the phone's bottom bar: the short form (a phone and the
+ * «Заказать» in the phone's bottom bar and «Заказать технику →» in the header: the short form (a phone and the
  * consent) opens right where the visitor is, instead of a trip to the home
  * page's form. A native modal <dialog>: the browser keeps the focus inside,
  * Esc closes it, the focus returns to the button, and it lies in the top

@@ -5,6 +5,7 @@ import { flushSync } from 'react-dom';
 import { CinemaVideo } from '@/components/CinemaVideo';
 import { useSoundLive } from '@/components/useSoundLive';
 import { AB_INLINE } from '@/lib/ab';
+import { SEARCH_REFERRER, SKIP_PARAMS } from '@/lib/introSkip';
 import { SITE } from '@/lib/site';
 import { reachGoal } from '@/lib/marketing';
 import { setSoundEnabled, soundEnabled, startedByPress, subscribeSound } from '@/lib/sound';
@@ -47,8 +48,10 @@ const OFFERS = [
 // who has already seen them), and so does any advertising or deep link: a
 // click id or a UTM tag (`yclid`, `gclid`, `utm_*`), a machine or the 3D city
 // (`?m=`, `?walk=1`) and any `#anchor` (`/#callback`, `#podbor`): the visitor
-// asked for something, not for the titles. Hiding also marks them seen.
-const HIDE_IF_SEEN = `(function(){${AB_INLINE};var d=document.documentElement,s=function(){try{sessionStorage.setItem('${SEEN_KEY}','1');localStorage.setItem('${SEEN_KEY}','1')}catch(e){}};try{if(ab==='calm'||sessionStorage.getItem('${SEEN_KEY}')||localStorage.getItem('${SEEN_KEY}')||/[?&](intro=0|m=|walk=|yclid|gclid|utm_[a-z]+=)/.test(location.search)||location.hash.length>1||matchMedia('(prefers-reduced-motion: reduce)').matches){document.getElementById('intro').hidden=true;s()}else{window.${START_KEY}=Date.now();d.setAttribute('${PLAYING_ATTR}','');setTimeout(function(){d.removeAttribute('${PLAYING_ATTR}');var i=document.getElementById('intro');if(i)i.hidden=true},${DURATION_MS + FALLBACK_MS})}}catch(e){}})()`;
+// asked for something, not for the titles. So does a visitor who came from a
+// search engine (the referrer is Яндекс, Google, Bing, Mail.ru …): he looked
+// for machinery, not for a film. Hiding also marks them seen.
+const HIDE_IF_SEEN = `(function(){${AB_INLINE};var d=document.documentElement,s=function(){try{sessionStorage.setItem('${SEEN_KEY}','1');localStorage.setItem('${SEEN_KEY}','1')}catch(e){}};try{if(ab==='calm'||sessionStorage.getItem('${SEEN_KEY}')||localStorage.getItem('${SEEN_KEY}')||new RegExp(${JSON.stringify(SKIP_PARAMS)}).test(location.search)||new RegExp(${JSON.stringify(SEARCH_REFERRER)},'i').test(document.referrer)||location.hash.length>1||matchMedia('(prefers-reduced-motion: reduce)').matches){document.getElementById('intro').hidden=true;s()}else{window.${START_KEY}=Date.now();d.setAttribute('${PLAYING_ATTR}','');setTimeout(function(){d.removeAttribute('${PLAYING_ATTR}');var i=document.getElementById('intro');if(i)i.hidden=true},${DURATION_MS + FALLBACK_MS})}}catch(e){}})()`;
 
 /** The address asks for the order form or the wizard. */
 const FORM_HASH = /^#(callback|podbor)/;
@@ -220,7 +223,7 @@ export function IntroSplash() {
         <div className="intro-flash pointer-events-none absolute inset-0" aria-hidden />
 
         {/* Drone HUD */}
-        <div className="absolute left-4 top-20 font-mono text-[0.6rem] uppercase tracking-[0.25em] text-white/60 sm:left-8 sm:top-24">
+        <div className="absolute left-4 top-32 font-mono text-[0.6rem] uppercase tracking-[0.25em] text-white/60 sm:left-8 sm:top-24">
           <span className="intro-rec mr-2 inline-block h-1.5 w-1.5 rounded-full bg-red-500" />
           Аэросъёмка · {SITE.city}
         </div>
@@ -300,32 +303,36 @@ export function IntroSplash() {
           </nav>
         </div>
 
-        {/* Sound is on by default but starts only with the first touch: until it
+        {/* On a phone the two buttons stand at the top, under the header: at the
+            bottom they lay where the first screen's «Заказать» buttons appear. */}
+        <div className="absolute inset-x-4 top-[4.75rem] flex items-start justify-between gap-2 sm:inset-x-6 sm:bottom-6 sm:top-auto sm:items-end">
+          {/* Sound is on by default but starts only with the first touch: until it
             plays, this button starts it (a plain tap SoundDirector hears); once
             it plays, it switches it off, or on again. */}
-        <button
-          type="button"
-          onClick={(event) => {
-            event.stopPropagation();
-            // This tap is the one that started the sound: nothing more to do.
-            if (startedByPress(event.currentTarget)) return;
-            setSoundEnabled(soundOff);
-          }}
-          // As the header switch, a press that toggles must not wake the sound
-          // first (SoundDirector skips gestures on [data-sound-toggle]).
-          data-sound-toggle={soundOff || soundLive ? '' : undefined}
-          aria-pressed={!soundOff && soundLive}
-          className="intro-sound-hint absolute bottom-24 left-4 flex min-h-11 items-center gap-2 rounded-full bg-white px-4 py-2.5 text-sm font-bold text-slate-950 shadow-lg ring-1 ring-white/40 hover:bg-amber-300 sm:bottom-6 sm:left-6"
-        >
-          {soundOff || !soundLive ? '🔊 Включить звук' : '🔇 Выключить звук'}
-        </button>
-        <button
-          type="button"
-          className="absolute bottom-24 right-4 min-h-11 rounded-full bg-white px-5 py-2.5 text-sm font-bold text-slate-950 shadow-lg ring-1 ring-white/40 hover:bg-amber-300 sm:bottom-6 sm:right-6"
-          onClick={skip}
-        >
-          Пропустить →
-        </button>
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              // This tap is the one that started the sound: nothing more to do.
+              if (startedByPress(event.currentTarget)) return;
+              setSoundEnabled(soundOff);
+            }}
+            // As the header switch, a press that toggles must not wake the sound
+            // first (SoundDirector skips gestures on [data-sound-toggle]).
+            data-sound-toggle={soundOff || soundLive ? '' : undefined}
+            aria-pressed={!soundOff && soundLive}
+            className="intro-sound-hint flex min-h-11 items-center gap-2 rounded-full bg-white px-4 py-2.5 text-sm font-bold text-slate-950 shadow-lg ring-1 ring-white/40 hover:bg-amber-300"
+          >
+            {soundOff || !soundLive ? '🔊 Включить звук' : '🔇 Выключить звук'}
+          </button>
+          <button
+            type="button"
+            className="min-h-11 shrink-0 rounded-full bg-white px-5 py-2.5 text-sm font-bold text-slate-950 shadow-lg ring-1 ring-white/40 hover:bg-amber-300"
+            onClick={skip}
+          >
+            Пропустить →
+          </button>
+        </div>
       </div>
       <script dangerouslySetInnerHTML={{ __html: HIDE_IF_SEEN }} />
     </>

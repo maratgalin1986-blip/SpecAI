@@ -30,7 +30,7 @@ export const OFFER_LINE_POOL = 60;
 export const HOUSE_SERVES_KM = 300;
 
 export const NOBODY_ON_LINE =
-  'Оставьте заявку — исполнители рядом пришлют цены, первым отвечает парк СпецПласт16';
+  'Оставьте заявку — исполнители пришлют цены, первым отвечает парк СпецПласт16';
 /**
  * СпецПласт16's machines are on the line (always, owner 2026-11-11) and no
  * other provider is: «никого» would be untrue.

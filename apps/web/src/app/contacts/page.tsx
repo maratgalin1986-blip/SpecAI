@@ -46,7 +46,7 @@ export default function ContactsPage() {
         />
       </nav>
       <CinemaHero
-        eyebrow={`Вся Россия · офис ${SITE.name} — ${SITE.city}`}
+        eyebrow={`${SITE.reach} · офис ${SITE.name} — ${SITE.city}`}
         title="Контакты"
         clips={['crane-sun', 'building-sun']}
         camera={5}
@@ -71,7 +71,7 @@ export default function ContactsPage() {
           <div>
             <div className="text-sm text-slate-500">Где работаем</div>
             <div className="font-medium">
-              По всей России — заявку видят исполнители рядом с объектом
+              {SITE.reach} — заявку видят исполнители площадки, которые выезжают к объекту
             </div>
           </div>
           <div>

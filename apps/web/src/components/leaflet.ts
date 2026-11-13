@@ -79,7 +79,11 @@ export function visitorIcon(L: LeafletModule) {
 export function showVisitor(
   L: LeafletModule,
   map: LeafletMap,
-  options: { centreZoom?: number } = {},
+  options: {
+    centreZoom?: number;
+    /** Told each position, so a page can name the visitor's city. */
+    onFix?: (fix: VisitorFix) => void;
+  } = {},
 ): void {
   if (typeof navigator === 'undefined' || !navigator.geolocation) return;
   let stopped = false;
@@ -98,6 +102,7 @@ export function showVisitor(
   const untouched = () => !touched && map.getZoom() === startZoom && map.getCenter().equals(start);
   const draw = (fix: VisitorFix) => {
     if (stopped) return;
+    options.onFix?.(fix);
     try {
       if (!dot) {
         dot = L.marker([fix.lat, fix.lon], {
@@ -177,7 +182,7 @@ export function pinIcon(
   const px = Math.round(size * scale);
   const dim = pin.dim && !pin.isHouse && !pin.onLine;
   return L.divIcon({
-    className: `provider-pin${dim ? ' provider-pin-offline' : ''}${pin.onLine ? ' provider-pin-online' : ''}`,
+    className: `provider-pin${dim ? ' provider-pin-offline' : ''}${pin.onLine ? ' provider-pin-online' : ''}${pin.isHouse ? ' provider-pin-house' : ''}`,
     html: `<div style="width:${px}px;height:${px}px;border-radius:9999px;border:3px solid ${ring};background:#fff;box-shadow:0 4px 14px rgba(15,23,42,.35);overflow:hidden${dim ? ';opacity:.62;filter:grayscale(.55)' : ''}">${inner}</div><div style="width:0;height:0;margin:-2px auto 0;border-left:7px solid transparent;border-right:7px solid transparent;border-top:9px solid ${ring}${dim ? ';opacity:.62' : ''}"></div>`,
     iconSize: [px, px + 9],
     iconAnchor: [px / 2, px + 9],
@@ -243,17 +248,102 @@ export function declutterLabels(map: LeafletMap): () => void {
     // Write, read all, write: one layout for the whole pass, not one per label.
     // Labels off the screen are not compared.
     for (const label of labels) label.classList.remove('label-clash');
+    // The label of a pin folded under a neighbour (declutterPins) is not compared.
+    const shown = labels.filter((label) => !label.classList.contains('pin-folded'));
     const view = container.getBoundingClientRect();
-    const boxes = labels.map((label) => label.getBoundingClientRect());
+    const boxes = shown.map((label) => label.getBoundingClientRect());
     const placed: DOMRect[] = [];
     const clashing: HTMLElement[] = [];
-    labels.forEach((label, index) => {
+    shown.forEach((label, index) => {
       const box = boxes[index]!;
       if (!overlaps(view, box)) return;
       if (placed.some((other) => overlaps(other, box))) clashing.push(label);
       else placed.push(box);
     });
     for (const label of clashing) label.classList.add('label-clash');
+  };
+  map.on('zoomend moveend', run);
+  return () => requestAnimationFrame(run);
+}
+
+/** Which pin stays when two cover each other: the lower number (СпецПласт16 first). */
+const PIN_RANKS: [string, number][] = [
+  ['provider-pin-house', 0],
+  ['live-pin', 1],
+  ['provider-pin-online', 2],
+  ['provider-pin', 3],
+  ['intake-pin', 4],
+  ['customer-pin', 5],
+];
+
+function pinRank(element: HTMLElement): number | null {
+  for (const [name, rank] of PIN_RANKS) if (element.classList.contains(name)) return rank;
+  return null;
+}
+
+/** The part of a Leaflet marker the declutter needs (no import of the library). */
+interface PinLayer {
+  getElement(): HTMLElement | undefined;
+  getTooltip(): { getElement(): HTMLElement | undefined } | undefined;
+}
+
+function isPinLayer(layer: unknown): layer is PinLayer {
+  return (
+    typeof (layer as PinLayer).getElement === 'function' &&
+    typeof (layer as PinLayer).getTooltip === 'function'
+  );
+}
+
+/**
+ * Pins never cover each other (taps and keyboard focus land on one pin, and
+ * every target keeps its full size): where two overlap on the screen, the
+ * higher-ranked stays with a «+N» badge and the others fold under it — with
+ * their labels — until the map is zoomed in. Nothing is dropped: a tap on the
+ * pin lists its neighbours (MapSelection), and the next zoom level shows them.
+ * The work site the visitor drags and the «Вы здесь» dot are never folded.
+ * Returns the function to run after new pins.
+ */
+export function declutterPins(map: LeafletMap): () => void {
+  const run = () => {
+    const pins: { layer: PinLayer; element: HTMLElement; rank: number }[] = [];
+    try {
+      map.eachLayer((layer) => {
+        if (!isPinLayer(layer)) return;
+        const element = layer.getElement();
+        if (!element || element.classList.contains('leaflet-marker-draggable')) return;
+        const rank = pinRank(element);
+        if (rank !== null) pins.push({ layer, element, rank });
+      });
+    } catch {
+      return;
+    }
+    const setFolded = (pin: (typeof pins)[number], folded: boolean) => {
+      pin.element.classList.toggle('pin-folded', folded);
+      pin.layer.getTooltip()?.getElement()?.classList.toggle('pin-folded', folded);
+    };
+    // Write, read all, write — one layout for the pass.
+    for (const pin of pins) {
+      setFolded(pin, false);
+      pin.element.removeAttribute('data-more');
+    }
+    pins.sort((a, b) => a.rank - b.rank);
+    const boxes = pins.map((pin) => pin.element.getBoundingClientRect());
+    const placed: { index: number; more: number }[] = [];
+    const folded: number[] = [];
+    pins.forEach((_, index) => {
+      const box = boxes[index]!;
+      const under = placed.find((other) => overlaps(boxes[other.index]!, box));
+      if (under) {
+        under.more += 1;
+        folded.push(index);
+      } else {
+        placed.push({ index, more: 0 });
+      }
+    });
+    for (const index of folded) setFolded(pins[index]!, true);
+    for (const { index, more } of placed) {
+      if (more > 0) pins[index]!.element.setAttribute('data-more', `+${more}`);
+    }
   };
   map.on('zoomend moveend', run);
   return () => requestAnimationFrame(run);

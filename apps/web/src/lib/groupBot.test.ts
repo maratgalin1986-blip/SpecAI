@@ -324,7 +324,7 @@ describe('admin commands', () => {
     expect(sent.some((c) => c.method === 'getChatMember')).toBe(false);
     expect(messages()[0]!.body.text).toContain('/bot');
     // The platform's promise, a fixed text: no name or phone gets in through it.
-    expect(messages()[0]!.body.text).toContain('Бесплатно и без посредников: цену назначает');
+    expect(messages()[0]!.body.text).toContain('Без комиссии для заказчика: цену назначает');
     expect(messages()[0]!.body.text).toContain('Не пишет в личку');
   });
 

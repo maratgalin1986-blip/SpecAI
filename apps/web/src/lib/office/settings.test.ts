@@ -93,3 +93,12 @@ describe('parseOfficeSettings — адрес для ответов', () => {
     ).toBe('owner@example.ru');
   });
 });
+
+describe('WhatsApp сам по расписанию (владелец, 2026-11-13: «пока без WhatsApp»)', () => {
+  it('по умолчанию выключен; включает только сохранённая настройка', () => {
+    expect(parseOfficeSettings([]).whatsappAuto).toBe(false);
+    expect(
+      parseOfficeSettings([{ key: OFFICE_EXTRA_SETTINGS.whatsappAuto, value: '1' }]).whatsappAuto,
+    ).toBe(true);
+  });
+});

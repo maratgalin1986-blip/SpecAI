@@ -67,12 +67,17 @@ describe('faqAnswers and wantsPrice', () => {
   it('answers VAT and shift questions from site facts', () => {
     expect(faqAnswers('Работаете с НДС?').join(' ')).toContain('НДС');
     expect(faqAnswers('сколько часов смена').join(' ')).toContain('8 часов');
+    // Owner, 2026-11-13: the minimum order is 4 hours, then by the hour.
+    expect(faqAnswers('какой минимальный заказ?').join(' ')).toContain(
+      'Минимум 4 часа, дальше по часам',
+    );
+    expect(faqAnswers('сколько часов смена').join(' ')).not.toMatch(/по факту|отработанные/);
     expect(faqAnswers('привет')).toEqual([]);
   });
   it('says the platform works all over Russia, the house fleet in Tatarstan', () => {
     for (const question of ['Где вы работаете?', 'В каком регионе?', 'Работаете по России?']) {
       const answer = faqAnswers(question).join(' ');
-      expect(answer).toContain('по всей России');
+      expect(answer).toContain('Заявка из любого города России');
       expect(answer).toContain('Набережных Челнах и Татарстане');
     }
   });
@@ -81,7 +86,7 @@ describe('faqAnswers and wantsPrice', () => {
     expect(answer).toContain('исполнители');
     expect(answer).toContain('СпецПласт16');
     expect(answer).not.toContain('единственный');
-    expect(answer).toContain('Бесплатно и без посредников');
+    expect(answer).toContain('Без комиссии для заказчика');
   });
   it('answers «commission?» and «is it free?» with the promise: direct payment, no percentage', () => {
     for (const question of [
@@ -92,7 +97,7 @@ describe('faqAnswers and wantsPrice', () => {
       'А бесплатно ли это?',
     ]) {
       const answer = faqAnswers(question).join(' ');
-      expect(answer).toContain('Бесплатно и без посредников');
+      expect(answer).toContain('Без комиссии для заказчика');
       expect(answer).toContain('напрямую');
       expect(answer).toContain('не берёт процент');
     }
@@ -106,7 +111,7 @@ describe('faqAnswers and wantsPrice', () => {
       'Привезли бесплатно песок',
       'Площадка стоит ровная, кран встанет?',
     ]) {
-      expect(faqAnswers(question).join(' ')).not.toContain('Бесплатно и без посредников');
+      expect(faqAnswers(question).join(' ')).not.toContain('Без комиссии для заказчика');
     }
   });
   it('detects price questions', () => {

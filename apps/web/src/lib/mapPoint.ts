@@ -63,3 +63,30 @@ export function withPointLine(message: string, point: MapPoint, max = MESSAGE_MA
     .trimEnd();
   return base ? `${base}\n${line}` : line;
 }
+
+/** The line of a map заявка sent without a point: the dispatcher asks for the address. */
+export const NO_POINT_LINE = 'Место работ: точка не отмечена — адрес уточнит диспетчер.';
+
+/**
+ * The message of a заявка from /map. The point is optional: without it the
+ * dispatcher asks for the address, and the city is the one the page knows
+ * (the visitor's position or the town the map shows), else none — no city
+ * is assumed (CLAUDE.md, «Geography»).
+ */
+export function mapOrderMessage(input: {
+  machine: string;
+  when: string;
+  point: MapPoint | null;
+  city?: string | null;
+}): string {
+  const lines = [
+    `Заказ с карты: ${input.machine || 'техника — подобрать'}, ${input.when.toLowerCase()}.`,
+  ];
+  if (input.point) {
+    lines.push(pointMessageLine(input.point));
+  } else {
+    lines.push(NO_POINT_LINE);
+    if (input.city) lines.push(`Город (по карте или местоположению): ${input.city}`);
+  }
+  return lines.join('\n');
+}

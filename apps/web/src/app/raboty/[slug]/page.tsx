@@ -15,7 +15,7 @@ import {
   type Job,
 } from '@/lib/jobs';
 import { landingClips } from '@/lib/landingClips';
-import { fromPerHour, fromPrice, rub, SHIFT_HOURS } from '@/lib/prices';
+import { fromPerHour, fromPrice, MIN_ORDER_TEXT, rub, SHIFT_HOURS } from '@/lib/prices';
 import { SITE } from '@/lib/site';
 import { siteUrl } from '@/lib/siteUrl';
 import { pageMeta, pickTitle } from '@/lib/pageMeta';
@@ -190,8 +190,7 @@ export default async function JobPage(props: { params: Promise<{ slug: string }>
           })}
         </div>
         <p className="mt-3 text-sm text-slate-500">
-          Пример — одна смена, {SHIFT_HOURS} часов; платите за фактически отработанные часы.{' '}
-          {DELIVERY_NOTE}
+          Пример — одна смена, {SHIFT_HOURS} часов. {MIN_ORDER_TEXT}. {DELIVERY_NOTE}
         </p>
       </section>
 

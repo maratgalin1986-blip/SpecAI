@@ -1,5 +1,6 @@
 import { categoryName } from '@specai/shared';
-import { SHIFT, SITE } from '@/lib/site';
+import { CALLBACK_IN, SHIFT, SITE } from '@/lib/site';
+import { MIN_ORDER_TEXT, SHIFT_HOURS } from '@/lib/prices';
 
 // The site's dispatcher without a paid AI: it reads the visitor's message
 // with plain rules, suggests the machine for the job, answers the common
@@ -180,7 +181,9 @@ export function faqAnswers(text: string): string[] {
     answers.push('Работаем с НДС, по договору, есть ЭДО.');
   }
   if (/смен|минимал|сколько час|почасов/.test(lower)) {
-    answers.push('Смена — 8 часов, цена за смену = 8 × цена часа. Все цены — с машинистом.');
+    answers.push(
+      `${MIN_ORDER_TEXT}. Смена — ${SHIFT_HOURS} часов, цена за смену = ${SHIFT_HOURS} × цена часа. Все цены — с машинистом.`,
+    );
   }
   if (/когда|сегодня|завтра|срочн|быстро|подач/.test(lower)) {
     answers.push('Подаём обычно в день заявки — точное время подтвердит диспетчер.');
@@ -190,7 +193,7 @@ export function faqAnswers(text: string): string[] {
   }
   if (/где|город|район|регион|елабуг|нижнекам|менделеев|татарстан|росси|выезд/.test(lower)) {
     answers.push(
-      `Работаем по всей России: заявку видят исполнители рядом с вашим объектом. Парк ${SITE.name} — в Набережных Челнах и Татарстане.`,
+      `${SITE.reach}: заявку видят исполнители площадки, которые выезжают к вашему объекту. Парк ${SITE.name} — в Набережных Челнах и Татарстане.`,
     );
   }
   if (/смет|рассчит|посчита|калькул/.test(lower)) {
@@ -209,7 +212,7 @@ export function faqAnswers(text: string): string[] {
     )
   ) {
     answers.push(
-      `${SITE.promiseLine} Заявку видят исполнители со своей техникой и машинистами, включая парк ${SITE.name}: каждый называет свою цену, вы выбираете.`,
+      `${SITE.promiseLine} Заявку видят исполнители со своей техникой и машинистами, включая парк ${SITE.name}: каждый называет свою цену, вы выбираете. ${SITE.callbackWho}`,
     );
   }
   return answers;
@@ -222,7 +225,7 @@ export function wantsPrice(text: string): boolean {
 /** What the dispatcher says once a phone number arrived and the lead was saved. */
 export function leadAcceptedText(onShift: boolean): string {
   return onShift
-    ? `Принято! Диспетчер ${SITE.name} перезвонит в течение 15 минут и назовёт точную цену.`
+    ? `Принято! Диспетчер ${SITE.name} перезвонит в течение ${CALLBACK_IN} и назовёт точную цену.`
     : `Заявка принята, позвоним с ${SHIFT.from}:00 — сейчас нерабочее время.`;
 }
 

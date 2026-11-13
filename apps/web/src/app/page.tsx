@@ -28,9 +28,19 @@ import type { MachineType } from '@/lib/machinePhotos';
 import { pluralizeRu } from '@/lib/pluralize';
 import { loadActivity } from '@/lib/activityData';
 import { loadOfferNow } from '@/lib/offerNowData';
-import { SHIFT, SITE } from '@/lib/site';
-import { fromPerHour, HAMMER_RATE, MIN_RATE, priceFaqAnswer, SHIFT_HOURS } from '@/lib/prices';
+import { CALLBACK_IN, CALLBACK_MINUTES, SHIFT, SITE } from '@/lib/site';
+import {
+  CRANE_HEAVY_RATE,
+  fromPerHour,
+  fromPrice,
+  HAMMER_RATE,
+  MIN_ORDER_HOURS,
+  MIN_ORDER_TEXT,
+  MIN_RATE,
+  priceFaqAnswer,
+} from '@/lib/prices';
 import { pageMeta } from '@/lib/pageMeta';
+import { PHONE_VISIBILITY } from '@/lib/phoneVisibility';
 
 // Big interactive blocks below the fold: separate chunks, so the browser
 // hydrates them in their own short tasks instead of one long one.
@@ -78,7 +88,8 @@ const SERVICES: {
     icon: 'crane',
     title: 'Автокраны',
     photo: 'crane',
-    text: 'До 32 т — монтаж конструкций, погрузка и подъём грузов.',
+    // Both rates on the card: one «от 4 500» next to «32 т» read as the 32-tonne price.
+    text: `25 т — ${fromPrice('crane')}, 32 т — ${fromPrice(CRANE_HEAVY_RATE)}: монтаж конструкций, погрузка и подъём грузов.`,
     price: fromPerHour('crane'),
   },
   {
@@ -126,13 +137,13 @@ const SERVICES: {
 
 const MARQUEE = [
   'Экскаваторы-погрузчики',
-  'Автокраны до 32 т',
+  'Автокраны 25–32 т',
   'Гидромолот',
   'Фронтальные погрузчики',
   'Тракторы МТЗ',
   'Самосвалы',
   'Работа с НДС',
-  'Смена 8 часов',
+  MIN_ORDER_TEXT,
 ];
 
 const ADVANTAGES = [
@@ -142,7 +153,7 @@ const ADVANTAGES = [
   },
   {
     title: 'Цена видна сразу',
-    text: `Почасовая ставка на каждой карточке, смена — ${SHIFT_HOURS} часов. Стоимость подачи назовём до заказа.`,
+    text: `Почасовая ставка на каждой карточке. ${MIN_ORDER_TEXT}. Стоимость подачи назовём до заказа.`,
   },
   {
     title: 'Несколько предложений',
@@ -164,7 +175,7 @@ const STEPS = [
     title: 'Забронируйте',
     text: 'Примите предложение — исполнитель подтвердит бронь и закрепит машину и машиниста.',
   },
-  { title: 'Работайте', text: 'Диспетчер на связи, оплата по факту.' },
+  { title: 'Работайте', text: `Диспетчер на связи. ${MIN_ORDER_TEXT}.` },
 ];
 
 // Owner, 2026-11-02: the house fleet reaches a site in Набережные Челны within
@@ -215,6 +226,21 @@ const SERVICE_CATEGORY: Record<string, string> = {
   Тракторы: 'tractors',
 };
 
+/**
+ * Two cards share a catalog category («Гидромолот» is the backhoe loaders',
+ * the wheeled one the excavators'): the category's free count goes on its
+ * first card only, so the cards add up to the headline's «единиц техники
+ * свободно» instead of counting the same machines twice.
+ */
+const FREE_COUNT_ON = new Set(
+  SERVICES.filter(
+    (service, index) =>
+      SERVICES.findIndex(
+        (other) => SERVICE_CATEGORY[other.title] === SERVICE_CATEGORY[service.title],
+      ) === index,
+  ).map((service) => service.title),
+);
+
 const SERVICE_LANDING: Record<string, string> = {
   'Экскаваторы-погрузчики': 'ekskavator-pogruzchik',
   Гидромолот: 'ekskavator-pogruzchik',
@@ -254,7 +280,7 @@ const HOME_FAQ = [
   },
   {
     q: 'Где вы работаете?',
-    a: `По всей России: заявку видят исполнители рядом с вашим объектом. Парк ${SITE.name} — в Набережных Челнах и окрестностях. Там, где исполнители ещё подключаются, оставьте заявку — мы найдём технику. Стоимость подачи зависит от расстояния до объекта.`,
+    a: `${SITE.reach}: заявку видят исполнители площадки, которые выезжают к вашему объекту. Парк ${SITE.name} — в Набережных Челнах и окрестностях. Там, где исполнители ещё подключаются, оставьте заявку — мы найдём технику. Стоимость подачи зависит от расстояния до объекта.`,
   },
   {
     q: 'Можно оставить заявку ночью или в выходной?',
@@ -273,8 +299,13 @@ export default async function HomePage() {
       ? [{ prefix: '', value: available, suffix: '', label: 'единиц техники свободно' }]
       : []),
     { prefix: 'от ', value: MIN_RATE, suffix: ' ₽', label: 'час работы с машинистом' },
-    { prefix: '', value: SHIFT_HOURS, suffix: ' ч', label: 'смена, оплата по факту' },
-    { prefix: '', value: 15, suffix: ' мин', label: 'перезвоним в рабочее время' },
+    {
+      prefix: '',
+      value: MIN_ORDER_HOURS,
+      suffix: ' ч',
+      label: 'минимальный заказ, дальше по часам',
+    },
+    { prefix: '', value: CALLBACK_MINUTES, suffix: ' мин', label: 'перезвоним в рабочее время' },
   ];
 
   return (
@@ -289,7 +320,8 @@ export default async function HomePage() {
                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75 motion-reduce:animate-none" />
                 <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-400" />
               </span>
-              <span className="eyebrow text-slate-200">Вся Россия · исполнители рядом</span>
+              {/* Narrower letter-spacing than other eyebrows: one line at 360 px. */}
+              <span className="eyebrow text-slate-200 max-sm:!tracking-[0.06em]">{SITE.reach}</span>
             </div>
             <h1
               className="float-in mt-4 text-[2.25rem] font-extrabold leading-[1.02] tracking-[-0.04em] sm:mt-6 sm:text-6xl"
@@ -312,11 +344,10 @@ export default async function HomePage() {
               className="hero-long float-in mt-6 max-w-xl text-lg leading-relaxed text-slate-300"
               style={{ animationDelay: '240ms' }}
             >
-              Экскаваторы-погрузчики, автокраны и погрузчики с машинистами по всей России.
-              Разместите заявку — исполнители рядом с вами пришлют цены, вы выберете подходящее; или
-              оставьте телефон — подберёт диспетчер. Парк {SITE.name} в Набережных Челнах —{' '}
-              {fromPerHour(MIN_RATE)}, с НДС, подача по городу за {HOUSE_DELIVERY}.{' '}
-              {SITE.promiseLine}
+              Экскаваторы-погрузчики, автокраны и погрузчики с машинистами. {SITE.reach}: разместите
+              заявку — исполнители пришлют цены, вы выберете подходящее; или оставьте телефон —
+              подберёт диспетчер. Парк {SITE.name} в Набережных Челнах — {fromPerHour(MIN_RATE)}, с
+              НДС, подача по городу за {HOUSE_DELIVERY}. {SITE.promiseLine}
             </p>
             {/* Owner, 2026-10-03: «Заказать технику» the biggest and brightest;
                 2026-10-18: «Встать на линию» the second big button, then the
@@ -363,7 +394,7 @@ export default async function HomePage() {
               <div className="flex flex-wrap gap-3">
                 <a
                   href={SITE.phoneHref}
-                  className="show-cta inline-flex flex-1 items-center justify-center gap-2.5 rounded-full bg-white px-5 py-3 font-mono text-base font-bold tabular-nums text-slate-950 shadow-lg transition hover:bg-amber-100 sm:flex-none"
+                  className="show-cta inline-flex flex-1 basis-full items-center justify-center gap-2.5 whitespace-nowrap rounded-full bg-white px-5 py-3 font-mono text-base font-bold tabular-nums text-slate-950 shadow-lg transition hover:bg-amber-100 sm:flex-none sm:basis-auto"
                 >
                   <Icon name="phone" className="h-5 w-5" />
                   {SITE.phone}
@@ -394,7 +425,7 @@ export default async function HomePage() {
                 href="/providers"
                 className="link-draw group inline-flex min-h-[44px] items-center hover:text-white"
               >
-                Исполнители рядом&nbsp;<span className="nudge">→</span>
+                Все исполнители&nbsp;<span className="nudge">→</span>
               </a>
             </nav>
             <p className="float-in mt-5 text-sm text-slate-400" style={{ animationDelay: '480ms' }}>
@@ -516,8 +547,8 @@ export default async function HomePage() {
             </a>
           </div>
           <p className="mt-3 text-slate-600">
-            Цены парка {SITE.name} — с машинистом, смена {SHIFT_HOURS} часов; у других исполнителей
-            — свои ставки на карточках. Подача зависит от расстояния до объекта.
+            Цены парка {SITE.name} — с машинистом, {lowerFirst(MIN_ORDER_TEXT)}; у других
+            исполнителей — свои ставки на карточках. Подача зависит от расстояния до объекта.
           </p>
         </Reveal>
         <div className="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
@@ -548,7 +579,7 @@ export default async function HomePage() {
                       <span className="absolute bottom-4 left-5 flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-950/80 text-amber-400 ring-1 ring-white/10 backdrop-blur transition group-hover:bg-amber-500 group-hover:text-slate-950">
                         <Icon name={service.icon} className="h-6 w-6" live />
                       </span>
-                      {category && category.available > 0 && (
+                      {category && category.available > 0 && FREE_COUNT_ON.has(service.title) && (
                         <span className="absolute right-4 top-4 inline-flex items-center gap-1.5 rounded-full bg-white/90 px-2.5 py-1 text-xs font-semibold text-emerald-700 backdrop-blur">
                           <span className="live-dot h-1.5 w-1.5 rounded-full bg-emerald-500" />
                           {pluralizeRu(category.available, ['единица', 'единицы', 'единиц'])}{' '}
@@ -726,7 +757,7 @@ export default async function HomePage() {
               <ul className="mt-6 space-y-2 text-slate-200">
                 <li>✔ Подберём технику под задачу и бюджет</li>
                 <li>✔ Назовём точную цену с доставкой</li>
-                <li>✔ Работаем по всей России — исполнители рядом с вами</li>
+                <li>✔ {SITE.reach}</li>
               </ul>
               <a
                 href={SITE.phoneHref}
@@ -772,8 +803,8 @@ export default async function HomePage() {
                 </div>
                 <p className="text-sm leading-snug text-slate-200">
                   Вам ответит <span className="font-bold text-white">Иван</span>, начальник отдела
-                  логистики {SITE.name}. Подберёт технику и перезвонит за 15 минут в рабочее время,
-                  Пн–Сб {SHIFT.from}:00–{SHIFT.to}:00.
+                  логистики {SITE.name}. Подберёт технику и перезвонит за {CALLBACK_IN} в рабочее
+                  время, Пн–Сб {SHIFT.from}:00–{SHIFT.to}:00.
                 </p>
               </div>
               <p className="mt-3 text-xs text-slate-400">
@@ -795,8 +826,7 @@ export default async function HomePage() {
               Войдите или зарегистрируйтесь и опишите задачу — её увидят исполнители со своей
               техникой и машинистами, включая парк {SITE.name}. Сравните цены и выберите
               предложение. Телефон компании виден на карте и в каталоге, пока исполнитель сам его не
-              скрыл; ваш телефон исполнитель увидит только после подтверждения брони. Без
-              регистрации — оставьте телефон, перезвонит диспетчер. Сервис бесплатный, без комиссий.
+              скрыл. {PHONE_VISIBILITY} {SITE.callbackWho} {SITE.promise}.
             </p>
             <a
               href="/orders"

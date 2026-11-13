@@ -199,7 +199,7 @@ describe('the letter', () => {
       expect(part).toContain(SITE.legalName);
       expect(part).toContain(`ИНН ${SITE.inn}`);
       expect(part).toContain(SITE.platform);
-      expect(part).toContain('Бесплатно и без посредников');
+      expect(part).toContain('Без комиссии для заказчика');
     }
     expect(letter.html).toContain('>Отписаться</a>');
   });
