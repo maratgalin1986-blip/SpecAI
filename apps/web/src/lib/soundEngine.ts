@@ -118,6 +118,11 @@ export const FIRST_SOUNDS: readonly SampleName[] = [
 export const BED_SOUNDS: readonly SampleName[] = [SITE_BED, MUSIC_BED, CITY_BED];
 
 const prefetched = new Map<SampleName, Promise<{ data: ArrayBuffer } | null>>();
+// Recordings the engine has already asked for. When the first sign of the hand
+// is itself a gesture (the wheel, a key, a scroll), the engine starts the loops
+// in the same moment as the prefetch: without this the prefetch downloaded each
+// loop a second time, for nobody.
+const taken = new Set<SampleName>();
 
 function sampleFormats(): string[] {
   const probe = document.createElement('audio');
@@ -139,7 +144,7 @@ async function download(name: SampleName): Promise<{ data: ArrayBuffer } | null>
 /** Downloads (never plays) the given recordings; safe to call before any gesture. */
 export function prefetchSamples(names: readonly SampleName[] = FIRST_SOUNDS): void {
   for (const name of names) {
-    if (!prefetched.has(name)) prefetched.set(name, download(name));
+    if (!prefetched.has(name) && !taken.has(name)) prefetched.set(name, download(name));
   }
 }
 
@@ -340,6 +345,7 @@ export class SoundEngine {
       // compressed copy is not kept); a failed prefetch is downloaded again.
       const early = prefetched.get(name);
       prefetched.delete(name);
+      taken.add(name);
       const file = (early && (await early)) ?? (await download(name));
       return file ? await this.ctx.decodeAudioData(file.data) : null;
     });

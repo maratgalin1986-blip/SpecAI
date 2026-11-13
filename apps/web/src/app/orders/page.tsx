@@ -234,7 +234,7 @@ export default async function OrdersPage(props: { searchParams: Promise<OrdersSe
               </p>
               <a
                 href="/#podbor"
-                className="w-fit rounded-full bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white hover:bg-slate-800"
+                className="inline-flex min-h-11 w-fit items-center rounded-full bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white hover:bg-slate-800"
               >
                 Подобрать технику за 30 секунд
               </a>

@@ -386,20 +386,6 @@ html {
   }
 }
 
-/* The big blocks of a long page (the home page) skip style, layout and paint
-   while they are far from the screen, and their looping animations rest: less
-   work per scroll frame. The remembered size keeps the scrollbar steady after
-   the first pass. Only where the engine can let shadows and glows spill over
-   the block's edge (overflow-clip-margin): paint containment would cut them
-   at the edge otherwise. */
-@supports (content-visibility: auto) and (overflow-clip-margin: 1px) {
-  main > div > .depth:not(.marquee-mask) {
-    content-visibility: auto;
-    contain-intrinsic-size: auto 900px;
-    overflow-clip-margin: 3rem;
-  }
-}
-
 @keyframes depth-in {
   from {
     opacity: 0;

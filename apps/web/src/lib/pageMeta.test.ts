@@ -45,6 +45,7 @@ const PUBLIC_PAGES = [
   '/kak-polzovatsya',
   '/predlozheniya',
   '/bot',
+  '/uborka-snega',
 ];
 
 describe('fitTitle', () => {

@@ -24,7 +24,8 @@ export const DEFAULT_OG_IMAGE = {
   url: '/opengraph-image.png',
   width: 1200,
   height: 630,
-  alt: `${BRAND} — ${SITE.tagline.toLowerCase()}`,
+  // Only the first letter goes down: «России» keeps its capital.
+  alt: `${BRAND} — ${SITE.tagline.charAt(0).toLowerCase()}${SITE.tagline.slice(1)}`,
 };
 
 /**
