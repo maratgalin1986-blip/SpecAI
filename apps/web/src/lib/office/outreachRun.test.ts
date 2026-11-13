@@ -30,6 +30,7 @@ import {
   OUTREACH_BUDGET_MS,
   RAMP_START,
   rampedCap,
+  HOURLY_SHARE,
   smtpErrorCode,
   outreachErrorText,
   AUTO_SEND_HOURS,
@@ -1797,5 +1798,37 @@ describe('коды отказов почтового сервера (2026-11-13)
     const result = await sendOutreach(NOW, deps(db, { email }));
     expect(result.email).toBe(1);
     expect(result.errorCodes).toEqual({ '550 5.1.1': 1 });
+  });
+});
+
+describe('равномерная отправка: доля дневного лимита в час (2026-11-13)', () => {
+  const auto = (dailyCap: number) =>
+    settings({ outreachMode: 'auto', whatsappAuto: false, dailyCap });
+
+  it('за последний час уже ушла доля — проход не пишет, хотя дневной лимит не выбран', async () => {
+    const at = new Date('2026-11-13T12:00:00+03:00');
+    const recent = new Date(at.getTime() - 20 * 60_000);
+    // Лимит 24 в день → 2 в час; за последний час ушло 2.
+    const { db } = fakeDb([
+      row({ id: 'r1', status: 'CONTACTED', emailSentAt: recent, contactedAt: recent }),
+      row({ id: 'r2', status: 'CONTACTED', emailSentAt: recent, contactedAt: recent }),
+      row({ id: 'a' }),
+    ]);
+    const result = await sendOutreach(at, deps(db, { settings: auto(24) }));
+    expect(result.email).toBe(0);
+  });
+
+  it('в новом часу — снова доля, не больше', async () => {
+    const at = new Date('2026-11-13T12:00:00+03:00');
+    const earlier = new Date(at.getTime() - 2 * 3_600_000);
+    const { db } = fakeDb([
+      row({ id: 'r1', status: 'CONTACTED', emailSentAt: earlier, contactedAt: earlier }),
+      row({ id: 'a' }),
+      row({ id: 'b', email: 'b@mail.ru' }),
+      row({ id: 'c', email: 'c@mail.ru' }),
+    ]);
+    const result = await sendOutreach(at, deps(db, { settings: auto(24) }));
+    expect(result.email).toBe(2);
+    expect(HOURLY_SHARE).toBe(12);
   });
 });
