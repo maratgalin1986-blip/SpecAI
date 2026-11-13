@@ -40,6 +40,44 @@ function vestLogo() {
   return texture;
 }
 
+/** Rows of the brand atlas: the names as cut-out lettering and as sign boards. */
+export const BRAND_ROWS = { name: 0, platform: 1, nameBoard: 2, platformBoard: 3 } as const;
+export type BrandRow = keyof typeof BRAND_ROWS;
+/** Width / height of one row: a decal keeps this shape. */
+export const BRAND_ASPECT = 1024 / 192;
+
+/**
+ * «СпецПласт16» and «ИИСтройка24» for doors, booms and tipper bodies: one small
+ * canvas, four rows (dark lettering with a clear background, and white boards).
+ */
+function brandAtlas() {
+  const canvas = document.createElement('canvas');
+  canvas.width = 1024;
+  canvas.height = 768;
+  const ctx = canvas.getContext('2d')!;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.font = '900 138px Arial, sans-serif';
+  [SITE.name, SITE.platform, SITE.name, SITE.platform].forEach((text, row) => {
+    const y = row * 192;
+    if (row >= 2) {
+      ctx.fillStyle = '#f8fafc';
+      ctx.beginPath();
+      ctx.roundRect(4, y + 6, 1016, 180, 26);
+      ctx.fill();
+      ctx.lineWidth = 10;
+      ctx.strokeStyle = '#f59e0b';
+      ctx.stroke();
+    }
+    ctx.fillStyle = '#0f172a';
+    ctx.fillText(text, 512, y + 100, 940);
+  });
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.anisotropy = 8;
+  return texture;
+}
+
 /**
  * Site wear on a material: dust and dried mud rising from the ground (by
  * world height, so it stays right on moving machines), blotchy and duller
@@ -149,9 +187,9 @@ export function createMaterials() {
   return {
     vestLogo: pbr(0xffffff, 0.75, 0, { map: vestLogo() }),
     // Machine paint: glossy clear coat that catches the sky.
-    yellow: grime(pbr(0xf0a20b, 0.38, 0.05)),
-    amber: grime(pbr(0xc9700a, 0.45, 0.05)),
-    dark: grime(pbr(0x1f2937, 0.55, 0.3)),
+    yellow: grime(pbr(0xf2a007, 0.34, 0.08, { envMapIntensity: 1.25 })),
+    amber: grime(pbr(0xc2650a, 0.42, 0.08, { envMapIntensity: 1.15 })),
+    dark: grime(pbr(0x1b222d, 0.5, 0.35)),
     black: grime(pbr(0x161616, 0.85, 0), 0.7), // rubber, plastics
     steel: grime(pbr(0x9aa1ab, 0.32, 0.9), 0.6),
     // Tyres: rubber with a lugged tread, caked with mud low down.
@@ -173,6 +211,8 @@ export function createMaterials() {
     hose: pbr(0x111111, 0.45, 0),
     wood: pbr(0x9a6a33, 0.85, 0),
     cabin: pbr(0x3b6e8f, 0.4, 0.1),
+    // Lettering and sign boards: cut out by alpha, so no blending and no sorting.
+    brand: pbr(0xffffff, 0.55, 0, { map: brandAtlas(), alphaTest: 0.45 }),
     lamp: new THREE.MeshBasicMaterial({ color: 0xfff2c4 }),
     tail: new THREE.MeshBasicMaterial({ color: 0xff3b2f }),
     beacon: new THREE.MeshBasicMaterial({ color: 0xffa21a }),
@@ -181,14 +221,15 @@ export function createMaterials() {
 export type Materials = ReturnType<typeof createMaterials>;
 export type MatKey = keyof Materials;
 
-/** A unit box with softly bevelled edges: no toy-like sharp cubes. */
-const UNIT_BOX = new RoundedBoxGeometry(1, 1, 1, 2, 0.06);
+/** A unit box with softly bevelled edges, for instanced blocks. */
+const UNIT_BOX = new RoundedBoxGeometry(1, 1, 1, 1, 0.06);
+const UNIT_PLANE = new THREE.PlaneGeometry(1, 1);
 /** A plain unit box (12 triangles) for blocks seen from afar (the district). */
 export const PLAIN_BOX = new THREE.BoxGeometry(1, 1, 1);
 const UNIT_CYL = new THREE.CylinderGeometry(0.5, 0.5, 1, 20);
 // A tyre: a thick ring around the axle (Z after rotation), and the rim inside.
-const TYRE = new THREE.TorusGeometry(0.72, 0.28, 14, 40);
-const RIM = new THREE.CylinderGeometry(0.5, 0.5, 1, 18).rotateX(Math.PI / 2);
+const TYRE = new THREE.TorusGeometry(0.72, 0.28, 12, 32);
+const RIM = new THREE.CylinderGeometry(0.5, 0.5, 1, 16).rotateX(Math.PI / 2);
 // Hex wheel nut.
 const NUT = new THREE.CylinderGeometry(0.5, 0.5, 1, 6).rotateX(Math.PI / 2);
 
@@ -226,9 +267,34 @@ export class Rig {
     return this;
   }
 
-  /** A box of size w×h×d centred at pos. */
+  /**
+   * A box of size w×h×d centred at pos. Its edges carry a real chamfer of a few
+   * centimetres whatever the proportions (a scaled unit box would smear it along
+   * the long side), so every panel catches a highlight; slivers stay plain.
+   */
   box(node: THREE.Object3D, size: V3, mat: MatKey, pos: V3, rot: V3 = [0, 0, 0]) {
-    return this.add(node, UNIT_BOX, mat, pos, rot, size);
+    const thin = Math.min(size[0], size[1], size[2]);
+    const geo =
+      thin < 0.09
+        ? new THREE.BoxGeometry(size[0], size[1], size[2])
+        : new RoundedBoxGeometry(size[0], size[1], size[2], 1, Math.min(0.05, thin * 0.22));
+    this.add(node, geo, mat, pos, rot);
+    geo.dispose();
+    return this;
+  }
+
+  /**
+   * Lettering or a sign board from the brand atlas: a flat panel of the given
+   * width facing the node's +Z (turn it with `rot`), a hair off the surface.
+   */
+  decal(node: THREE.Object3D, row: BrandRow, width: number, pos: V3, rot: V3 = [0, 0, 0]) {
+    const geo = UNIT_PLANE.clone();
+    const uv = geo.attributes.uv!;
+    const top = 1 - BRAND_ROWS[row] / 4;
+    for (let i = 0; i < uv.count; i++) uv.setY(i, top - (1 - uv.getY(i)) / 4);
+    this.add(node, geo, 'brand', pos, rot, [width, width / BRAND_ASPECT, 1]);
+    geo.dispose();
+    return this;
   }
 
   /** A round post along Y of radius r and height h (rotate it for axles). */
@@ -245,8 +311,8 @@ export class Rig {
     for (const side of [-1, 1]) {
       const z = pos[2] + side * (w / 2 + 0.012);
       this.add(node, RIM, 'steel', [pos[0], pos[1], z], [0, 0, 0], [r * 0.22, r * 0.22, 0.05]);
-      for (let k = 0; k < 8; k++) {
-        const a = (k / 8) * Math.PI * 2;
+      for (let k = 0; k < 6; k++) {
+        const a = (k / 6) * Math.PI * 2;
         this.add(
           node,
           NUT,
@@ -310,7 +376,7 @@ export class Rig {
         if (!merged) continue;
         list.forEach((g) => g !== merged && g.dispose());
         const mesh = new THREE.Mesh(merged, this.materials[mat]);
-        mesh.castShadow = cast && mat !== 'glass' && mat !== 'lamp';
+        mesh.castShadow = cast && mat !== 'glass' && mat !== 'lamp' && mat !== 'brand';
         mesh.receiveShadow = receive;
         mesh.matrixAutoUpdate = false;
         mesh.updateMatrix();
@@ -341,6 +407,14 @@ export function moundGeometry() {
     const y = pos.getY(i);
     const n = 1 + 0.07 * Math.sin(x * 9 + z * 5) * Math.cos(z * 7 - x * 3) * (1 - y);
     pos.setXYZ(i, x * n, y, z * n);
+  }
+  // The lathe is traced top-down, which turns its faces inside out: wind them
+  // the other way, or the mound is lit from below and reads as a black shape.
+  const index = g.index!;
+  for (let i = 0; i < index.count; i += 3) {
+    const b = index.getX(i + 1);
+    index.setX(i + 1, index.getX(i + 2));
+    index.setX(i + 2, b);
   }
   g.computeVertexNormals();
   mound = g;

@@ -3,12 +3,12 @@ import { categoryBySlug } from '@specai/shared';
 import { PriceSurveyForm } from '@/components/PriceSurveyForm';
 import { PRICE_SURVEY_LEAD, PRICE_SURVEY_TITLE } from '@/lib/priceReports';
 import { SITE } from '@/lib/site';
+import { pageMeta } from '@/lib/pageMeta';
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMeta('/ceny/opros', {
   title: 'Опрос: сколько берут за спецтехнику в вашем городе',
   description: `${PRICE_SURVEY_TITLE} ${PRICE_SURVEY_LEAD} Открытый опрос ${SITE.platform}, ответы обезличены.`,
-  alternates: { canonical: '/ceny/opros' },
-};
+});
 
 /**
  * «Узнай цены в своём городе»: the open survey of the platform, asked as

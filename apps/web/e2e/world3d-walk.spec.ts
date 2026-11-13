@@ -129,3 +129,33 @@ test('/?walk=1 opens the walk straight away and leaves the address clean', async
   await page.getByRole('button', { name: 'Выйти из прогулки' }).click();
   await expect(walkDialog(page)).toHaveCount(0);
 });
+
+test('without the live scene every stop shows its own picture, above the card', async ({
+  page,
+}) => {
+  await guard(page);
+  await openHome(page);
+  await invitation(page).click();
+  const dialog = walkDialog(page);
+  await expect(exitButton(page)).toBeVisible();
+  const pause = dialog.getByRole('button', { name: /Пауза/ });
+  if (await pause.count()) await pause.click();
+
+  const pictures = new Set<string>();
+  for (const kind of ['excavator', 'crane', 'agp', 'dump']) {
+    const picture = dialog.locator(`img[data-stop="${kind}"][data-current]`);
+    await expect(picture).toBeVisible();
+    await expect
+      .poll(() => picture.evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth))
+      .toBeGreaterThan(300);
+    pictures.add((await picture.getAttribute('src')) ?? '');
+    // The controls do not lie on one another: the exit stays clear of the card.
+    const exit = await exitButton(page).boundingBox();
+    const order = await dialog.getByRole('link', { name: 'Заказать' }).boundingBox();
+    const title = await dialog.locator('p[aria-live]').boundingBox();
+    expect(title!.y).toBeGreaterThan(exit!.y + exit!.height + 40);
+    expect(order!.y + order!.height).toBeLessThanOrEqual(page.viewportSize()!.height);
+    await dialog.getByRole('button', { name: /Дальше/ }).click();
+  }
+  expect(pictures.size).toBe(4);
+});

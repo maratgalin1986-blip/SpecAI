@@ -175,7 +175,7 @@ export function GuestOrderForm({
           placeholder="Например: нужен экскаватор для рытья траншеи 50 м, мягкий грунт"
           value={description}
           onChange={(e) => setDescription(e.target.value)}
-          className="rounded-md border border-slate-300 px-3 py-2"
+          className="min-h-11 rounded-md border border-slate-300 px-3 py-2 text-base sm:text-sm"
         />
       </label>
       {autoCategory.auto && <AutoCategoryNote name={categoryName} inputId={categoryInputId} />}
@@ -187,7 +187,7 @@ export function GuestOrderForm({
         value={categoryId}
         onChange={autoCategory.pick}
         emptyLabel="Подобрать по описанию"
-        className="rounded-md border border-slate-300 px-3 py-2"
+        className="min-h-11 rounded-md border border-slate-300 px-3 py-2 text-base sm:text-sm"
       />
       <DemandHint categoryId={categoryId} categoryName={categoryName} />
 
@@ -200,7 +200,7 @@ export function GuestOrderForm({
             min={todayInMoscow()}
             value={startDate}
             onChange={(e) => setStartDate(e.target.value)}
-            className="rounded-md border border-slate-300 px-3 py-2"
+            className="min-h-11 rounded-md border border-slate-300 px-3 py-2 text-base sm:text-sm"
           />
         </label>
         <label className="flex flex-col gap-1 text-sm">
@@ -210,7 +210,7 @@ export function GuestOrderForm({
             min={startDate || todayInMoscow()}
             value={endDate}
             onChange={(e) => setEndDate(e.target.value)}
-            className="rounded-md border border-slate-300 px-3 py-2"
+            className="min-h-11 rounded-md border border-slate-300 px-3 py-2 text-base sm:text-sm"
           />
         </label>
       </div>
@@ -224,7 +224,7 @@ export function GuestOrderForm({
           placeholder="Город, улица, дом"
           autoComplete="street-address"
           maxLength={200}
-          className="rounded-md border border-slate-300 px-3 py-2"
+          className="min-h-11 rounded-md border border-slate-300 px-3 py-2 text-base sm:text-sm"
         />
         <span className="text-xs text-slate-500">
           По адресу исполнители посчитают подачу и увидят погоду на день работ.
@@ -248,7 +248,7 @@ export function GuestOrderForm({
             onChange={(e) => setName(e.target.value)}
             autoComplete="name"
             maxLength={100}
-            className="rounded-md border border-slate-300 px-3 py-2"
+            className="min-h-11 rounded-md border border-slate-300 px-3 py-2 text-base sm:text-sm"
           />
         </label>
         <label className="flex flex-col gap-1 text-sm">
@@ -261,7 +261,7 @@ export function GuestOrderForm({
             autoComplete="tel"
             placeholder="+7 900 000-00-00"
             maxLength={30}
-            className="rounded-md border border-slate-300 px-3 py-2"
+            className="min-h-11 rounded-md border border-slate-300 px-3 py-2 text-base sm:text-sm"
           />
         </label>
       </div>
@@ -284,7 +284,7 @@ export function GuestOrderForm({
           required
           checked={consent}
           onChange={(e) => setConsent(e.target.checked)}
-          className="mt-0.5"
+          className="mt-0.5 h-6 w-6 shrink-0"
         />
         <ConsentText />
       </label>
@@ -294,7 +294,7 @@ export function GuestOrderForm({
           {error}
         </p>
       )}
-      <Button type="submit" disabled={isSubmitting}>
+      <Button type="submit" disabled={isSubmitting} className="min-h-11">
         {isSubmitting ? 'Публикация…' : 'Опубликовать заявку'}
       </Button>
       <PromiseNote />

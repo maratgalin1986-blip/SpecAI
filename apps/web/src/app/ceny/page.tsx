@@ -14,6 +14,7 @@ import { PRICE_SURVEY_PATH, PRICE_SURVEY_TITLE } from '@/lib/priceReports';
 import { fromPerHour, PRICE_GROUPS, SHIFT_HOURS } from '@/lib/prices';
 import { ShowOrbs } from '@/components/ShowOrbs';
 import { SITE } from '@/lib/site';
+import { pageMeta } from '@/lib/pageMeta';
 
 // As the city pages: a page built while the database was unreachable does not stay long.
 export const revalidate = 600;
@@ -29,18 +30,17 @@ export async function generateMetadata(): Promise<Metadata> {
   const { index, loaded } = await loadPriceIndex();
   // A failed load is not «no data»: the page keeps its usual metadata then.
   const hasData = indexHasData(index) || !loaded;
-  return {
+  return pageMeta('/ceny', {
     title: TITLE,
     description: hasData
       ? 'Сколько стоит час спецтехники с машинистом: медиана и разброс цен по России, регионам и городам — по ценам исполнителей площадки и ответам на открытый опрос. Без имён компаний.'
       : `Цены на аренду спецтехники с машинистом: прайс парка ${SITE.name} в Набережных Челнах. Цены других исполнителей появятся, когда их наберётся достаточно для обезличенной сводки.`,
-    alternates: { canonical: '/ceny' },
     ...(hasData ? {} : { robots: { index: false, follow: true } }),
-  };
+  });
 }
 
 function Cell({ cell }: { cell: PriceCell | undefined }) {
-  if (!cell) return <span className="text-slate-400">мало данных</span>;
+  if (!cell) return <span className="text-slate-500">мало данных</span>;
   return (
     <span>
       <span className="font-semibold text-slate-900">{cellText(cell)}</span>{' '}

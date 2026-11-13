@@ -9,7 +9,7 @@ import { bidsLeftText } from './bidWindow';
 import { moscowDateKey, toBookingDay } from './bookingRules';
 import { customerShortName } from './customerPrivacy';
 import { pluralizeRu } from './pluralize';
-import { maskContactsAndLinks } from './privacy';
+import { maskOrderText } from './privacy';
 
 export const BOARD_PAGE_SIZE = 20;
 export const EXCERPT_MAX = 160;
@@ -193,7 +193,7 @@ export interface BoardCard {
   customer: string;
   /** «из Telegram-чата» for imported orders, null for the site's own. */
   sourceLabel: string | null;
-  /** The description, contacts and links hidden, at most EXCERPT_MAX characters. */
+  /** The description, contacts, links and the address hidden, at most EXCERPT_MAX characters. */
   excerpt: string;
 }
 
@@ -268,9 +268,9 @@ export function timeAgo(date: Date, now: Date = new Date()): string {
   return shortDate(date);
 }
 
-/** Contacts and links hidden, whitespace folded, cut at `max` with an ellipsis. */
+/** Contacts, links and the address hidden, whitespace folded, cut at `max` with an ellipsis. */
 export function excerpt(text: string, max = EXCERPT_MAX): string {
-  const clean = maskContactsAndLinks(text).replace(/\s+/g, ' ').trim();
+  const clean = maskOrderText(text).replace(/\s+/g, ' ').trim();
   if (clean.length <= max) return clean;
   const cut = clean.slice(0, max - 1);
   const lastSpace = cut.lastIndexOf(' ');

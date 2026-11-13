@@ -315,6 +315,26 @@ describe('renderNotification: bookings, cancellations and bid updates', () => {
     );
   });
 
+  it('names the city and the job of a new order, not the street and the house', () => {
+    const message = renderNotification({
+      type: 'order.new',
+      orderId: 'o1',
+      description: 'Автокран 25 т на 2 смены, ул. Строителей, д. 7, въезд со двора',
+      categoryName: 'Автокраны',
+      city: 'Елабуга',
+      startDate: start,
+    });
+    expect(message.title).toBe('Новая заявка: Автокраны, Елабуга');
+    expect(message.body).toContain('Автокран 25 т на 2 смены');
+    expect(message.body).not.toContain('Строителей');
+    const digest = renderNotification({
+      type: 'digest.evening',
+      items: ['автокраны, Елабуга: разгрузка, 52 комплекс, д. 12'],
+    });
+    expect(digest.body).toContain('автокраны, Елабуга: разгрузка');
+    expect(digest.body).not.toContain('комплекс');
+  });
+
   it('says «найдена в открытом чате» once for a chat order', () => {
     const message = renderNotification({
       type: 'order.new',

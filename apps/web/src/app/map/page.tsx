@@ -2,15 +2,15 @@ import type { Metadata } from 'next';
 import { DemandMap } from '@/components/DemandMap';
 import { OrderMap } from '@/components/OrderMap';
 import { SITE } from '@/lib/site';
+import { pageMeta } from '@/lib/pageMeta';
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMeta('/map', {
   // The layout's template adds «· ИИСтройка24 · СпецПласт16».
   title: 'Где нужна техника — отметьте на карте',
   description:
     'Отметьте на карте объект в своём городе, выберите технику — исполнители рядом ' +
     'и диспетчер назовут цену с подачей до этого места. Сервис бесплатный.',
-  alternates: { canonical: '/map' },
-};
+});
 
 export default async function OrderMapPage(props: {
   searchParams: Promise<{ embed?: string; layer?: string }>;

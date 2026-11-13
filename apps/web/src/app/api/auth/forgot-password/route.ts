@@ -30,17 +30,18 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Укажите корректный e-mail' }, { status: 400 });
   }
 
-  // Letters are off: say so (the same answer for every address) instead of «мы отправили письмо».
-  if (!emailFeatures().passwordRecovery) {
-    return NextResponse.json({ error: PASSWORD_RECOVERY_OFF_MESSAGE }, { status: 503 });
-  }
-
+  // The limits come first: every answer of this address counts, the 503 below too.
   const email = parsed.data.email;
   const ip = clientIp(request);
   const ipRate = checkRateLimit(`forgot-password:ip:${ip}`, IP_RATE_LIMIT);
   if (!ipRate.ok) return tooManyRequests(ipRate.retryAfterSec);
   const rate = checkRateLimit(`forgot-password:${email}:${ip}`, RATE_LIMIT);
   if (!rate.ok) return tooManyRequests(rate.retryAfterSec);
+
+  // Letters are off: say so (the same answer for every address) instead of «мы отправили письмо».
+  if (!emailFeatures().passwordRecovery) {
+    return NextResponse.json({ error: PASSWORD_RECOVERY_OFF_MESSAGE }, { status: 503 });
+  }
 
   // Всегда 200: не раскрываем существование аккаунта ответом. Письмо ждём —
   // на serverless функция может быть остановлена сразу после ответа, и

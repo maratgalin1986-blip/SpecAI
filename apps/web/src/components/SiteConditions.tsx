@@ -3,6 +3,7 @@ import { SiteMap } from '@/components/SiteMap';
 import { WeatherHud } from '@/components/WeatherHud';
 import { machineTypeOf } from '@/lib/equipmentCatalog';
 import { geocodeAddress } from '@/lib/geo';
+import { siteBlockView } from '@/lib/orderLocationPrivacy';
 import { MACHINE_LABELS } from '@/lib/machinePhotos';
 import {
   assessWork,
@@ -16,6 +17,10 @@ import {
 // Weather for the work day and the top-down map of the site, for an order.
 // Server component: coordinates are geocoded once from the order address and
 // stored on its Location, the forecast is cached for 30 minutes.
+// `showExact` follows lib/orderLocationPrivacy.ts: the map and the address are
+// for the customer, the platform's managers and the booked company; everyone
+// else gets the weather under the city's name, and neither the address nor
+// the coordinates reach the markup.
 
 type OrderLocation = {
   id: string;
@@ -52,14 +57,16 @@ export async function SiteConditions({
   date,
   location,
   categoryName,
+  showExact,
 }: {
   date: Date;
   location: OrderLocation | null;
   categoryName?: string | null;
+  /** Whether this viewer reads the address and sees the exact point. */
+  showExact: boolean;
 }) {
   const place = await placeOf(location);
-  // A city-only place (orders imported from chats) gets the weather, not the map.
-  const exact = Boolean(place && location && location.addressLine !== location.city);
+  const shown = siteBlockView(location, place, showExact);
 
   const day = mskParts(date.toISOString()).date;
   const ahead = (Date.parse(day) - Date.parse(mskToday())) / DAY_MS;
@@ -77,7 +84,7 @@ export async function SiteConditions({
         weather={weather}
         notes={weather ? assessWork(weather, machineGroup(type)) : []}
         group={machineGroup(type)}
-        place={location?.city || place.label}
+        place={shown.weatherPlace}
         dateLabel={dateLabel}
         machineLabel={type ? `для: ${MACHINE_LABELS[type].toLowerCase()}` : undefined}
         emptyReason={ahead <= 9 ? 'unavailable' : 'far'}
@@ -85,11 +92,13 @@ export async function SiteConditions({
     );
   }
 
-  if (!weatherBlock && !exact) return null;
+  if (!weatherBlock && !shown.map) return null;
   return (
     <section className="grid gap-4 lg:grid-cols-2" aria-label="Погода и место работ">
       {weatherBlock}
-      {exact && place ? <SiteMap lat={place.lat} lon={place.lon} label={place.label} /> : null}
+      {shown.map ? (
+        <SiteMap lat={shown.map.lat} lon={shown.map.lon} label={shown.map.label} />
+      ) : null}
     </section>
   );
 }

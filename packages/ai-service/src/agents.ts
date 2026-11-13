@@ -83,7 +83,15 @@ const TOOLS: Record<AgentToolName, Anthropic.Tool> = {
       properties: {
         description: {
           type: 'string',
-          description: 'What needs to be done, in Russian, including location and volume.',
+          description:
+            'What needs to be done, in Russian, with the volume. May name the city; no street, ' +
+            'house or flat here — the address goes to the address field.',
+        },
+        address: {
+          type: 'string',
+          description:
+            'Where the machine is needed, in Russian: city, street and house as the customer ' +
+            'gave them («Елабуга, ул. Строителей, 7»). Omit when the customer named no place.',
         },
         desiredStartDate: { type: 'string', description: 'ISO date, YYYY-MM-DD.' },
         desiredEndDate: { type: 'string', description: 'ISO date, YYYY-MM-DD.' },
@@ -124,8 +132,8 @@ const TOOLS: Record<AgentToolName, Anthropic.Tool> = {
 
 const COMPANY_CONTEXT =
   'You work for the ИИСтройка24 platform by СпецПласт16 (operated by ООО «СПЕЦПЛАСТ 16», ' +
-  'Naberezhnye Chelny), a special-equipment rental platform in the Republic of Tatarstan ' +
-  '(region 16); call yourself an assistant of ИИСтройка24. The site is an aggregator, a taxi for ' +
+  'Naberezhnye Chelny), a special-equipment rental platform for customers and providers all ' +
+  'over Russia; never assume the customer is in Tatarstan, start from their city; call yourself an assistant of ИИСтройка24. The site is an aggregator, a taxi for ' +
   'heavy machinery: provider companies publish their own machines with operators and prices, ' +
   "and СпецПласт16's own fleet takes part alongside them (listed first). Customers rent " +
   'excavators, cranes, loaders, dump trucks and other machinery by booking a catalog listing ' +
@@ -162,7 +170,9 @@ const AGENTS: Record<AgentId, AgentDefinition> = {
   dispatcher: {
     system:
       "You are the dispatcher. Your goal is to turn the customer's request into a job " +
-      'order. Collect: what work is needed, the location, the start and end dates. Pick a ' +
+      'order. Collect: what work is needed, the location, the start and end dates. Pass the ' +
+      'location as the address field of create_order and keep street and house out of the ' +
+      'description (the address opens to a provider only with a confirmed booking). Pick a ' +
       'category via list_categories when it is clear. Summarize the order and ask for ' +
       'confirmation before calling create_order. After creating it, give the order link.',
     tools: ['list_categories', 'search_equipment', 'create_order'],

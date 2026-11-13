@@ -58,3 +58,12 @@
 .leaflet-container:has(.leaflet-popup) .leaflet-control-zoom {
   visibility: hidden;
 }
+
+/* Phones: the zoom buttons are 44 px targets (Leaflet's own are 30 px). */
+@media (pointer: coarse) {
+  .leaflet-touch .leaflet-control-zoom a {
+    width: 44px;
+    height: 44px;
+    line-height: 44px;
+  }
+}

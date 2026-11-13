@@ -3,6 +3,7 @@
 // caller bakes it, and update(time, dt) animates the hierarchy.
 import * as THREE from 'three';
 import { Debris, keyframes, node, Rig, smooth, type MatKey } from './kit';
+import { AGP_REACH, CRANE, craneTip } from './layout';
 import { HAT, lookFor, makePerson } from './people';
 
 export interface Animated {
@@ -220,6 +221,11 @@ export function makeDumpTruck(rig: Rig): DumpTruck {
   for (let i = 0; i < 5; i++)
     for (const sz of [-1, 1])
       rig.box(bed, [0.08, 0.95, 0.06], 'amber', [0.5 + i * 0.95, 0.62, sz * 1.23]);
+  // The owner's name: a board on each side of the body, lettering on the doors.
+  rig.decal(bed, 'nameBoard', 3.0, [2.3, 0.72, 1.275]);
+  rig.decal(bed, 'nameBoard', 3.0, [2.3, 0.72, -1.275], [0, Math.PI, 0]);
+  rig.decal(root, 'name', 1.05, [2.77, 1.66, 1.19]);
+  rig.decal(root, 'name', 1.05, [2.77, 1.66, -1.19], [0, Math.PI, 0]);
   const heap = node(bed, [2.3, 0.18, 0]);
   rig.heap(heap, 1.9, 0.8, 'dirt', [0, 0, 0]);
   return { root, bed, heap, wheels };
@@ -227,9 +233,14 @@ export function makeDumpTruck(rig: Rig): DumpTruck {
 
 // ---------------------------------------------------------------- backhoe
 
-/** JCB-like backhoe loader digging at a pit behind it and loading a dump truck at its side. */
-export function makeBackhoe(rig: Rig, dirt: Debris, truck: DumpTruck): Animated {
+/**
+ * JCB-like backhoe loader digging at a pit behind it and loading a dump truck at
+ * its side: `swingTo` is the turn of the arm over the truck (negative: to its left).
+ */
+export function makeBackhoe(rig: Rig, dirt: Debris, truck: DumpTruck, swingTo = 1.35): Animated {
   const root = node(null);
+  rig.decal(root, 'name', 1.45, [1.22, 1.68, 0.76]);
+  rig.decal(root, 'name', 1.45, [1.22, 1.68, -0.76], [0, Math.PI, 0]);
   rig.box(root, [4.4, 0.7, 1.9], 'dark', [0, 0.95, 0]);
   // Engine hood: a sloped nose, cut from a side outline.
   rig.profile(
@@ -375,9 +386,9 @@ export function makeBackhoe(rig: Rig, dirt: Debris, truck: DumpTruck): Animated 
     [0, 0, 0.15, 1.2, -0.4],
     [1.8, 0, 0.35, 1.3, 1.1],
     [3.0, 0, -0.8, 2.4, 1.6],
-    [4.8, 1.35, -0.8, 1.0, 1.5],
-    [5.6, 1.35, -0.8, 1.0, -0.7],
-    [6.6, 1.35, -0.8, 1.0, -0.7],
+    [4.8, swingTo, -0.8, 1.0, 1.5],
+    [5.6, swingTo, -0.8, 1.0, -0.7],
+    [6.6, swingTo, -0.8, 1.0, -0.7],
     [8.2, 0, -0.3, 1.5, -0.3],
     [9.2, 0, 0.15, 1.2, -0.4],
   ];
@@ -411,79 +422,134 @@ export function makeBackhoe(rig: Rig, dirt: Debris, truck: DumpTruck): Animated 
 
 // ---------------------------------------------------------------- truck crane
 
-export const CRANE = {
-  elevation: 0.9,
-  boomLength: 16,
-  turretX: -2.0,
-  turretY: 1.75,
-  pivot: [-0.9, 1.3] as const,
-  yawA: 0.55,
-  yawB: -1.2,
-};
-/** Horizontal reach and height of the boom tip above the turret base. */
-export function craneTip() {
-  return {
-    reach: CRANE.pivot[0] + CRANE.boomLength * Math.cos(CRANE.elevation),
-    height: CRANE.turretY + CRANE.pivot[1] + CRANE.boomLength * Math.sin(CRANE.elevation),
-  };
+export { CRANE, craneTip };
+
+export interface CraneJob {
+  /** Turret turn over the slab stack and over the frame. */
+  yawA: number;
+  yawB: number;
+  /** Height the slab is picked from and set down at. */
+  groundA: number;
+  groundB: number;
 }
 
+/**
+ * A truck crane on a KamAZ-style carrier: outriggers down, a slewing turret with
+ * the operator's cab, a three-section boom and a slab on four slings. It carries
+ * a slab from the stack to the frame, sets it down and comes back with an empty hook.
+ */
 export function makeCrane(
   rig: Rig,
-  groundA: number,
-  groundB: number,
-): Animated & { boom: THREE.Group } {
+  job: CraneJob,
+): Animated & { boom: THREE.Group; placed: THREE.Group } {
   const root = node(null);
-  rig.box(root, [10.5, 0.9, 2.5], 'yellow', [0, 1.25, 0]);
-  rig.box(root, [10.6, 0.25, 2.2], 'dark', [0, 0.75, 0]);
-  rig.box(root, [1.7, 1.5, 2.5], 'yellow', [4.5, 2.45, 0]);
-  rig.box(root, [0.06, 0.75, 2.2], 'glass', [5.36, 2.65, 0]);
-  rig.box(root, [0.06, 0.16, 0.35], 'lamp', [5.3, 1.2, 0.9]);
-  rig.box(root, [0.06, 0.16, 0.35], 'lamp', [5.3, 1.2, -0.9]);
-  for (const x of [3.6, 2.2, -2.4, -3.8]) {
+  // Carrier: frame rails, a deck with a chamfered tail, lockers, tanks, the cab.
+  rig.box(root, [10.6, 0.34, 1.15], 'dark', [0, 0.86, 0]);
+  rig.profile(
+    root,
+    [
+      [-5.3, 1.06],
+      [3.55, 1.06],
+      [3.55, 1.62],
+      [-5.05, 1.62],
+      [-5.3, 1.42],
+    ],
+    2.5,
+    'yellow',
+    [0, 0, 0],
+    [0, 0, 0],
+    0.05,
+  );
+  rig.box(root, [8.3, 0.05, 2.1], 'dark', [-0.85, 1.65, 0]); // anti-slip deck
+  for (const s of [1, -1]) {
+    rig.box(root, [1.5, 0.5, 0.34], 'dark', [0.1, 0.78, s * 1.05]); // lockers
+    rig.box(root, [0.9, 0.05, 0.3], 'steel', [0.1, 1.04, s * 1.05]);
+    rig.box(root, [0.06, 0.14, 0.25], 'tail', [-5.31, 1.3, s * 0.95]);
+    for (const x of [3.45, -3.15])
+      rig.box(root, [x > 0 ? 3.1 : 2.6, 0.06, 0.55], 'dark', [x, 1.3, s * 1.0]);
+  }
+  rig.cyl(root, 0.3, 1.0, 'steel', [1.1, 0.8, 1.05], [0, 0, Math.PI / 2]);
+  rig.box(root, [0.12, 0.22, 2.4], 'hazard', [-5.36, 0.8, 0]);
+  truckCab(rig, root, 4.55, 'yellow');
+  operator(rig, root, [4.5, 1.3, 0.45]);
+  rig.box(root, [0.16, 0.12, 0.16], 'beacon', [4.4, 2.83, 0.6]);
+  exhaust(rig, root, [3.75, 1.4, -1.0], 1.6);
+  rig.decal(root, 'name', 1.05, [4.57, 1.66, 1.19]);
+  rig.decal(root, 'name', 1.05, [4.57, 1.66, -1.19], [0, Math.PI, 0]);
+  // Boom rest behind the cab.
+  rig.box(root, [0.18, 1.0, 0.18], 'dark', [3.3, 2.1, 0.35]);
+  rig.box(root, [0.18, 1.0, 0.18], 'dark', [3.3, 2.1, -0.35]);
+  rig.box(root, [0.3, 0.12, 1.0], 'dark', [3.3, 2.62, 0]);
+  for (const x of [4.4, 2.7, -2.5, -3.85]) {
     rig.wheel(root, [x, 0.6, 1.05], 0.6, 0.45);
     rig.wheel(root, [x, 0.6, -1.05], 0.6, 0.45);
   }
+  // Outriggers: beams out, rams down, pads on timber.
   for (const x of [3.0, -4.6])
     for (const s of [1, -1]) {
       rig.box(root, [0.3, 0.3, 2.4], 'hazard', [x, 1.0, s * 2.3]);
-      rig.box(root, [0.28, 0.95, 0.28], 'dark', [x, 0.55, s * 3.45]);
+      rig.box(root, [0.28, 0.95, 0.28], 'dark', [x, 0.6, s * 3.45]);
       ram(rig, root, [x, 1.0, s * 3.45], [x, 0.25, s * 3.45], 0.09);
-      rig.box(root, [0.8, 0.1, 0.8], 'dark', [x, 0.05, s * 3.45]);
+      rig.box(root, [0.8, 0.1, 0.8], 'dark', [x, 0.16, s * 3.45]);
+      rig.box(root, [1.1, 0.1, 0.9], 'wood', [x, 0.06, s * 3.45]);
     }
   const turret = node(root, [CRANE.turretX, CRANE.turretY, 0]);
-  rig.box(turret, [3.4, 1.1, 2.3], 'yellow', [-0.3, 0.55, 0]);
-  rig.box(turret, [1.0, 1.1, 2.4], 'hazard', [-2.3, 0.65, 0]); // counterweight
-  rig.box(turret, [1.3, 1.4, 0.9], 'glass', [0.9, 1.0, -1.25]);
-  rig.box(turret, [1.4, 0.12, 1.0], 'yellow', [0.9, 1.76, -1.25]);
-  rig.box(turret, [0.16, 0.12, 0.16], 'beacon', [-1.2, 1.2, 0.8]);
-  operator(rig, turret, [0.9, 0.3, -1.25]);
+  rig.cyl(turret, 1.05, 0.22, 'dark', [0, 0.02, 0]); // slew ring
+  rig.profile(
+    turret,
+    [
+      [-2.0, 0.14],
+      [1.5, 0.14],
+      [1.5, 0.75],
+      [0.9, 1.2],
+      [-2.0, 1.2],
+    ],
+    1.6,
+    'yellow',
+    [0, 0, 0.15],
+    [0, 0, 0],
+    0.05,
+  );
+  for (let i = 0; i < 4; i++)
+    rig.box(turret, [0.05, 0.6, 0.04], 'dark', [-1.5 + i * 0.3, 0.68, 0.96]);
+  rig.box(turret, [1.1, 1.15, 2.5], 'hazard', [-2.5, 0.72, 0]); // counterweight
+  // Winch drum with its cheeks, behind the boom foot.
+  rig.cyl(turret, 0.36, 1.0, 'steel', [-1.35, 1.5, 0], [Math.PI / 2, 0, 0]);
+  for (const z of [-0.52, 0.52])
+    rig.cyl(turret, 0.48, 0.06, 'dark', [-1.35, 1.5, z], [Math.PI / 2, 0, 0]);
+  cab(rig, turret, [0.75, 0.95, -1.2], [1.4, 1.45, 0.95]);
   const [px, py] = CRANE.pivot;
   const e = CRANE.elevation;
   // Luffing cylinder from the turret to 4 m along the boom.
-  const ax = 0.7;
-  const ay = 0.7;
-  const bx = px + 4 * Math.cos(e);
-  const by = py + 4 * Math.sin(e);
-  ram(rig, turret, [ax, ay, 0], [bx, by, 0], 0.17);
+  ram(rig, turret, [0.7, 0.7, 0], [px + 4 * Math.cos(e), py + 4 * Math.sin(e), 0], 0.17);
   const boom = node(turret, [px, py, 0]);
   boom.rotation.z = e;
-  rig.box(boom, [7.2, 0.78, 0.66], 'yellow', [3.4, 0, 0]);
-  rig.box(boom, [6.0, 0.6, 0.52], 'yellow', [9.0, 0, 0]);
-  rig.box(boom, [4.4, 0.46, 0.4], 'amber', [13.8, 0, 0]);
-  rig.cyl(boom, 0.32, 0.3, 'dark', [16, 0, 0], [Math.PI / 2, 0, 0]);
+  rig.box(boom, [7.2, 0.8, 0.68], 'yellow', [3.4, 0, 0]);
+  rig.box(boom, [6.0, 0.62, 0.52], 'yellow', [9.0, 0, 0]);
+  rig.box(boom, [4.4, 0.46, 0.38], 'amber', [13.8, 0, 0]);
+  // Collars where the sections slide, wear pads, the head with its sheaves.
+  rig.box(boom, [0.28, 0.9, 0.78], 'dark', [6.9, 0, 0]);
+  rig.box(boom, [0.24, 0.7, 0.6], 'dark', [11.9, 0, 0]);
+  rig.box(boom, [0.5, 0.9, 0.8], 'dark', [0.0, 0, 0]);
+  rig.box(boom, [0.7, 0.6, 0.5], 'dark', [15.9, -0.05, 0]);
+  rig.cyl(boom, 0.3, 0.34, 'steel', [16.1, -0.1, 0], [Math.PI / 2, 0, 0]);
   rig.hose(boom, [
-    [0.3, 0.42, 0.2],
-    [3.5, 0.42, 0.2],
-    [6.8, 0.4, 0.2],
+    [0.3, 0.44, 0.2],
+    [3.5, 0.44, 0.2],
+    [6.8, 0.42, 0.2],
   ]);
+  rig.decal(boom, 'platform', 3.6, [3.3, 0, 0.345]);
+  rig.decal(boom, 'platform', 3.6, [3.3, 0, -0.345], [0, Math.PI, 0]);
   const tip = craneTip();
   const pend = node(turret, [tip.reach, tip.height - CRANE.turretY, 0]);
   const cable = node(pend);
   rig.cyl(cable, 0.035, 1, 'black', [0, -0.5, 0], [0, 0, 0]);
   const hook = node(pend);
-  rig.box(hook, [0.45, 0.65, 0.35], 'yellow', [0, -0.33, 0]);
-  rig.cyl(hook, 0.08, 0.35, 'steel', [0, -0.8, 0], [0, 0, 0]);
+  rig.box(hook, [0.5, 0.62, 0.32], 'hazard', [0, -0.33, 0]);
+  rig.cyl(hook, 0.2, 0.36, 'dark', [0, -0.2, 0], [Math.PI / 2, 0, 0]);
+  rig.cyl(hook, 0.07, 0.36, 'steel', [0, -0.8, 0], [0, 0, 0]);
+  // The load: four slings and a slab, shown only while the crane carries it.
+  const load = node(hook);
   const slabY = -2.3;
   for (const sx of [-1, 1])
     for (const sz of [-1, 1]) {
@@ -496,32 +562,39 @@ export function makeCrane(
         dir.clone().normalize(),
       );
       const rot = new THREE.Euler().setFromQuaternion(quat);
-      rig.cyl(hook, 0.02, dir.length(), 'black', [mid.x, mid.y, mid.z], [rot.x, rot.y, rot.z]);
+      rig.cyl(load, 0.02, dir.length(), 'black', [mid.x, mid.y, mid.z], [rot.x, rot.y, rot.z]);
     }
-  rig.box(hook, [6, 0.25, 1.6], 'concrete', [0, slabY, 0]);
-  // Hook heights (cable length) at the stack, up high, at the frame.
+  rig.box(load, [6, 0.25, 1.6], 'concrete', [0, slabY, 0]);
+  // The slabs already set down on the frame (the caller places this node).
+  const placed = node(null);
+  rig.box(placed, [6, 0.25, 1.6], 'concrete', [0, 0.125, 0]);
+
+  // Hook heights (cable length) at the stack, clear of the frame, at the frame.
   const hookToSlabBottom = -slabY + 0.125;
-  const lowA = tip.height - (groundA + hookToSlabBottom);
-  const lowB = tip.height - (groundB + hookToSlabBottom);
-  const high = 5;
-  // [time, yaw, cable]
+  const lowA = tip.height - (job.groundA + hookToSlabBottom);
+  const lowB = tip.height - (job.groundB + hookToSlabBottom);
+  const high = Math.min(lowB - 1.4, 3.2);
+  // [time, yaw, cable]: never still for long, so a visitor always sees it work.
   const keys = [
-    [0, CRANE.yawA, high],
-    [3, CRANE.yawA, lowA],
-    [4.5, CRANE.yawA, lowA],
-    [8, CRANE.yawA, high],
-    [13, CRANE.yawB, high],
-    [16, CRANE.yawB, lowB],
-    [17.5, CRANE.yawB, lowB],
-    [19, CRANE.yawB, high],
-    [24, CRANE.yawA, high],
+    [0, job.yawA, high],
+    [2.4, job.yawA, lowA],
+    [3.4, job.yawA, lowA],
+    [5.6, job.yawA, high],
+    [10.4, job.yawB, high],
+    [11.8, job.yawB, lowB],
+    [12.8, job.yawB, lowB],
+    [14, job.yawB, high],
+    [18.5, job.yawA, high],
   ];
+  const PICK = 2.9;
+  const DROP = 12.3;
   const pose = [0, 0];
-  let lastYaw = CRANE.yawA;
+  let lastYaw = job.yawA;
   let sway = 0;
   return {
     root,
     boom,
+    placed,
     update(time, dt) {
       keyframes(keys, time, pose);
       const yaw = pose[0]!;
@@ -535,19 +608,51 @@ export function makeCrane(
       cable.scale.y = len;
       hook.position.y = -len;
       hook.rotation.y = Math.sin(time * 0.4) * 0.05;
+      const t = ((time % 18.5) + 18.5) % 18.5;
+      load.visible = t >= PICK && t < DROP;
+      placed.scale.y = t >= DROP || t < PICK ? 2 : 1;
     },
   };
 }
 
 // ---------------------------------------------------------------- aerial platform
 
-/** Truck-mounted aerial platform: telescopic boom, a basket kept level, a worker in it. */
-export function makeAgp(rig: Rig): Animated {
+/**
+ * Truck-mounted aerial platform: telescopic boom, a basket kept level, a worker
+ * in it. `turretYaw` turns the boom to the side the facade is on.
+ */
+export function makeAgp(rig: Rig, turretYaw = -Math.PI / 2): Animated {
   const root = node(null);
   rig.box(root, [6.6, 0.4, 1.1], 'dark', [0, 0.9, 0]);
   truckCab(rig, root, 2.85, 'white');
-  rig.box(root, [4.6, 0.5, 2.4], 'yellow', [-0.9, 1.35, 0]);
+  // Deck with a chamfered tail, tool lockers along it, mudguards.
+  rig.profile(
+    root,
+    [
+      [-3.2, 1.12],
+      [1.4, 1.12],
+      [1.4, 1.6],
+      [-3.0, 1.6],
+      [-3.2, 1.45],
+    ],
+    2.4,
+    'yellow',
+    [0, 0, 0],
+    [0, 0, 0],
+    0.05,
+  );
+  rig.box(root, [4.3, 0.05, 2.0], 'dark', [-0.9, 1.63, 0]);
+  for (const s of [1, -1]) {
+    rig.box(root, [1.3, 0.45, 0.3], 'dark', [0.2, 0.82, s * 1.05]);
+    rig.box(root, [0.06, 0.14, 0.25], 'tail', [-3.21, 1.3, s * 0.95]);
+    rig.box(root, [1.3, 0.06, 0.55], 'dark', [2.7, 1.22, s * 1.0]);
+  }
+  rig.box(root, [0.12, 0.2, 2.3], 'hazard', [-3.26, 0.78, 0]);
   rig.box(root, [0.16, 0.12, 0.16], 'beacon', [2.7, 2.83, 0.6]);
+  rig.decal(root, 'name', 1.05, [2.87, 1.66, 1.19]);
+  rig.decal(root, 'name', 1.05, [2.87, 1.66, -1.19], [0, Math.PI, 0]);
+  rig.decal(root, 'name', 2.2, [-1.6, 1.36, 1.21]);
+  rig.decal(root, 'name', 2.2, [-1.6, 1.36, -1.21], [0, Math.PI, 0]);
   for (const x of [2.7, -1.6]) {
     rig.wheel(root, [x, 0.55, 1.0], 0.55, 0.45);
     rig.wheel(root, [x, 0.55, -1.0], 0.55, 0.45);
@@ -555,16 +660,24 @@ export function makeAgp(rig: Rig): Animated {
   for (const x of [1.6, -3.0])
     for (const s of [1, -1]) {
       rig.box(root, [0.25, 0.25, 1.2], 'hazard', [x, 1.0, s * 1.6]);
-      rig.box(root, [0.22, 0.9, 0.22], 'dark', [x, 0.5, s * 2.15]);
-      rig.box(root, [0.6, 0.08, 0.6], 'dark', [x, 0.04, s * 2.15]);
+      rig.box(root, [0.22, 0.9, 0.22], 'dark', [x, 0.55, s * 2.15]);
+      rig.box(root, [0.6, 0.08, 0.6], 'dark', [x, 0.14, s * 2.15]);
+      rig.box(root, [0.8, 0.1, 0.7], 'wood', [x, 0.05, s * 2.15]);
     }
   const turret = node(root, [-1.5, 1.9, 0]);
-  turret.rotation.y = -Math.PI / 2;
+  turret.rotation.y = turretYaw;
   rig.cyl(turret, 0.6, 0.5, 'dark', [0, 0.25, 0], [0, 0, 0]);
   rig.box(turret, [0.9, 0.6, 0.8], 'yellow', [0, 0.6, 0]);
+  rig.box(turret, [0.5, 0.5, 0.5], 'dark', [-0.6, 0.5, 0]);
   const boom = node(turret, [0, 0.6, 0]);
   rig.box(boom, [4.3, 0.42, 0.42], 'yellow', [2.0, 0, 0]);
+  rig.box(boom, [0.2, 0.5, 0.5], 'dark', [4.1, 0, 0]);
   ram(rig, boom, [0.2, -0.3, 0], [2.2, -0.25, 0], 0.09);
+  rig.hose(boom, [
+    [0.2, 0.24, 0.12],
+    [2.0, 0.24, 0.12],
+    [4.0, 0.22, 0.12],
+  ]);
   const ext = node(boom, [1, 0, 0]);
   rig.box(ext, [4.0, 0.3, 0.3], 'white', [2.0, 0, 0]);
   const basket = node(ext, [4.0, 0, 0]);
@@ -584,22 +697,22 @@ export function makeAgp(rig: Rig): Animated {
   basket.add(worker.root);
   // Reach and tip heights for the facade: [time, elevation, length]
   const level = (tipY: number) => {
-    const reachZ = 5.05;
     const rise = tipY - 2.5;
-    return [Math.atan2(rise, reachZ), Math.hypot(rise, reachZ)];
+    return [Math.atan2(rise, AGP_REACH), Math.hypot(rise, AGP_REACH)];
   };
-  // Basket at the ground-floor window, then the 2nd and 3rd floor slabs.
+  // Basket at the ground-floor window, then the 2nd and 3rd floor slabs: it is
+  // on the move most of the time, so the lift is seen rising at any moment.
   const [e1, l1] = level(1.6);
   const [e2, l2] = level(5.0);
   const [e3, l3] = level(7.6);
   const keys = [
     [0, e1!, l1!],
-    [8, e1!, l1!],
-    [11, e2!, l2!],
-    [16, e2!, l2!],
-    [18.5, e3!, l3!],
-    [21.5, e3!, l3!],
-    [26, e1!, l1!],
+    [1.2, e1!, l1!],
+    [4.4, e2!, l2!],
+    [5.8, e2!, l2!],
+    [8.8, e3!, l3!],
+    [10.4, e3!, l3!],
+    [15, e1!, l1!],
   ];
   const pose = [0, 0];
   return {

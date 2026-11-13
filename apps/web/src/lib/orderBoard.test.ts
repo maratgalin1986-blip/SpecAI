@@ -129,6 +129,12 @@ describe('excerpt', () => {
   it('folds whitespace and keeps short text as is', () => {
     expect(excerpt('Нужен  кран\n\nна завтра')).toBe('Нужен кран на завтра');
   });
+
+  it('names the city and the job, not the street and the house', () => {
+    expect(excerpt('Елабуга, ул. Строителей, д. 7 — автокран 25 т на 2 смены')).toBe(
+      'Елабуга, [адрес — после подтверждения брони] — автокран 25 т на 2 смены',
+    );
+  });
 });
 
 describe('labels', () => {

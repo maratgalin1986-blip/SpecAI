@@ -228,7 +228,7 @@ export function CategorySelect({
               aria-label={`Сбросить — ${emptyLabel}`}
               onMouseDown={(event) => event.preventDefault()}
               onClick={() => choose({ id: '', label: emptyLabel })}
-              className="flex h-9 w-7 items-center justify-center text-lg leading-none opacity-60 hover:opacity-100"
+              className="flex h-11 w-8 items-center justify-center text-lg leading-none opacity-60 hover:opacity-100"
             >
               ×
             </button>
@@ -242,7 +242,7 @@ export function CategorySelect({
               if (open) close();
               else inputRef.current?.focus();
             }}
-            className="flex h-9 w-7 items-center justify-center text-xs opacity-60 hover:opacity-100"
+            className="flex h-11 w-8 items-center justify-center text-xs opacity-60 hover:opacity-100"
           >
             ▼
           </button>

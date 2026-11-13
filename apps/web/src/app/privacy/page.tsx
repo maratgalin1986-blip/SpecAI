@@ -4,16 +4,16 @@ import { CinemaHero } from '@/components/CinemaHero';
 import { PROCESSORS } from '@/lib/processors';
 import { CookieChoiceButtons } from '@/components/CookieChoiceButtons';
 import { CHAT_PHONE_REVEALS_PER_DAY } from '@/lib/chatOrders';
+import { pageMeta } from '@/lib/pageMeta';
 
 // TODO владелец: the texts below describe the aggregator as of 2026-10-13
 // (registration, phone reveal, chat import, public board). Have a lawyer read
 // sections 2, 4 and 5 before relying on them.
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMeta('/privacy', {
   title: 'Политика конфиденциальности',
   description: `Политика обработки персональных данных площадки ${SITE.platform} от ${SITE.name}`,
-  alternates: { canonical: '/privacy' },
-};
+});
 
 export default function PrivacyPage() {
   const operator = SITE.legalName || SITE.name;

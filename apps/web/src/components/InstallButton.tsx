@@ -125,6 +125,21 @@ export function InstallButton() {
   const deferred = useRef<BeforeInstallPromptEvent | null>(null);
   const helpOpen = useRef(false);
   helpOpen.current = help;
+  // The hint is a small dialog: focus goes to its «Понятно», Esc closes it
+  // and focus returns to the button.
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const helpCloseRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (!help) return;
+    helpCloseRef.current?.focus({ preventScroll: true });
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      setHelp(false);
+      buttonRef.current?.focus({ preventScroll: true });
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [help]);
   const press = useRef<() => void>(() => {});
 
   const visible = !!mode && !isStandalonePage(pathname);
@@ -289,8 +304,12 @@ export function InstallButton() {
             <p className="mt-1 text-slate-600">{text}</p>
           )}
           <button
+            ref={helpCloseRef}
             type="button"
-            onClick={() => setHelp(false)}
+            onClick={() => {
+              setHelp(false);
+              buttonRef.current?.focus({ preventScroll: true });
+            }}
             className="mt-2 min-h-11 rounded-full bg-slate-900 px-4 text-sm font-semibold text-white hover:bg-slate-700"
           >
             {INSTALL_BUTTON_TEXTS.close}
@@ -298,9 +317,13 @@ export function InstallButton() {
         </div>
       )}
       <button
+        ref={buttonRef}
         type="button"
         onClick={() => press.current()}
-        aria-label={INSTALL_BUTTON_TEXTS.label}
+        // The spoken name contains the words on the button (WCAG 2.5.3).
+        aria-label={
+          done ? INSTALL_BUTTON_TEXTS.done : `Установить приложение: ${label.toLowerCase()}`
+        }
         aria-expanded={mode === 'native' ? undefined : help}
         data-done={done ? '' : undefined}
         className="install-btn focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"

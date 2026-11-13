@@ -30,6 +30,7 @@ import { loadActivity } from '@/lib/activityData';
 import { loadOfferNow } from '@/lib/offerNowData';
 import { SHIFT, SITE } from '@/lib/site';
 import { fromPerHour, HAMMER_RATE, MIN_RATE, priceFaqAnswer, SHIFT_HOURS } from '@/lib/prices';
+import { pageMeta } from '@/lib/pageMeta';
 
 // Big interactive blocks below the fold: separate chunks, so the browser
 // hydrates them in their own short tasks instead of one long one.
@@ -173,10 +174,7 @@ const HOUSE_DELIVERY = '2 часа';
 
 // Title and description come from the root layout; the home page adds the
 // canonical (UTM and ?agent= variants of «/» otherwise count as duplicates).
-export const metadata: Metadata = {
-  alternates: { canonical: '/' },
-  openGraph: { url: '/' },
-};
+export const metadata: Metadata = pageMeta('/');
 
 // Service cards link to their catalog category (matched by slug) and show how
 // much equipment is listed there. Falls back to plain cards without a database.

@@ -34,6 +34,8 @@ import { currentNature, NATURE_EVENT, type NatureEventDetail } from '@/lib/scene
 // and the /stroyka film tour sends its weather (`sp:nature`).
 
 const GESTURES = ['pointerdown', 'keydown', 'touchend', 'click', 'scroll', 'wheel'] as const;
+/** The first signs of the visitor's hand: earlier than the gestures above. */
+const INTENT = ['pointerdown', 'touchstart', 'pointermove', 'keydown', 'wheel', 'scroll'] as const;
 const FIELD =
   'input:not([type=checkbox]):not([type=radio]):not([type=button]):not([type=submit]), textarea, select';
 
@@ -235,6 +237,30 @@ export function SoundDirector() {
       GESTURES.forEach((name) => window.removeEventListener(name, onGesture, { capture: true }));
     };
 
+    // The loops are fetched at the first sign of the visitor's hand, which
+    // comes before the gesture that may start audio (a finger down before it
+    // lifts, a scroll before a tap), so they are ready or nearly ready by then.
+    let intent = false;
+    const onIntent = () => {
+      removeIntent();
+      if (disposed || !soundEnabled()) return;
+      void loadModule()
+        .then((mod) => mod.prefetchSamples(mod.BED_SOUNDS))
+        .catch(() => {});
+    };
+    const addIntent = () => {
+      if (intent) return;
+      intent = true;
+      INTENT.forEach((name) =>
+        window.addEventListener(name, onIntent, { passive: true, capture: true }),
+      );
+    };
+    const removeIntent = () => {
+      if (!intent) return;
+      intent = false;
+      INTENT.forEach((name) => window.removeEventListener(name, onIntent, { capture: true }));
+    };
+
     // The switch: on → wake now (the press is a gesture); off → fade and sleep.
     let wasOn = soundEnabled();
     const unsubscribe = subscribeSound(() => {
@@ -276,9 +302,11 @@ export function SoundDirector() {
       const activation = (navigator as Navigator & { userActivation?: { hasBeenActive: boolean } })
         .userActivation;
       if (activation?.hasBeenActive) wake();
-      // Download (not play) the first sounds while the page is looked at, so
-      // the first touch is heard at once (owner, 2026-10-17). Not on «экономия
-      // трафика».
+      // Download (not play) the first sounds, so the first touch is heard at
+      // once (owner, 2026-10-17): the sting and the interface cues while the
+      // page is looked at, the three loops at the first sign of the visitor's
+      // hand — a visitor who only reads does not download them. Nothing on
+      // «экономия трафика».
       const saveData = (navigator as Navigator & { connection?: { saveData?: boolean } }).connection
         ?.saveData;
       if (!saveData) {
@@ -287,8 +315,11 @@ export function SoundDirector() {
             .requestIdleCallback ?? ((cb: () => void) => window.setTimeout(cb, 1200));
         idle(() => {
           if (disposed) return;
-          void import('@/lib/soundEngine').then((mod) => mod.prefetchSamples()).catch(() => {});
+          void loadModule()
+            .then((mod) => mod.prefetchSamples())
+            .catch(() => {});
         });
+        addIntent();
       }
     }
 
@@ -445,6 +476,7 @@ export function SoundDirector() {
       offCue();
       offMachine();
       removeGestures();
+      removeIntent();
       window.clearInterval(introPoll);
       window.clearTimeout(boomTimer);
       window.clearInterval(filmPoll);

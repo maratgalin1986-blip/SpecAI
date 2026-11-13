@@ -14,6 +14,7 @@
     "ensure-categories": "tsx prisma/ensure-categories.ts",
     "ensure-fleet": "tsx prisma/ensure-fleet.ts",
     "fetch-yandex-ca": "tsx prisma/fetch-yandex-ca.ts",
+    "restore-backup": "tsx scripts/restore-backup.ts",
     "build": "tsc --noEmit -p tsconfig.json",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "lint": "echo 'no lint step for @specai/database'",

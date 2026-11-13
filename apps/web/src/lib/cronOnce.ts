@@ -30,7 +30,19 @@ export async function onceADay<T>(
   task: () => Promise<T>,
   now: Date = new Date(),
 ): Promise<T | null> {
-  const key = cronRunKey(job, now);
+  return onceForKey(cronRunKey(job, now), task, now);
+}
+
+/**
+ * The same guard for any period: `key` names the job and the period it covers
+ * («cron:weekly-report:2026-11-02» — the week that began that Monday), so a
+ * late or repeated call for the period is skipped whatever day it comes on.
+ */
+export async function onceForKey<T>(
+  key: string,
+  task: () => Promise<T>,
+  now: Date = new Date(),
+): Promise<T | null> {
   const doneKey = `${key}:done`;
   const claim = async () => {
     try {

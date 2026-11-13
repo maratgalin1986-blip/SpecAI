@@ -12,9 +12,10 @@ import { routeToAgent, runAgent, type AgentToolHandlers } from '@specai/ai-servi
 import { getRequestUser } from '@/lib/requestUser';
 import { formatRate } from '@/lib/money';
 import { customerRates } from '@/lib/equipmentCatalog';
-import { maskContactsAndLinks, maskMessagesForAi } from '@/lib/privacy';
+import { maskContactsAndLinks, maskMessagesForAi, maskOrderText } from '@/lib/privacy';
 import { EXCERPT_MAX } from '@/lib/orderBoard';
 import { orderCategoryId } from '@/lib/orderCategoryData';
+import { addressCity, geocodeAddress } from '@/lib/geo';
 import { LEAD_RATE_LIMIT, checkRateLimit } from '@/lib/rateLimit';
 import { durableCheck } from '@/lib/durableRateLimit';
 import { rateLimitStore } from '@/lib/rateLimitStore';
@@ -299,13 +300,29 @@ export async function POST(request: NextRequest) {
         desiredStartDate: input.desiredStartDate,
         desiredEndDate: input.desiredEndDate,
         categoryId: optionalString(input, 'categoryId'),
+        address: optionalString(input, 'address')?.slice(0, 200),
       });
       if (!order.success) {
         throw new ToolError(`Некорректные данные заявки: ${order.error.message}`);
       }
-      const categoryId = await orderCategoryId(order.data);
+      // The work site goes to Location, as in POST /api/orders: the address is
+      // shown by lib/orderLocationPrivacy.ts, the description stays without it.
+      const { address, ...fields } = order.data;
+      const place = address ? await geocodeAddress(address) : null;
+      const location = address
+        ? await prisma.location.create({
+            data: {
+              addressLine: address,
+              city: addressCity(address, place),
+              country: 'Россия',
+              latitude: place?.lat ?? null,
+              longitude: place?.lon ?? null,
+            },
+          })
+        : null;
+      const categoryId = await orderCategoryId(fields);
       const created = await prisma.order.create({
-        data: { ...order.data, categoryId, customerId: currentUser.id },
+        data: { ...fields, categoryId, locationId: location?.id, customerId: currentUser.id },
       });
       return { id: created.id, status: created.status, link: `/orders/${created.id}` };
     },
@@ -357,9 +374,9 @@ export async function POST(request: NextRequest) {
       });
       return orders.map((o) => ({
         id: o.id,
-        // Contacts and links stay hidden whatever the source (152-ФЗ); an
-        // excerpt, as on the public board.
-        description: maskContactsAndLinks(o.description).slice(0, EXCERPT_MAX),
+        // Contacts, links and the address stay hidden whatever the source
+        // (152-ФЗ); an excerpt, as on the public board.
+        description: maskOrderText(o.description).slice(0, EXCERPT_MAX),
         category: o.category?.name ?? null,
         desiredStartDate: o.desiredStartDate.toISOString().slice(0, 10),
         desiredEndDate: o.desiredEndDate.toISOString().slice(0, 10),

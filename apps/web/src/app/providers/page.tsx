@@ -12,18 +12,18 @@ import {
 import { loadProviderCards } from '@/lib/providerCardsData';
 import { pluralizeRu } from '@/lib/pluralize';
 import { SITE } from '@/lib/site';
+import { pageMeta } from '@/lib/pageMeta';
 
 export const dynamic = 'force-dynamic';
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMeta('/providers', {
   title: 'Исполнители — компании со своей спецтехникой',
   description:
     'Компании и частники со своей спецтехникой по всей России: парк, база и выезд. Заявка бесплатно — исполнители рядом с объектом сами пришлют цены.',
-  alternates: { canonical: '/providers' },
-};
+});
 
 const field =
-  'w-full rounded-xl border border-graphite-200 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-signal-600 focus:ring-2 focus:ring-signal-200';
+  'min-h-11 w-full rounded-xl border border-graphite-200 bg-white px-3 py-2.5 text-base outline-none transition focus:border-signal-600 focus:ring-2 focus:ring-signal-200 sm:text-sm';
 
 function ProviderListCard({ card }: { card: ProviderCard }) {
   // The chips are the ones lib/reliability.ts computed for the card.
@@ -45,11 +45,11 @@ function ProviderListCard({ card }: { card: ProviderCard }) {
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <p className="cab-eyebrow">{card.isHouse ? `Парк ${SITE.name}` : card.city}</p>
-            <h3 className="mt-1 break-words text-lg font-bold leading-tight text-graphite-950">
+            <h2 className="mt-1 break-words text-lg font-bold leading-tight text-graphite-950">
               <a href={card.href} className="hover:underline">
                 {card.name}
               </a>
-            </h3>
+            </h2>
           </div>
           {card.rating !== null && (
             <p className="shrink-0 text-right">
@@ -118,8 +118,8 @@ export default async function ProvidersPage(props: {
   const hasFilters = Boolean(query.group || query.city);
   const pill = (active: boolean) =>
     active
-      ? 'shrink-0 rounded-full bg-graphite-950 px-4 py-2 text-sm font-semibold text-white'
-      : 'shrink-0 rounded-full border border-graphite-200 bg-white px-4 py-2 text-sm font-semibold text-graphite-700 hover:border-graphite-900';
+      ? 'inline-flex min-h-11 shrink-0 items-center rounded-full bg-graphite-950 px-4 py-2 text-sm font-semibold text-white'
+      : 'inline-flex min-h-11 shrink-0 items-center rounded-full border border-graphite-200 bg-white px-4 py-2 text-sm font-semibold text-graphite-700 hover:border-graphite-900';
 
   return (
     <div className="flex flex-col gap-6">

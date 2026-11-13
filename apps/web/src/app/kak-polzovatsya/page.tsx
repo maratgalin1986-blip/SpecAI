@@ -2,16 +2,16 @@ import type { Metadata } from 'next';
 import { SITE } from '@/lib/site';
 import { PROMISE_POINTS } from '@/lib/promise';
 import { ResetHintsButton } from '@/components/ResetHintsButton';
+import { pageMeta } from '@/lib/pageMeta';
 
 // A short help page (owner, 2026-10-17: «краткая справка, как пользоваться
 // сайтом»): the customer's and the provider's way in a few steps, one login
 // for both, and the app. The hints on the pages link here.
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMeta('/kak-polzovatsya', {
   title: 'Как пользоваться',
   description: `Как заказать спецтехнику и как исполнителю получать заявки на ${SITE.platform}: шаги, ${SITE.promise.toLowerCase()} — как это, один логин для двух ролей, приложение с картой «на линии».`,
-  alternates: { canonical: '/kak-polzovatsya' },
-};
+});
 
 const CUSTOMER_STEPS = [
   {

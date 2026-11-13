@@ -1,0 +1,37 @@
+name: Weekly report
+
+# Monday morning (Moscow): the owner's weekly report in Telegram — requests and
+# where they came from, bookings, new providers and machines, the line,
+# reviews, against the week before (apps/web/src/app/api/cron/weekly,
+# lib/weeklyReport.ts). The route also sends the weekly newsletter and the
+# «обновите цены» message; each is guarded per user.
+#
+# GitHub starts scheduled runs hours late and sometimes skips one, so the call
+# is repeated through Monday and once on Tuesday morning. The route is
+# idempotent: one report per reported week (the key is the week's Monday), not
+# before Monday 07:00 Moscow; a repeated call answers «already sent for this
+# week». Requires CRON_SECRET (repository secret, equal to the one in Vercel).
+on:
+  schedule:
+    # 07:23, 09:23, 11:23 and 14:23 Moscow on Monday; 08:23 Moscow on Tuesday.
+    - cron: '23 4,6,8,11 * * 1'
+    - cron: '23 5 * * 2'
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Send the weekly report
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          if [ -z "$CRON_SECRET" ]; then echo "::error::CRON_SECRET repository secret is not set"; exit 1; fi
+          # No --retry: a 500 means the report was not delivered and the week is
+          # free again; the next scheduled run tries once more.
+          curl -fsS --max-time 90 \
+            -H "Authorization: Bearer $CRON_SECRET" https://spec-ai-web.vercel.app/api/cron/weekly \
+            || { echo "::error::/api/cron/weekly failed: the report was not sent (Vercel → Logs, «[cron/weekly]»)"; exit 1; }
