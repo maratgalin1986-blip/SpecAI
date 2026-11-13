@@ -107,12 +107,19 @@ test('home, a landing and a job page carry their own preview card', async ({ req
   expect(titles.size).toBe(4);
 });
 
-test('favicon.ico is served and the sitemap dates every page', async ({ request }) => {
+test('favicon.ico is served and the sitemap dates pages only by their data', async ({
+  request,
+}) => {
   const icon = await request.get('/favicon.ico');
   expect(icon.status()).toBe(200);
   expect(icon.headers()['content-type']).toMatch(/icon/);
   const sitemap = await (await request.get('/sitemap.xml')).text();
   const urls = sitemap.match(/<url>/g)?.length ?? 0;
   expect(urls).toBeGreaterThan(20);
-  expect(sitemap.match(/<lastmod>/g)?.length ?? 0).toBe(urls);
+  // No build time as «last modified» (lib/sitemapPages.ts): the fixed pages
+  // carry no <lastmod>, and every date given is a real one.
+  const home = /<url>\s*<loc>[^<]*?\/?<\/loc>([\s\S]*?)<\/url>/.exec(sitemap)?.[1] ?? '';
+  expect(home).not.toContain('<lastmod>');
+  for (const [, date] of sitemap.matchAll(/<lastmod>([^<]+)<\/lastmod>/g))
+    expect(Number.isNaN(Date.parse(date!)), date).toBe(false);
 });

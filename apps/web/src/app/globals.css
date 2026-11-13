@@ -2,6 +2,13 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Labels and figures: the device's own monospace (app/layout.tsx). */
+:root {
+  --font-mono:
+    ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, 'Liberation Mono', 'Roboto Mono',
+    'Droid Sans Mono', monospace;
+}
+
 /* 3D effects (e.g. scroll-reveal tilt) must never cause sideways scrolling. */
 html,
 body {
@@ -2004,6 +2011,18 @@ html[data-vt-kind='fade']::view-transition-group(root) {
       0 0 22px 4px rgba(245, 158, 11, 0.7);
     opacity: 0;
     animation: fx-pulse 4s ease-out 1.5s infinite;
+  }
+  /* Fewer pulses at once: a button that already has its own shine (.sweep)
+     does not pulse too, and on a phone the header's phone link rests — the
+     bottom contact bar carries the pulsing «Позвонить». */
+  a.sweep[href^='tel:']::after,
+  a.sweep[href*='#podbor']::after {
+    animation: none !important;
+  }
+  @media (max-width: 640px) {
+    header a[href^='tel:']::after {
+      animation: none !important;
+    }
   }
   .cine-spark {
     position: fixed;

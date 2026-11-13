@@ -1,14 +1,14 @@
 import type { Metadata, Viewport } from 'next';
 import type { ReactNode } from 'react';
-import { JetBrains_Mono, Manrope } from 'next/font/google';
+import { Manrope } from 'next/font/google';
 import { InstallButton } from '@/components/InstallButton';
-import { InstallPrompt } from '@/components/InstallPrompt';
 import { TelegramMiniApp } from '@/components/TelegramMiniApp';
 import { Providers } from '@/components/Providers';
 import { SiteHeader } from '@/components/SiteHeader';
 import { SiteFooter } from '@/components/SiteFooter';
 import { PublicOnly } from '@/components/PublicOnly';
-import { AgentChatWidget } from '@/components/AgentChatWidget';
+import { LazyAgentChat, LazyInstallPrompt, LazyStorozh } from '@/components/LazyChrome';
+import { AnimationPause } from '@/components/AnimationPause';
 import { YandexMetrika } from '@/components/YandexMetrika';
 import { MarketingTracker } from '@/components/MarketingTracker';
 import { VtMorph } from '@/components/VtMorph';
@@ -16,7 +16,6 @@ import { CinemaLayer } from '@/components/CinemaLayer';
 import { MessengerButtons } from '@/components/MessengerButtons';
 import { TelegramChip } from '@/components/TelegramChip';
 import { CookieNotice } from '@/components/CookieNotice';
-import { Storozh } from '@/components/Storozh';
 import { BrandPresence } from '@/components/BrandPresence';
 import { SITE } from '@/lib/site';
 import { siteUrl } from '@/lib/siteUrl';
@@ -27,15 +26,10 @@ import { SHOW_INLINE } from '@/lib/showInline';
 import './install.css';
 import { fromPrice, MIN_RATE } from '@/lib/prices';
 
-// Cyrillic-capable fonts: Manrope for text and headings, a mono for labels and figures.
+// Manrope (Cyrillic) for text and headings. Small labels and figures use the
+// device's own monospace (--font-mono in globals.css): a web mono cost every
+// page about 50–70 KB for a few short uppercase labels.
 const sans = Manrope({ subsets: ['latin', 'cyrillic'], variable: '--font-sans', display: 'swap' });
-const mono = JetBrains_Mono({
-  subsets: ['latin', 'cyrillic'],
-  variable: '--font-mono',
-  display: 'swap',
-  // Small labels only: not preloaded, so it does not compete with the hero poster (LCP).
-  preload: false,
-});
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl()),
@@ -126,7 +120,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="ru" className={`${sans.variable} ${mono.variable}`} suppressHydrationWarning>
+    <html lang="ru" className={sans.variable} suppressHydrationWarning>
       <body className="flex min-h-screen flex-col bg-[#f7f7f5] font-sans text-slate-900 antialiased grain">
         <a
           href="#content"
@@ -174,15 +168,15 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           </PublicOnly>
           {/* Multi-agent assistant (works for guests too). The streaming single
               assistant (/api/ai/chat) stays available to API/mobile clients. */}
-          <AgentChatWidget />
+          <LazyAgentChat />
           <MessengerButtons />
           <TelegramChip />
-          <InstallPrompt />
+          <LazyInstallPrompt />
           <InstallButton />
           <TelegramMiniApp />
           <CookieNotice />
           {/* «Сторож»: Иван's question before the visitor leaves (home, machine and city pages). */}
-          <Storozh />
+          <LazyStorozh />
           <YandexMetrika />
           <MarketingTracker />
           {/* Cross-document view transitions must listen from the first render. */}
@@ -190,6 +184,8 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           {/* The other cinema effects load lazily (components/CinemaLayer.tsx). */}
           <CinemaLayer />
           <BrandPresence />
+          {/* Loops rest off screen and in a background tab. */}
+          <AnimationPause />
         </Providers>
       </body>
     </html>

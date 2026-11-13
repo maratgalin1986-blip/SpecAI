@@ -1,3 +1,5 @@
+import { Breadcrumbs } from '@/components/Breadcrumbs';
+import { HOME_CRUMB } from '@/lib/breadcrumbs';
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { CallbackForm } from '@/components/CallbackForm';
@@ -95,16 +97,13 @@ export default async function JobPage(props: { params: Promise<{ slug: string }>
         <CinemaLayer clips={landingClips(landing.slug)} />
         <div className="relative grid gap-8 lg:grid-cols-[1fr_380px]">
           <div className="flex min-w-0 flex-col justify-center">
-            <nav className="text-sm text-slate-400">
-              <a href="/" className="hover:text-white">
-                Главная
-              </a>{' '}
-              /{' '}
-              <a href="/raboty" className="hover:text-white">
-                Работы и цены
-              </a>{' '}
-              / <span>{job.name}</span>
-            </nav>
+            <Breadcrumbs
+              trail={[
+                HOME_CRUMB,
+                { name: 'Работы и цены', path: '/raboty' },
+                { name: job.name, path: `/raboty/${job.slug}` },
+              ]}
+            />
             <h1 className="cine-title mt-3 break-words text-3xl font-extrabold leading-tight sm:text-5xl">
               {job.name} в Набережных Челнах
             </h1>
@@ -141,7 +140,10 @@ export default async function JobPage(props: { params: Promise<{ slug: string }>
               dark
             />
             <p className="mt-3 text-xs text-slate-400">
-              <a href="/privacy" className="underline hover:text-white">
+              <a
+                href="/privacy"
+                className="inline-flex min-h-6 items-center underline hover:text-white"
+              >
                 Политика конфиденциальности
               </a>
             </p>

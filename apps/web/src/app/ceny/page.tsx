@@ -3,8 +3,8 @@ import { categoryName } from '@specai/shared';
 import {
   cellText,
   indexCategories,
-  indexHasData,
   INDEX_MIN_REPORTERS,
+  pricePageIndexable,
   INDEX_RANGE_MIN_REPORTERS,
   placesWithData,
   type PriceCell,
@@ -29,12 +29,14 @@ const TITLE = 'Цены на аренду спецтехники с машини
 export async function generateMetadata(): Promise<Metadata> {
   const { index, loaded } = await loadPriceIndex();
   // A failed load is not «no data»: the page keeps its usual metadata then.
-  const hasData = indexHasData(index) || !loaded;
+  const hasData = pricePageIndexable(index, loaded);
   return pageMeta('/ceny', {
     title: TITLE,
     description: hasData
       ? 'Сколько стоит час спецтехники с машинистом: медиана и разброс цен по России, регионам и городам — по ценам исполнителей площадки и ответам на открытый опрос. Без имён компаний.'
-      : `Цены на аренду спецтехники с машинистом: прайс парка ${SITE.name} в Набережных Челнах. Цены других исполнителей появятся, когда их наберётся достаточно для обезличенной сводки.`,
+      : // Agrees with the title («по данным исполнителей»): the data is being
+        // collected, the page shows the house price list meanwhile.
+        `Цены исполнителей ${SITE.platform} на спецтехнику с машинистом собираются: сводка появится, когда ответов будет достаточно. Пока — прайс парка ${SITE.name}.`,
     ...(hasData ? {} : { robots: { index: false, follow: true } }),
   });
 }
@@ -61,7 +63,7 @@ export default async function PricesPage() {
   const regions = placesWithData(index.regions, points, 'region');
   const cities = placesWithData(index.cities, points, 'city');
   // A failed load is not «no data»: it has its own note below.
-  const hasData = indexHasData(index) || !loaded;
+  const hasData = pricePageIndexable(index, loaded);
   const updated = updatedAt.toLocaleString('ru-RU', {
     timeZone: 'Europe/Moscow',
     day: 'numeric',

@@ -2,6 +2,13 @@
 
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { onIdle, whenIntroGone } from '@/lib/cinemaFx';
+import {
+  claimPhoneVideo,
+  isPhoneScreen,
+  onFirstInput,
+  phonePosterOnly,
+  releasePhoneVideo,
+} from '@/lib/phoneVideo';
 
 // Background footage done the fast way. The server renders the clip's poster
 // frame as a plain image, so the first paint does not wait for any script;
@@ -21,8 +28,10 @@ import { onIdle, whenIntroGone } from '@/lib/cinemaFx';
 // after the page has loaded and gone idle, with preload="none", and starts
 // downloading only when it is within a screen of the viewport. A `deferred`
 // clip (the home hero) also waits until the opening titles are gone (nothing
-// is decoded under them), and on phones until the first touch or a few idle
-// seconds later; its poster frame shows until then.
+// is decoded under them). Phones (lib/phoneVideo.ts) start a clip only on the
+// visitor's first touch, never on a timer, play one clip per page and none
+// at all on form, machine and job pages or under the opening titles; the
+// poster frame stays.
 
 type Connection = { saveData?: boolean; effectiveType?: string };
 
@@ -76,9 +85,8 @@ export function clipSources(
   );
 }
 
-const FIRST_INPUT = ['pointerdown', 'touchstart', 'keydown'] as const;
-/** Phones start a deferred clip this long after the titles, if not touched. */
-const PHONE_IDLE_MS = 2500;
+/** A tablet starts a deferred clip this long after the titles, if not touched. */
+const TABLET_IDLE_MS = 2500;
 
 export function CinemaVideo({
   clip,
@@ -99,13 +107,16 @@ export function CinemaVideo({
   className?: string;
   /** Load the poster first (the page's main picture). */
   priority?: boolean;
-  /** Wait for the opening titles to go, and on phones for a touch or idle. */
+  /** Wait for the opening titles to go (and on a tablet for a touch or idle). */
   deferred?: boolean;
 }) {
   const [allowed, setAllowed] = useState(false);
   const [light, setLight] = useState(false);
   const [fullHd, setFullHd] = useState(true);
   const [playing, setPlaying] = useState<string | null>(null);
+  // The clip has faded in over the poster: the frame underneath is hidden, so
+  // its push-in (camera-move…) rests instead of running twice.
+  const [covered, setCovered] = useState<string | null>(null);
   const [near, setNear] = useState(false);
   const posterRef = useRef<HTMLImageElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -113,12 +124,23 @@ export function CinemaVideo({
   // After load and idle: nothing competes with the poster and the scripts.
   useEffect(() => {
     if (!footageAllowed()) return;
+    const phone = isPhoneScreen();
+    // Phones: the poster frame only on form, machine and job pages, and under
+    // the opening titles (the first touch skips them anyway).
+    if (
+      phone &&
+      (phonePosterOnly(window.location.pathname) || posterRef.current?.closest('#intro'))
+    )
+      return;
+    const token = {};
     const cancels: Array<() => void> = [];
     let done = false;
     const go = () => {
       if (done) return;
       done = true;
       cancels.forEach((cancel) => cancel());
+      // One clip per page on a phone: another player got there first.
+      if (phone && !claimPhoneVideo(token)) return;
       setLight(lightFootage());
       setFullHd(needsFullHd(posterRef.current));
       setAllowed(true);
@@ -126,26 +148,27 @@ export function CinemaVideo({
     const whenIdle = () => {
       cancels.push(onIdle(go, 2500));
     };
+    // Phones: only the visitor's touch starts a clip, never a timer.
+    const begin = () => {
+      if (phone) cancels.push(onFirstInput(go));
+      else whenIdle();
+    };
     const start = () => {
       if (!deferred) {
-        whenIdle();
+        begin();
         return;
       }
       cancels.push(
         whenIntroGone(() => {
-          const phone = lightFootage() || window.matchMedia('(pointer: coarse)').matches;
-          if (!phone) {
-            whenIdle();
+          // A touch screen wider than a phone (a tablet) or a slow connection:
+          // the first touch, or a few idle seconds later.
+          if (!phone && (lightFootage() || window.matchMedia('(pointer: coarse)').matches)) {
+            cancels.push(onFirstInput(go));
+            const timer = window.setTimeout(whenIdle, TABLET_IDLE_MS);
+            cancels.push(() => window.clearTimeout(timer));
             return;
           }
-          // Phones: the first touch, or a few idle seconds later.
-          const opts = { passive: true, capture: true } as const;
-          FIRST_INPUT.forEach((type) => window.addEventListener(type, go, opts));
-          const timer = window.setTimeout(whenIdle, PHONE_IDLE_MS);
-          cancels.push(() => {
-            FIRST_INPUT.forEach((type) => window.removeEventListener(type, go, opts));
-            window.clearTimeout(timer);
-          });
+          begin();
         }),
       );
     };
@@ -155,6 +178,7 @@ export function CinemaVideo({
       done = true;
       window.removeEventListener('load', start);
       cancels.forEach((cancel) => cancel());
+      releasePhoneVideo(token);
     };
   }, [deferred]);
 
@@ -193,6 +217,7 @@ export function CinemaVideo({
         // the first paint; others may wait.
         decoding={priority ? 'sync' : 'async'}
         fetchPriority={priority ? 'high' : 'auto'}
+        data-covered={covered === clip && playing === clip ? '' : undefined}
         className={`object-cover ${className}`}
       />
       {allowed && (
@@ -208,6 +233,9 @@ export function CinemaVideo({
           preload="none"
           aria-hidden
           onPlaying={() => setPlaying(clip)}
+          onTransitionEnd={(event) => {
+            if (event.propertyName === 'opacity' && playing === clip) setCovered(clip);
+          }}
         >
           {clipSources(clip, light, true, fullHd)}
         </video>

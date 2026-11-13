@@ -9,8 +9,11 @@ import { afterIntroIdle } from '@/lib/cinemaFx';
 //  2. «title sequence» for h1/h2 (words rise from blur to sharp);
 //  3. pointer tilt with a soft glare on images, cards and photo figures;
 //  4. gentle scroll parallax on large images.
-// Transform/opacity only (plus a short blur on headings), everything plays once,
+// Transform only (plus a short blur on headings), everything plays once,
 // nothing is hidden until JS runs, and reduced motion switches the layer off.
+// Text stays at full opacity while it flies in: a half-transparent card or
+// heading fails contrast for everyone reading it mid-move (WCAG 1.4.3), so
+// only its position, angle and depth move.
 
 const FLY_SELECTOR =
   'main section, main article, main figure, main img, main [data-card], main .tilt-wrap';
@@ -174,16 +177,14 @@ export function Cinema3D() {
 
     function prepFly(el: HTMLElement) {
       el.dataset.c3Wait = '1';
-      el.style.opacity = '0';
       el.style.transform = window.matchMedia('(pointer: coarse)').matches
         ? FROM_TOUCH
         : FROM_DESKTOP;
       pending.set(el, () => {
         delete el.dataset.c3Wait;
         el.dataset.c3Fly = '1';
-        el.style.willChange = 'opacity, transform';
-        el.style.transition = `opacity 800ms ${EASE}, transform 900ms ${EASE}`;
-        el.style.opacity = '';
+        el.style.willChange = 'transform';
+        el.style.transition = `transform 900ms ${EASE}`;
         el.style.transform = '';
         const done = () => {
           delete el.dataset.c3Fly;
@@ -213,10 +214,10 @@ export function Cinema3D() {
         const s = document.createElement('span');
         s.textContent = w;
         s.style.display = 'inline-block';
-        s.style.opacity = '0';
         s.style.transform = 'translateY(0.6em)';
-        // Phones get a lighter blur: cheaper to paint, still visible.
-        s.style.filter = hoverable ? 'blur(6px)' : 'blur(3px)';
+        // A light blur that sharpens as the word rises; phones get less
+        // (cheaper to paint). The word itself stays opaque and readable.
+        s.style.filter = hoverable ? 'blur(3px)' : 'blur(2px)';
         spans.push(s);
         frag.appendChild(s);
       });
@@ -226,9 +227,8 @@ export function Cinema3D() {
         delete el.dataset.c3Wait;
         spans.forEach((s, idx) => {
           const d = `${idx * 55}ms`;
-          s.style.willChange = 'opacity, transform';
-          s.style.transition = `opacity 650ms ${EASE} ${d}, transform 650ms ${EASE} ${d}, filter 650ms ${EASE} ${d}`;
-          s.style.opacity = '';
+          s.style.willChange = 'transform';
+          s.style.transition = `transform 650ms ${EASE} ${d}, filter 650ms ${EASE} ${d}`;
           s.style.transform = '';
           s.style.filter = '';
         });

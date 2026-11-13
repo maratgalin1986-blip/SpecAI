@@ -40,6 +40,7 @@ import { jsonLdScript } from '@/lib/providerSeo';
 import { HAMMER_RATE } from '@/lib/machineWorks';
 import { NextFreeDate } from '@/components/shifts/NextFreeDate';
 import { pageMeta } from '@/lib/pageMeta';
+import { machineDescription } from '@/lib/machineDescription';
 
 export const dynamic = 'force-dynamic';
 
@@ -58,6 +59,11 @@ export async function generateMetadata(props: {
     select: {
       name: true,
       description: true,
+      make: true,
+      model: true,
+      year: true,
+      specs: true,
+      location: { select: { city: true } },
       dailyRate: true,
       hourlyRate: true,
       currency: true,
@@ -74,8 +80,19 @@ export async function generateMetadata(props: {
     currency: item.currency,
   });
   const title = `${item.name} — аренда ${rate.price}${rate.unit}`;
+  // A thin text is completed from the card's own data (lib/machineDescription.ts).
   const description = maskContactsAndLinks(
-    item.description ?? `Аренда: ${item.name}, ${item.category.name.toLowerCase()} с машинистом`,
+    machineDescription({
+      name: item.name,
+      categoryName: item.category.name,
+      description: item.description,
+      make: item.make,
+      model: item.model,
+      year: item.year,
+      specs: item.specs,
+      price: `${rate.price}${rate.unit}`,
+      city: item.location?.city,
+    }),
   ).slice(0, 200);
   const photo = item.imageUrls.find(isDisplayableImage);
   // The machine's own photo in the preview; the site picture when it has none.
