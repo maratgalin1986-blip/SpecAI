@@ -93,7 +93,7 @@ describe('channelDigestText', () => {
     );
     // The platform's promise closes every post (owner, 2026-10-17).
     expect(text?.endsWith(`\n\n${SITE.promiseLine}`)).toBe(true);
-    expect(SITE.promiseLine).toMatch(/^Бесплатно и без посредников: цену назначает/);
+    expect(SITE.promiseLine).toMatch(/^Без комиссии для заказчика: цену назначает/);
   });
 
   it('stays well under the Telegram message limit with the promise on a full day', () => {

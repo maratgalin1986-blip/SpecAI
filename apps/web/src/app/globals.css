@@ -1478,7 +1478,10 @@ html {
 .chat-fab {
   bottom: calc(4.75rem + env(safe-area-inset-bottom));
 }
-/* The callback form is on screen (CallbackIris): the chat button steps aside. */
+/* The callback form is on screen (CallbackIris): the chat button steps aside.
+   So does it while an order button, the phone or a field is under it
+   (AgentChatWidget, lib/overlayClear.ts → data-away). */
+.chat-fab[data-away]:not([aria-expanded='true']),
 html[data-callback-view] .chat-fab,
 /* Сторож (components/Storozh.tsx) takes the corner: the chat button and the
    Telegram chip wait (the card covers the chip anyway; this keeps it tidy). */
@@ -1508,20 +1511,26 @@ html[data-cookie-strip] .storozh-card {
   }
 }
 /* «На рабочий стол» (InstallButton): bottom left, level with the chat button,
-   above the contact bar and the chips; away while the «Установить» card shows. */
+   above the contact bar and the chips; away while the «Установить» card shows.
+   It moves (over the cookie strip, the Telegram chip, into the contact bar's
+   row) only by transform, from one fixed `bottom`: a change of `bottom` is a
+   layout shift (CLS 0.05 a jump), a transform is not. */
 .install-fab {
   bottom: calc(4.75rem + env(safe-area-inset-bottom));
+  --fab-lift: 0px;
+  --fab-dx: 0px;
+  transform: translate(var(--fab-dx), calc(-1 * var(--fab-lift)));
 }
 /* The cookie strip wraps to two lines on a phone (about 54px): the pill sits above it.
    Phones only: on wider screens the strip is at the right, the button at the left. */
 @media (max-width: 639px) {
   html[data-cookie-strip] .install-fab {
     /* above the contact bar (4.5rem) and the strip's measured height (CookieNotice) */
-    bottom: calc(5rem + var(--cookie-strip-h, 3.5rem) + env(safe-area-inset-bottom));
+    --fab-lift: calc(0.25rem + var(--cookie-strip-h, 3.5rem));
   }
 }
 html[data-tg-chip] .install-fab {
-  bottom: calc(8.75rem + env(safe-area-inset-bottom));
+  --fab-lift: 4rem;
 }
 html[data-install-hint] .install-fab,
 html[data-storozh] .install-fab {
@@ -1529,22 +1538,43 @@ html[data-storozh] .install-fab {
 }
 html[data-no-contact-bar] .install-fab {
   bottom: calc(1rem + env(safe-area-inset-bottom));
+  --fab-lift: 0px;
 }
 /* Phones: once folded, the round icon stands in the contact bar's own row, at
-   its right end (the bar makes room), so it covers nothing of the page. */
+   its right end (the bar makes room), so it covers nothing of the page: from
+   left 0.75rem to right 0.5rem (48 px wide), and down to the bar's padding. */
 @media (max-width: 639px) {
   html[data-install-dock] .install-fab[data-shape='icon'] {
-    left: auto;
-    right: 0.5rem;
-    bottom: max(0.5rem, env(safe-area-inset-bottom));
+    --fab-dx: calc(100vw - 4.25rem);
+    --fab-lift: calc(
+      max(0.5rem, env(safe-area-inset-bottom)) - 4.75rem - env(safe-area-inset-bottom)
+    );
   }
   html[data-install-dock] .install-fab[data-shape='icon'] .install-help {
     left: auto;
     right: 0;
   }
-  html[data-install-dock]:not([data-install-hint], [data-storozh], [data-lead-install])
+  html[data-install-dock]:not(
+      [data-install-hint],
+      [data-storozh],
+      [data-lead-install],
+      [data-lead-form-view]
+    )
     .contact-bar {
     padding-right: 3.875rem;
+  }
+}
+/* Phones: while a заявка is being written — a field of a lead form focused,
+   the form or its «Принято» on the screen (lib/overlayClear.ts, watchLeadForms) —
+   nothing floats over it but the contact bar (and the cookie strip until it is
+   answered): the Telegram chip, the chat button and «На экран» step aside. */
+@media (max-width: 639px) {
+  html[data-lead-form-view] .chat-fab,
+  html[data-lead-form-view] .install-fab,
+  html[data-lead-form-view] [data-bottom-bar]:has([data-telegram-link]) {
+    opacity: 0;
+    pointer-events: none;
+    visibility: hidden;
   }
 }
 /* The «Принято» screen offers the installation in its own line (LeadSuccess):
@@ -1569,6 +1599,7 @@ html[data-cookie-top] {
   html[data-tg-chip] .install-fab,
   html[data-no-contact-bar] .install-fab {
     bottom: 1rem;
+    --fab-lift: 0px;
   }
 }
 /* The «Установить» card (InstallPrompt) is taller than the chip: up over it. */
@@ -1622,8 +1653,32 @@ html[data-install-hint] .chat-fab {
   background-color: rgb(209 250 229); /* emerald-100 */
 }
 .site-header-vt[data-dark='true'] .promise-pill {
-  background-color: rgb(255 255 255 / 0.1);
-  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.2);
+  /* Light on the dark glass: the light theme's emerald-800 read as dark green on navy. */
+  color: rgb(167 243 208); /* emerald-200 */
+  background-color: rgb(16 185 129 / 0.16);
+  box-shadow: inset 0 0 0 1px rgb(110 231 183 / 0.45);
+}
+/* The rest of the dark header: «Ещё», the brand line under the logo, hovers,
+   the order button — and the «Ещё» list keeps its own white card colours. */
+.site-header-vt[data-dark='true'] summary {
+  color: rgb(255 255 255 / 0.9);
+}
+.site-header-vt[data-dark='true'] nav a:hover,
+.site-header-vt[data-dark='true'] summary:hover {
+  color: rgb(252 211 77); /* amber-300 */
+}
+.site-header-vt[data-dark='true'] .text-amber-700 {
+  color: rgb(252 211 77);
+}
+.site-header-vt[data-dark='true'] details > div a {
+  color: rgb(51 65 85); /* slate-700 on the white list */
+}
+.site-header-vt[data-dark='true'] details > div a:hover {
+  color: rgb(15 23 42);
+}
+.site-header-vt[data-dark='true'] .header-order {
+  background-color: rgb(245 158 11);
+  color: rgb(2 6 23);
 }
 
 /* cinema content */

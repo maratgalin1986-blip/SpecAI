@@ -3,6 +3,7 @@ import { SITE } from '@/lib/site';
 import { PROMISE_POINTS } from '@/lib/promise';
 import { ResetHintsButton } from '@/components/ResetHintsButton';
 import { pageMeta } from '@/lib/pageMeta';
+import { PHONE_VISIBILITY } from '@/lib/phoneVisibility';
 
 // A short help page (owner, 2026-10-17: «краткая справка, как пользоваться
 // сайтом»): the customer's and the provider's way in a few steps, one login
@@ -16,7 +17,7 @@ export const metadata: Metadata = pageMeta('/kak-polzovatsya', {
 const CUSTOMER_STEPS = [
   {
     title: 'Опишите задачу',
-    text: 'На странице «Заявки» напишите, какая техника нужна, где и когда. Можно без регистрации — телефон не публикуется, а с аккаунтом удобнее сравнивать предложения.',
+    text: `На странице «Заявки» напишите, какая техника нужна, где и когда. Можно без регистрации, а с аккаунтом удобнее сравнивать предложения. ${PHONE_VISIBILITY}`,
   },
   {
     title: 'Получите предложения',

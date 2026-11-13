@@ -19,6 +19,7 @@ import {
   LABEL_RANK,
   customerIcon,
   declutterLabels,
+  declutterPins,
   escapeHtml,
   intakeIcon,
   labelAbove,
@@ -216,9 +217,23 @@ export async function drawProviderLayer(
   L: LeafletModule,
   map: LeafletMap,
   alive: () => boolean,
-  options: { onSelect?: (selection: MapSelection) => void } = {},
+  options: {
+    onSelect?: (selection: MapSelection) => void;
+    /**
+     * Whether the visitor has an account: the machines on the line are asked
+     * for only then (the route answers a guest 401). Without it they are asked.
+     */
+    signedIn?: Promise<boolean>;
+  } = {},
 ): Promise<void> {
-  const refresh = declutterLabels(map);
+  // Pins first (registered first, so they also run first on every move), then
+  // the labels of the pins left on the screen.
+  const refreshPins = declutterPins(map);
+  const refreshLabels = declutterLabels(map);
+  const refresh = () => {
+    refreshPins();
+    refreshLabels();
+  };
   const pinsLayer: LayerGroup = L.layerGroup().addTo(map);
   let providers: ProviderMapPin[] = [];
   let customers: CustomerMapPin[] = [];
@@ -323,7 +338,9 @@ export async function drawProviderLayer(
 
   const [first, line] = await Promise.all([
     load(null),
-    json<{ machines?: LiveRow[] }>('/api/line/nearby'),
+    (options.signedIn ?? Promise.resolve(true)).then((account) =>
+      account ? json<{ machines?: LiveRow[] }>('/api/line/nearby') : null,
+    ),
   ]);
   if (!alive()) return;
   live = line?.machines ?? [];

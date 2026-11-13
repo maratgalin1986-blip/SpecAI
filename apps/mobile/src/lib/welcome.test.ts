@@ -30,7 +30,7 @@ describe('welcome before sign-in', () => {
     ]);
     for (const path of WELCOME_PATHS) {
       expect(accountTypeFromRole(path.role)).toBe(path.accountType);
-      expect(path.text).toContain('Бесплатно и без посредников');
+      expect(path.text).toContain('Без комиссии для заказчика');
       // Рядом с обещанием — без «лучшая», «самые», «гарантия» (REVIEW.md).
       expect(path.text).not.toMatch(/лучш|самы[ейх]|гарант/i);
     }

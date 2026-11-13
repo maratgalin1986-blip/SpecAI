@@ -55,7 +55,7 @@ export function OrderPublicView({
         <a href="/orders" className="font-semibold underline">
           Оставьте свою заявку
         </a>{' '}
-        — исполнители рядом пришлют цены, это бесплатно.
+        — исполнители пришлют цены, это бесплатно.
       </p>
     </div>
   );

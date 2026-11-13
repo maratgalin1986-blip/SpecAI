@@ -6,6 +6,10 @@ import { useEffect, useRef, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { AgentChat } from '@/components/AgentChat';
 import { useJourneyInView } from '@/components/useJourneyInView';
+import { CONTROLS, KEY_ACTIONS, coversContent, watchOverlay } from '@/lib/overlayClear';
+
+/** «Заказать технику», «Заказать сюда»…: the buttons that take the order. */
+const ORDER_WORDS = /Заказ|Оставить заявку|Опубликовать/;
 
 // Floating chat button shown on every page except /agents, which has the
 // full-size chat already.
@@ -29,6 +33,26 @@ export function AgentChatWidget() {
 
   const toggleRef = useRef<HTMLButtonElement>(null);
   const wasOpen = useRef(false);
+  // The closed button never lies on an order button, the phone or a field:
+  // while one is under it, it waits, transparent (globals.css, data-away).
+  useEffect(() => {
+    const el = toggleRef.current;
+    if (!show || isOpen || !el) return;
+    const stop = watchOverlay(() => {
+      const rect = el.getBoundingClientRect();
+      const under = coversContent(
+        { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom },
+        (hit) =>
+          hit.matches(KEY_ACTIONS) ||
+          (hit.matches(CONTROLS) && ORDER_WORDS.test(hit.textContent ?? '')),
+      );
+      el.toggleAttribute('data-away', under);
+    });
+    return () => {
+      stop();
+      el.removeAttribute('data-away');
+    };
+  }, [show, isOpen]);
   // Focus goes back to the toggle when the window closes (Esc, close or toggle).
   useEffect(() => {
     if (wasOpen.current && !isOpen) toggleRef.current?.focus();
@@ -91,7 +115,8 @@ export function AgentChatWidget() {
         type="button"
         data-platform-chrome
         onClick={() => setIsOpen((open) => !open)}
-        aria-label={isOpen ? 'Свернуть чат с помощником' : 'Открыть чат с помощником'}
+        // The spoken name begins with the words on the button (WCAG 2.5.3).
+        aria-label={isOpen ? 'Свернуть чат с помощником' : 'ИИ-помощник: открыть чат'}
         aria-expanded={isOpen}
         aria-controls={isOpen ? 'agent-chat-dialog' : undefined}
         tabIndex={show ? undefined : -1}

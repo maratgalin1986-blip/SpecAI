@@ -11,7 +11,7 @@ import {
   installLeadLine,
   noteInstallMoment,
 } from '@/lib/installHint';
-import { isOnShift, nextShiftText, SITE } from '@/lib/site';
+import { CALLBACK_IN, isOnShift, nextShiftText, SITE } from '@/lib/site';
 import { TelegramButton } from '@/components/TelegramButton';
 
 // The celebration is only needed once the заявка is sent: its own small chunk.
@@ -67,6 +67,7 @@ export function LeadSuccess({ dark = false, summary }: { dark?: boolean; summary
       ref={ref}
       tabIndex={-1}
       role="status"
+      data-lead-form
       className={`show-glow relative scroll-mt-28 overflow-hidden rounded-2xl p-6 outline-none ${
         dark ? 'bg-slate-900 text-white ring-1 ring-white/10' : 'bg-slate-950 text-white'
       }`}
@@ -80,7 +81,7 @@ export function LeadSuccess({ dark = false, summary }: { dark?: boolean; summary
       <p className="mt-1 text-sm text-white/70">
         {onShift === false
           ? `Сейчас нерабочее время — диспетчер Иван перезвонит ${nextShift}.`
-          : 'Диспетчер Иван перезвонит в течение 15 минут.'}{' '}
+          : `Диспетчер Иван перезвонит в течение ${CALLBACK_IN}.`}{' '}
         Не хотите ждать — позвоните или напишите сами.
       </p>
       <div className="mt-4 flex flex-wrap gap-2">

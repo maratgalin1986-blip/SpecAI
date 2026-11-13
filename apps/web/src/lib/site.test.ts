@@ -24,7 +24,7 @@ describe('SITE texts: all of Russia', () => {
   it('says the service covers Russia on the web', () => {
     for (const text of [SITE.tagline, SITE.description]) {
       expect(text).not.toMatch(TATARSTAN_ONLY);
-      expect(text).toContain('по всей России');
+      expect(text).toMatch(/по всей России|из любого города России/);
     }
     // СпецПласт16 stays a provider from Набережные Челны.
     expect(SITE.description).toContain('СпецПласт16 — в Набережных Челнах');
@@ -35,22 +35,28 @@ describe('SITE texts: all of Russia', () => {
     const tagline = mobileText('tagline', 'description');
     const description = mobileText('description', 'promise');
     expect(tagline).toBe(SITE.tagline);
-    expect(description).toContain('по всей России');
+    expect(description).toMatch(/по всей России|из любого города России/);
     expect(description).toContain('СпецПласт16 в Набережных Челнах');
     for (const text of [tagline, description]) expect(text).not.toMatch(TATARSTAN_ONLY);
   });
 });
 
-// Owner, 2026-10-17: «Бесплатно и без посредников» is the headline of every
-// ad. It is honest only while the platform takes no money from the deal.
-describe('SITE.promise: free and without middlemen', () => {
+// Owner, 2026-11-13 (replaces «Бесплатно и без посредников» of 2026-10-17):
+// «Без комиссии для заказчика» is the headline of every ad. It is honest only
+// while the platform takes no money from the deal.
+describe('SITE.promise: no commission for the customer', () => {
   afterEach(() => {
     vi.unstubAllEnvs();
   });
 
   it('is a short headline with a detail that says the customer pays directly', () => {
-    expect(SITE.promise).toBe('Бесплатно и без посредников');
-    expect(SITE.promiseShort).toMatch(/^Бесплатно · без посредников$/);
+    expect(SITE.promise).toBe('Без комиссии для заказчика');
+    expect(SITE.promiseShort).toBe('Без комиссии для заказчика');
+    // Who calls back, said the same way everywhere.
+    expect(SITE.callbackWho).toMatch(
+      /^Перезвонит диспетчер СпецПласт16 — он сравнивает предложения исполнителей/,
+    );
+    expect(SITE.reach).toBe('Заявка из любого города России');
     expect(SITE.promiseDetail).toContain('напрямую');
     expect(SITE.promiseDetail).toContain('не берёт процент');
     expect(SITE.promiseHref).toBe('/kak-polzovatsya#besplatno');

@@ -779,6 +779,28 @@ function offerWhatsAppText(
 ): string {
   const intro = `Здравствуйте! Это ${SITE.contactPerson} из компании ${SITE.name}, мы делаем сайты.`;
   const body = `${offer.opener} Собрали по данным карточки черновик страницы: ${input.previewUrl} Это не официальный сайт, в поиске его нет.`;
+  // Короткий вариант (владелец, 2026-11-13: «WhatsApp лучше читают»): что сделаем именно этой
+  // фирме, презентация под неё и один вопрос — как в письме.
+  if (input.pitchLine && input.showUrl) {
+    const service = `${SERVICE_LINK_LABEL}: ${serviceUrl(input.baseUrl, 'whatsapp', p.slug)}`;
+    const ask = 'Прислать условия под вашу задачу? Ответьте «да».';
+    const terms = 'Условия и цены — по ссылке ниже; сообщение не является офертой.';
+    const show = `Презентация для вас: ${input.showUrl}`;
+    return firstThatFits([
+      [
+        intro,
+        body,
+        input.pitchLine,
+        show,
+        terms,
+        service,
+        ask,
+        `${STOP_LINE} ${WHATSAPP_ONCE_LINE}`,
+      ],
+      [intro, body, input.pitchLine, show, terms, service, ask, STOP_LINE],
+      [intro, body, show, terms, service, ask, STOP_LINE],
+    ]);
+  }
   const bullets = offer.bullets.map((b) => `• ${b}`).join('\n');
   const price = 'Условия и цены — по ссылке ниже; сообщение не является офертой.';
   const leads = p.email?.trim()

@@ -350,3 +350,145 @@ test('phone: the install button, the cookie strip and the bottom bar do not lie 
     }
   }
 });
+
+test('/map: the заявка goes without a point, the phone has the mask and our own errors', async ({
+  page,
+}) => {
+  const sent = await guard(page);
+  const failures: string[] = [];
+  page.on('response', (response) => {
+    if (response.url().includes('/api/line/nearby') && response.status() >= 400) {
+      failures.push(`${response.status()} ${response.url()}`);
+    }
+  });
+  await page.goto('/map', { waitUntil: 'load' });
+  const form = page.locator('[data-map-order-form]');
+  await form.scrollIntoViewIfNeeded();
+  // Said before sending, not as an error after it.
+  await expect(form.locator('[data-map-no-point]')).toBeVisible();
+  // The browser's own bubbles are off: the form shows its own words.
+  await expect(form).toHaveAttribute('novalidate', '');
+  await form.getByRole('button', { name: 'Заказать технику сюда' }).click();
+  await expect(form.locator('[data-field-error]')).toHaveCount(2);
+  await expect(form).toContainText('Укажите телефон');
+  const phone = form.getByLabel('Телефон');
+  await phone.click();
+  await phone.pressSequentially('89270000004');
+  await expect(phone).toHaveValue('+7 (927) 000-00-04');
+  await form.locator('input[name="consent"]').check();
+  await form.getByRole('button', { name: 'Заказать технику сюда' }).click();
+  await expect(page.getByText('Заявка у диспетчера')).toBeVisible();
+  const lead = sent.find((item) => item.url.includes('/api/leads'))!;
+  expect(lead.body.phone).toBe('+7 (927) 000-00-04');
+  expect(String(lead.body.message)).toContain('адрес уточнит диспетчер');
+  expect(String(lead.body.name).length).toBeGreaterThan(0);
+  // A guest's map does not ask for the machines on the line (accounts only).
+  expect(failures).toEqual([]);
+});
+
+test('/map on a phone opens on the country, not on one region', async ({ page }) => {
+  test.skip(!isPhone(page), 'the phone view');
+  await guard(page);
+  await page.goto('/map', { waitUntil: 'load' });
+  await page.locator('.leaflet-tile').first().waitFor({ state: 'attached' });
+  await page.waitForTimeout(800);
+  const zoom = await page.evaluate(() => {
+    const tiles = Array.from(document.querySelectorAll<HTMLImageElement>('.leaflet-tile'));
+    const zooms = tiles.map((tile) => Number(/\/api\/tiles\/(\d+)\//.exec(tile.src)?.[1] ?? 99));
+    return Math.min(...zooms);
+  });
+  // The whole-country overview (TILE_MIN_ZOOM), not a region at zoom 5–6.
+  expect(zoom).toBeLessThanOrEqual(3);
+});
+
+test('phone: a lead form on the screen leaves only the contact bar floating', async ({ page }) => {
+  test.skip(!isPhone(page), 'the floating buttons of a phone');
+  await guard(page);
+  await page.addInitScript(() => {
+    try {
+      // The consent strip answered, so the chip and the buttons could all show.
+      localStorage.setItem('cookie-consent', 'later:' + Date.now());
+    } catch {
+      // No storage: the strip stays, the check below still holds.
+    }
+  });
+  for (const path of ['/orders#new', '/map']) {
+    await page.goto(path, { waitUntil: 'load' });
+    const form = page.locator('[data-lead-form]').first();
+    await form.scrollIntoViewIfNeeded();
+    await form.locator('input[type="tel"]').focus();
+    await expect
+      .poll(() => page.evaluate(() => document.documentElement.hasAttribute('data-lead-form-view')))
+      .toBe(true);
+    await page.waitForTimeout(400);
+    const floating = await page.evaluate(() => {
+      const seen = (el: Element | null | undefined) => {
+        if (!el) return false;
+        const style = getComputedStyle(el);
+        const box = el.getBoundingClientRect();
+        return style.visibility !== 'hidden' && Number(style.opacity) > 0.05 && box.width > 0;
+      };
+      return {
+        chat: seen(document.querySelector('.chat-fab')),
+        install: seen(document.querySelector('.install-fab')),
+        telegram: seen(
+          document.querySelector('[data-telegram-link]')?.closest('[data-bottom-bar]'),
+        ),
+      };
+    });
+    expect(floating, path).toEqual({ chat: false, install: false, telegram: false });
+  }
+});
+
+test('desktop: «Заказать технику →» in the header opens the short form in place', async ({
+  page,
+}) => {
+  test.skip(isPhone(page), 'the desktop header');
+  const sent = await guard(page);
+  await page.goto('/contacts', { waitUntil: 'load' });
+  await page.locator('header [data-header-order]').click();
+  const sheet = page.locator('dialog[data-order-sheet]');
+  await expect(sheet).toBeVisible();
+  expect(new URL(page.url()).pathname).toBe('/contacts');
+  await sheet.getByLabel('Телефон').fill('9270000005');
+  await sheet.locator('input[name="consent"]').check();
+  await sheet.getByRole('button', { name: 'Жду звонка' }).click();
+  await expect(sheet).toContainText(/Заявка у диспетчера/);
+  const lead = sent.find((item) => item.url.includes('/api/leads'))!;
+  expect(String(lead.body.source)).toMatch(/^header:\/contacts/);
+});
+
+test('desktop: the landing form keeps the phone whole, nothing between it and the consent', async ({
+  page,
+}) => {
+  test.skip(isPhone(page), 'the desktop landing');
+  await guard(page);
+  await page.goto('/arenda/ekskavator-pogruzchik', { waitUntil: 'load' });
+  const form = page.locator('[data-callback-form]').first();
+  const phone = form.getByLabel('Телефон');
+  const box = (await phone.boundingBox())!;
+  // «+7 (___) ___-__-__» in 16 px needs about 170 px with the padding.
+  expect(box.width).toBeGreaterThanOrEqual(220);
+  // The next control after the phone field is the consent checkbox.
+  const next = await phone.evaluate((el) => {
+    const controls = Array.from(
+      el.closest('form')!.querySelectorAll<HTMLElement>('input, button, textarea, select'),
+    ).filter((node) => node.offsetParent !== null && node.tabIndex >= 0);
+    return controls[controls.indexOf(el as HTMLElement) + 1]?.getAttribute('name') ?? '';
+  });
+  expect(next).toBe('consent');
+});
+
+for (const [name, path, referer] of [
+  ['an ad', '/?utm_source=yandex&utm_medium=cpc', undefined],
+  ['a search engine', '/', 'https://yandex.ru/search/?text=1'],
+] as const) {
+  test(`the titles are not played to a visitor from ${name}`, async ({ page }) => {
+    await guard(page);
+    await page.goto(path, { waitUntil: 'domcontentloaded', referer });
+    // The inline script hides them before the first paint (checked once, at
+    // once: played titles would also be gone after 2.8 s).
+    const playing = await page.evaluate(() => document.documentElement.hasAttribute('data-intro'));
+    expect(playing).toBe(false);
+  });
+}

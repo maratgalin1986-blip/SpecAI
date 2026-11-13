@@ -3,10 +3,11 @@
 import { useEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { Icon } from '@/components/Icon';
-import { OrderSheet } from '@/components/OrderSheet';
+import { OrderSheet, orderSource } from '@/components/OrderSheet';
 import { useJourneyInView } from '@/components/useJourneyInView';
 import { isOnShift, SHIFT, SITE } from '@/lib/site';
 import { hidesContactBar } from '@/lib/workPages';
+import { watchLeadForms } from '@/lib/overlayClear';
 
 function WhatsAppIcon({ className = 'h-5 w-5' }: { className?: string }) {
   return (
@@ -55,6 +56,9 @@ export function MessengerButtons() {
       root.removeAttribute('data-typing');
     };
   }, []);
+  // A lead form in use or on the screen: the other floating buttons step aside
+  // (lib/overlayClear.ts, globals.css html[data-lead-form-view]).
+  useEffect(() => watchLeadForms(), []);
   const inJourney = useJourneyInView(pathname);
   // /stroyka is full-screen with its own call buttons and no outbound links;
   // cabinets, order pages and sign-in forms keep their buttons uncovered.
@@ -97,7 +101,9 @@ export function MessengerButtons() {
           rel="noopener"
           className="flex min-h-12 items-center justify-center gap-1.5 rounded-lg bg-emerald-700 text-sm font-semibold text-white"
         >
-          <WhatsAppIcon className="h-4 w-4" /> WhatsApp
+          <WhatsAppIcon className="h-4 w-4" />
+          {/* The narrowest phones: the icon, the word for screen readers. */}
+          <span className="max-[379px]:sr-only">WhatsApp</span>
         </a>
         {/* The short form opens in place (OrderSheet): no trip to another
             page and no long scroll to a form further down. */}
@@ -110,7 +116,12 @@ export function MessengerButtons() {
           <Icon name="document" className="h-4 w-4" /> Заказать
         </button>
       </nav>
-      {orderOpen && <OrderSheet source="bottom-bar" onClose={() => setOrderOpen(false)} />}
+      {orderOpen && (
+        <OrderSheet
+          source={orderSource('bottom-bar', pathname)}
+          onClose={() => setOrderOpen(false)}
+        />
+      )}
       <aside aria-label="WhatsApp" data-platform-chrome>
         <a
           href={SITE.whatsappHref}
