@@ -297,9 +297,11 @@ export default function WalkController({
           </button>
         ))}
       </div>
-      <p className="w3d-hint motion-reduce:hidden pointer-events-none absolute inset-x-0 top-[34%] z-10 text-center text-sm font-semibold text-white drop-shadow-[0_2px_6px_rgba(0,0,0,0.8)]">
-        Потяните в сторону, чтобы осмотреться
-      </p>
+      {!fallback && (
+        <p className="w3d-hint motion-reduce:hidden pointer-events-none absolute inset-x-0 top-[34%] z-10 text-center text-sm font-semibold text-white drop-shadow-[0_2px_6px_rgba(0,0,0,0.8)]">
+          Потяните в сторону, чтобы осмотреться
+        </p>
+      )}
       <div
         key={walk.index}
         className="w3d-card absolute inset-x-3 bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-10 mx-auto rounded-2xl bg-slate-950/85 p-4 text-white shadow-2xl ring-1 ring-white/10 backdrop-blur sm:w-[34rem]"

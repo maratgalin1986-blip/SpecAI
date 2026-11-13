@@ -6,6 +6,8 @@
 //   cd apps/web && NODE_PATH=<global node_modules with playwright> node scripts/world3d-pictures.cjs
 // Needs Playwright's Chromium (software WebGL is enough) and esbuild, which is
 // taken from the test runner's own dependencies.
+/* eslint-disable @typescript-eslint/no-require-imports */
+/* global require, __dirname, Buffer, console, document, window, process */
 const fs = require('fs');
 const path = require('path');
 const { createRequire } = require('module');

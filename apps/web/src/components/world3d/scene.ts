@@ -1161,7 +1161,7 @@ export function createWorld(opts: WorldOptions): WorldHandle {
       walking.yaw += (walking.yawTarget - walking.yaw) * (instant ? 1 : 0.12);
       let pose = stopPose(stop, anchor, walking.yaw, camera.aspect, heading);
       if (!walking.arrived) {
-        const p = flightProgress(walking.start * 1000, time * 1000, WALK_FLIGHT_MS);
+        const p = flightProgress(walking.start * 1000, wall * 1000, WALK_FLIGHT_MS);
         pose = blendPose(walking.from, pose, p);
         if (p >= 1) {
           walking.arrived = true;
@@ -1341,7 +1341,7 @@ export function createWorld(opts: WorldOptions): WorldHandle {
     };
     autoSpin = false;
     for (const l of labels) l.sprite.visible = false;
-    walking = { index, from, start: time, arrived: false, yaw: 0, yawTarget: 0 };
+    walking = { index, from, start: wall, arrived: false, yaw: 0, yawTarget: 0 };
     if (still) instantArrive();
     else if (!running) frame(0);
   }
@@ -1352,7 +1352,7 @@ export function createWorld(opts: WorldOptions): WorldHandle {
       look: [lookNow.x, lookNow.y, lookNow.z],
     };
     walking.index = index;
-    walking.start = time;
+    walking.start = wall;
     walking.arrived = false;
     walking.yawTarget = 0;
     if (still) instantArrive();
@@ -1384,6 +1384,7 @@ export function createWorld(opts: WorldOptions): WorldHandle {
   let sampled = 0;
   let sampleMs = 0;
   let slowReported = false;
+  let wall = 0;
   /** The plainer picture of a device that renders under ~30 frames a second. */
   let lite = false;
   function goLite() {
@@ -1503,6 +1504,7 @@ export function createWorld(opts: WorldOptions): WorldHandle {
   }
 
   function frame(now: number) {
+    const prev = last;
     const dt = last ? Math.min(0.05, (now - last) / 1000) : 0;
     if (running && last) {
       // Watchdog over the first frames: a phone that cannot keep up falls back.
@@ -1525,6 +1527,9 @@ export function createWorld(opts: WorldOptions): WorldHandle {
     }
     last = now;
     time += dt;
+    // The flight of the walk runs by the clock on the wall: on a slow device it
+    // skips frames instead of lasting several times longer.
+    wall += last && prev ? Math.min(0.5, (now - prev) / 1000) : 0;
     if (autoSpin) azimuth += dt * 0.05;
     for (const u of updaters) u(time, dt);
     dirtParticles.update(dt);
