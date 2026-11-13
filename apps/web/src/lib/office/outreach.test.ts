@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { PLATFORM_PROMISE } from '@specai/shared';
+import { buildOffer } from './offer';
+import { nichePitch } from './pitch';
 import { SITE } from '@/lib/site';
 import {
   buildEmail,
@@ -424,19 +426,21 @@ describe('personal offer in the site letter and WhatsApp (U2)', () => {
     const letter = buildEmail(site, withOffer);
     expect(letter.subject).toBe(offer.subject);
     expect(letter.text).toContain(offer.opener);
-    for (const b of offer.bullets) expect(letter.text).toContain(`• ${b}`);
+    // Короткое письмо: строка захода (второй пункт) — абзацем, общих пунктов списком нет.
+    expect(letter.text).toContain(offer.bullets[1]!);
+    expect(letter.text).not.toContain(offer.bullets[0]!);
+    expect(letter.text).not.toContain('•');
     // Пакет и цены — на странице услуги, в первом письме их нет.
     noPricesOrPromises(letter.text);
     noPricesOrPromises(letter.html);
-    expect(letter.text).toContain('Что на странице:');
+    expect(letter.text).not.toContain('Что на странице:');
     expect(letter.text).toContain(DRAFT_LINE);
     expect(letter.text).toContain(NOT_OFFER_LINE);
     expect(letter.text).toContain(`— ${LEGAL_SIGNATURE}`);
     expect(letter.text).toContain(input.previewUrl);
     expect(letter.text).toContain(`${SERVICE_LINK_LABEL}: ${SERVICE_EMAIL}`);
     stopLineIsLast(letter.text);
-    expect(letter.html).toContain('<ul');
-    expect(letter.html).toContain(`<li style="margin:0 0 6px">${offer.bullets[0]}</li>`);
+    expect(letter.html).not.toContain('<ul');
     expect(letter.text).not.toMatch(FORBIDDEN);
   });
 
@@ -449,7 +453,7 @@ describe('personal offer in the site letter and WhatsApp (U2)', () => {
   it('html escapes the offer text', () => {
     const letter = buildEmail(site, {
       ...input,
-      offer: { ...offer, bullets: ['<b>жирно</b>', 'два', 'три'] },
+      offer: { ...offer, bullets: ['раз', '<b>жирно</b>', 'три'] },
     });
     expect(letter.html).toContain('&lt;b&gt;жирно&lt;/b&gt;');
     expect(letter.html).not.toContain('<b>жирно');
@@ -523,7 +527,7 @@ describe('письмо-презентация под фирму (владеле�
 
   it('пишет человек: имя, компания и город в приветствии, подпись перед реквизитами', () => {
     const letter = buildEmail(site, input);
-    expect(letter.text).toContain(`Меня зовут ${SITE.contactPerson}, я из компании ${SITE.name}`);
+    expect(letter.text).toContain(`Меня зовут ${SITE.contactPerson}, ${SITE.name} (${SITE.city})`);
     expect(letter.html).toContain(`С уважением, ${SITE.contactPerson}, ${SITE.name}`);
     expect(letter.html.indexOf('С уважением')).toBeLessThan(letter.html.indexOf(SITE.inn));
   });
@@ -711,5 +715,24 @@ describe('проект площадки: письма по роли ниши', (
 
   it('роль действует только в проекте площадки: фирме «Сайтов» ключ ниши письмо не меняет', () => {
     expect(buildEmail(site, forNiche('construction'))).toEqual(buildEmail(site, input));
+  });
+});
+
+describe('короткое письмо о сайте (разведка 2026-11-12)', () => {
+  it('основной текст до ссылок — не длиннее 140 слов и кончается одним вопросом', () => {
+    const offer = buildOffer({
+      dossier: null,
+      angle: 'leads_to_email',
+      companyName: site.name,
+      city: site.city,
+    });
+    const letter = buildEmail(site, {
+      ...input,
+      offer,
+      pitchLine: nichePitch('dentist').letterLine,
+    });
+    const body = letter.text.split('\nОткрыть страницу:')[0]!;
+    expect(body.match(/[\p{L}\d]+/gu)!.length).toBeLessThanOrEqual(140);
+    expect(letter.text).toContain('Прислать условия под вашу задачу? Ответьте «да»');
   });
 });
