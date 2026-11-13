@@ -50,17 +50,19 @@ jobs:
       - name: Office tick
         env:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          RELAY_EVENT: ${{ github.event_name }}
         run: bash .github/scripts/office-relay.sh
       # Непрерывный поиск (владелец, 2026-11-12: 250 писем в день на проект): расписание GitHub
       # срабатывает раз в несколько часов, поэтому каждый проход сам ставит следующий. Выключатель —
-      # файл .github/office-relay-chain.txt: первая строка «on». Сбой прохода цепочку не рвёт
-      # надолго: её поднимет расписание.
+      # файл .github/office-relay-chain.txt: первая строка «on». Сбой прохода цепочку не рвёт:
+      # следующий проход ставится после паузы в 5 минут (13.11 цепочка встала на час из-за сбоя карт).
       - name: Next run
-        if: ${{ success() }}
+        if: ${{ always() }}
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           if [ "$(head -n 1 .github/office-relay-chain.txt 2>/dev/null)" = "on" ]; then
-            sleep 60
+            # Неудачный проход (карты не отвечают) не рвёт цепочку: следующий — после паузы подольше.
+            if [ "${{ job.status }}" = "success" ]; then sleep 60; else sleep 300; fi
             gh workflow run office.yml --repo "$GITHUB_REPOSITORY" --ref main
           fi

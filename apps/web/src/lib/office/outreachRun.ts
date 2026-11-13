@@ -536,7 +536,7 @@ async function runOutreach(
     db.prospect.count({ where: { ...ofProject, whatsappSentAt: capWindow } }),
   ]);
   let emailLeft = Math.max(0, cap - emailToday - followUpsToday);
-  let whatsappLeft = Math.max(0, cap - whatsappToday);
+  let whatsappLeft = Math.max(0, Math.min(cap, WHATSAPP_DAILY_CAP) - whatsappToday);
   // Проход без кнопки владельца (режим 'auto'): сам офис отправляет только письма. Напоминания
   // и сообщения WhatsApp через шлюз уходят по кнопке (шлюз в 'auto' — только с whatsappAuto).
   const auto = mode === 'send' && !only;
@@ -553,6 +553,16 @@ async function runOutreach(
     ]);
     const perHour = Math.max(1, Math.ceil(cap / HOURLY_SHARE));
     emailLeft = Math.min(emailLeft, Math.max(0, perHour - emailHour - followUpsHour));
+  }
+  // WhatsApp — тоже равномерно: номер, с которого за час уходят десятки сообщений незнакомым людям,
+  // WhatsApp блокирует быстрее, чем почта ящик.
+  if (auto) {
+    const hourAgo = { gte: new Date(now.getTime() - 3_600_000), lt: new Date(now.getTime() + 1) };
+    const whatsappHour = await db.prospect.count({
+      where: { ...ofProject, whatsappSentAt: hourAgo },
+    });
+    const perHour = Math.max(1, Math.ceil(Math.min(cap, WHATSAPP_DAILY_CAP) / HOURLY_SHARE));
+    whatsappLeft = Math.min(whatsappLeft, Math.max(0, perHour - whatsappHour));
   }
   const active: OutreachChannels = {
     // Письма дня видны владельцу и без настроенного ящика: он сразу видит персональные
@@ -1173,16 +1183,21 @@ function mergeResults(a: OutreachResult, b: OutreachResult): OutreachResult {
 }
 
 /**
- * Разгон дневного лимита. Владелец (2026-11-12, после предупреждения о риске блокировки ящика):
- * «делай по 250 в день на проект» — это стартовое значение, оно действует сразу. Лимит выше него
+ * Разгон дневного лимита. Владелец (2026-11-13, после ночи с 250 письмами с одного ящика): «в сутки
+ * по 50 писем равномерно» — это стартовое значение, оно действует сразу. Лимит выше него
  * (если владелец поднимет в настройках) растёт примерно в 1,4 раза в день: резкий рост холодной
  * рассылки с одного ящика почтовые сервисы блокируют.
  */
 /** Дневной лимит проекта делится на столько часов: в час уходит не больше лимит / HOURLY_SHARE. */
 export const HOURLY_SHARE = 12;
+/**
+ * Сообщений WhatsApp в сутки на проект, не больше (2026-11-13): WhatsApp блокирует номер за рассылку
+ * незнакомым людям быстрее, чем почта — ящик; в час — доля по HOURLY_SHARE.
+ */
+export const WHATSAPP_DAILY_CAP = 24;
 
 export const RAMP_START = new Date('2026-11-12T21:00:00Z'); // 13.11 00:00 по Москве
-export const RAMP_START_CAP = 250;
+export const RAMP_START_CAP = 50;
 export const RAMP_FACTOR = 1.4;
 
 export function rampedCap(target: number, now: Date): number {

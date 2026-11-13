@@ -178,7 +178,9 @@ done
 
 # The owner's test letter (apps/web/src/lib/office/testLetter.ts): sent when the last line of the
 # on-demand file asks for it. The recipient is fixed in the code; the log gets status words only.
-if tail -n 1 .github/office-relay-run.txt 2>/dev/null | grep -q 'пробное письмо'; then
+# Only a run started by a push of that line: a scheduled or chained run of main must never send it
+# (2026-11-13: the line reached main and every chained run mailed the owner a test letter).
+if [ "${RELAY_EVENT:-}" = "push" ] && tail -n 1 .github/office-relay-run.txt 2>/dev/null | grep -q 'пробное письмо'; then
   if curl -fsS --max-time 60 -H "$AUTH" -o "$TMP/test.json" "$BASE_URL/api/cron/office/test-letter"; then
     echo "test letter: $(jq -r 'if .ok then "sent created=\(.created)" else "not sent: \(.reason // "?" | .[0:160])" end' "$TMP/test.json" 2>/dev/null || echo 'unreadable answer')"
   else
