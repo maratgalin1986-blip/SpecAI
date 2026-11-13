@@ -298,6 +298,11 @@ export interface OutreachResult {
    * попадают: тик снимает поле перед ответом.
    */
   samples?: { name: string; city: string | null; kind: string; token: string }[];
+  /**
+   * Отказы сервера по кодам («550 5.1.1»: 3, «unknown»: 1) — без адресов и текста: по ним видно,
+   * мёртвые ли это адреса или почтовый сервис начал резать рассылку (владелец, 2026-11-13).
+   */
+  errorCodes?: Record<string, number>;
   /** Признаки настроек ящика без значений (smtp.ts → officeMailHint), когда почта 'broken'. */
   mailHint?: string;
   /** Напоминаний ждут кнопки владельца (режим 'auto' сам их не отправляет). */
@@ -896,6 +901,7 @@ async function runOutreach(
           // видит пометку у фирмы.
           emailLeft -= 1;
           result.errors += 1;
+          countError(result, 'unknown');
           unconfirmed = {
             outreachError: outreachErrorText('email', DELIVERY_UNKNOWN),
             outreachErrorAt: new Date(),
@@ -929,6 +935,7 @@ async function runOutreach(
             active.email = false;
           } else {
             result.errors += 1;
+            countError(result, smtpErrorCode(sent.reason));
             mailFailures += 1;
             if (mailFailures >= MAIL_FAILURES_STOP) stopMail(sent.reason);
           }
@@ -1111,6 +1118,18 @@ async function runOutreach(
   return done();
 }
 
+/** Код отказа почтового сервера из текста ошибки: «550 5.1.1», «550», иначе «other». */
+export function smtpErrorCode(reason: string): string {
+  const match = /\b([45]\d\d)(?:[ -]+([45]\.\d{1,3}\.\d{1,3}))?/.exec(reason);
+  if (!match) return /timeout|время|не ответил/i.test(reason) ? 'timeout' : 'other';
+  return match[2] ? `${match[1]} ${match[2]}` : match[1]!;
+}
+
+function countError(result: OutreachResult, code: string): void {
+  result.errorCodes ??= {};
+  result.errorCodes[code] = (result.errorCodes[code] ?? 0) + 1;
+}
+
 /** Итог двух проходов (сайты и площадка) одним результатом. */
 function mergeResults(a: OutreachResult, b: OutreachResult): OutreachResult {
   const sum = (x?: number, y?: number) => (x ?? 0) + (y ?? 0);
@@ -1118,8 +1137,13 @@ function mergeResults(a: OutreachResult, b: OutreachResult): OutreachResult {
   const followUpsWaiting = sum(a.followUpsWaiting, b.followUpsWaiting);
   const filtered = sum(a.filtered, b.filtered);
   const optedOut = sum(a.optedOut, b.optedOut);
+  const errorCodes: Record<string, number> = { ...(a.errorCodes ?? {}) };
+  for (const [code, n] of Object.entries(b.errorCodes ?? {})) {
+    errorCodes[code] = (errorCodes[code] ?? 0) + n;
+  }
   return {
     ...a,
+    ...(Object.keys(errorCodes).length ? { errorCodes } : {}),
     email: a.email + b.email,
     whatsapp: a.whatsapp + b.whatsapp,
     followUps: sum(a.followUps, b.followUps),
