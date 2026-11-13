@@ -4,6 +4,7 @@
 // bring them all back. Pure helpers over a Storage-like object, so they are
 // unit-tested and never throw (private mode, blocked storage).
 
+import { ACCOUNT_PHONE_VISIBILITY, GUEST_PHONE_VISIBILITY } from './phoneVisibility';
 import { SITE } from './site';
 
 export const HINTS_STORAGE_KEY = 'sp_hints_dismissed';
@@ -20,11 +21,11 @@ export interface HintText {
 
 export const HINTS = {
   'orders-guest': {
-    text: 'Опишите, какая техника нужна, где и когда. Телефон не публикуется: исполнители пришлют цены, диспетчер сравнит их и перезвонит вам.',
+    text: `Опишите задачу — исполнители пришлют цены, диспетчер перезвонит. ${GUEST_PHONE_VISIBILITY}`,
     more: '#zakazchik',
   },
   'order-customer': {
-    text: 'Предложения исполнителей появляются ниже: сравните цену и машину и нажмите «Принять». Ваш телефон исполнитель увидит, когда подтвердит бронь.',
+    text: `Предложения исполнителей появляются ниже: сравните цену и машину и нажмите «Принять». ${ACCOUNT_PHONE_VISIBILITY}`,
     more: '#zakazchik',
   },
   'order-provider': {

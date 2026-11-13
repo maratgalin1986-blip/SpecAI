@@ -8,7 +8,7 @@ import { clipSources, footageAllowed, lightFootage } from '@/components/CinemaVi
 import { LiveClock } from '@/components/LiveClock';
 import { Icon } from '@/components/Icon';
 import { useMachineSound } from '@/components/useMachineSound';
-import { SITE } from '@/lib/site';
+import { CALLBACK_IN, SITE } from '@/lib/site';
 
 // «Путешествие по объекту»: a pinned, scroll-driven fly-through of one big
 // construction site. Scroll scrubs the footage like film on an editing desk,
@@ -97,7 +97,7 @@ const SCENES: Scene[] = [
     stop: 'finale',
     place: 'Ваш объект',
     title: 'Следующая остановка — ваша стройка',
-    text: 'Оставьте заявку — подберём технику и назовём цену; в рабочее время перезваниваем за 15 минут.',
+    text: `Оставьте заявку — подберём технику и назовём цену; в рабочее время перезваниваем за ${CALLBACK_IN}.`,
     href: '/#callback',
     cta: 'Оставить заявку',
     sub: '— Ваш объект — следующий. Позвоните или оставьте заявку',

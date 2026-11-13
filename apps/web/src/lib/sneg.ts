@@ -9,7 +9,7 @@ import { moscowDateKey } from '@/lib/bookingRules';
 import { DELIVERY_NOTE } from '@/lib/cities';
 import type { IconName } from '@/components/Icon';
 import { MACHINE_LABELS, type MachineType } from '@/lib/machinePhotos';
-import { fromPerHour, fromPrice, rateOf } from '@/lib/prices';
+import { fromPerHour, fromPrice, MIN_ORDER_TEXT, rateOf } from '@/lib/prices';
 import { SITE } from '@/lib/site';
 
 export const SNEG_PATH = '/uborka-snega';
@@ -134,7 +134,7 @@ export function snegFaq(): { q: string; a: string }[] {
     { q: 'Работаете с НДС и по договору?', a: VAT_ANSWER },
     {
       q: 'Можно заключить договор на сезон?',
-      a: 'Да, для управляющих компаний, ТСЖ и организаций: техника по вызову, оплата по отработанным часам. Условия обсудит диспетчер.',
+      a: `Да, для управляющих компаний, ТСЖ и организаций: техника по вызову. ${MIN_ORDER_TEXT}. Условия обсудит диспетчер.`,
     },
     {
       q: 'Я не в Набережных Челнах. Можно заказать?',

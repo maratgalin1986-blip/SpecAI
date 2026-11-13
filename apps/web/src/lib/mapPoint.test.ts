@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
+  NO_POINT_LINE,
+  mapOrderMessage,
   addressWithPoint,
   pointAddress,
   pointMessageLine,
@@ -62,5 +64,23 @@ describe('addressWithPoint', () => {
   it('leaves only the street when the point is removed', () => {
     expect(addressWithPoint(`ул. Мира · ${pointAddress(point)}`, null)).toBe('ул. Мира');
     expect(addressWithPoint(pointAddress(point), null)).toBe('');
+  });
+
+  it('takes a map order without a point: the dispatcher asks for the address', () => {
+    const message = mapOrderMessage({ machine: '', when: 'Сегодня', point: null });
+    expect(message).toContain('техника — подобрать, сегодня.');
+    expect(message).toContain(NO_POINT_LINE);
+    // No city is assumed when the page does not know one.
+    expect(message).not.toContain('Город');
+    expect(
+      mapOrderMessage({ machine: 'Автокран', when: 'Завтра', point: null, city: 'Самара' }),
+    ).toContain('Самара');
+  });
+
+  it('puts the point line into a map order with a point and no city', () => {
+    const message = mapOrderMessage({ machine: 'Автокран', when: 'Завтра', point, city: 'Казань' });
+    expect(message).toContain(pointMessageLine(point));
+    expect(message).not.toContain(NO_POINT_LINE);
+    expect(message).not.toContain('Казань');
   });
 });

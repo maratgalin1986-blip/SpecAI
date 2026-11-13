@@ -140,7 +140,7 @@ export function CabinetQuickOrder({ categories }: { categories: QuickCategory[] 
         <Icon name="arrow" className="h-4 w-4" />
       </button>
       <p className="text-xs text-graphite-300">
-        Заявку увидят все исполнители рядом — они пришлют цены, вы выберете.
+        Заявку увидят все исполнители площадки — они пришлют цены, вы выберете.
       </p>
       <PromiseNote dark />
     </form>

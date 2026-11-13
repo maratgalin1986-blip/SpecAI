@@ -109,3 +109,68 @@ export function watchOverlay(check: () => void, everyMs = 120): () => void {
     window.removeEventListener('resize', onMove);
   };
 }
+
+// ---------------------------------------------------------------------------
+// While a заявка is being written — a field of a lead form has the focus, the
+// form is on the screen, or its «Принято» is — at most one floating thing
+// besides the phone's contact bar is left: the Telegram chip, the chat button
+// and «На экран» step aside (globals.css, html[data-lead-form-view]).
+
+/** Put on a lead form and on its «Принято» screen. */
+export const LEAD_FORM_ATTR = 'data-lead-form';
+/** Set on <html> while a lead form is in use or on screen. */
+export const LEAD_FORM_VIEW_ATTR = 'data-lead-form-view';
+
+/**
+ * Whether a box shows on the screen enough to count: at least `minPx` of its
+ * height (or all of a shorter box) between `top` (under the sticky header)
+ * and `bottom` of the viewport.
+ */
+export function boxInView(
+  box: Pick<Box, 'top' | 'bottom'>,
+  view: { top: number; bottom: number },
+  minPx = 120,
+): boolean {
+  const height = box.bottom - box.top;
+  if (!(height > 0)) return false;
+  const seen = Math.min(box.bottom, view.bottom) - Math.max(box.top, view.top);
+  return seen >= Math.min(minPx, height);
+}
+
+/** The header's height on a phone (the sticky header covers the top of the page). */
+const HEADER_PX = 64;
+
+/**
+ * Keeps LEAD_FORM_VIEW_ATTR on <html> in step with the page: a field of a
+ * lead form focused, or a lead form or its «Принято» on the screen. Browser
+ * only; returns the function that stops it.
+ */
+export function watchLeadForms(): () => void {
+  const root = document.documentElement;
+  const check = () => {
+    const active = document.activeElement;
+    let on = Boolean(active && active !== document.body && active.closest(`[${LEAD_FORM_ATTR}]`));
+    if (!on) {
+      const view = { top: HEADER_PX, bottom: window.innerHeight };
+      for (const form of Array.from(document.querySelectorAll(`[${LEAD_FORM_ATTR}]`))) {
+        const rect = form.getBoundingClientRect();
+        if (boxInView(rect, view)) {
+          on = true;
+          break;
+        }
+      }
+    }
+    if (root.hasAttribute(LEAD_FORM_VIEW_ATTR) !== on)
+      root.toggleAttribute(LEAD_FORM_VIEW_ATTR, on);
+  };
+  const onFocus = () => window.setTimeout(check, 0);
+  document.addEventListener('focusin', onFocus);
+  document.addEventListener('focusout', onFocus);
+  const stop = watchOverlay(check, 150);
+  return () => {
+    stop();
+    document.removeEventListener('focusin', onFocus);
+    document.removeEventListener('focusout', onFocus);
+    root.removeAttribute(LEAD_FORM_VIEW_ATTR);
+  };
+}

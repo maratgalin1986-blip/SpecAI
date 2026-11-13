@@ -129,6 +129,45 @@ test('a press opens the instruction and closes again', async ({ page }) => {
   await expect(help).toBeHidden();
 });
 
+test('the install button moves without layout shifts (transform only)', async ({ page }) => {
+  await page.addInitScript(() => {
+    const shifts: string[] = [];
+    (window as unknown as { __fabShifts: string[] }).__fabShifts = shifts;
+    try {
+      new PerformanceObserver((list) => {
+        for (const entry of list.getEntries() as unknown as {
+          value: number;
+          sources?: { node?: Node | null }[];
+        }[]) {
+          for (const source of entry.sources ?? []) {
+            const node = source.node;
+            if (node instanceof Element && node.closest('.install-fab')) {
+              shifts.push(String(entry.value));
+            }
+          }
+        }
+      }).observe({ type: 'layout-shift', buffered: true });
+    } catch {
+      // No layout-shift entries in this browser: nothing to collect.
+    }
+  });
+  await open(page);
+  // The pill folds at 6 s (into the contact bar's row on a phone): past it.
+  await page.waitForTimeout(6500);
+  const shifts = await page.evaluate(
+    () => (window as unknown as { __fabShifts: string[] }).__fabShifts,
+  );
+  expect(shifts).toEqual([]);
+});
+
+test('the help button keeps a 24 px target even while it pops in', async ({ page }) => {
+  await open(page);
+  await page.waitForTimeout(4200);
+  const box = (await page.getByTestId('install-fab').locator('button').first().boundingBox())!;
+  expect(box.width).toBeGreaterThanOrEqual(24);
+  expect(box.height).toBeGreaterThanOrEqual(24);
+});
+
 test('install button stays away from the mini-app and the CRM-free pages keep it', async ({
   page,
 }) => {

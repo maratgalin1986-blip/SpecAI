@@ -16,6 +16,7 @@ import { SITE } from '@/lib/site';
 import { PromiseNote } from '@/components/PromiseNote';
 import type { OrderPrefill } from '@/lib/quickOrder';
 import { phoneError } from '@/lib/phoneMask';
+import { GUEST_PHONE_VISIBILITY } from '@/lib/phoneVisibility';
 import { ANONYMOUS_LEAD_NAME } from '@/lib/submitLead';
 
 // The celebration is only needed once the заявка is sent: its own small chunk.
@@ -188,6 +189,7 @@ export function GuestOrderForm({
         role="status"
         tabIndex={-1}
         data-guest-order-done
+        data-lead-form
         className="show-glow flex scroll-mt-24 flex-col gap-2 rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-900 outline-none"
       >
         <Celebrate />
@@ -217,6 +219,7 @@ export function GuestOrderForm({
       noValidate
       onSubmit={handleSubmit}
       data-guest-order-form
+      data-lead-form
       className="ym-hide-content flex flex-col gap-3"
     >
       <CategorySelect
@@ -366,9 +369,8 @@ export function GuestOrderForm({
         </a>
       </p>
       <PromiseNote />
-      <p className="text-xs text-slate-500">
-        Телефон видят только исполнители, которые нажмут «Показать телефон» — каждый показ
-        записывается. Публично номер не показывается.
+      <p data-phone-visibility className="text-xs text-slate-500">
+        {GUEST_PHONE_VISIBILITY}
       </p>
     </form>
   );

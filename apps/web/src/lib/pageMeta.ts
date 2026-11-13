@@ -61,7 +61,7 @@ export const HOME_TITLE = pickTitle(
  * promise without the opening brand, which the title already carries, and
  * without the note about the house fleet.
  */
-export const HOME_DESCRIPTION = `${SITE.tagline}, ${SITE.promise.toLowerCase()}: одна заявка — цены исполнителей рядом с вами, расчёт напрямую с владельцем техники.`;
+export const HOME_DESCRIPTION = `${SITE.tagline}, ${SITE.promise.toLowerCase()}: одна заявка — цены исполнителей, расчёт напрямую с владельцем техники.`;
 
 /**
  * A description within `max` characters: whole sentences while they fit,

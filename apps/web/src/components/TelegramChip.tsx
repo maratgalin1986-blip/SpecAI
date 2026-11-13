@@ -4,16 +4,20 @@ import { isStandalonePage } from '@/components/PublicOnly';
 
 import { useEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
-import { reachGoal } from '@/lib/marketing';
+import { COOKIE_CONSENT_KEY, cookieStripDue, reachGoal } from '@/lib/marketing';
 import { useTelegramLink } from '@/components/TelegramButton';
 
 const DISMISS_KEY = 'sp16_tg_chip';
+/** sessionStorage: the chip has come up once in this visit — not again on the next page. */
+const SESSION_KEY = 'sp16_tg_chip_shown';
 
 /**
  * Phones only: a small pinned chip «Цены и свободная техника — в Telegram»
- * above the call bar. It waits until the visitor has scrolled a bit, never
- * shows together with the consent strip, hides while a field is focused
- * (data-bottom-bar, see globals.css) and closes for good with ✕.
+ * above the call bar. It waits until the visitor has scrolled a bit and has
+ * answered the consent strip (never before it, never together with it), comes
+ * up at most once a visit, hides while a field is focused or a lead form is
+ * on the screen (data-bottom-bar, data-lead-form-view; see globals.css) and
+ * closes for good with ✕.
  */
 export function TelegramChip() {
   const pathname = usePathname();
@@ -22,7 +26,7 @@ export function TelegramChip() {
 
   useEffect(() => {
     try {
-      if (localStorage.getItem(DISMISS_KEY)) return;
+      if (localStorage.getItem(DISMISS_KEY) || sessionStorage.getItem(SESSION_KEY)) return;
     } catch {
       return;
     }
@@ -31,9 +35,21 @@ export function TelegramChip() {
       // Not together with the consent strip or the «Установить» card.
       const strip =
         root.hasAttribute('data-cookie-strip') || root.hasAttribute('data-install-hint');
+      // Only once the strip has been answered: not in the moment before it slides in.
+      let answered = false;
+      try {
+        answered = !cookieStripDue(localStorage.getItem(COOKIE_CONSENT_KEY));
+      } catch {
+        answered = false;
+      }
       const intro = document.getElementById('intro');
-      if (window.scrollY > 600 && !strip && (!intro || intro.hidden)) {
+      if (window.scrollY > 600 && answered && !strip && (!intro || intro.hidden)) {
         setShown(true);
+        try {
+          sessionStorage.setItem(SESSION_KEY, '1');
+        } catch {
+          // Storage blocked: it may come up again on the next page load.
+        }
         window.removeEventListener('scroll', check);
       }
     };

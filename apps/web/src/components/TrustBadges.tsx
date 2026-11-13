@@ -1,4 +1,5 @@
 import { Icon, type IconName } from '@/components/Icon';
+import { MIN_ORDER_TEXT } from '@/lib/prices';
 
 // Shown on pages that list every provider's machines: claims that only the
 // house fleet can back are said about СпецПласт16 by name.
@@ -6,7 +7,7 @@ const BADGES: { icon: IconName; title: string; text: string }[] = [
   { icon: 'helmet', title: 'С машинистом', text: 'Машина приезжает с машинистом' },
   { icon: 'receipt', title: 'НДС у СпецПласт16', text: 'Безнал для юрлиц; у других — уточняйте' },
   { icon: 'document', title: 'Договор с исполнителем', text: 'Закрывающие документы — от него' },
-  { icon: 'clock', title: 'Почасовая оплата', text: 'Платите за отработанные часы' },
+  { icon: 'clock', title: 'Почасовая оплата', text: MIN_ORDER_TEXT },
 ];
 
 export function TrustBadges({ dark = false }: { dark?: boolean }) {

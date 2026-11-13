@@ -1,4 +1,5 @@
 import type { MachineType } from '@/lib/machinePhotos';
+import { PLATFORM_MIN_ORDER_HOURS, PLATFORM_MIN_ORDER_TEXT } from '@specai/shared/src/promise';
 
 // The owner's hourly prices with an operator, ₽/h — the single source for the
 // whole site (catalogue cards, FAQ, landings, wizard, estimate, /stroyka,
@@ -6,8 +7,18 @@ import type { MachineType } from '@/lib/machinePhotos';
 // The database copy of these rates is set by
 // packages/database/prisma/ensure-fleet.ts (another package): keep it in step.
 
-/** A shift is 8 hours. */
+/** A shift is 8 hours: the unit of the «за смену» price. */
 export const SHIFT_HOURS = 8;
+
+/**
+ * The smallest order (owner, 2026-11-13): 4 hours, then by the hour — one
+ * number, shared with the assistant (packages/shared/src/promise.ts). Only
+ * the words of the site; prices and the bookings' sums do not change.
+ */
+export const MIN_ORDER_HOURS = PLATFORM_MIN_ORDER_HOURS;
+
+/** «Минимум 4 часа, дальше по часам» — the one wording of the minimum order. */
+export const MIN_ORDER_TEXT = PLATFORM_MIN_ORDER_TEXT;
 
 /** Most machines. */
 export const DEFAULT_RATE = 4000;
@@ -112,7 +123,7 @@ export const PRICE_GROUPS: { names: string; types: MachineType[]; rate: number }
 /** «Сколько стоит аренда?»: every price from RATES. */
 export function priceFaqAnswer(): string {
   const list = PRICE_GROUPS.map((g) => `${g.names} — ${fromPrice(g.rate)}`).join(', ');
-  return `${list}. Все цены — с машинистом, смена ${SHIFT_HOURS} часов.`;
+  return `${list}. Все цены — с машинистом, смена ${SHIFT_HOURS} часов. ${MIN_ORDER_TEXT}.`;
 }
 
 /**

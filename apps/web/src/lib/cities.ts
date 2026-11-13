@@ -3,7 +3,7 @@ import { isHouseEquipment } from '@/lib/fleet';
 import type { Landing } from '@/lib/landings';
 import { LANDINGS } from '@/lib/landings';
 import { MACHINE_LABELS } from '@/lib/machinePhotos';
-import { fromPerHour, rateOf, rub, SHIFT_HOURS } from '@/lib/prices';
+import { fromPerHour, MIN_ORDER_TEXT, rateOf, rub, SHIFT_HOURS } from '@/lib/prices';
 import { SITE } from '@/lib/site';
 
 // City pages /arenda/<slug>/<city> across Russia (owner, 2026-10-17: the
@@ -529,9 +529,9 @@ export function cityFaq(
     offer.kind === 'available' && offer.fromRate !== null
       ? `Сейчас на площадке ${city.inCity} — ${fromPerHour(offer.fromRate)}, ` +
         `смена ${SHIFT_HOURS} ч — от ${rub(offer.fromRate * SHIFT_HOURS)} ₽. ` +
-        `Цену назначает исполнитель, оплата — по отработанным часам. ${DELIVERY_NOTE}`
-      : `Цену назначает исполнитель: оставьте заявку, и исполнители, которые работают ` +
-        `${city.inCity} и рядом, пришлют свои предложения. Сравните и выберите — для заказчика это бесплатно.`;
+        `Цену назначает исполнитель. ${MIN_ORDER_TEXT}. ${DELIVERY_NOTE}`
+      : `Цену назначает исполнитель: оставьте заявку, и исполнители площадки, готовые выехать ` +
+        `${city.inCity}, пришлют свои предложения. Сравните и выберите — для заказчика это бесплатно.`;
   const who =
     offer.kind === 'available'
       ? offer.houseServes

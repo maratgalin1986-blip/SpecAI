@@ -101,6 +101,7 @@ export function CallbackForm({
       noValidate
       onSubmit={handleSubmit}
       data-callback-form
+      data-lead-form
       className="ym-hide-content flex flex-col gap-3"
     >
       <div>
@@ -108,30 +109,6 @@ export function CallbackForm({
           {title}
         </h2>
         <p className={`mt-1 text-sm ${dark ? 'text-slate-300' : 'text-slate-600'}`}>{subtitle}</p>
-      </div>
-      <div className={`grid grid-cols-1 gap-3 ${compact ? '' : 'sm:grid-cols-2'}`}>
-        {!compact && (
-          <input
-            name="name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            maxLength={100}
-            placeholder="Имя (необязательно)"
-            autoComplete="name"
-            aria-label="Имя (необязательно)"
-            className={input}
-          />
-        )}
-        <PhoneInput
-          value={phone}
-          onChange={(next) => {
-            setPhone(next);
-            if (fieldErrors.phone) setFieldErrors((current) => ({ ...current, phone: undefined }));
-          }}
-          error={fieldErrors.phone}
-          className={input}
-          dark={dark}
-        />
       </div>
       {!compact && (
         <textarea
@@ -163,6 +140,33 @@ export function CallbackForm({
           }}
         />
       )}
+      {/* What and where first, the contacts last: nothing stands between the
+          phone and the consent, and the phone field is never squeezed into
+          half a narrow column (its mask reads whole on every width). */}
+      <div className="grid grid-cols-1 gap-3">
+        {!compact && (
+          <input
+            name="name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            maxLength={100}
+            placeholder="Имя (необязательно)"
+            autoComplete="name"
+            aria-label="Имя (необязательно)"
+            className={input}
+          />
+        )}
+        <PhoneInput
+          value={phone}
+          onChange={(next) => {
+            setPhone(next);
+            if (fieldErrors.phone) setFieldErrors((current) => ({ ...current, phone: undefined }));
+          }}
+          error={fieldErrors.phone}
+          className={input}
+          dark={dark}
+        />
+      </div>
       {/* Honeypot for bots — hidden from people and screen readers. */}
       <input
         tabIndex={-1}

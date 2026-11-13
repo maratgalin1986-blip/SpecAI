@@ -9,7 +9,7 @@ import { TelegramButton } from '@/components/TelegramButton';
 import { DELIVERY_NOTE } from '@/lib/cities';
 import { pageMeta, pickTitle } from '@/lib/pageMeta';
 import { fromPerHour, fromPrice, rateOf } from '@/lib/prices';
-import { SHIFT, SITE } from '@/lib/site';
+import { CALLBACK_IN, SHIFT, SITE } from '@/lib/site';
 import { siteUrl } from '@/lib/siteUrl';
 import {
   HOUSE_DELIVERY_PROMISE,
@@ -138,7 +138,7 @@ export default function SnegPage() {
             <SnegForm />
             <p className="mt-4 rounded-xl bg-white/5 p-3 text-sm leading-snug text-slate-200 ring-1 ring-white/10">
               Вам ответит <span className="font-bold text-white">Иван</span>, начальник отдела
-              логистики {SITE.name}. Перезвонит за 15 минут в рабочее время.
+              логистики {SITE.name}. Перезвонит за {CALLBACK_IN} в рабочее время.
             </p>
             <p className="mt-3 text-xs text-slate-400">
               {SITE.legalName} · ИНН {SITE.inn} · {SITE.city} · работаем с НДС

@@ -72,7 +72,7 @@ export function orderLink(orderId: string, campaign: string): string {
 // so no phone number or name of anyone can get into the chat through them.
 export function replyText(link: string): string {
   // The author has no account: providers reach them, the link is for providers.
-  return `Заявку увидят исполнители рядом на ${SITE.platform} и свяжутся с автором. Есть такая техника — предложите цену: ${link}`;
+  return `Заявку увидят исполнители на ${SITE.platform} и свяжутся с автором. Есть такая техника — предложите цену: ${link}`;
 }
 
 export function followUpText(count: number, link: string): string {

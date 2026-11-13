@@ -1,23 +1,28 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { useSession } from 'next-auth/react';
 import type { Map as LeafletMap, Marker } from 'leaflet';
 import { createBaseMap, loadLeaflet, nearParam, pinIcon, showVisitor } from '@/components/leaflet';
 import { drawProviderLayer, type MapSelection } from '@/components/providerLayer';
 import { TAP_ERRORS, tapVisitorFix } from '@/components/visitorPosition';
-import { ConsentText } from '@/components/ConsentText';
+import { CONSENT_ERROR, ConsentCheck, focusFirstInvalid, PhoneInput } from '@/components/FormBits';
 import { LeadSuccess } from '@/components/LeadSuccess';
-import { EUROPEAN_RUSSIA, formatCoords, inServiceArea } from '@/lib/geo';
+import { formatCoords, inServiceArea, nearestCity } from '@/lib/geo';
 import { LANDINGS, landingListRate } from '@/lib/landings';
-import { pointMessageLine, type MapPoint } from '@/lib/mapPoint';
+import { mapOrderMessage, type MapPoint } from '@/lib/mapPoint';
+import { phoneError } from '@/lib/phoneMask';
+import { LEAD_PHONE_VISIBILITY } from '@/lib/phoneVisibility';
 import { rub } from '@/lib/prices';
 import { SITE } from '@/lib/site';
-import { leadErrorText, submitLead } from '@/lib/submitLead';
+import { ANONYMOUS_LEAD_NAME, leadErrorText, submitLead } from '@/lib/submitLead';
 import { useHydrated } from '@/lib/useHydrated';
 
 // «Где нужна техника?»: the customer marks the work site on the map (a tap,
 // «Я здесь» or an address search), picks the machine and leaves a phone. The
-// lead carries the point with a Yandex Maps link for the dispatcher.
+// lead carries the point with a Yandex Maps link for the dispatcher. The
+// point is optional: without it the заявка still goes, the dispatcher asks for
+// the address, and the city is the one the page knows (or none).
 
 const WHEN = ['Сегодня', 'Завтра', 'На этой неделе', 'Позже, уточню'] as const;
 
@@ -38,6 +43,25 @@ export function OrderMap({ embed = false }: { embed?: boolean }) {
   const [website, setWebsite] = useState('');
   const [status, setStatus] = useState<'idle' | 'sending' | 'sent'>('idle');
   const [error, setError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<{ phone?: string; consent?: string }>({});
+  const formRef = useRef<HTMLFormElement>(null);
+  // The visitor's own position, when the browser gave it: names the city of a
+  // заявка sent without a point.
+  const visitorRef = useRef<{ lat: number; lon: number } | null>(null);
+  // Machines «на линии» are for accounts only (GET /api/line/nearby): a guest's
+  // map does not ask for them, so it gets no 401. Settles once the session is known.
+  const { status: sessionStatus } = useSession();
+  const accountRef = useRef<{ promise: Promise<boolean>; resolve: (value: boolean) => void }>(null);
+  if (!accountRef.current) {
+    let resolve: (value: boolean) => void = () => {};
+    const promise = new Promise<boolean>((done) => {
+      resolve = done;
+    });
+    accountRef.current = { promise, resolve };
+  }
+  useEffect(() => {
+    if (sessionStatus !== 'loading') accountRef.current?.resolve(sessionStatus === 'authenticated');
+  }, [sessionStatus]);
   // «При выборе заказчика или исполнителя — видно вокруг него, кто рядом» (owner, 2026-11-08).
   const [selection, setSelection] = useState<MapSelection | null>(null);
   const hydrated = useHydrated();
@@ -50,18 +74,16 @@ export function OrderMap({ embed = false }: { embed?: boolean }) {
         if (cancelled || !element.current || mapRef.current) return;
         const map = createBaseMap(L, element.current);
         mapRef.current = map;
-        // Opens on the European part of the country, where the pins are — the
-        // country-wide view on a tall phone map showed mostly the Arctic Ocean.
-        // The visitor's own place (below) and the pins' card still move it.
+        // Opens on the whole country (createBaseMap's view) and moves to the
+        // visitor's town once the browser gives the position (owner, 2026-10-17:
+        // all of Russia, no region assumed). The pins' card still moves it.
         map.invalidateSize();
-        map.fitBounds(
-          [
-            [EUROPEAN_RUSSIA.south, EUROPEAN_RUSSIA.west],
-            [EUROPEAN_RUSSIA.north, EUROPEAN_RUSSIA.east],
-          ],
-          { animate: false },
-        );
-        showVisitor(L, map, { centreZoom: 11 });
+        showVisitor(L, map, {
+          centreZoom: 11,
+          onFix: (fix) => {
+            visitorRef.current = { lat: fix.lat, lon: fix.lon };
+          },
+        });
         // Every provider with a label over its pin — on the line or not —, the
         // machines on the line (signed in), customers with open orders and the
         // «приём заявок» points where nobody is near. A tap lists the neighbours.
@@ -69,6 +91,7 @@ export function OrderMap({ embed = false }: { embed?: boolean }) {
           onSelect: (next) => {
             if (!cancelled) setSelection(next);
           },
+          signedIn: accountRef.current?.promise,
         });
         const place = (lat: number, lon: number, zoom?: number) => {
           if (!inServiceArea(lat, lon)) {
@@ -130,20 +153,39 @@ export function OrderMap({ embed = false }: { embed?: boolean }) {
     }
   }
 
+  /** The city the page knows: the visitor's position, else the town the map shows. */
+  function knownCity(): string | null {
+    const visitor = visitorRef.current;
+    if (visitor) return nearestCity(visitor.lat, visitor.lon)?.name ?? null;
+    const map = mapRef.current;
+    if (!map || map.getZoom() < 10) return null;
+    const centre = map.getCenter();
+    return nearestCity(centre.lat, centre.lng, 30)?.name ?? null;
+  }
+
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
-    if (!point) {
-      setError('Отметьте на карте, где нужна техника');
+    setError(null);
+    const problems = {
+      phone: phoneError(phone) ?? undefined,
+      consent: consent ? undefined : CONSENT_ERROR,
+    };
+    setFieldErrors(problems);
+    if (problems.phone || problems.consent) {
+      focusFirstInvalid(formRef.current);
       return;
     }
-    setError(null);
     setStatus('sending');
-    const message = [
-      `Заказ с карты: ${machine || 'техника — подобрать'}, ${when.toLowerCase()}.`,
-      pointMessageLine(point),
-    ].join('\n');
+    const message = mapOrderMessage({ machine, when, point, city: point ? null : knownCity() });
     try {
-      await submitLead({ name, phone, message, source: 'map', consent, website });
+      await submitLead({
+        name: name.trim() || ANONYMOUS_LEAD_NAME,
+        phone,
+        message,
+        source: 'map',
+        consent,
+        website,
+      });
       setStatus('sent');
     } catch (err) {
       setStatus('idle');
@@ -207,7 +249,7 @@ export function OrderMap({ embed = false }: { embed?: boolean }) {
         {hint ??
           (point
             ? `📍 Место работ: ${formatCoords(point.lat, point.lon)} Значок можно перетащить.`
-            : 'Нажмите на карту там, где будет работать техника.')}
+            : 'Нажмите на карту там, где будет работать техника. Можно и без точки — адрес уточнит диспетчер.')}
       </p>
 
       {selection && (
@@ -251,8 +293,12 @@ export function OrderMap({ embed = false }: { embed?: boolean }) {
       )}
 
       <form
+        ref={formRef}
         method="post"
+        noValidate
         onSubmit={handleSubmit}
+        data-map-order-form
+        data-lead-form
         className="ym-hide-content flex flex-col gap-3 rounded-2xl bg-white p-5 ring-1 ring-slate-200"
       >
         <h2 className="text-lg font-semibold">Что и когда нужно</h2>
@@ -289,18 +335,14 @@ export function OrderMap({ embed = false }: { embed?: boolean }) {
             aria-label="Имя (необязательно)"
             className={input}
           />
-          <input
-            required
-            type="tel"
+          <PhoneInput
             value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-            maxLength={30}
-            pattern="(?:\D*\d){10,15}\D*"
-            title="Номер телефона: от 10 цифр"
-            placeholder="+7 (___) ___-__-__"
-            autoComplete="tel"
-            inputMode="tel"
-            aria-label="Телефон"
+            onChange={(next) => {
+              setPhone(next);
+              if (fieldErrors.phone)
+                setFieldErrors((current) => ({ ...current, phone: undefined }));
+            }}
+            error={fieldErrors.phone}
             className={input}
           />
         </div>
@@ -314,16 +356,20 @@ export function OrderMap({ embed = false }: { embed?: boolean }) {
           aria-hidden
           name="website"
         />
-        <label className="flex items-start gap-2 text-xs text-slate-600">
-          <input
-            type="checkbox"
-            required
-            checked={consent}
-            onChange={(e) => setConsent(e.target.checked)}
-            className="mt-0.5 h-6 w-6 shrink-0"
-          />
-          <ConsentText />
-        </label>
+        <ConsentCheck
+          checked={consent}
+          onChange={(next) => {
+            setConsent(next);
+            if (next) setFieldErrors((current) => ({ ...current, consent: undefined }));
+          }}
+          error={fieldErrors.consent}
+        />
+        {!point && (
+          // Said before sending, not as an error after it: the point helps, it is not required.
+          <p data-map-no-point className="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-900">
+            Точка на карте не отмечена — ничего страшного: адрес уточнит диспетчер по телефону.
+          </p>
+        )}
         {error && (
           <p role="alert" className="text-sm text-red-700">
             {error}
@@ -337,7 +383,8 @@ export function OrderMap({ embed = false }: { embed?: boolean }) {
           {status === 'sending' ? 'Отправляем…' : 'Заказать технику сюда'}
         </button>
         <p className="text-xs text-slate-500">
-          Диспетчер перезвонит и назовёт точную цену с подачей до этого места.
+          Диспетчер перезвонит и назовёт точную цену с подачей до этого места.{' '}
+          {LEAD_PHONE_VISIBILITY}
         </p>
       </form>
     </div>

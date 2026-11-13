@@ -23,7 +23,7 @@ describe('«Пригласи друга» in the app', () => {
   it('ends the shared message with the link and keeps the promise', () => {
     const message = invitationMessage('PROVIDER', 'https://example.com/r/K7M2QXA');
     expect(message.endsWith(' https://example.com/r/K7M2QXA')).toBe(true);
-    expect(message).toContain('бесплатно и без посредников');
+    expect(message).toContain('без комиссии для заказчика');
   });
 
   it('counts the friends who signed up', () => {
