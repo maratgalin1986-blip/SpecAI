@@ -807,7 +807,7 @@ async function runOutreach(
       ? 'Не писали: федеральная сеть с филиалами по стране — одна компания'
       : candidateSkipText(row.name)
         ? 'Не писали: похоже на имя человека, а не на компанию'
-        : prospect.kind === 'site' && hasOwnDomainEmail(row.email)
+        : hasOwnDomainEmail(row.email)
           ? 'Не писали: почта на своём домене — у фирмы, вероятно, уже есть сайт'
           : null;
     if (unfit) {
