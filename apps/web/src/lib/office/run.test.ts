@@ -961,49 +961,21 @@ describe('правило «есть сайт — не кандидат» — т�
     }),
   ];
 
-  it('websiteIsFine и флаг источника: проекту площадки сайт не мешает', () => {
+  it('websiteIsFine: фирма с сайтом не кандидат ни для одного проекта (владелец, 2026-11-13)', () => {
     expect(websiteIsFine('sites')).toBe(false);
-    expect(websiteIsFine('providers')).toBe(true);
-    expect(sourceNiche(nicheByKey('freight')!).websiteOk).toBe(true);
-    expect(sourceNiche(nicheByKey('construction')!).websiteOk).toBe(true);
+    expect(websiteIsFine('providers')).toBe(false);
+    expect(sourceNiche(nicheByKey('freight')!).websiteOk).toBeUndefined();
     expect(sourceNiche(nicheByKey('car_repair')!).websiteOk).toBeUndefined();
   });
 
-  it('проект площадки: фирма с сайтом становится кандидатом, в досье нет «нет своего сайта»', async () => {
+  it('проект площадки: фирма с сайтом мимо, без сайта — кандидат', async () => {
     const { db, prospects } = fakeDb();
     const result = await runStep(
       { agent: 'providers', niche: 'freight', city: 'Омск', trigger: 'cron' },
       { db, source: source(ok(list())) },
     );
-    expect(result).toMatchObject({ found: 2, created: 2, skipped: 0, error: null });
-    expect(prospects.map((p) => [p.kind, p.niche, p.sourceRef])).toEqual([
-      ['provider', 'freight', 'osm:node/1'],
-      ['provider', 'freight', 'osm:node/2'],
-    ]);
-    expect(parseDossier(prospects[0]!.dossierJson)!.gaps).toContain('нет своего сайта');
-    expect(parseDossier(prospects[1]!.dossierJson)!.gaps).not.toContain('нет своего сайта');
-  });
-
-  it('заказчики площадки (строители) — тоже с сайтом, вид кандидата остаётся provider', async () => {
-    const { db, prospects } = fakeDb();
-    const result = await runStep(
-      { agent: 'providers', niche: 'construction', city: 'Омск', trigger: 'cron' },
-      {
-        db,
-        source: source(
-          ok([
-            candidate({
-              name: 'СтройГрад',
-              sourceRef: 'osm:node/5',
-              phone: '+78432000005',
-              website: 'https://stroygrad.example',
-            }),
-          ]),
-        ),
-      },
-    );
-    expect(result).toMatchObject({ found: 1, created: 1, skipped: 0 });
-    expect(prospects[0]).toMatchObject({ kind: 'provider', niche: 'construction' });
+    expect(result).toMatchObject({ found: 2, created: 1, error: null });
+    expect(prospects.map((p) => p.sourceRef)).toEqual(['osm:node/1']);
   });
 
   it('«Сайты»: те же фирмы — с сайтом мимо, как раньше', async () => {

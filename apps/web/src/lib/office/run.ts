@@ -159,11 +159,12 @@ function defaultDb(): OfficeDb {
 }
 
 /**
- * «Есть сайт — не кандидат» — правило только проекта «Сайты»: там мы сайт продаём. Проект
- * площадки зовёт публиковать технику и заказывать её, и фирма с сайтом — такой же адресат.
+ * «Есть сайт — не кандидат» — для обоих проектов (владелец, 2026-11-13: «у них же есть сайт, бери
+ * фирмы без сайта»): у фирмы с сайтом есть и свои каналы заказов, ПЭК и «Деловые линии» получили
+ * письма именно так. Функция оставлена, чтобы правило менялось в одном месте.
  */
-export function websiteIsFine(agent: AgentId): boolean {
-  return AGENTS[agent].kind !== 'site';
+export function websiteIsFine(_agent: AgentId): boolean {
+  return false;
 }
 
 export function sourceNiche(niche: Niche): SourceNiche {
