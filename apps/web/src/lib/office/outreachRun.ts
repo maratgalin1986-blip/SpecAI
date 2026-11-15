@@ -53,6 +53,7 @@ import { collectAngleStats, chooseAngle, type AngleStat, type LearningDb } from 
 import { applicableAngles, buildOffer, type OfferAngle } from './offer';
 import { readOfficeSettings, type OutreachMode } from '@/lib/office/settings';
 import { inLocalHours } from './localTime';
+import { outreachPausedByOwner } from './pause';
 import { nichePitch } from './pitch';
 import {
   officeMailConfigured,
@@ -1260,7 +1261,7 @@ export function inAutoSendHours(now: Date): boolean {
  */
 export async function sendOutreach(now: Date, deps: OutreachDeps = {}): Promise<OutreachResult> {
   const settings = await (deps.settings ?? readOfficeSettings)();
-  if (settings.outreachPaused) {
+  if (settings.outreachPaused || outreachPausedByOwner(now)) {
     return { email: 0, whatsapp: 0, followUps: 0, skipped: 'paused', errors: 0 };
   }
   // Сам офис (режим 'auto', без кнопки владельца) пишет фирме только в её рабочее время
@@ -1346,7 +1347,8 @@ async function defaultSendLock(now: Date): Promise<(() => Promise<void>) | null>
  */
 export async function planOutreach(now: Date, deps: OutreachDeps = {}): Promise<OutreachPlan> {
   const settings = await (deps.settings ?? readOfficeSettings)();
-  if (settings.outreachPaused) return { items: [], skipped: 'paused' };
+  if (settings.outreachPaused || outreachPausedByOwner(now))
+    return { items: [], skipped: 'paused' };
   const { result, items } = await runOutreach(
     now,
     { ...deps, onlyApproved: undefined },

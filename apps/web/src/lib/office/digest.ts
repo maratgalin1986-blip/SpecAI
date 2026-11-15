@@ -6,6 +6,7 @@
 // Вторая волна (U3): лучший заход персональных предложений и «горячие» — открыли превью за
 // 7 дней и ещё не ответили (им пора позвонить).
 
+import { outreachPausedByOwner } from './pause';
 import { EMPTY_RUNS, FAILING_RUNS } from './searchHealth';
 import { phoneText } from './pages';
 import { prisma } from '@specai/database';
@@ -489,7 +490,8 @@ export async function collectDigest(
   const plan = resolvePlan(settings);
   const { step } = nextStep(plan.steps, plan.cursor);
   const outreachPaused =
-    settings.find((s) => s.key === OFFICE_SETTINGS.outreachPaused)?.value.trim() === '1';
+    settings.find((s) => s.key === OFFICE_SETTINGS.outreachPaused)?.value.trim() === '1' ||
+    outreachPausedByOwner(now);
   return buildDigest({
     date: now,
     runs,
