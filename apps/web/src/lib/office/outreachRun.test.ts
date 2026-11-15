@@ -1,3 +1,4 @@
+import { OUTREACH_PAUSED_UNTIL, outreachPausedByOwner } from './pause';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { mskDayBounds } from '@/lib/adminCrm';
 import type { OfficeMail as SendEmailInput } from './smtp';
@@ -1905,5 +1906,22 @@ describe('одна компания — одно письмо (владелец,
     );
     expect(result).toMatchObject({ email: 0, filtered: 1 });
     expect(rows[0]).toMatchObject({ status: 'DECLINED' });
+  });
+});
+
+describe('пауза рассылки владельца (2026-11-15)', () => {
+  it('до конца паузы не уходит ни письмо, ни список писем дня; после — работает', async () => {
+    const inside = new Date(OUTREACH_PAUSED_UNTIL.getTime() - 3_600_000);
+    const after = new Date(OUTREACH_PAUSED_UNTIL.getTime() + 3_600_000);
+    const auto = settings({ outreachMode: 'auto', whatsappAuto: false, dailyCap: 20 });
+    const { db } = fakeDb([row({ id: 'a' })]);
+    expect(await sendOutreach(inside, deps(db, { settings: auto }))).toMatchObject({
+      email: 0,
+      skipped: 'paused',
+    });
+    expect((await planOutreach(inside, deps(db, { settings: auto }))).skipped).toBe('paused');
+    expect(okEmail).not.toHaveBeenCalled();
+    expect(outreachPausedByOwner(inside)).toBe(true);
+    expect(outreachPausedByOwner(after)).toBe(false);
   });
 });
