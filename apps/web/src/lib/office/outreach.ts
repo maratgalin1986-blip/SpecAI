@@ -100,9 +100,22 @@ const EMAIL_ONCE_LINE =
   'Адрес — из открытой карточки компании; если не ответите, напомним один раз, не больше.';
 /** Письмо и сообщение — не оферта: условия на странице услуги (бизнес-план, § 8.10, § 9.4). */
 export const NOT_OFFER_LINE = 'Письмо не является офертой: условия и цены — на странице услуги.';
-/** Что это за страница: черновик, не официальный сайт (§ 8.10). */
-const DRAFT_LINE =
-  'Это черновик, а не официальный сайт: в поиске его нет, открывается только по ссылке.';
+/**
+ * Письмо о сайте не делает фирме «пробный сайт» (владелец, 2026-11-16): вместо него — пример нашей
+ * работы со ссылкой на наш сайт и фраза, что каждому делаем индивидуально.
+ */
+const EXAMPLE_LINE =
+  'Пример нашей работы — наш сайт с 3D-городом, по которому можно прогуляться: ссылка ниже.';
+const INDIVIDUAL_LINE =
+  'Делаем индивидуально под каждую компанию — на любом конструкторе или с нуля, не по шаблону.';
+/** Подпись ссылки на наш сайт как пример работы. */
+export const EXAMPLE_LINK_LABEL = 'Наш сайт — пример нашей работы';
+
+/** Адрес нашего сайта для письма о сайте, с метками канала и фирмы. */
+function exampleUrl(input: OutreachInput, source: OutreachChannel, slug: string): string {
+  const query = new URLSearchParams({ utm_source: source, utm_campaign: `example-${slug}` });
+  return `${input.baseUrl.replace(/\/+$/, '')}/?${query.toString()}`;
+}
 /**
  * Что предлагаем (владелец, 2026-11-12): лендинг — одна страница, дешевле; сайт — с разделами,
  * дороже; дальше сопровождение по подписке. Цен в первом письме нет (К6) — они на странице услуги.
@@ -222,16 +235,17 @@ interface Letter {
 
 function serviceLinks(p: OutreachProspect, input: OutreachInput): Letter['links'] {
   return [
-    ...(input.showUrl ? [{ label: SHOW_LINK_LABEL, url: input.showUrl }] : []),
+    { label: EXAMPLE_LINK_LABEL, url: exampleUrl(input, 'email', p.slug) },
     { label: SERVICE_LINK_LABEL, url: serviceUrl(input.baseUrl, 'email', p.slug) },
   ];
 }
 
-/**
- * Подпись ссылки на презентацию под фирму; пример нашей работы и вход в 3D-город — в ней, письмо
- * их не пересказывает (короче письмо — больше ответов).
- */
-export const SHOW_LINK_LABEL = 'Презентация и 3D-город — пример нашей работы';
+/** Куда ведёт кнопка письма о сайте: презентация под фирму, без неё — наш сайт. */
+function siteButton(p: OutreachProspect, input: OutreachInput): { button: string; url: string } {
+  return input.showUrl
+    ? { button: 'Смотреть презентацию', url: input.showUrl }
+    : { button: 'Открыть наш сайт', url: exampleUrl(input, 'email', p.slug) };
+}
 
 /** Что сделаем именно этой фирме и где это посмотреть; без презентации — ничего. */
 function pitchParagraphs(input: OutreachInput): string[] {
@@ -240,22 +254,16 @@ function pitchParagraphs(input: OutreachInput): string[] {
 
 function siteLetter(p: OutreachProspect, input: OutreachInput): Letter {
   const name = quotedName(p.name);
-  const niche = input.nicheTitle.trim().toLowerCase();
   return {
-    subject: `Сделали страницу для ${name} — посмотрите`,
+    subject: `Сайт для ${name}`,
     greeting: GREETING,
     paragraphs: [
-      `В открытой карточке компании ${name} на карте не указан сайт. Мы собрали по данным ` +
-        `карточки черновик страницы (${niche}): посмотреть можно по ссылке ниже. ${DRAFT_LINE}`,
-      // Превью показывает то, что есть в карточке; услуги — типовой список сферы; форма заявки
-      // включается только после подключения (К10).
-      'Что на странице: название, адрес, часы работы и телефон из карточки, кнопка «Позвонить» ' +
-        'и ссылка на карту; список услуг — типовой для вашей сферы, поправим по вашим словам. ' +
-        `После подключения добавим форму заявки: ${LEADS_TO_EMAIL_LINE.charAt(0).toLowerCase()}${LEADS_TO_EMAIL_LINE.slice(1)}.`,
+      `В открытой карточке компании ${name} на карте не указан сайт.`,
+      `${EXAMPLE_LINE} ${INDIVIDUAL_LINE}`,
       ...pitchParagraphs(input),
       NEXT_STEP_LINE,
     ],
-    button: 'Открыть страницу',
+    ...siteButton(p, input),
     links: serviceLinks(p, input),
     closing: [ASK_LINE, `${STOP_LINE} ${EMAIL_ONCE_LINE}`],
   };
@@ -274,11 +282,6 @@ export function packageLine(
   );
 }
 
-/** Строка захода из предложения: второй пункт — тот, что отличает заход (offer.ts). */
-function angleLine(offer: NonNullable<OutreachInput['offer']>): string {
-  return (offer.bullets[1] ?? offer.bullets[0] ?? '').trim();
-}
-
 /** Письмо для сайта из персонального предложения (U2). */
 function offerLetter(
   p: OutreachProspect,
@@ -288,16 +291,16 @@ function offerLetter(
   return {
     subject: offer.subject,
     greeting: GREETING,
-    // Короткое письмо (разведка 2026-11-12): факт о карточке, одна личная строка захода, что
-    // сделаем именно этой фирме, выбор «лендинг или сайт» и один вопрос. Что на странице, видно
-    // на обложке письма и в презентации — списком не пересказываем.
+    // Короткое письмо (разведка 2026-11-12): факт о карточке (заход), пример нашей работы, что
+    // сделаем именно этой фирме, выбор «лендинг или сайт» и один вопрос. Пробной страницы
+    // фирме не делаем (владелец, 2026-11-16).
     paragraphs: [
-      `${offer.opener} Мы собрали по данным карточки черновик страницы — он по ссылке ниже. ` +
-        DRAFT_LINE,
-      ...[...pitchParagraphs(input), angleLine(offer)].filter(Boolean).slice(0, 2),
+      offer.opener,
+      `${EXAMPLE_LINE} ${INDIVIDUAL_LINE}`,
+      ...pitchParagraphs(input),
       NEXT_STEP_LINE,
     ],
-    button: 'Открыть страницу',
+    ...siteButton(p, input),
     links: serviceLinks(p, input),
     closing: [ASK_LINE, `${STOP_LINE} ${EMAIL_ONCE_LINE}`],
   };
@@ -535,13 +538,14 @@ function followUpLetter(p: OutreachProspect, input: OutreachInput): Letter {
     };
   }
   return {
-    subject: `Напоминаем: страница для ${name} готова`,
+    subject: `Напоминаем: сайт для ${name}`,
     greeting,
     paragraphs: [
-      `Недавно мы писали вам: сделали страницу для ${name} по данным открытой карточки ` +
-        `компании. Посмотрите — это 30 секунд. ${LEADS_TO_EMAIL_LINE} после подключения.`,
+      `Недавно мы писали вам: у ${name} в открытой карточке на карте не указан сайт. Сделаем ` +
+        'сайт или лендинг индивидуально под вашу компанию; пример нашей работы — по ссылке ниже. ' +
+        `${LEADS_TO_EMAIL_LINE} после подключения.`,
     ],
-    button: 'Открыть страницу',
+    ...siteButton(p, input),
     links: serviceLinks(p, input),
     closing: closing('Если интересно'),
   };
@@ -671,7 +675,7 @@ function render(letter: Letter, input: OutreachInput, card?: LetterCard): Outrea
 }
 
 /**
- * Обложка — «черновик сайта для вашей компании» с кнопкой на её страницу. Заказчику техники
+ * Обложка — «презентация для вашей компании» с кнопкой на неё. Заказчику техники
  * страницу никто не делал, поэтому обложки у его письма нет.
  */
 function cardOf(p: OutreachProspect, input: OutreachInput): LetterCard | undefined {
@@ -681,7 +685,7 @@ function cardOf(p: OutreachProspect, input: OutreachInput): LetterCard | undefin
     label:
       p.kind === 'provider'
         ? 'Страница вашей компании на площадке заявок'
-        : 'Черновик сайта для вашей компании',
+        : 'Презентация для вашей компании',
     niche: input.nicheTitle.trim(),
     city: p.city?.trim() || null,
     address: p.address?.trim() || null,
@@ -749,8 +753,8 @@ export function buildWhatsAppText(p: OutreachProspect, input: OutreachInput): st
   }
   if (input.offer) return offerWhatsAppText(p, input, input.offer);
   const body =
-    `В открытой карточке ${name} на карте не указан сайт — собрали вам ` +
-    `черновик страницы по данным карточки: ${input.previewUrl} Это не официальный сайт, в поиске его нет.`;
+    `В открытой карточке ${name} на карте не указан сайт. Делаем сайты и лендинги индивидуально ` +
+    `под каждую компанию; пример нашей работы: ${exampleUrl(input, 'whatsapp', p.slug)}`;
   // Без адреса почты в карточке пересылать заявки некуда — просим его в ответ.
   const leads = p.email?.trim()
     ? `${LEADS_TO_EMAIL_LINE}.`
@@ -778,7 +782,7 @@ function offerWhatsAppText(
   offer: NonNullable<OutreachInput['offer']>,
 ): string {
   const intro = `Здравствуйте! Это ${SITE.contactPerson} из компании ${SITE.name}, мы делаем сайты.`;
-  const body = `${offer.opener} Собрали по данным карточки черновик страницы: ${input.previewUrl} Это не официальный сайт, в поиске его нет.`;
+  const body = `${offer.opener} Делаем сайты и лендинги индивидуально под каждую компанию; пример нашей работы: ${exampleUrl(input, 'whatsapp', p.slug)}`;
   // Короткий вариант (владелец, 2026-11-13: «WhatsApp лучше читают»): что сделаем именно этой
   // фирме, презентация под неё и один вопрос — как в письме.
   if (input.pitchLine && input.showUrl) {
@@ -801,7 +805,6 @@ function offerWhatsAppText(
       [intro, body, show, terms, service, ask, STOP_LINE],
     ]);
   }
-  const bullets = offer.bullets.map((b) => `• ${b}`).join('\n');
   const price = 'Условия и цены — по ссылке ниже; сообщение не является офертой.';
   const leads = p.email?.trim()
     ? `${LEADS_TO_EMAIL_LINE}.`
@@ -810,9 +813,8 @@ function offerWhatsAppText(
   const reply = `Ответьте здесь или позвоните ${SITE.phone}.`;
   const stop = `${STOP_LINE} ${WHATSAPP_ONCE_LINE}`;
   return firstThatFits([
-    [intro, body, bullets, price, leads, service, reply, stop],
-    [intro, body, bullets, price, leads, service, reply, STOP_LINE],
-    [intro, body, bullets, price, leads, service, STOP_LINE],
+    [intro, body, price, leads, service, reply, stop],
+    [intro, body, price, leads, service, reply, STOP_LINE],
     [intro, body, price, leads, service, STOP_LINE],
     [intro, body, price, leads, STOP_LINE],
     [intro, body, price, STOP_LINE],

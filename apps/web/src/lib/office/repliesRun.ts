@@ -345,7 +345,7 @@ async function applyReply(input: {
     const answer = buildReplyAnswer(kind, {
       name: row.name,
       slug: row.slug,
-      previewUrl: `${input.base}/preview/${encodeURIComponent(row.token)}`,
+      showUrl: `${input.base}/pokaz/${encodeURIComponent(row.token)}`,
       baseUrl: input.base,
       prices: input.prices,
       subject: message.subject,

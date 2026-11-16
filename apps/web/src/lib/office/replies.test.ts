@@ -75,7 +75,7 @@ describe('buildReplyAnswer', () => {
   const input = {
     name: 'Шиномонтаж',
     slug: 'shinomontazh',
-    previewUrl: 'https://site.example/preview/tok',
+    showUrl: 'https://site.example/pokaz/tok',
     baseUrl: 'https://site.example',
     prices: { setup: 15000, monthly: 1500 },
     subject: 'страница для «Шиномонтаж»',
@@ -86,9 +86,11 @@ describe('buildReplyAnswer', () => {
     expect(answer.subject).toBe('Re: страница для «Шиномонтаж»');
     expect(answer.text).toContain('15 000 ₽');
     expect(answer.text).toContain('1 500 ₽ в месяц');
-    expect(answer.text).toContain('https://site.example/preview/tok');
+    expect(answer.text).toContain('https://site.example/pokaz/tok');
+    expect(answer.text).toContain('Наш сайт — пример нашей работы: https://site.example/');
+    expect(answer.text).not.toContain('/preview/');
     expect(answer.text).toContain('реквизиты');
-    expect(answer.html).toContain('href="https://site.example/preview/tok"');
+    expect(answer.html).toContain('href="https://site.example/pokaz/tok"');
     expect(answer.text).not.toMatch(/[\u00a0\u202f]/);
   });
 

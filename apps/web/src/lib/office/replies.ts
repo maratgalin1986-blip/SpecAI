@@ -109,7 +109,8 @@ function rubles(value: number): string {
 export interface ReplyAnswerInput {
   name: string;
   slug: string;
-  previewUrl: string;
+  /** Презентация под фирму (/pokaz/<token>). */
+  showUrl: string;
   baseUrl: string;
   prices: OutreachInput['prices'];
   /** Тема письма фирмы — ответ уходит с «Re:». */
@@ -154,21 +155,20 @@ export function buildReplyAnswer(kind: ReplyKind, input: ReplyAnswerInput): Repl
     paragraphs.push(
       'Спасибо, договорились! Подготовим счёт и пришлём его ответным письмом в течение рабочего дня.',
       'Чтобы счёт был оформлен на вашу компанию, пришлите, пожалуйста, реквизиты: название, ИНН и ' +
-        'юридический адрес. Если что-то на странице нужно поправить до публикации — напишите, поправим.',
+        'юридический адрес. Если до запуска нужно что-то учесть в сайте — напишите.',
     );
   } else {
     paragraphs.push(
       'Спасибо за ответ! Коротко об условиях.',
-      'Страница уже собрана по данным карточки вашей компании — посмотреть её можно по ссылке ниже. ' +
-        'Если она вам подходит, мы публикуем её и дальше поддерживаем: правим тексты, услуги, часы и ' +
-        'фото по вашей просьбе, заявки с сайта приходят вам на почту.',
+      'Сайт или лендинг делаем индивидуально под вашу компанию: пример нашей работы и презентация — ' +
+        'по ссылкам ниже. После запуска дальше ведём сайт: правим тексты, услуги, часы и фото по ' +
+        'вашей просьбе, заявки с сайта приходят вам на почту.',
     );
     bullets.push(...priceLines);
     paragraphs.push(
-      'Оплата по счёту на расчётный счёт, договор — публичная оферта. До оплаты просмотр ни к чему ' +
-        'не обязывает.',
+      'Оплата по счёту на расчётный счёт, договор — публичная оферта. До оплаты ничего не обязывает.',
       'Если подходит — ответьте на это письмо «да» и пришлите реквизиты (название, ИНН, адрес): ' +
-        'подготовим счёт. Нужны правки на странице — напишите, что изменить.',
+        'подготовим счёт. Есть пожелания к сайту — напишите.',
     );
   }
   const closing = `Вопросы — ответом на это письмо или по телефону ${SITE.phone}.`;
@@ -181,7 +181,8 @@ export function buildReplyAnswer(kind: ReplyKind, input: ReplyAnswerInput): Repl
     '',
     ...(bullets.length ? [...bullets.map((b) => `• ${b}`), ''] : []),
     ...paragraphs.slice(2).flatMap((p) => [p, '']),
-    `Ваша страница: ${input.previewUrl}`,
+    `Презентация для вашей компании: ${input.showUrl}`,
+    `Наш сайт — пример нашей работы: ${input.baseUrl.replace(/\/+$/, '')}/`,
     `Кто мы и цены: ${service}`,
     '',
     closing,
@@ -197,7 +198,7 @@ ${p('Здравствуйте!')}
 ${paragraphs.slice(0, 2).map(p).join('\n')}
 ${bullets.length ? `<ul style="margin:0 0 12px;padding-left:20px">${bullets.map((b) => `<li style="margin:0 0 6px">${escapeHtml(b)}</li>`).join('')}</ul>` : ''}
 ${paragraphs.slice(2).map(p).join('\n')}
-<p style="margin:0 0 12px"><a href="${escapeHtml(input.previewUrl)}">Ваша страница</a> · <a href="${escapeHtml(service)}">Кто мы и цены</a></p>
+<p style="margin:0 0 12px"><a href="${escapeHtml(input.showUrl)}">Презентация для вашей компании</a> · <a href="${escapeHtml(input.baseUrl.replace(/\/+$/, '') + '/')}">Наш сайт — пример работы</a> · <a href="${escapeHtml(service)}">Кто мы и цены</a></p>
 ${p(closing)}
 <p style="margin:24px 0 0;color:#6b7280;font-size:13px">${escapeHtml(LEGAL_SIGNATURE)}</p>
 </div>

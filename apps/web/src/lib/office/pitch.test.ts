@@ -71,11 +71,11 @@ describe('письмо с презентацией', () => {
     const letter = buildEmail(site, input);
     expect(letter.html).toContain(`<a href="${base}/pokaz/tok"`);
     expect(letter.html).toContain('Смотреть презентацию');
-    expect(letter.html).toContain(`<a href="${input.previewUrl}"`);
+    // Пробной страницы фирме нет: ссылки на превью в письме не бывает.
+    expect(letter.html).not.toContain(input.previewUrl);
+    expect(letter.html).toContain(`<a href="${base}/?utm_source=email`);
     expect(letter.text).toContain(input.pitchLine);
-    expect(letter.text).toContain(
-      `Презентация и 3D-город — пример нашей работы: ${base}/pokaz/tok`,
-    );
+    expect(letter.text).toContain(`Смотреть презентацию: ${base}/pokaz/tok`);
     expect(letter.text).toContain('3D-город');
     expect(letter.text).not.toMatch(/₽|руб\./);
   });

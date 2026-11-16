@@ -173,9 +173,6 @@ export default async function PokazPage(props: { params: Promise<{ token: string
           <span className="eyebrow">С чего начать</span>
           <h2>Позвоните или ответьте на письмо</h2>
           <p className="tel">{SITE.phone}</p>
-          <a className="go" href={`/preview/${token}`}>
-            Посмотреть черновик вашей страницы
-          </a>
           <p className="mute">
             {SITE.contactPerson}, {SITE.name} · {SITE.legalName}, ИНН {SITE.inn}, {SITE.city}.
             Страница не является офертой; стоимость называем под вашу задачу.
