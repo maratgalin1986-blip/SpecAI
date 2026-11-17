@@ -46,7 +46,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          sparse-checkout: .github/scripts
+          sparse-checkout: |
+            .github/scripts
+            .github/office-relay-chain.txt
       - name: Office tick
         env:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
@@ -61,7 +63,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if [ "$(head -n 1 .github/office-relay-chain.txt 2>/dev/null)" = "on" ]; then
+          if [ "$(bash .github/scripts/relay-state.sh)" = "on" ]; then
             # Неудачный проход (карты не отвечают) не рвёт цепочку: следующий — после паузы подольше.
             if [ "${{ job.status }}" = "success" ]; then sleep 60; else sleep 300; fi
             gh workflow run office.yml --repo "$GITHUB_REPOSITORY" --ref main
