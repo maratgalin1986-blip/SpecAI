@@ -14,6 +14,13 @@ RELAY_STEPS="${RELAY_STEPS:-12}"
 RELAY_BUDGET_S="${RELAY_BUDGET_S:-540}"
 UA='SpecPlast16-office/1.0 (+https://xn--24-6kc5aagh4arjl.xn--p1ai; specplast16@yandex.ru)'
 
+# Пауза поиска (office-relay-chain.txt, relay-state.sh): шаги плана не идут, тик — чтение входящих —
+# остаётся.
+if [ "$(bash "$(dirname "$0")/relay-state.sh" "$(dirname "$0")/../office-relay-chain.txt")" = "off" ]; then
+  echo "relay: search is paused by the owner (office-relay-chain.txt); only the tick runs"
+  RELAY_STEPS=0
+fi
+
 if [ -z "${CRON_SECRET:-}" ]; then
   echo "::error::CRON_SECRET repository secret is not set — add it in Settings → Secrets and variables → Actions"
   exit 1
