@@ -48,7 +48,7 @@ export const NICHE_NEEDS: Record<string, string> = {
  * Версия текстов предложения. Неотправленное предложение прежней версии (до правил § 8.10
  * бизнес-плана: цены, «сайта нет», обещания сроков) не отправляется — строится заново.
  */
-export const OFFER_TEXT_VERSION = 2;
+export const OFFER_TEXT_VERSION = 3;
 
 export interface Offer {
   /** Версия текстов (OFFER_TEXT_VERSION); у предложений до 2026-11-11 поля нет. */
@@ -99,7 +99,7 @@ export function buildOffer(input: {
   const c = d?.competitors ?? null;
 
   // Название — только в именительном падеже («Улыбка: …»): склонять названия компаний нельзя.
-  let subject = `Черновик страницы для ${name}`;
+  let subject = `Сайт для ${name}`;
   // Факт — о карточке, а не о фирме: сайта может не быть только в карточке (§ 9.1, п. 3).
   let opener = `В открытой карточке компании ${name} на карте не указан сайт.`;
   let angleBullet = 'Страница открывается с телефона: кнопка «Позвонить» и ссылка на карту.';
@@ -107,7 +107,7 @@ export function buildOffer(input: {
   switch (input.angle) {
     case 'competitors_have_sites':
       if (c) {
-        subject = `${name}: черновик страницы — у соседей по сфере сайты в карточках указаны`;
+        subject = `${name}: сайт — у соседей по сфере сайты в карточках указаны`;
         opener =
           `По данным открытой карты, в ${c.radiusKm} км от вас ещё ${c.sameNiche} ` +
           `${plural(c.sameNiche, 'компания', 'компании', 'компаний')} той же сферы, и у ${c.withSite} из них в карточке указан сайт; ` +
@@ -117,7 +117,7 @@ export function buildOffer(input: {
       break;
     case 'first_in_area':
       if (c) {
-        subject = `${name}: черновик страницы для вашей компании`;
+        subject = `${name}: сайт для вашей компании`;
         opener =
           `По данным открытой карты, в ${c.radiusKm} км от вас ещё ${c.sameNiche} ` +
           `${plural(c.sameNiche, 'компания', 'компании', 'компаний')} той же сферы, и ни у одной в карточке не указан сайт — как и у вас.`;
@@ -126,29 +126,29 @@ export function buildOffer(input: {
       break;
     case 'open_late':
       if (d?.hours?.lateClose) {
-        subject = `${name}: черновик страницы с вашими часами работы`;
+        subject = `${name}: сайт с вашими часами работы`;
         opener = `В вашей карточке на карте указано, что вы работаете до ${d.hours.lateClose}, а сайт не указан.`;
         angleBullet = 'Часы работы из карточки показаны на странице.';
       }
       break;
     case 'weekends':
-      subject = `${name}: черновик страницы с вашими часами работы`;
+      subject = `${name}: сайт с вашими часами работы`;
       opener =
         'В вашей карточке на карте указано, что вы работаете и в выходные, а сайт не указан.';
       angleBullet = 'Часы работы из карточки, с выходными, показаны на странице.';
       break;
     case 'whatsapp':
-      subject = `${name}: черновик страницы с кнопкой «Написать»`;
+      subject = `${name}: сайт с кнопкой «Написать»`;
       opener = 'В вашей карточке на карте указан WhatsApp, а сайт не указан.';
       angleBullet = 'На странице есть кнопка «Написать в WhatsApp» — номер из карточки.';
       break;
     case 'leads_to_email':
-      subject = `${name}: черновик страницы, заявки — вам на почту`;
+      subject = `${name}: сайт, заявки — вам на почту`;
       angleBullet =
         'После подключения клиент сможет оставить заявку на странице — она придёт вам на почту.';
       break;
     case 'search':
-      subject = `Черновик страницы для ${name}`;
+      subject = `Сайт для ${name}`;
       angleBullet = 'Своя страница — ещё одно место, где о вас можно узнать, кроме карт.';
       break;
   }

@@ -301,7 +301,12 @@ describe('sendOutreach', () => {
     });
     expect(sent.text).toContain('Больше не писать: https://example.test/otpiska/tok-a?s=sig');
     expect(sent.html).toContain('https://example.test/otpiska/tok-a?s=sig');
-    expect(sent.text).toContain('https://example.test/preview/tok-a');
+    // Пробной страницы нет: кнопка — презентация под фирму, ссылка — наш сайт как пример.
+    expect(sent.text).not.toContain('https://example.test/preview/tok-a');
+    expect(sent.text).toContain('https://example.test/pokaz/tok-a');
+    expect(sent.text).toContain(
+      'https://example.test/?utm_source=email&utm_campaign=example-slug-a',
+    );
     // «Кто мы и цены» leads to the service page, labelled with the channel and the slug (S12).
     expect(sent.text).toContain(
       'Кто мы и цены: https://example.test/sajt-pod-klyuch?utm_source=email&utm_campaign=slug-a',
@@ -309,12 +314,10 @@ describe('sendOutreach', () => {
     // No dossier: the personal offer with a general angle (U2) — a fact about the card,
     // no prices, not an offer, a draft, the legal signature.
     expect(sent.text).toContain('В открытой карточке компании Компания a на карте не указан сайт.');
-    expect(sent.text).toContain(
-      'После подключения клиент сможет оставить заявку на странице — она придёт вам на почту.',
-    );
+    expect(sent.text).toContain('индивидуально под каждую компанию');
     expect(sent.text).not.toContain('₽');
     expect(sent.text).toContain(NOT_OFFER_LINE);
-    expect(sent.text).toContain('Это черновик, а не официальный сайт');
+    expect(sent.text.toLowerCase()).not.toContain('черновик');
     expect(sent.text).toContain(`— ${LEGAL_SIGNATURE}`);
     expect(updates).toHaveLength(1);
     expect(updates[0]!.id).toBe('a');
@@ -338,10 +341,7 @@ describe('sendOutreach', () => {
     const result = await sendOutreach(NOW, deps(db));
     expect(result).toEqual({ email: 0, whatsapp: 1, followUps: 0, skipped: null, errors: 0 });
     expect(okEmail).not.toHaveBeenCalled();
-    expect(okWhatsApp).toHaveBeenCalledWith(
-      '79271112233',
-      expect.stringContaining('/preview/tok-a'),
-    );
+    expect(okWhatsApp).toHaveBeenCalledWith('79271112233', expect.stringContaining('/pokaz/tok-a'));
     expect(okWhatsApp.mock.calls[0]![1]).toContain(
       'https://example.test/sajt-pod-klyuch?utm_source=whatsapp&utm_campaign=slug-a',
     );
@@ -610,7 +610,7 @@ describe('sendOutreach — reminders (S8)', () => {
     expect(okEmail).toHaveBeenCalledTimes(1);
     const sent = okEmail.mock.calls[0]![0];
     expect(sent.to).toBe('a@example.com');
-    expect(sent.subject).toBe('Напоминаем: страница для «Компания a» готова');
+    expect(sent.subject).toBe('Напоминаем: сайт для «Компания a»');
     expect(sent.replyTo).toBe('office@example.com');
     // К3: «Больше не писать» in the letter and the one-click header for mail clients.
     expect(sent.headers).toEqual({
@@ -619,8 +619,8 @@ describe('sendOutreach — reminders (S8)', () => {
     });
     expect(sent.text).toContain('Больше не писать: https://example.test/otpiska/tok-a?s=sig');
     expect(sent.html).toContain('https://example.test/otpiska/tok-a?s=sig');
-    expect(sent.text).toContain('Посмотрите — это 30 секунд.');
-    expect(sent.text).toContain('https://example.test/preview/tok-a');
+    expect(sent.text).toContain('индивидуально под вашу компанию');
+    expect(sent.text).not.toContain('https://example.test/preview/tok-a');
     expect(sent.text).toContain(
       'https://example.test/sajt-pod-klyuch?utm_source=email&utm_campaign=slug-a',
     );
@@ -882,13 +882,13 @@ describe('sendOutreach — personal offer (U2)', () => {
     const letter = okEmail.mock.calls[0]![0];
     expect(letter.subject).toBe(expected.subject);
     expect(letter.text).toContain(expected.opener);
-    // Короткое письмо: из пунктов предложения — строка захода (второй пункт).
-    expect(letter.text).toContain(expected.bullets[1]!);
+    // Пунктов про «страницу» в письме нет: пробной страницы фирме не делаем.
+    for (const bullet of expected.bullets) expect(letter.text).not.toContain(bullet);
     // The package and its price stay on the service page: the first letter has no prices.
     expect(letter.text).not.toContain('₽');
     expect(letter.text).toContain(NOT_OFFER_LINE);
     expect(letter.text).toContain(`— ${LEGAL_SIGNATURE}`);
-    expect(letter.text).toContain('https://example.test/preview/tok-a');
+    expect(letter.text).not.toContain('https://example.test/preview/tok-a');
     expect(letter.text).toContain('Кто мы и цены: ');
     const lines = letter.text!.trim().split('\n').filter(Boolean);
     // The «стоп» line closes the letter; the signature and «Больше не писать» follow (К3).
@@ -896,7 +896,8 @@ describe('sendOutreach — personal offer (U2)', () => {
     expect(lines[lines.length - 1]).toMatch(/^Больше не писать: /);
     const wa = okWhatsApp.mock.calls[0]![1];
     expect(wa).toContain(expected.opener);
-    expect(wa).toContain('https://example.test/preview/tok-a');
+    expect(wa).toContain('https://example.test/?utm_source=whatsapp&utm_campaign=example-slug-a');
+    expect(wa).not.toContain('/preview/');
     expect(wa).not.toContain('₽');
     expect(wa).toContain('сообщение не является офертой');
     expect(wa.length).toBeLessThanOrEqual(WHATSAPP_MAX_LENGTH);

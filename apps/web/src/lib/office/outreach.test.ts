@@ -11,6 +11,7 @@ import {
   isRuMobile,
   isStopReply,
   LEADS_TO_EMAIL_LINE,
+  EXAMPLE_LINK_LABEL,
   LEGAL_SIGNATURE,
   NOT_OFFER_LINE,
   ORDER_BUTTON_LABEL,
@@ -69,9 +70,12 @@ const input: OutreachInput = {
 
 const FORBIDDEN = /лучш|гарантир|самые|самый|самая/i;
 
-/** Строка о черновике: страница — не официальный сайт компании. */
-const DRAFT_LINE =
-  'Это черновик, а не официальный сайт: в поиске его нет, открывается только по ссылке.';
+const EXAMPLE_EMAIL = `${BASE}/?utm_source=email&utm_campaign=example-stomatologiya-ulybka-kazan`;
+const EXAMPLE_WHATSAPP = `${BASE}/?utm_source=whatsapp&utm_campaign=example-stomatologiya-ulybka-kazan`;
+/** Письмо о сайте не делает фирме пробный сайт (владелец, 2026-11-16): только пример нашей работы. */
+function noDraft(text: string) {
+  expect(text.toLowerCase()).not.toContain('черновик');
+}
 
 /** Первое письмо и WhatsApp для сайта: без цен и без снятых обещаний и утверждений о фирме. */
 const REMOVED = [
@@ -112,7 +116,7 @@ describe('serviceUrl', () => {
 describe('buildEmail', () => {
   it('site letter: subject, who we are, card fact, link, no prices, legal signature, stop line last', () => {
     const letter = buildEmail(site, input);
-    expect(letter.subject).toBe('Сделали страницу для Стоматология «Улыбка» — посмотрите');
+    expect(letter.subject).toBe('Сайт для Стоматология «Улыбка»');
     expect(letter.text).toContain(SITE.name);
     // Письмо о сайте — отдельный проект: площадка заявок в нём не упоминается (владелец, 2026-11-12).
     expect(letter.text).not.toContain(SITE.platform);
@@ -122,15 +126,18 @@ describe('buildEmail', () => {
     expect(letter.text).toContain(
       'В открытой карточке компании Стоматология «Улыбка» на карте не указан сайт.',
     );
-    expect(letter.text).toContain('стоматология');
-    expect(letter.text).toContain(input.previewUrl);
+    // Пробной страницы нет: пример нашей работы и «индивидуально под каждую компанию».
+    noDraft(letter.text);
+    noDraft(letter.html);
+    expect(letter.text).not.toContain(input.previewUrl);
+    expect(letter.text).toContain(`${EXAMPLE_LINK_LABEL}: ${EXAMPLE_EMAIL}`);
+    expect(letter.text).toContain('индивидуально под каждую компанию');
+    expect(letter.text).toContain('на любом конструкторе или с нуля, не по шаблону');
     // Цен и обещаний сроков в первом письме нет: условия — на странице услуги.
     noPricesOrPromises(letter.text);
     noPricesOrPromises(letter.html);
     expect(letter.text).toContain(NOT_OFFER_LINE);
-    expect(letter.text).toContain(DRAFT_LINE);
     expect(letter.html).toContain(NOT_OFFER_LINE);
-    expect(letter.html).toContain(DRAFT_LINE);
     // Подпись: кто пишет — юрлицо, ИНН, ОГРН, адрес.
     expect(letter.text).toContain(`— ${LEGAL_SIGNATURE}`);
     for (const part of [SITE.legalName, SITE.inn, SITE.ogrn, SITE.legalAddress]) {
@@ -152,19 +159,15 @@ describe('buildEmail', () => {
   it('site letter: «Кто мы и цены» link to the service page and leads to the company mail', () => {
     const letter = buildEmail(site, input);
     expect(letter.text).toContain(`${SERVICE_LINK_LABEL}: ${SERVICE_EMAIL}`);
-    // The preview has no lead form yet (К10): the letter promises it after the site is connected.
-    expect(letter.text).toContain('После подключения добавим форму заявки: заявки с сайта');
-    expect(letter.text).toContain('заявки с сайта будут приходить вам на почту.');
     expect(letter.text).not.toContain('Написать в WhatsApp');
-    // The service link comes after the preview link and before the closing lines.
+    // Наш сайт (пример) идёт раньше ссылки «Кто мы и цены» и до строк «стоп».
     const text = letter.text;
-    expect(text.indexOf(input.previewUrl)).toBeLessThan(text.indexOf(SERVICE_EMAIL));
+    expect(text.indexOf(EXAMPLE_EMAIL)).toBeLessThan(text.indexOf(SERVICE_EMAIL));
     expect(text.indexOf(SERVICE_EMAIL)).toBeLessThan(text.indexOf(STOP_LINE));
     // In html the link is escaped (&amp;) and labelled.
     expect(letter.html).toContain(
       `<a href="${SERVICE_EMAIL.replace('&', '&amp;')}" style="color:#0f766e">${SERVICE_LINK_LABEL}</a>`,
     );
-    expect(letter.html.toLowerCase()).toContain(LEADS_TO_EMAIL_LINE.toLowerCase());
     expect(letter.html.indexOf(SERVICE_LINK_LABEL)).toBeLessThan(letter.html.indexOf(STOP_LINE));
   });
 
@@ -189,7 +192,7 @@ describe('buildEmail', () => {
 
   it('html is one column with a button link and escaped text, no images', () => {
     const letter = buildEmail({ ...site, name: 'ИП <Иванов> & Ко' }, input);
-    expect(letter.html).toContain(`<a href="${input.previewUrl}"`);
+    expect(letter.html).toContain(`<a href="${EXAMPLE_EMAIL.replace(/&/g, '&amp;')}"`);
     expect(letter.html).toContain('ИП &lt;Иванов&gt; &amp; Ко');
     expect(letter.html).not.toContain('<Иванов>');
     expect(letter.html).not.toContain('<img');
@@ -207,13 +210,13 @@ describe('buildEmail', () => {
 describe('buildFollowUpEmail', () => {
   it('site reminder: short, what we made, preview and service links, stop line last', () => {
     const letter = buildFollowUpEmail(site, input);
-    expect(letter.subject).toBe('Напоминаем: страница для Стоматология «Улыбка» готова');
+    expect(letter.subject).toBe('Напоминаем: сайт для Стоматология «Улыбка»');
     expect(letter.text).toContain(SITE.name);
     expect(letter.text).toContain('Недавно мы писали вам');
-    expect(letter.text).toContain('сделали страницу для Стоматология «Улыбка»');
-    expect(letter.text).toContain('Посмотрите — это 30 секунд.');
+    expect(letter.text).toContain('индивидуально под вашу компанию');
+    noDraft(letter.text);
     expect(letter.text).toContain(LEADS_TO_EMAIL_LINE);
-    expect(letter.text).toContain(`Открыть страницу: ${input.previewUrl}`);
+    expect(letter.text).toContain(`Открыть наш сайт: ${EXAMPLE_EMAIL}`);
     expect(letter.text).toContain(`${SERVICE_LINK_LABEL}: ${SERVICE_EMAIL}`);
     expect(letter.text).toContain(`позвоните ${SITE.phone}`);
     expect(letter.text).toContain(`${STOP_LINE} Это единственное напоминание.`);
@@ -223,7 +226,6 @@ describe('buildFollowUpEmail', () => {
     expect(letter.text).not.toContain('₽');
     expect(letter.text).not.toMatch(FORBIDDEN);
     expect(letter.html).not.toMatch(FORBIDDEN);
-    expect(letter.html).toContain(`<a href="${input.previewUrl}"`);
     expect(letter.html).toContain(STOP_LINE);
   });
 
@@ -251,9 +253,10 @@ describe('buildWhatsAppText', () => {
     const text = buildWhatsAppText(site, input);
     expect(text.length).toBeLessThanOrEqual(WHATSAPP_MAX_LENGTH);
     expect(text).toContain(SITE.name);
-    expect(text).toContain(input.previewUrl);
+    expect(text).toContain(EXAMPLE_WHATSAPP);
     expect(text).toContain('В открытой карточке Стоматология «Улыбка» на карте не указан сайт');
-    expect(text).toContain('Это не официальный сайт, в поиске его нет.');
+    expect(text).toContain('индивидуально под каждую компанию');
+    noDraft(text);
     noPricesOrPromises(text);
     expect(text).toContain(`${SERVICE_LINK_LABEL}: ${SERVICE_WHATSAPP}`);
     expect(text).toContain(`${LEADS_TO_EMAIL_LINE}.`);
@@ -306,16 +309,20 @@ describe('buildWhatsAppText', () => {
     const long = { ...site, name: 'Общество с ограниченной ответственностью '.repeat(6) };
     const text = buildWhatsAppText(long, input);
     expect(text.length).toBeLessThanOrEqual(WHATSAPP_MAX_LENGTH);
-    expect(text).toContain(input.previewUrl);
+    expect(text).toContain(
+      EXAMPLE_WHATSAPP.replace('stomatologiya-ulybka-kazan', 'stomatologiya-ulybka-kazan'),
+    );
     expect(text).toContain(STOP_LINE);
   });
 
-  it('drops the optional lines first, never the preview link or the stop line (last)', () => {
+  it('drops the optional lines first, never the example link or the stop line (last)', () => {
     for (const repeat of [1, 2, 3, 4, 5, 6]) {
       const name = 'Стоматологическая клиника '.repeat(repeat);
       const text = buildWhatsAppText({ ...site, name }, input);
       expect(text.length, `repeat ${repeat}`).toBeLessThanOrEqual(WHATSAPP_MAX_LENGTH);
-      expect(text).toContain(input.previewUrl);
+      expect(text).toContain(
+        EXAMPLE_WHATSAPP.replace('stomatologiya-ulybka-kazan', 'stomatologiya-ulybka-kazan'),
+      );
       const parts = text.split('\n\n');
       expect(parts[parts.length - 1]!.startsWith(STOP_LINE), `repeat ${repeat}`).toBe(true);
     }
@@ -426,18 +433,18 @@ describe('personal offer in the site letter and WhatsApp (U2)', () => {
     const letter = buildEmail(site, withOffer);
     expect(letter.subject).toBe(offer.subject);
     expect(letter.text).toContain(offer.opener);
-    // Короткое письмо: строка захода (второй пункт) — абзацем, общих пунктов списком нет.
-    expect(letter.text).toContain(offer.bullets[1]!);
-    expect(letter.text).not.toContain(offer.bullets[0]!);
+    // Короткое письмо: пунктов предложения в нём нет — страницы-черновика фирме не делаем.
+    for (const bullet of offer.bullets) expect(letter.text).not.toContain(bullet);
     expect(letter.text).not.toContain('•');
     // Пакет и цены — на странице услуги, в первом письме их нет.
     noPricesOrPromises(letter.text);
     noPricesOrPromises(letter.html);
     expect(letter.text).not.toContain('Что на странице:');
-    expect(letter.text).toContain(DRAFT_LINE);
+    noDraft(letter.text);
     expect(letter.text).toContain(NOT_OFFER_LINE);
     expect(letter.text).toContain(`— ${LEGAL_SIGNATURE}`);
-    expect(letter.text).toContain(input.previewUrl);
+    expect(letter.text).not.toContain(input.previewUrl);
+    expect(letter.text).toContain(`${EXAMPLE_LINK_LABEL}: ${EXAMPLE_EMAIL}`);
     expect(letter.text).toContain(`${SERVICE_LINK_LABEL}: ${SERVICE_EMAIL}`);
     stopLineIsLast(letter.text);
     expect(letter.html).not.toContain('<ul');
@@ -453,7 +460,7 @@ describe('personal offer in the site letter and WhatsApp (U2)', () => {
   it('html escapes the offer text', () => {
     const letter = buildEmail(site, {
       ...input,
-      offer: { ...offer, bullets: ['раз', '<b>жирно</b>', 'три'] },
+      offer: { ...offer, opener: '<b>жирно</b>' },
     });
     expect(letter.html).toContain('&lt;b&gt;жирно&lt;/b&gt;');
     expect(letter.html).not.toContain('<b>жирно');
@@ -469,11 +476,12 @@ describe('personal offer in the site letter and WhatsApp (U2)', () => {
     const text = buildWhatsAppText(site, withOffer);
     expect(text.length).toBeLessThanOrEqual(WHATSAPP_MAX_LENGTH);
     expect(text).toContain(offer.opener);
-    expect(text).toContain(input.previewUrl);
-    expect(text).toContain(`• ${offer.bullets[1]}`);
+    expect(text).toContain(EXAMPLE_WHATSAPP);
+    // Пунктов про «страницу» в сообщении нет: пробной страницы фирме не делаем.
+    expect(text).not.toContain('•');
     noPricesOrPromises(text);
     expect(text).toContain('Условия и цены — по ссылке ниже; сообщение не является офертой.');
-    expect(text).toContain('Это не официальный сайт, в поиске его нет.');
+    noDraft(text);
     expect(text).toContain(`${SERVICE_LINK_LABEL}: ${SERVICE_WHATSAPP}`);
     expect(text.trim().endsWith('из открытой карточки компании.')).toBe(true);
   });
@@ -483,7 +491,7 @@ describe('personal offer in the site letter and WhatsApp (U2)', () => {
     const text = buildWhatsAppText(site, { ...input, offer: long });
     expect(text.length).toBeLessThanOrEqual(WHATSAPP_MAX_LENGTH);
     expect(text).not.toContain('Пункт 1');
-    expect(text).toContain(input.previewUrl);
+    expect(text).toContain(EXAMPLE_WHATSAPP);
     noPricesOrPromises(text);
     expect(text).toContain('Условия и цены — по ссылке ниже; сообщение не является офертой.');
     const parts = text.split('\n\n');
@@ -517,11 +525,11 @@ describe('письмо-презентация под фирму (владеле�
       { ...site, address: 'ул. Баумана, 5', hours: 'Пн–Пт 9:00–18:00' },
       input,
     );
-    expect(letter.html).toContain('Черновик сайта для вашей компании');
+    expect(letter.html).toContain('Презентация для вашей компании');
     expect(letter.html).toContain('Адрес: ул. Баумана, 5');
     expect(letter.html).toContain('Часы работы: Пн–Пт 9:00–18:00');
-    expect(letter.html).toContain(`<a href="${input.previewUrl}"`);
-    expect(letter.html).toContain('иистройка24.рф/preview/');
+    expect(letter.html).toContain(`<a href="${EXAMPLE_EMAIL.replace(/&/g, '&amp;')}"`);
+    expect(letter.html).toContain('иистройка24.рф');
     expect(letter.html).not.toContain('<img');
   });
 
@@ -731,7 +739,7 @@ describe('короткое письмо о сайте (разведка 2026-11-
       offer,
       pitchLine: nichePitch('dentist').letterLine,
     });
-    const body = letter.text.split('\nОткрыть страницу:')[0]!;
+    const body = letter.text.split('\nОткрыть наш сайт:')[0]!;
     expect(body.match(/[\p{L}\d]+/gu)!.length).toBeLessThanOrEqual(140);
     expect(letter.text).toContain('Прислать условия под вашу задачу? Ответьте «да»');
   });

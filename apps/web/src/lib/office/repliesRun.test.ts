@@ -149,7 +149,7 @@ describe('readReplies', () => {
     const mail = d.send.mock.calls[0]![0];
     expect(mail.to).toBe('firm@mail.ru');
     expect(mail.text).toContain('15 000 ₽');
-    expect(mail.text).toContain('https://site.example/preview/tok1');
+    expect(mail.text).toContain('https://site.example/pokaz/tok1');
     expect(mail.headers).toEqual({ 'In-Reply-To': '<m101@mail.ru>', References: '<m101@mail.ru>' });
     expect(d.notify.mock.calls[0]![0]).toContain('Офис ответил сам');
   });

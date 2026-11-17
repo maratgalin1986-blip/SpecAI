@@ -146,7 +146,7 @@ describe('offer', () => {
       'В вашей карточке на карте указано, что вы работаете до 21:00, а сайт не указан.',
     );
     const general = buildOffer({ dossier: null, angle: 'leads_to_email', companyName: 'Улыбка' });
-    expect(general.subject).toBe('Улыбка: черновик страницы, заявки — вам на почту');
+    expect(general.subject).toBe('Улыбка: сайт, заявки — вам на почту');
     expect(general.opener).toBe('В открытой карточке компании Улыбка на карте не указан сайт.');
   });
 });
