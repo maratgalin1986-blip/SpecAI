@@ -255,6 +255,7 @@ function deps(db: OutreachDb, over: Record<string, unknown> = {}) {
     optedOut: async () => ({ emails: new Set<string>(), phones: new Set<string>() }),
     contacted: async () => ({ emails: new Map<string, Date>(), phones: new Map<string, Date>() }),
     verifyMail: async () => ({ ok: true as const }),
+    addressCheck: async () => null,
     lock: async () => async () => {},
     ...over,
   };
@@ -1924,5 +1925,26 @@ describe('пауза рассылки владельца (2026-11-15)', () => {
     expect(okEmail).not.toHaveBeenCalled();
     expect(outreachPausedByOwner(inside)).toBe(true);
     expect(outreachPausedByOwner(after)).toBe(false);
+  });
+});
+
+describe('нерабочий адрес из карточки (владелец, 2026-11-18)', () => {
+  const at = new Date('2026-11-18T12:00:00+03:00');
+  const auto = () => settings({ outreachMode: 'auto', whatsappAuto: false, dailyCap: 20 });
+
+  it('адрес с опечаткой очищается перед отправкой и не съедает лимит; рабочий уходит', async () => {
+    const rows = [
+      row({ id: 'bad', email: 'ivan.dead@mail.ru' }),
+      row({ id: 'ok', email: 'ok@mail.ru' }),
+    ];
+    const { db } = fakeDb(rows);
+    const addressCheck = vi.fn(async (email: string) =>
+      email.includes('dead') ? 'у домена нет почтового сервера' : null,
+    );
+    const result = await sendOutreach(at, deps(db, { settings: auto(), addressCheck }));
+    expect(result).toMatchObject({ email: 1, badAddresses: 1 });
+    expect(okEmail.mock.calls.map((c) => c[0].to)).toEqual(['ok@mail.ru']);
+    expect(rows[0]).toMatchObject({ email: null });
+    expect(JSON.stringify(rows[0])).toContain('у домена нет почтового сервера');
   });
 });

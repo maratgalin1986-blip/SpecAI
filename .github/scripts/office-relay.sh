@@ -208,6 +208,8 @@ if curl -fsS --max-time 70 -H "$AUTH" -o "$TMP/tick.json" "$BASE_URL/api/cron/of
   jq -r '(.outreach.mailHint // "") | select(length > 0) | "tick: mail settings: \(.[0:160])"' "$TMP/tick.json" 2>/dev/null || true
   # Refusals by SMTP code only (no addresses): dead addresses or the mail service throttling.
   jq -r '(.outreach.errorCodes // {}) | to_entries | select(length > 0) | "tick: refusals: " + (map("\(.key)=\(.value)") | join(" "))' "$TMP/tick.json" 2>/dev/null || true
+  # Address check of the queue: counts only.
+  jq -r '.addresses // empty | "tick: addresses: checked=\(.checked // 0) removed=\(.removed // 0)"' "$TMP/tick.json" 2>/dev/null || true
   # Replies read from the mailbox: counts only.
   jq -r '.replies // empty | "tick: replies: seen=\(.seen // 0) replies=\(.replies // 0) answered=\(.answered // 0) stops=\(.stops // 0) bounces=\(.bounces // 0) needOwner=\(.needOwner // 0) skipped=\(.skipped // "no") error=\(if .error then "yes" else "no" end)"' "$TMP/tick.json" 2>/dev/null || true
   jq -r '(.replies.error // "") | select(length > 0) | "tick: mailbox error: \(.[0:160])"' "$TMP/tick.json" 2>/dev/null || true

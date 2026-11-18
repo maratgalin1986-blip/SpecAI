@@ -25,6 +25,7 @@ import {
 } from './digest';
 import { sendOutreach, type OutreachResult } from './outreachRun';
 import { readReplies, type RepliesResult } from './repliesRun';
+import { sweepAddresses, type SweepResult } from './addressSweep';
 import { runScheduledStep, type ScheduledStepResult } from './run';
 import { OVERPASS_TOTAL_MS } from './sources/osm';
 import { OFERTA_LEADS_DELETE_DAYS } from './oferta';
@@ -49,6 +50,8 @@ export interface TickDeps {
   outreach?: (now: Date, budgetMs: number) => Promise<OutreachResult>;
   /** Чтение ответов фирм из ящика офиса (lib/office/repliesRun.ts). */
   replies?: (now: Date, budgetMs: number) => Promise<RepliesResult>;
+  /** Проверка адресов очереди (lib/office/addressSweep.ts). */
+  sweep?: (now: Date, budgetMs: number) => Promise<SweepResult>;
   /** Запись итога прохода рассылки для /api/health. */
   savePass?: (now: Date, outreach: OutreachResult) => Promise<unknown>;
   /** Сообщение владельцу в Telegram (примеры отправленных писем). */
@@ -75,11 +78,20 @@ export type TickStep =
 
 export type TickResult =
   | { skipped: 'busy' }
-  | { steps: TickStep[]; outreach: OutreachResult; digest: boolean; replies?: RepliesResult };
+  | {
+      steps: TickStep[];
+      outreach: OutreachResult;
+      digest: boolean;
+      replies?: RepliesResult;
+      addresses?: SweepResult;
+    };
 
 /** Сколько времени тик отдаёт чтению ответов и сколько должно остаться рассылке после него. */
 export const REPLIES_BUDGET_MS = 12_000;
 export const REPLIES_MIN_LEFT_MS = 32_000;
+/** Проверка адресов: сколько времени тик ей отдаёт и сколько должно остаться рассылке после неё. */
+export const SWEEP_BUDGET_MS = 9_000;
+export const SWEEP_MIN_LEFT_MS = 28_000;
 export const LAST_OUTREACH_KEY = 'office.lastOutreach';
 
 /** Сколько времени оставить рассылке и сводке после шагов поиска. */
@@ -257,6 +269,18 @@ export async function officeTick(
     });
   }
 
+  // Адреса очереди: нерабочие снимаются до того, как на них уйдёт письмо (владелец, 2026-11-18).
+  let addresses: SweepResult | undefined;
+  if (left() >= SWEEP_MIN_LEFT_MS) {
+    addresses = await (deps.sweep ?? ((at, budget) => sweepAddresses(at, { budgetMs: budget })))(
+      now,
+      SWEEP_BUDGET_MS,
+    ).catch((error: unknown) => {
+      console.error('[office] address sweep failed', error);
+      return undefined;
+    });
+  }
+
   // Рассылке — остаток за вычетом времени на сводку и ответ; её собственный
   // порог «меньше 2 с — не начинать» внутри sendOutreach.
   const outreach = await (
@@ -312,7 +336,13 @@ export async function officeTick(
     });
     digest = sent === true;
   }
-  return { steps, outreach, digest, ...(replies ? { replies } : {}) };
+  return {
+    steps,
+    outreach,
+    digest,
+    ...(replies ? { replies } : {}),
+    ...(addresses ? { addresses } : {}),
+  };
 }
 
 /** Сообщение владельцу: сколько писем ушло и первые из них со ссылками на презентации. */

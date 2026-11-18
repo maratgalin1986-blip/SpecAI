@@ -44,6 +44,7 @@ function deps(over: Partial<TickDeps> = {}): TickDeps {
       bounces: 0,
       needOwner: 0,
     })),
+    sweep: vi.fn(async () => ({ checked: 0, removed: 0, reasons: {} })),
     savePass: vi.fn(async () => undefined),
     alert: vi.fn(async () => undefined),
     notify: vi.fn(async () => true),
