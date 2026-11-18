@@ -81,8 +81,12 @@ function addressOf(from: string): string {
 function senderOf(from: string, user: string): string {
   if (!user.includes('@')) return from || user;
   const named = /^([^<>]*)</.exec(from);
-  const name = unwrap(named?.[1] ?? (from.includes('@') ? '' : from));
-  return name ? `${name} <${user}>` : user;
+  // Без имени в настройке — живое имя вместо голого адреса: «Марат из СпецПласт16» (владелец,
+  // 2026-11-18). Без запятой: запятая в имени для почтовой программы — второй получатель.
+  const name =
+    unwrap(named?.[1] ?? (from.includes('@') ? '' : from)) ||
+    `${SITE.contactPerson} из ${SITE.name}`;
+  return `${name} <${user}>`;
 }
 
 /**

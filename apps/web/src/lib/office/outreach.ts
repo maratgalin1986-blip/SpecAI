@@ -212,7 +212,7 @@ const GREETING = `Здравствуйте! Меня зовут ${SITE.contactPe
  */
 const PROVIDER_GREETING = `Здравствуйте! Меня зовут ${SITE.contactPerson}, я из компании ${SITE.name} (${SITE.city}) — мы ведём площадку заявок на спецтехнику ${SITE.platform}.`;
 /** Подпись человека перед реквизитами. */
-const PERSON_SIGNATURE = `С уважением, ${SITE.contactPerson}, ${SITE.name}`;
+const PERSON_SIGNATURE = `С уважением, ${SITE.contactPerson}, ${SITE.name}. ${SITE.phone}, ${SITE.email}`;
 
 interface Letter {
   subject: string;
