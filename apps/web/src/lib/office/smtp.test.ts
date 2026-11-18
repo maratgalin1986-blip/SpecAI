@@ -30,7 +30,7 @@ describe('officeMailConfig', () => {
       secure: true,
       user: 'office@example.ru',
       pass: 'secret',
-      from: 'office@example.ru',
+      from: 'Марат из СпецПласт16 <office@example.ru>',
     });
     expect(officeMailConfigured(ENV)).toBe(true);
   });
@@ -79,7 +79,7 @@ describe('отправитель и кавычки', () => {
     expect(from('ИИСтройка24 <other@mail.ru>')).toBe('ИИСтройка24 <office@example.ru>');
     expect(from('«ИИСтройка24 <office@example.ru>»')).toBe('ИИСтройка24 <office@example.ru>');
     expect(from('ИИСтройка24')).toBe('ИИСтройка24 <office@example.ru>');
-    expect(from('other@mail.ru')).toBe('office@example.ru');
+    expect(from('other@mail.ru')).toBe('Марат из СпецПласт16 <office@example.ru>');
   });
 
   it('кавычки и невидимые знаки вокруг логина и пароля убираются', () => {
@@ -124,7 +124,7 @@ describe('запасной логин — адрес площадки с сай�
     expect(await sendOfficeMail(MAIL, { env, transport })).toEqual({ ok: true });
     // Второй раз основной логин не пробуется, отправитель — принятый адрес.
     expect(seen).toEqual(['owner@ya.ru', 'specplast16@yandex.ru', 'specplast16@yandex.ru']);
-    expect(sendMail.mock.calls[0]?.[0].from).toBe('specplast16@yandex.ru');
+    expect(sendMail.mock.calls[0]?.[0].from).toBe('Марат из СпецПласт16 <specplast16@yandex.ru>');
     expect(officeMailHint(env)).toContain('site-address-login=accepted');
   });
 
@@ -208,7 +208,7 @@ describe('sendOfficeMail', () => {
     );
     expect(result).toEqual({ ok: true });
     expect(sendMail).toHaveBeenCalledWith({
-      from: 'office@example.ru',
+      from: 'Марат из СпецПласт16 <office@example.ru>',
       to: 'firm@example.ru',
       subject: 'Тема',
       html: '<p>Текст</p>',
@@ -287,5 +287,13 @@ describe('sendOfficeTestMail', () => {
       }),
     });
     expect(result).toEqual({ ok: false, reason: 'Invalid login: 535 5.7.8' });
+  });
+});
+
+describe('имя отправителя по умолчанию', () => {
+  it('без имени в OUTREACH_FROM — «Марат из СпецПласт16», без запятой в имени', () => {
+    const from = officeMailConfig(ENV)!.from;
+    expect(from).toBe('Марат из СпецПласт16 <office@example.ru>');
+    expect(from.split('<')[0]).not.toContain(',');
   });
 });

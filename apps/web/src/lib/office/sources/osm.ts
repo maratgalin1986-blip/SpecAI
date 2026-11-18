@@ -147,7 +147,7 @@ export function parseOverpass(json: unknown, niche: SourceNiche): Candidate[] {
       lon: num(el.lon) ?? num(el.center?.lon),
       hours: str(tags.opening_hours),
       website: str(tags.website) ?? str(tags['contact:website']) ?? str(tags.url),
-      email: candidateEmail(tags.email) ?? candidateEmail(tags['contact:email']),
+      email: candidateEmail(`${tags.email ?? ''};${tags['contact:email'] ?? ''}`),
       whatsapp: candidatePhone(tags['contact:whatsapp']),
       telegram: candidateTelegram(tags['contact:telegram']),
       tags: niche.machineryTags?.(name, tags) ?? [],
