@@ -53,6 +53,7 @@ import { collectAngleStats, chooseAngle, type AngleStat, type LearningDb } from 
 import { applicableAngles, buildOffer, type OfferAngle } from './offer';
 import { readOfficeSettings, type OutreachMode } from '@/lib/office/settings';
 import { inLocalHours } from './localTime';
+import { addressProblem } from './mailCheck';
 import { outreachPausedByOwner } from './pause';
 import { nichePitch } from './pitch';
 import {
@@ -255,6 +256,8 @@ export interface OutreachDeps {
    * письма о сайтах, 'provider' — письма площадки. Без него проход общий (кнопка владельца).
    */
   project?: 'site' | 'provider';
+  /** Проверка адреса перед отправкой (mailCheck.ts → addressProblem): причина или null. */
+  addressCheck?: (email: string, now: Date) => Promise<string | null>;
   /** Ключи названий компаний, которым уже писали (brandKey), — для «одна компания — одно письмо». */
   contactedBrands?: () => Promise<Iterable<string>>;
   /** Признаки настроек ящика для сводки об отказе (подменяется в тестах). */
@@ -312,6 +315,8 @@ export interface OutreachResult {
   followUpsWaiting?: number;
   /** Строк снято перед отправкой: человек, а не компания, или почта на своём домене. */
   filtered?: number;
+  /** Адресов очищено перед отправкой: нерабочие (опечатка, у домена нет почты). */
+  badAddresses?: number;
   /** Строк снято с рассылки: их адрес отписан (К3). */
   optedOut?: number;
   /** Каналов закрыто без отправки: на этот адрес или номер уже писали в другой строке. */
@@ -818,6 +823,22 @@ async function runOutreach(
       });
       result.filtered = (result.filtered ?? 0) + count;
       continue;
+    }
+    // Адрес из карточки не годится (опечатка, чужой домен без почты): письмо на него вернулось бы
+    // отказом и ухудшило репутацию ящика — адрес очищается, фирма остаётся без почты.
+    if (row.email && wanted.includes('email')) {
+      const problem = await (deps.addressCheck ?? addressProblem)(row.email, now).catch(() => null);
+      if (problem) {
+        await db.prospect.updateMany({
+          where: { id: row.id, status: { in: [...OUTREACH_STATUSES] }, emailSentAt: null },
+          data: {
+            email: null,
+            outreachError: `Адрес из карточки не годится: ${problem} (${row.email})`,
+          },
+        });
+        result.badAddresses = (result.badAddresses ?? 0) + 1;
+        continue;
+      }
     }
     // Утверждённое письмо о сайте уходит только с тем предложением, что видел владелец.
     if (only && prospect.kind === 'site' && !storedOfferOf(row)) continue;

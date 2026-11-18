@@ -12,6 +12,7 @@ import { prisma } from '@specai/database';
 import { cityByName, findCityInText } from '@specai/shared';
 import { AGENTS, agentById } from './agents';
 import { candidateSkipText } from './candidateFilter';
+import { emailProblem } from './mailCheck';
 import { buildDossier, neighborsOf } from './dossier';
 import { machineryTags, nicheByKey, type Niche } from './niches';
 import { OFFICE_SETTINGS, defaultPlan, nextStep, parsePlan } from './plan';
@@ -343,7 +344,8 @@ async function createProspects(
       niche: ctx.niche,
       tags: c.tags.length ? c.tags.join(',') : null,
       hours: c.hours ?? null,
-      email: c.email ?? null,
+      // Адрес с опечаткой или служебный не сохраняем (mailCheck.ts); телефон и карточка остаются.
+      email: c.email && !emailProblem(c.email) ? c.email : null,
       whatsapp: c.whatsapp ?? null,
       telegram: c.telegram ?? null,
       source: ctx.source,

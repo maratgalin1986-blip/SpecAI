@@ -3,6 +3,7 @@ import { prisma } from '@specai/database';
 import { integrationFlags } from '@/lib/integrationFlags';
 import { LAST_OUTREACH_KEY } from '@/lib/office/tick';
 import { MAIL_READ_KEY } from '@/lib/office/repliesRun';
+import { SWEEP_STATS_KEY } from '@/lib/office/addressSweep';
 import { SEARCH_HEALTH_RUNS, searchHealth, type SearchHealth } from '@/lib/office/searchHealth';
 
 export const dynamic = 'force-dynamic';
@@ -43,6 +44,8 @@ interface OutreachHealth {
   repliesToday: number;
   /** Итог последнего прохода рассылки: время, числа, состояние ящика, код ответа сервера. */
   lastPass: Record<string, unknown> | null;
+  /** Проверка адресов очереди: время, сколько проверено и снято, причины. */
+  addressCheck: Record<string, unknown> | null;
   /** Итог последнего чтения ответов из ящика: время и числа. */
   mailbox: Record<string, unknown> | null;
 }
@@ -88,7 +91,7 @@ async function officeHealth(): Promise<
     const [repliesToday, records] = await Promise.all([
       prisma.prospect.count({ where: { repliedAt: { gte: dayStart } } }),
       prisma.appSetting.findMany({
-        where: { key: { in: [LAST_OUTREACH_KEY, MAIL_READ_KEY] } },
+        where: { key: { in: [LAST_OUTREACH_KEY, MAIL_READ_KEY, SWEEP_STATS_KEY] } },
         select: { key: true, value: true },
       }),
     ]);
@@ -115,6 +118,8 @@ async function officeHealth(): Promise<
         },
         lastPass: record(LAST_OUTREACH_KEY),
         mailbox: record(MAIL_READ_KEY),
+        // Проверка адресов очереди: сколько проверено и снято нерабочих (всего) и по каким причинам.
+        addressCheck: record(SWEEP_STATS_KEY),
       },
     };
   } catch {

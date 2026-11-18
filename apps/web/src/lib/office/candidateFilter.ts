@@ -241,3 +241,8 @@ export function hasOwnDomainEmail(email: string | null | undefined): boolean {
   const domain = (email ?? '').trim().toLowerCase().split('@')[1] ?? '';
   return domain.includes('.') && !FREE_MAIL.has(domain);
 }
+
+/** Бесплатный почтовый сервис по домену адреса. */
+export function isFreeMailDomain(domain: string): boolean {
+  return FREE_MAIL.has(domain.trim().toLowerCase());
+}
